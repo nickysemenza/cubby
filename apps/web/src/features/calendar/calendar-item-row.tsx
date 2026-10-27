@@ -103,7 +103,10 @@ function CalendarItemPresentation({
     entityKind: item.kind,
     entityId: item.id,
   });
-  const image = resolvedImage ?? item.displayImages[0] ?? null;
+  const image =
+    resolvedImage ??
+    fieldValueOf(item.source.fields.displayImages)?.[0] ??
+    null;
   if (variant === "month")
     return <CalendarItemCompact item={item} image={image} />;
   // "detail" is the fortnight density: the rich two-line block with a thumbnail

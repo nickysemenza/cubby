@@ -31,7 +31,7 @@ import {
   productWithIslandedMappingsSchema,
   TRACKER_PROBLEM_KEY_BY_TYPE,
   type ProblemItem,
-} from "@cubby/schemas/problems";
+} from "@cubby/schemas/problems-raw-read";
 import type {
   ProjectAttentionItem,
   ProjectAttentionType,

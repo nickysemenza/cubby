@@ -23,7 +23,7 @@ import {
   DUPLICATE_SPEND_DAY_WINDOW,
   DUPLICATE_SPEND_NAME_SIMILARITY,
   type ProblemItem,
-} from "@cubby/schemas/problems";
+} from "@cubby/schemas/problems-raw-read";
 import { type SQL, sql } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";

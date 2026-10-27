@@ -4,6 +4,10 @@ import {
   expenseInventoryOwnershipContextInput,
 } from "@cubby/schemas/inventory-ownership";
 import {
+  expenseMatchOut,
+  expenseMatchPurchaseContext,
+} from "@cubby/schemas/project";
+import {
   expenseAnalyzeInput,
   expenseAnalyzeOut,
   expenseFacetCountsInput,
@@ -39,6 +43,7 @@ import {
 import { matchExpenses } from "~/server/domains/expense/repo/match";
 import { loadEffectiveInventoryOwnershipById } from "~/server/domains/inventory/repo/ownership";
 import { confirmInventoryExpenseBeneficiary } from "~/server/domains/inventory/repo/ownership-mutations";
+import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { listAll } from "~/server/generic/list/repo/list-all";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -321,5 +326,36 @@ export const expenseHandlers = implementOperationDomain(expenseContract, {
     loadVendorAttributionDefaults(context.db, input.vendor),
   confirmInventoryBeneficiary: (context, input) =>
     confirmInventoryBeneficiary(context, input),
-  match: (context, input) => matchExpenses(context.db, input),
+  match: async (context, input) => {
+    const matched = await matchExpenses(context.db, input);
+    const purchases = await publicFieldEnvelopeBatch({
+      db: context.db,
+      reads: matched.matches.flatMap((match) =>
+        match.candidates.flatMap((candidate) =>
+          candidate.purchase
+            ? [
+                {
+                  entity: "purchase",
+                  schema: expenseMatchPurchaseContext,
+                  row: {
+                    ...candidate.purchase,
+                    observation: candidate.purchase,
+                  },
+                },
+              ]
+            : [],
+        ),
+      ),
+    });
+    return expenseMatchOut.parse({
+      ...matched,
+      matches: matched.matches.map((match) => ({
+        ...match,
+        candidates: match.candidates.map((candidate) => ({
+          ...candidate,
+          purchase: candidate.purchase ? purchases.shift() : null,
+        })),
+      })),
+    });
+  },
 });

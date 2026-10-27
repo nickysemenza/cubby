@@ -4,6 +4,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  plantingCalendarSourceFixture,
   mealCalendarSourceFixture,
   taskCalendarSourceFixture,
 } from "~/features/calendar/calendar-source.fixtures";
@@ -33,7 +34,6 @@ const meal = (title = "Dinner"): CalendarItem => ({
     mealKind: "cooked",
     recipeNames: ["Soup"],
   }),
-  displayImages: [],
   mealTotals: withMacros({
     cost: {
       status: "complete",
@@ -66,12 +66,11 @@ const task = (): CalendarItem => ({
   source: taskCalendarSourceFixture(testShortcode("task", "TSK-9H64")),
   projectName: null,
   subjectProductName: null,
-  displayImages: [],
 });
 
 const planting = (): CalendarItem => ({
   kind: "planting",
-  displayImages: [],
+  source: plantingCalendarSourceFixture(testShortcode("planting", "PLT-3B2C")),
   id: testShortcode("planting", "PLT-3B2C"),
   milestone: "sowed",
   title: "Tomato · Brandywine",

@@ -1,4 +1,5 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type {
   LocationTreeNode,
   InventoryItemForTree,
@@ -342,16 +343,21 @@ const LocationOverview = memo(function LocationOverview({
       </div>
       {(fieldValueOf(location.fields.images) ?? []).length > 1 && (
         <div className="mt-2 flex gap-2 overflow-x-auto">
-          {(fieldValueOf(location.fields.images) ?? []).map((image) => (
-            <ImageWithPreview
-              key={image.id}
-              src={image.url}
-              alt={`${location.name} photo`}
-              to="/images/$shortcode"
-              params={{ shortcode: image.id }}
-              size={64}
-            />
-          ))}
+          {(fieldValueOf(location.fields.images) ?? []).map((image) => {
+            const url = publicImageUrl(image);
+            return url ? (
+              <ImageWithPreview
+                key={image.id}
+                src={url}
+                alt={`${location.name} photo`}
+                to="/images/$shortcode"
+                params={{ shortcode: image.id }}
+                size={64}
+              />
+            ) : (
+              <span key={image.id}>Updating…</span>
+            );
+          })}
         </div>
       )}
       {items.length > 0 && (

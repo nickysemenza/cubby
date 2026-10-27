@@ -19,6 +19,7 @@ import {
   classificationFieldDisplayRefusal,
 } from "@cubby/schemas/classification-field-policy";
 import type { Entity } from "@cubby/schemas/entity";
+import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
@@ -99,6 +100,7 @@ import { Spinner } from "~/ui/primitives/spinner";
 
 import {
   fieldSuggestionBasisFromRecord,
+  suggestionRecordFieldValue,
   isBasisSufficient,
   basisValueOf,
   savedSuggestionEntityId,
@@ -395,11 +397,9 @@ function removeFieldPatch(
   suggestion: FieldSuggestion,
   freshRecord: SuggestionRecord,
 ): z.output<typeof mutationPatchSchema> {
-  const readKey =
-    entityFieldModels[entity].fields.find(
-      (candidate) => candidate.key === field,
-    )?.readKey ?? field;
-  const current = textArraySchema.safeParse(freshRecord[readKey]);
+  const current = textArraySchema.safeParse(
+    suggestionRecordFieldValue(entity, freshRecord, field),
+  );
   const removedValues = new Set(
     suggestion.removals.map((removal) => removal.value),
   );
@@ -460,7 +460,7 @@ function recordValue(
     const item = readReferenceField(record, field)?.items[0];
     return { value: item?.id ?? null, label: item?.name ?? item?.id ?? null };
   }
-  const value = basisValueOf(record[field.readKey ?? key]);
+  const value = basisValueOf(suggestionRecordFieldValue(entity, record, key));
   return {
     value,
     label: field.kind === "enum" ? enumFieldLabel(entity, key, value) : value,
@@ -498,7 +498,9 @@ function recordSuggestionBasis(
 ) {
   const basis = fieldSuggestionBasisFromRecord(entity, targets, record);
   for (const key of suggestionContextKeys(entity, targets)) {
-    const parsed = nullableBasisValueSchema.safeParse(record[key]);
+    const value = suggestionRecordFieldValue(entity, record, key);
+    if (value === undefined) continue;
+    const parsed = nullableBasisValueSchema.safeParse(basisValueOf(value));
     if (parsed.success) basis[key] = parsed.data;
   }
   basis.__resolutionContext = resolutionContext(record, [
@@ -542,18 +544,19 @@ function suggestionRequestsForRecord(
   return plans.flatMap(({ target, ownTargets, basisTargets, field }) => {
     const basis = recordSuggestionBasis(entity, basisTargets, record);
     const currentValue = recordValue(entity, record, target.key).value;
-    const loaded =
-      record[field?.readKey ?? target.key] !== undefined ||
-      (field?.reference != null &&
-        record[target.key.replace(/Ids?$/u, "")] !== undefined) ||
-      resolutions[target.key] !== undefined ||
-      currentValue !== null;
+    const readKey = field?.readKey ?? target.key;
+    const loaded = Object.hasOwn(entityFieldEnvelopeFields[entity], readKey)
+      ? suggestionRecordFieldValue(entity, record, target.key) !== undefined
+      : record[readKey] !== undefined ||
+        (field?.reference != null &&
+          record[target.key.replace(/Ids?$/u, "")] !== undefined) ||
+        currentValue !== null;
     if (
       !loaded ||
       !isBasisSufficient(entity, ownTargets, basis) ||
       (entity === "expense" &&
         target.key === "projectId" &&
-        record.lineKind !== "principal")
+        suggestionRecordFieldValue(entity, record, "lineKind") !== "principal")
     )
       return [];
     const resolution = resolutions[target.key];
@@ -769,7 +772,9 @@ function storedSuggestionIndex(
       current &&
       suggestion.currentValue === current.id &&
       suggestion.suggestedValue !== current.id &&
-      current.path.some((node) => node.id === suggestion.suggestedValue)
+      (fieldValueOf(current.fields.path) ?? []).some(
+        (node) => node.id === suggestion.suggestedValue,
+      )
     );
   })) {
     // Siblings share a key; the strongest wins regardless of read order.
@@ -1560,19 +1565,21 @@ function BoundRecordSuggestions({
         return;
       }
       // Acceptance reads the entity again without asking the decision model twice. Rebuild
-      // the basis over the request's own key set (`source.basis`'s keys,
-      // not every visible target's union) so a parent/default or line-kind
+      // the basis over the request's declared target keys, rather than every
+      // visible target's union, so a parent/default or line-kind
       // change still revokes the proposal, while an unrelated visible
       // target's basis does not falsely invalidate this one.
       const fresh = await readRecord(entity, id);
       if (!fresh) throw new Error("Suggestion inputs changed");
       const freshRecord = recordSchema.parse(fresh);
-      const basisKeys = Object.keys(source.basis).filter(
-        (key) => !key.startsWith("__"),
-      );
+      const declaredTargets = suggestTargetsFor(entity, source.targets);
       const freshTargets: SuggestTargets = {
-        targets: suggestTargetsFor(entity, source.targets).targets,
-        basisKeys,
+        ...declaredTargets,
+        // Context values are added separately; treating them as declared basis
+        // widens the resolution fingerprint during acceptance.
+        basisKeys: [
+          ...new Set([...declaredTargets.basisKeys, ...source.targets]),
+        ],
       };
       const freshBasis = recordSuggestionBasis(
         entity,

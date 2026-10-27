@@ -1,4 +1,5 @@
 import { calendarRangeInput } from "@cubby/schemas/calendar";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -76,7 +77,10 @@ describe("calendar day membership", () => {
       }),
     );
     const covers = new Map(
-      range.items.map((item) => [item.id, item.displayImages[0]?.id]),
+      range.items.map((item) => [
+        item.id,
+        fieldValueOf(item.source.fields.displayImages)?.[0]?.id,
+      ]),
     );
     expect(covers.get(project.output.id)).toBe(expected.get(project.output.id));
     expect(covers.get(task.output.id)).toBe(expected.get(project.output.id));

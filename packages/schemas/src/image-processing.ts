@@ -1,3 +1,4 @@
+import { computedFieldEnvelope } from "./field-envelope";
 import { imageRepresentations } from "./image-summary";
 import { imageShortcode } from "./identifier-fields";
 import { assessmentChildHandle } from "./assessment-reference";
@@ -441,7 +442,9 @@ export function selectImageDescription(
 
 export const imageProcessingStatusInput = z.object({ id: imageShortcode });
 export const imageProcessingStatusOutput = z.object({
-  representations: imageRepresentations,
+  fields: z.object({
+    representations: computedFieldEnvelope(imageRepresentations),
+  }),
   status: imageProcessingStatus,
   analyses: z.array(imageDescriptionAnalysis).max(20),
   correction: imageDescriptionCorrection.nullable(),

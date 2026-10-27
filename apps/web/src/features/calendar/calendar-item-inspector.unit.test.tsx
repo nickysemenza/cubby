@@ -22,7 +22,10 @@ import {
   EditableCalendarItem,
 } from "./calendar-item-inspector";
 import { calendarItemEditDescriptor } from "./calendar-kind-registry";
-import { expenseCalendarSourceFixture } from "./calendar-source.fixtures";
+import {
+  plantingCalendarSourceFixture,
+  expenseCalendarSourceFixture,
+} from "./calendar-source.fixtures";
 
 const expense: Extract<CalendarItem, { kind: "expense" }> = {
   kind: "expense",
@@ -40,7 +43,6 @@ const expense: Extract<CalendarItem, { kind: "expense" }> = {
   ),
   projectName: null,
   productName: "Souper Cubes",
-  displayImages: [],
 };
 
 const savedExpense: ExpenseOut = buildFieldEnvelopeRow({
@@ -217,7 +219,9 @@ describe("EditableCalendarItem", () => {
   it("keeps plantings read-only with a full-record route", () => {
     const planting: Extract<CalendarItem, { kind: "planting" }> = {
       kind: "planting",
-      displayImages: [],
+      source: plantingCalendarSourceFixture(
+        testShortcode("planting", "PLT-3B2C"),
+      ),
       id: testShortcode("planting", "PLT-3B2C"),
       milestone: "sowed",
       title: "Tomato · Brandywine",

@@ -1,6 +1,10 @@
 import { entityImageOf, type ImageEntity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import {
+  publicImageUrl,
+  publicImageUrlSummary,
+} from "@cubby/schemas/image-summary";
 import { getErrorMessage } from "@cubby/shared";
 import { isEqual } from "es-toolkit";
 import {
@@ -72,17 +76,20 @@ const NO_FIELDS: readonly string[] = [];
  */
 const recordImagesSchema = z
   .array(
-    z
-      .object({
+    publicImageUrlSummary
+      .extend({
         id: z.string(),
-        url: z.string(),
         filename: z.string(),
         key: z.string(),
         purpose: z.enum(["item", "label"]).nullish(),
       })
-      .transform(({ purpose, ...image }): PendingImage =>
-        purpose ? { ...image, purpose } : image,
-      ),
+      .transform(({ purpose, ...image }): PendingImage => ({
+        id: image.id,
+        url: publicImageUrl(image) ?? "",
+        filename: image.filename,
+        key: image.key,
+        ...(purpose ? { purpose } : {}),
+      })),
   )
   .catch([]);
 

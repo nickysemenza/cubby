@@ -1,4 +1,5 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 import { capitalize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -507,11 +508,12 @@ function ProjectCards({
   return (
     <Grid cols="cards3">
       {projects.map((project) => {
+        const cover = coverImages?.[project.id]?.[0];
         return (
           <ProjectCard
             key={project.id}
             project={project}
-            coverUrl={coverImages?.[project.id]?.[0]?.url}
+            coverUrl={cover ? publicImageUrl(cover) : undefined}
           />
         );
       })}

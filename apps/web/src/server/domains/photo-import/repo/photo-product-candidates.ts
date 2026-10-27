@@ -5,16 +5,17 @@ import {
   type ProductId,
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party-fields";
+import {
+  rawOwnPhotoProductEvidence as photoProductEvidence,
+  type RawOwnPhotoProductCandidate as PhotoProductCandidate,
+  type RawOwnPhotoProductEvidence as PhotoProductEvidence,
+} from "@cubby/schemas/photo-import-raw-read";
 import type {
   PhotoGroupProposal,
-  PhotoProductCandidate,
-  PhotoProductEvidence,
   PhotoRunImage,
   PhotoAcceptedSourceLine,
 } from "@cubby/schemas/photo-import-run";
-import { photoProductEvidence } from "@cubby/schemas/photo-import-run";
 import { productListInventoryEntryOut } from "@cubby/schemas/product";
 import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
 import { importExtractionOutcome } from "@cubby/schemas/purchase-import";
@@ -671,7 +672,9 @@ export async function loadPhotoProductEvidence(
         products.flatMap((item) => (item.categoryId ? [item.categoryId] : [])),
       ),
     ]);
-  const inventoryGroups = ids.map((id) => inventoryEntries.get(id) ?? []);
+  const inventoryGroups = products.map(
+    (item) => inventoryEntries.get(item.id) ?? [],
+  );
   const publicInventory = await publicFieldEnvelopeRows({
     db,
     entity: "inventory",
@@ -680,14 +683,14 @@ export async function loadPhotoProductEvidence(
   });
   let inventoryOffset = 0;
   const publicInventoryByProduct = new Map(
-    ids.map((id, index) => {
-      const length = inventoryGroups[index]?.length ?? 0;
-      const rows = publicInventory.slice(
+    products.map((item, index) => {
+      const count = inventoryGroups[index]?.length ?? 0;
+      const entries = publicInventory.slice(
         inventoryOffset,
-        inventoryOffset + length,
+        inventoryOffset + count,
       );
-      inventoryOffset += length;
-      return [id, rows] as const;
+      inventoryOffset += count;
+      return [item.id, entries];
     }),
   );
   const expenseRows = ids.length
@@ -768,7 +771,8 @@ export async function loadPhotoProductEvidence(
       .slice(0, 4)
       .map((image) => ({
         id: image.id,
-        url: preferredImageUrl(image),
+        url: image.url,
+        representations: image.representations,
         capturedAt: image.capturedAt?.toISOString() ?? null,
       })),
     purchaseLines: expenseRows
@@ -808,5 +812,14 @@ export async function loadPhotoProductEvidence(
     schema: photoProductEvidence,
     rows,
   });
-  return new Map(products.map((item, index) => [item.id, publicRows[index]!]));
+  return new Map(
+    products.map((item, index) => {
+      const row = publicRows[index];
+      if (!row)
+        throw new Error(
+          "Photo Product evidence batch changed result cardinality",
+        );
+      return [item.id, row];
+    }),
+  );
 }

@@ -3,7 +3,7 @@
  * isometric-geometry and isometric-scene; canvas lifecycle and pointer/touch
  * interaction live in use-isometric-pantry.
  */
-import { formatCategoryLabel, getFeatureColor } from "@cubby/shared";
+import { getFeatureColor } from "@cubby/shared";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowsOutSimpleIcon } from "@phosphor-icons/react/dist/csr/ArrowsOutSimple";
 import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
@@ -11,6 +11,7 @@ import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { createActionFor } from "~/entity/actions/action-items";
+import { categoryText } from "~/entity/presentation/category-text";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -41,9 +42,7 @@ function CategoryLegend({
       ),
     ).values(),
   ).sort((a, b) =>
-    formatCategoryLabel(a.category).localeCompare(
-      formatCategoryLabel(b.category),
-    ),
+    categoryText(a.category).localeCompare(categoryText(b.category)),
   );
   if (categories.length === 0) return null;
   return (
@@ -56,7 +55,7 @@ function CategoryLegend({
               style={{ backgroundColor: getFeatureColor(feature) }}
             />
             <span className="text-2xs leading-none text-muted-foreground">
-              {formatCategoryLabel(category)}
+              {categoryText(category)}
             </span>
           </div>
         ))}

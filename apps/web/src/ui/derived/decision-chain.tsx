@@ -10,7 +10,6 @@ import { compactFieldText } from "~/entity/fields/field-text";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Button } from "~/ui/primitives/button";
 
-import { SourceStack } from "./source-stack";
 import { UpdatingDot } from "./value-mark";
 import { ExplanationEntityLink, ReadableExplanationValue } from "./why-value";
 
@@ -40,6 +39,41 @@ export function DecisionValue({
   );
 }
 
+function DecisionResult({
+  result,
+  entity,
+  field,
+}: {
+  result: FieldExplanationOutput["envelope"]["result"];
+  entity: Entity;
+  field: string;
+}) {
+  const decision = fieldDecisionOf({ result });
+  if (!decision)
+    return <span className="text-xs text-muted-foreground">Updating…</span>;
+  if (decision.outcome.kind === "empty")
+    return (
+      <span className="text-xs text-muted-foreground">
+        {
+          {
+            explicit_none: "None",
+            unset: "Not set",
+            blocked: "Blocked",
+            mixed: "Mixed",
+            not_applicable: "Not applicable",
+          }[decision.outcome.reason]
+        }
+      </span>
+    );
+  return (
+    <DecisionValue
+      entity={entity}
+      field={field}
+      value={decision.outcome.value}
+    />
+  );
+}
+
 /** The envelope decides the winning level; clients never rerun precedence.
  * Resolution evidence owns its structured value instead of duplicating wire fields. */
 export function DecisionChain({
@@ -61,28 +95,48 @@ export function DecisionChain({
     <div className="grid gap-3">
       <section aria-label="Effective result" className="grid gap-1">
         <h3 className="text-xs font-medium">Effective result</h3>
-        {decision?.outcome.kind === "empty" ? (
-          <span className="text-xs text-muted-foreground">
-            {
-              {
-                explicit_none: "None",
-                unset: "Not set",
-                blocked: "Blocked",
-                mixed: "Mixed",
-                not_applicable: "Not applicable",
-              }[decision.outcome.reason]
-            }
-          </span>
-        ) : decision ? (
-          <DecisionValue
-            entity={data.subject.entityKind}
-            field={data.field}
-            value={fieldValueOf(data.envelope)}
-          />
-        ) : (
-          <span className="text-xs text-muted-foreground">Updating…</span>
-        )}
+        <DecisionResult
+          result={data.envelope.result}
+          entity={data.subject.entityKind}
+          field={data.field}
+        />
+        {source &&
+        (!data.resolutionEvidence || data.envelope.result.kind === "cached") ? (
+          <p className="text-xs text-muted-foreground">
+            From{" "}
+            <ExplanationEntityLink
+              entity={source.entityKind}
+              id={source.entityId}
+              name={source.name}
+            />
+          </p>
+        ) : null}
       </section>
+      {data.envelope.result.kind === "cached" ? (
+        <section
+          aria-label="Current input comparison"
+          className="grid gap-1 text-xs"
+        >
+          {data.comparison.kind === "available" ? (
+            <p>
+              Stored{" "}
+              <DecisionResult
+                result={data.envelope.result}
+                entity={data.subject.entityKind}
+                field={data.field}
+              />
+              {" → live "}
+              <DecisionResult
+                result={data.comparison.result}
+                entity={data.subject.entityKind}
+                field={data.field}
+              />
+            </p>
+          ) : (
+            <p>Live comparison unavailable: {data.comparison.reason}</p>
+          )}
+        </section>
+      ) : null}
       {data.envelope.current.assignment !== null ||
       data.envelope.current.controls.kind === "editable" ? (
         <section aria-label="Your choice" className="grid gap-1">
@@ -144,37 +198,6 @@ export function DecisionChain({
           Sources below describe current inputs. The cached result retains its
           recorded provenance until recomputed.
         </p>
-      ) : null}
-      {!data.resolutionEvidence ? (
-        <SourceStack
-          rows={data.sources.map((item, index) => ({
-            key: `${index}:${item.label}`,
-            // Current evidence cannot establish a historical winner from source identity alone.
-            status:
-              data.envelope.result.kind === "live" &&
-              source &&
-              item.entity?.entityKind === source.entityKind &&
-              item.entity.entityId === source.entityId
-                ? "deciding"
-                : "skipped",
-            title: item.entity ? (
-              <ExplanationEntityLink
-                entity={item.entity.entityKind}
-                id={item.entity.entityId}
-                name={item.label}
-              />
-            ) : (
-              item.label
-            ),
-            children: (
-              <DecisionValue
-                entity={data.subject.entityKind}
-                field={data.field}
-                value={item.value}
-              />
-            ),
-          }))}
-        />
       ) : null}
       {pending}
     </div>

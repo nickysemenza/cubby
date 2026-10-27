@@ -8,6 +8,7 @@ import SwiftUI
 struct SourceStackView<Content: View>: View {
     let label: String
     let levels: [SourceStackLevel]
+    var showsTitles = true
     @ViewBuilder let content: (SourceStackLevel) -> Content
 
     var body: some View {
@@ -16,14 +17,14 @@ struct SourceStackView<Content: View>: View {
                 HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
                     rail(level.status, first: position == 0, last: position == levels.count - 1)
                     VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                        title(level)
+                        if showsTitles { title(level) }
                         content(level)
                     }
                     .padding(.vertical, FieldGuideTokens.Space.xs)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel("\(level.title), \(level.status.label)")
+                .accessibilityLabel(showsTitles ? "\(level.title), \(level.status.label)" : level.status.label)
             }
         }
         .accessibilityElement(children: .contain)

@@ -3,15 +3,22 @@ import {
   entityManifest,
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
+import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, renderHook } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import type { EntityActionDefinition } from "~/entity/actions/entity-action-definition";
+import { RelationScopeContext } from "~/entity/entity-detail/relation-scope";
 import { installFeatures } from "~/features/registry";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import type { CubbyRow as Row } from "../../ui/data-table/table-features";
 import type { ActionVerbId } from "./action-verbs";
+import { useDismissEmailForPurchaseAction } from "./email-entity-actions";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles } from "./entity-actions";
 import {
@@ -367,4 +374,61 @@ describe("useEntityActions", () => {
       /must be constant for a component instance/,
     );
   });
+});
+
+it("offers Purchase dismissal from an Email's governed pair facts", () => {
+  const harness = createBrowserTestHarness();
+  const purchaseId = testShortcode("purchase", "PUR-4K7M");
+  const computed = (value: unknown) =>
+    computedFieldEnvelope(z.unknown()).parse({
+      current: {
+        assignment: null,
+        controls: { kind: "readonly", reason: "computed" },
+      },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value },
+          provenance: { kind: "computed" },
+        },
+      },
+      work: { kind: "idle" },
+    });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <harness.wrapper>
+      <RelationScopeContext.Provider
+        value={{ source: "purchase", recordId: purchaseId }}
+      >
+        {children}
+      </RelationScopeContext.Provider>
+    </harness.wrapper>
+  );
+  const { result, unmount } = renderHook(useDismissEmailForPurchaseAction, {
+    wrapper,
+  });
+  const emailRow = {
+    id: testShortcode("email", "EML-4K7M"),
+    checksum: "synthetic-checksum",
+    fields: {
+      ownedByViewer: computed(true),
+      ledgerPartyName: computed("Synthetic member"),
+      purchaseLinks: computed([
+        {
+          purchaseId,
+          state: "suggested",
+          accepted: false,
+          changedSinceReview: false,
+          replacesPurchaseIds: [],
+          proposedBy: null,
+          label: "Synthetic Purchase (Suggested)",
+        },
+      ]),
+    },
+  };
+  try {
+    expect(result.current.rowMenuItem(emailRow)).not.toBeNull();
+  } finally {
+    unmount();
+    harness.dispose();
+  }
 });

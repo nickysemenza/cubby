@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { imageShortcode } from "@cubby/schemas/identifiers";
 import {
   productLabelNutrition,
@@ -57,7 +58,9 @@ export function LabelNutritionReview({
     });
   }, [analysis, id]);
   const current = product.labelNutrition;
-  const original = label.representations?.original ?? label.url;
+  const original =
+    fieldValueOf(label.fields.representations)?.original ??
+    fieldValueOf(label.fields.url);
   if (status.error) return <ErrorDisplay error={status.error} />;
   if (!proposal || current?.source === proposal.source) return null;
   return (
@@ -86,9 +89,9 @@ export function LabelNutritionReview({
               Review the printed values against the source photo. Saving
               replaces the package label nutrition on this Product.
             </Description>
-            <a href={original} target="_blank" rel="noreferrer">
+            <a href={original ?? undefined} target="_blank" rel="noreferrer">
               <Image
-                src={original}
+                src={original ?? undefined}
                 alt="Source nutrition panel"
                 displayWidth={240}
                 className="max-h-64 w-60 max-w-full object-contain"

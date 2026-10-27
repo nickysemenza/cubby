@@ -1,4 +1,3 @@
-import type { ImageOut } from "@cubby/schemas/image";
 import type {
   RecipeCreateInput,
   RecipeUpdateInput,
@@ -12,7 +11,6 @@ import {
 import { z } from "zod";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import type { PendingImage } from "~/entity/entity-media/pending-image-upload";
 import { ComboboxItem } from "~/ui/combobox/combobox-types";
 
 // Draft shape for an ingredient amount, edited via separate qty/unit inputs.
@@ -169,9 +167,7 @@ interface EditRecipeFormProps {
   error?: string;
   onCancel?: () => void;
   onEdit: (data: RecipeUpdateInput) => void;
-  entity: RecipeOut & {
-    images?: PendingImage[] | ImageOut[];
-  };
+  entity: RecipeOut;
 }
 
 // Combined props type using discriminated union

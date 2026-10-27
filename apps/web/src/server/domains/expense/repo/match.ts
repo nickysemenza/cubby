@@ -1,8 +1,8 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
-  ExpenseMatchCandidate,
+  RawExpenseMatchCandidate as ExpenseMatchCandidate,
   ExpenseMatchOptions,
-  ExpenseMatchOut,
+  RawExpenseMatchOut as ExpenseMatchOut,
 } from "@cubby/schemas/project";
 import { sql } from "drizzle-orm";
 

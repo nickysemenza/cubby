@@ -1,3 +1,8 @@
+import {
+  imageFieldEnvelopeFields,
+  imagePublicReadFields,
+} from "./generated/entity-field-envelope-fields.image.gen";
+import { imageRepresentations } from "./image-summary";
 import { withFieldEnvelopes } from "./field-envelope";
 import {
   productFieldEnvelopeFields,
@@ -596,6 +601,19 @@ export const photoAcceptedSourceLine = z.object({
 });
 export type PhotoAcceptedSourceLine = z.infer<typeof photoAcceptedSourceLine>;
 
+/** Current own-photo Image values, bounded to the evidence the comparison UI displays. */
+const rawPhotoProductOwnPhoto = z.object({
+  id: imageShortcode,
+  url: z.url(),
+  representations: imageRepresentations.optional(),
+  capturedAt: z.string().nullable().optional(),
+});
+export const photoProductOwnPhoto = withFieldEnvelopes(
+  rawPhotoProductOwnPhoto,
+  imageFieldEnvelopeFields,
+  imagePublicReadFields,
+);
+
 export const photoProductCandidate = z.object({
   id: productShortcode,
   name: z.string(),
@@ -620,15 +638,7 @@ export const photoProductCandidate = z.object({
   hasInventory: z.boolean(),
   quantity: productQuantitySummaryOut.optional(),
   inventoryEntries: z.array(productListInventoryEntryOut).optional(),
-  ownPhotos: z
-    .array(
-      z.object({
-        id: imageShortcode,
-        url: z.string(),
-        capturedAt: z.string().nullable().optional(),
-      }),
-    )
-    .optional(),
+  ownPhotos: z.array(photoProductOwnPhoto).optional(),
   variantEvidence: z
     .array(
       z.object({
@@ -666,7 +676,6 @@ export const photoProductCandidate = z.object({
   purchaseLineCount: z.number().int().nonnegative().optional(),
 });
 export type PhotoProductCandidate = z.infer<typeof photoProductCandidate>;
-
 // Evidence retains the observed source facts used by frozen comparisons.
 const rawPhotoProductEvidence = photoProductCandidate
   .pick({

@@ -1,6 +1,6 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import { totalsPreview } from "@cubby/schemas/nutrition";
 import type {
   RawRecipeGraph as RecipeGraphOut,
@@ -42,8 +42,9 @@ type RecipeImageRow = {
   deletedAt?: Date | null;
 };
 
-const mapRecipeImages = (images: RecipeImageRow[] | undefined): ImageOut[] =>
-  mapImages(images);
+const mapRecipeImages = (
+  images: RecipeImageRow[] | undefined,
+): RawImageOutput[] => mapImages(images);
 
 // Uses cookbookId, not SourceType; ingredientRef must be a trusted SQL expression.
 export const ownRecipeCountForIngredientSql = (ingredientRef: string): string =>

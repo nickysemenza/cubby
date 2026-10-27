@@ -7,12 +7,12 @@ import type {
   ProblemsViewsOut,
   SectionTotals,
   ProblemItem,
-} from "@cubby/schemas/problems";
+} from "@cubby/schemas/problems-raw-read";
 import {
   emptyLocationSchema,
   problemsViewsSchema,
   productWithoutMappingsSchema,
-} from "@cubby/schemas/problems";
+} from "@cubby/schemas/problems-raw-read";
 import { getMiscDisplayName } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { z } from "zod";

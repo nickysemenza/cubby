@@ -1,4 +1,9 @@
 import {
+  financialTransactionImportPreviewOut,
+  importPreviewExistingTransaction,
+} from "@cubby/schemas/financial-transaction";
+
+import {
   financialTransactionContract,
   ledgerPartyContract,
 } from "~/contracts/finance.contract";
@@ -17,6 +22,7 @@ import { financialTransactionSourceOptions } from "~/server/domains/financial-tr
 import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
 import { convergeFinancialEvidence } from "~/server/domains/financial-transaction/service/financial-convergence";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
+import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import {
   listMemberLogins,
   setMemberLoginParty,
@@ -62,8 +68,31 @@ export const financialTransactionHandlers = implementOperationDomain(
       previewFinancialBooking(context.db, input),
     commitBooking: (context, input) =>
       commitFinancialBooking(context.db, input, context.actorContext),
-    previewTransactionImport: (context, input) =>
-      previewFinancialTransactionImport(context.db, input),
+    previewTransactionImport: async (context, input) => {
+      const preview = await previewFinancialTransactionImport(
+        context.db,
+        input,
+      );
+      const transactions = await publicFieldEnvelopeBatch({
+        db: context.db,
+        reads: preview.rows.flatMap((row) =>
+          row.existingTransactions.map((transaction) => ({
+            entity: "financialTransaction",
+            schema: importPreviewExistingTransaction,
+            row: transaction,
+          })),
+        ),
+      });
+      return financialTransactionImportPreviewOut.parse({
+        ...preview,
+        rows: preview.rows.map((row) => ({
+          ...row,
+          existingTransactions: row.existingTransactions.map(() =>
+            transactions.shift(),
+          ),
+        })),
+      });
+    },
     sourceOptions: (context) => financialTransactionSourceOptions(context.db),
     vendorInference: (context, input) =>
       merchantVendorInferenceFor(context.db, input.merchant),

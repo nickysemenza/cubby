@@ -127,7 +127,13 @@ describe("summary mutation output demand", () => {
         })
       ).item;
     expect(await read()).toMatchObject({
-      defaultTrade: "plumbing",
+      fields: {
+        defaultTrade: {
+          result: {
+            decision: { outcome: { kind: "value", value: "plumbing" } },
+          },
+        },
+      },
     });
     await executeEntityMutationRead(
       context,
@@ -140,7 +146,15 @@ describe("summary mutation output demand", () => {
       ["id"],
     );
 
-    expect(await read()).toMatchObject({ defaultTrade: "electrical" });
+    expect(await read()).toMatchObject({
+      fields: {
+        defaultTrade: {
+          result: {
+            decision: { outcome: { kind: "value", value: "electrical" } },
+          },
+        },
+      },
+    });
   });
 
   it("returns card scalar projections instead of the identity object", async () => {
@@ -257,7 +271,17 @@ describe("summary mutation output demand", () => {
       ["id"],
     );
 
-    expect(await read()).toMatchObject({ amount: { value: 3, unit: "each" } });
+    expect(await read()).toMatchObject({
+      fields: {
+        amount: {
+          result: {
+            decision: {
+              outcome: { kind: "value", value: { value: 3, unit: "each" } },
+            },
+          },
+        },
+      },
+    });
   });
 
   it("projects a single FinancialTransaction allocation as a Purchase identity", async () => {

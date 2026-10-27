@@ -144,6 +144,7 @@ the root. Traversal follows only supplied, bounded topology and batches current
 facts across all its levels. Explicit embedded paths can name a governed container
 such as Location's installed Product; its effective result retains the nested
 Product envelopes. Compact identity leaves validate without fabricated fields.
+Image attachments use a bounded generated Image projection without another media decorator, so Image attachments cannot recursively attach themselves. The compiler uses raw media decorators; public decorators use the generated projection. Specialist responses collect their declared entity nodes into one heterogeneous batch, deduplicating current-fact loads by entity and identity while retaining each node’s projection, order and duplicates. Frozen review proposals and provenance evidence are not live entity nodes.
 Child schemas import target field-schema leaves rather than full parent reads. A field may declare
 `validation.publicRead` when repository calculation inputs contain additional
 facts that must not become competing public values. Generated read projections
@@ -188,8 +189,11 @@ use canonical Product outputs, serialized once per selected food page while
 preserving duplicate and empty linkage groups. MCP reduces those Products to
 ordinary identity references. Image repositories retain raw hydration inputs;
 direct Image operation replies use canonical generated entity projections.
-Thumbnail, attachment, hash-index, upload and storage receipts remain ordinary
-asset references and retain their durable source evidence.
+Live Image attachments and photo-match galleries use bounded Image envelopes.
+Compact display-image entries are selected value snapshots. Hash repair exposes
+`originalUrl` as an original-byte fetch locator rather than the effective display
+URL; upload and storage receipts remain ordinary asset references and retain
+their durable source evidence.
 MCP Recipe usage responses carry identity references
 and line evidence; they do not reconstruct servings or tags from a usage row.
 Meal recipe mutation replies retain the canonical Meal list projection in MCP;

@@ -31,17 +31,21 @@ export function SourceStack({
             )}
           />
           <div className="grid min-w-0 gap-1">
-            <div
-              className={cn(
-                "flex flex-wrap items-center gap-1",
-                row.status === "deciding"
-                  ? "font-medium text-foreground"
-                  : "text-muted-foreground",
-              )}
-            >
-              {row.title}
-              <span className="sr-only"> · {row.status}</span>
-            </div>
+            {row.title != null ? (
+              <div
+                className={cn(
+                  "flex flex-wrap items-center gap-1",
+                  row.status === "deciding"
+                    ? "font-medium text-foreground"
+                    : "text-muted-foreground",
+                )}
+              >
+                {row.title}
+                <span className="sr-only"> · {row.status}</span>
+              </div>
+            ) : (
+              <span className="sr-only">{row.status}</span>
+            )}
             {row.children}
           </div>
         </li>

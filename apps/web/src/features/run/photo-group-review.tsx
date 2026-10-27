@@ -9,6 +9,7 @@ import {
   productCategoryShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type {
   PhotoGroupReview as PhotoGroupDecision,
   PhotoGroupProposal,
@@ -533,6 +534,7 @@ function GroupPhotos({
   return (
     <div className="min-w-0 space-y-2">
       <PhotoGrid
+        imageUrl={(image) => image.url}
         className="grid-cols-2 sm:grid-cols-3 md:grid-cols-3 [&>div:first-child]:col-span-2"
         images={tiles}
         tileClassName="max-sm:max-h-48"
@@ -581,6 +583,7 @@ function GroupPhotos({
         }}
       />
       <PhotoViewer
+        imageUrl={(image) => image.url}
         images={tiles}
         index={viewing}
         onIndexChange={setViewing}
@@ -1330,7 +1333,7 @@ function SelectedProductEvidence({
           {product.ownPhotos?.map((photo) => (
             <div key={photo.id}>
               <Image
-                src={photo.url}
+                src={publicImageUrl(photo)}
                 alt="Own Product photo"
                 displayWidth={56}
                 className="size-14 object-contain"
@@ -4400,6 +4403,7 @@ export function PhotoGroupReview({
                 count={review.unassignedImageIds.length}
               >
                 <PhotoGrid
+                  imageUrl={(image) => image.url}
                   images={review.unassignedImageIds.flatMap((id) =>
                     photoTile(imagesById.get(id)),
                   )}

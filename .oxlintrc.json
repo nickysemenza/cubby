@@ -369,6 +369,8 @@
         "packages/schemas/src/garden-guides.ts",
         "packages/schemas/src/garden-practice.ts",
         "packages/schemas/src/image-summary.ts",
+        "packages/schemas/src/field-envelope.ts",
+        "packages/schemas/src/entity-core.ts",
         "packages/schemas/src/display-images.ts",
         "packages/schemas/src/image-processing.ts",
         "packages/schemas/src/image-identification.ts",

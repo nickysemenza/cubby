@@ -142,3 +142,41 @@ it("formats a structured Cost through its declared amount projection", () => {
   expect(screen.getByText("$40.00")).toBeVisible();
   expect(screen.queryByText("item")).not.toBeInTheDocument();
 });
+
+it("compares a cached value with an explicitly empty current result", () => {
+  const data = explain(base);
+  render(
+    <DecisionChain
+      data={{
+        ...data,
+        envelope: {
+          ...data.envelope,
+          result: {
+            kind: "cached",
+            computedAt: "2026-10-25T12:00:00Z",
+            freshness: "stale",
+            decision: {
+              outcome: { kind: "value", value: 18 },
+              provenance: { kind: "computed" },
+            },
+          },
+        },
+        comparison: {
+          kind: "available",
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "empty", reason: "unset" },
+              provenance: { kind: "computed" },
+            },
+          },
+        },
+      }}
+    />,
+  );
+  const comparison = screen.getByRole("region", {
+    name: "Current input comparison",
+  });
+  expect(comparison).toHaveTextContent("Stored 18 → live Not set");
+  expect(comparison).not.toHaveTextContent("null");
+});

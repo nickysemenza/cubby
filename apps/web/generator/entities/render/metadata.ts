@@ -275,10 +275,7 @@ export const renderEntityMetadataArtifacts = (
         " * constraint of its own (the `satisfies` on `entitySummary` below is fine —\n" +
         " * it only reads `Entity` after `entityKeys` is fixed).\n" +
         " */\n" +
-        renderRecord({
-          name: "entityKeys",
-          entries: entities.map(({ key }) => key),
-        }) +
+        'export { ENTITY_KEYS as entityKeys } from "@cubby/shared/entity-keys";\n' +
         "\n" +
         renderRecord({
           name: "entitySummary",

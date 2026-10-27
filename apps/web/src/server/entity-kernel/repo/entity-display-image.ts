@@ -16,7 +16,7 @@ import {
   localRelationshipByKey,
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
-import type { EntityAttachmentRead } from "@cubby/schemas/entity-read-media";
+import type { RawEntityAttachmentRead } from "@cubby/schemas/entity-media-raw-read";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { imageShortcode } from "@cubby/schemas/identifiers";
 import type {
@@ -818,7 +818,7 @@ type PublicEntityRow = z.output<typeof publicEntityRowSchema>;
 /** Reuse only the authoritative media resolved for this read batch. */
 const resolvedImageRepresentations = (
   lists: ReadonlyMap<string, readonly DisplayImageSummary[]>,
-  attachments?: ReadonlyMap<string, readonly EntityAttachmentRead[]>,
+  attachments?: ReadonlyMap<string, readonly RawEntityAttachmentRead[]>,
 ): Map<string, ImageRepresentations> => {
   const representations = new Map<string, ImageRepresentations>();
   for (const group of [lists, attachments]) {
@@ -838,7 +838,7 @@ const resolvedImageRepresentations = (
 const directAttachments = async (
   db: Database | DrizzleTransaction,
   entityIds: readonly string[],
-): Promise<Map<string, EntityAttachmentRead[]>> => {
+): Promise<Map<string, RawEntityAttachmentRead[]>> => {
   if (entityIds.length === 0) return new Map();
   const rows = await unwrapDb(db)
     .select({
@@ -861,7 +861,7 @@ const directAttachments = async (
       asc(entityAttachment.createdAt),
       asc(image.id),
     );
-  const attachments = new Map<string, EntityAttachmentRead[]>();
+  const attachments = new Map<string, RawEntityAttachmentRead[]>();
   const representations = await loadImageRepresentations(
     db,
     rows.map((row) => row.shortcode),
@@ -886,7 +886,7 @@ export const resolveEntityAttachments = async (
   db: Database | DrizzleTransaction,
   entityKind: Entity,
   entityIds: readonly string[],
-): Promise<Map<string, EntityAttachmentRead[]>> =>
+): Promise<Map<string, RawEntityAttachmentRead[]>> =>
   entityManifest[entityKind].imageStorage === false
     ? new Map()
     : directAttachments(db, entityIds);
@@ -903,7 +903,7 @@ export async function withUniversalEntityMedia<
   Array<
     PublicEntityRow & {
       displayImages: DisplayImageSummary[];
-      attachments?: EntityAttachmentRead[];
+      attachments?: RawEntityAttachmentRead[];
       redirectedFrom?: string | null;
       previousShortcodes?: string[];
     }
@@ -928,7 +928,7 @@ export async function withUniversalEntityMedia<
     resolveEntityDisplayImageLists(db, refs),
     detail
       ? resolveEntityAttachments(db, entityKind, entityIds)
-      : Promise.resolve(new Map<string, EntityAttachmentRead[]>()),
+      : Promise.resolve(new Map<string, RawEntityAttachmentRead[]>()),
     detail
       ? previousShortcodesFor(db, entityIds)
       : Promise.resolve(new Map<string, string[]>()),

@@ -60,6 +60,10 @@ export function projectProductFieldEnvelopes({
     const units = projectProductUnitPrices({
       product: row,
       price: selectedPrice,
+      service:
+        price.result.kind !== "missing" &&
+        price.result.decision.outcome.kind === "empty" &&
+        price.result.decision.outcome.reason === "not_applicable",
     });
     output = { ...built, unitPriceMappings: units.unitPriceMappings };
     // This is a current computation over selected inputs, not the historical

@@ -25,7 +25,7 @@ import type {
   VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import {
   type PaginationParams,
@@ -596,9 +596,9 @@ export const getProductsForFoodLookup = async (
 export const getProductImagesByProductIds = async (
   db: Database,
   ids: ProductId[],
-): Promise<Record<string, ImageOut[]>> => {
+): Promise<Record<string, RawImageOutput[]>> => {
   const uniqueIds = uniq(ids);
-  const result: Record<string, ImageOut[]> = Object.fromEntries(
+  const result: Record<string, RawImageOutput[]> = Object.fromEntries(
     uniqueIds.map((id) => [id, []]),
   );
   if (uniqueIds.length === 0) return result;

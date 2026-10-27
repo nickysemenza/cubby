@@ -8,6 +8,23 @@ import {
   type EntityArtifacts,
 } from "../declarations.ts";
 
+/** Shared attachment reads remain raw in declarations and become public here. */
+const imageSlots = {
+  product: ["images", "labelImages"],
+  recipe: ["images"],
+  ingredient: ["images"],
+  cookbook: ["images"],
+  location: ["images"],
+  inventory: ["images"],
+  meal: ["images"],
+  task: ["images"],
+  vendor: ["logo"],
+  expense: ["images"],
+  gardenEntry: ["images"],
+} satisfies Record<string, readonly string[]>;
+const imageSlotsFor = (entity: string): readonly string[] =>
+  Object.entries(imageSlots).find(([key]) => key === entity)?.[1] ?? [];
+
 /** The declaration owns whether a field needs assignment or derivation facts. */
 const governedFields = (entity: CompiledEntity) =>
   entity.fieldModel.fields.filter(
@@ -33,6 +50,7 @@ export const renderFieldEnvelopeArtifacts = (
   const projectorBindings: string[] = [];
   const artifacts = entities.flatMap((entity) => {
     if (entity.contract === null) return [];
+    const contract = entity.contract;
     const declaration = declarationModules.get(entity.key);
     if (declaration === undefined)
       throw new EntityDeclarationError(
@@ -88,14 +106,74 @@ export const renderFieldEnvelopeArtifacts = (
       `${JSON.stringify(entity.key)}:${name}FieldEnvelopeFields`,
     );
     const readImports = [
-      ["output", entity.contract.output],
-      ["list", entity.contract.list],
-      ["detail", entity.contract.detail],
-      ["mcpOutput", entity.contract.mcpOutput],
-      ["mcpList", entity.contract.mcpList],
-      ["mcpDetail", entity.contract.mcpDetail],
+      ["output", contract.output],
+      ["list", contract.list],
+      ["detail", contract.detail],
+      ["mcpOutput", contract.mcpOutput],
+      ["mcpList", contract.mcpList],
+      ["mcpDetail", contract.mcpDetail],
     ] as const;
-    const nested = entity.contract.embedded;
+    const imagePaths = [
+      ...imageSlotsFor(entity.key).map((key) => [key]),
+      ...contract.embedded
+        .filter((binding) => !binding.recursive)
+        .flatMap((binding) =>
+          imageSlotsFor(binding.entity).map((key) => [...binding.path, key]),
+        ),
+    ];
+    const hasReadPath = (
+      schema: z.core.$ZodType,
+      path: readonly string[],
+    ): boolean => {
+      if (
+        schema instanceof z.ZodLazy ||
+        schema instanceof z.ZodNullable ||
+        schema instanceof z.ZodOptional
+      )
+        return hasReadPath(schema.unwrap(), path);
+      if (schema instanceof z.ZodArray)
+        return hasReadPath(schema.element, path);
+      if (schema instanceof z.ZodDiscriminatedUnion)
+        return schema.options.some((option) => hasReadPath(option, path));
+      const [key, ...remaining] = path;
+      if (key === undefined) return schema instanceof z.ZodObject;
+      if (!(schema instanceof z.ZodObject)) return false;
+      const child = schema.shape[key];
+      return child !== undefined && hasReadPath(child, remaining);
+    };
+    const imageBindings = [
+      ...new Map(imagePaths.map((path) => [path.join("."), path])).values(),
+    ]
+      .map((path) => ({
+        path,
+        entity: "image",
+        recursive: false,
+        projections: readImports.flatMap(([projection]) => {
+          const owners = contract.embedded.filter(
+            (binding) =>
+              !binding.recursive &&
+              binding.path.length === path.length - 1 &&
+              binding.path.every((part, index) => part === path[index]),
+          );
+          if (
+            path.length > 1 &&
+            !owners.some((binding) => binding.projections.includes(projection))
+          )
+            return [];
+          const schema =
+            projection.endsWith("List") || projection === "list"
+              ? declaration.readSchemas.list
+              : projection.endsWith("Detail") || projection === "detail"
+                ? declaration.readSchemas.detail
+                : declaration.readSchemas.output;
+          return hasReadPath(schema, path) ? [projection] : [];
+        }),
+      }))
+      .filter((binding) => binding.projections.length > 0);
+    // Transform descendants first while their declared raw keys remain reachable.
+    const nested = [...contract.embedded, ...imageBindings].sort(
+      (left, right) => right.path.length - left.path.length,
+    );
     const nestedTargets = [...new Set(nested.map((binding) => binding.entity))];
     const nestedKeys = new Set<string>();
     for (const binding of nested) {
@@ -123,10 +201,9 @@ export const renderFieldEnvelopeArtifacts = (
           `${entity.key}.${binding.path.join(".")} embeds unknown entity ${binding.entity}`,
         );
     }
-    if (nested.length)
-      nestedBindings.push(
-        `${JSON.stringify(entity.key)}:${JSON.stringify([...new Map(nested.map(({ path, entity }) => [`${entity}:${path.join(".")}`, { path, entity }])).values()])}`,
-      );
+    nestedBindings.push(
+      `${JSON.stringify(entity.key)}:${JSON.stringify([...new Map([...nested.map(({ path, entity }) => ({ path, entity })), { path: ["attachments"], entity: "image" }].map((binding) => [`${binding.entity}:${binding.path.join(".")}`, binding])).values()])}`,
+    );
     const embedded = (projection: string) =>
       nested.some((binding) =>
         binding.projections.some((value) => value === projection),
@@ -272,6 +349,17 @@ export const renderFieldEnvelopeArtifacts = (
   });
   return [
     ...artifacts,
+    {
+      relativePath:
+        "packages/schemas/src/generated/entity-image-attachment.gen.ts",
+      source:
+        generatedHeader +
+        'import { rawImageOutput } from "../image-raw-read";\n' +
+        'import { imageFieldEnvelopeFields, imagePublicReadFields } from "./entity-field-envelope-fields.image.gen";\n' +
+        'import { withFieldEnvelopes } from "../field-envelope";\n' +
+        "/** Bounded live Image read; excludes universal media to terminate attachment nesting. */\n" +
+        "export const imageAttachmentReadSchema = withFieldEnvelopes(rawImageOutput, imageFieldEnvelopeFields, imagePublicReadFields);\n",
+    },
     {
       relativePath:
         "apps/web/src/server/generated/entity-field-envelope-projectors.gen.ts",

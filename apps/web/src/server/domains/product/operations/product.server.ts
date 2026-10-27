@@ -1,10 +1,12 @@
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { imageOut } from "@cubby/schemas/image";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import {
   buildPaginatedResponse,
   normalizeSorts,
 } from "@cubby/schemas/pagination";
+import { productSummariesOut } from "@cubby/schemas/product";
 import { productPickerItemOut } from "@cubby/schemas/product";
 import {
   productListInventoryEntryOut,
@@ -22,6 +24,7 @@ import type {
   productQuickCreatePayload,
   productSummariesInput,
 } from "@cubby/schemas/product";
+import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import {
   type CreateManyProductResult,
   productSearchInput,
@@ -202,11 +205,36 @@ async function applyProductUpcData(
   return { ...product, sideEffects: result.sideEffects };
 }
 
-export const getProductSummariesWorkflow = (
+export const getProductSummariesWorkflow = async (
   context: ProductWorkflowContext,
   input: z.output<typeof productSummariesInput>,
-) =>
-  getProductSummaries(context.db, context.usdaClient, input.ids, input.include);
+) => {
+  const summaries = await getProductSummaries(
+    context.db,
+    context.usdaClient,
+    input.ids,
+    input.include,
+  );
+  if (!summaries.images) return productSummariesOut.parse(summaries);
+  const groups = Object.entries(summaries.images);
+  const images = await publicFieldEnvelopeRows({
+    db: context.db,
+    entity: "image",
+    schema: imageOut,
+    rows: groups.flatMap(([, rows]) => rows),
+  });
+  let offset = 0;
+  return productSummariesOut.parse({
+    ...summaries,
+    images: Object.fromEntries(
+      groups.map(([id, rows]) => {
+        const selected = images.slice(offset, offset + rows.length);
+        offset += rows.length;
+        return [id, selected];
+      }),
+    ),
+  });
+};
 
 async function getProductQuantitySummaries(
   context: ProductWorkflowContext,
@@ -544,7 +572,23 @@ export const productHandlers = implementOperationDomain(productContract, {
       }),
     };
   },
-  categoryDistribution: (context) => getCategoryDistribution(context.db),
+  categoryDistribution: async (context) => {
+    const distribution = await getCategoryDistribution(context.db);
+    const categories = await publicFieldEnvelopeRows({
+      db: context.db,
+      entity: "productCategory",
+      schema: productCategorySummary,
+      rows: distribution.flatMap((row) => (row.category ? [row.category] : [])),
+    });
+    let index = 0;
+    return distribution.map((row) => {
+      if (!row.category) return { ...row, category: null };
+      const category = categories[index++];
+      if (!category)
+        throw new Error("Missing category distribution projection");
+      return { ...row, category };
+    });
+  },
   externalIdSourceOptions: (context) =>
     getProductExternalIdSourceOptions(context.db),
   getByShortcodes: async (context, input) =>

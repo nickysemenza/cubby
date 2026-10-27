@@ -125,10 +125,13 @@ test("a staged photo and reviewed placement commit one Product with one each", a
   expect(product.inventoryEntry.map((entry) => entry.id)).toEqual([
     inventory.id,
   ]);
+  expect(fieldValueOf(inventory.fields.amount)).toEqual({
+    value: 1,
+    unit: "each",
+  });
   expect(inventory).toMatchObject({
     product: { id: product.id },
     location: { id: location.id },
-    amount: { value: 1, unit: "each" },
     placement: "stock",
   });
 });
@@ -187,7 +190,6 @@ test("a recount commits its resolutions against the loaded snapshot and refuses 
   const entry = await createEntityFixture(page, "inventory", {
     productId: product.id,
     locationId: location.id,
-    amount: { value: 1, unit: "each" },
     placement: "stock",
   });
 
@@ -219,7 +221,6 @@ test("a recount commits its resolutions against the loaded snapshot and refuses 
       })
     ).id,
     locationId: location.id,
-    amount: { value: 1, unit: "each" },
     placement: "stock",
   });
   const stale = await post(

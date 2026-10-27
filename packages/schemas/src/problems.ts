@@ -1,3 +1,28 @@
+import { withFieldEnvelopes } from "./field-envelope";
+import {
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+} from "./generated/entity-field-envelope-fields.product.gen";
+import {
+  cookbookFieldEnvelopeFields,
+  cookbookPublicReadFields,
+} from "./generated/entity-field-envelope-fields.cookbook.gen";
+import {
+  vendorFieldEnvelopeFields,
+  vendorPublicReadFields,
+} from "./generated/entity-field-envelope-fields.vendor.gen";
+import {
+  locationFieldEnvelopeFields,
+  locationPublicReadFields,
+} from "./generated/entity-field-envelope-fields.location.gen";
+import {
+  purchaseFieldEnvelopeFields,
+  purchasePublicReadFields,
+} from "./generated/entity-field-envelope-fields.purchase.gen";
+import {
+  expenseFieldEnvelopeFields,
+  expensePublicReadFields,
+} from "./generated/entity-field-envelope-fields.expense.gen";
 import { assessmentChildHandle } from "./assessment-reference";
 import { z } from "zod";
 import { locationRefOut } from "./location-fields";
@@ -6,7 +31,10 @@ import { money, moneyNullable } from "./money";
 import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
 import { entityConnectionItem } from "./entity-connections";
 import { referentialLivenessViolationSchema } from "./entity-integrity";
-import { financialReconciliationFields } from "./financial-reconciliation";
+import {
+  financialReconciliationSummary,
+  financialReconciliationFields,
+} from "./financial-reconciliation";
 import {
   anyShortcodeSchema,
   cookbookShortcode,
@@ -83,24 +111,50 @@ const coverageFields = {
   applicable: z.array(baseKind),
 };
 
-export const duplicateUniqueProductSchema = z.object({
+export const rawDuplicateUniqueProductSchema = z.object({
   ...productProblemFields,
   expectedQuantity: z.number().nullable(),
   locations: z.array(locationRefOut),
 });
 
-export const orphanedProductSchema = z.object({
+export const duplicateUniqueProductSchema = withFieldEnvelopes(
+  rawDuplicateUniqueProductSchema,
+  { brandName: productFieldEnvelopeFields.brandName },
+  productPublicReadFields,
+);
+
+export const rawOrphanedProductSchema = z.object({
   ...productProblemFields,
   createdAt: z.date(),
 });
 
-export const partiallyImportedCookbookSchema = z.object({
+export const orphanedProductSchema = withFieldEnvelopes(
+  rawOrphanedProductSchema,
+  { brandName: productFieldEnvelopeFields.brandName },
+  productPublicReadFields,
+);
+
+export const rawPartiallyImportedCookbookSchema = z.object({
   id: cookbookShortcode,
   name: z.string(),
   sourceRecipeCount: z.number().int().nonnegative(),
   recipeCount: z.number().int().nonnegative(),
   missingRecipeCount: z.number().int().positive(),
 });
+
+export const partiallyImportedCookbookSchema = withFieldEnvelopes(
+  rawPartiallyImportedCookbookSchema.extend({
+    observation: rawPartiallyImportedCookbookSchema.pick({
+      sourceRecipeCount: true,
+      recipeCount: true,
+    }),
+  }),
+  {
+    sourceRecipeCount: cookbookFieldEnvelopeFields.sourceRecipeCount,
+    recipeCount: cookbookFieldEnvelopeFields.recipeCount,
+  },
+  cookbookPublicReadFields,
+);
 
 /**
  * A product sold by weight whose expense lines nonetheless claim a fixed
@@ -124,7 +178,7 @@ export const partiallyImportedCookbookSchema = z.object({
  * The fix is a weight-to-money unit mapping; `price` is the wrong shape here
  * and setting it papers over the gap.
  */
-export const weightSoldProductSchema = z.object({
+export const rawWeightSoldProductSchema = z.object({
   ...productProblemFields,
   /** Priced principal expense lines behind the verdict. */
   lineCount: z.number().int().positive(),
@@ -135,6 +189,12 @@ export const weightSoldProductSchema = z.object({
   /** Non-null means a recipe can already read through it and mis-cost. */
   ingredientId: ingredientShortcode.nullable(),
 });
+
+export const weightSoldProductSchema = withFieldEnvelopes(
+  rawWeightSoldProductSchema,
+  { brandName: productFieldEnvelopeFields.brandName },
+  productPublicReadFields,
+);
 
 // A recorded `projectTool` link for a tool we did not own while the project
 // ran. The `trade_match` suggestion lane shipped without consulting ownership
@@ -147,7 +207,7 @@ export const weightSoldProductSchema = z.object({
 // always "detach": a tool bought before the ledger's coverage of it begins
 // looks acquired-late, in which case the missing acquisition Expense is the
 // real defect. Both dates ride along so the row says which.
-export const toolUsedOutsideOwnershipSchema = z.object({
+export const rawToolUsedOutsideOwnershipSchema = z.object({
   ...productProblemFields,
   projectId: projectShortcode,
   projectName: z.string(),
@@ -155,6 +215,12 @@ export const toolUsedOutsideOwnershipSchema = z.object({
   toolDate: plainDate,
   projectBoundary: plainDate,
 });
+
+export const toolUsedOutsideOwnershipSchema = withFieldEnvelopes(
+  rawToolUsedOutsideOwnershipSchema,
+  { brandName: productFieldEnvelopeFields.brandName },
+  productPublicReadFields,
+);
 
 export const duplicateProductIdentitySchema = z.object({
   assessmentId: assessmentChildHandle,
@@ -180,13 +246,19 @@ export const duplicateProductIdentitySchema = z.object({
   ),
 });
 
-export const productWithoutMappingsSchema = z.object({
+export const rawProductWithoutMappingsSchema = z.object({
   ...productProblemFields,
   createdAt: z.date(),
   isIngredient: z.boolean(),
   usdaUnavailable: z.boolean(),
   ingredientId: ingredientShortcode.nullable(),
 });
+
+export const productWithoutMappingsSchema = withFieldEnvelopes(
+  rawProductWithoutMappingsSchema,
+  { brandName: productFieldEnvelopeFields.brandName },
+  productPublicReadFields,
+);
 
 /**
  * A product whose own NAME states a pack size it has no unit mapping for —
@@ -199,7 +271,7 @@ export const productWithoutMappingsSchema = z.object({
  * human act: titles that carry a pack count are refused upstream precisely
  * because they parse to a per-each size 6-12x too small.
  */
-export const productWithTitleDerivableSizeSchema = z.object({
+export const rawProductWithTitleDerivableSizeSchema = z.object({
   ...productProblemFields,
   category: z.string().nullable(),
   // `amount` — the Rust title grammar that produces `proposed` always parses
@@ -209,7 +281,13 @@ export const productWithTitleDerivableSizeSchema = z.object({
   token: z.string(),
 });
 
-export const ingredientWithPartialCoverageSchema = z.object({
+export const productWithTitleDerivableSizeSchema = withFieldEnvelopes(
+  rawProductWithTitleDerivableSizeSchema,
+  { brandName: productFieldEnvelopeFields.brandName },
+  productPublicReadFields,
+);
+
+export const rawIngredientWithPartialCoverageSchema = z.object({
   ...productProblemFields,
   coverage: z.object(coverageFields),
   hasPrice: z.boolean(),
@@ -217,6 +295,12 @@ export const ingredientWithPartialCoverageSchema = z.object({
   usdaUnavailable: z.boolean(),
   ingredientId: ingredientShortcode,
 });
+
+export const ingredientWithPartialCoverageSchema = withFieldEnvelopes(
+  rawIngredientWithPartialCoverageSchema,
+  { brandName: productFieldEnvelopeFields.brandName },
+  productPublicReadFields,
+);
 
 // An ingredient carrying ≥1 "unused" alias — one that's redundant (case-only dup
 // of the name/another alias) or never matched by a recipe line. `aliases` is the
@@ -229,7 +313,7 @@ export const ingredientWithUnusedAliasesSchema = z.object({
   unusedAliases: z.array(z.string()),
 });
 
-export const emptyLocationSchema = z.object({
+export const rawEmptyLocationSchema = z.object({
   id: locationShortcode,
   name: z.string(),
   type: z.string().nullable(),
@@ -239,6 +323,15 @@ export const emptyLocationSchema = z.object({
   firstImageUrl: z.string().nullable(),
   firstImageId: z.string().nullable(),
 });
+
+export const emptyLocationSchema = withFieldEnvelopes(
+  rawEmptyLocationSchema,
+  {
+    type: locationFieldEnvelopeFields.type,
+    aiDescription: locationFieldEnvelopeFields.aiDescription,
+  },
+  locationPublicReadFields,
+);
 
 // --- Recount staleness (tenet 1: inventory truth is restored only by a
 // deliberate recount, so an uncounted bin is unverified, not accurate). ---
@@ -266,7 +359,7 @@ export const duplicateVendorSchema = z.object({
   canonicalSampleId: vendorShortcode,
 });
 
-export const vendorWithoutLogoSchema = z.object({
+export const rawVendorWithoutLogoSchema = z.object({
   id: vendorShortcode,
   name: z.string(),
   website: z.string().nullable(),
@@ -274,7 +367,13 @@ export const vendorWithoutLogoSchema = z.object({
   expenseRowCount: z.number().int(),
 });
 
-export const productWithIslandedMappingsSchema = z.object({
+export const vendorWithoutLogoSchema = withFieldEnvelopes(
+  rawVendorWithoutLogoSchema,
+  { purchaseCount: vendorFieldEnvelopeFields.purchaseCount },
+  vendorPublicReadFields,
+);
+
+export const rawProductWithIslandedMappingsSchema = z.object({
   ...productProblemFields,
   islandCount: z.number(),
   islands: z.array(
@@ -285,6 +384,12 @@ export const productWithIslandedMappingsSchema = z.object({
   ),
   coverage: z.object(coverageFields),
 });
+
+export const productWithIslandedMappingsSchema = withFieldEnvelopes(
+  rawProductWithIslandedMappingsSchema,
+  { brandName: productFieldEnvelopeFields.brandName },
+  productPublicReadFields,
+);
 
 // A live image whose EXIF/GPS extraction ended without metadata: its original
 // is missing from storage, or extraction kept failing. Terminal so it leaves
@@ -342,7 +447,7 @@ export const staleIngredientParseSchema = z.object({
   modifierDrift: z.boolean(),
 });
 
-export const productWithBetterUpcDataSchema = z.object({
+export const rawProductWithBetterUpcDataSchema = z.object({
   ...productProblemFields,
   upc: z.string(),
   // Each field is set only when a fresh lookup would fill it (stored value empty
@@ -354,6 +459,12 @@ export const productWithBetterUpcDataSchema = z.object({
     imageUrl: z.string().nullable(),
   }),
 });
+
+export const productWithBetterUpcDataSchema = withFieldEnvelopes(
+  rawProductWithBetterUpcDataSchema,
+  { brandName: productFieldEnvelopeFields.brandName },
+  productPublicReadFields,
+);
 
 /**
  * A purchase whose live expenses don't add up to its stated paperwork total.
@@ -369,7 +480,7 @@ export const productWithBetterUpcDataSchema = z.object({
  * deliberately NOT a field — `reconciliationDelta` already derives it from these
  * two numbers for the list column and the detail cue.
  */
-export const purchaseNotReconcilingSchema = z.object({
+export const rawPurchaseNotReconcilingSchema = z.object({
   id: purchaseShortcode,
   /** Through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
@@ -391,7 +502,23 @@ export const purchaseNotReconcilingSchema = z.object({
   postedRefundTotal: financialReconciliationFields.postedRefundTotal,
 });
 
-export const purchaseFinancialSettlementMismatchSchema = z.object({
+export const purchaseNotReconcilingSchema = withFieldEnvelopes(
+  rawPurchaseNotReconcilingSchema.extend({
+    observation: rawPurchaseNotReconcilingSchema.pick({
+      vendorId: true,
+      expenseTotal: true,
+      expenseCount: true,
+    }),
+  }),
+  {
+    vendorId: purchaseFieldEnvelopeFields.vendorId,
+    expenseTotal: purchaseFieldEnvelopeFields.expenseTotal,
+    expenseCount: purchaseFieldEnvelopeFields.expenseCount,
+  },
+  purchasePublicReadFields,
+);
+
+export const rawPurchaseFinancialSettlementMismatchSchema = z.object({
   id: purchaseShortcode,
   vendorName: z.string().nullable(),
   vendorId: vendorShortcode.nullable(),
@@ -410,7 +537,25 @@ export const purchaseFinancialSettlementMismatchSchema = z.object({
   }),
 });
 
-export const duplicateSpendCandidateSchema = z.object({
+export const purchaseFinancialSettlementMismatchSchema = withFieldEnvelopes(
+  rawPurchaseFinancialSettlementMismatchSchema.extend({
+    financialReconciliation: financialReconciliationSummary,
+    observation: rawPurchaseFinancialSettlementMismatchSchema.pick({
+      vendorId: true,
+      expenseTotal: true,
+      financialReconciliation: true,
+    }),
+  }),
+  {
+    vendorId: purchaseFieldEnvelopeFields.vendorId,
+    expenseTotal: purchaseFieldEnvelopeFields.expenseTotal,
+    financialReconciliation:
+      purchaseFieldEnvelopeFields.financialReconciliation,
+  },
+  purchasePublicReadFields,
+);
+
+export const rawDuplicateSpendCandidateSchema = z.object({
   id: expenseShortcode,
   expenseName: z.string(),
   cost: money,
@@ -430,6 +575,14 @@ export const duplicateSpendCandidateSchema = z.object({
   nameSimilarity: z.number(),
   alternateMatchCount: z.number().int(),
 });
+
+export const duplicateSpendCandidateSchema = withFieldEnvelopes(
+  rawDuplicateSpendCandidateSchema.extend({
+    observation: rawDuplicateSpendCandidateSchema.pick({ purchaseId: true }),
+  }),
+  { purchaseId: expenseFieldEnvelopeFields.purchaseId },
+  expensePublicReadFields,
+);
 
 export const DUPLICATE_SPEND_NAME_SIMILARITY = 0.15;
 
@@ -602,7 +755,7 @@ const detector = <
  * schemas, `PROBLEM_CLASS`, the count payload, the coverage-meter totals, and
  * `ProblemItem` are all derived from this one table.
  */
-export const problemDetectors = {
+export const rawProblemDetectors = {
   // --- fast lane ---
   runFindings: detector("fast", "defect", runFindingProblemSchema),
   duplicateInventory: detector("fast", "defect", problemRowSchema),
@@ -616,7 +769,7 @@ export const problemDetectors = {
     "defect",
     duplicateProductIdentitySchema,
   ),
-  orphanedProducts: detector("fast", "defect", orphanedProductSchema),
+  orphanedProducts: detector("fast", "defect", rawOrphanedProductSchema),
   // Unambiguously wrong and converges to zero: a live record of a checked kind
   // (see `ORPHAN_CHECK_KINDS`) with no physical connection at all is nothing
   // in the house refers to it, same reasoning as `orphanedProducts` but read
@@ -626,7 +779,7 @@ export const problemDetectors = {
   partiallyImportedCookbooks: detector(
     "fast",
     "defect",
-    partiallyImportedCookbookSchema,
+    rawPartiallyImportedCookbookSchema,
   ),
   // Unambiguously wrong and converges to zero: the item was sold, so the shelf
   // is stale and the location total is overstated by its full value. Not
@@ -662,7 +815,7 @@ export const problemDetectors = {
   toolsUsedOutsideOwnership: detector(
     "fast",
     "defect",
-    toolUsedOutsideOwnershipSchema,
+    rawToolUsedOutsideOwnershipSchema,
   ),
   productsWithNoImages: detector(
     "fast",
@@ -703,7 +856,7 @@ export const problemDetectors = {
   // a standing population into the navbar badge, which is what that class is
   // meant to keep clear. Each row is still real work — the fix is a
   // weight-to-money mapping — it just never reaches zero and stays there.
-  weightSoldProducts: detector("fast", "coverage", weightSoldProductSchema),
+  weightSoldProducts: detector("fast", "coverage", rawWeightSoldProductSchema),
   // Two roster rows for one real vendor is simply wrong — that vendor's spend is
   // split across both — and it converges to zero: `mergeVendors` folds the pair
   // and the pair never comes back (the live roster sits at 0 across 114 vendors).
@@ -714,7 +867,7 @@ export const problemDetectors = {
   vendorsWithoutLogos: detector(
     "fast",
     "coverage",
-    vendorWithoutLogoSchema,
+    rawVendorWithoutLogoSchema,
     "vendors",
   ),
   // Advisory, not backlog (see the note above): a purchase whose expenses disagree
@@ -724,12 +877,12 @@ export const problemDetectors = {
   purchasesNotReconciling: detector(
     "fast",
     "coverage",
-    purchaseNotReconcilingSchema,
+    rawPurchaseNotReconcilingSchema,
   ),
   purchaseFinancialSettlementMismatches: detector(
     "fast",
     "coverage",
-    purchaseFinancialSettlementMismatchSchema,
+    rawPurchaseFinancialSettlementMismatchSchema,
   ),
   // Advisory for a different reason than the two above: the match itself is a
   // heuristic. Amount + date is what finds these at all, and two unrelated things
@@ -739,7 +892,7 @@ export const problemDetectors = {
   duplicateSpendCandidates: detector(
     "fast",
     "coverage",
-    duplicateSpendCandidateSchema,
+    rawDuplicateSpendCandidateSchema,
   ),
   duplicateFinancialTransactionSourceRefs: detector(
     "fast",
@@ -808,12 +961,12 @@ export const problemDetectors = {
   ingredientsWithPartialCoverage: detector(
     "coverage",
     "defect",
-    ingredientWithPartialCoverageSchema,
+    rawIngredientWithPartialCoverageSchema,
   ),
   productsWithIslandedMappings: detector(
     "coverage",
     "defect",
-    productWithIslandedMappingsSchema,
+    rawProductWithIslandedMappingsSchema,
   ),
   // COVERAGE, not defect, and the distinction is load-bearing: only `defect`
   // rows reach `totalProblems` and the navbar badge, and there are ~1,400 of
@@ -822,7 +975,7 @@ export const problemDetectors = {
   productsWithTitleDerivableSize: detector(
     "coverage",
     "coverage",
-    productWithTitleDerivableSizeSchema,
+    rawProductWithTitleDerivableSizeSchema,
   ),
   // --- upc lane ---
   // COVERAGE, not defect: the proposals come from an external provider, so the
@@ -831,7 +984,7 @@ export const problemDetectors = {
   productsWithBetterUpcData: detector(
     "upc",
     "coverage",
-    productWithBetterUpcDataSchema,
+    rawProductWithBetterUpcDataSchema,
   ),
   // --- tracker lane ---
   overdueTasks: detector("tracker", "defect", projectAttentionItemSchema),
@@ -882,7 +1035,7 @@ export const problemDetectors = {
   productsWithoutMappings: detector(
     "views",
     "defect",
-    productWithoutMappingsSchema,
+    rawProductWithoutMappingsSchema,
   ),
   productsMissingPrice: detector("views", "defect", problemRowSchema),
   // Misc buckets are *expected* to be unpriced — the `product/unpriced-buckets` view
@@ -901,7 +1054,7 @@ export const problemDetectors = {
   emptyLocations: detector(
     "views",
     "coverage",
-    emptyLocationSchema,
+    rawEmptyLocationSchema,
     "emptyLocations",
   ),
   // Recorded exits exceed recorded acquisitions, but acquisition history is
@@ -917,6 +1070,114 @@ export const problemDetectors = {
     problemRowSchema,
   ),
 };
+
+export const problemDetectors = {
+  ...rawProblemDetectors,
+  orphanedProducts: {
+    ...rawProblemDetectors.orphanedProducts,
+    item: orphanedProductSchema,
+  },
+  weightSoldProducts: {
+    ...rawProblemDetectors.weightSoldProducts,
+    item: weightSoldProductSchema,
+  },
+  toolsUsedOutsideOwnership: {
+    ...rawProblemDetectors.toolsUsedOutsideOwnership,
+    item: toolUsedOutsideOwnershipSchema,
+  },
+  productsWithoutMappings: {
+    ...rawProblemDetectors.productsWithoutMappings,
+    item: productWithoutMappingsSchema,
+  },
+  productsWithTitleDerivableSize: {
+    ...rawProblemDetectors.productsWithTitleDerivableSize,
+    item: productWithTitleDerivableSizeSchema,
+  },
+  ingredientsWithPartialCoverage: {
+    ...rawProblemDetectors.ingredientsWithPartialCoverage,
+    item: ingredientWithPartialCoverageSchema,
+  },
+  productsWithIslandedMappings: {
+    ...rawProblemDetectors.productsWithIslandedMappings,
+    item: productWithIslandedMappingsSchema,
+  },
+  productsWithBetterUpcData: {
+    ...rawProblemDetectors.productsWithBetterUpcData,
+    item: productWithBetterUpcDataSchema,
+  },
+  partiallyImportedCookbooks: {
+    ...rawProblemDetectors.partiallyImportedCookbooks,
+    item: partiallyImportedCookbookSchema,
+  },
+  vendorsWithoutLogos: {
+    ...rawProblemDetectors.vendorsWithoutLogos,
+    item: vendorWithoutLogoSchema,
+  },
+  emptyLocations: {
+    ...rawProblemDetectors.emptyLocations,
+    item: emptyLocationSchema,
+  },
+  purchasesNotReconciling: {
+    ...rawProblemDetectors.purchasesNotReconciling,
+    item: purchaseNotReconcilingSchema,
+  },
+  purchaseFinancialSettlementMismatches: {
+    ...rawProblemDetectors.purchaseFinancialSettlementMismatches,
+    item: purchaseFinancialSettlementMismatchSchema,
+  },
+  duplicateSpendCandidates: {
+    ...rawProblemDetectors.duplicateSpendCandidates,
+    item: duplicateSpendCandidateSchema,
+  },
+};
+
+/** Live entity projections are explicit; Run proposal evidence is never traversed. */
+export const problemLiveReadProjections = {
+  orphanedProducts: { entity: "product", schema: orphanedProductSchema },
+  weightSoldProducts: { entity: "product", schema: weightSoldProductSchema },
+  toolsUsedOutsideOwnership: {
+    entity: "product",
+    schema: toolUsedOutsideOwnershipSchema,
+  },
+  productsWithoutMappings: {
+    entity: "product",
+    schema: productWithoutMappingsSchema,
+  },
+  productsWithTitleDerivableSize: {
+    entity: "product",
+    schema: productWithTitleDerivableSizeSchema,
+  },
+  ingredientsWithPartialCoverage: {
+    entity: "product",
+    schema: ingredientWithPartialCoverageSchema,
+  },
+  productsWithIslandedMappings: {
+    entity: "product",
+    schema: productWithIslandedMappingsSchema,
+  },
+  productsWithBetterUpcData: {
+    entity: "product",
+    schema: productWithBetterUpcDataSchema,
+  },
+  partiallyImportedCookbooks: {
+    entity: "cookbook",
+    schema: partiallyImportedCookbookSchema,
+  },
+  vendorsWithoutLogos: { entity: "vendor", schema: vendorWithoutLogoSchema },
+  emptyLocations: { entity: "location", schema: emptyLocationSchema },
+  purchasesNotReconciling: {
+    entity: "purchase",
+    schema: purchaseNotReconcilingSchema,
+  },
+  purchaseFinancialSettlementMismatches: {
+    entity: "purchase",
+    schema: purchaseFinancialSettlementMismatchSchema,
+  },
+  duplicateSpendCandidates: {
+    entity: "expense",
+    schema: duplicateSpendCandidateSchema,
+  },
+} as const;
 
 type Detectors = typeof problemDetectors;
 export type ProblemKey = keyof Detectors;

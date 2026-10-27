@@ -123,7 +123,8 @@ function ResolutionChain({
                   : step?.effect === "used" || step?.effect === "fallback"
                     ? "deciding"
                     : "skipped",
-              title: row.title,
+              // The report row owns its linked title and all supporting values.
+              title: null,
               children: (
                 <RecordsBlockView
                   block={{

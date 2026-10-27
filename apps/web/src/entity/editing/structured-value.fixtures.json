@@ -287,9 +287,63 @@
           "recipe": {
             "id": "RCP-2222",
             "name": "Vector stew",
-            "servings": null,
             "yield": null,
-            "totals": null
+            "fields": {
+              "servings": {
+                "current": {
+                  "assignment": {
+                    "kind": "inherit"
+                  },
+                  "controls": {
+                    "kind": "editable",
+                    "canSetNone": false,
+                    "canConfirm": false,
+                    "reset": {
+                      "kind": "unavailable"
+                    }
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "empty",
+                      "reason": "unset"
+                    },
+                    "provenance": {
+                      "kind": "computed"
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "totals": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "empty",
+                      "reason": "unset"
+                    },
+                    "provenance": {
+                      "kind": "computed"
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              }
+            }
           },
           "scale": 2,
           "sortOrder": 1,

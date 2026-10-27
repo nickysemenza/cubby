@@ -1,3 +1,8 @@
+import { withFieldEnvelopes } from "./field-envelope";
+import {
+  imageFieldEnvelopeFields,
+  imagePublicReadFields,
+} from "./generated/entity-field-envelope-fields.image.gen";
 import { imageFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.image.gen";
 import {
   imageProcessingIssue,
@@ -8,7 +13,7 @@ import { imageAssociationStorage } from "./entity-definitions/image-associations
 import { parseShortcode } from "@cubby/shared";
 import { IMAGE_FIELD_KEYS } from "./image-field-keys";
 import { productImagePurpose } from "./image-summary";
-import { imageOut } from "./entity-definitions/field-primitives";
+import { imageAttachmentReadSchema as imageOut } from "./generated/entity-image-attachment.gen";
 import { z } from "zod";
 import {
   ALLOWED_IMAGE_TYPES,
@@ -541,11 +546,11 @@ export const cullPendingImagesSchema = z.object({
 });
 
 export {
-  imageOut,
   imageAnalysisSummarySchema,
   type ImageAnalysisSummary,
 } from "./entity-definitions/field-primitives";
 
+export { imageOut };
 export type ImageOut = z.infer<typeof imageOut>;
 
 export const imageHashIndexItemSchema = z.object({
@@ -567,7 +572,16 @@ export const imageHashIndexItemSchema = z.object({
 export const imageHashIndexSchema = z.object({
   algorithmRevision: z.literal(1),
   items: z.array(imageHashIndexItemSchema),
-  repair: z.array(z.object({ id: imageShortcode, url: z.url() })),
+  repair: z.array(
+    z.object({
+      id: imageShortcode,
+      originalUrl: z
+        .url()
+        .describe(
+          "Original stored bytes to hash for index repair; never the selected display representation.",
+        ),
+    }),
+  ),
 });
 export type ImageHashIndex = z.infer<typeof imageHashIndexSchema>;
 
@@ -633,9 +647,13 @@ export const imageBrowserDeleteOut = z.object({
   sideEffects: mutationSideEffectsSchema,
 });
 
-export const projectImageSummarySchema = z
-  .object(generatedImageFieldSchemas.read)
-  .pick({ id: true, url: true, filename: true });
+export const projectImageSummarySchema = withFieldEnvelopes(
+  z
+    .object(generatedImageFieldSchemas.read)
+    .pick({ id: true, url: true, filename: true }),
+  imageFieldEnvelopeFields,
+  imagePublicReadFields,
+);
 export const projectImageSummariesInput = z.object({
   projectIds: z.array(projectShortcode).max(500),
 });

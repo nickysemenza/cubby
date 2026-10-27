@@ -8,6 +8,7 @@ import {
   type ProductShortcode,
   parseEntityId,
 } from "@cubby/schemas/identifiers";
+import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import type {
   ProductCreateInput,
   ProductSummariesInput,
@@ -202,12 +203,16 @@ const getProductFoodSummaries = async (
   return result;
 };
 
+type RawProductSummariesOut = Omit<ProductSummariesOut, "images"> & {
+  images?: Record<string, RawImageOutput[]>;
+};
+
 export const getProductSummaries = async (
   db: Database,
   usdaClient: UsdaFoodBatchPort,
   shortcodes: ProductShortcode[],
   include: ProductSummariesInput["include"],
-): Promise<ProductSummariesOut> => {
+): Promise<RawProductSummariesOut> => {
   const ids = await resolveAllOrThrow(db, "product", shortcodes);
   const shortcodeById = new Map(
     shortcodes.map((shortcode, i) => {
@@ -222,7 +227,7 @@ export const getProductSummaries = async (
       }),
     );
   const requested = new Set(include);
-  const summaries: ProductSummariesOut = {};
+  const summaries: RawProductSummariesOut = {};
 
   await Promise.all([
     requested.has("food")

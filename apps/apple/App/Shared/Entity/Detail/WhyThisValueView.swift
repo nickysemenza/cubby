@@ -510,7 +510,8 @@ struct WhyThisValueView: View {
         } else {
             SourceStackView(
                 label: block.title ?? "Resolution order",
-                levels: SourceStack.levels(chain: block, steps: steps)
+                levels: SourceStack.levels(chain: block, steps: steps),
+                showsTitles: false
             ) { level in
                 RecordsBlockView(
                     records: ReportPresentation.records(untitled(block, row: level.index)), host: nil)
@@ -521,7 +522,7 @@ struct WhyThisValueView: View {
         }
     }
 
-    /// One chain row (or the empty block) without the title and footer the stack already shows.
+    /// The report row owns its linked title; the chain owns the block footer.
     private func untitled(_ block: ReportRecordsBlock, row: Int? = nil) -> ReportRecordsBlock {
         var result = block
         result.title = nil

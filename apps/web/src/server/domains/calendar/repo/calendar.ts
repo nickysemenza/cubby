@@ -3,6 +3,13 @@ import {
   calendarTaskSource,
   calendarExpenseSource,
   calendarProjectSource,
+  calendarPurchaseSource,
+  calendarPlantingSource,
+  rawCalendarMealSource,
+  rawCalendarTaskSource,
+  rawCalendarExpenseSource,
+  rawCalendarProjectSource,
+  calendarItem,
 } from "@cubby/schemas/calendar";
 import type {
   CalendarDaySummary,
@@ -17,6 +24,7 @@ import {
   calendarItemKey,
   calendarSourceMatches,
 } from "@cubby/schemas/calendar";
+import type { RawCalendarItem } from "@cubby/schemas/calendar-raw-read";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -75,7 +83,7 @@ import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { hydrateTaskInheritanceRows } from "~/server/domains/task/repo/task-project-inheritance";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
+import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import type { NestedListScaffold } from "~/server/generic/list/repo/list";
 
 import {
@@ -242,7 +250,7 @@ const loadCalendarExpenses = async (
 const loadCalendarPurchaseItems = async (
   db: Database,
   input: CalendarRangeInput,
-): Promise<CalendarItem[]> => {
+): Promise<RawCalendarItem[]> => {
   if (!calendarSourceMatches("spending", input)) return [];
   const filters = input.filters?.spending;
   const hasFilters =
@@ -314,19 +322,9 @@ const loadCalendarProjects = async (
 };
 
 const mapMealItems = async (
-  db: Database,
   meals: Awaited<ReturnType<typeof loadCalendarMeals>>,
-): Promise<CalendarItem[]> => {
-  const sources = await publicFieldEnvelopeRows({
-    db,
-    entity: "meal",
-    schema: calendarMealSource,
-    rows: meals.map((meal) => ({
-      ...meal,
-      recipeNames: meal.recipes.map((recipe) => recipe.recipe.name),
-    })),
-  });
-  return meals.map((meal, index) => ({
+): Promise<RawCalendarItem[]> => {
+  return meals.map((meal) => ({
     kind: "meal",
     id: meal.id,
     title: meal.name || mealTypeTitle(meal.mealType),
@@ -335,7 +333,10 @@ const mapMealItems = async (
     endDateExclusive: shiftPlainDate(meal[calendarSources.meal.dates[0]], 1),
     interaction: "move" as const,
     sortOrder: meal.sortOrder,
-    source: calendarMealSource.parse(sources[index]),
+    source: rawCalendarMealSource.parse({
+      ...meal,
+      recipeNames: meal.recipes.map((recipe) => recipe.recipe.name),
+    }),
     displayImages: [],
     mealTotals: meal.totals,
   }));
@@ -344,7 +345,7 @@ const mapMealItems = async (
 const mapTaskItems = async (
   db: Database,
   rows: Awaited<ReturnType<typeof loadCalendarTasks>>,
-): Promise<CalendarItem[]> => {
+): Promise<RawCalendarItem[]> => {
   const dataQualities = await loadDataQualities(
     db,
     "task",
@@ -353,12 +354,7 @@ const mapTaskItems = async (
   const values = rows.map((row) =>
     dbTaskToAPI(row, [], [], 0, 0, dataQualities.get(row.id)!),
   );
-  const sources = await publicFieldEnvelopeRows({
-    db,
-    entity: "task",
-    schema: calendarTaskSource,
-    rows: values,
-  });
+
   return rows.flatMap((row, index) => {
     const value = values[index]!;
     const startDate = value.due?.start ?? value.due?.end;
@@ -374,7 +370,7 @@ const mapTaskItems = async (
             interaction: "move" as const,
             due: value.due,
             status: value.status,
-            source: calendarTaskSource.parse(sources[index]),
+            source: rawCalendarTaskSource.parse(value),
             projectName: value.projectName,
             assignedProjectName:
               row.fieldResolutions.projectId?.mode === "explicit"
@@ -391,7 +387,7 @@ const mapTaskItems = async (
 const mapExpenseItems = async (
   db: Database,
   rows: Awaited<ReturnType<typeof loadCalendarExpenses>>,
-): Promise<CalendarItem[]> => {
+): Promise<RawCalendarItem[]> => {
   const dataQualities = await loadDataQualities(
     db,
     "expense",
@@ -400,12 +396,7 @@ const mapExpenseItems = async (
   const values = rows.map((row) =>
     dbExpenseToAPI(row, dataQualities.get(row.id)!),
   );
-  const sources = await publicFieldEnvelopeRows({
-    db,
-    entity: "expense",
-    schema: calendarExpenseSource,
-    rows: values,
-  });
+
   return rows.flatMap((row, index) => {
     const value = values[index]!;
     return value.date
@@ -421,7 +412,7 @@ const mapExpenseItems = async (
               : ("read-only" as const),
             future: value.future,
             cost: value.cost,
-            source: calendarExpenseSource.parse(sources[index]),
+            source: rawCalendarExpenseSource.parse(value),
             projectName: value.projectName,
             productName: value.productName,
             displayImages: [],
@@ -432,11 +423,10 @@ const mapExpenseItems = async (
 };
 
 const mapProjectItems = async (
-  db: Database,
   rows: Awaited<ReturnType<typeof loadCalendarProjects>>,
   projectDates: Awaited<ReturnType<typeof loadProjectDateWindows>> | null,
   input: CalendarRangeInput,
-): Promise<CalendarItem[]> => {
+): Promise<RawCalendarItem[]> => {
   const selected = rows.flatMap((row) => {
     const window = projectDates?.dateWindows.get(row.id);
     const firstDate = window?.effectiveStart ?? window?.effectiveEnd;
@@ -469,15 +459,9 @@ const mapProjectItems = async (
         ];
   });
 
-  const sources = await publicFieldEnvelopeRows({
-    db,
-    entity: "project",
-    schema: calendarProjectSource,
-    rows: selected.map((item) => item.source),
-  });
-  return selected.map((item, index) => ({
+  return selected.map((item) => ({
     ...item,
-    source: calendarProjectSource.parse(sources[index]),
+    source: rawCalendarProjectSource.parse(item.source),
   }));
 };
 
@@ -588,19 +572,19 @@ export async function getCalendarRange(
   ]);
 
   const [mealItems, taskItems, expenseItems, projectItems] = await Promise.all([
-    mapMealItems(db, meals),
+    mapMealItems(meals),
     mapTaskItems(db, taskRows),
     mapExpenseItems(db, expenseRows),
-    mapProjectItems(db, projectRows, projectDates, input),
+    mapProjectItems(projectRows, projectDates, input),
   ]);
-  const items = sortCalendarItems([
+  const items = [
     ...mealItems,
     ...taskItems,
     ...expenseItems,
     ...purchaseItems,
     ...projectItems,
     ...mapPlantingItems(plantingRows, input),
-  ]);
+  ];
   const spendingLineCodes = [
     ...new Set(
       items.flatMap((item) =>
@@ -701,7 +685,27 @@ export async function getCalendarRange(
     db,
     items.map((item) => ({ entityKind: item.kind, entityId: item.id })),
   );
-  const hydrated = items.map((item) => {
+  const sourceSchemas = {
+    meal: calendarMealSource,
+    task: calendarTaskSource,
+    expense: calendarExpenseSource,
+    purchase: calendarPurchaseSource,
+    project: calendarProjectSource,
+    planting: calendarPlantingSource,
+  };
+  const sources = await publicFieldEnvelopeBatch({
+    db,
+    reads: items.map((item) => ({
+      entity: item.kind,
+      schema: sourceSchemas[item.kind],
+      row: {
+        ...("source" in item ? item.source : undefined),
+        id: item.id,
+        displayImages: covers.get(entityRefKey(item.kind, item.id)) ?? [],
+      },
+    })),
+  });
+  const hydrated = items.map((item, index) => {
     const rows = (
       item.kind === "expense"
         ? [item.id]
@@ -731,8 +735,9 @@ export async function getCalendarRange(
             party.inherited && (parties.get(party.id)?.inherited ?? true),
         });
     }
-    return {
+    return calendarItem.parse({
       ...item,
+      source: sources[index],
       ...((item.kind === "expense" || item.kind === "purchase") && {
         spendingContext: {
           projectNames: [
@@ -745,10 +750,10 @@ export async function getCalendarRange(
           ),
         },
       }),
-      displayImages: covers.get(entityRefKey(item.kind, item.id)) ?? [],
-    };
+    });
   });
-  return { items: hydrated, days: summarizeCalendarDays(input, hydrated) };
+  const ordered = sortCalendarItems(hydrated);
+  return { items: ordered, days: summarizeCalendarDays(input, ordered) };
 }
 
 /** One read for the two-kind Schedule workbench. The window selects dated

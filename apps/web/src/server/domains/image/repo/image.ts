@@ -581,7 +581,8 @@ export const getImageHashIndex = async (
       .filter((row) => row.perceptualHash === null)
       .map((row) => ({
         id: parseShortcodeFor("image", row.shortcode),
-        url: getR2PublicUrl(row.key),
+        // Hash repair must read original bytes even when a display derivative is preferred.
+        originalUrl: getR2PublicUrl(row.key),
       })),
   };
 };

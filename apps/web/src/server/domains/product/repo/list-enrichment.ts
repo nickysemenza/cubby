@@ -9,9 +9,9 @@ import { computePerUnitPrices } from "~/lib/price-mapping-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { unitPriceLabel } from "~/server/generic/list/repo/list-display-labels";
 
+// Nested categories are already public here; applicability comes from the selected price decision.
 const unitPriceReadInput = rawProductList.pick({
   id: true,
-  category: true,
   unitMappings: true,
   food: true,
   labelNutrition: true,
@@ -34,13 +34,14 @@ type ProductUnitPriceProjection = Pick<
 export function projectProductUnitPrices({
   product,
   price,
+  service,
 }: {
   product: unknown;
   price: number | null;
+  service: boolean;
 }): ProductUnitPriceProjection {
   const input = unitPriceReadInput.parse(product);
   const unitPriceMappings = getAllUnitMappingsFromProduct({ ...input, price });
-  const service = isServiceProductCategory(input.category);
   const comparable = computePerUnitPrices(unitPriceMappings);
   const unitPrice =
     service || (comparable.natural === null && comparable.perGram === null)

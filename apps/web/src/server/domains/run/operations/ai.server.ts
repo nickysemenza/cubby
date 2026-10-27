@@ -1,3 +1,7 @@
+import {
+  detectedInventorySchema,
+  detectedProductMatchSchema,
+} from "@cubby/schemas/ai";
 import type {
   FieldSuggestionsInput,
   enrichmentProposalPrecomputeInput,
@@ -84,6 +88,7 @@ import {
   fieldReviewIdentity,
 } from "~/server/generic/assessment/repo/field-assessment-review";
 import { latestSuggestionSweepStatus } from "~/server/generic/assessment/repo/suggestion-review";
+import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import {
   resolveAllOrThrow,
   resolveLiveShortcodes,
@@ -661,12 +666,36 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   },
   detectInventoryItems: async (context, input) => {
     const runId = await actorAiRun(context);
-    return detectInventoryItems(
+    const detected = await detectInventoryItems(
       context.db,
       await resolveOrThrow(context.db, "location", input.locationId),
       runId,
       input.imageIds,
     );
+    const matches = await publicFieldEnvelopeBatch({
+      db: context.db,
+      reads: detected.items.flatMap((item) =>
+        item.matchedProduct
+          ? [
+              {
+                entity: "product",
+                schema: detectedProductMatchSchema,
+                row: item.matchedProduct,
+              },
+            ]
+          : [],
+      ),
+    });
+    return {
+      ...detectedInventorySchema.parse({
+        ...detected,
+        items: detected.items.map((item) => ({
+          ...item,
+          matchedProduct: item.matchedProduct ? matches.shift() : null,
+        })),
+      }),
+      analyzedAt: detected.analyzedAt,
+    };
   },
   approveDetectedInventoryItem: async (context, input) =>
     approveDetectedInventoryItem(

@@ -363,7 +363,7 @@ describe("MCP catalog", () => {
         action: "find_or_create_by_upc",
         upc: "012345678905",
       }),
-    ).toMatchObject({ id: productId });
+    ).toMatchObject({ product: { id: productId } });
     // Exercise a known exception-eligible gap rather than whichever required
     // field happens to be first as the quality registry grows.
     const purchaseId = z
@@ -871,7 +871,18 @@ describe("MCP catalog", () => {
     );
     expect(readback.isError).not.toBe(true);
     expect(readback.structuredContent).toMatchObject({
-      item: { cost: 12, productId: product.shortcode },
+      item: {
+        cost: 12,
+        fields: {
+          productId: {
+            result: {
+              decision: {
+                outcome: { kind: "value", value: product.shortcode },
+              },
+            },
+          },
+        },
+      },
     });
   });
 

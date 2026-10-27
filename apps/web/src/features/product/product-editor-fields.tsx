@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/external-id";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { redundantTokens } from "@cubby/shared/redundant-tokens";
@@ -585,27 +586,15 @@ function ProductIdentifyAction({
 const attachedImageWithContentType = imageOut.extend({
   purpose: z.enum(["item", "label"]).nullable(),
 });
-const asPendingImage = (image: {
-  id: string;
-  url: string;
-  filename: string;
-  key: string;
-  purpose: "item" | "label" | null;
-}): PendingImage =>
-  image.purpose
-    ? {
-        id: image.id,
-        url: image.url,
-        filename: image.filename,
-        key: image.key,
-        purpose: image.purpose,
-      }
-    : {
-        id: image.id,
-        url: image.url,
-        filename: image.filename,
-        key: image.key,
-      };
+const asPendingImage = (
+  image: z.output<typeof attachedImageWithContentType>,
+): PendingImage => ({
+  id: image.id,
+  url: publicImageUrl(image) ?? "",
+  filename: image.filename,
+  key: image.key,
+  ...(image.purpose ? { purpose: image.purpose } : {}),
+});
 
 /**
  * The product `media` hook's `documents` slot: manuals share the Product

@@ -171,8 +171,8 @@ describe("Email generic persisted reads", () => {
         linked: false,
       },
     });
-    expect(list.items).toEqual([
-      expect.objectContaining({
+    expect(list.items).toMatchObject([
+      {
         id: metadata.shortcode,
         sender: "news@example.test",
         subject: "Workshop newsletter",
@@ -180,8 +180,12 @@ describe("Email generic persisted reads", () => {
         ledgerPartyId: party.shortcode,
         classification: "unrelated",
         classificationStage: "rule",
-        linked: false,
-      }),
+        fields: {
+          linked: {
+            result: { decision: { outcome: { kind: "value", value: false } } },
+          },
+        },
+      },
     ]);
     expect(list.meta.totalCount).toBe(1);
     const detail = await executeEntity(context, {
@@ -193,7 +197,11 @@ describe("Email generic persisted reads", () => {
     expect(detail.item).toMatchObject({
       id: metadata.shortcode,
       subject: "Workshop newsletter",
-      linked: false,
+      fields: {
+        linked: {
+          result: { decision: { outcome: { kind: "value", value: false } } },
+        },
+      },
     });
     const unknown = await executeEntity(context, {
       action: "get",
@@ -362,7 +370,13 @@ describe("Email generic persisted reads", () => {
       ),
     ).toBe(true);
     expect(linked.meta.totalCount).toBe(3);
-    expect(linked.items[0]).toMatchObject({ linked: true });
+    expect(linked.items[0]).toMatchObject({
+      fields: {
+        linked: {
+          result: { decision: { outcome: { kind: "value", value: true } } },
+        },
+      },
+    });
     const unlinked = await executeEntity(context, {
       action: "list",
       entity: "email",
@@ -387,7 +401,20 @@ describe("Email generic persisted reads", () => {
         id: codes.get(messageId)!,
       });
       expect(detail.item).toMatchObject({
-        linked: ["accepted", "attachment", "lifecycle"].includes(messageId),
+        fields: {
+          linked: {
+            result: {
+              decision: {
+                outcome: {
+                  kind: "value",
+                  value: ["accepted", "attachment", "lifecycle"].includes(
+                    messageId,
+                  ),
+                },
+              },
+            },
+          },
+        },
       });
     }
   });
@@ -432,8 +459,23 @@ describe("Email generic persisted reads", () => {
     });
     expect(detail.item).toMatchObject({
       classification: "unrelated",
-      reviewedClassification: "related",
-      reviewedClassificationReason: "Synthetic independent message review",
+      fields: {
+        reviewedClassification: {
+          result: {
+            decision: { outcome: { kind: "value", value: "related" } },
+          },
+        },
+        reviewedClassificationReason: {
+          result: {
+            decision: {
+              outcome: {
+                kind: "value",
+                value: "Synthetic independent message review",
+              },
+            },
+          },
+        },
+      },
     });
     await getDb(ctx.db).execute(
       sql`UPDATE "Email" SET checksum = ${"b".repeat(64)} WHERE id = ${email.id}::uuid`,
@@ -446,8 +488,14 @@ describe("Email generic persisted reads", () => {
     });
     expect(changed.item).toMatchObject({
       classification: "unrelated",
-      reviewedClassification: null,
-      reviewedClassificationReason: null,
+      fields: {
+        reviewedClassification: {
+          result: { decision: { outcome: { kind: "empty" } } },
+        },
+        reviewedClassificationReason: {
+          result: { decision: { outcome: { kind: "empty" } } },
+        },
+      },
     });
   });
 });

@@ -23,7 +23,7 @@ import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 
-import { PhotoGrid, type PhotoGridImage } from "./photo-grid";
+import { PhotoGrid } from "./photo-grid";
 import { PhotoViewer } from "./photo-viewer";
 
 const imageContentTypeSchema = z.enum(ALLOWED_IMAGE_TYPES);
@@ -69,13 +69,17 @@ function PendingPhotoPreview({
 }: {
   viewing: PreviewSelection | null;
   setViewing: (selection: PreviewSelection | null) => void;
-  groups: Record<PreviewSelection["group"], PhotoGridImage[]>;
+  groups: Record<
+    PreviewSelection["group"],
+    Pick<PendingImage, "id" | "url" | "filename">[]
+  >;
 }) {
   if (!viewing) return null;
   const images = groups[viewing.group];
   const index = images.findIndex((image) => image.id === viewing.id);
   return (
     <PhotoViewer
+      imageUrl={(image) => image.url}
       images={images}
       index={index < 0 ? null : index}
       onOpenChange={(open) => {
@@ -583,6 +587,7 @@ export function PendingImageUpload({
         <div className="space-y-2">
           <Label>Uploading images</Label>
           <PhotoGrid
+            imageUrl={(image) => image.url}
             images={uploadDrafts}
             onSelect={(image) => setViewing({ group: "draft", id: image.id })}
             renderOverlay={(draft) => (
@@ -629,6 +634,7 @@ export function PendingImageUpload({
         <div className="space-y-2">
           <Label>New images</Label>
           <PhotoGrid
+            imageUrl={(image) => image.url}
             images={pendingImages}
             onSelect={(image) => setViewing({ group: "pending", id: image.id })}
             renderOverlay={(image) => (
@@ -652,6 +658,7 @@ export function PendingImageUpload({
         <div className="space-y-2">
           <Label>Existing images</Label>
           <PhotoGrid
+            imageUrl={(image) => image.url}
             images={currentExistingImages}
             onSelect={(image) =>
               setViewing({ group: "existing", id: image.id })

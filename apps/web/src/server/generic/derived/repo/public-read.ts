@@ -333,22 +333,23 @@ export function selectedFieldEnvelopeSchema(
   });
 }
 
-export async function publicFieldEnvelopeRows<S extends z.ZodType>({
+/** One response may contain several selected projections of the same entity. */
+export async function publicFieldEnvelopeBatch({
   db,
-  entity,
-  schema,
-  rows,
+  reads,
   contexts,
 }: {
   db: RepositoryQueryInput;
-  entity: ShortcodeEntity;
-  schema: S;
-  rows: readonly unknown[];
-  contexts?: PageFieldReadContexts;
-}): Promise<Array<z.output<S>>> {
-  if (!(schema instanceof z.ZodObject))
-    throw new Error("An entity field read requires an object schema");
-  const roots = rows.map((row) => prepareReadNode(entity, schema, row));
+  reads: readonly {
+    entity: ShortcodeEntity;
+    schema: z.ZodObject;
+    row: ReadRow;
+  }[];
+  contexts?: ReadonlyMap<ShortcodeEntity, PageFieldReadContexts>;
+}): Promise<ReadRow[]> {
+  const roots = reads.map(({ entity, schema, row }) =>
+    prepareReadNode(entity, schema, row),
+  );
   const requested = new Map<ShortcodeEntity, Set<string>>();
   const collect = (node: ReadNode) => {
     const fields = node.schema.shape.fields;
@@ -363,7 +364,7 @@ export async function publicFieldEnvelopeRows<S extends z.ZodType>({
   const facts = new Map<ShortcodeEntity, PageFieldReadContexts>();
   await Promise.all(
     [...requested].map(async ([kind, codes]) => {
-      const existing = kind === entity ? contexts : undefined;
+      const existing = contexts?.get(kind);
       const missing = [...codes].filter((code) => !existing?.has(code));
       const loaded = missing.length
         ? await loadPublicFieldReadContexts(db, kind, missing)
@@ -395,5 +396,28 @@ export async function publicFieldEnvelopeRows<S extends z.ZodType>({
       publicFieldEnvelopeRow(node.schema, node.entity, row, current),
     );
   };
-  return roots.map((root) => schema.parse(serialize(root)));
+  return roots.map(serialize);
+}
+
+export async function publicFieldEnvelopeRows<S extends z.ZodType>({
+  db,
+  entity,
+  schema,
+  rows,
+  contexts,
+}: {
+  db: RepositoryQueryInput;
+  entity: ShortcodeEntity;
+  schema: S;
+  rows: readonly unknown[];
+  contexts?: PageFieldReadContexts;
+}): Promise<Array<z.output<S>>> {
+  if (!(schema instanceof z.ZodObject))
+    throw new Error("An entity field read requires an object schema");
+  const serialized = await publicFieldEnvelopeBatch({
+    db,
+    reads: rows.map((row) => ({ entity, schema, row: rowRecord.parse(row) })),
+    contexts: contexts ? new Map([[entity, contexts]]) : undefined,
+  });
+  return serialized.map((row) => schema.parse(row));
 }

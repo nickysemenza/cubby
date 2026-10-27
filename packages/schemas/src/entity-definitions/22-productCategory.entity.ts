@@ -7,7 +7,7 @@ import { productCategoryShortcode } from "../identifier-fields.js";
 import {
   PRODUCT_CATEGORY_MAX_DEPTH,
   productCategoryFeature,
-  productCategorySummary,
+  rawProductCategorySummary,
 } from "../product-category-fields.js";
 import { defineEntity } from "./definition.js";
 import { labelField } from "./label-field.js";
@@ -610,7 +610,7 @@ Rules:
             "The root-to-category classification path, including this category.",
         },
         validation: {
-          read: productCategorySummary.shape.path,
+          read: rawProductCategorySummary.shape.path,
           create: null,
           update: null,
         },

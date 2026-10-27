@@ -61,7 +61,9 @@ export function useShortcodeLookups(shortcodes: string[]) {
       shortcode: d.id,
       name: d.name,
       entityKind: "product" as const,
-      productCategory: d.category,
+      productCategory: d.category
+        ? { ...d.category, path: fieldValueOf(d.category.fields.path) ?? [] }
+        : null,
       productFeature: fieldValueOf(d.fields.categoryFeature),
     }));
     return [...locs, ...prods];

@@ -3,7 +3,7 @@ import { productResolveCandidateOut } from "@cubby/schemas/product";
 import type { SearchHit } from "@cubby/schemas/search";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render } from "@testing-library/react";
-import { categorySummaryFixture } from "tooling/product-category-fixtures";
+import { categoryReadFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
@@ -236,7 +236,7 @@ describe("product stock picker evidence", () => {
     id: product,
     name: "Back Brace",
     brandName: "BraceAbility",
-    category: categorySummaryFixture("household"),
+    category: categoryReadFixture("household"),
     quantityLedger: {
       acquiredUnits: 1,
       exitedUnits: 0,
@@ -275,7 +275,7 @@ describe("product stock picker evidence", () => {
     const item = buildProductComboboxItem(
       {
         ...base,
-        category: categorySummaryFixture("software"),
+        category: categoryReadFixture("software"),
         fields: {
           categoryFeature: fieldValueFixture(
             productResolveCandidateOut.shape.fields.shape.categoryFeature,

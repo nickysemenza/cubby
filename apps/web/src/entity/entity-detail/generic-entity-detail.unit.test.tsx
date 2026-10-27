@@ -12,7 +12,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { categorySummaryFixture } from "tooling/product-category-fixtures";
+import { categoryReadFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
@@ -306,7 +306,7 @@ describe("GenericEntityDetail", () => {
     // reads in its summary cell, so the facts omit it.)
     const record = recordFor("product");
     const fields = entityFieldEnvelopeSchemas.product.detail.shape.fields.shape;
-    const category = categorySummaryFixture("tools");
+    const category = categoryReadFixture("tools");
     const product = {
       ...record,
       model: "2853-20",
@@ -431,6 +431,15 @@ describe("GenericEntityDetail", () => {
       cookbooks: [],
       fields: {
         ...record.fields,
+        brandId: fieldValueFixture(
+          entityFieldEnvelopeSchemas.product.detail.shape.fields.shape.brandId,
+          testShortcode("vendor", "VEN-TEST"),
+        ),
+        brandName: fieldValueFixture(
+          entityFieldEnvelopeSchemas.product.detail.shape.fields.shape
+            .brandName,
+          "Synthetic publisher",
+        ),
         primaryGtin: fieldValueFixture(
           entityFieldEnvelopeSchemas.product.detail.shape.fields.shape
             .primaryGtin,

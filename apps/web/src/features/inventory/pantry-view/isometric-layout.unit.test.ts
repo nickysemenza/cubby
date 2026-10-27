@@ -1,7 +1,7 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { type InfLocation } from "@cubby/schemas/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
-import { categorySummaryFixture } from "tooling/product-category-fixtures";
+import { categoryReadFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it, vi } from "vitest";
 
 import { locationReadFixture } from "~/features/location/location-read.fixtures";
@@ -50,7 +50,7 @@ describe("isometric pantry layout", () => {
         valuation: 20,
         product: {
           name: "String lights",
-          category: categorySummaryFixture("household"),
+          category: categoryReadFixture("household"),
         },
         location: { id: tote.id, name: tote.name, type: "furniture" },
       },
@@ -77,7 +77,7 @@ describe("isometric pantry layout", () => {
         categoryFeature: "food",
         amount: { value: 2, unit: "each" },
         valuation: 8,
-        product: { name: "Coffee", category: categorySummaryFixture("food") },
+        product: { name: "Coffee", category: categoryReadFixture("food") },
         location: {
           id: shelf.id,
           name: shelf.name,

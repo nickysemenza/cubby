@@ -60,7 +60,7 @@ import type {
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import type { EntityRef } from "@cubby/schemas/identifiers";
 import { parseEntityRef, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ProblemsFast } from "@cubby/schemas/problems";
+import type { ProblemsFast } from "@cubby/schemas/problems-raw-read";
 import { is, type SQL, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 

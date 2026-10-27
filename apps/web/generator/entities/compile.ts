@@ -1,7 +1,7 @@
 import {
   withEntityListMedia,
   withEntityDetailMedia,
-} from "@cubby/schemas/entity-read-media";
+} from "@cubby/schemas/entity-media-raw-read";
 import type { RawReadSchemas } from "@cubby/schemas/entity-definitions/definition";
 import { resolveFieldDisplay, schemaAtReadPath } from "./presentation.ts";
 import { deriveBulkUpdateFields } from "./bulk.ts";

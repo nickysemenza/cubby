@@ -1,8 +1,8 @@
 import type {
-  CalendarItem,
   CalendarPlantingMilestone,
   CalendarRangeInput,
 } from "@cubby/schemas/calendar";
+import type { RawCalendarItem as CalendarItem } from "@cubby/schemas/calendar-raw-read";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import { and, eq, gte, isNotNull, isNull, lte, or } from "drizzle-orm";

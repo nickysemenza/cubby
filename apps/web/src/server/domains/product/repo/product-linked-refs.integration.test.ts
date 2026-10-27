@@ -103,9 +103,12 @@ describe("Product linked references and category behavior", () => {
     expect(repeated.queryCount).toBe(single.queryCount);
     for (const item of repeated.result) {
       expect(item.category?.id).toBe(category.output.id);
-      expect(item.category?.path.map((node) => node.name)).toContain(
-        "Synthetic storage group",
-      );
+      expect(
+        (item.category
+          ? (fieldValueOf(item.category.fields.path) ?? [])
+          : []
+        ).map((node) => node.name),
+      ).toContain("Synthetic storage group");
       expect(item.category).not.toHaveProperty("feature");
       expect(fieldValueOf(item.fields.categoryFeature)).toBe("storage");
       const locations = fieldValueOf(item.fields.servingAsLocations);

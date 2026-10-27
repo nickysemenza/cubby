@@ -13,6 +13,7 @@ import {
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ClockCounterClockwise";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
@@ -362,8 +363,14 @@ function detailFiles<E extends GenericDetailEntity>(
           readRecordField(record, "images", z.array(imageOut).nullish()) ?? [],
         ).images
       : attachments.images;
-  const { documents } = attachments;
-  return { images, documents };
+  const toDisplayFile = (image: z.output<typeof imageOut>) => {
+    const url = publicImageUrl(image);
+    return url ? [{ ...image, url }] : [];
+  };
+  return {
+    images: images.flatMap(toDisplayFile),
+    documents: attachments.documents.flatMap(toDisplayFile),
+  };
 }
 
 function detailWayfinding<E extends GenericDetailEntity>(

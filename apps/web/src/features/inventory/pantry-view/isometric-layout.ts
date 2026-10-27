@@ -1,10 +1,10 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationTreeNode } from "@cubby/schemas/location";
+import type { ProductCategorySummary as ProductCategory } from "@cubby/schemas/product-category-fields";
 import {
   getFeatureColor,
   getLocationTypeColor,
   type LocationType,
-  type ProductCategory,
 } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { sum, sumBy } from "es-toolkit";

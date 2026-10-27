@@ -1,5 +1,4 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
-import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
@@ -35,7 +34,6 @@ describe("product-backed locations (null type)", () => {
     const storage = getLocationGlyph({
       type: null,
       product: {
-        category: categorySummaryFixture("storage"),
         fields: {
           categoryFeature: fieldValueFixture(
             entityFieldEnvelopeSchemas.product.output.shape.fields.shape
@@ -48,7 +46,6 @@ describe("product-backed locations (null type)", () => {
     const tools = getLocationGlyph({
       type: null,
       product: {
-        category: categorySummaryFixture("tools"),
         fields: {
           categoryFeature: fieldValueFixture(
             entityFieldEnvelopeSchemas.product.output.shape.fields.shape
@@ -64,7 +61,7 @@ describe("product-backed locations (null type)", () => {
   it("falls back to a generic glyph when the product has no category", () => {
     const uncategorized = getLocationGlyph({
       type: null,
-      product: { category: null },
+      product: {},
     });
     expect(uncategorized).toBe(getLocationIcon(null));
   });
@@ -75,7 +72,6 @@ describe("product-backed locations (null type)", () => {
       getLocationGlyph({
         type: "room",
         product: {
-          category: categorySummaryFixture("storage"),
           fields: {
             categoryFeature: fieldValueFixture(
               entityFieldEnvelopeSchemas.product.output.shape.fields.shape

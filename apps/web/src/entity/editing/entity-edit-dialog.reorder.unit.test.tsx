@@ -21,7 +21,12 @@ const images = ["IMG-AAAA", "IMG-BBBB", "IMG-CCCC"].map((id, index) =>
     seed: index,
     overrides: {
       id,
-      url: `https://images.example/${id}.jpg`,
+      fields: {
+        url: fieldValueFixture(
+          imageOut.shape.fields.shape.url,
+          `https://images.example/${id}.jpg`,
+        ),
+      },
       filename: `photo-${index + 1}.jpg`,
       key: `key-${id}`,
     },

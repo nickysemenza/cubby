@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { computedFieldEnvelope, fieldEnvelope } from "./field-envelope";
 
+import { recordEmojiField } from "./emoji";
 import { productCategoryShortcode } from "./identifier-fields";
 
 /**
@@ -62,17 +64,33 @@ export const rawProductCategorySummary = z.object({
 export type RawProductCategorySummary = z.infer<
   typeof rawProductCategorySummary
 >;
-/** Public category references carry identity/path; Product fields own current behavior. */
-export const productCategorySummary = rawProductCategorySummary.omit({
-  feature: true,
+/** A current category reference keeps its derived ancestry in the canonical envelope. */
+export const productCategorySummary = z.object({
+  id: productCategoryShortcode,
+  name: z.string().min(1),
+  fields: z.object({
+    path: computedFieldEnvelope(rawProductCategorySummary.shape.path),
+  }),
 });
 export type ProductCategorySummary = z.infer<typeof productCategorySummary>;
 
 /** Purchase-line evidence for a category in Vendor reads and classification. */
-export const purchasedCategorySummary = z.object({
+export const rawPurchasedCategorySummary = z.object({
   id: productCategoryShortcode,
   name: z.string(),
   emoji: z.string().nullable(),
   principalLineCount: z.number().int(),
   distinctPurchaseCount: z.number().int(),
 });
+
+/** Current Vendor category reads retain usage evidence beside authoritative category emoji. */
+export const purchasedCategorySummary = rawPurchasedCategorySummary
+  .omit({ emoji: true })
+  .extend({
+    fields: z.object({
+      emoji: fieldEnvelope(
+        recordEmojiField.validation.update,
+        recordEmojiField.validation.read,
+      ),
+    }),
+  });

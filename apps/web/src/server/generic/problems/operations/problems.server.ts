@@ -1,9 +1,14 @@
 import { problemsTypeSliceOut } from "@cubby/schemas/mcp";
 import {
   allProblemsMcpSchema,
-  assembleAllProblems,
+  problemsFastSchema,
+  problemsCoverageSchema,
+  problemsUpcSchema,
+  problemsViewsSchema,
+  problemsTrackerSchema,
   referentialLivenessViolationsMcpOut,
 } from "@cubby/schemas/problems";
+import { assembleAllProblems } from "@cubby/schemas/problems-raw-read";
 import { z } from "zod";
 
 import { integrityProblemsContract } from "~/contracts/entity-integrity.contract";
@@ -17,6 +22,8 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
 
+import { publicProblemGroups, publicProblemSlice } from "./problem-public-read";
+
 // Load detector groups only for the operations that need them.
 const problemWorkflows = () =>
   import("~/server/generic/problems/operations/problem-workflows.server");
@@ -28,24 +35,42 @@ const problemExecution = () =>
 /** Problem reads are authoritative so fixes disappear on the next fetch. */
 export const problemsHandlers = implementOperationDomain(problemsContract, {
   getFast: async (context) =>
-    (await problemDetectors()).findFastProblems(context.db),
+    publicProblemGroups(
+      context.db,
+      await (await problemDetectors()).findFastProblems(context.db),
+      problemsFastSchema,
+    ),
   getCounts: (context) => readProblemCounts(context),
   getViews: async (context) =>
-    (
-      await import("~/server/generic/problems/service/problem-views.service")
-    ).findViewProblems(context.db),
-  getCoverage: async (context) =>
-    (await problemDetectors()).findCoverageProblems(
+    publicProblemGroups(
       context.db,
-      context.usdaClient,
+      await (
+        await import("~/server/generic/problems/service/problem-views.service")
+      ).findViewProblems(context.db),
+      problemsViewsSchema,
+    ),
+  getCoverage: async (context) =>
+    publicProblemGroups(
+      context.db,
+      await (
+        await problemDetectors()
+      ).findCoverageProblems(context.db, context.usdaClient),
+      problemsCoverageSchema,
     ),
   getUpc: async (context) =>
-    (await problemDetectors()).findUpcProblems(
+    publicProblemGroups(
       context.db,
-      context.upcLookupClient,
+      await (
+        await problemDetectors()
+      ).findUpcProblems(context.db, context.upcLookupClient),
+      problemsUpcSchema,
     ),
   getTracker: async (context) =>
-    (await problemDetectors()).findTrackerProblems(context.db),
+    publicProblemGroups(
+      context.db,
+      await (await problemDetectors()).findTrackerProblems(context.db),
+      problemsTrackerSchema,
+    ),
   getCoverageTotals: async (context) =>
     (await problemDetectors()).findCoverageTotals(context.db),
   getMaintenanceCounts: async (context) =>
@@ -92,13 +117,16 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
       const definition = problemQuery(key.data);
       if (!definition) throw new Error("Problem query registry is incomplete");
       return pageProblemTypeSlice(
-        await (
-          await problemExecution()
-        ).findProblemByType(
+        await publicProblemSlice(
           context.db,
-          definition.key,
-          context.upcLookupClient,
-          context.usdaClient,
+          await (
+            await problemExecution()
+          ).findProblemByType(
+            context.db,
+            definition.key,
+            context.upcLookupClient,
+            context.usdaClient,
+          ),
         ),
         input,
       );
@@ -113,8 +141,10 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
         (views) => views.findViewProblems(context.db),
       ),
     ]);
-    return allProblemsMcpSchema.parse(
+    return publicProblemGroups(
+      context.db,
       assembleAllProblems({ fast, coverage, upc, tracker, views }),
+      allProblemsMcpSchema,
     );
   },
 });
@@ -156,13 +186,16 @@ export const integrityProblemsHandlers = implementOperationDomain(
   {
     getByType: async (context, input) =>
       integrityProblemsContract.ops.getByType.output.parse(
-        await (
-          await problemExecution()
-        ).findProblemByType(
+        await publicProblemSlice(
           context.db,
-          input.key,
-          context.upcLookupClient,
-          context.usdaClient,
+          await (
+            await problemExecution()
+          ).findProblemByType(
+            context.db,
+            input.key,
+            context.upcLookupClient,
+            context.usdaClient,
+          ),
         ),
       ),
   },

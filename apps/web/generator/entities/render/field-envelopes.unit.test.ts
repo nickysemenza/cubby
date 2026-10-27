@@ -30,6 +30,38 @@ describe("recursive field projections", () => {
     expect(recipe?.source).not.toContain("recipedetailNode");
   });
 
+  it("envelopes shared Image attachments without making raw declarations depend on media", async () => {
+    const artifacts = renderFieldEnvelopeArtifacts(
+      await loadEntityDeclarations(),
+    );
+    const leaf = artifacts.find((artifact) =>
+      artifact.relativePath.endsWith("entity-image-attachment.gen.ts"),
+    );
+    expect(leaf?.source).toContain(
+      "withFieldEnvelopes(rawImageOutput, imageFieldEnvelopeFields, imagePublicReadFields)",
+    );
+    expect(leaf?.source).not.toContain("entity-read-media");
+    const product = artifacts.find((artifact) =>
+      artifact.relativePath.endsWith("entity-field-envelopes.product.gen.ts"),
+    );
+    expect(product?.source).toContain(
+      'shape["images"].element, imageFieldEnvelopeFields, imagePublicReadFields',
+    );
+    expect(product?.source).toContain(
+      'shape["labelImages"].element, imageFieldEnvelopeFields, imagePublicReadFields',
+    );
+    const inventory = artifacts.find((artifact) =>
+      artifact.relativePath.endsWith("entity-field-envelopes.inventory.gen.ts"),
+    );
+    expect(inventory?.source).toContain(
+      'shape["product"].shape["images"].element, imageFieldEnvelopeFields, imagePublicReadFields',
+    );
+    const nested = artifacts.find((artifact) =>
+      artifact.relativePath.endsWith("entity-field-envelope-nested.gen.ts"),
+    );
+    expect(nested?.source).toContain('{"path":["images"],"entity":"image"}');
+  });
+
   it("emits declared domain envelope ports without importing repository adapters", async () => {
     const entities = await loadEntityDeclarations();
     const port = renderFieldEnvelopeArtifacts(entities).find((artifact) =>

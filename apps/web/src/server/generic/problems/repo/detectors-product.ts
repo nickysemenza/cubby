@@ -15,7 +15,10 @@ import type {
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { ProblemItem, problemDetectors } from "@cubby/schemas/problems";
+import {
+  ProblemItem,
+  problemDetectors,
+} from "@cubby/schemas/problems-raw-read";
 import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { isMiscProduct } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";

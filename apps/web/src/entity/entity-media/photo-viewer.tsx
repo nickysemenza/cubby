@@ -1,4 +1,3 @@
-import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
@@ -18,6 +17,7 @@ import type { PhotoGridImage } from "./photo-grid";
 
 interface PhotoViewerProps<TImage extends PhotoGridImage> {
   images: TImage[];
+  imageUrl: (image: TImage) => string | undefined;
   index: number | null;
   onOpenChange: (open: boolean) => void;
   onIndexChange: (index: number) => void;
@@ -27,6 +27,7 @@ interface PhotoViewerProps<TImage extends PhotoGridImage> {
 /** Full-scene viewer: arrows move through the same ordered batch as the grid. */
 export function PhotoViewer<TImage extends PhotoGridImage>({
   images,
+  imageUrl,
   index,
   onOpenChange,
   onIndexChange,
@@ -51,7 +52,7 @@ export function PhotoViewer<TImage extends PhotoGridImage>({
         <div className="relative flex min-h-0 flex-1 items-center justify-center bg-muted/30 p-3 sm:p-5">
           <Image
             key={image.id}
-            src={preferredImageUrl(image)}
+            src={imageUrl(image)}
             alt={image.filename}
             displayWidth={1600}
             className="max-h-[calc(100dvh-13rem)] w-full object-contain"

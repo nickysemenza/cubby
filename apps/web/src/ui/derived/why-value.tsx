@@ -55,6 +55,7 @@ import {
   ResolutionEvidence,
   sectionLabelClassName,
 } from "./resolution-evidence";
+import { SourceStack } from "./source-stack";
 
 type ExplanationSource = z.infer<typeof fieldExplanationSource>;
 type ExplanationValue = ExplanationSource["value"];
@@ -265,33 +266,63 @@ export function ExplanationEntityLink({
   );
 }
 
-function ExplanationSourceRow({ source }: { source: ExplanationSource }) {
-  const record = explanationRecord.safeParse(source.value);
-  const name = record.success ? z.string().safeParse(record.data.name) : null;
+function ExplanationSources({
+  data,
+  sources,
+}: {
+  data: FieldExplanationOutput;
+  sources: readonly ExplanationSource[];
+}) {
+  const provenance =
+    data.envelope.result.kind === "live"
+      ? data.envelope.result.decision.provenance
+      : null;
+  const winner =
+    provenance?.kind === "inherited" || provenance?.kind === "default"
+      ? provenance.source
+      : null;
   return (
-    <LedgerRow as="div">
-      <LedgerCell
-        as="dt"
-        slot="primary"
-        className="text-xs font-medium text-muted-foreground"
-      >
-        {source.label}
-      </LedgerCell>
-      <LedgerCell as="dd" slot="secondary" className="grid gap-1.5">
-        {source.entity ? (
-          <ExplanationEntityLink
-            entity={source.entity.entityKind}
-            id={source.entity.entityId}
-            name={name?.success ? name.data : null}
-          />
-        ) : null}
-        {source.value !== null || source.entity === null ? (
-          <ReadableExplanationValue
-            value={source.entity ? sourceFacts(source) : source.value}
-          />
-        ) : null}
-      </LedgerCell>
-    </LedgerRow>
+    <SourceStack
+      label="Current evidence sources"
+      rows={sources.map(
+        (source): Parameters<typeof SourceStack>[0]["rows"][number] => {
+          const record = explanationRecord.safeParse(source.value);
+          const parsedName = record.success
+            ? z.string().safeParse(record.data.name)
+            : null;
+          const name = parsedName?.success ? parsedName.data : null;
+          return {
+            key: explanationSourceKey(source),
+            status:
+              winner &&
+              source.entity?.entityKind === winner.entityKind &&
+              source.entity.entityId === winner.entityId
+                ? "deciding"
+                : "skipped",
+            title: (
+              <>
+                {source.label !== name || !source.entity ? (
+                  <span>{source.label}</span>
+                ) : null}
+                {source.entity ? (
+                  <ExplanationEntityLink
+                    entity={source.entity.entityKind}
+                    id={source.entity.entityId}
+                    name={name}
+                  />
+                ) : null}
+              </>
+            ),
+            children:
+              source.value !== null || source.entity === null ? (
+                <ReadableExplanationValue
+                  value={source.entity ? sourceFacts(source) : source.value}
+                />
+              ) : null,
+          };
+        },
+      )}
+    />
   );
 }
 
@@ -622,30 +653,18 @@ export function WhyValueContents({
           {visibleSources(result.data).length > 0 ? (
             <section className="grid gap-2 border-t border-border pt-3">
               <h3 className={sectionLabelClassName}>Evidence</h3>
-              <Ledger as="dl" variant="facts">
-                {visibleSources(result.data)
-                  .slice(0, 6)
-                  .map((source) => (
-                    <ExplanationSourceRow
-                      key={explanationSourceKey(source)}
-                      source={source}
-                    />
-                  ))}
-              </Ledger>
+              <ExplanationSources
+                data={result.data}
+                sources={visibleSources(result.data).slice(0, 6)}
+              />
               {visibleSources(result.data).length > 6 ? (
                 <Disclosure
                   summary={`Show ${visibleSources(result.data).length - 6} more evidence entries`}
                 >
-                  <Ledger as="dl" variant="facts">
-                    {visibleSources(result.data)
-                      .slice(6)
-                      .map((source) => (
-                        <ExplanationSourceRow
-                          key={explanationSourceKey(source)}
-                          source={source}
-                        />
-                      ))}
-                  </Ledger>
+                  <ExplanationSources
+                    data={result.data}
+                    sources={visibleSources(result.data).slice(6)}
+                  />
                 </Disclosure>
               ) : null}
             </section>

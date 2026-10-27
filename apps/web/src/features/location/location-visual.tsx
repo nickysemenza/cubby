@@ -1,5 +1,6 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type { LocationTreeNode } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -69,7 +70,7 @@ function SourceLink({
   }
   const ownPhoto = (fieldValueOf(location.fields.images) ?? []).find(
     (owned) =>
-      owned.url ===
+      fieldValueOf(owned.fields.url) ===
       (visual.primaryImage?.representations?.original ??
         visual.primaryImage?.url),
   );
@@ -149,7 +150,7 @@ function ChildContactSheet({
         const image = (
           <Image
             key={child.id}
-            src={child.image.url}
+            src={publicImageUrl(child.image)}
             alt={`${child.name} compartment`}
             displayWidth={240}
             className="size-full bg-card object-cover"

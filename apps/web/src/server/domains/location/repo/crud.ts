@@ -7,7 +7,7 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import {
   locationPickerAncestorOut,
@@ -844,7 +844,7 @@ export const locationListRead = async (
 const loadLocationCoverImages = async (
   db: Database,
   ids: LocationId[],
-): Promise<Map<LocationId, ImageOut>> => {
+): Promise<Map<LocationId, RawImageOutput>> => {
   const covers = await resolveEntityDisplayImageLists(
     db,
     ids.map((entityId) => ({ entityKind: "location", entityId })),

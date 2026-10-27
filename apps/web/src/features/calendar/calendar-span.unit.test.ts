@@ -2,7 +2,10 @@ import type { CalendarItem } from "@cubby/schemas/calendar";
 import { testShortcode } from "@cubby/schemas/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { projectCalendarSourceFixture } from "./calendar-source.fixtures";
+import {
+  plantingCalendarSourceFixture,
+  projectCalendarSourceFixture,
+} from "./calendar-source.fixtures";
 import { itemSpanLabel } from "./calendar-span";
 
 const projectSpan = (
@@ -10,7 +13,6 @@ const projectSpan = (
   endDateExclusive: string,
 ): CalendarItem => ({
   kind: "project",
-  displayImages: [],
   id: testShortcode("project", "PRJ-4K7M"),
   title: "Kitchen Remodel",
   startDate,
@@ -22,7 +24,7 @@ const projectSpan = (
 
 const plantingMilestone: CalendarItem = {
   kind: "planting",
-  displayImages: [],
+  source: plantingCalendarSourceFixture(testShortcode("planting", "PLT-3B2C")),
   id: testShortcode("planting", "PLT-3B2C"),
   milestone: "sowed",
   title: "Tomato · Brandywine",

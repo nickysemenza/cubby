@@ -4,7 +4,6 @@ import {
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
 import { productCategoryFeature } from "@cubby/schemas/product-category-fields";
-import type { ProductCategory } from "@cubby/shared";
 import { getLocationTypeColor, type LocationType } from "@cubby/shared";
 import { CubeIcon } from "@phosphor-icons/react/dist/csr/Cube";
 import { FileArchiveIcon } from "@phosphor-icons/react/dist/csr/FileArchive";
@@ -115,7 +114,6 @@ export const getLocationIcon = (type: LocationType | null): Icon =>
 export const getLocationGlyph = (location: {
   type: LocationType | null;
   product?: {
-    category?: ProductCategory | null;
     fields?: Record<string, ReadableFieldEnvelope>;
   } | null;
 }): Icon => {

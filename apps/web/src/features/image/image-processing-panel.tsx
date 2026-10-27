@@ -257,6 +257,9 @@ function IdentificationSummary({ image }: { image: ImageWithEntity }) {
 export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
   const id = imageShortcode.parse(image.id);
   const status = useImageProcessingStatus(id);
+  const transparent = status.data
+    ? fieldValueOf(status.data.fields.representations)?.transparent
+    : undefined;
   const queryClient = useQueryClient();
   useEffect(() => {
     if (!status.data) return;
@@ -293,7 +296,7 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
               ? workStateLabel(status.data.status.cutout)
               : "Not processed"}
           </p>
-          {!status.data.representations.transparent ? (
+          {!transparent ? (
             <p className="text-muted-foreground">
               Transparent image unavailable
             </p>
@@ -363,6 +366,9 @@ export const ImageDetailActions: DetailSlotComponent<"image"> = ({
 function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
   const id = imageShortcode.parse(image.id);
   const status = useImageProcessingStatus(id);
+  const transparent = status.data
+    ? fieldValueOf(status.data.fields.representations)?.transparent
+    : undefined;
   const [compareOpen, setCompareOpen] = useState(false);
   const schedule = useActionMutation({
     mutationFn: imageProcessing.schedule.mutationOptions,
@@ -402,17 +408,17 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
         >
           View original
         </a>
-        {status.data?.representations.transparent ? (
+        {transparent ? (
           <a
             className={buttonVariants({ variant: "outline" })}
-            href={status.data.representations.transparent}
+            href={transparent}
             target="_blank"
             rel="noreferrer"
           >
             View transparent PNG
           </a>
         ) : null}
-        {status.data?.representations.transparent ? (
+        {transparent ? (
           <Button
             type="button"
             size="sm"
@@ -507,20 +513,12 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
               Transparent result
             </figcaption>
             <a
-              href={
-                status.data?.representations.transparent ??
-                fieldValueOf(image.fields.url) ??
-                undefined
-              }
+              href={transparent ?? fieldValueOf(image.fields.url) ?? undefined}
               target="_blank"
               rel="noreferrer"
             >
               <Image
-                src={
-                  status.data?.representations.transparent ??
-                  fieldValueOf(image.fields.url) ??
-                  undefined
-                }
+                src={transparent ?? fieldValueOf(image.fields.url) ?? undefined}
                 alt="Processed image"
                 displayWidth={640}
                 className="max-h-[60vh] w-full object-contain"

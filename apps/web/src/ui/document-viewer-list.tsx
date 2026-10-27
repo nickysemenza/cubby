@@ -1,4 +1,3 @@
-import type { ImageOut } from "@cubby/schemas/image";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import prettyBytes from "pretty-bytes";
 import { type FC, useEffect, useRef } from "react";
@@ -14,7 +13,10 @@ import { buttonVariants } from "~/ui/primitives/button";
  * caller into a per-document detail round-trip just to satisfy the type.
  * `size` stays optional and the byte chip hides when it's absent.
  */
-export type ViewableDocument = Pick<ImageOut, "id" | "url" | "filename"> & {
+export type ViewableDocument = {
+  id: string;
+  url: string;
+  filename: string;
   size?: number;
 };
 

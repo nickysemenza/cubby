@@ -1,22 +1,17 @@
-import {
-  preferredImageUrl,
-  type ImageRepresentations,
-} from "@cubby/schemas/image-summary";
 import { type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 import { Panel } from "~/ui/layout/panel";
 import { Image } from "~/ui/primitives/image";
 
-export interface PhotoGridImage {
+export type PhotoGridImage = {
   id: string;
-  url: string;
-  representations?: ImageRepresentations;
   filename: string;
-}
+};
 
 interface PhotoGridProps<TImage extends PhotoGridImage> {
   images: TImage[];
+  imageUrl: (image: TImage) => string | undefined;
   onSelect?: (image: TImage, index: number) => void;
   renderOverlay?: (image: TImage, index: number) => ReactNode;
   fit?: "cover" | "contain";
@@ -27,6 +22,7 @@ interface PhotoGridProps<TImage extends PhotoGridImage> {
 /** Compact, selectable image grid used for saved records and unsaved drafts. */
 export function PhotoGrid<TImage extends PhotoGridImage>({
   images,
+  imageUrl,
   onSelect,
   renderOverlay,
   fit = "cover",
@@ -59,7 +55,7 @@ export function PhotoGrid<TImage extends PhotoGridImage>({
             />
           ) : null}
           <Image
-            src={preferredImageUrl(image)}
+            src={imageUrl(image)}
             alt={image.filename}
             displayWidth={320}
             className={cn(

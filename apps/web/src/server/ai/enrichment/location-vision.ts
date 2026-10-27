@@ -1,10 +1,10 @@
 import type {
   ApproveDetectedInventoryItemInput,
   ApproveDetectedInventoryItemOut,
-  DetectedInventory,
+  RawDetectedInventory as DetectedInventory,
   DetectedInventoryAiResult,
   DetectedInventoryItem,
-  DetectedItem,
+  RawDetectedItem as DetectedItem,
   LocationDescription,
 } from "@cubby/schemas/ai";
 /**
@@ -22,10 +22,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
-import {
-  productCategorySummary,
-  type ProductCategorySummary,
-} from "@cubby/schemas/product-category-fields";
+import { rawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import {
   getMiscDisplayName,
   isMiscProduct,
@@ -33,6 +30,7 @@ import {
 } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import type { z } from "zod";
 
 import {
   buildLocationAnalysisFingerprint,
@@ -130,6 +128,9 @@ export function isLocationHasNoImagesToAnalyzeError(
     (error instanceof Error && error.message === LOCATION_NO_IMAGES_MESSAGE)
   );
 }
+
+const detectionCategory = rawProductCategorySummary.omit({ feature: true });
+type ProductCategorySummary = z.infer<typeof detectionCategory>;
 
 interface DetectedProductMatch {
   id: ProductId;
@@ -518,8 +519,8 @@ async function matchDetectedItems(
               name: semanticMatch.item.name,
               brandName: semanticMatch.item.subtitle ?? item.manufacturer,
               category:
-                productCategorySummary.safeParse(semanticMatch.item.typeHint)
-                  .data ?? null,
+                detectionCategory.safeParse(semanticMatch.item.typeHint).data ??
+                null,
             };
           }
         }

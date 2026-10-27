@@ -42,7 +42,9 @@ export function resolveLocationPrimaryVisual(
     image: { ...image, url: preferredImageUrl(image) },
     source:
       (fieldValueOf(location.fields.images) ?? []).some(
-        (own) => own.url === (image.representations?.original ?? image.url),
+        (own) =>
+          fieldValueOf(own.fields.url) ===
+          (image.representations?.original ?? image.url),
       ) || !fieldValueOf(location.fields.product)
         ? "location"
         : "product",

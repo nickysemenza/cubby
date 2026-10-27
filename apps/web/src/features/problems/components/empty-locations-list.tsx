@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { ProblemItem } from "@cubby/schemas/problems";
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { type ReactNode, useState } from "react";
@@ -47,10 +48,10 @@ export function EmptyLocationsList({
         renderItem={(location) => {
           const details: ReactNode[] = [];
 
-          if (location.aiDescription) {
+          if (fieldValueOf(location.fields.aiDescription)) {
             details.push(
               <p key="ai-desc" className="line-clamp-2 text-muted-foreground">
-                {location.aiDescription}
+                {fieldValueOf(location.fields.aiDescription)}
               </p>,
             );
           }
@@ -93,7 +94,7 @@ export function EmptyLocationsList({
             ),
             badges: [
               <Badge key="type" variant="outline" className="capitalize">
-                {location.type}
+                {fieldValueOf(location.fields.type) ?? "Updating…"}
               </Badge>,
             ],
             details,

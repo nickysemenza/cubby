@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { groupItemsByDay } from "./calendar-agenda";
 import {
+  plantingCalendarSourceFixture,
   mealCalendarSourceFixture,
   taskCalendarSourceFixture,
 } from "./calendar-source.fixtures";
@@ -28,7 +29,6 @@ const meal = (id: string, startDate: string): CalendarItem => ({
     id: testShortcode("meal", id),
     date: startDate,
   }),
-  displayImages: [],
   mealTotals: withMacros({
     cost: { status: "unavailable", reason: "empty" },
     nutrition: buildNutrition(() => ({
@@ -54,12 +54,11 @@ const task = (
   source: taskCalendarSourceFixture(testShortcode("task", id), "planning"),
   projectName: null,
   subjectProductName: null,
-  displayImages: [],
 });
 
 const planting = (id: string, startDate: string): CalendarItem => ({
   kind: "planting",
-  displayImages: [],
+  source: plantingCalendarSourceFixture(testShortcode("planting", id)),
   id: testShortcode("planting", id),
   milestone: "sowed",
   title: id,

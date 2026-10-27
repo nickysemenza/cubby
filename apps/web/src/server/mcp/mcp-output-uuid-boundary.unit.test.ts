@@ -26,10 +26,11 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // Product unit-mapping rows keep their uuid: it is the only handle
   // `syncProductUnitMappings` accepts to update a row in place (a mapping
   // resent without it is deleted and reinserted). Declared on product get/list
-  // and on the products embedded in ingredient get/list — same row, same
+  // and on embedded/enrichment Products — same row, same
   // write handle. See `productUnitMappingMcpEntityOut` in @cubby/schemas.
   "entity_read.item.product[].unitMappings[].id",
   "entity_read.item.unitMappings[].id",
+  "product_enrichment.results[].item.unitMappings[].id",
   "entity_read.items[].product[].unitMappings[].id",
   "entity_read.items[].unitMappings[].id",
   // Image processing jobs are internal queue handles, not Image entity links.

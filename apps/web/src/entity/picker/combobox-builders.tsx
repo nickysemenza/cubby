@@ -13,18 +13,17 @@ import {
   type ShortcodeFor,
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
+import type { ImageOut } from "@cubby/schemas/image";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type { LocationTreeNode, LocationType } from "@cubby/schemas/location";
 import { locationType } from "@cubby/schemas/location";
+import type { ProductCategorySummary as ProductCategory } from "@cubby/schemas/product-category-fields";
 import {
   isServiceProductFeature,
   productCategoryFeature,
 } from "@cubby/schemas/product-category-fields";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
-import {
-  formatCategoryLabel,
-  type ProductCategory,
-  type ShortcodeType,
-} from "@cubby/shared";
+import { type ShortcodeType } from "@cubby/shared";
 import { z } from "zod";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
@@ -32,6 +31,7 @@ import { VendorMark } from "~/entity/components/vendor-cell";
 import { enumDisplayValue } from "~/entity/display/enum-field-display";
 import { EntityIcon, entityLabel } from "~/entity/entities";
 import { compactFieldText } from "~/entity/fields/field-text";
+import { categoryText } from "~/entity/presentation/category-text";
 import { locationToSegments } from "~/entity/presentation/location-breadcrumb";
 import { LocationIcon } from "~/entity/presentation/location-icons";
 import { resolveLocationPrimaryVisual } from "~/entity/presentation/location-visual-resolver";
@@ -308,7 +308,7 @@ function productPickerBase(
     brand
       ? z.string().nullable().parse(fieldValueOf(brand))
       : product.brandName,
-    product.category ? formatCategoryLabel(product.category) : null,
+    product.category ? categoryText(product.category) : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -424,7 +424,8 @@ export const buildLocationComboboxItem = (location: {
   fields?: Record<string, ReadableFieldEnvelope>;
   aliases?: string[] | null;
   ancestors?: Array<{ id?: string; name: string }> | null;
-  coverImage?: { url: string } | null;
+  coverImage?: Pick<ImageOut, "fields"> | null;
+  coverImageUrl?: string | null;
 }): ComboboxItem<LocationShortcode> => {
   const type = fieldEnvelopeFor(location, "type");
   const currentType = type
@@ -450,7 +451,9 @@ export const buildLocationComboboxItem = (location: {
     ],
     secondary: currentType ?? undefined,
     thumb: {
-      imageUrl: location.coverImage?.url ?? null,
+      imageUrl: location.coverImage
+        ? (publicImageUrl(location.coverImage) ?? null)
+        : (location.coverImageUrl ?? null),
       fallback: (
         <LocationIcon
           type={currentType}
@@ -485,7 +488,7 @@ export const buildLocationComboboxItemFromDetail = (
     fields: { type: location.fields.type },
     // `locationToSegments` is root→leaf and includes the location itself.
     ancestors: locationToSegments(location).slice(0, -1),
-    coverImage: resolveLocationPrimaryVisual(location).image,
+    coverImageUrl: resolveLocationPrimaryVisual(location).image?.url ?? null,
   });
 
 type VendorPickerInput = {

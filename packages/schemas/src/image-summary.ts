@@ -1,3 +1,4 @@
+import { computedFieldEnvelope, fieldValueOf } from "./field-envelope";
 import { z } from "zod";
 
 /** The ProductImage join's purpose, shared by attachment reads and edits. */
@@ -23,4 +24,24 @@ export function preferredImageUrl(image: {
   representations?: ImageRepresentations;
 }): string {
   return image.representations?.preferred ?? image.url;
+}
+
+/** Current Image values for public media consumers. */
+export const publicImageUrlSummary = z.object({
+  fields: z.object({
+    url: computedFieldEnvelope(z.url()),
+    representations: computedFieldEnvelope(imageRepresentations).optional(),
+  }),
+});
+export type PublicImageUrlSummary = z.output<typeof publicImageUrlSummary>;
+
+export function publicImageUrl(
+  image: PublicImageUrlSummary,
+): string | undefined {
+  const representations = image.fields.representations;
+  return (
+    (representations ? fieldValueOf(representations)?.preferred : undefined) ??
+    fieldValueOf(image.fields.url) ??
+    undefined
+  );
 }

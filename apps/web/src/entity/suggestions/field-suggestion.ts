@@ -2,11 +2,15 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
+import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   basisValueOf,
   usesSavedFieldSuggestionContext,
 } from "@cubby/schemas/field-suggestion";
+
+import { readPathValue } from "~/entity/read-path";
 export { basisValueOf } from "@cubby/schemas/field-suggestion";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { parseShortcode } from "@cubby/shared";
@@ -38,6 +42,23 @@ function fieldByKey(
   return entityFieldModels[entity].fields.find((field) => field.key === key);
 }
 
+/** Saved records distinguish an unavailable governed result from a successful empty outcome. */
+export function suggestionRecordFieldValue<TRecord extends object>(
+  entity: ShortcodeEntity,
+  record: TRecord,
+  key: string,
+  // oxlint-disable-next-line anti-slop/no-unknown-returns -- Declared suggestion paths cross heterogeneous field types; callers parse the value or normalize it with basisValueOf.
+): unknown {
+  const readKey = fieldByKey(entity, key)?.readKey ?? key;
+  if (Object.hasOwn(entityFieldEnvelopeFields[entity], readKey)) {
+    const envelope = fieldEnvelopeFor(record, readKey);
+    return envelope && envelope.result.kind !== "missing"
+      ? fieldValueOf(envelope)
+      : undefined;
+  }
+  return readPathValue(record, readKey);
+}
+
 /**
  * `targets.basisKeys` read off a full entity record via each field's
  * `readKey` — the non-RHF counterpart of the provider's `useWatch` snapshot,
@@ -59,12 +80,8 @@ export function fieldSuggestionBasisFromRecord<TRecord extends object>(
   const referenceLabels: Record<string, { id: string; name: string | null }> =
     {};
   for (const key of targets.basisKeys) {
-    const readKey = fieldByKey(entity, key)?.readKey ?? key;
     const field = fieldByKey(entity, key);
-    // SAFETY: `readKey` comes from the generated field model, which owns
-    // this record's shape; a key absent from a partial record just reads
-    // `undefined`, which `basisValueOf` treats as null.
-    const value = record[readKey as keyof TRecord];
+    const value = suggestionRecordFieldValue(entity, record, key);
     const reference = field?.reference
       ? readReferenceField(record, field)?.items[0]
       : undefined;

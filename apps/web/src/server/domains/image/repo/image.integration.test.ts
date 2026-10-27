@@ -347,6 +347,9 @@ describe("image repository", () => {
       .where(eq(image.id, newer.id));
     const index = await getImageHashIndex(ctx.db);
     const ids = new Set([older.shortcode, newer.shortcode]);
+    const repair = index.repair.find((row) => row.id === newer.shortcode);
+    expect(repair?.originalUrl).toMatch(/\.jpg$/);
+    expect(repair).not.toHaveProperty("url");
     expect(
       index.repair.filter(({ id }) => ids.has(id)).map(({ id }) => id),
     ).toEqual([newer.shortcode, older.shortcode]);

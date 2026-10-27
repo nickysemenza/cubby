@@ -12,6 +12,7 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { CalendarItemPresentation } from "./calendar-item-row";
 import {
+  plantingCalendarSourceFixture,
   mealCalendarSourceFixture,
   taskCalendarSourceFixture,
   expenseCalendarSourceFixture,
@@ -33,7 +34,6 @@ const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
     mealType: "dinner",
     mealKind: "eating_out",
   }),
-  displayImages: [],
   mealTotals: withMacros({
     cost: { status: "unavailable", reason: "empty" },
     nutrition: buildNutrition(() => ({
@@ -45,7 +45,7 @@ const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
 
 const plantingMilestone: Extract<CalendarItem, { kind: "planting" }> = {
   kind: "planting",
-  displayImages: [],
+  source: plantingCalendarSourceFixture(testShortcode("planting", "PLT-3B2C")),
   id: testShortcode("planting", "PLT-3B2C"),
   milestone: "sowed",
   title: "Tomato · Brandywine",
@@ -69,16 +69,16 @@ const plannedExpense: Extract<CalendarItem, { kind: "expense" }> = {
     testShortcode("expense", "EXP-1111"),
     "other",
     "Target",
+    [
+      {
+        id: testShortcode("image", "IMG-4K7M"),
+        url: "https://example.com/tray.png",
+      },
+    ],
   ),
   projectName: "Kitchen",
   spendingContext: { projectNames: ["Kitchen"], parties: [] },
   productName: "Souper Cubes",
-  displayImages: [
-    {
-      id: testShortcode("image", "IMG-4K7M"),
-      url: "https://example.com/tray.png",
-    },
-  ],
 };
 
 describe("CalendarItemPresentation", () => {
@@ -186,7 +186,6 @@ describe("CalendarItemPresentation", () => {
       projectName: "Household",
       assignedProjectName: "Household",
       subjectProductName: "KitchenAid mixer",
-      displayImages: [],
     };
     render(<CalendarItemPresentation item={task} variant="rich" />);
     expect(screen.getByText("Blocked")).toBeInTheDocument();

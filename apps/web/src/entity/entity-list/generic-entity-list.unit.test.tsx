@@ -3,7 +3,6 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
-import { formatCategoryLabel } from "@cubby/shared";
 import {
   fireEvent,
   render,
@@ -11,7 +10,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { categorySummaryFixture } from "tooling/product-category-fixtures";
+import { categoryReadFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entities } from "~/entity/entities";
@@ -25,6 +24,7 @@ import {
   productListItem,
 } from "~/entity/generated/entity-lists.gen";
 import { listOverrides } from "~/entity/list-columns/list-overrides.fixtures";
+import { categoryText } from "~/entity/presentation/category-text";
 import { listPage } from "~/entity/routing/list-page";
 import { mealNameUpdate } from "~/features/meal/list-columns";
 import { installFeatures } from "~/features/registry";
@@ -338,6 +338,10 @@ describe("GenericEntityList", () => {
     const priced = mock(productListItem, {
       overrides: {
         fields: {
+          cost: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.list.shape.fields.shape.cost,
+            { kind: "item", amount: 42 },
+          ),
           price: fieldValueFixture(
             entityFieldEnvelopeSchemas.product.list.shape.fields.shape["price"],
             42,
@@ -346,7 +350,7 @@ describe("GenericEntityList", () => {
             entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
               "categoryId"
             ],
-            categorySummaryFixture("household").id,
+            categoryReadFixture("household").id,
           ),
           displayImages: fieldValueFixture(
             entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
@@ -358,13 +362,17 @@ describe("GenericEntityList", () => {
         id: testShortcode("product", "PRD-4K7M"),
         name: "Cast iron skillet",
 
-        category: categorySummaryFixture("household"),
+        category: categoryReadFixture("household"),
         externalIds: [],
       },
     });
     const unpriced = mock(productListItem, {
       overrides: {
         fields: {
+          cost: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.list.shape.fields.shape.cost,
+            null,
+          ),
           price: fieldValueFixture(
             entityFieldEnvelopeSchemas.product.list.shape.fields.shape["price"],
             null,
@@ -373,7 +381,7 @@ describe("GenericEntityList", () => {
             entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
               "categoryId"
             ],
-            categorySummaryFixture("tools").id,
+            categoryReadFixture("tools").id,
           ),
           displayImages: fieldValueFixture(
             entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
@@ -385,7 +393,7 @@ describe("GenericEntityList", () => {
         id: testShortcode("product", "PRD-ZX4C"),
         name: "Mystery gadget",
 
-        category: categorySummaryFixture("tools"),
+        category: categoryReadFixture("tools"),
         externalIds: [],
       },
     });
@@ -404,7 +412,7 @@ describe("GenericEntityList", () => {
     const gadgetCard = gadget.closest<HTMLElement>("[data-entity-card]");
     expect(gadgetCard).not.toBeNull();
     expect(
-      within(gadgetCard!).getByText(formatCategoryLabel(unpriced.category)),
+      within(gadgetCard!).getByText(categoryText(unpriced.category)),
     ).toBeVisible();
     expect(gadgetCard).not.toHaveTextContent('"path"');
     expect(gadgetCard?.querySelector("pre")).toBeNull();

@@ -1,3 +1,5 @@
+import { productCategorySummary } from "@cubby/schemas/product-category-fields";
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import type {
   ProductCategoryFeature,
   RawProductCategorySummary,
@@ -80,6 +82,21 @@ export const categorySummaryFixture = (
   path: [{ id: taxonomyShortcode(feature), name: categoryNames[feature] }],
   feature,
 });
+
+/** A current public category reference, distinct from SQL fixture inputs. */
+export const categoryReadFixture = (feature: ProductCategoryFeature) => {
+  const raw = categorySummaryFixture(feature);
+  return productCategorySummary.parse({
+    id: raw.id,
+    name: raw.name,
+    fields: {
+      path: fieldValueFixture(
+        productCategorySummary.shape.fields.shape.path,
+        raw.path,
+      ),
+    },
+  });
+};
 
 export const taxonomyRootFixtures = taxonomyFeatures.map(
   (feature, sortOrder) => ({

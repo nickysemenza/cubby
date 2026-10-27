@@ -9,7 +9,10 @@
  * canonical relation internally, but count callers never invoke sample.
  */
 
-import { UpcEnrichmentFreshness, ProblemItem } from "@cubby/schemas/problems";
+import {
+  UpcEnrichmentFreshness,
+  ProblemItem,
+} from "@cubby/schemas/problems-raw-read";
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
 
 import type { DiagnosticKey } from "~/entity/problems/problem-query";

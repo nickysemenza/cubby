@@ -1,7 +1,10 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { vendorSpendingProfile } from "../spending-classification.js";
-import { purchasedCategorySummary } from "../product-category-fields";
+import {
+  purchasedCategorySummary,
+  rawPurchasedCategorySummary,
+} from "../product-category-fields";
 import { spendingCategoryShortcode } from "../identifier-fields.js";
 import { defineEntity } from "./definition.js";
 import { labelField } from "./label-field.js";
@@ -241,7 +244,8 @@ export default defineEntity({
         reference: { entity: "productCategory", multiple: true },
         display: { list: false, referencePreviewLimit: 2 },
         validation: {
-          read: z.array(purchasedCategorySummary).optional(),
+          read: z.array(rawPurchasedCategorySummary).optional(),
+          publicRead: z.array(purchasedCategorySummary).optional(),
           create: null,
           update: null,
         },
@@ -1254,6 +1258,20 @@ export default defineEntity({
     ],
   },
   fields: {
+    embedded: [
+      {
+        path: ["purchasedCategories"],
+        entity: "productCategory",
+        projections: [
+          "output",
+          "list",
+          "detail",
+          "mcpOutput",
+          "mcpList",
+          "mcpDetail",
+        ],
+      },
+    ],
     create: { module: "@cubby/schemas/vendor", export: "vendorCreateInput" },
     update: { module: "@cubby/schemas/vendor", export: "vendorUpdateData" },
     output: {

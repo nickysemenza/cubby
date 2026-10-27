@@ -943,7 +943,7 @@ export const expenseMatchRatioLabel = z.enum([
 ]);
 export type ExpenseMatchRatioLabel = z.infer<typeof expenseMatchRatioLabel>;
 
-export const expenseMatchPurchaseContext = z.object({
+export const rawExpenseMatchPurchaseContext = z.object({
   id: purchaseShortcode,
   vendorName: z.string().nullable(),
   orderId: z.string().nullable(),
@@ -952,6 +952,22 @@ export const expenseMatchPurchaseContext = z.object({
   statedTotal: moneyNullable,
   financialReconciliation: financialReconciliationSummary,
 });
+export const expenseMatchPurchaseContext = withFieldEnvelopes(
+  rawExpenseMatchPurchaseContext.extend({
+    observation: rawExpenseMatchPurchaseContext.pick({
+      expenseCount: true,
+      expenseTotal: true,
+      financialReconciliation: true,
+    }),
+  }),
+  {
+    expenseCount: purchaseFieldEnvelopeFields.expenseCount,
+    expenseTotal: purchaseFieldEnvelopeFields.expenseTotal,
+    financialReconciliation:
+      purchaseFieldEnvelopeFields.financialReconciliation,
+  },
+  purchasePublicReadFields,
+);
 
 export const expenseMatchCandidate = z.object({
   expenseId: expenseShortcode,
@@ -1006,6 +1022,19 @@ export const expenseMatchOut = z.object({
   }),
 });
 export type ExpenseMatchOut = z.infer<typeof expenseMatchOut>;
+export const rawExpenseMatchCandidate = expenseMatchCandidate.extend({
+  purchase: rawExpenseMatchPurchaseContext.nullable(),
+});
+export type RawExpenseMatchCandidate = z.infer<typeof rawExpenseMatchCandidate>;
+export const rawExpenseMatchOut = expenseMatchOut.extend({
+  matches: z.array(
+    z.object({
+      key: z.string(),
+      candidates: z.array(rawExpenseMatchCandidate),
+    }),
+  ),
+});
+export type RawExpenseMatchOut = z.infer<typeof rawExpenseMatchOut>;
 
 export const expenseTradeAffinityOut = z.object({
   projectId: projectShortcode,

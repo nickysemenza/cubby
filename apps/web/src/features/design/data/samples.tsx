@@ -59,6 +59,9 @@ const makeLocation = (
     work: { kind: "idle" },
   });
   const location = infLocation.parse({
+    attachments: [],
+    redirectedFrom: null,
+    previousShortcodes: [],
     id: locationShortcode.parse(`LOC-222${suffix}`),
     name,
     aliases: [],
