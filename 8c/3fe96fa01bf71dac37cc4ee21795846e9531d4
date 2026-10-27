@@ -1,0 +1,23 @@
+apps/web/src/server/domains/product/repo/create-atomicity.integration.test.ts
+  s_9fb58b1f0c0012::t_d5a92e99e79bf2 21
+apps/web/src/server/domains/product/repo/crud.ts
+  s_9fb58b1f0c0012::t_b42043b783a1db 48-51,82,1015-1023,1391,1394,1500-1510,1565-1567,1902,2228,2251,2254
+apps/web/src/server/domains/product/repo/lookup.ts
+  s_9fb58b1f0c0012::t_e2a08c922ba34a 8-11,17,39-40,81-89,118-122,124,197-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8c3fe96fa01bf71dac37cc4ee21795846e9531d4",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
