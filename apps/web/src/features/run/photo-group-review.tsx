@@ -301,20 +301,25 @@ function PhotoBrandPicker({
 }) {
   const [selected] = useSelectedPickerItems("vendor", value ? [value] : [], []);
   return (
-    <WithBrandSearch>
-      {(search) => (
-        <Picker
-          {...search}
-          entity="vendor"
-          label={label}
-          placeholder="Choose a brand"
-          clearable
-          value={selected ?? null}
-          setValue={setValue}
-          disabled={disabled}
-        />
-      )}
-    </WithBrandSearch>
+    <Stack gap="xs">
+      {selected ? (
+        <EntityRefLink entity="vendor" id={selected.id} name={selected.name} />
+      ) : null}
+      <WithBrandSearch>
+        {(search) => (
+          <Picker
+            {...search}
+            entity="vendor"
+            label={label}
+            placeholder="Choose a brand"
+            clearable
+            value={selected ?? null}
+            setValue={setValue}
+            disabled={disabled}
+          />
+        )}
+      </WithBrandSearch>
+    </Stack>
   );
 }
 
@@ -1284,6 +1289,8 @@ function SelectedProductEvidence({
   showCover?: boolean;
   identifiers?: ReactNode;
 }) {
+  const brandId = fieldValueOf(product.fields.brandId);
+  const brandName = fieldValueOf(product.fields.brandName);
   return (
     <Stack gap="xs" className="text-xs">
       {showCover ? (
@@ -1308,8 +1315,10 @@ function SelectedProductEvidence({
 
               className="font-medium"
             />
-            {fieldValueOf(product.fields.brandName) ? (
-              <p>{fieldValueOf(product.fields.brandName)}</p>
+            {brandId ? (
+              <EntityRefLink entity="vendor" id={brandId} name={brandName} />
+            ) : brandName ? (
+              <p>{brandName}</p>
             ) : null}
             {product.model ? <p>{product.model}</p> : null}
           </div>
@@ -1774,7 +1783,16 @@ function PhotoBrandEvidence({
           >
             <Row wrap gap="sm">
               <span>
-                Brand: <strong>{item.name}</strong>
+                Brand:{" "}
+                {item.matches.length === 1 && item.matches[0] ? (
+                  <EntityRefLink
+                    entity="vendor"
+                    id={item.matches[0].id}
+                    name={item.matches[0].name}
+                  />
+                ) : (
+                  <strong>{item.name}</strong>
+                )}
               </span>
               <Button size="sm" variant="ghost" onClick={onShowEvidence}>
                 Read from {countLabel(item.imageIds.length, "photo")}
@@ -3865,65 +3883,86 @@ function PhotoItemList({
               />
             </label>
           ) : null}
-          <button
-            type="button"
-            id={`photo-item-${item.groupKey}`}
-            aria-current={activeGroupKey === item.groupKey ? "true" : undefined}
-            aria-controls={`photo-group-${item.groupKey}`}
-            className="flex min-h-11 min-w-0 flex-1 gap-2 p-2 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring aria-current:bg-muted"
-            onKeyDown={(event) => {
-              if (!(event.target instanceof HTMLButtonElement)) return;
-              const index = items.findIndex(
-                (item) => item.groupKey === activeGroupKey,
-              );
-              const delta =
-                event.key === "ArrowDown" || event.key === "j"
-                  ? 1
-                  : event.key === "ArrowUp" || event.key === "k"
-                    ? -1
-                    : 0;
-              if (!delta) return;
-              event.preventDefault();
-              const next =
-                items[Math.max(0, Math.min(items.length - 1, index + delta))];
-              if (next) {
-                setActiveGroupKey(next.groupKey);
-                document.getElementById(`photo-item-${next.groupKey}`)?.focus();
+          <div className="min-w-0 flex-1">
+            <button
+              type="button"
+              id={`photo-item-${item.groupKey}`}
+              aria-current={
+                activeGroupKey === item.groupKey ? "true" : undefined
               }
-            }}
-            onClick={() => {
-              setActiveGroupKey(item.groupKey);
-              if (isMobile)
-                requestAnimationFrame(() =>
-                  document
-                    .getElementById(`photo-group-${item.groupKey}`)
-                    ?.scrollIntoView({ block: "start" }),
+              aria-controls={`photo-group-${item.groupKey}`}
+              className="flex min-h-11 w-full min-w-0 flex-1 gap-2 p-2 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring aria-current:bg-muted"
+              onKeyDown={(event) => {
+                if (!(event.target instanceof HTMLButtonElement)) return;
+                const index = items.findIndex(
+                  (item) => item.groupKey === activeGroupKey,
                 );
-            }}
-          >
-            <PhotoThumb
-              image={imagesById.get(
-                item.images.find((image) => image.purpose === "item")?.id ??
-                  item.images[0]?.id ??
-                  "",
-              )}
-              size={40}
-            />
-            <span className="min-w-0 space-y-1">
-              <span className="block text-sm font-medium break-words">
-                {proposalName(item)}
-              </span>
-              <span className="block text-xs text-muted-foreground">
-                {photoItemStatus(item, imagesById, runStatus)}
-              </span>
-              {item.inventory ? (
-                <span className="block text-xs text-muted-foreground">
-                  {item.inventory.quantity} ·{" "}
-                  {item.inventory.locationName ?? "Choose location"}
+                const delta =
+                  event.key === "ArrowDown" || event.key === "j"
+                    ? 1
+                    : event.key === "ArrowUp" || event.key === "k"
+                      ? -1
+                      : 0;
+                if (!delta) return;
+                event.preventDefault();
+                const next =
+                  items[Math.max(0, Math.min(items.length - 1, index + delta))];
+                if (next) {
+                  setActiveGroupKey(next.groupKey);
+                  document
+                    .getElementById(`photo-item-${next.groupKey}`)
+                    ?.focus();
+                }
+              }}
+              onClick={() => {
+                setActiveGroupKey(item.groupKey);
+                if (isMobile)
+                  requestAnimationFrame(() =>
+                    document
+                      .getElementById(`photo-group-${item.groupKey}`)
+                      ?.scrollIntoView({ block: "start" }),
+                  );
+              }}
+            >
+              <PhotoThumb
+                image={imagesById.get(
+                  item.images.find((image) => image.purpose === "item")?.id ??
+                    item.images[0]?.id ??
+                    "",
+                )}
+                size={40}
+              />
+              <span className="min-w-0 space-y-1">
+                <span className="block text-sm font-medium break-words">
+                  {proposalName(item)}
                 </span>
-              ) : null}
-            </span>
-          </button>
+                <span className="block text-xs text-muted-foreground">
+                  {photoItemStatus(item, imagesById, runStatus)}
+                </span>
+                {item.inventory ? (
+                  <span className="block text-xs text-muted-foreground">
+                    {item.inventory.quantity} ·{" "}
+                    {item.inventory.locationName ?? "Choose location"}
+                  </span>
+                ) : null}
+              </span>
+            </button>
+            {(() => {
+              const choice =
+                item.product.kind === "create"
+                  ? item.product.create
+                  : item.review?.productChanges;
+              return choice?.brandId ? (
+                <div className="px-2 pb-2 text-xs">
+                  <EntityRefLink entity="vendor" id={choice.brandId} />
+                </div>
+              ) : choice?.brandCreate ? (
+                <p className="px-2 pb-2 text-xs text-muted-foreground">
+                  New brand: {choice.brandCreate.name}
+                </p>
+              ) : null;
+            })()}
+          </div>
         </div>
       ))}
     </nav>
