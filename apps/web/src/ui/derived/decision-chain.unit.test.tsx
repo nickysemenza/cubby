@@ -5,7 +5,7 @@ import { afterEach, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { DecisionChain } from "./decision-chain";
+import { DecisionChain, DecisionValue } from "./decision-chain";
 
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
 afterEach(() => {
@@ -129,4 +129,16 @@ it("does not invent edit controls for an allocated result", () => {
   expect(
     screen.queryByRole("button", { name: "Use inherited" }),
   ).not.toBeInTheDocument();
+});
+
+it("formats a structured Cost through its declared amount projection", () => {
+  render(
+    <DecisionValue
+      entity="product"
+      field="cost"
+      value={{ kind: "item", amount: 40 }}
+    />,
+  );
+  expect(screen.getByText("$40.00")).toBeVisible();
+  expect(screen.queryByText("item")).not.toBeInTheDocument();
 });

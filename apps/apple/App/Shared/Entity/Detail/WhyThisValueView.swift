@@ -443,7 +443,14 @@ struct WhyThisValueView: View {
 
     private func valueText(_ value: JSONValue) -> String? {
         if field.reference != nil, let id = value.stringValue { return resolvedSourceName(id) ?? id }
-        if let text = EntityFieldValue.text(value, field: field) { return text }
+        // Explanation values are field-root values; restore that root so the declaration's
+        // display projection applies just as it does in the ordinary detail row.
+        if let text = EntityFieldValue.text(
+            in: .object([field.key: value]), field: field, surface: surface)
+            ?? EntityFieldValue.text(value, field: field)
+        {
+            return text
+        }
         switch value {
         case .bool(let flag): return flag ? "Yes" : "No"
         case .number(let number): return DisplayFormat.number(number)

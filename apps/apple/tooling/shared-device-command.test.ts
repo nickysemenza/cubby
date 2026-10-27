@@ -97,7 +97,7 @@ test("shared single-file journeys replay inside the existing session", () => {
       "panel",
     ],
   };
-  const script = `import assert from 'node:assert/strict'; import { sharedDeviceCommand } from ${JSON.stringify(module)}; const result = sharedDeviceCommand('pnpm', ['exec','agent-device','test','journey.ad','--reporter','default','--artifacts-dir','/synthetic/artifacts','-e','PRODUCT_ID=synthetic'], {CUBBY_E2E_AGENT_DEVICE:${JSON.stringify(JSON.stringify(driver))}}); assert.deepEqual(result.args, ['replay','journey.ad','-e','PRODUCT_ID=synthetic',...${JSON.stringify(driver.targetArgs)}]);`;
+  const script = `import assert from 'node:assert/strict'; import { sharedDeviceCommand } from ${JSON.stringify(module)}; const result = sharedDeviceCommand('pnpm', ['exec','agent-device','test','journey.ad','--reporter','default','--artifacts-dir','/synthetic/artifacts','-e','PRODUCT_ID=synthetic'], {CUBBY_E2E_AGENT_DEVICE:${JSON.stringify(JSON.stringify(driver))}}); assert.deepEqual(result.args, ['replay','journey.ad','--timeout','240000','-e','PRODUCT_ID=synthetic',...${JSON.stringify(driver.targetArgs)}]);`;
   const result = spawnSync(
     process.execPath,
     ["--input-type=module", "--eval", script],

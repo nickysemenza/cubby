@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { fieldDecisionOf, fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import type { ReactNode } from "react";
@@ -6,6 +7,8 @@ import { z } from "zod";
 
 import { enumFieldLabel } from "~/entity/display/enum-field-display";
 import { FieldResolutionEntityActions } from "~/entity/fields/field-resolution";
+import { readPathValue } from "~/entity/read-path";
+import { formatCurrency } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Button } from "~/ui/primitives/button";
 
@@ -22,6 +25,19 @@ export function DecisionValue({
   field?: string;
   value: unknown;
 }) {
+  const model =
+    entity && field
+      ? entityFieldModels[entity].fields.find(
+          (candidate) => candidate.key === field,
+        )
+      : null;
+  if (model?.display.format === "currency") {
+    const amount = readPathValue(
+      { [model.key]: value },
+      model.display.readPath ?? model.key,
+    );
+    if (typeof amount === "number") return formatCurrency(amount);
+  }
   const label =
     entity && field && typeof value === "string"
       ? enumFieldLabel(entity, field, value)

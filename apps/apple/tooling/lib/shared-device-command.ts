@@ -100,7 +100,12 @@ function sharedReplayBody(body: string[]) {
     throw new Error("Shared device journeys need one explicit replay file");
   // `test` forks a session per attempt and conflicts with the panel's active
   // session. Single-file replay keeps the returned session and daemon alive.
-  const replay = ["replay", file];
+  // A replay is one daemon request; retain enough time for the full native journey.
+  const replay = [
+    "replay",
+    file,
+    ...(body.includes("--timeout") ? [] : ["--timeout", "240000"]),
+  ];
   for (let i = 2; i < body.length; i++) {
     const argument = body[i]!;
     if (
