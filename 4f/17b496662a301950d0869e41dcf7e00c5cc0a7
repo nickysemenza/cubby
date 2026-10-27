@@ -1,0 +1,21 @@
+apps/web/drizzle/0048_carry_drain_work.sql
+  s_9607b89cdf7e1e::t_389a0b2af5b90d 21-69
+apps/web/tooling/coarse-jobs-migration.integration.test.ts
+  s_9607b89cdf7e1e::t_1147d31378bc65 54-65,83-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4f17b496662a301950d0869e41dcf7e00c5cc0a7",
+  "prompts": {},
+  "sessions": {
+    "s_9607b89cdf7e1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f56125d7-a4fa-4fe4-a445-81d11b32c3e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
