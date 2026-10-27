@@ -1,7 +1,7 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
@@ -19,6 +19,7 @@ import {
   getSearchDocumentEmbeddingText,
   searchCoverageIncomplete,
 } from "~/server/generic/search/repo/search-document";
+import * as searchService from "~/server/generic/search/service/search.service";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -30,7 +31,10 @@ import {
 // genuine same-brand charge.
 describe("acquisition Expense discovery gating", () => {
   const ctx = withTestDb();
-  afterEach(() => setCfEnv(undefined));
+  afterEach(() => {
+    setCfEnv(undefined);
+    vi.restoreAllMocks();
+  });
 
   const { dimensions } = getSemanticEmbeddingConfig();
   /** A unit vector whose cosine with every query embedding is `similarity`. */
@@ -62,6 +66,24 @@ describe("acquisition Expense discovery gating", () => {
     );
     return index;
   };
+
+  it("skips lexical description search when identity has fewer than three characters", async () => {
+    semanticIndex();
+    const source = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "XY",
+        notes: "Synthetic lengthy descriptive evidence for semantic retrieval",
+      }),
+      ctx.actor,
+    );
+    const lexical = vi.spyOn(searchService, "findLexicalSearchCandidates");
+    await discoverAcquisitionCandidateScan(ctx.db, {
+      entityKind: "product",
+      entityId: source.id,
+    });
+    expect(lexical).not.toHaveBeenCalled();
+  });
 
   const charge = async (
     index: ReturnType<typeof createInMemoryVectorizeIndex>,

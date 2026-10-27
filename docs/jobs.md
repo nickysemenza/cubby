@@ -457,7 +457,20 @@ backlog banner, compact lane/reason counts, Runs needing attention, then Jobs.
 Navigable counts use the Job entity population, hiding internal work with the
 table; queue health continues to measure internal kinds. Every supplied retry
 restriction intersects, including mixed entity filters, row IDs and Run scope.
-Count chips scope the Job table; web records that scope in Activity's URL.
+Count chips scope the Job table; web records that scope in Activity's URL. AI
+stream Run links resolve through uncancelled `AiEvaluationRequest` demand,
+without multiplying Job counts. Run evaluation summaries scope through the
+Run/request unique index and apply `requestedAiEvaluations` cancellation and
+receipt precedence: a withdrawn request is cancelled and never inherits a
+later shared receipt if it has none. Roster enrollment records requests for
+new and updated slots; migration `0044` backfills existing owner demand. A disposable synthetic
+EXPLAIN probe with 3,000 historical Jobs and 3,000 unrelated evaluations/requests
+used `Job_due_idx`/`Job_claimed_idx` for Activity, then
+`AiEvaluationRequest_evaluation_idx` for its request links. Run summaries used
+`AiEvaluationRequest_run_item_key`, `AiEvaluation_pkey` and `Job_key_unique`;
+recent outcomes also used `Entity_pkey`. PostgreSQL reported 0.148 ms for
+Activity and 0.016–0.038 ms per Run query in that local seed. These are query-plan
+evidence, not production latency claims.
 Runs use the generic `attention` saved view: member-visible stopped Runs that
 have no successor, plus stalled Runs, ordered stalled first then newest.
 The embed shows ten rows and links to all matching Runs. AI cost is the Run's
@@ -515,7 +528,10 @@ record (~55k), which starved every other kind for days.
   failed with `failureCode = "superseded"` (a cleared backlog, not a member's
   decision) is re-admitted at that pace; a member's cancel stays final. A
   member's cancel of the pass's Run also stops the pass: it resets its cursor
-  and waits a day rather than continuing under a new Run.
+  and waits a day rather than continuing under a new Run. The roster admission
+  transaction locks the cursor's owning/replaced Runs before reading status or
+  opening a continuation. A member-stopped result resets the cursor and persists
+  the one-day wait; superseded Runs can still continue.
 - Publication correction work is one `assessment.correction` Job per
   publication commit (`targetAssessmentIds`), not one per assessment; sources are
   still resolved after commit under serializable isolation.
@@ -631,8 +647,13 @@ Queued obsolete generations retire in sets before inference; paused authority
 parks its Jobs without spending attempts. No model work holds a claim
 transaction open. Page and single claims use the same `job-kind:<kind>`
 nonblocking admission lock and fresh live-lease count when `maxInFlight` is
-configured. With a cap of one, a page enters once and its per-target leases
-keep the kind occupied until the last live target settles. Active Run
+configured. AI evaluation capacity counts distinct page admission tokens in
+both drain selection and claim admission. Every admitted page shares one
+`Job.admissionToken`; each target retains an independent `leaseToken` and
+generation for publication fencing. A single claim consumes one admission
+unit. Any surviving live target keeps its page occupied, so a connection page
+leaves the second AI unit available to another feature. Pre-cutover running
+Jobs without admission tokens count individually until their leases end. Active Run
 exemptions follow the shared kind policy. Heartbeats renew the exact token/generation set in one
 statement; replaced tokens are reported separately and cannot publish.
 
@@ -646,7 +667,11 @@ removes duplicate anchors, and then reselects. Other features and Job kinds
 keep their turns and backfill retains its reserve. Queue and Run counts still
 count target Jobs; AI ahead positions are estimates because one page can
 capture many targets before the next selection. Ordinary ahead positions count
-page services; target counts remain unchanged.
+page services; target counts remain unchanged. Visible position reads first probe
+the earliest indexed key of that kind. If no earlier key can exist, they
+return zero without executing the count; this avoids PostgreSQL choosing a
+kind-only scan and filtering thousands of later Jobs. Other positions retain
+the same due-work and Run-class count.
 
 `EvaluationPageAdapter` in `ai/repo/evaluation-page.ts` owns finite feature
 preparation, decision evaluation and publication results. Every target carries
@@ -665,7 +690,9 @@ unadmitted suffix stays due rather than completing its enumeration receipt.
 Connection pages evaluate 8 sources at once (a Worker invocation holds five
 strong connections). Expense Project recommendation inputs and
 FinancialTransaction settlement/transfer retrieval load for the page before
-provider work. Nearby purchases retain their per-transaction top ten and each
+provider work. Evidence capture normally shares the page's reads; if one
+candidate becomes unreadable, capture retries per source and returns that
+source's failure without rejecting healthy sources. Nearby purchases retain their per-transaction top ten and each
 Purchase retains its original ranked settlement limit before allocation and
 conflict filtering. Acquisition search still captures each newly retrieved
 candidate before subsequent provider waits. Compatible Product identity and
@@ -678,9 +705,16 @@ Jobs still defer when another invocation owns the claim.
 One batched fingerprint read fences the page before evaluation and each chunk
 before writes; a changed or deleted source is obsolete without writes.
 Incomplete candidate coverage retries the source before any of its candidates
-publish. Candidate publication locks live endpoints in domain parent order,
+publish. Candidate publication locks live endpoints in the shared
+`orderedEntityLockKinds` order (parents before dependent kinds, then alphabetical),
+which embedding publication also uses. Connection chunks prelock the union of
+candidate endpoints, Product pairs and field callback endpoints before any
+callback runs. Retained Email evidence keeps its Purchase → original → Email
+order after the chunk's Purchase locks. Candidate publication
 recomputes dependency bases and acquisition eligibility in sets, and compares
-each locked basis against its original retrieval evidence. It then uses one
+each locked basis against its original retrieval evidence. Invalidated connection
+or retained Email evidence raises `ConnectionEvidenceInvalidatedError` and
+settles that source obsolete, including on its final allowed attempt. It then uses one
 immutable Assessment batch and one supersession transition for the chunk.
 Supersession first scopes indexed live subjects, then joins the chunk's slots
 to immutable Assessment evidence once, rather than scanning history per slot.

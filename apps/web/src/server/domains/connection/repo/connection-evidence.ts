@@ -36,6 +36,7 @@ import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   SHORTCODE_TABLE,
+  orderedEntityLockKinds,
   type ShortcodeTable,
 } from "~/server/generic/shortcode/repo/shortcode-tables";
 
@@ -284,26 +285,9 @@ export async function connectionRecords(
   const records: PreparedConnectionBases["records"] = new Map();
   const kinds = z.enum(shortcodeEntities);
   const unique = uniqBy(refs, connectionRecordKey);
-  // Match the domain parent-before-child lock order for the entire chunk.
-  const parents = [
-    "purchase",
-    "project",
-    "location",
-    "cookbook",
-    "device",
-    "task",
-    "product",
-  ];
-  const ordered = [
-    ...new Set(unique.map((ref) => kinds.parse(ref.entityKind))),
-  ];
-  ordered.sort((a, b) => {
-    const rank = (kind: string) => {
-      const index = parents.indexOf(kind);
-      return index < 0 ? parents.length : index;
-    };
-    return rank(a) - rank(b) || a.localeCompare(b);
-  });
+  const ordered = orderedEntityLockKinds(
+    unique.map((ref) => kinds.parse(ref.entityKind)),
+  );
   for (const kind of ordered) {
     const kindRefs = unique.filter((ref) => ref.entityKind === kind);
     const codes = new Map(
@@ -510,9 +494,10 @@ export async function captureConnectionEvidence(
   // Domain parent locks precede dependent payloads: Purchase before financial
   // rows, Project before Product, and Location before moving Inventory.
   const targetFirst =
-    candidate.target.entityKind === "purchase" ||
-    candidate.target.entityKind === "project" ||
-    candidate.target.entityKind === "location";
+    orderedEntityLockKinds([
+      candidate.source.entityKind,
+      candidate.target.entityKind,
+    ])[0] === candidate.target.entityKind;
   const record = async (ref: EntityRef) =>
     prepared?.records.get(connectionRecordKey(ref)) ||
     (await connectionRecord(db, ref, lock));

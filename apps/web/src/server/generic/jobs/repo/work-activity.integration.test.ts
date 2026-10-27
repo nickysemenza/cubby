@@ -8,11 +8,18 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
+import { requestedAiEvaluations } from "~/server/ai/repo/ai-evaluation-requests";
 import { enqueueAiEvaluations } from "~/server/ai/repo/ai-evaluation-requests";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import { job } from "~/server/db/schema";
+import {
+  aiEvaluation,
+  aiEvaluationRequest,
+  job,
+  run,
+} from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { readRunEvaluations } from "~/server/generic/run-detail/repo/run-evaluations";
 
 import { enqueueJob } from "./jobs";
 import { readWorkActivity } from "./work-activity";
@@ -96,6 +103,10 @@ describe("work activity", () => {
       ),
     );
     expect(evaluations).toHaveLength(3);
+    const [owner] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, runId));
 
     // Enqueue stamps availability after `now`; read just after it.
     const activity = await readWorkActivity(
@@ -115,9 +126,125 @@ describe("work activity", () => {
     });
     expect(stream("ai.evaluation", "product-identity")).toMatchObject({
       due: 2,
+      runIds: [owner!.shortcode],
     });
     expect(stream("ai.evaluation", "entity-connections")).toMatchObject({
       due: 1,
     });
+  });
+  it("resolves shared demand through requests and preserves cancelled request receipts", async () => {
+    const activation = await activateAiRefresh(
+      ctx.db,
+      "synthetic-shared-activity",
+      { enabled: true },
+    );
+    const owners = [];
+    for (let index = 0; index < 3; index++)
+      owners.push(
+        await ensureRun(ctx.db, ctx.actor, {
+          clientKey: `synthetic-shared-activity:${index}`,
+          purpose: "ai_refresh",
+          trigger: "manual",
+          status: "running",
+          input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
+        }),
+      );
+    const target = aiEvaluationTarget.parse({
+      kind: "product",
+      entity: "product",
+      recordId: crypto.randomUUID(),
+      field: null,
+      assessmentIds: [],
+    });
+    let evaluationId = "";
+    for (const runId of owners) {
+      const [entry] = await enqueueAiEvaluations(ctx.db, [
+        {
+          input: {
+            runId,
+            shareKey: "synthetic-shared-activity",
+            executionKind: "ai_refresh",
+            feature: "product-identity",
+            target,
+            provenance: aiProvenance.parse({
+              dependencies: [],
+              inputFingerprint: "synthetic-shared",
+              optionFingerprint: "synthetic",
+              model: null,
+            }),
+            snapshot: {},
+          },
+        },
+      ]);
+      evaluationId = entry!.id;
+    }
+    const [owner, joined, cancelled] = owners;
+    if (!owner || !joined || !cancelled)
+      throw new Error("Synthetic Runs missing");
+    await getDb(ctx.db)
+      .update(aiEvaluationRequest)
+      .set({
+        cancelledAt: new Date(),
+        receipt: { reason: "Synthetic retained cancellation" },
+      })
+      .where(eq(aiEvaluationRequest.runId, cancelled));
+    const activity = await readWorkActivity(
+      ctx.db,
+      new Date(Date.now() + 1000),
+    );
+    const codes = await getDb(ctx.db)
+      .select({ id: run.id, shortcode: run.shortcode })
+      .from(run);
+    expect(
+      activity.streams.find((entry) => entry.feature === "product-identity"),
+    ).toMatchObject({
+      due: 1,
+      runIds: expect.arrayContaining(
+        codes
+          .filter((entry) => entry.id === owner || entry.id === joined)
+          .map((entry) => entry.shortcode),
+      ),
+    });
+    expect(
+      activity.streams.find((entry) => entry.feature === "product-identity")
+        ?.runIds,
+    ).not.toContain(codes.find((entry) => entry.id === cancelled)!.shortcode);
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ state: "completed", receipt: { candidates: 7 } })
+      .where(eq(aiEvaluation.id, evaluationId));
+    expect(
+      (
+        await readRunEvaluations(ctx.db, {
+          runId: joined,
+          purpose: "ai_refresh",
+        })
+      ).recent,
+    ).toMatchObject([{ candidates: 7 }]);
+    expect(
+      (
+        await readRunEvaluations(ctx.db, {
+          runId: cancelled,
+          purpose: "ai_refresh",
+        })
+      ).byKind,
+    ).toMatchObject([{ cancelled: 1, completed: 0 }]);
+    expect((await requestedAiEvaluations(ctx.db, cancelled))[0]).toMatchObject({
+      state: "cancelled",
+      receipt: { reason: "Synthetic retained cancellation" },
+    });
+    // A withdrawn request with no receipt must not inherit later shared work.
+    await getDb(ctx.db)
+      .update(aiEvaluationRequest)
+      .set({ receipt: null })
+      .where(eq(aiEvaluationRequest.runId, cancelled));
+    expect(
+      (
+        await readRunEvaluations(ctx.db, {
+          runId: cancelled,
+          purpose: "ai_refresh",
+        })
+      ).recent,
+    ).toEqual([]);
   });
 });

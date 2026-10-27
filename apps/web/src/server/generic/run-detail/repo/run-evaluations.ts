@@ -20,7 +20,7 @@ const OPEN = [S.queued, S.retry_wait, S.result_ready, S.blocked];
  * A Run's AI evaluations by record kind and feature, its recent pace, and its
  * latest settled outcomes (candidate counts, obsolete reasons, errors).
  * Durations are each Job's last claim to its settlement. Reads stay within
- * the Run (`AiEvaluation_run_state_idx`); Jobs join by their unique key.
+ * the Run’s request index (`AiEvaluationRequest_run_item_key`); Jobs join by their unique key.
  */
 export async function readRunEvaluations(
   db: Database,
@@ -32,6 +32,16 @@ export async function readRunEvaluations(
     OPEN.map((state) => sql`${state}`),
     sql`, `,
   );
+  // The Run requests execution; it need not be the shared evaluation's owner.
+  const requested = sql`requested AS MATERIALIZED (
+    SELECT e.id, e.target, e.feature, e."updatedAt",
+      CASE WHEN request."cancelledAt" IS NOT NULL THEN ${S.cancelled} ELSE e.state END AS state,
+      CASE WHEN request."cancelledAt" IS NOT NULL AND request.receipt IS NULL THEN NULL
+        ELSE coalesce(request.receipt, e.receipt) END AS receipt,
+      CASE WHEN request."cancelledAt" IS NOT NULL THEN 'Cancelled by a member'::text ELSE e.error END AS error
+    FROM "AiEvaluationRequest" request JOIN "AiEvaluation" e ON e.id = request."evaluationId"
+    WHERE request."runId" = ${input.runId}::uuid
+  )`;
   const kinds = await getDb(db).execute<{
     entity: string | null;
     feature: string;
@@ -45,6 +55,7 @@ export async function readRunEvaluations(
     completedPace: number;
     lastCompletedAt: string | null;
   }>(sql`
+    WITH ${requested}
     SELECT e.target->>'entity' AS entity, e.feature,
       count(*) FILTER (WHERE e.state IN (${open}))::int AS waiting,
       count(*) FILTER (WHERE e.state = ${S.running})::int AS running,
@@ -57,9 +68,8 @@ export async function readRunEvaluations(
       count(*) FILTER (WHERE e.state = ${S.completed}
         AND e."updatedAt" > ${at} - ${PACE_MINUTES} * interval '1 minute')::int AS "completedPace",
       max(e."updatedAt") FILTER (WHERE e.state = ${S.completed}) AS "lastCompletedAt"
-    FROM "AiEvaluation" e
+    FROM requested e
     LEFT JOIN "Job" j ON j.key = 'ai-evaluation:' || e.id::text
-    WHERE e."runId" = ${input.runId}::uuid
     GROUP BY 1, 2
     ORDER BY count(*) DESC
   `);
@@ -75,6 +85,7 @@ export async function readRunEvaluations(
     seconds: number | null;
     settledAt: string;
   }>(sql`
+    WITH ${requested}
     SELECT e.id, e.target->>'entity' AS entity, ent.shortcode AS "recordCode",
       e.feature, e.state,
       (e.receipt->>'candidates')::int AS candidates,
@@ -82,15 +93,14 @@ export async function readRunEvaluations(
       left(e.error::text, 300) AS error,
       extract(epoch FROM j."updatedAt" - j."lastClaimedAt")::float8 AS seconds,
       e."updatedAt" AS "settledAt"
-    FROM "AiEvaluation" e
+    FROM requested e
     LEFT JOIN "Job" j ON j.key = 'ai-evaluation:' || e.id::text
     LEFT JOIN "Entity" ent ON ent.id = (e.target->>'recordId')::uuid
-    WHERE e."runId" = ${input.runId}::uuid
-      AND e.state IN (${
-        input.failedOnly
-          ? sql`${S.failed}`
-          : sql`${S.completed}, ${S.failed}, ${S.obsolete}, ${S.blocked}`
-      })
+    WHERE e.state IN (${
+      input.failedOnly
+        ? sql`${S.failed}`
+        : sql`${S.completed}, ${S.failed}, ${S.obsolete}, ${S.blocked}`
+    })
     ORDER BY e."updatedAt" DESC
     LIMIT ${RECENT_OUTCOMES}
   `);

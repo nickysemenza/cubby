@@ -1,6 +1,6 @@
 {
-  "id": "59a6b901-bb4d-4a70-a444-4d2836f20722",
-  "prevId": "5b208d40-8dd0-44ec-a838-8582e0d430e5",
+  "id": "899009e9-a32f-4da1-a08f-5253538d32e7",
+  "prevId": "59a6b901-bb4d-4a70-a444-4d2836f20722",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2722,6 +2722,12 @@
         },
         "leaseToken": {
           "name": "leaseToken",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "admissionToken": {
+          "name": "admissionToken",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false

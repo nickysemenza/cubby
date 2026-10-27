@@ -85,6 +85,16 @@ statements/batches can replay after a failure before the final journal receipt.
 `-- cubby:outside-transaction` is reserved here for concurrent index creation/drop.
 The same journal hash/prefix checks and deployment serialization still apply.
 
+`0043_activity_indexes` uses the same opt-ins for its DerivedValue and Job
+indexes: `CREATE INDEX CONCURRENTLY IF NOT EXISTS` runs outside a transaction.
+These are index-only additions; ordinary writes and stored records survive.
+`0044_evaluation_page_admission` adds a nullable admission token without changing
+live per-target lease fences and backfills missing owning evaluation requests.
+Settled evaluations retain their state and receipt even if the member later
+cancelled the owning Run; only unfinished, receipt-less demand inherits that
+stop. Existing request receipts survive replay. The migration neither resets
+Jobs nor discards evaluation history.
+
 The Job migration widens identity checks without scanning under an exclusive
 lock, adds a nullable shortcode and a not-valid not-null check, and builds
 indexes concurrently. The check immediately refuses new code-less Jobs, so old

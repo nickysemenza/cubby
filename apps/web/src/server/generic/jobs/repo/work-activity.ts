@@ -2,10 +2,12 @@ import { runShortcode } from "@cubby/schemas/identifiers";
 import { jobState } from "@cubby/schemas/job";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import type { WorkActivity } from "~/contracts/job.contract";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import { run } from "~/server/db/schema";
 import { INTERNAL_JOB_KINDS } from "~/server/generic/jobs/kind-policy";
 import { jobDue } from "~/server/generic/jobs/repo/jobs";
 
@@ -30,6 +32,7 @@ export async function readWorkActivity(
     sql`${at} - ${minutes} * interval '1 minute'`;
   const due = jobDue(now);
   const live = sql`"Job".state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}, ${jobState.enum.paused})`;
+  const requester = alias(run, "r");
   const rows = await getDb(db).execute<{
     kind: string;
     feature: string | null;
@@ -45,8 +48,17 @@ export async function readWorkActivity(
     oldestDueAt: string | null;
     runs: string[] | null;
   }>(sql`
+    WITH activity_jobs AS MATERIALIZED (
+      SELECT "Job".*, e.feature, e.id AS "evaluationId" FROM "Job"
+      LEFT JOIN "AiEvaluation" e ON "Job".kind = 'ai.evaluation' AND e.id = ("Job".input->>'evaluationId')::uuid
+      WHERE (${live} OR "Job"."lastClaimedAt" > ${since(RECENT_MINUTES.failed)})
+        AND "Job".kind NOT IN (${sql.join(
+          INTERNAL_JOB_KINDS.map((kind) => sql`${kind}`),
+          sql`, `,
+        )})
+    )
     SELECT "Job".kind,
-      e.feature,
+      "Job".feature,
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.running} AND "Job"."leaseExpiresAt" > ${at})::int AS "running",
       count(*) FILTER (WHERE ${due} AND "Job".state <> ${jobState.enum.running})::int AS "due",
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.retry_wait} AND "Job"."availableAt" > ${at})::int AS "backingOff",
@@ -57,21 +69,25 @@ export async function readWorkActivity(
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.failed} AND "Job"."updatedAt" > ${since(RECENT_MINUTES.failed)})::int AS "failed",
       max("Job"."updatedAt") FILTER (WHERE "Job".state = ${jobState.enum.completed}) AS "lastCompletedAt",
       min("Job"."availableAt") FILTER (WHERE ${due} AND "Job".state <> ${jobState.enum.running}) AS "oldestDueAt",
-      (array_agg(DISTINCT r.shortcode) FILTER (WHERE r.status IN (${sql.join(
-        ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
-        sql`, `,
-      )})))[1:${STREAM_RUNS}] AS "runs"
-    FROM "Job"
-    LEFT JOIN "AiEvaluation" e
-      ON "Job".kind = 'ai.evaluation' AND e.id = ("Job".input->>'evaluationId')::uuid
-    LEFT JOIN "Run" r ON r.id = "Job"."runId"
-    WHERE (${live} OR "Job"."lastClaimedAt" > ${since(RECENT_MINUTES.failed)})
-      AND "Job".kind NOT IN (${sql.join(
-        INTERNAL_JOB_KINDS.map((kind) => sql`${kind}`),
-        sql`, `,
-      )})
-    GROUP BY "Job".kind, e.feature
-    ORDER BY "Job".kind, e.feature
+      ARRAY(
+        SELECT r.shortcode FROM activity_jobs stream
+        CROSS JOIN LATERAL (
+          SELECT stream."runId" AS id WHERE stream."runId" IS NOT NULL
+          UNION
+          SELECT request."runId" FROM "AiEvaluationRequest" request
+          WHERE request."evaluationId" = stream."evaluationId" AND request."cancelledAt" IS NULL
+        ) demand
+        JOIN "Run" r ON r.id = demand.id
+        WHERE stream.kind = "Job".kind AND stream.feature IS NOT DISTINCT FROM "Job".feature
+          AND ${notDeleted(requester)} AND r.status IN (${sql.join(
+            ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
+            sql`, `,
+          )})
+        GROUP BY r.id ORDER BY r."createdAt" DESC, r.id LIMIT ${STREAM_RUNS}
+      ) AS "runs"
+    FROM activity_jobs "Job"
+    GROUP BY "Job".kind, "Job".feature
+    ORDER BY "Job".kind, "Job".feature
   `);
   const iso = (value: string | null) =>
     value === null ? null : new Date(`${value}Z`).toISOString();

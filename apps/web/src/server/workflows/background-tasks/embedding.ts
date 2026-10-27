@@ -38,7 +38,10 @@ import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import type { JobClaim } from "~/server/generic/jobs/repo/jobs";
 import type { JobHandler, PreparedJobPage } from "~/server/generic/jobs/types";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
-import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
+import {
+  SHORTCODE_TABLE,
+  orderedEntityLockKinds,
+} from "~/server/generic/shortcode/repo/shortcode-tables";
 
 export interface EmbeddingRefreshPort {
   readonly configured: () => boolean;
@@ -278,9 +281,9 @@ export function embeddingJobHandler(
     if (!selections.length) return;
     // Writers lock sources before identities. Materialized CTE dependencies
     // preserve that order across mixed-kind pages, with sorted locks per table.
-    const kinds = [
-      ...new Set(selections.map(({ input }) => input.entityKind)),
-    ].sort();
+    const kinds = orderedEntityLockKinds(
+      selections.map(({ input }) => input.entityKind),
+    );
     const locks = kinds.map((kind, index) => {
       const source = SHORTCODE_TABLE[kind];
       const previous = index

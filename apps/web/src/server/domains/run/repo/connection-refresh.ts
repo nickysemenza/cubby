@@ -25,7 +25,11 @@ import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { entityIdentity, job, run, aiEvaluation } from "~/server/db/schema";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
 import {
@@ -223,32 +227,62 @@ export async function prepareConnectionDiscoveryRoster(
     createRun: (tx: Database, replacing: RunId | null) => Promise<RunId>;
   },
 ) {
-  const page = await connectionRosterTargets(db, input);
-  // A cancelled or failed Run in the cursor never receives more work.
-  const current = input.runId && (await runIsActive(db, input.runId));
-  // Keep the stopped owner's identity across pages that admit nothing, or a
-  // later page would reopen the original key and resolve the stopped Run.
-  let stopped = current ? null : (input.runId ?? input.replacing ?? null);
-  let runId = current ? input.runId : null;
-  if (!runId && (await hasAdmissibleTarget(db, page.targets)))
-    // An idempotent open can return a Run stopped since it was created, also
-    // one the cursor never saved; continue after it under its next key.
-    for (let open = 0; open < 3 && !runId; open++) {
-      const opened = await input.createRun(db, stopped);
-      if (await runIsActive(db, opened)) runId = opened;
-      else if (opened === stopped) break;
-      else stopped = opened;
-    }
-  const inserted = runId
-    ? await insertEvaluationTargets(db, runId, page.targets)
-    : 0;
-  return {
-    scanned: page.scanned,
-    inserted,
-    next: page.next,
-    runId,
-    replacing: runId ? null : stopped,
-  };
+  return withTransactionDatabase(db, async (db) => {
+    const ownerIds = [
+      ...new Set([input.runId, input.replacing].filter((id) => id != null)),
+    ];
+    const owners = ownerIds.length
+      ? await getDb(db)
+          .select({ id: run.id, failureCode: run.failureCode })
+          .from(run)
+          .where(inArray(run.id, ownerIds))
+          .orderBy(run.id)
+          .for("update")
+      : [];
+    const stoppedByMember = () => ({
+      outcome: "member-stopped" as const,
+      scanned: 0,
+      inserted: 0,
+      next: input.after,
+      runId: null,
+      replacing: input.runId ?? input.replacing ?? null,
+    });
+    if (owners.some((owner) => owner.failureCode === "user_cancelled"))
+      return stoppedByMember();
+    const page = await connectionRosterTargets(db, input);
+    // A cancelled or failed Run in the cursor never receives more work.
+    const current = input.runId && (await runIsActive(db, input.runId));
+    // Keep the stopped owner's identity across pages that admit nothing, or a
+    // later page would reopen the original key and resolve the stopped Run.
+    let stopped = current ? null : (input.runId ?? input.replacing ?? null);
+    let runId = current ? input.runId : null;
+    if (!runId && (await hasAdmissibleTarget(db, page.targets)))
+      // An idempotent open can return a Run stopped since it was created, also
+      // one the cursor never saved; continue after it under its next key.
+      for (let open = 0; open < 3 && !runId; open++) {
+        const opened = await input.createRun(db, stopped);
+        const [owner] = await getDb(db)
+          .select({ failureCode: run.failureCode })
+          .from(run)
+          .where(eq(run.id, opened))
+          .for("update");
+        if (owner?.failureCode === "user_cancelled") return stoppedByMember();
+        if (await runIsActive(db, opened)) runId = opened;
+        else if (opened === stopped) break;
+        else stopped = opened;
+      }
+    const inserted = runId
+      ? await insertEvaluationTargets(db, runId, page.targets)
+      : 0;
+    return {
+      outcome: "admitted" as const,
+      scanned: page.scanned,
+      inserted,
+      next: page.next,
+      runId,
+      replacing: runId ? null : stopped,
+    };
+  });
 }
 
 /** Records one connection roster page queues, for Sweeps and routine discovery alike; one evaluation page. */
