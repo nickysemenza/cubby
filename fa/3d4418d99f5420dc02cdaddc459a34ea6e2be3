@@ -1,0 +1,25 @@
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_9fb58b1f0c0012::t_c8f504d1ba6f0d 128-131,372,605-607
+tools/oxlint/cubby/no-raw-deleted-at-predicate-baseline.json
+  s_9fb58b1f0c0012::t_f3c8c6f0f5c3b8 76
+apps/web/src/server/domains/expense/repo/lookup.ts
+  s_9fb58b1f0c0012::t_9d002623dd8a13 6-7,12-17,24-27,184-185,209-218,322-324
+apps/web/src/server/domains/vendor/repo/vendor-logo.ts
+  s_9fb58b1f0c0012::t_6518976557e5fc 1-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fa3d4418d99f5420dc02cdaddc459a34ea6e2be3",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
