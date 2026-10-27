@@ -1,0 +1,33 @@
+apps/web/src/server/db/helpers/build-where.unit.test.ts
+  s_9fb58b1f0c0012::t_c7698d4bae479e 35,39,535,537-539,744,746-748
+apps/web/src/server/domains/project/repo/lookup.ts
+  s_9fb58b1f0c0012::t_34206fa845be14 7,44,68
+apps/web/src/server/domains/task/repo/crud.ts
+  s_9fb58b1f0c0012::t_e2410f158c01cb 79,719
+apps/web/src/server/domains/task/repo/lookup.ts
+  s_9fb58b1f0c0012::t_10f76388ae2d51 2
+apps/web/src/server/generic/list/repo/any-of-filter.integration.test.ts
+  s_9fb58b1f0c0012::t_66b91da57851ab 22,24,142,214
+apps/web/src/server/generic/list/repo/list-scopes.integration.test.ts
+  s_9fb58b1f0c0012::t_0bb8f770fb37c1 32,285,313,322-324,351
+apps/web/src/server/generic/list/repo/list.ts
+  s_9fb58b1f0c0012::t_650e1d8fe4cc8a 1676-1678,1724,1781,1851,1856-1858,1863,1868-1869,1876-1890,2103-2120,2630-2632,2674-2677,2734-2736
+apps/web/src/server/generic/work-queue/service/work-queue-problems.ts
+  s_9fb58b1f0c0012::t_bcc36fca13206a 45-48,51,118,121,124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "16be263b1be35afabb96be70dbf9ba7cf55f3175",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
