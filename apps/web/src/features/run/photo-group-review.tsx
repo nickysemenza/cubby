@@ -16,12 +16,14 @@ import type {
   PhotoGroupProposalGroup,
   PhotoRunImage,
   ReviewPhotoGroupsAction,
+  ReviewPhotoGroupsOutput,
 } from "@cubby/schemas/photo-import-run";
 import {
   reviewPhotoGroupsOutput,
   photoRunReviewResponse,
   type PhotoRunDefaults,
 } from "@cubby/schemas/photo-import-run";
+import { brandNameKey } from "@cubby/schemas/vendor";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
@@ -44,7 +46,6 @@ import {
   useContext,
   useSyncExternalStore,
   useEffect,
-  useMemo,
   useId,
   useRef,
   useState,
@@ -60,6 +61,7 @@ import { ProductExternalIds } from "~/entity/components/product-external-ids";
 import { entityFieldPresentation } from "~/entity/editing/entity-field-presentation";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { PhotoGrid } from "~/entity/entity-media/photo-grid";
+import { PhotoViewer } from "~/entity/entity-media/photo-viewer";
 import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
@@ -79,11 +81,10 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { DateDisplay } from "~/ui/common/date-display";
-import { DecisionSteps } from "~/ui/common/decision-steps";
 import { Facts } from "~/ui/common/facts";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
-import { useIndexedSubsections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
@@ -197,6 +198,7 @@ function usePhotoDraft() {
   return { session, state };
 }
 const NO_PROPOSALS: readonly PhotoGroupProposal[] = [];
+const PhotoProposalsContext = createContext(NO_PROPOSALS);
 
 /**
  * Photos and proposals follow the run while it is live. A run with an agent
@@ -223,24 +225,32 @@ export function usePhotoRunReview(
   });
 }
 
+function publishPhotoReview(
+  queryClient: ReturnType<typeof useQueryClient>,
+  runId: string,
+  data: ReviewPhotoGroupsOutput,
+) {
+  queryClient.setQueryData(photoImport.review.queryKey({ runId }), (old) =>
+    old
+      ? {
+          ...old,
+          review: {
+            runId: data.runId,
+            runStatus: data.runStatus,
+            proposals: data.proposals,
+            unassignedImageIds: data.unassignedImageIds,
+          },
+        }
+      : old,
+  );
+}
+
 function useReviewAction(runId: string) {
   const queryClient = useQueryClient();
   const { mutateAsync: execute } = useWorkflowCommand({
     onResult: ({ result }) => {
       const data = reviewPhotoGroupsOutput.parse(result);
-      queryClient.setQueryData(photoImport.review.queryKey({ runId }), (old) =>
-        old
-          ? {
-              ...old,
-              review: {
-                runId: data.runId,
-                runStatus: data.runStatus,
-                proposals: data.proposals,
-                unassignedImageIds: data.unassignedImageIds,
-              },
-            }
-          : old,
-      );
+      publishPhotoReview(queryClient, runId, data);
     },
   });
   return useMutation({
@@ -485,6 +495,7 @@ function GroupPhotos({
   editable: boolean;
   busy: boolean;
 }) {
+  const [viewing, setViewing] = useState<number | null>(null);
   const labelPhotos = proposal.images
     .filter((entry) => entry.purpose === "label")
     .map((entry) => imagesById.get(entry.id));
@@ -502,20 +513,27 @@ function GroupPhotos({
     string,
     { purpose: "item" | "label" | null; reason?: string }
   >([
-    ...proposal.images.map(
-      (entry) => [entry.id, { purpose: entry.purpose }] as const,
-    ),
+    ...proposal.images
+      .slice()
+      .sort(
+        (a, b) => Number(b.purpose === "item") - Number(a.purpose === "item"),
+      )
+      .map((entry) => [entry.id, { purpose: entry.purpose }] as const),
     ...proposal.skip.map(
       (entry) => [entry.id, { purpose: null, reason: entry.reason }] as const,
     ),
   ]);
+  const tiles = [...entries.keys()].flatMap((id) =>
+    photoTile(imagesById.get(id)),
+  );
   return (
     <div className="min-w-0 space-y-2">
       <PhotoGrid
-        className="grid-cols-1 sm:grid-cols-1 md:grid-cols-1"
-        images={[...entries.keys()].flatMap((id) =>
-          photoTile(imagesById.get(id)),
-        )}
+        className="grid-cols-2 sm:grid-cols-3 md:grid-cols-3 [&>div:first-child]:col-span-2"
+        images={tiles}
+        tileClassName="max-sm:max-h-48"
+        fit="contain"
+        onSelect={(_image, index) => setViewing(index)}
         renderOverlay={(tile) => {
           const { purpose = null, reason } = entries.get(tile.id) ?? {};
           return (
@@ -543,7 +561,7 @@ function GroupPhotos({
                     : "Skipped"}
               </Badge>
               {editable ? (
-                <div className="absolute top-1 right-1">
+                <div className="absolute top-1 right-1 z-20">
                   <ImageMenu
                     imageId={tile.id}
                     groupKey={proposal.groupKey}
@@ -557,6 +575,15 @@ function GroupPhotos({
             </>
           );
         }}
+      />
+      <PhotoViewer
+        images={tiles}
+        index={viewing}
+        onIndexChange={setViewing}
+        onOpenChange={(open) => {
+          if (!open) setViewing(null);
+        }}
+        detailLink={(image) => ({ shortcode: image.id })}
       />
       {labelPhotos.length > 0 &&
       !labelPhotos.some((photo) => photo?.recognizedText?.trim()) ? (
@@ -926,7 +953,12 @@ function IdentityDecision({
   const resolve = useMutation({
     mutationFn: (
       input: Parameters<typeof photoImport.resolveConcern.call>[0],
-    ) => photoImport.resolveConcern.call(input),
+    ) =>
+      session.save(async () => {
+        // Resolution joins the same barrier as field saves before any next edit.
+        const data = await photoImport.resolveConcern.call(input);
+        publishPhotoReview(queryClient, runId, data);
+      }),
     onSuccess: async (_data, input) => {
       session.acknowledge(replyId, input.reply ?? "");
       void invalidateOperationTags(queryClient, ripple.runOnly);
@@ -1311,15 +1343,18 @@ function FieldChangeToggle({
   disabled,
   onChange,
   children,
+  label,
 }: {
   checked: boolean;
   disabled: boolean;
   onChange: (checked: boolean) => Promise<boolean>;
   children: ReactNode;
+  label?: string;
 }) {
   return (
     <label className="flex items-center gap-2">
       <Checkbox
+        aria-label={label}
         checked={checked}
         disabled={disabled}
         onCheckedChange={(next) => {
@@ -1345,6 +1380,17 @@ const productCategoryField = entityFieldPresentation(
   "edit",
 );
 
+// A new Brand name and its empty reference describe one Product field change.
+function photoProductChangeCount(
+  changes: PhotoGroupDecision["productChanges"],
+) {
+  return new Set(
+    Object.keys(changes ?? {}).map((field) =>
+      field === "brandCreate" ? "brandId" : field,
+    ),
+  ).size;
+}
+
 function ExistingProductChanges({
   proposal,
   current,
@@ -1356,20 +1402,22 @@ function ExistingProductChanges({
   save: SaveGroup;
   busy: boolean;
 }) {
-  const [open, setOpen] = useState(
-    Boolean(Object.keys(proposal.review?.productChanges ?? {}).length),
-  );
-  const [showUnchanged, setShowUnchanged] = useState(false);
   const review = reviewDecision(proposal);
   const changes = review.productChanges ?? {};
+  const [selectedBrand] = useSelectedPickerItems(
+    "vendor",
+    changes.brandId ? [changes.brandId] : [],
+    [],
+  );
   return (
-    <Disclosure
-      summary={`Product changes · ${countLabel(Object.keys(changes).length, "selected field")}`}
+    <section
+      aria-label="Proposed Product changes"
       className="border-t border-border pt-2 text-xs"
-      open={open}
-      onOpenChange={setOpen}
-      keepMounted
     >
+      <h4 className="mb-2 font-medium">
+        Product changes ·{" "}
+        {countLabel(photoProductChangeCount(changes), "selected field")}
+      </h4>
       <p className="mb-2 text-muted-foreground">
         Only selected fields change when you attach the photos. Added text is
         green; removed text is red and struck through.
@@ -1379,118 +1427,115 @@ function ExistingProductChanges({
       ) : null}
       {current.data ? (
         <Stack gap="sm">
-          {productReviewFields
-            .filter(({ key }) => showUnchanged || Object.hasOwn(changes, key))
-            .map(({ key: field, presentation }) => {
-              const before =
-                field === "tags"
-                  ? (current.data?.tags.join(", ") ?? "")
+          {productReviewFields.map(({ key: field, presentation }) => {
+            const before =
+              field === "tags"
+                ? (current.data?.tags.join(", ") ?? "")
+                : field === "brandId"
+                  ? (current.data?.brandName ?? "")
                   : (current.data?.[field] ?? "");
-              const change = changes[field];
-              const after = Array.isArray(change)
-                ? change.join(", ")
-                : (change ?? "");
-              return (
-                <Stack key={field} gap="xs">
-                  <FieldChangeToggle
-                    checked={Object.hasOwn(changes, field)}
-                    disabled={busy}
-                    onChange={(checked) =>
-                      save(() => {
-                        const next = { ...changes };
-                        if (!checked) delete next[field];
-                        else if (field === "tags")
-                          next.tags = current.data?.tags ?? [];
-                        else if (field === "brandId")
-                          next.brandId = current.data?.brandId ?? null;
-                        else next[field] = before;
-                        return {
-                          ...toGroupInput(proposal),
-                          review: { ...review, productChanges: next },
-                        };
-                      })
-                    }
-                  >
-                    Change {presentation.label.toLocaleLowerCase()}
-                  </FieldChangeToggle>
-                  {Object.hasOwn(changes, field) ? (
-                    <>
-                      <div aria-label={`Proposed ${field} change`}>
-                        <p className="text-muted-foreground">
-                          {after
-                            ? before
-                              ? `Replace ${field}`
-                              : `Set ${field}`
-                            : `Clear ${field}`}{" "}
-                          · Current → Proposed
-                        </p>
-                        <InlineTextDiff
-                          before={before}
-                          after={after}
-                          beforeLabel="Current"
-                          afterLabel="Proposed"
-                          wrap
-                        />
-                      </div>
-                      {field === "brandId" ? (
-                        <PhotoBrandPicker
-                          label="New brand"
-                          value={changes.brandId}
-                          setValue={(item) =>
-                            save(() => ({
+            const change = changes[field];
+            const after =
+              field === "brandId"
+                ? (changes.brandCreate?.name ?? selectedBrand?.name ?? "")
+                : Array.isArray(change)
+                  ? change.join(", ")
+                  : (change ?? "");
+            return (
+              <Stack key={field} gap="xs">
+                <FieldChangeToggle
+                  label={`Change ${presentation.label.toLocaleLowerCase()}`}
+                  checked={Object.hasOwn(changes, field)}
+                  disabled={busy}
+                  onChange={(checked) =>
+                    save(() => {
+                      const next = { ...changes };
+                      if (!checked) delete next[field];
+                      else if (field === "tags")
+                        next.tags = current.data?.tags ?? [];
+                      else if (field === "brandId")
+                        next.brandId = current.data?.brandId ?? null;
+                      else next[field] = before;
+                      return {
+                        ...toGroupInput(proposal),
+                        review: { ...review, productChanges: next },
+                      };
+                    })
+                  }
+                >
+                  Change {presentation.label.toLocaleLowerCase()}
+                  {!Object.hasOwn(changes, field) ? (
+                    <span className="ml-2 font-normal text-muted-foreground">
+                      {field === "brandId"
+                        ? (current.data?.brandName ?? "Not set")
+                        : before || "Not set"}
+                    </span>
+                  ) : null}
+                </FieldChangeToggle>
+                {Object.hasOwn(changes, field) ? (
+                  <>
+                    <div aria-label={`Proposed ${field} change`}>
+                      <p className="text-muted-foreground">
+                        {after
+                          ? before
+                            ? `Replace ${field}`
+                            : `Set ${field}`
+                          : `Clear ${field}`}{" "}
+                        · Current → Proposed
+                      </p>
+                      <InlineTextDiff
+                        before={before}
+                        after={after}
+                        beforeLabel="Current"
+                        afterLabel="Proposed"
+                        wrap
+                      />
+                    </div>
+                    {field === "brandId" ? (
+                      <PhotoBrandControl
+                        proposal={proposal}
+                        label="New brand"
+                        value={changes.brandId}
+                        save={save}
+                        busy={busy}
+                      />
+                    ) : (
+                      <CommitInput
+                        label={`New ${presentation.label.toLocaleLowerCase()}`}
+                        required={
+                          entityFieldByKey("product", field)?.requiredOnCreate
+                        }
+                        value={after}
+                        disabled={busy}
+                        onCommit={(value, onSaved) =>
+                          save(
+                            () => ({
                               ...toGroupInput(proposal),
                               review: {
                                 ...review,
                                 productChanges: {
                                   ...changes,
-                                  brandId: item
-                                    ? parseShortcodeFor("vendor", item.id)
-                                    : null,
+                                  [field]:
+                                    field === "tags"
+                                      ? value
+                                          .split(",")
+                                          .map((tag) => tag.trim())
+                                          .filter(Boolean)
+                                      : value || (field === "name" ? "" : null),
                                 },
                               },
-                            }))
-                          }
-                          disabled={busy}
-                        />
-                      ) : (
-                        <CommitInput
-                          label={`New ${presentation.label.toLocaleLowerCase()}`}
-                          required={
-                            entityFieldByKey("product", field)?.requiredOnCreate
-                          }
-                          value={after}
-                          disabled={busy}
-                          onCommit={(value, onSaved) =>
-                            save(
-                              () => ({
-                                ...toGroupInput(proposal),
-                                review: {
-                                  ...review,
-                                  productChanges: {
-                                    ...changes,
-                                    [field]:
-                                      field === "tags"
-                                        ? value
-                                            .split(",")
-                                            .map((tag) => tag.trim())
-                                            .filter(Boolean)
-                                        : value ||
-                                          (field === "name" ? "" : null),
-                                  },
-                                },
-                              }),
-                              onSaved,
-                            )
-                          }
-                        />
-                      )}
-                    </>
-                  ) : null}
-                </Stack>
-              );
-            })}
-          {productCategoryField.editable &&
-          (showUnchanged || Object.hasOwn(changes, "categoryId")) ? (
+                            }),
+                            onSaved,
+                          )
+                        }
+                      />
+                    )}
+                  </>
+                ) : null}
+              </Stack>
+            );
+          })}
+          {productCategoryField.editable ? (
             <FieldChangeToggle
               checked={Object.hasOwn(changes, "categoryId")}
               disabled={busy}
@@ -1508,6 +1553,9 @@ function ExistingProductChanges({
               }
             >
               Change {productCategoryField.label.toLocaleLowerCase()}
+              {!Object.hasOwn(changes, "categoryId") ? (
+                <CategoryLabel category={current.data.category ?? null} />
+              ) : null}
             </FieldChangeToggle>
           ) : null}
           {Object.hasOwn(changes, "categoryId") ? (
@@ -1548,18 +1596,11 @@ function ExistingProductChanges({
               </WithProductCategorySearch>
             </>
           ) : null}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setShowUnchanged((shown) => !shown)}
-          >
-            {showUnchanged ? "Hide unchanged fields" : "Show unchanged fields"}
-          </Button>
         </Stack>
-      ) : open && !current.isError ? (
+      ) : !current.isError ? (
         <p>Loading current Product…</p>
       ) : null}
-    </Disclosure>
+    </section>
   );
 }
 
@@ -1597,6 +1638,280 @@ function selectPhotoProduct(
   };
 }
 
+type PhotoBrandChoice = Extract<
+  PhotoGroupProposalGroup["product"],
+  { kind: "create" }
+>["create"];
+
+function withPhotoBrand(
+  proposal: PhotoGroupProposal,
+  choice: Pick<PhotoBrandChoice, "brandId" | "brandCreate">,
+): PhotoGroupProposalGroup {
+  const group = toGroupInput(proposal);
+  if (group.product.kind === "create") {
+    const {
+      brandCreate: _previousCreate,
+      brandId: _previousId,
+      ...create
+    } = group.product.create;
+    return {
+      ...group,
+      product: { kind: "create", create: { ...create, ...choice } },
+    };
+  }
+  const review = reviewDecision(proposal);
+  const {
+    brandCreate: _previousCreate,
+    brandId: _previousId,
+    ...changes
+  } = review.productChanges ?? {};
+  return {
+    ...group,
+    review: { ...review, productChanges: { ...changes, ...choice } },
+  };
+}
+
+function PhotoBrandEvidence({
+  proposal,
+  save,
+  busy,
+  onShowEvidence,
+}: {
+  proposal: PhotoGroupProposal;
+  save: Save;
+  busy: boolean;
+  onShowEvidence?: () => void;
+}) {
+  const proposals = useContext(PhotoProposalsContext);
+  const rejected = new Set(
+    (proposal.review?.rejectedBrandNames ?? []).map(brandNameKey),
+  );
+  const evidence = (proposal.brandEvidence ?? []).filter(
+    (item) => !rejected.has(brandNameKey(item.name)),
+  );
+  const chosen =
+    proposal.product.kind === "create"
+      ? proposal.product.create
+      : proposal.review?.productChanges;
+  return (
+    <section aria-label="Brand evidence" className="space-y-2 text-xs">
+      {chosen?.brandCreate ? (
+        <p className="font-medium">
+          On approval: create brand “{chosen.brandCreate.name}”
+        </p>
+      ) : null}
+      {evidence.map((item) => {
+        const [onlyMatch] = item.matches;
+        const choice =
+          item.matches.length === 1 && onlyMatch
+            ? { brandId: onlyMatch.id }
+            : item.matches.length === 0
+              ? { brandCreate: { name: item.name } }
+              : null;
+        const matching = proposals.filter(
+          (other) =>
+            other.state === "proposed" &&
+            (other.origin === "coordinator" ||
+              other.origin === "external_agent") &&
+            !other.blockedReason &&
+            other.brandEvidence?.length === 1 &&
+            other.product.kind === "create" &&
+            !other.product.create.brandId &&
+            !other.product.create.brandCreate &&
+            !(other.review?.rejectedBrandNames ?? []).some(
+              (name) => brandNameKey(name) === brandNameKey(item.name),
+            ) &&
+            other.brandEvidence?.some(
+              (entry) =>
+                brandNameKey(entry.name) === brandNameKey(item.name) &&
+                entry.matches.length < 2 &&
+                (choice?.brandId
+                  ? entry.matches[0]?.id === choice.brandId
+                  : entry.matches.length === 0),
+            ),
+        );
+        const selected =
+          Boolean(
+            chosen?.brandCreate &&
+            brandNameKey(chosen.brandCreate.name) === brandNameKey(item.name),
+          ) || item.matches.some((match) => chosen?.brandId === match.id);
+        return (
+          <div
+            key={item.name}
+            className="space-y-1 border-b border-border pb-2 last:border-b-0"
+          >
+            <Row wrap gap="sm">
+              <span>
+                Brand: <strong>{item.name}</strong>
+              </span>
+              <Button size="sm" variant="ghost" onClick={onShowEvidence}>
+                Read from {countLabel(item.imageIds.length, "photo")}
+              </Button>
+              {selected ? (
+                <span className="text-muted-foreground">
+                  In proposal · applies on approval
+                </span>
+              ) : choice ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() =>
+                    void save(() => ({
+                      groups: [withPhotoBrand(proposal, choice)],
+                      removeGroupKeys: [],
+                    }))
+                  }
+                >
+                  {choice.brandId ? "Use brand" : "Propose new brand"}
+                </Button>
+              ) : (
+                item.matches.map((match) => (
+                  <Button
+                    key={match.id}
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() =>
+                      void save(() => ({
+                        groups: [
+                          withPhotoBrand(proposal, { brandId: match.id }),
+                        ],
+                        removeGroupKeys: [],
+                      }))
+                    }
+                  >
+                    Use {match.name}
+                  </Button>
+                ))
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() =>
+                  void save(() => {
+                    const group = selected
+                      ? withPhotoBrand(proposal, {})
+                      : toGroupInput(proposal);
+                    return {
+                      groups: [
+                        {
+                          ...group,
+                          review: {
+                            ...(group.review ?? reviewDecision(proposal)),
+                            rejectedBrandNames: [
+                              ...(proposal.review?.rejectedBrandNames ?? []),
+                              item.name,
+                            ],
+                          },
+                        },
+                      ],
+                      removeGroupKeys: [],
+                    };
+                  })
+                }
+              >
+                Reject brand proposal
+              </Button>
+            </Row>
+            {choice && matching.length > 1 ? (
+              <Disclosure
+                summary={`Use ${item.name} for ${matching.length} matching items`}
+              >
+                <p className="mb-2 text-muted-foreground">
+                  Only untouched new Products with matching photo evidence and
+                  no selected brand. Member-reviewed choices stay unchanged.
+                </p>
+                <RecordList aria-label="Matching brand proposals">
+                  {matching.map((other) => (
+                    <RecordRow
+                      key={other.groupKey}
+                      primary={proposalName(other)}
+                    />
+                  ))}
+                </RecordList>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() =>
+                    void save(() => ({
+                      groups: matching.map((other) =>
+                        withPhotoBrand(other, choice),
+                      ),
+                      removeGroupKeys: [],
+                    }))
+                  }
+                >
+                  Update {matching.length} proposals
+                </Button>
+              </Disclosure>
+            ) : null}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function PhotoBrandControl({
+  proposal,
+  value,
+  label,
+  save,
+  busy,
+}: {
+  proposal: PhotoGroupProposal;
+  value: string | null | undefined;
+  label: string;
+  save: SaveGroup;
+  busy: boolean;
+}) {
+  const chosen =
+    proposal.product.kind === "create"
+      ? proposal.product.create
+      : proposal.review?.productChanges;
+  return (
+    <Stack gap="xs">
+      <span className="text-muted-foreground">{label}</span>
+      <PhotoBrandPicker
+        label={label}
+        value={value}
+        disabled={busy}
+        setValue={(item) =>
+          void save(() =>
+            withPhotoBrand(proposal, {
+              brandId: item ? parseShortcodeFor("vendor", item.id) : null,
+            }),
+          )
+        }
+      />
+      <Disclosure summary="Brand not listed?" keepMounted>
+        <CommitInput
+          label="New brand name"
+          value={chosen?.brandCreate?.name ?? ""}
+          disabled={busy}
+          onCommit={(name, onSaved) =>
+            save(
+              () =>
+                withPhotoBrand(
+                  proposal,
+                  name ? { brandId: null, brandCreate: { name } } : {},
+                ),
+              onSaved,
+            )
+          }
+        />
+        <p className="mt-1 text-muted-foreground">
+          Propose a brand now; create it only when you approve this item. An
+          exact existing name is reused.
+        </p>
+      </Disclosure>
+    </Stack>
+  );
+}
+
 function ProductPanel({
   runId,
   proposal,
@@ -1606,6 +1921,7 @@ function ProductPanel({
   step,
   runLocation,
   labelText,
+  onShowEvidence,
 }: {
   runId: string;
   proposal: PhotoGroupProposal;
@@ -1615,6 +1931,7 @@ function ProductPanel({
   step: string;
   runLocation: RunLocation | null;
   labelText: string;
+  onShowEvidence?: () => void;
 }) {
   const saveGroup: SaveGroup = (build, onSaved) =>
     save(
@@ -1651,19 +1968,12 @@ function ProductPanel({
     if (product.kind !== "create") return null;
     if (field === "brandId")
       return (
-        <PhotoBrandPicker
+        <PhotoBrandControl
+          proposal={proposal}
           label="Brand"
           value={product.create.brandId}
-          setValue={(item) =>
-            saveProduct({
-              kind: "create",
-              create: {
-                ...product.create,
-                brandId: item ? parseShortcodeFor("vendor", item.id) : null,
-              },
-            })
-          }
-          disabled={busy}
+          save={saveGroup}
+          busy={busy}
         />
       );
     const presentation = entityFieldPresentation("product", field, "create");
@@ -1784,6 +2094,19 @@ function ProductPanel({
   return (
     <Stack gap="sm" className="min-w-0">
       <IdentityDecision runId={runId} proposal={proposal} busy={busy} />
+      <PhotoBrandEvidence
+        proposal={proposal}
+        save={save}
+        busy={busy}
+        onShowEvidence={onShowEvidence}
+      />
+      {product.kind === "existing" &&
+      !labelText.trim() &&
+      !proposal.review?.unresolvedReason ? (
+        <p className="text-xs text-muted-foreground">
+          No label text — compare the photo with the product
+        </p>
+      ) : null}
       {product.kind === "create" ? (
         <>
           <Stack gap="sm">
@@ -2496,6 +2819,7 @@ function ProposalCard({
   action: ReturnType<typeof useReviewAction>;
   approve: (groupKey: string) => Promise<void>;
 }) {
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const currentProduct = useSelectedPhotoProduct(runId, proposal.product);
   const { state } = usePhotoDraft();
   const approving = state.approving !== null;
@@ -2511,6 +2835,7 @@ function ProposalCard({
   return (
     <Section
       data-photo-group={proposal.groupKey}
+      className="max-sm:[&>[data-slot=section-heading]>div:first-child]:basis-full"
       headingAs="h3"
       title={
         <span className="flex min-w-0 flex-wrap items-center gap-2">
@@ -2626,50 +2951,80 @@ function ProposalCard({
             }));
           }}
         />
-        <DecisionSteps
-          aria-label="Photo group decisions"
-          collapseAnswered
-          steps={proposal.steps.map((step) =>
-            step.key === "identity" &&
-            proposal.product.kind === "existing" &&
-            !proposal.images.some((entry) =>
-              imagesById.get(entry.id)?.recognizedText?.trim(),
-            ) &&
-            !proposal.review?.unresolvedReason
-              ? {
-                  ...step,
-                  summary: "No label text — compare the photo with the product",
-                }
-              : step,
-          )}
-          media={
-            <>
-              <GroupPhotos
-                proposal={proposal}
-                proposals={proposals}
-                imagesById={imagesById}
-                save={save}
-                editable
-                busy={busy}
-              />
-            </>
-          }
-          renderBody={(step) => (
-            <ProductPanel
-              runId={runId}
+        <div className="grid min-w-0 gap-4 @xl/photo-editor:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
+          <div className="min-w-0 space-y-3">
+            <GroupPhotos
               proposal={proposal}
-              currentProduct={currentProduct}
+              proposals={proposals}
+              imagesById={imagesById}
               save={save}
+              editable
               busy={busy}
-              step={step.key}
-              runLocation={runLocation}
-              labelText={proposal.images
-                .map((entry) => imagesById.get(entry.id)?.recognizedText)
-                .filter(Boolean)
-                .join("\n")}
             />
-          )}
-        />
+            <div id={`photo-evidence-${proposal.groupKey}`}>
+              <Disclosure
+                summary="Photo evidence and label text"
+                open={evidenceOpen}
+                onOpenChange={setEvidenceOpen}
+                keepMounted
+              >
+                <GroupEvidence proposal={proposal} imagesById={imagesById} />
+              </Disclosure>
+            </div>
+          </div>
+          <div className="min-w-0 space-y-4">
+            <Disclosure summary="Choose a different Product" keepMounted>
+              <ProductPanel
+                runId={runId}
+                proposal={proposal}
+                currentProduct={currentProduct}
+                save={save}
+                busy={busy}
+                step="product"
+                runLocation={runLocation}
+                labelText=""
+              />
+            </Disclosure>
+            <section aria-label="Product details" className="min-w-0">
+              <ProductPanel
+                runId={runId}
+                proposal={proposal}
+                currentProduct={currentProduct}
+                save={save}
+                busy={busy}
+                step="identity"
+                onShowEvidence={() => {
+                  setEvidenceOpen(true);
+                  requestAnimationFrame(() =>
+                    document
+                      .getElementById(`photo-evidence-${proposal.groupKey}`)
+                      ?.scrollIntoView({ block: "nearest" }),
+                  );
+                }}
+                runLocation={runLocation}
+                labelText={proposal.images
+                  .map((entry) => imagesById.get(entry.id)?.recognizedText)
+                  .filter(Boolean)
+                  .join("\n")}
+              />
+            </section>
+            <section
+              aria-label="Inventory decision"
+              className="border-t border-border pt-3"
+            >
+              <ProductPanel
+                runId={runId}
+                proposal={proposal}
+                currentProduct={currentProduct}
+                save={save}
+                busy={busy}
+                step="ownership"
+                runLocation={runLocation}
+                labelText=""
+              />
+            </section>
+          </div>
+        </div>
         {proposal.review?.stockIntent === "receive" &&
         currentProduct.data?.inventoryEntries?.length ? (
           <div className="mt-3 space-y-2 text-xs">
@@ -2700,9 +3055,6 @@ function ProposalCard({
             </Button>
           </div>
         ) : null}
-        <div className="mt-3">
-          <GroupEvidence proposal={proposal} imagesById={imagesById} />
-        </div>
         {proposal.missingImageCount ? (
           <StatusText as="p" tone="warning" className="mt-3 text-xs">
             {proposal.missingImageCount === 1
@@ -2757,8 +3109,8 @@ function ProposalCard({
             .
             {proposal.product.kind === "existing" ? (
               <span className="block font-medium text-foreground">
-                {Object.keys(proposal.review?.productChanges ?? {}).length ? (
-                  `${countLabel(Object.keys(proposal.review?.productChanges ?? {}).length, "product change")} selected`
+                {photoProductChangeCount(proposal.review?.productChanges) ? (
+                  `${countLabel(photoProductChangeCount(proposal.review?.productChanges), "product change")} selected`
                 ) : (
                   <span>No product details changed</span>
                 )}{" "}
@@ -2779,10 +3131,14 @@ function ProposalCard({
           >
             <CheckIcon />
             {proposal.product.kind === "create"
-              ? "Create product"
-              : `Attach ${countLabel(proposal.images.length, "photo")}`}
+              ? proposal.inventory
+                ? `Create product and add ${proposal.inventory.quantity}`
+                : "Create product and attach photos"
+              : proposal.inventory
+                ? `${photoProductChangeCount(proposal.review?.productChanges) ? "Update product" : "Attach photos"} and add ${proposal.inventory.quantity}`
+                : `Apply and attach ${countLabel(proposal.images.length, "photo")}`}
             <kbd aria-hidden="true" className="text-xs opacity-70">
-              ⌘↵
+              Ctrl/⌘ Enter
             </kbd>
           </Button>
         </div>
@@ -2892,6 +3248,7 @@ function PhotoTable({
       headingAs="h2"
       aria-label="Run photos"
       title="Photos"
+      disclosure={{}}
       count={images.length}
     >
       {/* Bounded region: a 1,000-photo run scrolls here, not the page. */}
@@ -3093,6 +3450,33 @@ function SettledGroup({
           )}
         </Stack>
       </Row>
+      {committed && proposal.review?.fieldSuggestions?.length ? (
+        <Disclosure
+          summary={`Applied field reviews · ${proposal.review.fieldSuggestions.length}`}
+        >
+          <RecordList aria-label="Applied field reviews">
+            {proposal.review.fieldSuggestions.map((suggestion) => (
+              <RecordRow
+                key={suggestion.id}
+                primary={
+                  productReviewFields.find(
+                    (field) => field.key === suggestion.field,
+                  )?.presentation.label ??
+                  (suggestion.field === "categoryId"
+                    ? productCategoryField.label
+                    : suggestion.field)
+                }
+                secondary="Applied with this item approval · saved changes are in Product activity"
+                trailing={
+                  <Disclosure summary="Review provenance">
+                    <code className="text-2xs break-all">{suggestion.id}</code>
+                  </Disclosure>
+                }
+              />
+            ))}
+          </RecordList>
+        </Disclosure>
+      ) : null}
       {committed ? (
         <Section
           headingAs="h4"
@@ -3304,102 +3688,20 @@ function ExpenseLinkReview({
   );
 }
 
-/** Offscreen editors must not start per-group catalogue queries on page load. */
+/** Keep visited panes mounted so switching items preserves drafts and focus targets. */
 function DeferredPhotoGroup({
-  name,
   eager,
   children,
 }: {
-  name: string;
   eager: boolean;
   children: ReactNode;
 }) {
-  const region = useRef<HTMLDivElement>(null);
-  const [mounted, setMounted] = useState(eager);
+  const [visited, setVisited] = useState(eager);
   useEffect(() => {
-    if (mounted) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setMounted(true);
-      return;
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) setMounted(true);
-      },
-      { rootMargin: "600px" },
-    );
-    if (region.current) observer.observe(region.current);
-    return () => observer.disconnect();
-  }, [mounted]);
-  // Retain mounted editors after scrolling away so unfinished edits survive.
-  return (
-    <div ref={region}>
-      {mounted ? (
-        children
-      ) : (
-        <section className="min-h-80 border-t border-border pt-4">
-          <h3 className="text-lg font-semibold">{name}</h3>
-        </section>
-      )}
-    </div>
-  );
+    if (eager) setVisited(true);
+  }, [eager]);
+  return eager || visited ? children : null;
 }
-
-function PhotoNavGlyph({
-  mode,
-  state,
-}: {
-  mode: "create" | "existing";
-  state: "needs" | "ready" | "applied";
-}) {
-  return (
-    <span
-      className="inline-flex shrink-0 items-center gap-1"
-      aria-label={
-        state === "needs"
-          ? "Needs you"
-          : state === "ready"
-            ? "Ready"
-            : "Applied"
-      }
-    >
-      <span
-        className={`size-1.5 rounded-full ${state === "needs" ? "bg-signal" : state === "ready" ? "bg-positive" : "bg-muted-foreground"}`}
-      />
-      <span
-        className={
-          mode === "create" ? "text-action-create" : "text-muted-foreground"
-        }
-      >
-        {mode === "create" ? "＋" : "↪"}
-      </span>
-    </span>
-  );
-}
-const NewNeedsInputGlyph = () => <PhotoNavGlyph mode="create" state="needs" />;
-const NewReadyGlyph = () => <PhotoNavGlyph mode="create" state="ready" />;
-const AttachNeedsInputGlyph = () => (
-  <PhotoNavGlyph mode="existing" state="needs" />
-);
-const AttachReadyGlyph = () => <PhotoNavGlyph mode="existing" state="ready" />;
-const AppliedNewPhotoGlyph = () => (
-  <PhotoNavGlyph mode="create" state="applied" />
-);
-const AppliedPhotoGlyph = () => (
-  <PhotoNavGlyph mode="existing" state="applied" />
-);
-const photoNavGlyphs = {
-  create: {
-    needs: NewNeedsInputGlyph,
-    ready: NewReadyGlyph,
-    applied: AppliedNewPhotoGlyph,
-  },
-  existing: {
-    needs: AttachNeedsInputGlyph,
-    ready: AttachReadyGlyph,
-    applied: AppliedPhotoGlyph,
-  },
-};
 
 function PhotoRunDestination({
   defaults,
@@ -3463,6 +3765,143 @@ function PhotoRunDestination({
   );
 }
 
+function photoItemStatus(
+  item: PhotoGroupProposal,
+  imagesById: ImagesById,
+  runStatus: string,
+) {
+  if (item.state !== "proposed")
+    return item.state === "committed" ? "Applied" : "Discarded";
+  if (item.blockedReason) return item.blockedReason;
+  if (isStaleGroup(item, imagesById, runStatus))
+    return "Photos changed · review this group";
+  if (awaitingDescriptions(item, imagesById).length)
+    return "Waiting for photo descriptions";
+  return `${item.product.kind === "create" ? "New Product" : "Existing Product"} · Ready to approve`;
+}
+
+function PhotoItemList({
+  items,
+  activeGroupKey,
+  setActiveGroupKey,
+  imagesById,
+  selected,
+  onSelectionChange,
+  busy,
+  runStatus,
+}: {
+  items: readonly PhotoGroupProposal[];
+  activeGroupKey?: string;
+  setActiveGroupKey: (key: string) => void;
+  imagesById: ImagesById;
+  selected: ReadonlySet<string>;
+  onSelectionChange: (keys: Iterable<string>) => void;
+  busy: boolean;
+  runStatus: string;
+}) {
+  const isMobile = useIsMobile();
+  return (
+    <nav
+      aria-label="Items to review"
+      className="max-h-[60vh] overflow-auto border-y border-border lg:sticky lg:top-4"
+    >
+      {items.map((item) => (
+        <div
+          key={item.groupKey}
+          className="flex items-start gap-2 border-b border-border last:border-b-0"
+        >
+          {item.state === "proposed" ? (
+            <label
+              htmlFor={`photo-select-${item.groupKey}`}
+              className="flex w-7 shrink-0 items-center justify-center self-stretch max-md:min-h-11 max-md:w-11"
+            >
+              <Checkbox
+                id={`photo-select-${item.groupKey}`}
+                aria-label={`Select ${proposalName(item)} for batch approval`}
+                checked={selected.has(item.groupKey)}
+                disabled={busy || Boolean(item.blockedReason)}
+                onCheckedChange={(checked) =>
+                  onSelectionChange(
+                    checked
+                      ? [...selected, item.groupKey]
+                      : [...selected].filter((key) => key !== item.groupKey),
+                  )
+                }
+              />
+            </label>
+          ) : null}
+          <button
+            type="button"
+            id={`photo-item-${item.groupKey}`}
+            aria-current={activeGroupKey === item.groupKey ? "true" : undefined}
+            aria-controls={`photo-group-${item.groupKey}`}
+            className="flex min-h-11 min-w-0 flex-1 gap-2 p-2 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring aria-current:bg-muted"
+            onKeyDown={(event) => {
+              if (!(event.target instanceof HTMLButtonElement)) return;
+              const index = items.findIndex(
+                (item) => item.groupKey === activeGroupKey,
+              );
+              const delta =
+                event.key === "ArrowDown" || event.key === "j"
+                  ? 1
+                  : event.key === "ArrowUp" || event.key === "k"
+                    ? -1
+                    : 0;
+              if (!delta) return;
+              event.preventDefault();
+              const next =
+                items[Math.max(0, Math.min(items.length - 1, index + delta))];
+              if (next) {
+                setActiveGroupKey(next.groupKey);
+                document.getElementById(`photo-item-${next.groupKey}`)?.focus();
+              }
+            }}
+            onClick={() => {
+              setActiveGroupKey(item.groupKey);
+              if (isMobile)
+                requestAnimationFrame(() =>
+                  document
+                    .getElementById(`photo-group-${item.groupKey}`)
+                    ?.scrollIntoView({ block: "start" }),
+                );
+            }}
+          >
+            <PhotoThumb
+              image={imagesById.get(
+                item.images.find((image) => image.purpose === "item")?.id ??
+                  item.images[0]?.id ??
+                  "",
+              )}
+              size={40}
+            />
+            <span className="min-w-0 space-y-1">
+              <span className="block text-sm font-medium break-words">
+                {proposalName(item)}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {photoItemStatus(item, imagesById, runStatus)}
+              </span>
+              {item.inventory ? (
+                <span className="block text-xs text-muted-foreground">
+                  {item.inventory.quantity} ·{" "}
+                  {item.inventory.locationName ?? "Choose location"}
+                </span>
+              ) : null}
+            </span>
+          </button>
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+function activePhotoKey(
+  items: readonly PhotoGroupProposal[],
+  key: string | null,
+) {
+  return (items.find((item) => item.groupKey === key) ?? items[0])?.groupKey;
+}
+
 export function PhotoGroupReview({
   runId,
   query,
@@ -3488,28 +3927,8 @@ export function PhotoGroupReview({
   );
   const queryClient = useQueryClient();
   const candidates = usePhotoRunCandidates(runId, proposals ?? NO_PROPOSALS);
-  const groupSections = useMemo(
-    () =>
-      visibleProposals.map((proposal) => {
-        const Icon =
-          photoNavGlyphs[proposal.product.kind][
-            proposal.state !== "proposed"
-              ? "applied"
-              : proposal.blockedReason
-                ? "needs"
-                : "ready"
-          ];
-        return {
-          id: `photo-group-${proposal.groupKey}`,
-          title: proposalName(proposal),
-          icon: Icon,
-          indexLeading: <Icon />,
-          content: null,
-        };
-      }),
-    [visibleProposals],
-  );
-  useIndexedSubsections("photo-batch", groupSections);
+  const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
+  const activeKey = activePhotoKey(visibleProposals, activeGroupKey);
   const action = useReviewAction(runId);
   const defaultsCommand = useWorkflowCommand({
     onResult: ({ result }) => {
@@ -3650,345 +4069,334 @@ export function PhotoGroupReview({
 
   return (
     <PhotoDraftContext value={session}>
-      <PhotoCandidatesContext value={candidates}>
-        <Stack gap="lg">
-          {results.length > 0 && !reviewView.attention ? (
-            <Section
-              headingAs="h2"
-              title="Import results"
-              inert={approving}
-              caption={`${resultProducts.filter((proposal) => proposal.product.kind === "create").length} Products created · ${resultProducts.filter((proposal) => proposal.product.kind === "existing").length} existing Products matched`}
-            >
-              <RecordList aria-label="Products from this import">
-                {resultProducts.map((proposal) =>
-                  proposal.committedProduct ? (
-                    <RecordRow
-                      key={proposal.committedProduct.id}
-                      leading={
-                        <PhotoThumb
-                          image={imagesById.get(
-                            proposal.images.find(
-                              (entry) => entry.purpose === "item",
-                            )?.id ?? "",
-                          )}
-                          size={40}
-                        />
-                      }
-                      primary={
-                        <EntityRefLink
-                          entity="product"
-                          data={proposal.committedProduct}
-                          displayImage={
-                            proposal.committedProduct.coverUrl
-                              ? { url: proposal.committedProduct.coverUrl }
-                              : null
-                          }
-                        />
-                      }
-                      secondary={
-                        proposal.product.kind === "create"
-                          ? "Created by this import"
-                          : "Matched existing Product"
-                      }
-                      trailing={
-                        <Row gap="sm" wrap>
-                          {results
-                            .filter(
+      <PhotoProposalsContext value={review.proposals}>
+        <PhotoCandidatesContext value={candidates}>
+          <Stack gap="lg">
+            {results.length > 0 && !reviewView.attention ? (
+              <Section
+                headingAs="h2"
+                title="Import results"
+                inert={approving}
+                caption={`${resultProducts.filter((proposal) => proposal.product.kind === "create").length} Products created · ${resultProducts.filter((proposal) => proposal.product.kind === "existing").length} existing Products matched`}
+              >
+                <RecordList aria-label="Products from this import">
+                  {resultProducts.map((proposal) =>
+                    proposal.committedProduct ? (
+                      <RecordRow
+                        key={proposal.committedProduct.id}
+                        leading={
+                          <PhotoThumb
+                            image={imagesById.get(
+                              proposal.images.find(
+                                (entry) => entry.purpose === "item",
+                              )?.id ?? "",
+                            )}
+                            size={40}
+                          />
+                        }
+                        primary={
+                          <EntityRefLink
+                            entity="product"
+                            data={proposal.committedProduct}
+                            displayImage={
+                              proposal.committedProduct.coverUrl
+                                ? { url: proposal.committedProduct.coverUrl }
+                                : null
+                            }
+                          />
+                        }
+                        secondary={
+                          proposal.product.kind === "create"
+                            ? "Created by this import"
+                            : "Matched existing Product"
+                        }
+                        trailing={
+                          <Row gap="sm" wrap>
+                            {results
+                              .filter(
+                                (result) =>
+                                  result.committedProduct?.id ===
+                                    proposal.committedProduct?.id &&
+                                  result.committedInventoryId,
+                              )
+                              .map((result) =>
+                                result.committedInventoryId ? (
+                                  <EntityRefLink
+                                    key={result.committedInventoryId}
+                                    entity="inventory"
+                                    data={{
+                                      id: result.committedInventoryId,
+                                      name: `${result.inventory?.quantity ?? 0} received`,
+                                    }}
+                                  />
+                                ) : null,
+                              )}
+                            {results.some(
                               (result) =>
                                 result.committedProduct?.id ===
                                   proposal.committedProduct?.id &&
                                 result.committedInventoryId,
                             )
-                            .map((result) =>
-                              result.committedInventoryId ? (
-                                <EntityRefLink
-                                  key={result.committedInventoryId}
-                                  entity="inventory"
-                                  data={{
-                                    id: result.committedInventoryId,
-                                    name: `${result.inventory?.quantity ?? 0} received`,
-                                  }}
-                                />
-                              ) : null,
-                            )}
-                          {results.some(
-                            (result) =>
-                              result.committedProduct?.id ===
-                                proposal.committedProduct?.id &&
-                              result.committedInventoryId,
-                          )
-                            ? null
-                            : "No inventory received"}
-                        </Row>
-                      }
-                    />
-                  ) : null,
-                )}
-              </RecordList>
-            </Section>
-          ) : null}
-          <Section
-            headingAs="h2"
-            title="Photo review"
-            caption={`${proposed.length} to review · ${settled.length} settled · ${review.unassignedImageIds.length} photos not in a group`}
-          >
-            <PhotoReviewScopeControls review={reviewView} />
-            {proposed.length > 0 ? (
-              <PhotoRunDestination
-                defaults={query.data.defaults}
-                disabled={busy}
-                onChange={(defaults) =>
-                  defaultsCommand.mutate(
-                    operationCommandRequest(
-                      photoImportContract,
-                      "setDefaults",
-                      { runId, defaults },
-                    ),
-                  )
-                }
-              />
-            ) : null}
-            <output className="text-xs text-muted-foreground">
-              {action.isPending
-                ? action.variables?.action === "save"
-                  ? "Saving changes…"
-                  : "Applying decision…"
-                : action.isError
-                  ? `Changes were not saved: ${action.error.message}`
-                  : action.isSuccess
-                    ? "Saved"
-                    : "Changes save when you leave a field."}
-            </output>
-            {visibleProposals.some(
-              (group) => group.state === "proposed" && group.blockedReason,
-            ) ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  const attention = visibleProposals.filter(
-                    (group) =>
-                      group.state === "proposed" && group.blockedReason,
-                  );
-                  const previous = attention.findIndex(
-                    (group) => group.groupKey === nextAttention.current,
-                  );
-                  const unresolved =
-                    attention[(previous + 1) % attention.length];
-                  nextAttention.current = unresolved?.groupKey ?? null;
-                  if (unresolved) {
-                    const target = document.getElementById(
-                      `photo-group-${unresolved.groupKey}`,
-                    );
-                    target?.scrollIntoView({ block: "start" });
-                    target?.focus({ preventScroll: true });
-                  }
-                }}
-              >
-                Next item needing a decision
-              </Button>
-            ) : null}
-            {proposed.length > 0 ? (
-              <Row
-                align="center"
-                justify="between"
-                gap="sm"
-                className="flex-wrap"
-              >
-                <span className="text-xs text-muted-foreground">
-                  {applyingBatch.length
-                    ? `${draft.selected.size ? "Selected items" : "Ready items in this view"} — On apply: ${applyingBatch.filter((group) => group.product.kind === "create").length} new Products · ${applyingBatch.filter((group) => group.product.kind === "existing").length} existing Products matched · ${applyingBatch.reduce((sum, group) => sum + (group.inventory?.quantity ?? 0), 0)} stock units to add · ${applyingBatch.filter((group) => !group.inventory).length} groups with no stock change.`
-                    : "No ready items in this scope. Unresolved items stay in review."}
-                </span>
-                <Row gap="sm" wrap>
-                  <Button
-                    variant="outline"
-                    disabled={busy || filteredReady.length === 0}
-                    onClick={() =>
-                      session.select(
-                        filteredReady.map((proposal) => proposal.groupKey),
-                      )
-                    }
-                  >
-                    Select all resolved items
-                  </Button>
-                  {draft.selected.size > 0 ? (
-                    <Button
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={() => session.select([])}
-                    >
-                      Clear selection
-                    </Button>
-                  ) : null}
-                  <Button
-                    onMouseDown={(event) => event.preventDefault()}
-                    disabled={
-                      applyingBatch.length === 0 ||
-                      defaultsCommand.isPending ||
-                      (action.isPending &&
-                        action.variables?.action !== "save") ||
-                      approving
-                    }
-                    onClick={() =>
-                      void approve(
-                        applyingBatch.map((proposal) => proposal.groupKey),
-                      )
-                    }
-                  >
-                    <CheckIcon />
-                    {approving
-                      ? "Approving selected items…"
-                      : `Apply ${countLabel(applyingBatch.length, draft.selected.size ? "selected item" : "ready item")}`}
-                  </Button>
-                </Row>
-              </Row>
-            ) : null}
-            {proposed.length === 0 ? (
-              settled.length ? (
-                <StatusText tone="muted">
-                  Every proposed group has been approved or discarded.
-                </StatusText>
-              ) : (
-                <Stack gap="sm" className="items-start">
-                  <StatusText tone="muted">{emptyCopy.title}</StatusText>
-                  {images.length ? (
-                    <>
-                      <p className="text-xs text-muted-foreground">
-                        {emptyCopy.detail}
-                      </p>
-                    </>
-                  ) : null}
-                </Stack>
-              )
-            ) : null}
-          </Section>
-          <PhotoReviewEmpty
-            total={review.proposals.length}
-            visible={visibleProposals.length}
-          />
-          {admitted.length > 0 ? (
-            <div className="min-w-0">
-              <div className="min-w-0 space-y-6">
-                {/* Hidden editors stay mounted so filtering preserves unsaved drafts. */}
-                {admitted.map((selected, index) => (
-                  <div
-                    key={selected.groupKey}
-                    hidden={
-                      !visibleProposals.some(
-                        (item) => item.groupKey === selected.groupKey,
-                      )
-                    }
-                    id={`photo-group-${selected.groupKey}`}
-                    className="scroll-mt-20"
-                    data-detail-section
-                    tabIndex={-1}
-                    inert={selected.state !== "proposed" && approving}
-                  >
-                    {selected.state === "proposed" ? (
-                      <label className="flex min-h-11 items-center gap-2 border-t border-border px-2 text-xs">
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${proposalName(selected)} for batch approval`}
-                          checked={draft.selected.has(selected.groupKey)}
-                          disabled={busy || Boolean(selected.blockedReason)}
-                          title={selected.blockedReason ?? undefined}
-                          onChange={(event) =>
-                            session.select(
-                              event.target.checked
-                                ? [...draft.selected, selected.groupKey]
-                                : [...draft.selected].filter(
-                                    (key) => key !== selected.groupKey,
-                                  ),
-                            )
-                          }
-                        />
-                        {selected.blockedReason ?? "Select for batch"}
-                      </label>
-                    ) : null}
-                    {selected.state === "proposed" ? (
-                      <PhotoDraftGroup value={selected.groupKey}>
-                        <DeferredPhotoGroup
-                          name={proposalName(selected)}
-                          eager={index === 0}
-                        >
-                          <ProposalCard
-                            key={selected.groupKey}
-                            runId={runId}
-                            runStatus={review.runStatus}
-                            proposal={selected}
-                            proposals={review.proposals}
-                            imagesById={imagesById}
-                            busy={busy}
-                            save={save}
-                            action={action}
-                            approve={(groupKey) => approve([groupKey])}
-                          />
-                        </DeferredPhotoGroup>
-                      </PhotoDraftGroup>
-                    ) : (
-                      <Section
-                        headingAs="h3"
-                        className="min-w-0 border-t border-border pt-3"
-                        disclosure={{}}
-                        title={
-                          <span>
-                            {selected.state === "committed"
-                              ? "Approved"
-                              : "Discarded"}{" "}
-                            · {proposalName(selected)}
-                          </span>
+                              ? null
+                              : "No inventory received"}
+                          </Row>
                         }
-                      >
-                        <SettledGroup
-                          runId={runId}
-                          proposal={selected}
-                          imagesById={imagesById}
-                        />
-                      </Section>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {review.unassignedImageIds.length ? (
+                      />
+                    ) : null,
+                  )}
+                </RecordList>
+              </Section>
+            ) : null}
             <Section
               headingAs="h2"
-              aria-label="Not in a group"
-              title="Not in a group"
-              count={review.unassignedImageIds.length}
+              title="Photo review"
+              caption={`${proposed.length} to review · ${settled.length} settled · ${review.unassignedImageIds.length} photos not in a group`}
             >
-              <PhotoGrid
-                images={review.unassignedImageIds.flatMap((id) =>
-                  photoTile(imagesById.get(id)),
-                )}
-                renderOverlay={(tile) => (
-                  <div className="absolute top-1 right-1">
-                    <ImageMenu
-                      imageId={tile.id}
-                      groupKey={null}
-                      purpose={null}
-                      proposals={review.proposals}
-                      save={save}
-                      disabled={busy}
-                    />
-                  </div>
-                )}
-              />
+              <PhotoReviewScopeControls review={reviewView} />
+              {proposed.length > 0 ? (
+                <PhotoRunDestination
+                  defaults={query.data.defaults}
+                  disabled={busy}
+                  onChange={(defaults) =>
+                    defaultsCommand.mutate(
+                      operationCommandRequest(
+                        photoImportContract,
+                        "setDefaults",
+                        { runId, defaults },
+                      ),
+                    )
+                  }
+                />
+              ) : null}
+              <output className="text-xs text-muted-foreground">
+                {action.isPending
+                  ? action.variables?.action === "save"
+                    ? "Saving changes…"
+                    : "Applying decision…"
+                  : action.isError
+                    ? `Changes were not saved: ${action.error.message}`
+                    : action.isSuccess
+                      ? "Proposal saved · records change only on approval"
+                      : "Proposal edits save when you leave a field. Approve to apply them."}
+              </output>
+              {visibleProposals.some(
+                (group) => group.state === "proposed" && group.blockedReason,
+              ) ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const attention = visibleProposals.filter(
+                      (group) =>
+                        group.state === "proposed" && group.blockedReason,
+                    );
+                    const previous = attention.findIndex(
+                      (group) => group.groupKey === nextAttention.current,
+                    );
+                    const unresolved =
+                      attention[(previous + 1) % attention.length];
+                    nextAttention.current = unresolved?.groupKey ?? null;
+                    if (unresolved) setActiveGroupKey(unresolved.groupKey);
+                    if (unresolved) {
+                      const target = document.getElementById(
+                        `photo-group-${unresolved.groupKey}`,
+                      );
+                      requestAnimationFrame(() => {
+                        target?.scrollIntoView({ block: "start" });
+                        target?.focus({ preventScroll: true });
+                      });
+                    }
+                  }}
+                >
+                  Next item needing a decision
+                </Button>
+              ) : null}
+              {proposed.length > 0 ? (
+                <Row
+                  align="center"
+                  justify="between"
+                  gap="sm"
+                  className="flex-wrap"
+                >
+                  <span className="text-xs text-muted-foreground">
+                    {applyingBatch.length
+                      ? `${draft.selected.size ? "Selected items" : "Ready items in this view"} — On apply: ${applyingBatch.filter((group) => group.product.kind === "create").length} new Products · ${applyingBatch.filter((group) => group.product.kind === "existing").length} existing Products matched · ${applyingBatch.reduce((sum, group) => sum + (group.inventory?.quantity ?? 0), 0)} stock units to add · ${applyingBatch.filter((group) => !group.inventory).length} groups with no stock change.`
+                      : "No ready items in this scope. Unresolved items stay in review."}
+                  </span>
+                  <Row gap="sm" wrap>
+                    <Button
+                      variant="outline"
+                      disabled={busy || filteredReady.length === 0}
+                      onClick={() =>
+                        session.select(
+                          filteredReady.map((proposal) => proposal.groupKey),
+                        )
+                      }
+                    >
+                      Select all ready items
+                    </Button>
+                    {draft.selected.size > 0 ? (
+                      <Button
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => session.select([])}
+                      >
+                        Clear selection
+                      </Button>
+                    ) : null}
+                    <Button
+                      onMouseDown={(event) => event.preventDefault()}
+                      disabled={
+                        applyingBatch.length === 0 ||
+                        defaultsCommand.isPending ||
+                        (action.isPending &&
+                          action.variables?.action !== "save") ||
+                        approving
+                      }
+                      onClick={() =>
+                        void approve(
+                          applyingBatch.map((proposal) => proposal.groupKey),
+                        )
+                      }
+                    >
+                      <CheckIcon />
+                      {approving
+                        ? "Approving selected items…"
+                        : `Approve ${countLabel(applyingBatch.length, draft.selected.size ? "selected item" : "ready item")}`}
+                    </Button>
+                  </Row>
+                </Row>
+              ) : null}
+              {proposed.length === 0 ? (
+                settled.length ? (
+                  <StatusText tone="muted">
+                    Every proposed group has been approved or discarded.
+                  </StatusText>
+                ) : (
+                  <Stack gap="sm" className="items-start">
+                    <StatusText tone="muted">{emptyCopy.title}</StatusText>
+                    {images.length ? (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          {emptyCopy.detail}
+                        </p>
+                      </>
+                    ) : null}
+                  </Stack>
+                )
+              ) : null}
             </Section>
-          ) : null}
+            <PhotoReviewEmpty
+              total={review.proposals.length}
+              visible={visibleProposals.length}
+            />
+            {admitted.length > 0 ? (
+              <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(14rem,20rem)_minmax(0,1fr)]">
+                <PhotoItemList
+                  items={visibleProposals}
+                  runStatus={review.runStatus}
+                  activeGroupKey={activeKey}
+                  setActiveGroupKey={setActiveGroupKey}
+                  imagesById={imagesById}
+                  selected={draft.selected}
+                  onSelectionChange={(keys) => session.select(keys)}
+                  busy={busy}
+                />
+                <div className="min-w-0">
+                  {/* Hidden editors stay mounted so filtering preserves unsaved drafts. */}
+                  {admitted.map((selected) => (
+                    <div
+                      key={selected.groupKey}
+                      hidden={activeKey !== selected.groupKey}
+                      id={`photo-group-${selected.groupKey}`}
+                      className="scroll-mt-20"
+                      data-detail-section
+                      tabIndex={-1}
+                      inert={selected.state !== "proposed" && approving}
+                    >
+                      {selected.state === "proposed" ? (
+                        <PhotoDraftGroup value={selected.groupKey}>
+                          <DeferredPhotoGroup
+                            eager={activeKey === selected.groupKey}
+                          >
+                            <ProposalCard
+                              key={selected.groupKey}
+                              runId={runId}
+                              runStatus={review.runStatus}
+                              proposal={selected}
+                              proposals={review.proposals}
+                              imagesById={imagesById}
+                              busy={busy}
+                              save={save}
+                              action={action}
+                              approve={(groupKey) => approve([groupKey])}
+                            />
+                          </DeferredPhotoGroup>
+                        </PhotoDraftGroup>
+                      ) : (
+                        <Section
+                          headingAs="h3"
+                          className="min-w-0 border-t border-border pt-3"
+                          disclosure={{}}
+                          title={
+                            <span>
+                              {selected.state === "committed"
+                                ? "Approved"
+                                : "Discarded"}{" "}
+                              · {proposalName(selected)}
+                            </span>
+                          }
+                        >
+                          <SettledGroup
+                            runId={runId}
+                            proposal={selected}
+                            imagesById={imagesById}
+                          />
+                        </Section>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
-          {images.length ? (
-            <PhotoTable images={images} groupByImage={groupByImage} />
-          ) : (
-            <StatusText tone="muted">
-              No photos have been uploaded for this batch.
-            </StatusText>
-          )}
-        </Stack>
-      </PhotoCandidatesContext>
+            {review.unassignedImageIds.length ? (
+              <Section
+                headingAs="h2"
+                aria-label="Not in a group"
+                title="Not in a group"
+                count={review.unassignedImageIds.length}
+              >
+                <PhotoGrid
+                  images={review.unassignedImageIds.flatMap((id) =>
+                    photoTile(imagesById.get(id)),
+                  )}
+                  renderOverlay={(tile) => (
+                    <div className="absolute top-1 right-1">
+                      <ImageMenu
+                        imageId={tile.id}
+                        groupKey={null}
+                        purpose={null}
+                        proposals={review.proposals}
+                        save={save}
+                        disabled={busy}
+                      />
+                    </div>
+                  )}
+                />
+              </Section>
+            ) : null}
+
+            {images.length ? (
+              <PhotoTable images={images} groupByImage={groupByImage} />
+            ) : (
+              <StatusText tone="muted">
+                No photos have been uploaded for this batch.
+              </StatusText>
+            )}
+          </Stack>
+        </PhotoCandidatesContext>
+      </PhotoProposalsContext>
     </PhotoDraftContext>
   );
 }

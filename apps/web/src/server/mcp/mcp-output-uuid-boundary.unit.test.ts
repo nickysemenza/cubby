@@ -90,6 +90,11 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "maintenance_read.items[].sourceId",
   "maintenance_read.entries[].id",
   "nutrition.id",
+  // Photo approval retains shared Assessment child handles for review provenance.
+  // These are not Product/Vendor/Image identities or entity lookup selectors.
+  "photo_run.proposals[].review.fieldSuggestions[].id",
+  "photo_run.fieldSuggestions[].id",
+  "photo_run_read.proposals[].review.fieldSuggestions[].id",
   "photo_run_read.candidates[].purchaseLines[].acceptedSourceLines[].sourceOrderId",
   "product_enrichment.product.externalIds[].id",
   "purchase_import_read.items[].assessmentId",

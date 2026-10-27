@@ -1,5 +1,6 @@
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { z } from "zod";
+import { assessmentChildHandle } from "./assessment-reference";
 import { productSummaryWithCover } from "./product-fields";
 
 import {
@@ -45,12 +46,17 @@ export const photoRunImageState = runTargetState;
 export type PhotoRunImageState = z.infer<typeof photoRunImageState>;
 export const photoRunImageOutcome = z.enum(["attached", "skipped"]);
 export type PhotoRunImageOutcome = z.infer<typeof photoRunImageOutcome>;
+const photoFieldSuggestionReferences = z.array(
+  z.object({ id: assessmentChildHandle, field: z.string(), value: z.json() }),
+);
+
 /** A committed group's receipt survives a failed operation-ledger completion. */
 export const photoRunImageCommitReceipt = z.object({
   groupKey: z.string().min(1),
   productId: productShortcode.optional(),
   purpose: productImagePurpose.optional(),
   inventoryId: inventoryShortcode.optional(),
+  fieldSuggestions: photoFieldSuggestionReferences.optional(),
 });
 export type PhotoRunImageCommitReceipt = z.infer<
   typeof photoRunImageCommitReceipt
@@ -66,14 +72,41 @@ const commitPhotoGroupSkip = z.object({
   reason: z.string().trim().min(1).max(500),
 });
 
-const commitPhotoGroupProductCreate = z.object({
+const photoGroupProductFields = z.object({
   name: z.string().trim().min(1).max(500),
   categoryId: productCategoryShortcode.nullable().optional(),
-  brandId: vendorShortcode.nullable().optional(),
+  brandId: vendorShortcode
+    .nullable()
+    .optional()
+    .describe(
+      "Resolve the marketed Brand visible on labels to an existing Vendor; do not leave Brand only in name or notes.",
+    ),
+  /** Created only with explicit group approval; exact existing names are reused. */
+  brandCreate: z
+    .object({ name: z.string().trim().min(1).max(500) })
+    .optional()
+    .describe(
+      "Propose the marketed Brand visible on labels when no Vendor matches. Cite supporting photos in group evidence; do not leave Brand only in name or notes. Created only at member approval. Omit a non-null brandId.",
+    ),
   model: z.string().trim().max(200).nullable().optional(),
   notes: z.string().trim().max(4_000).nullable().optional(),
   tags: z.array(z.string().trim().min(1)).max(50).optional(),
 });
+
+const onePhotoBrandChoice = (
+  value: Pick<
+    z.input<typeof photoGroupProductFields>,
+    "brandId" | "brandCreate"
+  >,
+) => !(value.brandId && value.brandCreate);
+const photoBrandChoiceError = {
+  message: "Choose an existing Brand or create one, not both",
+  path: ["brandCreate"],
+};
+const commitPhotoGroupProductCreate = photoGroupProductFields.refine(
+  onePhotoBrandChoice,
+  photoBrandChoiceError,
+);
 
 export type CommitPhotoGroupProductCreate = z.infer<
   typeof commitPhotoGroupProductCreate
@@ -85,7 +118,18 @@ export const photoGroupReview = z.object({
   /** Regrouping combines predecessor concerns without truncating their evidence. */
   unresolvedReason: z.string().trim().min(1).nullable(),
   stockIntent: z.enum(["evidence", "counted", "historical", "receive"]),
-  productChanges: commitPhotoGroupProductCreate.partial().optional(),
+  productChanges: photoGroupProductFields
+    .partial()
+    .refine(onePhotoBrandChoice, photoBrandChoiceError)
+    .optional(),
+  /** Exact evidence names the member declined; retained across regrouping. */
+  rejectedBrandNames: z.array(z.string().trim().min(1)).optional(),
+  /** Server-owned revision of an explicit field selection; ordinary saves retain it. */
+  fieldDecisionRevisions: z.record(z.string(), z.string()).optional(),
+  /** Shared field Assessments, published without applying Product changes. */
+  fieldSuggestions: photoFieldSuggestionReferences.optional(),
+  /** Server-captured existing Brand and photo evidence before a proposed Vendor exists. */
+  brandCreateInputFingerprint: z.string().optional(),
   /** Written by the server only after the Product transaction succeeds. */
   confirmation: z
     .object({ by: userId, at: z.iso.datetime() })
@@ -226,6 +270,7 @@ export const commitPhotoGroupOutput = z.object({
   outcome: commitPhotoGroupOutcome,
   productId: productShortcode.optional(),
   inventoryId: inventoryShortcode.optional(),
+  fieldSuggestions: photoGroupReview.shape.fieldSuggestions,
   images: z.array(commitPhotoGroupOutputImage),
   conflict: z
     .object({ existingProductIds: z.array(productShortcode) })
@@ -361,6 +406,16 @@ export const photoGroupProposal = z.object({
   groupKey: z.string(),
   steps: z.array(decisionStep),
   crossCheck: z.array(photoFieldCrossCheck).optional(),
+  brandEvidence: z
+    .array(
+      z.object({
+        name: z.string(),
+        imageIds: z.array(imageShortcode),
+        prefillImageIds: z.array(imageShortcode).optional(),
+        matches: z.array(z.object({ id: vendorShortcode, name: z.string() })),
+      }),
+    )
+    .optional(),
   blockedReason: z.string().nullable(),
   review: photoGroupReview.optional(),
   state: photoGroupProposalState,

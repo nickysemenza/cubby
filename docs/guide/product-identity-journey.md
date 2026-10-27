@@ -28,10 +28,36 @@ explicit reference, already-counted or historical choice. Additional photos and
 labels never increase quantity. A Product match alone does not prove another
 physical copy.
 
-Ready item details stay folded until changed; genuine concerns open for review.
+Ready item details remain available in the compact review workbench; genuine concerns open for review.
 The web can apply all ready groups directly or a selected subset, with Product
 and stock effects visible before approval. Autosave barriers, revision checks
-and independent batch failures remain in force.
+and independent batch failures remain in force. Resolving an identity concern
+joins the save barrier and publishes its confirmed review snapshot before the
+next field edit can save.
+
+Photo Brand evidence names its supporting images and exact live Vendor name/alias
+matches. A single unambiguous marketed-label match prefills a new Product draft; it can stage an existing Product correction without applying it. Unknown names require an explicit Brand claim or member
+entry. Choosing a new Brand stores `brandCreate` in the proposal and creates or
+reuses the exact Vendor only inside the approved Product transaction. Multiple
+exact matches require the member to choose one. Rejections follow photo lineage;
+an agent cannot replace a member-edited group or regroup its images.
+
+Selected changes to an existing Product publish inactive shared field Assessments:
+they retain evidence and review identity without entering automatic application.
+Approval writes the selected fields and records the generic `saved_field`
+acceptance receipt in the same transaction. Rejecting a linked Brand proposal
+records shared Assessment Feedback as well as the photo evidence rejection.
+Unchanged candidate values retain their original Assessment and input fingerprint
+through sibling draft edits. Approval locks and checks the retained Product inputs
+before any write; changed selected photo evidence or a later member correction
+requires clearing and reselecting the proposed field after review rather than an
+automatic rebase. Proposed new Brands retain the same before-input fence until a
+Vendor exists. Refreshing cannot revive a rejected correction. A member who clears
+and explicitly selects that Brand again creates a fresh decision revision, while
+the earlier rejection remains history. Weak retailer/provenance text and short
+alias matches stay available as choices without prefilling Brand. Brand creation, Product changes, photo attachments
+and optional stock remain one approval transaction; per-group failures preserve
+successful siblings and the existing operation replay receipts.
 
 ## The whole journey
 
@@ -157,15 +183,18 @@ with their selected analysis provenance; member-corrected prose has no model
 claims, and missing current-source evidence is explicit. Retained analyses hydrate
 older Runs without rewriting them. Unfinished edits remain after scrolling away. Approved and discarded details stay collapsed until opened.
 
-Proposal values name their last recorded writer. They are not Jev/Clef field
-suggestions. Product identity detection reads every live Product through durable AI refresh work; the review queue reads at most 200 open stored pair Assessments after suppression and focus filters, with agent proposals ordered before that limit. Problems reads all current actionable pairs, so dismissed rows and weak recommendations cannot hide a later actionable pair. A nonexact model verdict of distinct variants resolves its assessment without universal suppression; revised evidence or policy remains assessable. Retained Source URLs and matching nonempty selected variants retrieve ranking candidates even across different names or URLs; neither establishes exact identity by itself. Migrated pair records with unknown fingerprints remain immutable history. Those with unknown producers or agent provenance can remain visible read-only; rows carrying obsolete rule or model policies stay outside current queues until reassessed under the current policy. Exact identifiers and stored source-grounded variant judgments carry the decision evidence. The Workbench match card reads each pair's stored `signals.variantEvidence` for its colour and size relations, showing Unknown only when no grounded evidence was stored. Its suggested keeper is the purchase side, then the higher Product data-quality score, then the older record. A disabled Review merge states its reason beneath the actions and as the button's description: an identity conflict quotes the stored conflicting verified models or variant literals (falling back to the stored evidence text), and a missing fingerprint says a side has no current identity snapshot. Related pairs can share a group, but review applies one independently assessed pair at a time. Older proposals whose
+Proposal values name their last recorded writer. Photo field proposals reuse
+shared Assessment/Feedback history without a model confidence score; they are
+not Jev/Clef model judgments. Photo review exposes their opaque child handles
+for provenance; Product, Vendor and Image references remain shortcodes. Product identity detection reads every live Product through durable AI refresh work; the review queue reads at most 200 open stored pair Assessments after suppression and focus filters, with agent proposals ordered before that limit. Problems reads all current actionable pairs, so dismissed rows and weak recommendations cannot hide a later actionable pair. A nonexact model verdict of distinct variants resolves its assessment without universal suppression; revised evidence or policy remains assessable. Retained Source URLs and matching nonempty selected variants retrieve ranking candidates even across different names or URLs; neither establishes exact identity by itself. Migrated pair records with unknown fingerprints remain immutable history. Those with unknown producers or agent provenance can remain visible read-only; rows carrying obsolete rule or model policies stay outside current queues until reassessed under the current policy. Exact identifiers and stored source-grounded variant judgments carry the decision evidence. The Workbench match card reads each pair's stored `signals.variantEvidence` for its colour and size relations, showing Unknown only when no grounded evidence was stored. Its suggested keeper is the purchase side, then the higher Product data-quality score, then the older record. A disabled Review merge states its reason beneath the actions and as the button's description: an identity conflict quotes the stored conflicting verified models or variant literals (falling back to the stored evidence text), and a missing fingerprint says a side has no current identity snapshot. Related pairs can share a group, but review applies one independently assessed pair at a time. Older proposals whose
 writer was not recorded say so. Manufacturer is text on a Product, not a
 separate record; existing-name counts help reuse the catalogue's spelling.
 Category and destination pickers show the selected record's representative
 image before another search is needed.
 
-Adding a new batch to a Cubby Run replaces all unapproved proposals and member
-edits when regrouping. Approved and discarded groups remain fixed. State this
+Adding a new batch to a Cubby Run replaces unapproved agent proposals when
+regrouping. Member-edited groups and their images stay intact, as do approved
+and discarded groups. State this
 next to the add-photos action. Claude/Codex Runs wait for that session to regroup.
 Completed Runs can accept new batches. If a Cubby grouping session has been
 archived, start a new import instead; its approved Products remain available

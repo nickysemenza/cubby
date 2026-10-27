@@ -107,7 +107,7 @@ export function PhotoReviewScopeControls({
           )
         }
       >
-        Results · {review.total}
+        All items · {review.total}
       </Button>
       <Input
         aria-label="Search photo groups"
@@ -156,7 +156,7 @@ export function PhotoReviewEmpty({
   if (!total || visible) return null;
   return (
     <p className="text-sm text-muted-foreground">
-      No photo groups match this view. Clear search or choose Results.
+      No photo groups match this view. Clear search or choose All items.
     </p>
   );
 }

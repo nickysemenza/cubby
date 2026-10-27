@@ -147,12 +147,15 @@ with the refusal as `unresolvedReason`.
 
 Attaching to an existing Product preserves its fields, existing gallery order,
 and cover. Only explicit `review.productChanges` updates the selected name,
-category, Brand reference (`brandId`), model, notes, or tags, atomically with attachments and
+category, Brand selection (`brandId` or proposed `brandCreate`), model, notes, or tags, atomically with attachments and
 Inventory. Leave it absent unless the user chose those changes.
 
-Use a stable `groupKey` per physical item. Re-proposing a groupKey replaces
-it while it is still `proposed`; `committed`/`discarded` groups are frozen and
-come back in `frozenGroupKeys`; `removeGroupKeys` drops a proposed group.
+Use a stable `groupKey` per physical item. Read proposal `origin` before
+regrouping: agents may replace or remove unreviewed proposed groups, but must
+leave member-reviewed groups and their images intact. A proposal touching a
+protected group or image fails with the conflicting group named; regroup only
+the remaining photos. `committed`/`discarded` groups are frozen and come back
+in `frozenGroupKeys`.
 Then stop and tell the user the groups are ready to review on the run page.
 Read the outcome with `photo_run_read.proposals`: a group left `proposed`
 with `conflict` hit an exact case-insensitive name/alias collision (re-propose

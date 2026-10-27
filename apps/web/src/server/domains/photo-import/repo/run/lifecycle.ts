@@ -13,7 +13,7 @@ import {
 } from "@cubby/schemas/photo-import-run";
 import { runStatus } from "@cubby/schemas/purchase-import";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -381,9 +381,9 @@ const OPEN_FOR_UPLOAD: ReadonlySet<RunStatus> = new Set([
  * Admit an upload batch. Replaying a `clientBatchId` returns its stored
  * offset and changes nothing. A new batch on a `cubby` Run starts a new
  * grouping generation: the dispatch generation is cleared (fencing the old
- * coordinator's proposal writes) and still-`proposed` groups are dropped so
- * every unapproved photo is regrouped. Committed and discarded groups and
- * their photos are untouched.
+ * coordinator's proposal writes). Unapproved agent groups are dropped for
+ * regrouping; member-reviewed, committed and discarded groups and their photos
+ * stay intact.
  */
 export async function admitPhotoRunBatch(
   db: Database,
@@ -469,6 +469,10 @@ export async function admitPhotoRunBatch(
             and(
               eq(photoGroupProposal.runId, run.id),
               eq(photoGroupProposal.state, "proposed"),
+              or(
+                isNull(photoGroupProposal.origin),
+                ne(photoGroupProposal.origin, "member"),
+              ),
             ),
           );
       },

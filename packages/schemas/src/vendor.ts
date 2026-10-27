@@ -19,6 +19,14 @@ export {
   type VendorOut,
 } from "./generated/vendor.gen";
 
+/** Comparison key for photo Brand evidence, member rejections and batch choices. */
+export const brandNameKey = (text: string): string =>
+  text
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
 /**
  * Vendor — the roster of places money goes. `Vendor ──< Purchase ──< Expense`:
  * a vendor issues purchases (`purchase`), each of which carries one or more

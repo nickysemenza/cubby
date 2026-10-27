@@ -15,6 +15,7 @@ import {
   type ImageShortcode,
   type LedgerPartyId,
   type ProductId,
+  type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import {
@@ -48,11 +49,17 @@ import {
   updateInventoryEntry,
 } from "~/server/domains/inventory/repo/crud";
 import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
+import {
+  assertPhotoProductReviewCurrent,
+  photoProductSuggestions,
+} from "~/server/domains/photo-import/repo/run/product-suggestions";
 import { createProductWithSideEffects } from "~/server/domains/product/repo/write/product-orchestration";
 import { createProductWriteActions } from "~/server/domains/product/repo/write/product-writes";
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { loadRunScopeByShortcode } from "~/server/domains/purchase-import/repo/run-service";
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
+import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
+import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
@@ -283,6 +290,7 @@ function buildReplayOutput(
 ): CommitPhotoGroupOutput {
   let productShortcodeStr: string | undefined;
   let inventoryShortcodeStr: string | undefined;
+  let fieldSuggestions: CommitPhotoGroupOutput["fieldSuggestions"];
   for (const entry of [...attaches, ...skips]) {
     const commitReceipt = photoRunImageCommitReceipt.safeParse(
       targetByImageId.get(entry.imageId)?.commitReceipt ?? {},
@@ -290,6 +298,7 @@ function buildReplayOutput(
     if (commitReceipt.success) {
       productShortcodeStr ??= commitReceipt.data.productId;
       inventoryShortcodeStr ??= commitReceipt.data.inventoryId;
+      fieldSuggestions ??= commitReceipt.data.fieldSuggestions;
     }
   }
   return commitPhotoGroupOutput.parse({
@@ -298,6 +307,7 @@ function buildReplayOutput(
     outcome: "replayed",
     productId: productShortcodeStr,
     inventoryId: inventoryShortcodeStr,
+    fieldSuggestions,
     images: [...attaches, ...skips].map((entry) => ({
       id: entry.code,
       state: targetByImageId.get(entry.imageId)!.state,
@@ -306,28 +316,92 @@ function buildReplayOutput(
   });
 }
 
+/** Brand claims use the shared resolver inside the Product approval transaction. */
+async function resolvePhotoBrand(
+  db: Database,
+  selection: {
+    brandId?: VendorShortcode | null;
+    brandCreate?: { name: string };
+  },
+) {
+  if (!selection.brandCreate) return selection.brandId;
+  if (selection.brandId)
+    throw new Error("Choose an existing Brand or create one, not both");
+  return resolveProductBrandName(db, selection.brandCreate.name);
+}
+
 /** Resolve the group's target Product — an existing one by id, or a brand-new one. */
 async function resolveProduct(
   txDb: Database,
   input: CommitPhotoGroupInput,
   actor: ActorContext,
-): Promise<string> {
+): Promise<{
+  id: string;
+  fieldSuggestions?: CommitPhotoGroupOutput["fieldSuggestions"];
+}> {
   if (input.product.kind === "existing") {
     const id = await resolveOrThrow(txDb, "product", input.product.existingId);
     if (
       input.review?.productChanges &&
       Object.keys(input.review.productChanges).length
     ) {
-      // This bounded patch excludes image/object fields: updateProduct cannot
-      // delete stored objects while this transaction remains open.
+      await assertPhotoProductReviewCurrent(
+        txDb,
+        input.product.existingId,
+        input.review,
+        input.images.map((image) => image.id),
+      );
       const crud = buildCrudServices(txDb);
+      const brandId = await resolvePhotoBrand(
+        txDb,
+        input.review.productChanges,
+      );
+      const { brandCreate: _brandCreate, ...changes } =
+        input.review.productChanges;
+      if (brandId !== undefined) changes.brandId = brandId;
+      const suggestions = [...(input.review.fieldSuggestions ?? [])].filter(
+        (suggestion) =>
+          suggestion.field in changes &&
+          (suggestion.field !== "brandId" ||
+            !input.review?.productChanges?.brandCreate),
+      );
+      if (input.review.productChanges.brandCreate) {
+        const createdBrandSuggestions = await photoProductSuggestions(txDb, {
+          runId: input.runId,
+          groupKey: input.groupKey,
+          productId: input.product.existingId,
+          review: {
+            ...input.review,
+            productChanges: { brandId: changes.brandId },
+          },
+          imageIds: input.images.map((image) => image.id),
+        });
+        suggestions.push(...createdBrandSuggestions);
+      }
       await createProductWriteActions(txDb, crud.usdaClient).updateProduct(
         id,
-        input.review.productChanges,
+        changes,
         actor,
       );
+      for (const suggestion of suggestions) {
+        await reviewAssessment(
+          txDb,
+          { ...crud, actorContext: actor },
+          {
+            assessmentId: suggestion.id,
+            operationId: `photo-approval:${input.runId}:${input.groupKey}:${suggestion.field}`,
+            verdict: "correct",
+            intent: "apply",
+            application: {
+              kind: "saved_field",
+              recordId: input.product.existingId,
+            },
+          },
+        );
+      }
+      return { id: input.product.existingId, fieldSuggestions: suggestions };
     }
-    return input.product.existingId;
+    return { id: input.product.existingId };
   }
   const crud = buildCrudServices(txDb);
   const created = await createProductWithSideEffects(
@@ -340,14 +414,14 @@ async function resolveProduct(
     productCreateInput.parse({
       name: input.product.create.name,
       categoryId: input.product.create.categoryId ?? null,
-      brandId: input.product.create.brandId,
+      brandId: await resolvePhotoBrand(txDb, input.product.create),
       model: input.product.create.model ?? null,
       notes: input.product.create.notes ?? null,
       tags: input.product.create.tags ?? [],
     }),
     actor,
   );
-  return created.output.id;
+  return { id: created.output.id };
 }
 
 /**
@@ -488,6 +562,7 @@ async function markTargets(
   productShortcodeStr: string | undefined,
   inventoryShortcodeStr: string | undefined,
   now: Date,
+  fieldSuggestions: CommitPhotoGroupOutput["fieldSuggestions"],
 ): Promise<{ id: string; state: string }[]> {
   // Built as plain strings; `commitPhotoGroupOutput.parse` in `doCommit`
   // re-validates and brands every id on the single return path.
@@ -502,6 +577,7 @@ async function markTargets(
       productId: productShortcodeStr,
       purpose: entry.purpose,
       inventoryId: inventoryShortcodeStr,
+      fieldSuggestions,
     });
     await getDb(txDb)
       .update(photoRunImage)
@@ -675,8 +751,11 @@ async function doCommit(
   // not mint a `create` Product nobody will ever see.
   let productShortcodeStr: string | undefined;
   let inventoryShortcodeStr: string | undefined;
+  let fieldSuggestions: CommitPhotoGroupOutput["fieldSuggestions"];
   if (groupTouchesProduct(input)) {
-    productShortcodeStr = await resolveProduct(txDb, input, actor);
+    const resolved = await resolveProduct(txDb, input, actor);
+    productShortcodeStr = resolved.id;
+    fieldSuggestions = resolved.fieldSuggestions;
     const productId = await resolveOrThrow(
       txDb,
       "product",
@@ -701,6 +780,7 @@ async function doCommit(
     productShortcodeStr,
     inventoryShortcodeStr,
     now,
+    fieldSuggestions,
   );
   const runCompletes = await completeRunIfDone(
     txDb,
@@ -716,6 +796,7 @@ async function doCommit(
     outcome: "committed",
     productId: productShortcodeStr,
     inventoryId: inventoryShortcodeStr,
+    fieldSuggestions,
     images,
     runStatus: runCompletes ? "completed" : runStatus,
   });

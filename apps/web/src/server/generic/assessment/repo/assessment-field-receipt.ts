@@ -22,6 +22,7 @@ import {
 import { openAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** Saving a draft is a separate fact. Verify stored value; never rewrite a later edit. */
 export async function acknowledgeSavedField(
@@ -90,12 +91,14 @@ export async function acknowledgeSavedField(
       if (removals.some((removal) => saved.includes(removal.value)))
         throw new Error("The saved field still contains a reviewed removal");
     } else if (
-      raw !==
-      (expected === null
-        ? null
+      // PostgreSQL JSON text adds whitespace; compare structured values canonically.
+      expected === null
+        ? raw !== null
         : typeof expected === "string"
-          ? expected
-          : JSON.stringify(expected))
+          ? raw !== expected
+          : raw === null ||
+            canonicalJson(z.json().parse(JSON.parse(raw))) !==
+              canonicalJson(expected)
     )
       throw new Error("The saved field changed from the reviewed value");
     const write = await latestFieldWrite(
