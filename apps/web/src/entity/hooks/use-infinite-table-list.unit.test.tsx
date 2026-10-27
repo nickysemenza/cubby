@@ -138,7 +138,7 @@ describe("useInfiniteTableList", () => {
     expect(receivedSignal?.aborted).toBe(true);
   });
 
-  it("loads complete rows, totals and derived metadata with one page request", async () => {
+  it("loads complete rows and totals with one page request", async () => {
     const gate = Promise.withResolvers<ListQueryResponse<TestRow>>();
     const execute = vi.fn(() => gate.promise);
     const { result } = renderHook(
@@ -161,15 +161,6 @@ describe("useInfiniteTableList", () => {
           totalCount: 1,
           sums: { count: 3 },
           totalLabels: { count: "3 records" },
-          derived: {
-            first: {
-              count: {
-                state: "fresh",
-                decidedBy: { level: "own" },
-                asOf: null,
-              },
-            },
-          },
         },
       }),
     );
@@ -177,7 +168,6 @@ describe("useInfiniteTableList", () => {
     expect(result.current.data).toEqual([{ id: "first" }]);
     expect(result.current.sums).toEqual({ count: 3 });
     expect(result.current.totalLabels).toEqual({ count: "3 records" });
-    expect(result.current.derived?.first?.count?.state).toBe("fresh");
     expect(execute).toHaveBeenCalledOnce();
   });
 

@@ -1,5 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { imageShortcode } from "@cubby/schemas/identifiers";
-import type { ImageWithEntity } from "@cubby/schemas/image";
 import {
   imageProcessingStatusOutput,
   scheduleImageProcessingInput,
@@ -15,6 +15,7 @@ import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
@@ -395,7 +396,7 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
       <div className="flex flex-wrap gap-2 text-sm">
         <a
           className={buttonVariants({ variant: "outline" })}
-          href={image.url}
+          href={fieldValueOf(image.fields.url) ?? undefined}
           target="_blank"
           rel="noreferrer"
         >
@@ -488,9 +489,13 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
             <figcaption className="mb-2 text-sm font-medium">
               Original
             </figcaption>
-            <a href={image.url} target="_blank" rel="noreferrer">
+            <a
+              href={fieldValueOf(image.fields.url) ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+            >
               <Image
-                src={image.url}
+                src={fieldValueOf(image.fields.url) ?? undefined}
                 alt="Original image"
                 displayWidth={640}
                 className="max-h-[60vh] w-full object-contain"
@@ -502,12 +507,20 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
               Transparent result
             </figcaption>
             <a
-              href={status.data?.representations.transparent ?? image.url}
+              href={
+                status.data?.representations.transparent ??
+                fieldValueOf(image.fields.url) ??
+                undefined
+              }
               target="_blank"
               rel="noreferrer"
             >
               <Image
-                src={status.data?.representations.transparent ?? image.url}
+                src={
+                  status.data?.representations.transparent ??
+                  fieldValueOf(image.fields.url) ??
+                  undefined
+                }
                 alt="Processed image"
                 displayWidth={640}
                 className="max-h-[60vh] w-full object-contain"
@@ -525,3 +538,5 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
     </>
   );
 }
+
+type ImageWithEntity = DetailRecordOf<"image">;

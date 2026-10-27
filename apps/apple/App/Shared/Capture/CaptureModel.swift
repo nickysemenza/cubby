@@ -6,6 +6,16 @@ import Observation
 /// `ScanSession` doing the work. Created per client, so a base URL change gets a fresh one.
 @Observable
 final class CaptureModel {
+    private enum ReadError: LocalizedError {
+        case locationTypeUnavailable(String)
+        var errorDescription: String? {
+            switch self {
+            case .locationTypeUnavailable(let name):
+                "Location type for \(name) is unavailable. Refresh before reviewing missing bins."
+            }
+        }
+    }
+
     struct LocationOption: Identifiable, Hashable {
         let id: LocationCode
         let name: String
@@ -96,9 +106,14 @@ final class CaptureModel {
         do {
             let fresh = try await client.locationTree()
             tree = fresh
-            missingBins = (fresh[anchor]?.childNodes ?? []).filter { child in
-                !seenBins.contains(child.id)
-                    && (child.type == .box || child.type == .bag || child.type == .planter)
+            let children = fresh[anchor]?.childNodes ?? []
+            missingBins = try children.filter { child in
+                guard !seenBins.contains(child.id) else { return false }
+                let raw = try JSONValue(encoding: child.fields.type)
+                guard let type = FieldEnvelope(raw)?.effectiveValue?.stringValue,
+                    LocationType.allCases.contains(where: { $0.rawValue == type })
+                else { throw ReadError.locationTypeUnavailable(child.name) }
+                return ["box", "bag", "planter"].contains(type)
             }
             missingError = nil
         } catch {

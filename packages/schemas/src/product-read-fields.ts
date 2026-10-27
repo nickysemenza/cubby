@@ -11,7 +11,6 @@ import {
   inventoryShortcode,
 } from "./identifier-fields";
 import { locationListRefOut } from "./location-fields";
-import locationDefinition from "./entity-definitions/04-location.entity";
 import { imageUrlSummary } from "./image-summary";
 import { amount } from "./codec";
 import { money, moneyNullable } from "./money";
@@ -20,7 +19,6 @@ import { recipeUsageOut } from "./recipe-fields";
 import { unitMappingOut, unitMappingWithMetadata } from "./unitmapping";
 const locationAncestorFields = locationListRefOut.shape;
 const locationPathRefFields = locationListRefOut.shape;
-const locationOutFields = locationDefinition.readSchemas.output.shape;
 export const productQuantityLedgerOut = z.object({
   acquiredUnits: z.number().nonnegative(),
   exitedUnits: z.number().nonnegative(),
@@ -77,7 +75,6 @@ const productLocationAncestorOut = z.object({
 export const productCookbookRefOut = z.object({
   id: cookbookShortcode,
   name: z.string(),
-  recipeCount: z.number().int().nonnegative(),
 });
 export type ProductCookbookRefOut = z.infer<typeof productCookbookRefOut>;
 
@@ -87,18 +84,10 @@ export const productLocationRefOut = z.object({
   ancestors: z.array(productLocationAncestorOut),
 });
 
-// The embedded location is an identity reference for the movement timeline,
-// not a place to read the location's own completeness (its `valuation` is
-// null for the same reason), so the location's `dataQuality` stays off it.
-const { dataQuality: _locationDataQuality, ...locationEmbedFields } =
-  locationOutFields;
-export const productInventoryWithLocationOut = z.object({
+/** A bounded live Inventory row; its holding Location is identity only. */
+export const rawProductInventoryWithLocationOut = z.object({
   ...productInventoryFields,
-  location: z.object({
-    ...locationEmbedFields,
-    displayImage: imageUrlSummary.nullable(),
-    ancestors: z.array(productLocationAncestorOut),
-  }),
+  location: locationListRefOut.pick({ id: true, name: true }),
 });
 
 export const productPrimaryPlacement = z.object({
@@ -118,12 +107,8 @@ export const productQuantityFields = {
   quantityVariance: z.number().nullable(),
 };
 
-export const productListInventoryEntryOut = z.object({
-  ...productInventoryFields,
-  location: locationListRefOut,
-});
-export type ProductListInventoryEntryOut = z.infer<
-  typeof productListInventoryEntryOut
+export type RawProductListInventoryEntryOut = z.output<
+  typeof rawProductInventoryWithLocationOut
 >;
 
 export const productUnitPriceMappings = z
@@ -192,7 +177,7 @@ export function productReadSchemas<
     notesPresence: z.boolean(),
     dataGaps: z.array(facts.ownDataCheck),
     ingredient: productIngredientOut.nullable(),
-    inventoryEntry: z.array(productListInventoryEntryOut),
+    inventoryEntry: z.array(rawProductInventoryWithLocationOut),
     expenseCount: z.number().int(),
     // Live `productComponent` links where this product is the parent — non-zero
     // means it's a kit or multi-pack. Counts distinct components, not units: a
@@ -224,7 +209,7 @@ export function productReadSchemas<
     coverImageUrl: output.shape.coverImageUrl,
     ingredient: productIngredientOut.nullable(),
     unitMappings: z.array(unitMappingOut),
-    inventoryEntry: z.array(productInventoryWithLocationOut),
+    inventoryEntry: z.array(rawProductInventoryWithLocationOut),
     servingAsLocations: z.array(productLocationRefOut),
     /**
      * Live `productComponent` links where this product is the parent — non-zero

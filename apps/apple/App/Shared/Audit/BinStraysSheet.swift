@@ -65,6 +65,9 @@ struct BinStraysSheet: View {
                             if row.ambiguousQuantity {
                                 StatusChip(text: "1 of several units", tone: .warning)
                             }
+                            FieldValueStatus(
+                                raw: (try? JSONValue(encoding: row)) ?? .null,
+                                field: EntityCatalog[.inventory].field("amount"))
                         }
                     }
                 }

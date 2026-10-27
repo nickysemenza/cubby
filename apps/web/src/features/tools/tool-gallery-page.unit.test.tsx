@@ -1,3 +1,7 @@
+import {
+  toolGalleryInventoryEntryOut,
+  toolGalleryItemOut,
+} from "@cubby/schemas/project";
 import type {
   ToolGalleryInventoryEntryOut,
   ToolGalleryItemOut,
@@ -16,6 +20,7 @@ import {
 import type * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { project } from "~/integrations/tanstack-query/generated/catalog/project.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
@@ -37,11 +42,16 @@ const placement = (
   suffix: string,
   locationId: ToolGalleryInventoryEntryOut["location"]["id"],
   name: string,
-  amount: ToolGalleryInventoryEntryOut["amount"],
+  amount: { value: number; unit: string },
   installed = false,
 ): ToolGalleryInventoryEntryOut => ({
   id: testShortcode("inventory", `INV-${suffix}`),
-  amount,
+  fields: {
+    amount: fieldValueFixture(
+      toolGalleryInventoryEntryOut.shape.fields.shape.amount,
+      amount,
+    ),
+  },
   placement: installed ? "installed" : "stock",
   location: {
     id: locationId,
@@ -50,7 +60,6 @@ const placement = (
       {
         id: testShortcode("location", "LOC-HOME"),
         name: "Home",
-        type: "house",
       },
     ],
   },
@@ -64,7 +73,12 @@ const entries = [
 const item: ToolGalleryItemOut = {
   productId: PRODUCT_ID,
   productName: "Cordless drill",
-  brandName: "Makita",
+  fields: {
+    brandName: fieldValueFixture(
+      toolGalleryItemOut.shape.fields.shape.brandName,
+      "Makita",
+    ),
+  },
   model: "XFD10",
   coverImageUrl: null,
   extraImageCount: 2,
@@ -396,6 +410,37 @@ describe("Tools gallery", () => {
       mixed: true,
       installed: true,
     });
+  });
+
+  it("keeps a missing placement amount unavailable instead of displaying zero", () => {
+    const first = entries[0]!;
+    const amount = toolGalleryInventoryEntryOut.shape.fields.shape.amount.parse(
+      {
+        ...first.fields.amount,
+        result: { kind: "missing" },
+        work: {
+          kind: "failed",
+          error: "Synthetic tool quantity failure",
+          retryAt: null,
+        },
+      },
+    );
+    const missing = { ...first, fields: { amount } };
+    expect(toolPlacementSummary([missing]).label).toBe("—");
+    render(
+      <ToolCard
+        item={{ ...item, inventoryEntries: [missing] }}
+        current={false}
+        onInspect={vi.fn()}
+        onHover={vi.fn()}
+        onHoverEnd={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByLabelText("Synthetic tool quantity failure").length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("0 each")).not.toBeInTheDocument();
   });
 
   it("wires the complete card as a keyboard-native inspection target", () => {

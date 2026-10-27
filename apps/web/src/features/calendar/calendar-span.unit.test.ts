@@ -2,6 +2,7 @@ import type { CalendarItem } from "@cubby/schemas/calendar";
 import { testShortcode } from "@cubby/schemas/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { projectCalendarSourceFixture } from "./calendar-source.fixtures";
 import { itemSpanLabel } from "./calendar-span";
 
 const projectSpan = (
@@ -16,7 +17,7 @@ const projectSpan = (
   endDateExclusive,
   interaction: "read-only",
   status: "in_progress",
-  projectKind: null,
+  source: projectCalendarSourceFixture(testShortcode("project", "PRJ-4K7M")),
 });
 
 const plantingMilestone: CalendarItem = {

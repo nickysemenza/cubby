@@ -5,6 +5,7 @@ export type {
   ProductCategoryFeature,
   ProductCategoryPathNode,
   ProductCategorySummary,
+  RawProductCategorySummary,
 } from "./product-category-fields";
 
 export {

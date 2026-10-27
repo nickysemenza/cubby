@@ -1,9 +1,10 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { productCategoryShortcode } from "@cubby/schemas/identifiers";
-import type { ProductCategoryOut } from "@cubby/schemas/product-category";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 
 import { EntityIcon } from "~/entity/entities";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
@@ -27,8 +28,8 @@ import { WithVendorShortcodeSearch } from "./with-vendor-search";
  * projections below read off it. */
 export type ProductCategoryRow = Pick<
   ProductCategoryOut,
-  "id" | "name" | "parentId" | "aliases" | "description" | "path"
->;
+  "id" | "name" | "parentId" | "aliases" | "description"
+> & { fields: Pick<ProductCategoryOut["fields"], "path"> };
 
 /**
  * The pure "categories + query -> picker items" projection, split out from
@@ -51,25 +52,30 @@ export function productCategorySearchItems(
   }
   const needle = query.toLowerCase();
   return categories
-    .filter((category) =>
-      [
+    .filter((category) => {
+      const effectiveCategoryPath = fieldValueOf(category.fields.path);
+      return [
         category.name,
         ...category.aliases,
         category.description,
-        category.path.map((node) => node.name).join(" / "),
+        (effectiveCategoryPath ?? []).map((node) => node.name).join(" / "),
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
-        .includes(needle),
-    )
+        .includes(needle);
+    })
     .flatMap((category) => {
+      const effectiveCategoryPath = fieldValueOf(category.fields.path);
+
       const parsedId = productCategoryShortcode.safeParse(category.id);
       if (!parsedId.success) return [];
       return [
         {
           id: parsedId.data,
-          name: category.path.map((node) => node.name).join(" / "),
+          name: (effectiveCategoryPath ?? [])
+            .map((node) => node.name)
+            .join(" / "),
           detail: category.description ?? undefined,
         },
       ];
@@ -173,3 +179,5 @@ export function requireReferenceEntitySearch(entity: string): SearchProvider {
   }
   return referenceEntitySearch(entity);
 }
+
+type ProductCategoryOut = DetailRecordOf<"productCategory">;

@@ -80,8 +80,9 @@ export function SpendingCategorySummaryValue({
 }
 
 export const renderSpendingCategorySummary = (
-  summary: SpendingCategorySummary,
+  summary: SpendingCategorySummary | null,
   contextOnly = false,
-) => (
-  <SpendingCategorySummaryValue summary={summary} contextOnly={contextOnly} />
-);
+) =>
+  summary ? (
+    <SpendingCategorySummaryValue summary={summary} contextOnly={contextOnly} />
+  ) : null;

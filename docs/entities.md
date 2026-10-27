@@ -107,17 +107,137 @@ per-entity code as possible.
 
 ## Field resolution and overrides
 
-ADR 0021 presents provenance through the `derived` sidecar: inherited ↳, dashed
-auto suggestion, and an immediate Updating dot for stale/waiting values. One
-shared Why this value popover owns precedence, source links, assignment/reset,
-suggestion review, quality explanations and stored-versus-live comparison.
-Missing values retain the field's empty presentation; failed refreshes retain
-the stored value and raw diagnostic. Web temporarily adapts `fieldResolutions`
-only when no sidecar exists. Native rows and fields show the dot and inherited
-or auto caption; the full native chain remains follow-up work.
-The `automaticFields` stored value contributes provenance to its listed fields,
-with its refresh state and timestamp; it never creates its own list column.
-Fields absent from that value retain their own or inherited provenance.
+ADR 0021 defines one typed `fields.<readKey>` envelope for governed and derived
+fields; ordinary fields remain simple. `current` carries authoritative assignment
+intent and controls, `result` couples the effective outcome with its matching
+provenance, and `work` reports background activity independently. Inherit, explicit
+value and explicit None are separate intents. A successful empty outcome is not
+a missing computation. A missing result renders Updating… (or Unavailable with its raw failure); it never renders the successful empty state. Automatic ownership comes from current receipts and audit
+evidence, never a cached `automaticFields` value; edits and same-value confirmation
+end that ownership immediately.
+
+One shared Why this value experience owns source stacks, assignment/reset,
+suggestion review and explanations across web and Apple. Image stacks use the
+same ordered source primitive with view-only thumbnail strips. Allocation
+contributors remain independent sources. Freshness and work are separate: failed
+refreshes can retain a usable result and its historical provenance, alongside the
+raw diagnostic. Current explanation evidence is not the historical chain that
+produced a cached result. Live comparison availability has its own discriminant.
+#3324 owns the complete client cutover; do not add a second read contract.
+
+Nested references carry only what their consumer needs. Recipe usage rows and
+`appearsInRecipes` carry recipe identity (`id`, `name`); amounts, modifiers and
+original-line evidence remain on the usage. A nested record that exposes governed
+values instead uses a named typed envelope projection. Ingredient product rows
+retain their nutrition, food, mapping and price content; they are not identity-only
+references. Batch current facts for nested projections alongside their parent
+page, and keep frozen provenance references outside that traversal.
+Declare these edges in `fields.embedded`, with the nested property path, target entity
+and participating projections. Generation reads array, nullable, lazy and tagged-union
+structure from the declaration schemas and emits concrete replacements; section-line
+subrecipes terminate at scalar snapshots. Generation
+uses those declarations for both concrete child schemas and serializer traversal.
+Direct self edges may declare `recursive: true` on detail projections. Generation
+emits a typed lazy node rather than expanding its descendants; Location detail and
+tree reads share that node. Root-only attachment and redirect metadata stays on
+the root. Traversal follows only supplied, bounded topology and batches current
+facts across all its levels. Explicit embedded paths can name a governed container
+such as Location's installed Product; its effective result retains the nested
+Product envelopes. Compact identity leaves validate without fabricated fields.
+Child schemas import target field-schema leaves rather than full parent reads. A field may declare
+`validation.publicRead` when repository calculation inputs contain additional
+facts that must not become competing public values. Generated read projections
+apply that schema to existing keys on both root and embedded records; they never
+add a key absent from the projection. This does not change saved intent, mutation
+schemas or internal resolver inputs. Product pricing retains coverage evidence
+on reads, while its private calculation prices remain internal. Unit-price quotes
+and their explanation graph compute at read time from the selected valuation and
+current conversion facts. Selected reads retain these already-loaded inputs until
+the public projection removes unrequested fields. They carry that valuation's pending/failure work; they
+do not claim its cached provenance or computation time as their own. Repository/compiler
+`Raw*` read schemas retain internal resolver evidence outside the declared field roster;
+public manifests never publish a `fieldResolutions` descriptor or explanation path.
+Public entity and specialist `*Out`
+exports expose the canonical envelope, including nested Ingredient and Inventory products and
+Recipe section snapshots. Inventory holding Locations expose their name and
+governed type, without placeholder descriptions, images or valuations. Their
+current facts share the page serializer’s deduplicated batches. Inventory
+embedded in Product reads and photo candidate evidence exposes the same amount
+and valuation envelopes, with compact holding-Location identities. Meal occurrences
+retain their scale and evidence beside canonical Recipe servings and totals.
+Photo-review Product evidence uses canonical tag and brand fields beside retained
+photos, identifiers and purchase-line evidence. Those observations cannot authorize
+edits or establish automatic ownership. Nutrition reports reuse one selected Meal
+classification envelope throughout their root, person and food references. Duplicate
+stock results carry the selected Product brand envelope. Discard-preview amounts
+remain evidence for their one command calculation, alongside its selected shelf,
+warning and proposed quantity; ordinary shelf reads use Inventory envelopes. Location inventory-count trees expose only
+identity, topology and counts; they do not carry an unused plain Location type.
+Cookbook retitles return the existing kernel mutation receipt; list reads own
+the complete summary and its count envelopes. Saves do not refetch that summary.
+Inventory
+mutations use their declared envelopes on MCP too; there is no separate slim
+Inventory adapter. Native manifest paths unwrap the same result before
+walking nested values; a missing or empty outcome never falls back to a plain
+value beside the envelope. List responses carry envelopes in their rows, without
+a derived sidecar. Generic merge responses pass the keeper through this same
+serializer after its write completes. Vendor logo and coverage reads also use
+the canonical projection; coverage exposes its date under `fields.latestPurchaseDate`.
+External USDA records remain ordinary source facts; their live linked Products
+use canonical Product outputs, serialized once per selected food page while
+preserving duplicate and empty linkage groups. MCP reduces those Products to
+ordinary identity references. Image repositories retain raw hydration inputs;
+direct Image operation replies use canonical generated entity projections.
+Thumbnail, attachment, hash-index, upload and storage receipts remain ordinary
+asset references and retain their durable source evidence.
+MCP Recipe usage responses carry identity references
+and line evidence; they do not reconstruct servings or tags from a usage row.
+Meal recipe mutation replies retain the canonical Meal list projection in MCP;
+compact plan receipts remain command-specific identity and coverage artifacts.
+The Project tree operation serializes its selected forest through the same
+batched list projection as ordinary Project reads. Nesting on the client changes
+presentation only, retaining each canonical field envelope.
+Project promotion from Tasks returns canonical Project and Task projections;
+its private transaction result remains a repository shape.
+Serialization deduplicates fact loads while preserving each projected snapshot;
+missing current facts fail the read instead of inventing ownership or idle work.
+
+Current own intent wins immediately using the same precedence as filtering and
+sorting. Use inherited removes the override and follows sources; Keep this value
+creates an explicit assignment. After reset, show a valid fallback or Updating,
+never the removed override. Actionable reads carry current eligibility, exact
+fallback previews load on demand, and writes revalidate the action.
+Location tree, detail and shortcode reads use the existing published
+`valuationRollup` for `fields.valuation`, including its matching freshness and
+work status. They batch only the selected IDs and never compute the whole
+population to fill a missing result. Live rollup computation remains available
+to its background producer and explicit live reports.
+Inventory reads include the governed Location assignment as well as its compact
+identity, so Move can check current controls. The existing joined reference batch
+supplies its public code; action admission does not refetch an entry.
+Inherited-field previews run the existing SQL source ladder with only the local
+assignment removed, inside the explanation snapshot. They preserve terminal
+source identity and distinguish an ancestor's explicit None from no decision;
+the bounded evidence display never limits the counterfactual. Lists and saves
+do not compute this preview. Specialist previews reuse the existing pricing,
+Recipe-yield, Expense classification/project, itemization-policy and Inventory
+ownership resolvers with only the selected assignment cleared. Blocked ownership
+or category evidence stays a successful blocked outcome, not an invented fallback.
+Assignment facts load the declared governed storage columns in a page batch;
+reference identities normalize in one set lookup, without treating an effective
+hydrated value as saved intent. Physical Product price reads share one SQL value
+for overrides, cached fallback, price-presence filters, sorting and footer totals.
+Reset rejects a cached own value or a snapshot with unknown provenance. List
+filters and totals do not walk kit history to manufacture a fallback before its
+stored computation completes. Product Cost is a separate readonly envelope:
+physical Cost projects the complete selected valuation price (including provenance,
+freshness and work), while service Cost publishes its average, positive-charge count
+and latest dated charge atomically. Cost sorting uses that same selected snapshot;
+valuation-presence filters and Item prices totals exclude services. Failed Cost
+refreshes retain the old tuple, and date-only Expense edits invalidate its latest
+charge evidence. The Project Dates editor remains an ordinary saved
+range; its read-only effective start-date projection retains cache semantics for
+both display and sorting.
 
 Product detail exposes `unitPriceMappings` as list reads do. Its unit-price
 label and the explanation's complete conversion-graph evidence come from one
@@ -126,7 +246,7 @@ edges. Raw stored `unitMappings` alone are not that complete graph. Service
 Products keep their not-applicable unit-price label.
 
 Before adding an inherited value or override, trace an existing field through its
-stored intent, effective read, `fieldResolutions` provenance, and declared
+stored intent, effective envelope result and provenance, and declared
 `resolution` actions. Reuse that contract for edits, Use inherited, and explicit
 None where supported. Reference candidate filters and dependent scopes apply in capture forms, inline detail editors, and table cells through the same picker provider; an inline editor must not widen a declared member-only roster.
 
@@ -162,7 +282,7 @@ default trade.
 `effectiveFieldSql` is the value every read, list row, filter, sort and group
 uses; `inheritedFieldSql` the fallback; `effectiveSourceSql` and
 `inheritedSourceSql` the record that decided the value or the fallback,
-which `fieldResolutions.sourceEntity` names; `inheritanceLadderSql` every
+which the result's provenance names; `inheritanceLadderSql` every
 record a hierarchy chain reads, for "why this value" explanations, ending
 at the ancestor a `whileSame` walk stops at (`eligible` false). A stored
 filter over an inherited field, a `via` path ending at one, and a relation
@@ -1457,7 +1577,8 @@ Task and Project assignees use the identifier field’s member-scoped LedgerPart
 picker and `assigneeId` / `assigneeMode` inheritance contract.
 Both references declare outgoing graph paths and incoming inverses for their
 stored assignee foreign keys, alongside the member lifecycle policies.
-Reads expose effective `assigneeId`, `assigneeName`, and `fieldResolutions.assigneeId`;
+Reads expose `fields.assigneeId` with the effective id and matching provenance,
+plus its reference label;
 list filters and sorts use the same effective SQL as hydration. Explicit null
 means None and reset clears the stored override. Project’s field label is
 Default assignee; task’s is Assignee. The static My tasks saved view combines
@@ -1468,8 +1589,8 @@ without one; [ADR 0018](adr/0018-current-member-filter-token.md)). Unassigned us
 A saved view may also declare `view` (the list view it opens in, such as
 `shelf`) and `pin: { surface: "home", order }`, which lists it in the home
 "Your views" row on web and Apple; neither takes part in active-view matching.
-Inventory's `ownerLedgerPartyId` reads the effective owner and carries
-`fieldResolutions.ownerLedgerPartyId`, so its Use inherited, Confirm, and Set
+Inventory's `fields.ownerLedgerPartyId` separates the stored choice from the
+effective owner, so its Use inherited, Keep this value, and Set
 to Household actions are the generic resolution actions (`resolution.confirm`
 pins the inherited value; `resolution.labels` names a null value Household or
 Unknown). Its filter matches the effective owner by running the ownership
@@ -1504,10 +1625,9 @@ select option's `description` is shown as the tooltip of its pill wherever
 the value renders. A `number` field whose provenance is `derived` from one
 `{ entity, relation }` source links to that target's list, filtered by the
 entity's relation section for the same relation, both in its list cell and as
-the detail fact's filter action. A read that reports
-`fieldResolutions[field].mode === "inherit"` for an empty stored value
-displays the inherited value beside its `FieldResolutionBadge`, while the
-field itself keeps reading the stored value for edits.
+the detail fact's filter action. A governed field displays its envelope result with matching provenance.
+Editors seed drafts from `current.assignment`; an inherited or cached effective
+value never becomes the stored editing baseline.
 
 Every list column falls in one of three buckets. A generic column is a
 schema-eligible scalar with `display.list` enabled, rendered by `createEntityDisplayColumns` with no
@@ -1966,9 +2086,9 @@ its outer mutation supplies loading state and presentation only.
 
 Each page is one `entity.list` request returning complete canonical rows and
 `meta.totalCount`, full-filter `meta.sums` / `meta.totalLabels`, grouping and
-membership metadata, and `meta.derived` keyed by public row ID. The derived
-sidecar contains stored-field state, deciding provenance and computation time;
-values stay in their ordinary field slots. Stored metadata loads alongside
+membership metadata. Governed values live only in each row's typed `fields`
+envelopes, with assignment/control facts, result provenance and background work.
+Stored metadata loads alongside
 page hydration using internal IDs, without resolving public IDs back to storage.
 Inheritance resolutions produced during hydration contribute their provenance.
 
@@ -2610,7 +2730,9 @@ is discarded or guessed to be background work.
 The `derived.drain` Job claims ready marks, member edits first, then
 propagation, then reconciliation. It computes each directly marked target's
 batch outside the publication transaction through its adapter
-(`workflows/derived-computes.ts`). The Job's transaction expands fanout marks
+(`workflows/derived-computes.ts`). Preparation validates each outcome and its
+provenance against the value; invalid metadata backs off its target alongside
+other computation failures, before the publication batch is assembled. The Job's transaction expands fanout marks
 and publishes prepared values; newly expanded targets compute on a later page.
 Publication writes only marks whose ticket is unchanged since the claim, so an
 edit that lands during compute keeps its record dirty, and a deleted-and-reset
@@ -2660,17 +2782,38 @@ not a production rebuild or exhaustive coverage of every input branch.
 
 Reads never compute or repair: lists compile a stored field to one primary-key
 lookup (`storedDerivedSql`) for rows, sort, filter and footer totals, and a
-missing value reads as unknown, never zero. List pages and record reads carry a
-`derived` sidecar per row: state (`fresh`, `stale`, `missing`, `failed`), the
-deciding level and computation time. Detail reads attach it to the record beside
-media, using the same resolved identity and metadata reader as list pages. Native
-and web detail indicators therefore consume the record's current sidecar rather
-than the list snapshot it opened from. Field explanations add the stored value
-beside a live recompute for that one record; they never publish it. Web and
-Apple explanations distinguish the published value from the live result,
-retain Updating and calculation failures, and show the publication time when
-known. Values use the field's formatter, with structured evidence retained for
-non-scalar results; an unavailable live computation stays explicit.
+missing value reads as unknown, never zero. List pages and record reads carry
+one typed envelope per governed field. A field whose public name differs from
+its existing cache key declares `storedKey`; the compiler requires a published
+stored value and the serializer carries that snapshot's value, provenance,
+freshness and work together. Pure domain projections over selected envelopes
+use the existing `extensions.ports.fieldEnvelope` source-reference port. The
+serializer invokes that port with its already loaded constructor inputs; it
+performs no additional reads. Repository serializers and fact readers depend on
+`repositoryQueries` and pure presentation modules. Public media hydration and
+domain-specific reset orchestration stay in the service layer; those wrappers
+retain the same concurrent batch reads before serialization. Product's port projects physical Cost and unit
+prices from the selected price, including when price is omitted from the public
+selection, without introducing a second physical-price cache. A cached result carries its deciding
+provenance, computation time and freshness; work status does not determine whether
+a usable result exists. Field explanations return that same envelope and add
+current source evidence and an optional live comparison for one record; they
+never publish it. Web and Apple explanations distinguish the published value
+from the live result, retain Updating and calculation failures, and show the
+publication time when known. Values use the field's formatter, with structured
+evidence retained for non-scalar results; an unavailable live computation stays
+explicit.
+
+`DerivedValue.decidedBy` stores typed outcome metadata and provenance beside the
+value in the same publication. It does not duplicate the value payload. A live
+compute may return a successful empty outcome; omitting a record from the compute
+batch means no result exists. Publication rejects a value/outcome mismatch.
+Manual price and Project start-date provenance are selected with their values in
+one SQL statement. Current receipts are never used to relabel an older snapshot.
+The field-envelope cutover retains non-null legacy values and their original
+metadata, leaves unsupported historical provenance unknown, and queues refresh.
+Legacy nulls without an outcome reason remain stored but unavailable until typed
+publication; reads do not guess a reason or repair the cache.
 
 The derived cache is disposable: truncating `DerivedValue` and marking every
 declaration rebuilds the same values. Overrides, explicit None, waivers and
@@ -4215,13 +4358,14 @@ checks. Only declared fill fields qualify; review-required fields and populated
 member values remain protected. Preview and persisted application share that
 threshold. Propagated corrections use receipt authority, never invented model
 confidence. This field policy does not change financial acceptance rules.
-Each entity with eligible fill fields declares one non-list `automaticFields`
-value, containing `{ [fieldKey]: { confidence } }`. It reads Automatic rule
-receipts, Assessment state, the current record and field audit history. Only
-receipt-bound current values carry `decidedBy: { level: "suggested", auto: true,
-confidence }`; a later member edit (including a changed-and-restored value) or
-confirmation clears that provenance. Rebuilding the cache never applies a rule
-or writes a field.
+Actionable reads batch current Automatic rule receipts, Assessment state, saved
+values and field audit history. Only receipt-bound current assignments carry
+`ownership: { kind: "automatic", receiptId, confidence }`. A member edit, including
+a changed-and-restored value or same-value confirmation, ends that ownership
+before background work runs. There is no `automaticFields` cache or derived
+target; storage checks reject late attempts to recreate that retired work. The
+cutover deletes only those disposable snapshots and marks, retaining receipts,
+audit evidence, member decisions and unrelated durable work.
 
 Image correction authority is text-only and scoped to identical retained content
 hashes. Its provider-free resolver admits only successful command-bound member

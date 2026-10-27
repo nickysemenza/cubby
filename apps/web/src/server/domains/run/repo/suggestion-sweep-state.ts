@@ -1,4 +1,6 @@
 import type { FieldSuggestionsInput } from "@cubby/schemas/ai";
+import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
@@ -169,8 +171,18 @@ export async function saveSweepSuggestions(
       if (found.action !== "get" || !found.item)
         throw new Error("Suggestion target no longer exists");
       const record = z.record(z.string(), z.unknown()).parse(found.item);
+      const governed = Object.hasOwn(
+        entityFieldEnvelopeFields[input.entity],
+        input.field,
+      );
+      const envelope = fieldEnvelopeFor(record, input.field);
+      if (governed && (!envelope || envelope.result.kind === "missing"))
+        throw new Error("Suggestion target field result is unavailable");
+      const currentValue = governed
+        ? envelope && fieldValueOf(envelope)
+        : record[input.field];
       if (
-        canonicalJson(z.json().parse(record[input.field] ?? null)) !==
+        canonicalJson(z.json().parse(currentValue ?? null)) !==
         canonicalJson(input.currentValue)
       )
         throw new Error("Suggestion target changed during inference");

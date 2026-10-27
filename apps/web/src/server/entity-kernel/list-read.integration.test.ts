@@ -1,4 +1,8 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { type LedgerPartyShortcode } from "@cubby/schemas/identifiers";
+import { vendorOut } from "@cubby/schemas/vendor";
 import { sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -7,16 +11,18 @@ import { entitySummaryFields } from "~/contracts/mcp-projections";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { buildFiltersFromManifest } from "~/entity/filters";
 import { listEntities } from "~/entity/generated/entity-lists.gen";
-import { listReadRowSchema } from "~/entity/model/list-read-fields";
-import { selectListReadRows } from "~/entity/model/list-read-schema";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { getDb } from "~/server/db/helpers";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { setInventoryOwnership } from "~/server/domains/inventory/repo/ownership-mutations";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
+import { vendorHandlers } from "~/server/domains/vendor/operations.server";
 import { executeEntity } from "~/server/entity-kernel";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
+import { selectedFieldEnvelopeSchema } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { systemPrincipal } from "~/server/http/authenticate";
 import {
   createLocationFixture,
   createProductIdentityFixture,
@@ -31,6 +37,65 @@ import {
 
 describe("complete list composition", () => {
   const ctx = withTestDb();
+  it("returns a canonical keeper after a Vendor merge", async () => {
+    const keeper = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic canonical keeper",
+      itemizationExpectation: "required",
+    });
+    const donor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic canonical donor",
+    });
+    const response = await executeEntity(buildKernelContext(ctx.db), {
+      action: "merge",
+      entity: "vendor",
+      data: {
+        keepId: parseShortcodeFor("vendor", keeper.shortcode),
+        mergeIds: [parseShortcodeFor("vendor", donor.shortcode)],
+      },
+    });
+    const kept = vendorOut.parse(response.item);
+    expect(kept.fields.itemizationExpectation.current.assignment).toMatchObject(
+      {
+        kind: "value",
+        value: "required",
+        ownership: { kind: "record" },
+      },
+    );
+    expect(fieldValueOf(kept.fields.itemizationExpectation)).toBe("required");
+    expect(kept).not.toHaveProperty("itemizationExpectation");
+    expect(kept).not.toHaveProperty("fieldResolutions");
+    expect(kept).not.toHaveProperty("derived");
+    expect(response.mergeSummary).toMatchObject({
+      deletedIds: [parseShortcodeFor("vendor", donor.shortcode)],
+    });
+  });
+
+  it("publishes a successful empty coverage date through the Vendor envelope", async () => {
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic empty coverage",
+    });
+    const response = await vendorHandlers.operations.coverage({
+      data: {
+        vendorId: parseShortcodeFor("vendor", vendor.shortcode),
+        from: "2026-01-01",
+        to: "2026-12-31",
+      },
+      request: {
+        principal: systemPrincipal(buildKernelContext(ctx.db)),
+        headers: new Headers(),
+        signal: new AbortController().signal,
+      },
+    });
+    expect(response).toMatchObject({ ok: true });
+    if (!response.ok) return;
+    expect(response.data.fields.latestPurchaseDate.result).toMatchObject({
+      kind: "live",
+      decision: { outcome: { kind: "empty", reason: "unset" } },
+    });
+    expect(response.data).not.toHaveProperty("latestPurchaseDate");
+    expect(response.data.orderIds).toEqual([]);
+  });
+
   it("counts every declared saved view as its applied list reads it", async () => {
     await seedReferenceUniverse(ctx.db);
     const context = buildKernelContext(ctx.db);
@@ -179,7 +244,7 @@ describe("complete list composition", () => {
       2, 2, 0, 1, 5, 1, 1,
     ]);
   });
-  it("returns complete rows, totals and derived metadata in one list read", async () => {
+  it("returns complete canonical rows and matching selected fields in one list read", async () => {
     await seedReferenceUniverse(ctx.db);
     const context = buildKernelContext(ctx.db);
     for (const entity of listEntities) {
@@ -193,9 +258,14 @@ describe("complete list composition", () => {
       if (full.action !== "list") throw new Error("Wrong list action");
       expect(full.meta.totalCount).toBeGreaterThanOrEqual(full.items.length);
       expect(full.items.length).toBeLessThanOrEqual(2);
-      expect(full.meta.derived ?? {}).toEqual(expect.any(Object));
-      for (const id of Object.keys(full.meta.derived ?? {}))
-        expect(full.items.some((row) => row.id === id)).toBe(true);
+      expect(full.meta).not.toHaveProperty("derived");
+      for (const row of full.items) {
+        expect(
+          entityFieldEnvelopeSchemas[entity].list.safeParse(row).success,
+        ).toBe(true);
+        expect(row).not.toHaveProperty("fieldResolutions");
+        expect(row).not.toHaveProperty("derived");
+      }
       const fields = entitySummaryFields(entity);
       const selected = await ENTITY_LIST_READ_OPERATIONS[entity].listFields(
         context,
@@ -204,15 +274,16 @@ describe("complete list composition", () => {
       );
       expect(selected.meta.totalCount).toBe(full.meta.totalCount);
       expect(selected.items).toEqual(
-        selectListReadRows(
-          entity,
-          full.items.map((row) => listReadRowSchema.parse(row)),
-          fields,
+        full.items.map((row) =>
+          selectedFieldEnvelopeSchema(
+            entityFieldEnvelopeSchemas[entity].list,
+            fields,
+          ).parse(row),
         ),
       );
     }
   }, 60_000);
-  it("keys stored derived state by public page identity", async () => {
+  it("keeps stored result and work state on the public field envelope", async () => {
     await seedReferenceUniverse(ctx.db);
     const result = await executeEntity(buildKernelContext(ctx.db), {
       action: "list",
@@ -223,9 +294,9 @@ describe("complete list composition", () => {
     expect(result.action).toBe("list");
     if (result.action !== "list") throw new Error("Wrong list action");
     expect(result.items.length).toBeGreaterThan(0);
-    for (const row of result.items)
-      expect(result.meta.derived?.[row.id]).toMatchObject({
-        quantityVariance: { state: expect.any(String) },
-      });
+    for (const row of result.items) {
+      expect(row).toHaveProperty("fields.quantityVariance.result.kind");
+      expect(row).toHaveProperty("fields.quantityVariance.work.kind");
+    }
   }, 60_000);
 });

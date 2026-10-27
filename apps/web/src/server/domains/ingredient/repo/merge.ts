@@ -12,7 +12,7 @@ import {
   type IngredientShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { MergeSummaryOut } from "@cubby/schemas/ingredient";
+import { type MergeSummaryOut } from "@cubby/schemas/ingredient";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 

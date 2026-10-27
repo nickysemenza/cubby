@@ -21,7 +21,7 @@ import {
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   usesSavedFieldSuggestionContext,
   fieldSuggestionResolutionContext,
@@ -433,9 +433,13 @@ function setFieldPatch(
     (candidate) => candidate.key === field,
   )?.resolution;
   const usesInheritedValue =
-    resolution?.canReset === true &&
+    resolution?.current.controls.kind === "editable" &&
+    resolution.current.controls.reset.kind === "available" &&
+    resolution.current.controls.reset.preview.kind === "ready" &&
     resolutionPolicy?.redundancy === "eligible" &&
-    resolution.fallbackValue === value;
+    fieldValueOf({
+      result: resolution.current.controls.reset.preview.result,
+    }) === value;
   return usesInheritedValue && resolutionPolicy
     ? mutationPatchSchema.parse(resolutionPolicy.reset)
     : explicitSuggestionPatch(entity, field, value);
@@ -464,7 +468,9 @@ function recordValue(
 }
 
 function recordFieldResolutions(record: SuggestionRecord) {
-  const parsed = fieldResolutionsSchema.safeParse(record.fieldResolutions);
+  const parsed = z
+    .record(z.string(), fieldEnvelope(z.unknown(), z.unknown()))
+    .safeParse(record.fields);
   return parsed.success ? parsed.data : {};
 }
 
@@ -472,7 +478,7 @@ function resolutionContext(
   record: SuggestionRecord,
   keys: readonly string[],
 ): string | null {
-  return fieldSuggestionResolutionContext(record.fieldResolutions, keys);
+  return fieldSuggestionResolutionContext(record.fields, keys);
 }
 
 const basisFingerprint = (basis: Record<string, string | null>) =>
@@ -555,7 +561,8 @@ function suggestionRequestsForRecord(
       target.mode !== "prune" &&
       currentValue === null &&
       (resolution === undefined ||
-        (resolution.mode === "inherit" && resolution.value === null));
+        (resolution.current.assignment?.kind === "inherit" &&
+          fieldValueOf(resolution) === null));
     return [
       {
         record,
@@ -613,7 +620,7 @@ function acceptedBasis(
     ),
   );
   basis.__acceptedFallback = JSON.stringify(
-    recordFieldResolutions(record)[field]?.fallbackValue ?? null,
+    recordFieldResolutions(record)[field]?.current.controls ?? null,
   );
   return basisFingerprint(basis);
 }
@@ -1825,9 +1832,13 @@ function ResolvedFieldSuggestion({
   );
   const resolutionPolicy = definition?.resolution;
   const usesInheritedValue =
-    resolution?.canReset === true &&
+    resolution?.current.controls.kind === "editable" &&
+    resolution.current.controls.reset.kind === "available" &&
+    resolution.current.controls.reset.preview.kind === "ready" &&
     resolutionPolicy?.redundancy === "eligible" &&
-    resolution.fallbackValue === suggestion?.value;
+    fieldValueOf({
+      result: resolution.current.controls.reset.preview.result,
+    }) === suggestion?.value;
   const apply = async () => {
     // A cached preview is unvalidated: only the live answer may be applied.
     if (snapshot.current.row.previewByField.get(field))

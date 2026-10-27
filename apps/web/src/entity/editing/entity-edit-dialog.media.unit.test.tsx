@@ -111,12 +111,30 @@ describe("editor presentation media hook", () => {
 describe("image block attachment roles", () => {
   // Product is the one gallery whose attachments carry roles; the block
   // offers the role select only for it.
+  const product = mock(productWithMappingsAndFoodOut, {
+    seed: 8,
+    overrides: { unitMappings: [] },
+  });
   const record = {
-    ...mock(productWithMappingsAndFoodOut, {
-      seed: 8,
-      overrides: { images: [], unitMappings: [] },
-    }),
-    images: [{ ...image("IMG-RECORD", "record.jpg"), purpose: "item" }],
+    ...product,
+    fields: {
+      ...product.fields,
+      images: {
+        ...product.fields.images,
+        result: {
+          kind: "live" as const,
+          decision: {
+            outcome: {
+              kind: "value" as const,
+              value: [
+                { ...image("IMG-RECORD", "record.jpg"), purpose: "item" },
+              ],
+            },
+            provenance: { kind: "computed" as const },
+          },
+        },
+      },
+    },
   };
   const request = {
     entity: "product" as const,
@@ -142,6 +160,7 @@ describe("image block attachment roles", () => {
         />
         <output data-testid="image-fields">
           {JSON.stringify({
+            imageOrder: session.form.watch("imageOrder"),
             pendingImageIds: session.form.watch("pendingImageIds"),
             pendingImagePurposes: session.form.watch("pendingImagePurposes"),
           })}
@@ -165,6 +184,7 @@ describe("image block attachment roles", () => {
     await waitFor(() =>
       expect(screen.getByTestId("image-fields")).toHaveTextContent(
         JSON.stringify({
+          imageOrder: ["IMG-RECORD"],
           pendingImageIds: ["IMG-RECORD"],
           pendingImagePurposes: { "IMG-RECORD": "label" },
         }),

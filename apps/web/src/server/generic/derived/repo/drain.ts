@@ -23,6 +23,7 @@ import { uuidArrayParam } from "~/server/db/helpers/query";
 import { findPgError } from "~/server/errors/db-errors";
 import {
   type DerivedComputed,
+  computedDecision,
   type DerivedComputes,
   type DerivedSink,
   isDerivedSink,
@@ -127,7 +128,9 @@ export async function prepareDerivedPage(
           db,
           ids.slice(start, start + DERIVED_COMPUTE_BATCH),
         ))
-          values.set(id, value);
+          // Decision validation belongs to target preparation so a malformed
+          // outcome cannot abort publication of the page's valid targets.
+          values.set(id, { ...value, decision: computedDecision(value) });
       computed.set(target, values);
     } catch (error) {
       failed.set(
@@ -302,12 +305,13 @@ const publishValues = async (
         ticket: mark.ticket,
         hasValue: computed !== undefined,
         value: computed?.value ?? null,
-        decidedBy: computed?.decidedBy ?? null,
+        decidedBy: computed === undefined ? null : computedDecision(computed),
         inputHash: computed?.inputHash ?? null,
         ...sortColumns(declaration, computed?.sort ?? null),
       };
     }),
   );
+
   // Avoid planning a second value-table writer when there is nothing to remove.
   const hasMissing = rows.some((row) => !row.hasValue);
   // Lock, publish and clear the observed tickets in one statement. Every write

@@ -3,18 +3,15 @@ import {
   type NutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
-import {
-  type RecipeOut,
-  type SectionIngredientOut,
-} from "@cubby/schemas/recipe";
+import { type SectionIngredientOut } from "@cubby/schemas/recipe";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
-import {
-  testIngredientLine,
-  testEmptyRecipe,
-} from "@cubby/schemas/testing/recipe";
+import { testIngredientLine } from "@cubby/schemas/testing/recipe";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { ok } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { emptyRecipeReadFixture } from "~/features/recipe/recipe-read.fixtures";
 const unavailableNutrition = buildNutrition(() => ({
   status: "unavailable" as const,
   reason: "no_data" as const,
@@ -53,7 +50,10 @@ const ingredient = (id: string, name: string): SectionIngredientOut =>
 const rowKey = (id: string) => testEntityId("recipe", `usage-${id}`);
 
 const recipe = (id: string, name: string): RecipeOut =>
-  testEmptyRecipe({ id: testShortcode("recipe", `RCP-${id}`), name: name });
+  emptyRecipeReadFixture({
+    id: testShortcode("recipe", `RCP-${id}`),
+    name: name,
+  });
 
 const costing = (): RecipeCosting => ({
   rows: ["flour", "water"].map((id) => ({
@@ -182,3 +182,5 @@ describe("RecipeSpecView variants", () => {
     expect(screen.getByText("missing")).toBeInTheDocument();
   });
 });
+
+type RecipeOut = DetailRecordOf<"recipe">;

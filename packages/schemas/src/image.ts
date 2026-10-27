@@ -1,4 +1,4 @@
-import imageDefinition from "./entity-definitions/18-image.entity";
+import { imageFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.image.gen";
 import {
   imageProcessingIssue,
   imageAssociationEntity,
@@ -616,7 +616,7 @@ export {
   importTargetSummarySchema,
   type ImportTargetSummary,
 } from "./image-processing";
-export const imageWithEntitySchema = imageDefinition.readSchemas.detail;
+export const imageWithEntitySchema = imageFieldEnvelopeSchemas.detail;
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;
 

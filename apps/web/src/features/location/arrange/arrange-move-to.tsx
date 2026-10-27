@@ -1,5 +1,5 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import { FolderSimplePlusIcon } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
 import { useState } from "react";
 import { match } from "ts-pattern";
@@ -26,9 +26,14 @@ export type ArrangeMoveTarget =
       kind: "location";
       locationId: LocationShortcode;
       name: string;
-      roots: InfLocation[];
+      roots: LocationTreeNode[];
     }
-  | { kind: "item"; drag: ItemDragData; name: string; roots: InfLocation[] };
+  | {
+      kind: "item";
+      drag: ItemDragData;
+      name: string;
+      roots: LocationTreeNode[];
+    };
 
 const REFUSED = "Pick a different destination — that move isn't allowed.";
 

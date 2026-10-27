@@ -5,8 +5,8 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { productPrimaryPlacement } from "@cubby/schemas/product";
 import {
-  isServiceProductCategory,
-  productCategorySummary,
+  isServiceProductFeature,
+  productCategoryFeature,
 } from "@cubby/schemas/product-category-fields";
 import { productPricingOut } from "@cubby/schemas/product-fields";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -118,7 +118,7 @@ export async function productStockSummary(
     selectedListProjection("product", [
       "id",
       "onHandUnits",
-      "category",
+      "categoryFeature",
       "primaryPlacement",
     ]),
   );
@@ -126,10 +126,10 @@ export async function productStockSummary(
     .object({
       onHandUnits: z.number().nullable(),
       primaryPlacement: productPrimaryPlacement.nullable(),
-      category: productCategorySummary.nullable(),
+      categoryFeature: productCategoryFeature.nullable(),
     })
     .parse(products.data[0]);
-  if (isServiceProductCategory(product.category))
+  if (isServiceProductFeature(product.categoryFeature))
     return [
       {
         kind: "note",
@@ -324,7 +324,7 @@ export async function productPricingSummary(
       "purchaseDate",
       "unitPriceLabel",
       "pricing",
-      "category",
+      "categoryFeature",
     ]),
   );
   const row = z
@@ -332,10 +332,10 @@ export async function productPricingSummary(
       purchaseDate: z.string().nullable(),
       unitPriceLabel: z.string().nullish(),
       pricing: productPricingOut,
-      category: productCategorySummary.nullable(),
+      categoryFeature: productCategoryFeature.nullable(),
     })
     .parse(result.data[0]);
-  if (isServiceProductCategory(row.category)) {
+  if (isServiceProductFeature(row.categoryFeature)) {
     return serviceChargesSummary(db, productId, code);
   }
   return [

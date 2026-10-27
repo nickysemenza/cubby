@@ -104,11 +104,16 @@ public final class GenericEntityEditModel {
 
     // MARK: - Fields and sections
 
-    /// Draft classifier changes immediately update editor and suggestion eligibility.
+    /// Draft classifier changes immediately update editor and suggestion eligibility. A drafted
+    /// key's saved envelope no longer describes it, so the draft value reads in its place.
     public var applicabilityRecord: JSONValue {
         var values: [String: JSONValue] = [:]
         if case .object(let saved) = original { values = saved }
         values.merge(draft) { _, draftValue in draftValue }
+        if var envelopes = values["fields"]?.objectValue {
+            for key in draft.keys { envelopes.removeValue(forKey: key) }
+            values["fields"] = .object(envelopes)
+        }
         return .object(values)
     }
 
@@ -168,27 +173,30 @@ public final class GenericEntityEditModel {
 
     /// A reviewed command saved one field independently of the editor's remaining draft.
     /// Advance only its diff base; a newer local choice must remain dirty against that base.
+    /// The saved envelope's controls predate that write, so they are dropped rather than reused
+    /// as action authority until the record is read again.
     public func acknowledgeSavedField(
         _ key: String, value: JSONValue, reviewedDraftValue: JSONValue
     ) {
         guard case .update = mode, var saved = original?.objectValue else { return }
         saved[key] = value
-        if var resolutions = saved["fieldResolutions"]?.objectValue {
-            resolutions.removeValue(forKey: key)
-            saved["fieldResolutions"] = .object(resolutions)
+        if var envelopes = saved["fields"]?.objectValue {
+            envelopes.removeValue(forKey: key)
+            if let readKey = descriptor.field(key)?.readKey { envelopes.removeValue(forKey: readKey) }
+            saved["fields"] = .object(envelopes)
         }
         original = .object(saved)
         initialDraft[key] = value
         if (draft[key] ?? .null) == reviewedDraftValue { draft[key] = value }
     }
 
-    /// The server projection describes the saved record. Resolver dependencies are not a
-    /// complete editable-key roster, so any changed draft invalidates this provenance.
-    public func resolutionForEditor(_ field: FieldDescriptor) -> FieldResolutionPresentation? {
+    /// The saved envelope while it still describes the draft. Resolver dependencies are not a
+    /// complete editable-key roster, so any changed draft invalidates its result and controls.
+    public func resolutionForEditor(_ field: FieldDescriptor) -> FieldEnvelope? {
         guard let original,
             draft.allSatisfy({ key, value in value == (original[key] ?? .null) })
         else { return nil }
-        return FieldResolutionPresentation(raw: original, field: field)
+        return FieldEnvelope.of(original, field: field)
     }
 
     /// Stage the declaration's ordinary update patch; Save owns persistence.
@@ -197,9 +205,10 @@ public final class GenericEntityEditModel {
         stageResolution(.useInherited, for: key)
     }
 
-    /// Stage one of the saved resolution's offered links (Use inherited, Confirm, Set to …).
+    /// Stage one action the saved envelope's current controls offer (Use inherited, Keep this
+    /// value, Set to …). An edited draft or a missing envelope offers none.
     @discardableResult
-    public func stageResolution(_ kind: FieldResolutionAction.Kind, for key: String) -> Bool {
+    public func stageResolution(_ kind: FieldAssignmentAction.Kind, for key: String) -> Bool {
         guard let field = descriptor.field(key),
             let action = resolutionForEditor(field)?.actions(field: field).first(where: { $0.kind == kind })
         else { return false }
@@ -475,11 +484,20 @@ public final class GenericEntityEditModel {
 
     private func seed(original: JSONValue) {
         var stored = original.objectValue ?? [:]
-        // Resolve stored intent against the incoming row before the editor has a draft baseline.
-        for field in editableFields(in: original) {
-            if let resolution = FieldResolutionPresentation(raw: original, field: field) {
-                stored[field.key] = resolution.storedValue
+        // Seed governed fields from the stored intent S, never the inherited or cached effective
+        // value V. Declared companions (`…Mode`) follow the intent unless the row carries them.
+        // Retain every stored intent in the diff baseline even when current applicability hides
+        // its editor. A staged reset must differ from that intent, not from an absent read slot.
+        for field in descriptor.fields {
+            if let envelope = FieldEnvelope.of(original, field: field) {
+                let seeded = envelope.storedDraft(field: field)
+                stored[field.key] = seeded?.value ?? .null
+                for (key, value) in seeded?.companions ?? [:] where stored[key] == nil {
+                    stored[key] = value
+                }
             }
+        }
+        for field in editableFields(in: original) {
             // A read payload carries keys the input schema rejects and stored quirks (`""`, a
             // `null` the input omits). The diff base is exactly what the editor would send back
             // untouched, so an unedited structured field stays out of the patch.

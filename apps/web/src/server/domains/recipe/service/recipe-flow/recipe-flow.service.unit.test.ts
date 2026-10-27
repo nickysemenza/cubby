@@ -1,14 +1,14 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
-import {
-  type RecipeOut,
-  recipeOut,
-  sectionIngredientOut,
-} from "@cubby/schemas/recipe";
 import type {
   RecipeFlowAiPlan,
   RecipeFlowArtifact,
   RecipeFlowPlan,
 } from "@cubby/schemas/recipe-flow";
+import {
+  rawRecipeOutput as recipeOut,
+  rawSectionIngredient as sectionIngredientOut,
+} from "@cubby/schemas/recipe-raw-read";
+import type { RawRecipeOutput as RecipeOut } from "@cubby/schemas/recipe-raw-read";
 import {
   testCompleteDataQuality,
   testEntityId,

@@ -2,7 +2,6 @@ import { galleryEntities } from "@cubby/schemas/entity-manifest";
 import {
   attachableImageEntity,
   attachmentRoleForEntity,
-  type ImageWithEntity,
 } from "@cubby/schemas/image";
 import { getErrorMessage, parseShortcode } from "@cubby/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,6 +9,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { entityLabel } from "~/entity/entities";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { buildSearchHitComboboxItem } from "~/entity/picker/combobox-builders";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { image as imageOperations } from "~/integrations/tanstack-query/generated/catalog/image.gen";
@@ -139,3 +139,5 @@ export function AttachExistingImageDialog({
     </Overlay>
   );
 }
+
+type ImageWithEntity = DetailRecordOf<"image">;

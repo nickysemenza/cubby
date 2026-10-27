@@ -118,6 +118,10 @@ import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger
 import { syncChangedEffectivePrices } from "~/server/domains/product/repo/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
 import {
+  purchaseCoverageSql,
+  purchaseEvidenceFieldResolutionsSql,
+} from "~/server/domains/purchase/repo/purchase-evidence-policy";
+import {
   emptyPurchaseFinancialAggregate,
   loadPurchaseFinancialAggregates,
   type PurchaseFinancialAggregate,
@@ -176,11 +180,6 @@ import {
   findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-import {
-  purchaseCoverageSql,
-  purchaseEvidenceFieldResolutionsSql,
-} from "./purchase-evidence-policy";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
   "Shipment.purchaseId": {

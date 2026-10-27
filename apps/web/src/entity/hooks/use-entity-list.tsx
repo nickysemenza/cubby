@@ -250,7 +250,6 @@ export interface UseEntityListReturn<
   totalCount: number | undefined;
   sums: Record<string, number> | undefined;
   totalLabels: Record<string, string> | undefined;
-  derived: import("~/ui/hooks/use-paginated-table-core").ListQueryResponse<TData>["meta"]["derived"];
   inspection: ReturnType<typeof useEntityPreview>;
 }
 
@@ -1033,7 +1032,6 @@ export function useEntityList<
     totalCount: isLoading ? undefined : totalCount,
     sums,
     totalLabels: infiniteResult.totalLabels,
-    derived: infiniteResult.derived,
     inspection,
   };
 }

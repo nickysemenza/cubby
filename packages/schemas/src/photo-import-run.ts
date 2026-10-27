@@ -1,3 +1,9 @@
+import { withFieldEnvelopes } from "./field-envelope";
+import {
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+} from "./generated/entity-field-envelope-fields.product.gen";
+import { rawProductDetail } from "./product-raw-read";
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { z } from "zod";
 import { assessmentChildHandle } from "./assessment-reference";
@@ -30,7 +36,6 @@ import { productVariantComparison } from "./product-variant-comparison";
 import {
   productListInventoryEntryOut,
   productQuantitySummaryOut,
-  productWithFoodOut,
 } from "./product";
 
 export const runTargetDeviceWorkState = z.enum([
@@ -662,7 +667,8 @@ export const photoProductCandidate = z.object({
 });
 export type PhotoProductCandidate = z.infer<typeof photoProductCandidate>;
 
-export const photoProductEvidence = photoProductCandidate
+// Evidence retains the observed source facts used by frozen comparisons.
+const rawPhotoProductEvidence = photoProductCandidate
   .pick({
     id: true,
     name: true,
@@ -678,11 +684,16 @@ export const photoProductEvidence = photoProductCandidate
     brandName: z.string().nullable(),
     model: z.string().nullable(),
     identifiers: z.array(z.string()),
-    notes: productWithFoodOut.shape.notes,
-    tags: productWithFoodOut.shape.tags,
-    category: productWithFoodOut.shape.category,
-    externalIds: productWithFoodOut.shape.externalIds,
+    notes: rawProductDetail.shape.notes,
+    tags: rawProductDetail.shape.tags,
+    category: rawProductDetail.shape.category,
+    externalIds: rawProductDetail.shape.externalIds,
   });
+export const photoProductEvidence = withFieldEnvelopes(
+  rawPhotoProductEvidence,
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+);
 export type PhotoProductEvidence = z.infer<typeof photoProductEvidence>;
 export const photoRejectedCandidate = z.object({
   id: productShortcode,

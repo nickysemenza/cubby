@@ -4,14 +4,14 @@ import type {
   RecipeId,
 } from "@cubby/schemas/identifiers";
 import type {
-  EnrichmentRow,
-  IngredientWithFoodLeanOut,
-  IngredientWithFoodOut,
-} from "@cubby/schemas/ingredient";
+  RawIngredientEnrichment as EnrichmentRow,
+  RawIngredientWithFoodLean as IngredientWithFoodLeanOut,
+} from "@cubby/schemas/ingredient-raw-read";
+import type { RawIngredientDetail as IngredientWithFoodOut } from "@cubby/schemas/ingredient-raw-read";
 import type {
-  ProductWithMappingsOut as ProductWithMappings,
-  ProductWithMappingsAndFoodOut,
-} from "@cubby/schemas/product";
+  RawProductWithMappings as ProductWithMappings,
+  RawProductWithMappingsAndFood,
+} from "@cubby/schemas/product-raw-read";
 
 import { conversionCoverage, gradedKinds } from "~/lib/conversion-coverage";
 import { classifyIngredientFix } from "~/lib/recipe-totals-gaps";
@@ -21,13 +21,13 @@ import type { Database } from "~/server/db";
 import { buildIngredientNutritionProduct } from "~/server/domains/ingredient/repo/nutrition-product";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import { recipeTreeLeafIngredientIds } from "~/server/domains/recipe/repo/totals";
-import { TraceNames, withTrace } from "~/server/observability/tracing";
-
 import {
   batchEnrichNestedItems,
   batchEnrichWithFood,
-} from "../../usda-food/repo/usda-helpers";
-import type { UsdaFoodBatchPort } from "../../usda-food/repo/usda-helpers";
+} from "~/server/domains/usda-food/repo/usda-helpers";
+import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
+import { TraceNames, withTrace } from "~/server/observability/tracing";
+
 import { getIngredientByID as getIngredientByIDRepo } from "./crud";
 import { findFuzzyMergeCandidates } from "./merge";
 import {
@@ -39,7 +39,7 @@ import {
 const enrichProductsWithFood = async (
   usdaClient: UsdaFoodBatchPort,
   products: ProductWithMappings[],
-): Promise<ProductWithMappingsAndFoodOut[]> => {
+): Promise<RawProductWithMappingsAndFood[]> => {
   return batchEnrichWithFood(products, foodLookupParamFromProduct, usdaClient);
 };
 
@@ -161,7 +161,15 @@ export const enrichmentWorkbench = async (
     // opt-outs (naKinds) drop out, so a count-only item isn't pegged below
     // "complete" for a volume it's never measured by.
     const applicable = gradedKinds(ing.naKinds);
-    const coverage = conversionCoverage(getIngredientMappings(ing), applicable);
+    const coverage = conversionCoverage(
+      getIngredientMappings({
+        product: ing.product.map((product) => ({
+          ...product,
+          price: product.pricing.effectivePrice,
+        })),
+      }),
+      applicable,
+    );
     const recommendedFix = classifyIngredientFix({
       products: ing.product,
       coverage,

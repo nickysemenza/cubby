@@ -11,7 +11,12 @@ import {
   type StoredNutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
-import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product";
+import type { RawProductWithMappingsAndFood } from "@cubby/schemas/product-raw-read";
+
+type NutritionProduct = Pick<
+  RawProductWithMappingsAndFood,
+  "id" | "price" | "unitMappings" | "food" | "labelNutrition"
+>;
 import type { RecipeYield } from "@cubby/schemas/recipe-shared";
 import {
   isNutrientKey,
@@ -34,8 +39,13 @@ import { getAllUnitMappingsFromProduct } from "./unit-mapping-utils";
 import { wasm } from "./wasm";
 
 export type FoodAmountSource =
-  | { kind: "product"; product: ProductWithMappingsAndFoodOut }
-  | { kind: "ingredient"; ingredient: IngredientWithFoodLeanOut }
+  | { kind: "product"; product: NutritionProduct }
+  | {
+      kind: "ingredient";
+      ingredient: Pick<IngredientWithFoodLeanOut, "naKinds"> & {
+        product: NutritionProduct[];
+      };
+    }
   | {
       kind: "recipe";
       /** Current batch totals, already multiplied by `scale`. */
@@ -73,7 +83,7 @@ const fromWTotals = (totals: WNutritionTotals): NutritionTotals =>
   });
 
 const mappedSource = (
-  products: ProductWithMappingsAndFoodOut[],
+  products: NutritionProduct[],
   optOuts: readonly string[] = [],
 ): WFoodAmountInput["source"] => ({
   kind: "mapped",
@@ -168,7 +178,7 @@ export const manualFoodTotals = (
   calculateFoodAmount(null, { kind: "manual", nutrients }).totals;
 
 export function productFoodTotals(
-  product: ProductWithMappingsAndFoodOut,
+  product: NutritionProduct,
   grams: number,
 ): NutritionTotals {
   return calculateFoodAmount(
@@ -178,9 +188,7 @@ export function productFoodTotals(
 }
 
 /** A package label overrides USDA serving weights, including when they conflict. */
-export function productServingGrams(
-  product: ProductWithMappingsAndFoodOut,
-): number | null {
+export function productServingGrams(product: NutritionProduct): number | null {
   if (product.labelNutrition) return product.labelNutrition.servingGrams;
   const result = safeConvertAmount(
     { value: 1, unit: "serving" },

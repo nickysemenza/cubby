@@ -1,11 +1,14 @@
-import type { ImageOut } from "@cubby/schemas/image";
-import { imageOut } from "@cubby/schemas/image";
+import { imageOut, type ImageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { cleanup, render, screen } from "@testing-library/react";
 import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import {
+  locationReadFixture,
+  type LocationFixtureOverrides,
+} from "~/features/location/location-read.fixtures";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { LocationVisual } from "./location-visual";
@@ -64,26 +67,27 @@ const location = (
   code: string,
   name: string,
   type: LocationType | null,
-  overrides: Partial<InfLocation> = {},
-): InfLocation => ({
-  id: testShortcode("location", `LOC-${code}`),
-  name,
-  aliases: [],
-  type: type ?? "furniture",
-  product: null,
-  lastBulkInventory: null,
-  aiDescription: null,
-  images: [],
-  valuation: null,
-  dataQuality: testCompleteDataQuality(),
-  createdAt: new Date("2026-01-01T00:00:00Z"),
-  updatedAt: new Date("2026-01-01T00:00:00Z"),
-  children: [],
-  ...overrides,
-  notes: overrides.notes ?? null,
-});
+  overrides: LocationFixtureOverrides = {},
+): InfLocation =>
+  locationReadFixture({
+    id: testShortcode("location", `LOC-${code}`),
+    name,
+    aliases: [],
+    type: type ?? "furniture",
+    product: null,
+    lastBulkInventory: null,
+    aiDescription: null,
+    images: [],
+    valuation: null,
+    dataQuality: testCompleteDataQuality(),
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
+    children: [],
+    ...overrides,
+    notes: overrides.notes ?? null,
+  });
 
-const containerLocation = (overrides: Partial<InfLocation> = {}) =>
+const containerLocation = (overrides: LocationFixtureOverrides = {}) =>
   location("AAAA", "Abrasives box", null, {
     displayImages: [image("product")],
     product: {

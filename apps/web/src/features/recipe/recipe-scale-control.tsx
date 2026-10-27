@@ -1,9 +1,9 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import { ArrowsOutIcon } from "@phosphor-icons/react/dist/csr/ArrowsOut";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { roundTo } from "~/lib/round-to";
 import { Picker } from "~/ui/combobox/picker";
@@ -307,3 +307,5 @@ export function RecipeScaleControl({
     </Row>
   );
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

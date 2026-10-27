@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { FunctionComponent } from "react";
 
 import type { CollectionActionProps } from "~/entity/entity-detail/collection-actions";
@@ -33,9 +34,12 @@ export const LocationAiDescription: DetailSlotComponent<"location"> = ({
 /** Analyze action of the AI description report: the photo analysis and its proposal review. */
 export const AnalyzeLocationAction: FunctionComponent<
   CollectionActionProps<"location">
-> = ({ record: location }) => (
-  <AiDescriptionSection
-    locationId={location.id}
-    hasImages={(location.images ?? []).length > 0}
-  />
-);
+> = ({ record: location }) => {
+  const effectiveLocationImages = fieldValueOf(location.fields.images);
+  return (
+    <AiDescriptionSection
+      locationId={location.id}
+      hasImages={(effectiveLocationImages ?? []).length > 0}
+    />
+  );
+};

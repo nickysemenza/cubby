@@ -109,6 +109,7 @@ export interface EntityBindingSchemas {
   list: ZodSchema;
   repositoryDetail: ZodSchema;
   repositoryList: ZodSchema;
+  repositoryOutput: ZodSchema;
 }
 
 export type EntityCreateInput<E extends EntitySchemaBindingEntity> =
@@ -143,7 +144,7 @@ export interface EntityLifecycleContract {
 export interface EntityRepositoryWriteResult<
   E extends EntitySchemaBindingEntity,
   S extends EntityBindingSchemas,
-  TOutput = ZodOutput<S["output"]>,
+  TOutput = ZodOutput<S["repositoryOutput"]>,
 > {
   output: TOutput;
   entityId: EntityInternalId<E>;

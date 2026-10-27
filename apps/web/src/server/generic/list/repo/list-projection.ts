@@ -23,10 +23,6 @@ import {
   isListMediaField,
   type ListReadRow,
 } from "~/entity/model/list-read-fields";
-import {
-  listReadSchema,
-  projectListRows,
-} from "~/entity/model/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inheritedFieldOfColumn } from "~/server/db/computed/effective-field";
 import {
@@ -39,6 +35,10 @@ import type {
   ListBindingGroup,
   ListProjection,
 } from "~/server/generic/list/repo/list-contracts";
+import {
+  listReadSchema,
+  projectListRows,
+} from "~/server/generic/list/repo/list-read-schema";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { traceListGroup } from "~/server/observability/list-read-tracing";
 

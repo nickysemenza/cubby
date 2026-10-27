@@ -1,9 +1,9 @@
-import type { TaskOut } from "@cubby/schemas/project";
 import type { CellData } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { installFeatures } from "~/features/registry";
 import {
   createCubbyColumnCollection,
@@ -147,3 +147,5 @@ describe("task list display columns", () => {
     expect(screen.queryByText("in_progress")).toBeNull();
   });
 });
+
+type TaskOut = DetailRecordOf<"task">;

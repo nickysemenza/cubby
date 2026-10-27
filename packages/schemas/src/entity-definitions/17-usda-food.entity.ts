@@ -12,7 +12,7 @@ import {
   nutritionInfo,
 } from "@cubby/usda";
 import { z } from "zod";
-import { productTopLevelOut } from "../product-output-fields.js";
+import { rawProductOutput as productTopLevelOut } from "../product-raw-read.js";
 export default defineEntity(
   {
     key: "usda-food",

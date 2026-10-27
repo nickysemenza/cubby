@@ -14,6 +14,10 @@ import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { expect, it } from "vitest";
 
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
 import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
 import { mock } from "~/lib/test/mock-schema";
@@ -146,13 +150,21 @@ it("offers another meal from the same day as a leftovers source", () => {
     id: "00000000-0000-4000-8000-000000000003",
     mealId: otherMealId,
     recipeId: testShortcode("recipe", "RCP-3333"),
-    recipe: {
+    recipe: entityReadFixture(mealRecipeOut.shape.recipe, {
       id: testShortcode("recipe", "RCP-3333"),
       name: "Soup",
-      servings: null,
       yield: null,
-      totals: null,
-    },
+      fields: {
+        servings: fieldValueFixture(
+          mealRecipeOut.shape.recipe.shape.fields.shape.servings,
+          null,
+        ),
+        totals: fieldValueFixture(
+          mealRecipeOut.shape.recipe.shape.fields.shape.totals,
+          null,
+        ),
+      },
+    }),
     scale: 1,
     sortOrder: null,
     estimatedYieldGrams: null,

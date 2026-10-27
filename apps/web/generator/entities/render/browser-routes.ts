@@ -139,7 +139,6 @@ const renderDetailRoute = (entity: RoutedEntity): string => {
     `  entity: ${JSON.stringify(entity.key)},\n` +
     `  query: (${detailParam}) => ${query(detailParam)},\n` +
     `  render: (record, ${detailParam}) => <${GENERIC_DETAIL.export} key={${detailParam}} entity=${JSON.stringify(entity.key)} record={record} />,\n` +
-    `  title: (record) => record.${entity.inspector.titleField},\n` +
     "});\n\n" +
     `const ${name}NotFound = notFoundPage(${JSON.stringify(entity.key)});\n\n` +
     `export const Route = createFileRoute(${JSON.stringify(`/_authenticated/${basePath}/$${detailParam}`)})({\n` +

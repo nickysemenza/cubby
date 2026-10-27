@@ -160,33 +160,58 @@ struct EntityRowPresentationTests {
     }
 
     /// An inherited owner reads muted with the marker, not an "Inherited · …" caption; a null
-    /// owner reads in the declaration's words (Unknown under inherit, Household when explicit).
+    /// owner reads in the declaration's words (Unknown when unset, Household when explicitly
+    /// none), and a missing result reads Updating rather than an empty value.
     @Test func inheritedOwnerCarriesTheMarkerAndNullOwnerItsLabel() throws {
-        func fact(mode: String, value: JSONValue) throws -> EntityRowPresentation.Fact {
+        func fact(assignment: JSONValue, result: JSONValue) throws -> EntityRowPresentation.Fact {
+            let envelope: JSONValue = [
+                "current": [
+                    "assignment": assignment,
+                    "controls": [
+                        "kind": "editable", "canSetNone": true, "canConfirm": true,
+                        "reset": ["kind": "unavailable"],
+                    ],
+                ],
+                "result": result, "work": ["kind": "idle"],
+            ]
             let row = EntityRow(
                 id: "INV-1001", title: "Synthetic entry", subtitle: nil, imageURL: nil,
-                raw: [
-                    "id": "INV-1001", "ownerLedgerPartyId": value,
-                    "fieldResolutions": [
-                        "ownerLedgerPartyId": [
-                            "mode": .string(mode), "storedValue": .null, "value": value,
-                            "fallbackValue": value,
-                            "source": "purchase", "sourceEntity": .null, "matchesFallback": false,
-                            "canReset": false,
-                        ]
-                    ],
-                ])
+                raw: ["id": "INV-1001", "fields": ["ownerLedgerPartyId": envelope]])
             return try #require(
                 EntityRowPresentation.resolve(
                     descriptor: EntityCatalog[.inventory], row: row, columns: ["ownerLedgerPartyId"]
                 ).facts.first { $0.id == "ownerLedgerPartyId" })
         }
-        let inherited = try fact(mode: "inherit", value: "LPY-4K7M")
+        let inherit: JSONValue = ["kind": "inherit"]
+        let inherited = try fact(
+            assignment: inherit,
+            result: [
+                "kind": "live",
+                "decision": [
+                    "outcome": ["kind": "value", "value": "LPY-4K7M"],
+                    "provenance": [
+                        "kind": "inherited",
+                        "source": ["entityKind": "product", "entityId": "PRD-1001", "name": .null],
+                    ],
+                ],
+            ])
         #expect(inherited.inherited)
         #expect(!inherited.value.contains("Inherited"))
-        #expect(try fact(mode: "inherit", value: .null).value == "Unknown")
-        #expect(try fact(mode: "explicit", value: .null).value == "Household")
-        #expect(try !fact(mode: "explicit", value: .null).inherited)
+        let unset: JSONValue = [
+            "kind": "live",
+            "decision": ["outcome": ["kind": "empty", "reason": "unset"], "provenance": .null],
+        ]
+        #expect(try fact(assignment: inherit, result: unset).value == "Unknown")
+        let household: JSONValue = [
+            "kind": "live",
+            "decision": [
+                "outcome": ["kind": "empty", "reason": "explicit_none"],
+                "provenance": ["kind": "own", "ownership": ["kind": "record"]],
+            ],
+        ]
+        #expect(try fact(assignment: ["kind": "none"], result: household).value == "Household")
+        #expect(try !fact(assignment: ["kind": "none"], result: household).inherited)
+        #expect(try fact(assignment: inherit, result: ["kind": "missing"]).value == "Updating…")
     }
 
     /// A scored entity's record can itself be unassessed (null score), and an exceptions-only

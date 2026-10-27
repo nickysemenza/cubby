@@ -1,4 +1,4 @@
-import type { InfLocation } from "@cubby/schemas/location";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useId, useMemo, useState } from "react";
@@ -20,7 +20,7 @@ import {
   visualizationState,
 } from "~/ui/visualizations/visualization";
 
-export function LocationTree({ data }: { data: InfLocation[] }) {
+export function LocationTree({ data }: { data: LocationTreeNode[] }) {
   const inventoryId = useId();
   const [query, setQuery] = useState("");
   const [showInventory, setShowInventory] = useState(false);

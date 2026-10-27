@@ -1,6 +1,8 @@
-import { type InfLocation, infLocation } from "@cubby/schemas/location";
+import { type InfLocation } from "@cubby/schemas/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
+import { locationReadFixture } from "~/features/location/location-read.fixtures";
 
 import { collectTreeProductIds } from "./location-gallery-data";
 
@@ -9,7 +11,7 @@ const location = (
   productIds: string[],
   children?: InfLocation[],
 ): InfLocation =>
-  infLocation.parse({
+  locationReadFixture({
     id: testShortcode("location", id),
     name: id,
     aliases: [],

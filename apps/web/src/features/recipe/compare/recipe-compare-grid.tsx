@@ -1,16 +1,17 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import type {
   MeasureEstimate,
   NutritionTotals,
 } from "@cubby/schemas/nutrition";
 import { hasKnownEstimate } from "@cubby/schemas/nutrition";
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
 import { EqualsIcon } from "@phosphor-icons/react/dist/csr/Equals";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useMemo, useState } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   useEntityDisplayImages,
   entityDisplayImageKey,
@@ -169,12 +170,14 @@ const AverageCell: React.FC<{
   );
 };
 
-const SourceCell: React.FC<{ recipe: RecipeOut }> = ({ recipe }) =>
-  sourceLabel(recipe.source) ? (
-    <RecipeSourceLink source={recipe.source} />
+const SourceCell: React.FC<{ recipe: RecipeOut }> = ({ recipe }) => {
+  const effectiveRecipeSource = fieldValueOf(recipe.fields.source);
+  return sourceLabel(effectiveRecipeSource) ? (
+    <RecipeSourceLink source={effectiveRecipeSource} />
   ) : (
     <span className="text-muted-foreground">—</span>
   );
+};
 
 const STICKY = stickyRowHeaderCard;
 
@@ -212,19 +215,22 @@ export const RecipeCompareGrid: React.FC<{
   const seeded = useMemo(
     () =>
       Object.fromEntries(
-        compared.flatMap(({ recipe }) =>
-          recipe.displayImages
+        compared.flatMap(({ recipe }) => {
+          const effectiveRecipeDisplayImages = fieldValueOf(
+            recipe.fields.displayImages,
+          );
+          return effectiveRecipeDisplayImages
             ? [
                 [
                   entityDisplayImageKey({
                     entityKind: "recipe",
                     entityId: recipe.id,
                   }),
-                  recipe.displayImages[0] ?? null,
+                  effectiveRecipeDisplayImages[0] ?? null,
                 ],
               ]
-            : [],
-        ),
+            : [];
+        }),
       ),
     [compared],
   );
@@ -331,7 +337,9 @@ export const RecipeCompareGrid: React.FC<{
               className={`${STICKY} z-20 w-32 px-2 pt-2 pb-2`}
             />
             {compared.map((c) => {
-              const subtitle = sourceLabel(c.recipe.source);
+              const subtitle = sourceLabel(
+                fieldValueOf(c.recipe.fields.source),
+              );
               const cover =
                 images[
                   entityDisplayImageKey({
@@ -634,3 +642,5 @@ export const RecipeCompareGrid: React.FC<{
     </Panel>
   );
 };
+
+type RecipeOut = DetailRecordOf<"recipe">;

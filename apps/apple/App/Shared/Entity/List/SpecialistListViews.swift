@@ -247,6 +247,10 @@ struct LocationGalleryListView: View {
     let filters: EntityFilterState
     @State private var type = "all"
 
+    private func locationType(_ node: LocationTreeNode) -> String? {
+        FieldEnvelope(wire(node.fields.type))?.effectiveValue?.stringValue
+    }
+
     var body: some View {
         SpecialistLoadView(
             loadingLabel: "Loading locations", filters: filters,
@@ -266,16 +270,18 @@ struct LocationGalleryListView: View {
             List {
                 Picker("Type", selection: $type) {
                     Text("All").tag("all")
-                    ForEach(Array(Set(locations.map { $0.type.rawValue })).sorted(), id: \.self) {
+                    ForEach(Array(Set(locations.compactMap { locationType($0) })).sorted(), id: \.self) {
                         Text($0.capitalized).tag($0)
                     }
                 }
-                ForEach(locations.filter { type == "all" || $0.type.rawValue == type }, id: \.id) { node in
+                ForEach(locations.filter { type == "all" || locationType($0) == type }, id: \.id) { node in
                     NavigationLink(value: Route.entityDetail(.location, id: node.id.rawValue)) {
                         HStack {
-                            let url = node.displayImages?.first.flatMap {
-                                URL(string: $0.representations?.preferred ?? $0.url)
-                            }
+                            let image = FieldEnvelope(wire(node.fields.displayImages))?.effectiveValue?
+                                .arrayValue?.first
+                            let url =
+                                (image?["representations"]?["preferred"]?.stringValue
+                                ?? image?["url"]?.stringValue).flatMap(URL.init(string:))
                             Thumb(url: url, size: 48, symbol: "shippingbox")
                             VStack(alignment: .leading) {
                                 Text(node.name)
@@ -283,7 +289,9 @@ struct LocationGalleryListView: View {
                                 // subtree and inventory once per row.
                                 EntityQualityFact(
                                     key: .location, id: node.id.rawValue,
-                                    raw: .object(["dataQuality": wire(node.dataQuality)]))
+                                    raw: .object([
+                                        "fields": .object(["dataQuality": wire(node.fields.dataQuality)])
+                                    ]))
                                 Text("\(node.totalItems) items · \(node.childNodes.count) sublocations")
                                     .font(.caption).foregroundStyle(.secondary)
                             }

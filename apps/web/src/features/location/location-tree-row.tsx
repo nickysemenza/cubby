@@ -1,4 +1,5 @@
-import type { InfLocation } from "@cubby/schemas/location";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import type * as React from "react";
 
 import { cn } from "~/lib/utils";
@@ -9,7 +10,7 @@ import { LocationIcon } from "../../entity/presentation/location-icons";
 
 interface LocationTreeRowProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
-  location: Pick<InfLocation, "name" | "type" | "product">;
+  location: Pick<LocationTreeNode, "name" | "fields">;
   depth: number;
   primaryMeta?: React.ReactNode;
   secondaryMeta?: React.ReactNode;
@@ -70,8 +71,8 @@ export function LocationTreeRow({
       {leading}
       {icon ?? (
         <LocationIcon
-          type={location.type}
-          product={location.product}
+          type={fieldValueOf(location.fields.type)}
+          product={fieldValueOf(location.fields.product)}
           size={16}
         />
       )}

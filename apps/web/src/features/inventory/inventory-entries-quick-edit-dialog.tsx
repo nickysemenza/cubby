@@ -1,21 +1,20 @@
-import type { Amount } from "@cubby/schemas/codec";
-import type {
-  InventoryShortcode,
-  LocationShortcode,
-} from "@cubby/schemas/identifiers";
-import type { LocationType } from "@cubby/schemas/location";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import type { ProductListInventoryEntryOut } from "@cubby/schemas/product";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
-import { buildLocationComboboxItem } from "~/entity/picker/combobox-builders";
+import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import {
   useEntityListSource,
   type SearchProviderProps,
 } from "~/entity/picker/with-search-hook";
 import { EditableAmountCell } from "~/entity/table/editable-cell";
 import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
+import { NoneValue } from "~/ui/primitives/none-value";
 
 /**
  * The location search provider for every entry row's `EditableEntityCell` —
@@ -35,11 +34,7 @@ function LocationSearchProvider(props: SearchProviderProps<LocationShortcode>) {
   );
 }
 
-interface QuickEditInventoryEntry {
-  id: InventoryShortcode;
-  amount: Amount;
-  location: { id: LocationShortcode; name: string; type: LocationType | null };
-}
+type QuickEditInventoryEntry = ProductListInventoryEntryOut;
 
 interface InventoryEntriesQuickEditDialogProps {
   open: boolean;
@@ -83,40 +78,49 @@ export function InventoryEntriesQuickEditDialog({
         {entries.length === 0 ? (
           <p className="text-sm text-muted-foreground">No inventory entries.</p>
         ) : (
-          entries.map((entry) => (
-            <Row key={entry.id} align="center" gap="sm" wrap>
-              <EditableAmountCell
-                amount={entry.amount}
-                onSave={async (newAmount) => {
-                  await updateInventoryMutation.mutateAsync({
-                    id: entry.id,
-                    data: { amount: newAmount },
-                  });
-                }}
-              />
-              <span className="text-muted-foreground/50">@</span>
-              <EditableEntityCell
-                value={buildLocationComboboxItem(entry.location)}
-                label="location"
-                SearchProvider={LocationSearchProvider}
-                onSave={async (newLocationId) => {
-                  if (!newLocationId) return;
-                  await updateInventoryMutation.mutateAsync({
-                    id: entry.id,
-                    data: { locationId: newLocationId },
-                  });
-                }}
-                renderValue={(v) =>
-                  v ? (
-                    <Row as="span" align="center" gap="xs">
-                      {v.icon}
-                      <span className="truncate">{v.name}</span>
-                    </Row>
-                  ) : null
-                }
-              />
-            </Row>
-          ))
+          entries.map((entry) => {
+            const amount = fieldValueOf(entry.fields.amount);
+            return (
+              <Row key={entry.id} align="center" gap="sm" wrap>
+                <FieldRecordValue record={entry} field="amount">
+                  {amount ? (
+                    <EditableAmountCell
+                      amount={amount}
+                      onSave={async (newAmount) => {
+                        await updateInventoryMutation.mutateAsync({
+                          id: entry.id,
+                          data: { amount: newAmount },
+                        });
+                      }}
+                    />
+                  ) : (
+                    <NoneValue />
+                  )}
+                </FieldRecordValue>
+                <span className="text-muted-foreground/50">@</span>
+                <EditableEntityCell
+                  value={buildRecordComboboxItem("location", entry.location)}
+                  label="location"
+                  SearchProvider={LocationSearchProvider}
+                  onSave={async (newLocationId) => {
+                    if (!newLocationId) return;
+                    await updateInventoryMutation.mutateAsync({
+                      id: entry.id,
+                      data: { locationId: newLocationId },
+                    });
+                  }}
+                  renderValue={(v) =>
+                    v ? (
+                      <Row as="span" align="center" gap="xs">
+                        {v.icon}
+                        <span className="truncate">{v.name}</span>
+                      </Row>
+                    ) : null
+                  }
+                />
+              </Row>
+            );
+          })
         )}
       </Stack>
     </Overlay>

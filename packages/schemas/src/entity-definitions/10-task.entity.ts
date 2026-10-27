@@ -1,5 +1,4 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { automaticFields } from "./automatic-fields";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { imageAssociationStorage } from "./image-associations";
 import { defineEntity } from "./definition.js";
@@ -18,7 +17,6 @@ import {
   tradeSchema,
   TRADE_SUGGEST_RULE,
 } from "@cubby/schemas/task-fields";
-import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { imageOut } from "./field-primitives.js";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { FILTER_NONE } from "../filter-sentinel-fields.js";
@@ -257,22 +255,11 @@ export default defineEntity({
     },
   },
   model: {
-    stored: { automaticFields: automaticFields("task", "Task") },
     hierarchy: {
       parentField: "parentTaskId",
       maxDepth: MAX_PROJECT_TREE_DEPTH,
     },
     fields: [
-      {
-        display: { detail: false, list: false },
-        key: "fieldResolutions",
-        kind: "json",
-        validation: {
-          read: optionalFieldResolutionsSchema,
-          create: null,
-          update: null,
-        },
-      },
       {
         key: "name",
         kind: "text",
@@ -327,21 +314,21 @@ export default defineEntity({
           description:
             "An explicit assignee or None wins; otherwise follow the parent task, then the effective project default.",
           projections: {
-            list: "fieldResolutions.assigneeId.value",
-            detail: "fieldResolutions.assigneeId.value",
-            summary: "fieldResolutions.assigneeId.value",
+            list: "assigneeId",
+            detail: "assigneeId",
+            summary: "assigneeId",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.assigneeId.sourceEntity",
+              path: "fields.assigneeId.result.decision.provenance.source",
               label: "Source",
             },
             {
-              path: "fieldResolutions.assigneeId.storedValue",
+              path: "fields.assigneeId.current.assignment.value",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.assigneeId.fallbackValue",
+              path: "fields.assigneeId.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -412,21 +399,21 @@ export default defineEntity({
           description:
             "An explicit project choice wins; otherwise the task follows its parent.",
           projections: {
-            list: "fieldResolutions.projectId.value",
-            detail: "fieldResolutions.projectId.value",
-            summary: "fieldResolutions.projectId.value",
+            list: "projectId",
+            detail: "projectId",
+            summary: "projectId",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.projectId.sourceEntity",
+              path: "fields.projectId.result.decision.provenance.source",
               label: "Source",
             },
             {
-              path: "fieldResolutions.projectId.storedValue",
+              path: "fields.projectId.current.assignment.value",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.projectId.fallbackValue",
+              path: "fields.projectId.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -494,21 +481,21 @@ export default defineEntity({
           description:
             "An explicit product choice wins; otherwise the task follows its parent.",
           projections: {
-            list: "fieldResolutions.subjectProductId.value",
-            detail: "fieldResolutions.subjectProductId.value",
-            summary: "fieldResolutions.subjectProductId.value",
+            list: "subjectProductId",
+            detail: "subjectProductId",
+            summary: "subjectProductId",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.subjectProductId.sourceEntity",
+              path: "fields.subjectProductId.result.decision.provenance.source",
               label: "Source",
             },
             {
-              path: "fieldResolutions.subjectProductId.storedValue",
+              path: "fields.subjectProductId.current.assignment.value",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.subjectProductId.fallbackValue",
+              path: "fields.subjectProductId.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -611,18 +598,21 @@ export default defineEntity({
           description:
             "A task trade override wins; otherwise the nearest ancestor task on the same effective project, then that project's default trade, supplies it.",
           projections: {
-            list: "fieldResolutions.trade.value",
-            detail: "fieldResolutions.trade.value",
-            summary: "fieldResolutions.trade.value",
+            list: "trade",
+            detail: "trade",
+            summary: "trade",
           },
           sourceDependencies: [
-            { path: "fieldResolutions.trade.sourceEntity", label: "Source" },
             {
-              path: "fieldResolutions.trade.storedValue",
+              path: "fields.trade.result.decision.provenance.source",
+              label: "Source",
+            },
+            {
+              path: "fields.trade.current.assignment.value",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.trade.fallbackValue",
+              path: "fields.trade.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -970,7 +960,6 @@ export default defineEntity({
       required: { schedule: ["due"] },
     },
     output: [
-      "fieldResolutions",
       "assigneeId",
       "assigneeName",
       "id",

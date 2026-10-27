@@ -1,5 +1,6 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useDraggable } from "@dnd-kit/core";
 import { CrosshairIcon } from "@phosphor-icons/react/dist/csr/Crosshair";
@@ -28,9 +29,9 @@ import { useArrangeDropTarget } from "./use-arrange-drop-target";
 const SPRING_LOAD_MS = 700;
 
 interface ArrangeLocationRowProps {
-  node: InfLocation;
+  node: LocationTreeNode;
   /** Full forest — needed for `parentIdOf`/`isValidLocationDrop` (cycle checks). */
-  roots: InfLocation[];
+  roots: LocationTreeNode[];
   /** Visual indentation depth, forwarded to `LocationTreeRow`. */
   depth: number;
   onDrill: (id: LocationShortcode) => void;
@@ -103,7 +104,9 @@ export function ArrangeLocationRow({
   const cover =
     useEntityDisplayImage(
       { entityKind: "location", entityId: node.id },
-      node.displayImages ? (node.displayImages[0] ?? null) : undefined,
+      node.fields.displayImages.result.kind === "missing"
+        ? undefined
+        : (fieldValueOf(node.fields.displayImages)?.[0] ?? null),
     ) ?? resolveLocationPrimaryVisual(node).image;
 
   return (
@@ -132,7 +135,11 @@ export function ArrangeLocationRow({
           // -my cancels the row's own py so the cover is full-bleed.
           className="-my-1"
           fallback={
-            <LocationIcon type={node.type} product={node.product} size={14} />
+            <LocationIcon
+              type={fieldValueOf(node.fields.type)}
+              product={fieldValueOf(node.fields.product)}
+              size={14}
+            />
           }
           to="/locations/$shortcode"
           shortcode={node.id}

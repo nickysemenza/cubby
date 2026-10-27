@@ -1,16 +1,11 @@
-import { ingredientWithFoodOut } from "@cubby/schemas/ingredient";
-import { mealOut, mealRecipeOut } from "@cubby/schemas/meal";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { mealRecipeOut } from "@cubby/schemas/meal";
 import {
   buildNutrition,
   type NutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
-import {
-  productTopLevelOut,
-  productWithFoodOut,
-  productWithMappingsAndFoodOut,
-} from "@cubby/schemas/product";
-import { recipeTopLevel } from "@cubby/schemas/recipe-shared";
+import { productTopLevelOut, productWithFoodOut } from "@cubby/schemas/product";
 import { foodSummary } from "@cubby/usda";
 import {
   Client,
@@ -413,8 +408,6 @@ describe("MCP protocol smoke", () => {
       entity: "product",
       item: {
         ...product,
-        displayImages: [],
-        derived: {},
         attachments: [],
         redirectedFrom: null,
         previousShortcodes: [],
@@ -458,8 +451,6 @@ describe("MCP protocol smoke", () => {
       entity: "product",
       item: {
         ...product,
-        displayImages: [],
-        derived: {},
         attachments: [],
         redirectedFrom: null,
         previousShortcodes: [],
@@ -512,7 +503,7 @@ describe("MCP protocol smoke", () => {
     const mealRecipe = mock(mealRecipeOut, {
       overrides: { scaledTotals: totals },
     });
-    const meal = mock(mealOut, {
+    const meal = mock(entityFieldEnvelopeSchemas.meal.mcpList, {
       overrides: { recipes: [mealRecipe], totals },
     });
     const runEntity: ExecuteEntity = async () => ({
@@ -553,28 +544,44 @@ describe("MCP protocol smoke", () => {
     expect(food.nutritionInfo.nutrientSummary).toBeDefined();
     // `externalIds: []` — the generator can't satisfy the source-slug refine.
     const product = mock(productWithFoodOut, {
-      overrides: { food, externalIds: [] },
-    });
-    const embedded = mock(productWithMappingsAndFoodOut, {
-      overrides: { food, externalIds: [] },
-    });
-    const recipe = mock(recipeTopLevel, {
-      overrides: { notes: "a headnote that repeats once per usage row" },
-    });
-    const ingredient = mock(ingredientWithFoodOut, {
       overrides: {
-        recipe,
-        appearsInRecipes: [recipe],
-        recipeUsages: [
-          {
-            ...mock(ingredientWithFoodOut, {
-              overrides: { product: [], appearsInRecipes: [] },
-            }).recipeUsages[0]!,
-            recipe,
+        fields: {
+          food: {
+            result: {
+              kind: "live",
+              decision: {
+                outcome: { kind: "value", value: food },
+                provenance: { kind: "computed" },
+              },
+            },
           },
-        ],
-        product: [embedded],
+        },
+        externalIds: [],
       },
+    });
+    const ingredientSchema = entityFieldEnvelopeSchemas.ingredient.mcpDetail;
+    const embedded = mock(ingredientSchema.shape.product.element, {
+      overrides: {
+        fields: {
+          food: {
+            result: {
+              kind: "live",
+              decision: {
+                outcome: { kind: "value", value: food },
+                provenance: { kind: "computed" },
+              },
+            },
+          },
+        },
+        externalIds: [],
+      },
+    });
+    const recipe = {
+      ...mock(ingredientSchema.shape.recipe.unwrap()),
+      notes: "a headnote that repeats once per usage row",
+    };
+    const ingredient = mock(ingredientSchema, {
+      overrides: { recipe, appearsInRecipes: [recipe], product: [embedded] },
     });
     const runEntity: ExecuteEntity = async (_context, command) =>
       command.entity === "product"
@@ -583,8 +590,6 @@ describe("MCP protocol smoke", () => {
             entity: "product",
             item: {
               ...product,
-              displayImages: [],
-              derived: {},
               attachments: [],
               redirectedFrom: null,
               previousShortcodes: [],
@@ -596,8 +601,6 @@ describe("MCP protocol smoke", () => {
             entity: "ingredient",
             item: {
               ...ingredient,
-              displayImages: [],
-              derived: {},
               attachments: [],
               redirectedFrom: null,
               previousShortcodes: [],

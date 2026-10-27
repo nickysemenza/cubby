@@ -1,10 +1,10 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import {
   type RecipeFlowArtifact,
   type RecipeFlowState,
   recipeFlowArtifactSchema,
 } from "@cubby/schemas/recipe-flow";
+import type { RawRecipeOutput as RecipeOut } from "@cubby/schemas/recipe-raw-read";
 import { sha256Hex } from "@cubby/shared/sha256";
 
 import { RECIPE_FLOW_IDENTITY } from "~/server/ai/policy/feature-identity";

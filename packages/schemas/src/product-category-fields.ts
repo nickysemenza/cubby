@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { ProductCategory } from "@cubby/shared";
 
 import { productCategoryShortcode } from "./identifier-fields";
 
@@ -38,10 +37,14 @@ export const SERVICE_PRODUCT_FEATURES: readonly ProductCategoryFeature[] = [
 ];
 
 export const isServiceProductCategory = (
-  category: Pick<ProductCategory, "feature"> | null | undefined,
+  category: { feature: ProductCategoryFeature | null } | null | undefined,
 ): boolean =>
   category?.feature != null &&
   SERVICE_PRODUCT_FEATURES.some((feature) => feature === category.feature);
+
+export const isServiceProductFeature = (
+  feature: ProductCategoryFeature | null | undefined,
+): boolean => feature != null && SERVICE_PRODUCT_FEATURES.includes(feature);
 
 export const productCategoryPathNode = z.object({
   id: productCategoryShortcode,
@@ -50,11 +53,18 @@ export const productCategoryPathNode = z.object({
 export type ProductCategoryPathNode = z.infer<typeof productCategoryPathNode>;
 
 /** The compact tree projection embedded in Product reads. */
-export const productCategorySummary = z.object({
+export const rawProductCategorySummary = z.object({
   id: productCategoryShortcode,
   name: z.string().min(1),
   path: z.array(productCategoryPathNode).min(1).max(3),
   feature: productCategoryFeature.nullable(),
+});
+export type RawProductCategorySummary = z.infer<
+  typeof rawProductCategorySummary
+>;
+/** Public category references carry identity/path; Product fields own current behavior. */
+export const productCategorySummary = rawProductCategorySummary.omit({
+  feature: true,
 });
 export type ProductCategorySummary = z.infer<typeof productCategorySummary>;
 

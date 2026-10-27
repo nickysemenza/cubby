@@ -1,6 +1,6 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { InventoryItemForTree } from "@cubby/schemas/location";
+import type { InventoryItemForTree } from "@cubby/schemas/location-fields";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";

@@ -475,7 +475,7 @@ type KernelEntity = keyof typeof generatedEntityKernelContractCases &
  */
 type Written<E extends KernelEntity> =
   | EntityRepositoryWriteResult<E, SchemasFor<E>>
-  | ZodOutput<SchemasFor<E>["output"]>;
+  | ZodOutput<SchemasFor<E>["repositoryOutput"]>;
 
 /** What an entity-specific delete reports; ids default to the requested. */
 type DeleteOutcome = {

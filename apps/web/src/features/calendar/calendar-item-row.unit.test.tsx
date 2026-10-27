@@ -11,6 +11,11 @@ import {
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { CalendarItemPresentation } from "./calendar-item-row";
+import {
+  mealCalendarSourceFixture,
+  taskCalendarSourceFixture,
+  expenseCalendarSourceFixture,
+} from "./calendar-source.fixtures";
 
 const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
   kind: "meal",
@@ -21,9 +26,13 @@ const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
   endDateExclusive: "2026-08-19",
   interaction: "move",
   sortOrder: null,
-  mealType: "dinner",
-  mealKind: "eating_out",
-  recipeNames: [],
+  source: mealCalendarSourceFixture({
+    id: testShortcode("meal", "MEL-1111"),
+    date: "2026-08-18",
+    name: "Dinner with Andy and a deliberately long title",
+    mealType: "dinner",
+    mealKind: "eating_out",
+  }),
   displayImages: [],
   mealTotals: withMacros({
     cost: { status: "unavailable", reason: "empty" },
@@ -56,8 +65,11 @@ const plannedExpense: Extract<CalendarItem, { kind: "expense" }> = {
   interaction: "move",
   cost: 79,
   future: true,
-  vendor: "Target",
-  trade: "other",
+  source: expenseCalendarSourceFixture(
+    testShortcode("expense", "EXP-1111"),
+    "other",
+    "Target",
+  ),
   projectName: "Kitchen",
   spendingContext: { projectNames: ["Kitchen"], parties: [] },
   productName: "Souper Cubes",
@@ -167,7 +179,10 @@ describe("CalendarItemPresentation", () => {
       interaction: "move",
       due: { start: "2026-08-18", end: null },
       status: "blocked",
-      trade: "appliances",
+      source: taskCalendarSourceFixture(
+        testShortcode("task", "TSK-1111"),
+        "appliances",
+      ),
       projectName: "Household",
       assignedProjectName: "Household",
       subjectProductName: "KitchenAid mixer",

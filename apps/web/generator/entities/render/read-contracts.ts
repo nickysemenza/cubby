@@ -10,26 +10,15 @@ export const renderEntityReadArtifacts = (
   const detailEntities = projections.detail;
   const detailSchemas = detailEntities
     .map(
-      ({ key, contract }) =>
-        `  ${JSON.stringify(key)}: withEntityDetailMedia(${contract.detail.export}),`,
+      ({ key }) =>
+        `  ${JSON.stringify(key)}: entityFieldEnvelopeSchemas[${JSON.stringify(key)}].detail,`,
     )
     .join("\n");
-  const detailTypeImports = new Map<string, Set<string>>();
-  for (const { contract } of detailEntities) {
-    const exports =
-      detailTypeImports.get(contract.detail.module) ?? new Set<string>();
-    exports.add(contract.detail.export);
-    detailTypeImports.set(contract.detail.module, exports);
-  }
   const detailRuntimeImportSource = [
-    ...[...detailTypeImports.entries()].map(([module, exports]) => ({
-      module,
-      source: `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
-    })),
     {
-      module: "@cubby/schemas/entity-read-media",
+      module: "@cubby/schemas/entity-field-envelopes",
       source:
-        'import { withEntityDetailMedia } from "@cubby/schemas/entity-read-media";',
+        'import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";',
     },
     {
       module: "@cubby/schemas/identifiers",
@@ -51,12 +40,6 @@ export const renderEntityReadArtifacts = (
   const listEntityKeys = listEntitySpecs.map(({ key }) => key);
   const crudEntitySpecs = projections.crud;
   const browserCrudEntities = crudEntitySpecs.map(({ key }) => key);
-  const listRuntimeOutputImports = listEntitySpecs
-    .map(
-      ({ key, contract }) =>
-        `import { ${contract.list.export} as ${key}ListOutputSchema } from ${JSON.stringify(contract.list.module)};`,
-    )
-    .join("\n");
   const listFilterFieldImports = listEntitySpecs
     .flatMap(({ key, filterSchema }) =>
       filterSchema === null
@@ -95,7 +78,7 @@ export const renderEntityReadArtifacts = (
   const listItemSchemas = listEntitySpecs
     .map(
       ({ key, inspector }) =>
-        `export const ${key}ListItem = withEntityListMedia(${key}ListOutputSchema)${treeRowExtension(inspector)};`,
+        `export const ${key}ListItem = entityFieldEnvelopeSchemas[${JSON.stringify(key)}].list${treeRowExtension(inspector)};`,
     )
     .join("\n");
   const listReadSchemas = listEntitySpecs
@@ -141,7 +124,7 @@ export const renderEntityReadArtifacts = (
         `export const detailEntities = ${compactLiteral(detailEntities.map(({ key }) => key))} as const;\n` +
         "export type DetailEntity = (typeof detailEntities)[number];\n\n" +
         "// One generated detail schema per entity.\n// oxfmt-ignore\n" +
-        `const ENTITY_DETAIL_OUTPUT_SCHEMAS = {\n${detailSchemas}\n} as const;\n\n` +
+        `const ENTITY_DETAIL_OUTPUT_SCHEMAS: { [E in DetailEntity]: (typeof entityFieldEnvelopeSchemas)[E]["detail"] } = {\n${detailSchemas}\n};\n\n` +
         "// One generated detail input variant per entity.\n// oxfmt-ignore\n" +
         `export const entityDetailInputSchema = z.discriminatedUnion("entity", [\n  ${detailInputVariants}\n]);\n\n` +
         "type EntityDetailInput = z.input<typeof entityDetailInputSchema>;\n" +
@@ -169,8 +152,8 @@ export const renderEntityReadArtifacts = (
       source:
         generatedHeader +
         "// Generated schema aliases retain deterministic import order.\n" +
-        `${listRuntimeOutputImports}\n${listFilterFieldImports}\n` +
-        'import { withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
+        `${listFilterFieldImports}\n` +
+        'import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";\n' +
         'import { compileListReadSchema } from "../model/list-read-fields";\n' +
         'import { listChildCountSchema, listNestingSchema, listGroupByDimensionsSchema, type ListGroupBy, MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { FilterPatch } from "../filters";\n' +

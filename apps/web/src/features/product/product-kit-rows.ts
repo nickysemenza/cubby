@@ -1,4 +1,5 @@
-import type { ProductListItem } from "@cubby/schemas/product";
+import type { EntityFieldEnvelopeRead } from "@cubby/schemas/entity-field-envelopes";
+type ProductListItem = EntityFieldEnvelopeRead<"product", "list">;
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 
 /**

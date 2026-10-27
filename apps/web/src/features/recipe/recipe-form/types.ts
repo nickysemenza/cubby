@@ -1,7 +1,6 @@
 import type { ImageOut } from "@cubby/schemas/image";
 import type {
   RecipeCreateInput,
-  RecipeOut,
   RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
 import {
@@ -12,6 +11,7 @@ import {
 } from "@cubby/schemas/recipe-shared";
 import { z } from "zod";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import type { PendingImage } from "~/entity/entity-media/pending-image-upload";
 import { ComboboxItem } from "~/ui/combobox/combobox-types";
 
@@ -178,3 +178,5 @@ interface EditRecipeFormProps {
 export type RecipeFormProps = CreateRecipeFormProps | EditRecipeFormProps;
 
 // Import types from schema
+
+type RecipeOut = DetailRecordOf<"recipe">;

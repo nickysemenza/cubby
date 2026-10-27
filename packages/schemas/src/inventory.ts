@@ -1,8 +1,14 @@
-import inventoryDefinition from "./entity-definitions/05-inventory.entity";
+import { inventoryFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.inventory.gen";
 import {
-  productInventoryEmbedOut,
-  inventoryDetailProductOut,
-} from "./inventory-fields";
+  inventoryFieldEnvelopeFields,
+  inventoryPublicReadFields,
+} from "./generated/entity-field-envelope-fields.inventory.gen";
+import {
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+} from "./generated/entity-field-envelope-fields.product.gen";
+import { withFieldEnvelopes } from "./field-envelope";
+import { rawReceivingInventoryStock } from "./inventory-raw-read";
 import { tradeSchema } from "./task-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { z } from "zod";
@@ -12,20 +18,13 @@ import { auditDateFilterFields, plainDate } from "./base-entity";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { positiveAmount } from "./codec";
 import { productMatchSide, productMatchSource } from "./recommendations";
-import { externalIdOut } from "./external-id";
 import {
   expenseShortcode,
   inventoryShortcode,
   locationShortcode,
   productShortcode,
 } from "./identifiers";
-import { locationOut } from "./location";
 import { duplicateUniqueProductSchema } from "./problems";
-import {
-  createItemsResponseSchema,
-  createPaginatedResponseSchema,
-} from "./pagination";
-import { unitMappingOut } from "./unitmapping";
 import { inventoryPlacement as cycleSafeInventoryPlacement } from "./inventory-fields";
 import {
   generatedInventoryItemFieldSchemas,
@@ -79,10 +78,7 @@ export const inventoryFiltersSchema = z.object(inventoryFilterFields);
 // the house rule.
 export type InventorySortField = GeneratedEntitySortField<"inventory">;
 
-export const inventoryEntryFields =
-  inventoryDefinition.readSchemas.output.shape;
-
-export const inventoryEntryOut = inventoryDefinition.readSchemas.output;
+export const inventoryEntryOut = inventoryFieldEnvelopeSchemas.output;
 
 /**
  * `"<product name> · <location name>"`, or just the product name when the
@@ -99,47 +95,25 @@ export const inventoryDisplayName = ({
   locationName?: string | null;
 }): string => (locationName ? `${productName} · ${locationName}` : productName);
 
-export {
-  productInventoryEmbedOut,
-  type ProductInventoryEmbedOut,
-} from "./inventory-fields";
-export const inventoryWithProductOut = z.object({
-  ...inventoryEntryFields,
-  product: productInventoryEmbedOut,
-});
-
-export const inventoryWithLocationOut = z.object({
-  ...inventoryEntryFields,
-  location: locationOut,
-});
-
-export {
-  inventoryListProductOut,
-  inventoryListLocationOut,
-  type InventoryListProductOut,
-  type InventoryListLocationOut,
-  inventoryDetailProductOut,
-} from "./inventory-fields";
-export const inventoryListItemOut = inventoryDefinition.readSchemas.list;
-const inventoryListItemFields = inventoryListItemOut.shape;
-export type InventoryListItemOut = z.infer<typeof inventoryListItemOut>;
-
+export const inventoryListItemOut = inventoryFieldEnvelopeSchemas.list;
+export type InventoryListItemOut = z.output<typeof inventoryListItemOut>;
+export const inventoryListProductOut = inventoryListItemOut.shape.product;
+export type InventoryListProductOut = z.output<typeof inventoryListProductOut>;
+export const inventoryListLocationOut = inventoryListItemOut.shape.location;
+export type InventoryListLocationOut = z.output<
+  typeof inventoryListLocationOut
+>;
 export const inventoryWithLocationAndProductOut =
-  inventoryDefinition.readSchemas.detail;
+  inventoryFieldEnvelopeSchemas.detail;
+export const inventoryDetailProductOut =
+  inventoryWithLocationAndProductOut.shape.product;
 const inventoryWithLocationAndProductFields =
   inventoryWithLocationAndProductOut.shape;
-export type InventoryWithLocationAndProductOut = z.infer<
+export type InventoryWithLocationAndProductOut = z.output<
   typeof inventoryWithLocationAndProductOut
 >;
-
-/** Generic MCP entity detail with storage-only product child ids removed. */
 export const inventoryWithLocationAndProductMcpEntityOut =
-  inventoryWithLocationAndProductOut.extend({
-    product: inventoryDetailProductOut.extend({
-      externalIds: z.array(externalIdOut.omit({ id: true })),
-      unitMappings: z.array(unitMappingOut.omit({ id: true })),
-    }),
-  });
+  inventoryFieldEnvelopeSchemas.mcpDetail;
 
 export const inventoryWithLocationAndProductAndSideEffectsOut = z.object({
   ...inventoryWithLocationAndProductFields,
@@ -155,8 +129,13 @@ export const inventoryWithLocationAndProductListAndSideEffectsOut = z.object({
   sideEffects: mutationSideEffectsSchema,
 });
 
-export const inventoryDuplicateUniqueProductsOut = z.array(
+export const inventoryDuplicateUniqueProductOut = withFieldEnvelopes(
   duplicateUniqueProductSchema,
+  { brandName: productFieldEnvelopeFields.brandName },
+  productPublicReadFields,
+);
+export const inventoryDuplicateUniqueProductsOut = z.array(
+  inventoryDuplicateUniqueProductOut,
 );
 
 export const inventoryCountsByLocationOut = z.record(
@@ -290,6 +269,11 @@ export const inventoryReceivingPlan = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("create") }),
 ]);
+export const inventoryReceivingStockOut = withFieldEnvelopes(
+  rawReceivingInventoryStock,
+  inventoryFieldEnvelopeFields,
+  inventoryPublicReadFields,
+);
 export const inventoryReceivingContextOut = z.object({
   productId: productShortcode,
   /**
@@ -307,14 +291,7 @@ export const inventoryReceivingContextOut = z.object({
   locationPlans: z.array(
     z.object({ locationId: locationShortcode, plan: inventoryReceivingPlan }),
   ),
-  stock: z.array(
-    z.object({
-      id: inventoryShortcode,
-      locationId: locationShortcode,
-      locationName: z.string(),
-      amount: z.object({ value: z.number(), unit: z.string() }),
-    }),
-  ),
+  stock: z.array(inventoryReceivingStockOut),
   matches: z.array(
     z.object({
       source: productMatchSource,
@@ -488,8 +465,7 @@ export const reconcileSessionPayload = z.object({
 
 export const inventoryLocationSnapshotInput = z.object({
   locationId: locationShortcode,
-  placement:
-    inventoryDefinition.readSchemas.output.shape.placement.default("stock"),
+  placement: inventoryPlacement.default("stock"),
 });
 
 export const inventoryLocationSnapshotOut = z.object({
@@ -502,27 +478,3 @@ export type ReconcileSessionPayload = z.infer<typeof reconcileSessionPayload>;
 export const inventoryFindDuplicatesInput = z.object({
   excludeLocationId: locationShortcode.optional(),
 });
-
-/**
- * Slim MCP projection of an inventory list/detail row: built from the same
- * field map as `inventoryListItemOut` minus the audit columns, so it cannot
- * drift from the plain shape. `product` and `location` are REQUIRED here as
- * they are there — a live entry always resolves both through its FK join.
- * `placement` is kept because an agent that can SET it but never see it
- * cannot tell a fixture from stock when deciding what to recount, move, or
- * discard.
- */
-export const inventoryMcpOut = z.object({
-  id: inventoryListItemFields.id,
-  amount: inventoryListItemFields.amount,
-  valuation: inventoryListItemFields.valuation,
-  placement: inventoryListItemFields.placement,
-  product: inventoryListItemFields.product,
-  location: inventoryListItemFields.location,
-});
-export type InventoryMcpOut = z.infer<typeof inventoryMcpOut>;
-
-export const inventoryMcpListOut =
-  createPaginatedResponseSchema(inventoryMcpOut);
-export const inventoryMcpBulkMoveOut =
-  createItemsResponseSchema(inventoryMcpOut);

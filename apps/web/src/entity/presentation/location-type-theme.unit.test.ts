@@ -1,5 +1,8 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import {
   getLocationGlyph,
@@ -31,11 +34,29 @@ describe("product-backed locations (null type)", () => {
   it("resolves the glyph from the product's category", () => {
     const storage = getLocationGlyph({
       type: null,
-      product: { category: categorySummaryFixture("storage") },
+      product: {
+        category: categorySummaryFixture("storage"),
+        fields: {
+          categoryFeature: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.output.shape.fields.shape
+              .categoryFeature,
+            "storage",
+          ),
+        },
+      },
     });
     const tools = getLocationGlyph({
       type: null,
-      product: { category: categorySummaryFixture("tools") },
+      product: {
+        category: categorySummaryFixture("tools"),
+        fields: {
+          categoryFeature: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.output.shape.fields.shape
+              .categoryFeature,
+            "tools",
+          ),
+        },
+      },
     });
     expect(storage).not.toBe(tools);
   });
@@ -53,7 +74,16 @@ describe("product-backed locations (null type)", () => {
     expect(
       getLocationGlyph({
         type: "room",
-        product: { category: categorySummaryFixture("storage") },
+        product: {
+          category: categorySummaryFixture("storage"),
+          fields: {
+            categoryFeature: fieldValueFixture(
+              entityFieldEnvelopeSchemas.product.output.shape.fields.shape
+                .categoryFeature,
+              "storage",
+            ),
+          },
+        },
       }),
     ).toBe(getLocationIcon("room"));
   });

@@ -74,7 +74,7 @@ export const renderEntityMetadataArtifacts = (
           ? null
           : Object.fromEntries(
               Object.entries(entity.contract).flatMap(([operation, ref]) =>
-                ref === null
+                ref === null || !("module" in ref)
                   ? []
                   : [[operation, `${ref.module}#${ref.export}`]],
               ),
@@ -163,6 +163,7 @@ export const renderEntityMetadataArtifacts = (
           ),
           fields: fieldModel.fields.map(({ validation, ...field }) => ({
             ...field,
+            storedKey: field.storedKey ?? null,
             // `resolution.inherit` is emitted compiled, as list fields' `inherit`.
             resolution: withoutInherit(field.resolution),
             // A field is required on create when it declares a create schema

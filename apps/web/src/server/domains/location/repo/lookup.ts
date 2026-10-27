@@ -8,11 +8,13 @@ import {
  * Find locations by various identifiers (name, shortcode).
  */
 import type {
-  InfLocation,
   LocationAncestorOut,
-  LocationOut,
   LocationType,
 } from "@cubby/schemas/location";
+import type {
+  RawLocationDetail,
+  RawLocationOutput,
+} from "@cubby/schemas/location-raw-read";
 import { parseShortcode, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
@@ -38,7 +40,7 @@ import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-
 import { getLocationById } from "./crud";
 import { dbLocationToAPI } from "./helpers";
 import { loadLocationAncestors } from "./tree";
-import { computeLocationValuations } from "./valuation";
+import { loadStoredLocationValuations } from "./valuation";
 
 /**
  * Get full location details by shortcode. Returns null if the code doesn't
@@ -47,7 +49,7 @@ import { computeLocationValuations } from "./valuation";
 export const getLocationByShortcode = async (
   db: Database,
   shortcode: string,
-): Promise<InfLocation | null> => {
+): Promise<RawLocationDetail | null> => {
   const id = await resolveLiveShortcode(db, shortcode, "location");
   return id ? getLocationById(db, parseEntityId("location", id)) : null;
 };
@@ -59,7 +61,7 @@ export const getLocationByShortcode = async (
 export const getLocationsByShortcodes = async (
   db: Database,
   shortcodes: string[],
-): Promise<(LocationOut & { parentName: string | null })[]> => {
+): Promise<(RawLocationOutput & { parentName: string | null })[]> => {
   if (shortcodes.length === 0) return [];
   const uppercased = shortcodes.map((s) => s.toUpperCase());
   const results = await getDb(db).query.location.findMany({
@@ -71,7 +73,10 @@ export const getLocationsByShortcodes = async (
     },
   });
   const [valuations, dataQualities] = await Promise.all([
-    computeLocationValuations(db),
+    loadStoredLocationValuations(
+      db,
+      results.map((row) => row.id),
+    ),
     loadDataQualities(
       db,
       "location",

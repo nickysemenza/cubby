@@ -158,8 +158,9 @@ export function collectNativeContract(
   };
 
   projectContractSchemas(contracts, allowedOperations);
-  registerNamedSchemas(named, registries);
+  // Record-only children need wire projections before their exported names are registered.
   registerRecordSchemas(records, registries.output);
+  registerNamedSchemas(named, registries);
 
   const operations: NativeOperation[] = [];
   for (const { contract } of contracts) {

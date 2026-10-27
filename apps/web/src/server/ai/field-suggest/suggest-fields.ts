@@ -25,10 +25,14 @@ import type {
  * doesn't carry a `suggestions` proposal — see `FieldSuggestionOutcome`.
  */
 import { entityRefKey } from "@cubby/schemas/entity";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
-  fieldResolutionsSchema,
+  fieldEnvelope,
+  type ReadableFieldEnvelope,
+} from "@cubby/schemas/field-envelope";
+import {
   type FieldResolution,
   type FieldResolutions,
 } from "@cubby/schemas/field-resolution";
@@ -85,6 +89,8 @@ import {
   supportsFieldCorrection,
 } from "~/server/generic/assessment/repo/field-correction-resolver";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
+import { buildFieldEnvelopeRow } from "~/server/generic/derived/repo/envelope";
+import { currentReadFacts } from "~/server/generic/derived/repo/read-context";
 import {
   lookupEntityLabels,
   resolveShortcodes,
@@ -164,20 +170,25 @@ async function resolveSuggestionInheritance(
 ): Promise<FieldResolutions> {
   const draft = { ...input.basis };
   const context = fieldResolutionContext(input.basis.__resolutionContext);
-  for (const [field, resolution] of Object.entries(context)) {
-    const stored = scalarBasisValue(resolution.storedValue);
+  const edited = draftFieldNames(input.basis.__draftFields);
+  for (const [field, envelope] of Object.entries(context)) {
+    if (edited.has(field)) continue;
+    const assignment = envelope.current.assignment;
+    const stored = scalarBasisValue(
+      assignment?.kind === "value" ? assignment.value : null,
+    );
     draft[field] = stored;
     if (input.entity === "task" && field === "assigneeId") {
       draft.assigneeMode =
-        resolution.mode === "inherit" ? "inherit" : "explicit";
+        assignment?.kind === "inherit" ? "inherit" : "explicit";
     }
     if (input.entity === "task" && field === "projectId") {
       draft.projectMode =
-        resolution.mode === "inherit" ? "inherit" : "explicit";
+        assignment?.kind === "inherit" ? "inherit" : "explicit";
     }
     if (input.entity === "task" && field === "subjectProductId") {
       draft.subjectProductMode =
-        resolution.mode === "inherit" ? "inherit" : "explicit";
+        assignment?.kind === "inherit" ? "inherit" : "explicit";
     }
   }
   if (input.entity === "expense") {
@@ -207,11 +218,14 @@ async function resolveSuggestionInheritance(
 
 function fieldResolutionContext(
   raw: string | null | undefined,
-): FieldResolutions {
+): Record<string, ReadableFieldEnvelope> {
   if (!raw) return {};
   try {
     const parsed: unknown = JSON.parse(raw);
-    return fieldResolutionsSchema.catch({}).parse(parsed);
+    return z
+      .record(z.string(), fieldEnvelope(z.unknown(), z.unknown()))
+      .catch({})
+      .parse(parsed);
   } catch {
     return {};
   }
@@ -220,6 +234,68 @@ function fieldResolutionContext(
 function scalarBasisValue(value: FieldResolution["value"]): string | null {
   const scalar = z.string().safeParse(value);
   return scalar.success ? normalizeBasisValue(scalar.data) : null;
+}
+
+function draftFieldNames(raw: string | null | undefined): ReadonlySet<string> {
+  if (!raw) return new Set();
+  try {
+    return new Set(z.array(z.string()).parse(JSON.parse(raw)));
+  } catch {
+    return new Set();
+  }
+}
+
+/** Draft resolution uses the same concrete field contracts as saved reads. */
+function suggestionFieldEnvelopes(
+  input: FieldSuggestionsInput,
+  resolutions: FieldResolutions,
+): NonNullable<FieldSuggestionsOut["fields"]> {
+  const projection: z.ZodType = entityFieldEnvelopeSchemas[input.entity].detail;
+  if (!(projection instanceof z.ZodObject))
+    throw new Error(`No draft field projection for ${input.entity}`);
+  const governed = projection.shape.fields;
+  if (!(governed instanceof z.ZodObject))
+    throw new Error(`No governed fields for ${input.entity}`);
+  const fieldSchemas: Record<string, z.ZodType> = {};
+  const row = currentReadFacts.parse({
+    ...input.basis,
+    id: input.entityId ?? "draft",
+  });
+  const results: Record<string, { kind: "missing" }> = {};
+  for (const [key, resolution] of Object.entries(resolutions)) {
+    const schema = governed.shape[key];
+    if (!(schema instanceof z.ZodType))
+      throw new Error(`No declared field envelope for ${input.entity}.${key}`);
+    fieldSchemas[key] = schema;
+    row[key] = resolution.value;
+    // Draft allocation resolvers may identify the rule without evaluating shares.
+    if (
+      resolution.mode === "allocated" &&
+      resolution.value === null &&
+      !resolution.emptyReason
+    )
+      results[key] = { kind: "missing" };
+  }
+  const context = fieldResolutionContext(input.basis.__resolutionContext);
+  const edited = draftFieldNames(input.basis.__draftFields);
+  const currentAssignments = Object.fromEntries(
+    Object.entries(context).flatMap(([key, envelope]) =>
+      !edited.has(key) && envelope.current.assignment
+        ? [[key, envelope.current.assignment]]
+        : [],
+    ),
+  );
+  const output = buildFieldEnvelopeRow({
+    schema: z.object({ id: z.string(), fields: z.object(fieldSchemas) }),
+    entity: input.entity,
+    row,
+    resolutions,
+    currentAssignments,
+    results,
+  });
+  return z
+    .record(z.string(), fieldEnvelope(z.json(), z.json()))
+    .parse(output.fields);
 }
 
 function normalizeBasisValue(
@@ -1261,5 +1337,10 @@ export async function suggestFields(
   };
   await Promise.all([...requestedTargets].map(resolveTarget));
 
-  return { suggestions, outcomes, fieldResolutions, eligibleTargets };
+  return {
+    suggestions,
+    outcomes,
+    fields: suggestionFieldEnvelopes(input, fieldResolutions),
+    eligibleTargets,
+  };
 }

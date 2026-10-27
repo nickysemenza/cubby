@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   type IngredientShortcode,
   type LedgerPartyShortcode,
@@ -422,9 +423,26 @@ function useFoodAmount(draft: ReturnType<typeof useFoodDraft>) {
   const source = useMemo(
     () =>
       draft.kind === "product" && product.data
-        ? ({ kind: "product", product: product.data } as const)
+        ? ({
+            kind: "product",
+            product: {
+              ...product.data,
+              food: fieldValueOf(product.data.fields.food) ?? null,
+              price: fieldValueOf(product.data.fields.price) ?? null,
+            },
+          } as const)
         : draft.kind === "ingredient" && ingredient.data
-          ? ({ kind: "ingredient", ingredient: ingredient.data } as const)
+          ? ({
+              kind: "ingredient",
+              ingredient: {
+                ...ingredient.data,
+                product: ingredient.data.product.map((nested) => ({
+                  ...nested,
+                  food: fieldValueOf(nested.fields.food) ?? null,
+                  price: fieldValueOf(nested.fields.price) ?? null,
+                })),
+              },
+            } as const)
           : draft.kind === "manual"
             ? ({
                 kind: "manual",
@@ -443,12 +461,12 @@ function useFoodAmount(draft: ReturnType<typeof useFoodDraft>) {
     draft.amount && source ? calculateFoodAmount(draft.amount, source) : null;
   const suggestedUnits = useMemo(
     () =>
-      product.data
-        ? sourceUnits(getAllUnitMappingsFromProduct(product.data))
-        : ingredient.data
-          ? sourceUnits(getIngredientMappings(ingredient.data))
+      source?.kind === "product"
+        ? sourceUnits(getAllUnitMappingsFromProduct(source.product))
+        : source?.kind === "ingredient"
+          ? sourceUnits(getIngredientMappings(source.ingredient))
           : NO_SUGGESTED_UNITS,
-    [ingredient.data, product.data],
+    [source],
   );
 
   return { product, ingredient, estimate, suggestedUnits };

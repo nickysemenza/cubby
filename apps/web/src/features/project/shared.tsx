@@ -1,8 +1,5 @@
-import type {
-  ExpenseOut,
-  ProjectStatus,
-  TaskStatus,
-} from "@cubby/schemas/project";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { ProjectStatus, TaskStatus } from "@cubby/schemas/project";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Link } from "@tanstack/react-router";
 import { z } from "zod";
@@ -12,6 +9,7 @@ import {
   VendorOrderLink,
 } from "~/entity/components/entity-ref-link";
 import { VendorCell } from "~/entity/components/vendor-cell";
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
 import { multiSelectFilterFnBy, type FilterValue } from "~/entity/filters";
 import {
@@ -75,75 +73,90 @@ export function expenseVendorColumn(
   const cellData = entityCellData<ExpenseOut, VendorName>(
     "vendor",
     (value) => z.string().min(1).parse(value),
-    (row) => (row.vendor ? { id: row.vendor, name: row.vendor } : null),
+    (row) => {
+      const effectiveRowVendor = fieldValueOf(row.fields.vendor);
+      return effectiveRowVendor
+        ? { id: effectiveRowVendor, name: effectiveRowVendor }
+        : null;
+    },
     (row, value) => save(value, row),
     (row) => save(null, row),
   );
 
-  return helper.accessor((row) => row.vendor, {
-    id: opts?.id ?? "vendor",
-    header: opts?.asPurchase ? "Purchase" : "Vendor",
-    filterFn: vendorIdFilterFn,
-    meta: attachCubbyColumnMeta({
-      className: opts?.asPurchase ? "w-56" : "w-40",
-      mobile: opts?.mobile,
-      filterConfig: manifestFilterConfig(
-        "expense",
-        opts?.id ?? "vendor",
-        opts?.vendorOptions ? { vendor: opts.vendorOptions } : undefined,
-      ),
-      cellData,
-    }),
-    cell: (info) => {
-      const expense = info.row.original;
-      const vendor = info.getValue();
-      return (
-        <EditableEntityCell<VendorName>
-          value={vendor ? { id: vendor, name: vendor } : null}
-          label="vendor"
-          clearable
-          // Keep editing outside the link trigger.
-          trigger="pencil"
-          onSave={(newVendor) => save(newVendor, expense)}
-          clipboard={specFromCellData(cellData, expense)}
-          SearchProvider={WithVendorSearch}
-          renderValue={(v) => {
-            if (opts?.asPurchase) {
-              if (expense.purchaseId) {
-                const label = purchaseLabel({
-                  orderId: expense.orderId,
-                  displayLabel: expense.purchaseDisplayLabel,
-                  vendorName: v?.name ?? expense.vendor,
-                  date: expense.purchaseDate,
-                });
-                return (
-                  <EntityRefLink
-                    entity="purchase"
-                    id={expense.purchaseId}
-                    name={label}
-                  />
+  return helper.accessor(
+    (row) => {
+      const effectiveRowVendor = fieldValueOf(row.fields.vendor);
+      return effectiveRowVendor;
+    },
+    {
+      id: opts?.id ?? "vendor",
+      header: opts?.asPurchase ? "Purchase" : "Vendor",
+      filterFn: vendorIdFilterFn,
+      meta: attachCubbyColumnMeta({
+        className: opts?.asPurchase ? "w-56" : "w-40",
+        mobile: opts?.mobile,
+        filterConfig: manifestFilterConfig(
+          "expense",
+          opts?.id ?? "vendor",
+          opts?.vendorOptions ? { vendor: opts.vendorOptions } : undefined,
+        ),
+        cellData,
+      }),
+      cell: (info) => {
+        const expense = info.row.original;
+        const vendor = info.getValue();
+        return (
+          <EditableEntityCell<VendorName>
+            value={vendor ? { id: vendor, name: vendor } : null}
+            label="vendor"
+            clearable
+            // Keep editing outside the link trigger.
+            trigger="pencil"
+            onSave={(newVendor) => save(newVendor, expense)}
+            clipboard={specFromCellData(cellData, expense)}
+            SearchProvider={WithVendorSearch}
+            renderValue={(v) => {
+              if (opts?.asPurchase) {
+                const purchaseId = fieldValueOf(expense.fields.purchaseId);
+                if (purchaseId) {
+                  const label = purchaseLabel({
+                    orderId: fieldValueOf(expense.fields.orderId),
+                    displayLabel: expense.purchaseDisplayLabel,
+                    vendorName: v?.name ?? fieldValueOf(expense.fields.vendor),
+                    date: expense.purchaseDate,
+                  });
+                  return (
+                    <EntityRefLink
+                      entity="purchase"
+                      id={purchaseId}
+                      name={label}
+                    />
+                  );
+                }
+                return v ? (
+                  <span className="truncate">{v.name}</span>
+                ) : (
+                  <span className="text-muted-foreground">(none)</span>
                 );
               }
               return v ? (
-                <span className="truncate">{v.name}</span>
+                <VendorCell
+                  vendor={v.name}
+                  vendorId={persistedVendorId(v.name, {
+                    vendor: fieldValueOf(expense.fields.vendor),
+                    vendorId: expense.vendorId,
+                  })}
+                  logo={expense.vendorLogo}
+                />
               ) : (
-                <span className="text-muted-foreground">(none)</span>
+                <NoneValue />
               );
-            }
-            return v ? (
-              <VendorCell
-                vendor={v.name}
-                vendorId={persistedVendorId(v.name, expense)}
-                logo={expense.vendorLogo}
-              />
-            ) : (
-              <NoneValue />
-            );
-          }}
-        />
-      );
+            }}
+          />
+        );
+      },
     },
-  });
+  );
 }
 
 /** Presence-filtered order id; its link scopes through the unique Purchase id. */
@@ -159,8 +172,10 @@ export function expenseOrderIdColumn(
     mobile: opts?.mobile,
     filterConfig: manifestFilterConfig("expense", "orderId"),
     trigger: "pencil",
-    renderValue: (v, expense) =>
-      v ? (
+    renderValue: (v, expense) => {
+      const effectiveExpenseOrderUrl = expense.orderUrl;
+      const effectiveExpenseVendor = fieldValueOf(expense.fields.vendor);
+      return v ? (
         <>
           <span className="font-mono">{v}</span>
           <Link
@@ -172,14 +187,15 @@ export function expenseOrderIdColumn(
             <FunnelIcon className="size-3.5" />
           </Link>
           <VendorOrderLink
-            orderUrl={expense.orderUrl}
+            orderUrl={effectiveExpenseOrderUrl}
             orderId={v}
-            vendorName={expense.vendor}
+            vendorName={effectiveExpenseVendor}
           />
         </>
       ) : (
         <NoneValue />
-      ),
+      );
+    },
     editable: {
       onSave: async (newOrderId, expense) => {
         await save(newOrderId, expense);
@@ -187,3 +203,5 @@ export function expenseOrderIdColumn(
     },
   });
 }
+
+type ExpenseOut = ListRowOf<"expense">;

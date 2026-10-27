@@ -1,3 +1,8 @@
+import {
+  fieldEnvelopeFor,
+  fieldValueOf,
+  type ReadableFieldEnvelope,
+} from "@cubby/schemas/field-envelope";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationType } from "@cubby/schemas/location";
 import type {
@@ -19,7 +24,12 @@ import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
 import { ChipRefLink } from "./leaf";
 
 // Minimal data shape - just id and name
-type MinimalEntityData = { id: string; name: string; emoji?: string | null };
+type MinimalEntityData = {
+  id: string;
+  name: string;
+  emoji?: string | null;
+  fields?: Record<string, ReadableFieldEnvelope>;
+};
 
 // Discriminated union for entity-specific data shapes
 export type InlineRefLinkProps = {
@@ -47,7 +57,10 @@ export type InlineRefLinkProps = {
       // selection is supplied only by the canonical display-image contract.
       data: MinimalEntityData & {
         type?: LocationType | null;
-        product?: { category: ProductCategory | null } | null;
+        product?: {
+          category: ProductCategory | null;
+          fields?: Record<string, ReadableFieldEnvelope>;
+        } | null;
       };
     }
   | { entity: "inventory"; data: MinimalEntityData }
@@ -138,17 +151,27 @@ const inlineSpec = (props: InlineRefLinkProps): InlineSpec =>
       name: data.name,
       metadata: data.date ?? undefined,
     }))
-    .with({ entity: "location" }, ({ data }) => ({
-      id: data.id,
-      name: data.name,
-      metadata: data.type ?? undefined,
-    }))
+    .with({ entity: "location" }, ({ data }) => {
+      const type = fieldEnvelopeFor(data, "type");
+      return {
+        id: data.id,
+        name: data.name,
+        metadata: type
+          ? (z.string().nullable().parse(fieldValueOf(type)) ?? undefined)
+          : (data.type ?? undefined),
+      };
+    })
     .with({ entity: "product" }, ({ data }) => {
       const isMisc = isMiscProduct(data.name);
+      const brand = fieldEnvelopeFor(data, "brandName");
       return {
         id: data.id,
         name: isMisc ? getMiscDisplayName(data.name) : data.name,
-        metadata: isMisc ? "misc" : data.brandName,
+        metadata: isMisc
+          ? "misc"
+          : brand
+            ? z.string().nullable().parse(fieldValueOf(brand))
+            : data.brandName,
       };
     })
     .with({ entity: "usda-food" }, ({ data }) => {

@@ -1,3 +1,8 @@
+import {
+  storedFieldDecision,
+  type StoredFieldDecision,
+} from "@cubby/schemas/derived-value";
+
 /**
  * The compute seam for stored derived values. An adapter receives a batch of
  * record ids and returns each live record's value; an id absent from the
@@ -12,10 +17,28 @@ export interface DerivedComputed {
   readonly value: unknown;
   /** The typed projection lists sort and filter on. */
   readonly sort: number | string | null;
-  /** Which level decided the value, for values with a decision chain. */
-  readonly decidedBy?: unknown;
+  /** Override the default computed mechanism when an assignment or resolver decides. */
+  readonly decision?: StoredFieldDecision;
   /** Paid work only: the hash of the declared input projection. */
   readonly inputHash?: string | null;
+}
+
+/** An absent scalar is a successful empty computation; omitted records remain missing. */
+export function computedDecision(
+  computed: DerivedComputed,
+): StoredFieldDecision {
+  const hasValue = computed.value !== null && computed.value !== undefined;
+  const decision = storedFieldDecision.parse(
+    computed.decision ?? {
+      outcome: hasValue
+        ? { kind: "value" }
+        : { kind: "empty", reason: "unset" },
+      provenance: { kind: "computed" },
+    },
+  );
+  if ((decision.outcome.kind === "value") !== hasValue)
+    throw new Error("Derived outcome does not match its published value");
+  return decision;
 }
 
 export type DerivedCompute = (

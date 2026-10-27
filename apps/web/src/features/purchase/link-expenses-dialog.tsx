@@ -1,7 +1,7 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ExpenseShortcode } from "@cubby/schemas/identifiers";
 import {
   type LinkExpenseScope,
-  type PurchaseOut,
   type purchaseLinkExpenseCandidate,
 } from "@cubby/schemas/purchase";
 import { useDebouncedValue } from "@tanstack/react-pacer";
@@ -15,6 +15,7 @@ import { useMemo, useState } from "react";
 import type { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
@@ -38,6 +39,7 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
@@ -115,11 +117,12 @@ export function LinkExpensesDialog({
   const candidates = candidatesQuery.data?.candidates ?? NO_CANDIDATES;
   const projectRefs = useMemo(
     () =>
-      candidates.flatMap((row) =>
-        row.projectId
-          ? [{ entityKind: "project" as const, entityId: row.projectId }]
-          : [],
-      ),
+      candidates.flatMap((row) => {
+        const projectId = fieldValueOf(row.fields.projectId);
+        return projectId
+          ? [{ entityKind: "project" as const, entityId: projectId }]
+          : [];
+      }),
     [candidates],
   );
   const projectImages = useEntityDisplayImages(projectRefs);
@@ -232,7 +235,7 @@ export function LinkExpensesDialog({
           }),
         );
         add(
-          helper.accessor((row) => row.trade, {
+          helper.accessor((row) => fieldValueOf(row.fields.trade), {
             id: "trade",
             header: "Trade",
             meta: {
@@ -241,7 +244,11 @@ export function LinkExpensesDialog({
             },
             cell: (info) => {
               const trade = info.getValue();
-              return trade ? <TradeBadge trade={trade} /> : <NoneValue />;
+              return (
+                <FieldRecordValue record={info.row.original} field="trade">
+                  {trade ? <TradeBadge trade={trade} /> : <NoneValue />}
+                </FieldRecordValue>
+              );
             },
           }),
         );
@@ -255,21 +262,26 @@ export function LinkExpensesDialog({
             },
             cell: (info) => {
               const row = info.row.original;
-              return row.projectId && row.projectName ? (
-                <EntityRefLink
-                  displayImage={
-                    projectImages[
-                      entityDisplayImageKey({
-                        entityKind: "project",
-                        entityId: row.projectId,
-                      })
-                    ] ?? null
-                  }
-                  entity="project"
-                  data={{ id: row.projectId, name: row.projectName }}
-                />
-              ) : (
-                <NoneValue />
+              const projectId = fieldValueOf(row.fields.projectId);
+              return (
+                <FieldRecordValue record={row} field="projectId">
+                  {projectId && row.projectName ? (
+                    <EntityRefLink
+                      displayImage={
+                        projectImages[
+                          entityDisplayImageKey({
+                            entityKind: "project",
+                            entityId: projectId,
+                          })
+                        ] ?? null
+                      }
+                      entity="project"
+                      data={{ id: projectId, name: row.projectName }}
+                    />
+                  ) : (
+                    <NoneValue />
+                  )}
+                </FieldRecordValue>
               );
             },
           }),
@@ -380,3 +392,5 @@ export function LinkExpensesDialog({
     </Overlay>
   );
 }
+
+type PurchaseOut = DetailRecordOf<"purchase">;

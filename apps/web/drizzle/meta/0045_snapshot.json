@@ -1,6 +1,6 @@
 {
-  "id": "899009e9-a32f-4da1-a08f-5253538d32e7",
-  "prevId": "59a6b901-bb4d-4a70-a444-4d2836f20722",
+  "id": "382c3ea9-3f8c-4de1-baae-ebcbf2ea6878",
+  "prevId": "899009e9-a32f-4da1-a08f-5253538d32e7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1291,7 +1291,12 @@
       },
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "DerivedDirty_no_retired_automatic_fields": {
+          "name": "DerivedDirty_no_retired_automatic_fields",
+          "value": "split_part(\"DerivedDirty\".\"target\", '@', 1) NOT LIKE '%.automaticFields'"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.DerivedValue": {
@@ -1485,7 +1490,12 @@
       },
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "DerivedValue_no_retired_automatic_fields": {
+          "name": "DerivedValue_no_retired_automatic_fields",
+          "value": "\"DerivedValue\".\"key\" <> 'automaticFields'"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.EntityAttachment": {

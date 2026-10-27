@@ -3,6 +3,7 @@ import {
   identifierKindPresentation,
   externalIdKind,
 } from "@cubby/schemas/external-id";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
@@ -80,8 +81,11 @@ export function ProductTagsField({
           values: tags,
           restating: {
             brandName: basisValueOf(brandName),
-            classification: category?.path.map((node) => node.name),
-            feature: category?.feature ?? null,
+            classification: (category
+              ? (fieldValueOf(category.fields.path) ?? [])
+              : []
+            ).map((node) => node.name),
+            feature: category ? fieldValueOf(category.fields.feature) : null,
             alias: z.array(z.string()).catch([]).parse(aliases),
           },
         }).map((match) => [match.value, match]),

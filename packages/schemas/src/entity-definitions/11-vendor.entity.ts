@@ -1,5 +1,4 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { vendorSpendingProfile } from "../spending-classification.js";
 import { purchasedCategorySummary } from "../product-category-fields";
@@ -12,7 +11,6 @@ import { money } from "@cubby/schemas/money";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { z } from "zod";
 import { mailSearchState } from "../mail-search-fields.js";
-import { optionalFieldResolutionsSchema } from "../field-resolution.js";
 import {
   vendorAgentHints,
   vendorDomainList,
@@ -230,7 +228,6 @@ export default defineEntity({
     },
   },
   model: {
-    stored: { automaticFields: automaticFields("vendor", "Vendor") },
     fields: [
       {
         key: "systemKey",
@@ -374,16 +371,6 @@ export default defineEntity({
         },
       },
       {
-        display: { detail: false, list: false },
-        key: "fieldResolutions",
-        kind: "json",
-        validation: {
-          read: optionalFieldResolutionsSchema,
-          create: null,
-          update: null,
-        },
-      },
-      {
         key: "itemizationExpectation",
         kind: "enum",
         nullable: true,
@@ -441,18 +428,18 @@ export default defineEntity({
           description:
             "An explicit Vendor itemization policy wins; otherwise its order evidence supplies it: an online account expects item lines, no order evidence expects none, and receipt-only or unrecorded evidence stays unclassified.",
           projections: {
-            list: "fieldResolutions.itemizationExpectation.value",
-            detail: "fieldResolutions.itemizationExpectation.value",
-            summary: "fieldResolutions.itemizationExpectation.value",
+            list: "itemizationExpectation",
+            detail: "itemizationExpectation",
+            summary: "itemizationExpectation",
           },
           sourceDependencies: [
             { path: "orderEvidence", label: "Order evidence" },
             {
-              path: "fieldResolutions.itemizationExpectation.storedValue",
+              path: "fields.itemizationExpectation.current.assignment.value",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.itemizationExpectation.fallbackValue",
+              path: "fields.itemizationExpectation.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -1235,7 +1222,6 @@ export default defineEntity({
       "defaultSpendingCategoryEmoji",
       "spendingProfile",
       "defaultSpendingCategoryId",
-      "fieldResolutions",
       "itemizationExpectation",
       "id",
       "name",
@@ -1270,7 +1256,10 @@ export default defineEntity({
   fields: {
     create: { module: "@cubby/schemas/vendor", export: "vendorCreateInput" },
     update: { module: "@cubby/schemas/vendor", export: "vendorUpdateData" },
-    output: { module: "@cubby/schemas/vendor", export: "vendorOut" },
+    output: {
+      module: "@cubby/schemas/vendor-raw-read",
+      export: "rawVendorOut",
+    },
   },
   storage: {
     indexes: [

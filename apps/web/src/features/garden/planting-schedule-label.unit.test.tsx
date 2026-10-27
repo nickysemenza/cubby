@@ -1,8 +1,11 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { plantingGuides } from "@cubby/schemas/garden-guides";
 import { shortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import {
   ScheduleGrid,
   type ScheduleRow,
@@ -33,15 +36,30 @@ const rows: ScheduleRow[] = [
 function Fixture() {
   const renderLabel = usePlantingScheduleLabel(rows, [
     {
-      id: "PLT-TEST",
-      displayImages: [
-        {
-          id: shortcode("IMG-TEST"),
-          url: "https://example.com/seed.jpg",
-        },
-      ],
+      id: testShortcode("planting", "PLT-TEST"),
+      fields: {
+        displayImages: fieldValueFixture(
+          entityFieldEnvelopeSchemas.planting.list.shape.fields.shape
+            .displayImages,
+          [
+            {
+              id: shortcode("IMG-TEST"),
+              url: "https://example.com/seed.jpg",
+            },
+          ],
+        ),
+      },
     },
-    { id: "PLT-NO-COVER", displayImages: [] },
+    {
+      id: testShortcode("planting", "PLT-NO-COVER"),
+      fields: {
+        displayImages: fieldValueFixture(
+          entityFieldEnvelopeSchemas.planting.list.shape.fields.shape
+            .displayImages,
+          [],
+        ),
+      },
+    },
   ]);
   return (
     <ScheduleGrid

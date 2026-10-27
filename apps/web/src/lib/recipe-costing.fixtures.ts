@@ -1,22 +1,23 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
-import {
-  type ProductLabelNutrition,
-  totalsPreview,
-} from "@cubby/schemas/nutrition";
-import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { RawIngredientDetail as IngredientWithFoodOut } from "@cubby/schemas/ingredient-raw-read";
+import { type ProductLabelNutrition } from "@cubby/schemas/nutrition";
+import type { RecipeSectionLineRead as SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { RawRecipeOutput } from "@cubby/schemas/recipe-raw-read";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 
 import {
   type CostingRow,
   computeRecipeCosting,
   type RecipeCosting,
+  type RecipeCostingInput,
 } from "~/lib/recipe-costing";
+
+type FixtureRecipe = RecipeCostingInput & Pick<RawRecipeOutput, "name">;
 
 // Shared fixture builders for the recipe-costing test suites
 // (recipe-costing.unit.test.ts and recipe-totals-gaps.unit.test.ts).
 //
-// Almost every field on IngredientWithFoodOut / SectionIngredientOut / RecipeOut
+// Almost every field on IngredientWithFoodOut / SectionIngredientOut / FixtureRecipe
 // is irrelevant scaffolding for these tests. These builders state the defaults
 // once so each test shows only the values its assertions actually depend on
 // (mapping amounts, nutrient codes, names, yields). The `.fixtures.ts` suffix
@@ -60,6 +61,7 @@ export const makeProduct = (
   growsPlantId: null,
   brandName: "",
   category: null,
+  categoryFeature: null,
   categoryId: null,
   classificationEvidence: "",
   itemImageCount: 0,
@@ -190,7 +192,7 @@ export const makeEntry = (
 
 // A section row referencing a sub-recipe (recipe-as-ingredient).
 export const makeSubRecipeEntry = (
-  sub: RecipeOut,
+  sub: FixtureRecipe,
   amounts: Amount[],
 ): CostingRow => ({
   id: `link-${sub.id}`,
@@ -205,54 +207,32 @@ export const makeSubRecipeEntry = (
 export const makeSubRecipe = (
   idStr: string,
   name: string,
-  yieldValue: RecipeOut["yield"],
+  yieldValue: FixtureRecipe["yield"],
   ingredients: SectionIngredientOut[],
-): RecipeOut => ({
+): FixtureRecipe => ({
   id: testShortcode("recipe", idStr),
   name,
-  ...dates,
-  meta: null,
   yield: yieldValue,
-  images: [],
-  dataQuality: testCompleteDataQuality(),
-  forkedFromRecipeId: null,
-  forkedFromRecipeName: null,
-  ...totalsPreview(null),
-  sections: [
-    { id: `${idStr}-sec`, name: null, instructions: [], ingredients, ...dates },
-  ],
+  sections: [{ name: null, ingredients }],
 });
 
 // ─── Root recipe + costing ───────────────────────────────────────────────────
 // Wrap loose costing rows in a root recipe (one section per row, preserving
 // each row's sectionName) and run the unified engine.
-export const makeRootRecipe = (rows: CostingRow[]): RecipeOut => ({
+export const makeRootRecipe = (rows: CostingRow[]): FixtureRecipe => ({
   id: testShortcode("recipe", "root"),
   name: "root",
-  ...dates,
-  meta: null,
   yield: null,
-  images: [],
-  dataQuality: testCompleteDataQuality(),
-  forkedFromRecipeId: null,
-  forkedFromRecipeName: null,
-  ...totalsPreview(null),
-  sections: rows.map((row, i) => {
+  sections: rows.map((row) => {
     const { sectionName, ...ingredient } = row;
-    return {
-      id: `root-sec-${i}`,
-      name: sectionName,
-      instructions: [],
-      ingredients: [ingredient],
-      ...dates,
-    };
+    return { name: sectionName, ingredients: [ingredient] };
   }),
 });
 
 export const costRecipe = (
   rows: CostingRow[],
   ingMap: Record<string, IngredientWithFoodOut>,
-  recipeMap: Record<string, RecipeOut> = {},
+  recipeMap: Record<string, FixtureRecipe> = {},
 ): RecipeCosting => {
   const root = makeRootRecipe(rows);
   // Fixture callers use readable keys ("flour", "sauce"), while the rows
@@ -284,5 +264,5 @@ export const normalizeIngredientMap = (
 export const calculateTotals = (
   rows: CostingRow[],
   ingMap: Record<string, IngredientWithFoodOut>,
-  recipeMap: Record<string, RecipeOut> = {},
+  recipeMap: Record<string, FixtureRecipe> = {},
 ) => costRecipe(rows, ingMap, recipeMap).totals;

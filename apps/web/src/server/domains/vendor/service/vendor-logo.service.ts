@@ -4,7 +4,7 @@ import {
   ALLOWED_IMAGE_TYPES,
   MAX_IMAGE_UPLOAD_BYTES,
 } from "@cubby/schemas/image";
-import type { VendorOut } from "@cubby/schemas/vendor";
+import type { RawVendorOut } from "@cubby/schemas/vendor-raw-read";
 import {
   assertResponseContentType,
   fetchExternalResponse,
@@ -240,7 +240,7 @@ async function fetchAndAttachVendorLogoWithPorts<
 const productionVendorLogoPorts: VendorLogoPorts<
   Database,
   ActorContext,
-  VendorOut,
+  RawVendorOut,
   VendorId
 > = {
   contentTypeToExtension,

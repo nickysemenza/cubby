@@ -98,12 +98,16 @@ describe("booleanCellData", () => {
 });
 
 describe("amountCellData", () => {
-  const build = (stored: Amount = { value: 1, unit: "g" }) => {
+  const build = (stored: Amount | null = { value: 1, unit: "g" }) => {
     const save = vi.fn<(row: null, amount: Amount) => Promise<void>>(
       async () => {},
     );
     return { save, data: amountCellData<null>(() => stored, save) };
   };
+
+  it("does not fabricate a clipboard quantity when no result exists", () => {
+    expect(build(null).data.getCopyPayload(null)).toBeNull();
+  });
 
   const pasteText = async (text: string): Promise<Amount> => {
     const { save, data } = build();

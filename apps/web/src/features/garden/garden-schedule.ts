@@ -1,9 +1,10 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { GardenGuideWindow } from "@cubby/schemas/garden-guide";
 import { plantingGuides } from "@cubby/schemas/garden-guides";
 import type { GardenCropKey } from "@cubby/schemas/garden-practice";
 import { gardenCropLabel } from "@cubby/schemas/garden-practice";
-import type { PlantingOut } from "@cubby/schemas/planting";
 
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import type {
   ScheduleRow,
   ScheduleSegment,
@@ -117,6 +118,13 @@ export function guideScheduleRows(
 }
 
 const plantingSegments = (planting: PlantingOut): ScheduleSegment[] => {
+  const effectivePlantingExpectedHarvestStart = fieldValueOf(
+    planting.fields.expectedHarvestStart,
+  );
+  const effectivePlantingExpectedHarvest = fieldValueOf(
+    planting.fields.expectedHarvest,
+  );
+
   const segments: ScheduleSegment[] = [];
   if (planting.season?.start) {
     segments.push({
@@ -134,12 +142,13 @@ const plantingSegments = (planting: PlantingOut): ScheduleSegment[] => {
       variant: "milestone",
     });
   }
-  if (planting.expectedHarvestStart) {
+  if (effectivePlantingExpectedHarvestStart) {
     segments.push({
       id: `${planting.id}:harvest`,
-      label: planting.expectedHarvest ?? "Expected harvest",
-      startDate: planting.expectedHarvestStart,
-      endDate: planting.expectedHarvestEnd ?? planting.expectedHarvestStart,
+      label: effectivePlantingExpectedHarvest ?? "Expected harvest",
+      startDate: effectivePlantingExpectedHarvestStart,
+      endDate:
+        planting.expectedHarvestEnd ?? effectivePlantingExpectedHarvestStart,
       variant: "range",
     });
   }
@@ -220,23 +229,33 @@ export function plantingScheduleRows(
           .sort((a, b) =>
             a.planting.displayName.localeCompare(b.planting.displayName),
           )
-          .map(({ planting, segments }) => ({
-            id: `planting:${planting.id}`,
-            name: planting.displayName,
-            depth: 1,
-            meta: `${planting.status}${planting.plannedWindow ? ` · Planned window: ${planting.plannedWindow}` : ""}`,
-            metaShort: planting.status.replaceAll("_", " "),
-            segments,
-            noDateLabel:
-              segments.length === 0
-                ? planting.plannedWindow
-                  ? `Planned window: ${planting.plannedWindow}`
-                  : "No dated milestones"
-                : undefined,
-          })),
+          .map(({ planting, segments }) => {
+            const effectivePlantingStatus = fieldValueOf(
+              planting.fields.status,
+            );
+            return {
+              id: `planting:${planting.id}`,
+              name: planting.displayName,
+              depth: 1,
+              meta: `${effectivePlantingStatus}${planting.plannedWindow ? ` · Planned window: ${planting.plannedWindow}` : ""}`,
+              metaShort: (effectivePlantingStatus ?? "Unknown").replaceAll(
+                "_",
+                " ",
+              ),
+              segments,
+              noDateLabel:
+                segments.length === 0
+                  ? planting.plannedWindow
+                    ? `Planned window: ${planting.plannedWindow}`
+                    : "No dated milestones"
+                  : undefined,
+            };
+          }),
         ...guideRows,
       ];
     });
 }
 
 export const cropName = (key: GardenCropKey) => gardenCropLabel(key);
+
+type PlantingOut = ListRowOf<"planting">;

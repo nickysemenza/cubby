@@ -1,8 +1,9 @@
 import type { Amount } from "@cubby/schemas/codec";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import { z } from "zod";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { wasm } from "~/lib/wasm";
 
 import { getIngredientName } from "../../entity/presentation/recipe-utils";
@@ -74,12 +75,14 @@ const assembleSectionedReport = (
  * grouped by section.
  */
 export const buildRecipeParseReport = (recipe: RecipeOut): string => {
+  const effectiveRecipeServings = fieldValueOf(recipe.fields.servings);
+
   const header = [
     "Recipe parse from cubby (raw lines + how they parsed):",
     "",
     `title:    ${recipe.name}`,
     `yield:    ${recipe.yield ? formatYield(recipe.yield) : "(none)"}`,
-    `servings: ${recipe.servings ?? "(none)"}`,
+    `servings: ${effectiveRecipeServings ?? "(none)"}`,
   ].join("\n");
 
   // Skip ingredient-less sections (e.g. an instructions-only section) so they
@@ -153,3 +156,5 @@ export const buildImportRecipeParseReport = (recipe: ImportRecipe): string => {
 
   return assembleSectionedReport(header, sections);
 };
+
+type RecipeOut = DetailRecordOf<"recipe">;

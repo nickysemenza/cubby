@@ -1,10 +1,14 @@
-import { imageWithEntitySchema } from "@cubby/schemas/image";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { vendorOut } from "@cubby/schemas/vendor";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { recommendations } from "~/integrations/tanstack-query/generated/catalog/recommendations.gen";
@@ -17,7 +21,7 @@ installFeatures();
 const VENDOR_ID = testShortcode("vendor", "VEN-WORK");
 const IMAGE_ID = testShortcode("image", "IMG-WORK");
 
-const vendor = vendorOut.parse({
+const vendor = entityReadFixture(vendorOut, {
   id: VENDOR_ID,
   name: "Fixture vendor",
   website: null,
@@ -34,26 +38,19 @@ const vendor = vendorOut.parse({
   },
   returnWindowDays: null,
   notes: null,
-  role: "seller",
-  brandedProductCount: 0,
-  brandCategoryCount: 0,
-  purchasedBrandProductCount: 0,
-  brandSpend: 0,
-  expenseCount: 0,
-  firstPurchaseDate: null,
-  documentedPurchaseCount: 0,
-  missingItemizationCount: 0,
-  purchaseCount: 1,
-  spend: 24,
-  latestPurchaseDate: "2026-06-16",
-  mailSearch: null,
   logo: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),
-  dataQuality: testCompleteDataQuality(),
+  fields: {
+    role: fieldValueFixture(vendorOut.shape.fields.shape.role, "seller"),
+    dataQuality: fieldValueFixture(
+      vendorOut.shape.fields.shape.dataQuality,
+      testCompleteDataQuality(),
+    ),
+  },
 });
 
-const imageRecord = imageWithEntitySchema.parse({
+const imageRecord = entityReadFixture(entityFieldEnvelopeSchemas.image.detail, {
   id: IMAGE_ID,
   url: "https://example.test/fixture.jpg",
   key: "fixtures/fixture.jpg",

@@ -3,6 +3,7 @@ import {
   parseEntityId,
   type PurchaseId,
 } from "@cubby/schemas/identifiers";
+import { expenseChargeContextPurchaseOut } from "@cubby/schemas/project";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -11,6 +12,7 @@ import {
   getPurchaseExpenses,
   getPurchaseLinkIdentityByID,
 } from "~/server/domains/purchase/repo/purchase";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import {
   resolveLiveShortcode,
   resolveOrThrow,
@@ -46,11 +48,22 @@ export const expenseChargeContextWorkflow = bindWorkflow(
       whenTrue: (branch) =>
         branch
           .parallel("chargeReads", 2, {
-            purchase: ({ context }, { input: { resolvePurchase } }) =>
-              getPurchaseLinkIdentityByID(
+            purchase: async ({ context }, { input: { resolvePurchase } }) => {
+              const purchase = await getPurchaseLinkIdentityByID(
                 context,
                 requirePurchase(resolvePurchase),
-              ),
+              );
+              if (!purchase) return null;
+              const [result] = await publicFieldEnvelopeRows({
+                db: context,
+                entity: "purchase",
+                schema: expenseChargeContextPurchaseOut,
+                rows: [purchase],
+              });
+              if (!result)
+                throw new Error("Charge context Purchase read produced no row");
+              return result;
+            },
             lines: ({ context }, { input: { resolvePurchase } }) =>
               getPurchaseExpenses(context, requirePurchase(resolvePurchase)),
           })

@@ -91,6 +91,7 @@ export const renderKernelBindingsArtifacts = (
         const { ports } = entity;
         const refs = [
           ports.repository,
+          ports.fieldEnvelope,
           ports.references.label,
           ports.references.resolver,
           ports.filters,

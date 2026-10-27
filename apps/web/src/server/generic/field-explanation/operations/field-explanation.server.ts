@@ -4,8 +4,15 @@ import {
   scoredEntities,
 } from "@cubby/schemas/data-quality";
 import { type Entity, entityRefSchema } from "@cubby/schemas/entity";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import {
+  fieldEnvelope,
+  fieldEnvelopeFor,
+  fieldDecisionOf,
+  fieldValueOf,
+} from "@cubby/schemas/field-envelope";
 import {
   fieldExplanationInput,
   fieldExplanationOutput,
@@ -29,18 +36,26 @@ import {
   executeEntityAs,
   type EntityKernelContext,
 } from "~/server/entity-kernel";
+import type {
+  EntityBindingSchemas,
+  EntityKernelCoreBinding,
+} from "~/server/entity-kernel/adapter";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import {
   loadDisplayImageSources,
   resolveEntityDisplayImageChain,
 } from "~/server/entity-kernel/repo/entity-display-image";
+import type { EntitySchemaBindingEntity } from "~/server/generated/entity-bindings.gen";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { loadQualityBreakdown } from "~/server/generic/data-quality/repo/hydrate";
-import { explainStoredDerived } from "~/server/generic/derived/repo/explain";
+import { explainLiveDerived } from "~/server/generic/derived/repo/explain";
 import { explanationReferenceValues } from "~/server/generic/field-explanation/repo/explanation-reference-values";
 import {
   loadFieldCountEvidence,
   withFieldExplanationSnapshot,
 } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
+import { inheritedResetPreview } from "~/server/generic/field-explanation/repo/inherited-reset-preview";
+import { specialistResetPreview } from "~/server/generic/field-explanation/service/specialist-reset-preview";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { loadFieldResolutionEvidence } from "~/server/generic/suggestions/repo/field-resolution-evidence";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
@@ -116,7 +131,13 @@ export function readExplanationPath(
   for (const segment of path.split(".")) {
     if (value === null) return { found: true, value: null };
     const record = jsonRecord.safeParse(value);
-    if (!record.success || !(segment in record.data)) {
+    if (!record.success) return { found: false, value: null };
+    const envelope = fieldEnvelopeFor(record.data, segment);
+    if (envelope) {
+      value = z.json().parse(fieldValueOf(envelope));
+      continue;
+    }
+    if (!(segment in record.data)) {
       return { found: false, value: null };
     }
     value = record.data[segment]!;
@@ -535,6 +556,28 @@ async function loadProjection(
 
 type ExplainFieldInput = z.output<typeof fieldExplanationInput>;
 
+/** Resolver observations are current inputs, separate from a cached display result. */
+async function loadSourceProjection(
+  context: EntityKernelContext,
+  entity: Entity,
+  entityId: string,
+  surface: Surface,
+): Promise<JsonRecord> {
+  const supported = z.enum(ENTITY_KERNEL_ENTITIES).safeParse(entity);
+  if (!supported.success)
+    return loadProjection(context, entity, entityId, surface);
+  const binding: EntityKernelCoreBinding<
+    EntitySchemaBindingEntity,
+    EntityBindingSchemas
+  > = ENTITY_KERNEL_BINDINGS[supported.data];
+  const item = await binding.repository.get(
+    context,
+    binding.schemas.id.parse(entityId),
+  );
+  if (!item) throw new Error("Entity was not found");
+  return asJsonRecord(z.looseObject({}).parse(item));
+}
+
 async function loadExplanationSnapshot(
   context: EntityKernelContext,
   input: ExplainFieldInput,
@@ -543,17 +586,21 @@ async function loadExplanationSnapshot(
   needsCountEvidence: boolean,
 ) {
   if (entity === "usda-food") {
+    const projection = await loadProjection(
+      context,
+      entity,
+      input.entityId,
+      input.surface,
+    );
     return {
-      projection: await loadProjection(
-        context,
-        entity,
-        input.entityId,
-        input.surface,
-      ),
+      projection,
+      sourceProjection: projection,
+      comparison: null,
       countEvidence: null,
       resolutionEvidence: null,
       resolutionEvidenceTruncated: false,
       qualityBreakdown: undefined,
+      resetPreview: null,
     };
   }
   return withFieldExplanationSnapshot(context.db, async (snapshotDb) => {
@@ -565,14 +612,18 @@ async function loadExplanationSnapshot(
         recipeCosting: new RecipeCostingService(snapshotDb, context.usdaClient),
       },
     };
-    const projection = await loadProjection(
-      snapshotContext,
-      entity,
-      input.entityId,
-      input.surface,
-    );
+    const [projection, sourceProjection] = await Promise.all([
+      loadProjection(snapshotContext, entity, input.entityId, input.surface),
+      loadSourceProjection(
+        snapshotContext,
+        entity,
+        input.entityId,
+        input.surface,
+      ),
+    ]);
     const resolution = fieldResolutionSchema.safeParse(
-      readExplanationPath(projection, `fieldResolutions.${fieldKey}`).value,
+      readExplanationPath(sourceProjection, `fieldResolutions.${fieldKey}`)
+        .value,
     );
     const evidence = await loadFieldResolutionEvidence(
       snapshotDb,
@@ -581,8 +632,50 @@ async function loadExplanationSnapshot(
       fieldKey,
       resolution.success ? resolution.data : null,
     );
+    const shortcodeEntity = shortcodeEntities.find(
+      (candidate) => candidate === entity,
+    );
+    const internalId = shortcodeEntity
+      ? await resolveLiveShortcode(snapshotDb, input.entityId, shortcodeEntity)
+      : null;
+    const comparison = internalId
+      ? await explainLiveDerived(
+          snapshotDb,
+          derivedComputes,
+          entity,
+          fieldKey,
+          internalId,
+        )
+      : null;
+    const field = entityFieldModels[entity].fields.find(
+      (candidate) => candidate.key === fieldKey,
+    );
+    const currentEnvelope = fieldEnvelopeFor(
+      projection,
+      field?.readKey ?? fieldKey,
+    );
+    const resetPreview =
+      internalId &&
+      currentEnvelope?.current.controls.kind === "editable" &&
+      currentEnvelope.current.controls.reset.kind === "available"
+        ? ((await specialistResetPreview(
+            snapshotDb,
+            entity,
+            fieldKey,
+            internalId,
+          )) ??
+          (await inheritedResetPreview(
+            snapshotDb,
+            entity,
+            fieldKey,
+            internalId,
+          )))
+        : null;
     return {
       projection,
+      resetPreview,
+      sourceProjection,
+      comparison,
       qualityBreakdown:
         fieldKey === "dataQuality" &&
         z.enum(scoredEntities).safeParse(entity).success
@@ -778,22 +871,87 @@ export async function explainField(
     field.key,
     !explanation.sourceDependencies?.length,
   );
-  const { projection, countEvidence } = snapshot;
+  const { projection, sourceProjection, countEvidence } = snapshot;
   const path = projectionPath(field, explanation, input.surface);
-  const resolved = readExplanationPath(projection, path);
+  const resolved = readExplanationPath(sourceProjection, path);
   const unscoredQuality =
     field.key === "dataQuality" &&
     !z.enum(scoredEntities).safeParse(entity).success;
-  if (!resolved.found && !unscoredQuality)
+  const displayedEnvelope =
+    fieldEnvelopeFor(projection, path) ??
+    fieldEnvelopeFor(projection, field.readKey ?? field.key);
+  if (!resolved.found && !unscoredQuality && !displayedEnvelope)
     throw new Error(`Explanation projection does not expose ${path}`);
-  const value = unscoredQuality ? "Not assessed" : resolved.value;
+  let envelope =
+    displayedEnvelope ??
+    fieldEnvelope(z.json(), z.json()).parse({
+      current: {
+        assignment: null,
+        controls: { kind: "readonly", reason: "computed" },
+      },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: unscoredQuality
+            ? { kind: "empty", reason: "not_applicable" }
+            : resolved.value === null
+              ? { kind: "empty", reason: "unset" }
+              : { kind: "value", value: resolved.value },
+          provenance: { kind: "computed" },
+        },
+      },
+      work: { kind: "idle" },
+    });
+  if (
+    snapshot.resetPreview &&
+    envelope.current.controls.kind === "editable" &&
+    envelope.current.controls.reset.kind === "available"
+  ) {
+    const schemas: Partial<Record<Entity, { detail: z.ZodObject }>> =
+      entityFieldEnvelopeSchemas;
+    const fieldsSchema = schemas[entity]?.detail.shape.fields;
+    const schema =
+      fieldsSchema instanceof z.ZodObject
+        ? fieldsSchema.shape[field.readKey ?? field.key]
+        : undefined;
+    if (!schema)
+      throw new Error("Reset preview requires a canonical field schema");
+    envelope = fieldEnvelope(z.json(), z.json()).parse(
+      schema.parse({
+        ...envelope,
+        current: {
+          ...envelope.current,
+          controls: {
+            ...envelope.current.controls,
+            reset: {
+              ...envelope.current.controls.reset,
+              preview: { kind: "ready", result: snapshot.resetPreview },
+            },
+          },
+        },
+      }),
+    );
+  }
+  const decision = fieldDecisionOf(envelope);
+  const value =
+    decision?.outcome.kind === "value"
+      ? z.json().parse(decision.outcome.value)
+      : null;
   const subject = { entityKind: entity, entityId: input.entityId };
-  const resolution = explanationResolution(projection, field.key);
+  const resolution = explanationResolution(sourceProjection, field.key);
+  const evidenceProjection = z.record(z.string(), z.json()).parse({
+    ...sourceProjection,
+    ...(explanation.ruleId === "product.unit-price" ? projection : {}),
+    fields: {
+      ...z.record(z.string(), z.unknown()).parse(projection.fields ?? {}),
+      [field.readKey ?? field.key]: envelope,
+    },
+  });
   const sources = unscoredQuality
     ? []
     : [
         ...explainProjectionSources(
-          projection,
+          evidenceProjection,
           explanation,
           value,
           resolution !== null,
@@ -804,7 +962,7 @@ export async function explainField(
   const { interpretation, finalSources } = explainInterpretation(
     field,
     value,
-    projection,
+    evidenceProjection,
     sources,
     unscoredQuality,
     resolution,
@@ -819,27 +977,19 @@ export async function explainField(
     ...source,
     value: linkedValues[index] ?? source.value,
   }));
-  const shortcodeEntity = shortcodeEntities.find(
-    (candidate) => candidate === entity,
-  );
-  const internalId = shortcodeEntity
-    ? await resolveLiveShortcode(context.db, input.entityId, shortcodeEntity)
-    : null;
-  const derived = internalId
-    ? await explainStoredDerived(
-        context.db,
-        derivedComputes,
-        entity,
-        field.key,
-        internalId,
-      )
-    : null;
   return fieldExplanationOutput.parse({
     subject,
     field: field.key,
     label: field.label,
-    value,
-    derived: derived ?? undefined,
+    envelope,
+    comparison:
+      snapshot.comparison ??
+      (envelope.result.kind === "live"
+        ? { kind: "available", result: envelope.result }
+        : {
+            kind: "unavailable",
+            reason: "No live comparison is available for this field",
+          }),
     evaluatedAt: new Date().toISOString(),
     interpretation,
     qualityBreakdown: snapshot.qualityBreakdown,
@@ -849,7 +999,6 @@ export async function explainField(
       description: explanation.description,
     },
     sources: linkedSources,
-    resolution,
     resolutionEvidence: snapshot.resolutionEvidence,
     truncated: [
       finalSources.truncated,

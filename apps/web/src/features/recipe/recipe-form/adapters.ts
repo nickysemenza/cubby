@@ -1,8 +1,8 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import type {
   RecipeCreateInput,
   RecipeIngredientInput,
-  RecipeOut,
   RecipeUpdateInput,
   recipeInstructionInput,
   recipeSectionInput,
@@ -10,6 +10,7 @@ import type {
 import { match, P } from "ts-pattern";
 import type { z } from "zod";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   getOptionalIngredientId,
   getOptionalRecipeId,
@@ -28,64 +29,74 @@ type RecipeImageChanges = Pick<RecipeCreateInput, "pendingImageIds"> &
 
 const blankAmount = { value: null, unit: "" };
 
-const cookbookIdOf = (recipe: RecipeOut) =>
-  recipe.source?.type === "book" ? recipe.source.cookbookId : null;
+const cookbookIdOf = (recipe: RecipeOut) => {
+  const effectiveRecipeSource = fieldValueOf(recipe.fields.source);
+  return effectiveRecipeSource?.type === "book"
+    ? effectiveRecipeSource.cookbookId
+    : null;
+};
 
 export const recipeToFormValues = (
   recipe: RecipeOut | undefined,
   initialName?: string,
   initialUrl?: string,
-): RecipeFormValues => ({
-  name: recipe ? recipe.name : (initialName ?? ""),
-  cookbookId: recipe ? cookbookIdOf(recipe) : null,
-  meta: recipe ? recipe.meta : initialUrl ? { url: initialUrl } : null,
-  yield: recipe?.yield ?? null,
-  servings: recipe?.servings ?? null,
-  tags: recipe?.tags ?? [],
-  notes: recipe?.notes ?? null,
-  sections: recipe
-    ? recipe.sections.map((section) => ({
-        id: section.id,
-        name: section.name,
-        ingredients: section.ingredients.map((ing): IngItem =>
-          match(ing)
-            .with({ type: "ingredient" }, (ing) => ({
-              id: ing.id,
-              type: "ingredient" as const,
-              ingredient: {
-                id: ing.ingredient.id,
-                name: ing.ingredient.name,
-              },
-              recipe: null,
-              amounts: ing.amounts.length > 0 ? ing.amounts : [blankAmount],
-              rawLine: ing.rawLine ?? null,
-              modifier: ing.modifier ?? null,
-              aliases: ing.ingredient.aliases ?? [],
-            }))
-            .with({ type: "recipe" }, (ing) => ({
-              id: ing.id,
-              type: "recipe" as const,
-              ingredient: null,
-              recipe: {
-                id: ing.recipe.id,
-                name: ing.recipe.name,
-              },
-              amounts: ing.amounts.length > 0 ? ing.amounts : [blankAmount],
-              rawLine: ing.rawLine ?? null,
-              modifier: ing.modifier ?? null,
-            }))
-            .exhaustive(),
-        ),
-        instructions: section.instructions,
-      }))
-    : [
-        {
-          name: null,
-          ingredients: [],
-          instructions: [],
-        },
-      ],
-});
+): RecipeFormValues => {
+  const effectiveRecipeServings = recipe
+    ? fieldValueOf(recipe.fields.servings)
+    : null;
+  const effectiveRecipeTags = recipe ? fieldValueOf(recipe.fields.tags) : null;
+  return {
+    name: recipe ? recipe.name : (initialName ?? ""),
+    cookbookId: recipe ? cookbookIdOf(recipe) : null,
+    meta: recipe ? recipe.meta : initialUrl ? { url: initialUrl } : null,
+    yield: recipe?.yield ?? null,
+    servings: effectiveRecipeServings ?? null,
+    tags: effectiveRecipeTags ?? [],
+    notes: recipe?.notes ?? null,
+    sections: recipe
+      ? recipe.sections.map((section) => ({
+          id: section.id,
+          name: section.name,
+          ingredients: section.ingredients.map((ing): IngItem =>
+            match(ing)
+              .with({ type: "ingredient" }, (ing) => ({
+                id: ing.id,
+                type: "ingredient" as const,
+                ingredient: {
+                  id: ing.ingredient.id,
+                  name: ing.ingredient.name,
+                },
+                recipe: null,
+                amounts: ing.amounts.length > 0 ? ing.amounts : [blankAmount],
+                rawLine: ing.rawLine ?? null,
+                modifier: ing.modifier ?? null,
+                aliases: ing.ingredient.aliases ?? [],
+              }))
+              .with({ type: "recipe" }, (ing) => ({
+                id: ing.id,
+                type: "recipe" as const,
+                ingredient: null,
+                recipe: {
+                  id: ing.recipe.id,
+                  name: ing.recipe.name,
+                },
+                amounts: ing.amounts.length > 0 ? ing.amounts : [blankAmount],
+                rawLine: ing.rawLine ?? null,
+                modifier: ing.modifier ?? null,
+              }))
+              .exhaustive(),
+          ),
+          instructions: section.instructions,
+        }))
+      : [
+          {
+            name: null,
+            ingredients: [],
+            instructions: [],
+          },
+        ],
+  };
+};
 
 const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput =>
   match(ing)
@@ -172,7 +183,14 @@ export const recipeFormValuesToUpdateInput = (
 ): RecipeUpdateInput | null => {
   const normalized = normalizeRecipeFormBasics(values);
   const basicUpdates = buildUpdateObject(
-    recipe,
+    {
+      ...recipe,
+      servings:
+        recipe.fields.servings.current.assignment?.kind === "value"
+          ? recipe.fields.servings.current.assignment.value
+          : null,
+      tags: fieldValueOf(recipe.fields.tags),
+    },
     {
       ...values,
       yield: normalized.yield,
@@ -245,3 +263,5 @@ export const recipeFormValuesToUpdateInput = (
     },
   };
 };
+
+type RecipeOut = DetailRecordOf<"recipe">;

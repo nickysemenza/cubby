@@ -3,13 +3,13 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { totalsPreview } from "@cubby/schemas/nutrition";
 import type {
-  RecipeGraphOut,
-  RecipeListItem,
-  RecipeOut,
-  RecipeSectionOut,
-  RecipeTopLevel,
-  SectionIngredient,
-} from "@cubby/schemas/recipe";
+  RawRecipeGraph as RecipeGraphOut,
+  RawRecipeList as RecipeListItem,
+  RawRecipeOutput as RecipeOut,
+  RawRecipeSection as RecipeSectionOut,
+  RawRecipeTopLevel as RecipeTopLevel,
+  RawSectionIngredient as SectionIngredient,
+} from "@cubby/schemas/recipe-raw-read";
 
 import { totalsForRead } from "~/lib/nutrition-estimates";
 import {
@@ -109,7 +109,10 @@ export const computeRecipeUsages = (
 
   const recipeUsages = mapRelation(liveRecipeUsages, (usage) => ({
     id: usage.id,
-    recipe: dbRecipeToTopLevel(usage.recipeSection.recipe),
+    recipe: {
+      id: parseShortcodeFor("recipe", usage.recipeSection.recipe.shortcode),
+      name: usage.recipeSection.recipe.name,
+    },
     sectionName: usage.recipeSection.name,
     amounts: usage.amounts,
     rawLine: usage.rawLine,

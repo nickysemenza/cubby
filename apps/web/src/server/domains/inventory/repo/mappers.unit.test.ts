@@ -1,4 +1,4 @@
-import { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
+import { rawInventoryDetail } from "@cubby/schemas/inventory-raw-read";
 import {
   testCompleteDataQuality,
   testEntityId,
@@ -105,7 +105,6 @@ describe("inventory mappers", () => {
         knownUnitCount: 1,
       }),
       testCompleteDataQuality(),
-      testCompleteDataQuality(),
     );
 
     // 8.87 / 1.3 rounds to 6.82; the product's authoritative effective
@@ -192,13 +191,11 @@ describe("inventory mappers", () => {
       },
     } satisfies InventoryEntryDeepDB;
 
-    const locationDataQuality = testCompleteDataQuality();
     const result = dbInventoryEntryToAPI(
       row,
       9,
       resolveProductPricing(4.5),
       testCompleteDataQuality(),
-      locationDataQuality,
     );
 
     expect(result).toEqual({
@@ -235,18 +232,8 @@ describe("inventory mappers", () => {
       dataQuality: testCompleteDataQuality(),
       location: {
         id: testShortcode("location", "LOC-TEST"),
-        aliases: [],
-        lastBulkInventory: null,
-        product: null,
-        aiDescription: null,
-        notes: null,
-        images: [],
-        valuation: null,
         name: "Pantry",
         type: "room",
-        createdAt: CREATED_AT,
-        updatedAt: UPDATED_AT,
-        dataQuality: locationDataQuality,
       },
       product: {
         displayImages: [],
@@ -295,6 +282,6 @@ describe("inventory mappers", () => {
       },
       displayName: "Flour · Pantry",
     });
-    expect(inventoryWithLocationAndProductOut.parse(result)).toEqual(result);
+    expect(rawInventoryDetail.parse(result)).toEqual(result);
   });
 });

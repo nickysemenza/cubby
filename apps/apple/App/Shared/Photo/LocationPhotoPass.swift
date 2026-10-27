@@ -8,6 +8,17 @@ import SwiftUI
 final class LocationPhotoPassModel {
     enum Phase: Equatable { case loading, ready, failed(String) }
 
+    private enum ReadError: LocalizedError {
+        case imagesUnavailable(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .imagesUnavailable(let name):
+                "Image evidence for \(name) is unavailable. Refresh and try again."
+            }
+        }
+    }
+
     private struct SavedPass: Codable {
         let ids: [String]
         let cursor: Int
@@ -71,15 +82,20 @@ final class LocationPhotoPassModel {
             } else {
                 let roots = scope.flatMap { fresh[$0] }.map { [$0] } ?? fresh.roots
                 var queue: [LocationCode] = []
-                func visit(_ node: LocationTreeNode) {
-                    if !node.images.contains(where: {
-                        $0.status == .uploaded && $0.contentType.hasPrefix("image/")
+                func visit(_ node: LocationTreeNode) throws {
+                    let raw = try JSONValue(encoding: node.fields.images)
+                    guard let images = FieldEnvelope(raw)?.effectiveValue?.arrayValue else {
+                        throw ReadError.imagesUnavailable(node.name)
+                    }
+                    if !images.contains(where: {
+                        $0["status"]?.stringValue == "UPLOADED"
+                            && $0["contentType"]?.stringValue?.hasPrefix("image/") == true
                     }) {
                         queue.append(node.id)
                     }
-                    for child in node.childNodes { visit(child) }
+                    for child in node.childNodes { try visit(child) }
                 }
-                roots.forEach(visit)
+                try roots.forEach(visit)
                 stops = queue
                 cursor = 0
                 completed = 0
@@ -89,6 +105,7 @@ final class LocationPhotoPassModel {
             phase = .ready
         } catch {
             phase = .failed(error.userMessage)
+            Diagnostics.report(error, context: "Location photo pass")
         }
     }
 

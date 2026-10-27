@@ -1,4 +1,4 @@
-import type { RecipeCreateInput } from "@cubby/schemas/recipe";
+import { type RecipeCreateInput } from "@cubby/schemas/recipe";
 import { asc, eq } from "drizzle-orm";
 import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";

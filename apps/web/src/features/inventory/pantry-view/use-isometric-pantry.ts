@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type React from "react";
@@ -51,7 +52,27 @@ export function useIsometricPantry() {
   const inventoryQuery = useAllInventoryItems();
 
   const inventory = useMemo(() => {
-    return inventoryQuery.items satisfies InventoryData[];
+    return inventoryQuery.items.flatMap((item): InventoryData[] => {
+      const effectiveItemAmount = fieldValueOf(item.fields.amount);
+      const effectiveItemValuation = fieldValueOf(item.fields.valuation);
+
+      const amount = effectiveItemAmount;
+      if (!amount) return [];
+      return [
+        {
+          id: item.id,
+          amount,
+          valuation: effectiveItemValuation,
+          product: item.product,
+          categoryFeature: fieldValueOf(item.product.fields.categoryFeature),
+          location: {
+            id: item.location.id,
+            name: item.location.name,
+            type: fieldValueOf(item.location.fields.type),
+          },
+        },
+      ];
+    });
   }, [inventoryQuery.items]);
 
   const rooms = useMemo(() => {

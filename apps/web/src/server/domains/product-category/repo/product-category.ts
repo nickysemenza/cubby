@@ -17,14 +17,14 @@ import {
   type ProductCategoryFeature,
   type ProductCategoryFilters,
   type ProductCategoryOut,
-  type ProductCategorySummary,
+  type RawProductCategorySummary,
   type ProductCategoryUpdateData,
   productCategoryOut,
 } from "@cubby/schemas/product-category";
 import {
   PRODUCT_CATEGORY_MAX_DEPTH as MAX_PRODUCT_CATEGORY_DEPTH,
   productCategoryFeature,
-  productCategorySummary,
+  rawProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
 import type { categoryMappingSchema } from "@cubby/schemas/spending-classification";
 import {
@@ -857,7 +857,7 @@ export async function listBoundCategoryFeatures(
 export async function loadCategorySummaries(
   db: Database | DrizzleTransaction,
   ids?: readonly ProductCategoryId[],
-): Promise<Map<ProductCategoryId, ProductCategorySummary>> {
+): Promise<Map<ProductCategoryId, RawProductCategorySummary>> {
   if (ids?.length === 0) return new Map();
   const rows = await unwrapDb(db)
     .select({ ...getTableColumns(productCategory), effectiveFeature })
@@ -875,7 +875,7 @@ export async function loadCategorySummaries(
   return new Map(
     rows.map((row) => {
       const path = paths.get(row.id) ?? [];
-      const summary = productCategorySummary.parse({
+      const summary = rawProductCategorySummary.parse({
         id: parseShortcodeFor("productCategory", row.shortcode),
         name: row.name,
         path: path.map(({ id, name }) => ({

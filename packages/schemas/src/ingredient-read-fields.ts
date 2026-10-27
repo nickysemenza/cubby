@@ -3,10 +3,10 @@ import { productNutritionDisplay } from "./product-read-fields";
 import { recipeUsageOut } from "./recipe-fields";
 import { displayImagesField } from "./display-images";
 import {
-  productWithMappingsOut,
-  productWithMappingsAndFoodOut,
-} from "./product-output-fields";
-import { recipeTopLevel, recipeRefOut } from "./recipe-shared";
+  rawProductWithMappings as productWithMappingsOut,
+  rawProductWithMappingsAndFood as productWithMappingsAndFoodOut,
+} from "./product-raw-read";
+import { rawRecipeTopLevel, recipeRefOut } from "./recipe-shared";
 import { productShortcode } from "./identifier-fields";
 export const ingredientNutritionProductOut = z.object({
   productId: productShortcode,
@@ -28,9 +28,9 @@ export function ingredientReadSchemas<S extends z.ZodRawShape>(
     ownRecipeCount: z.number().int(),
   });
   const detail = base.extend({
-    recipe: recipeTopLevel.nullable(),
+    recipe: rawRecipeTopLevel.nullable(),
     recipeUsages: z.array(recipeUsageOut),
-    appearsInRecipes: z.array(recipeTopLevel),
+    appearsInRecipes: z.array(recipeRefOut),
     product: z.array(productWithMappingsAndFoodOut),
     nutritionProduct: ingredientNutritionProductOut.nullable(),
   });

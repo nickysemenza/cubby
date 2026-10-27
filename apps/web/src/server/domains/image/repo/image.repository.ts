@@ -1,4 +1,4 @@
-import { imageWithEntitySchema } from "@cubby/schemas/image";
+import { rawImageList } from "@cubby/schemas/image-raw-read";
 
 import {
   defineRepository,
@@ -15,7 +15,7 @@ import {
   updateImage,
 } from "./image";
 
-const listImages = completeListReader(imageWithEntitySchema, imageListRead);
+const listImages = completeListReader(rawImageList, imageListRead);
 const imageShortcodes = bindShortcodeResolver("image");
 
 /** Images are created by the upload workflow, never as a row CRUD action. */

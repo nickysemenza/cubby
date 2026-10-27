@@ -41,6 +41,7 @@ import {
   executeEntityAs,
 } from "~/server/entity-kernel";
 import { AppError, createAppError } from "~/server/errors/app-error";
+import { readPublicEntityRow } from "~/server/generic/derived/service/public-read";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -284,8 +285,13 @@ export const imageHandlers = implementOperationDomain(imageContract, {
 export const imageUploadHandlers = implementOperationDomain(
   imageUploadContract,
   {
-    markUploaded: (context, input) =>
-      markImageUploadedWorkflow(context.db, input),
+    markUploaded: async (context, input) =>
+      readPublicEntityRow({
+        db: context.db,
+        entity: "image",
+        projection: "detail",
+        row: await markImageUploadedWorkflow(context.db, input),
+      }),
     uploadImage: async (context, input) =>
       translateImageFailure(
         async () =>

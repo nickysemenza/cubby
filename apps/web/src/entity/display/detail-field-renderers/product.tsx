@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { Link } from "@tanstack/react-router";
 
 import {
@@ -9,6 +10,7 @@ import {
   ProductGtin,
   productGtinLabel,
 } from "~/entity/components/product-gtin";
+import { ProductCostValue } from "~/entity/display/product-cost-value";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
@@ -44,6 +46,9 @@ function ProductIngredientLink({
 }
 
 export const productDetailFields = {
+  "product-cost": (product) => ({
+    value: <ProductCostValue envelope={product.fields.cost} />,
+  }),
   "product-id": (product) => ({
     value: <span className="font-mono text-xs">{product.id}</span>,
   }),
@@ -56,12 +61,17 @@ export const productDetailFields = {
       <CategoryLabel category={product.category} />
     ) : undefined,
   }),
-  "product-primary-gtin": (product) => ({
-    label: productGtinLabel(product.primaryGtin),
-    value: product.primaryGtin ? (
-      <ProductGtin gtin={product.primaryGtin} />
-    ) : undefined,
-  }),
+  "product-primary-gtin": (product) => {
+    const effectiveProductPrimaryGtin = fieldValueOf(
+      product.fields.primaryGtin,
+    );
+    return {
+      label: productGtinLabel(effectiveProductPrimaryGtin),
+      value: effectiveProductPrimaryGtin ? (
+        <ProductGtin gtin={effectiveProductPrimaryGtin} />
+      ) : undefined,
+    };
+  },
   "product-fdc-id": (product) => ({
     value: product.fdc_id ? (
       <Link
@@ -73,16 +83,19 @@ export const productDetailFields = {
       </Link>
     ) : undefined,
   }),
-  "product-ingredient": (product) => ({
-    value: product.ingredient ? (
-      <Row gap="sm" wrap>
-        <ProductIngredientLink ingredient={product.ingredient} />
-        {product.food ? (
-          <EntityRefLink entity="usda-food" data={product.food} />
-        ) : null}
-      </Row>
-    ) : undefined,
-  }),
+  "product-ingredient": (product) => {
+    const effectiveProductFood = fieldValueOf(product.fields.food);
+    return {
+      value: product.ingredient ? (
+        <Row gap="sm" wrap>
+          <ProductIngredientLink ingredient={product.ingredient} />
+          {effectiveProductFood ? (
+            <EntityRefLink entity="usda-food" data={effectiveProductFood} />
+          ) : null}
+        </Row>
+      ) : undefined,
+    };
+  },
   // `{ source, kind, externalId, url }` rows, not the plain string list the
   // field kind implies — this renderer is what keeps the page from parsing
   // them as strings.
@@ -92,24 +105,27 @@ export const productDetailFields = {
         <ProductExternalIds identifiers={product.externalIds} />
       ) : undefined,
   }),
-  "product-tags": (product) => ({
-    filterAction: null,
-    value:
-      product.tags.length > 0 ? (
-        <Row gap="xs" wrap justify="end">
-          {product.tags.map((tag) => (
-            <EntityFilterLink
-              key={tag}
-              to="/products"
-              search={{ tags: tag }}
-              label={`Show all products tagged ${tag}`}
-              display="value"
-              className="no-underline"
-            >
-              <Badge variant="outline">{tag}</Badge>
-            </EntityFilterLink>
-          ))}
-        </Row>
-      ) : undefined,
-  }),
+  "product-tags": (product) => {
+    const tags = fieldValueOf(product.fields.tags) ?? [];
+    return {
+      filterAction: null,
+      value:
+        tags.length > 0 ? (
+          <Row gap="xs" wrap justify="end">
+            {tags.map((tag) => (
+              <EntityFilterLink
+                key={tag}
+                to="/products"
+                search={{ tags: tag }}
+                label={`Show all products tagged ${tag}`}
+                display="value"
+                className="no-underline"
+              >
+                <Badge variant="outline">{tag}</Badge>
+              </EntityFilterLink>
+            ))}
+          </Row>
+        ) : undefined,
+    };
+  },
 } satisfies EntityDetailFieldRenderers<"product">;

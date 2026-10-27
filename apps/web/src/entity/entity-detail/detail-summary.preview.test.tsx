@@ -2,6 +2,7 @@ import {
   connectedRecordsInputSchema,
   connectedRecordsOutputSchema,
 } from "@cubby/schemas/connected-records";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import {
   entityReportManyInput,
   type ReportBlock,
@@ -18,6 +19,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { expect, it } from "vitest";
 import { page } from "vitest/browser";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -46,9 +48,16 @@ const examples = {
     <DetailSummary
       entity="product"
       record={fromPartial<DetailRecordOf<"product">>({
+        fields: {
+          brandId: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.detail.shape.fields.shape[
+              "brandId"
+            ],
+            null,
+          ),
+        },
         id: shortcode("PRD-4K7M"),
         name: "Synthetic garden organizer",
-        brandId: null,
       })}
     />
   ),
@@ -67,8 +76,7 @@ const examples = {
       record={fromPartial<DetailRecordOf<"expense">>({
         id: shortcode("EXP-4K7M"),
         name: "Synthetic shipping allocation",
-        lineKind: "shipping",
-        spendingCategoryId: null,
+
         spendingCategoryAllocations: [
           {
             spendingCategoryId: shortcode("SPC-4K7M"),
@@ -77,16 +85,27 @@ const examples = {
             incomplete: false,
           },
         ],
-        fieldResolutions: {
+        fields: {
+          lineKind: fieldValueFixture(
+            entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+              "lineKind"
+            ],
+            "shipping",
+          ),
+
           spendingCategoryId: {
-            mode: "allocated",
-            storedValue: null,
-            value: null,
-            fallbackValue: null,
-            source: "Principal items",
-            sourceEntity: null,
-            matchesFallback: false,
-            canReset: false,
+            current: {
+              assignment: { kind: "inherit" },
+              controls: { kind: "readonly", reason: "allocated" },
+            },
+            result: {
+              kind: "live",
+              decision: {
+                outcome: { kind: "empty", reason: "mixed" },
+                provenance: { kind: "allocated" },
+              },
+            },
+            work: { kind: "idle" },
           },
         },
       })}

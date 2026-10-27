@@ -1,12 +1,15 @@
-import type { ProjectListItemOut } from "@cubby/schemas/project";
 import { addDays, format, parseISO } from "date-fns";
 
 import {
   projectScheduleRow,
   type ProjectScheduleRow,
+  type ProjectForSchedule,
 } from "~/lib/project-schedule";
 
+import type { ForestNode } from "./project-forest";
 import { buildProjectTree } from "./project-tree";
+
+type PortfolioProject = ProjectForSchedule & ForestNode;
 
 /** A schedule row plus the viewer's own expand state. */
 export type ProjectScheduleEntry = ProjectScheduleRow & { expanded?: boolean };
@@ -26,12 +29,12 @@ export function scheduleGridRows(rows: readonly ProjectScheduleEntry[]) {
 
 /** The server already selected and paged the filtered forest by root. */
 export function buildPortfolioScheduleRows(
-  projects: ProjectListItemOut[],
+  projects: PortfolioProject[],
   collapsed: ReadonlySet<string>,
 ): ProjectScheduleEntry[] {
   const rows: ProjectScheduleEntry[] = [];
   const walk = (
-    project: ReturnType<typeof buildProjectTree>[number],
+    project: ReturnType<typeof buildProjectTree<PortfolioProject>>[number],
     depth: number,
   ) => {
     const expandable = project.subRows.length > 0;

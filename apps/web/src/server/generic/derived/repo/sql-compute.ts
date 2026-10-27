@@ -1,9 +1,13 @@
+import {
+  fieldProvenance,
+  fieldEmptyReason,
+} from "@cubby/schemas/field-envelope";
 /**
  * The SQL compute adapter: evaluate a declared value's existing scalar SQL for
  * a batch of live rows, set-based in one statement. The expression is the one
  * the list used to evaluate per page, so the stored figure matches it exactly.
  */
-import { and, inArray, isNull, type SQL } from "drizzle-orm";
+import { and, inArray, isNull, sql, SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -23,10 +27,24 @@ const scalar = z.union([z.number(), z.string(), z.boolean(), z.null()]);
 export function sqlColumnCompute(
   source: { table: PgTable; id: PgColumn; deletedAt: PgColumn },
   expression: SQL,
+  options: {
+    provenance?: SQL;
+    emptyReason?: z.output<typeof fieldEmptyReason> | SQL;
+  } = {},
 ): DerivedCompute {
   return async (db, ids) => {
     const rows = await unwrapDb(db)
-      .select({ id: source.id, value: expression })
+      .select({
+        id: source.id,
+        value: expression,
+        emptyReason:
+          options.emptyReason instanceof SQL
+            ? options.emptyReason
+            : sql`${options.emptyReason ?? "unset"}`,
+        provenance:
+          options.provenance ??
+          sql`${JSON.stringify(fieldProvenance.parse({ kind: "computed" }))}::jsonb`,
+      })
       .from(source.table)
       .where(and(inArray(source.id, [...ids]), isNull(source.deletedAt)));
     const out = new Map<string, DerivedComputed>();
@@ -35,6 +53,16 @@ export function sqlColumnCompute(
       out.set(String(row.id), {
         value,
         sort: typeof value === "boolean" ? Number(value) : value,
+        decision: {
+          outcome:
+            value === null
+              ? {
+                  kind: "empty",
+                  reason: fieldEmptyReason.parse(row.emptyReason),
+                }
+              : { kind: "value" },
+          provenance: fieldProvenance.parse(row.provenance),
+        },
       });
     }
     return out;

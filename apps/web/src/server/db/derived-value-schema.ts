@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  check,
   doublePrecision,
   foreignKey,
   index,
@@ -44,6 +45,10 @@ export const derivedValue = pgTable(
     computedAt: timestamp("computedAt", { mode: "date" }).notNull(),
   },
   (t) => [
+    check(
+      "DerivedValue_no_retired_automatic_fields",
+      sql`${t.key} <> 'automaticFields'`,
+    ),
     primaryKey({ columns: [t.entityId, t.key] }),
     foreignKey({
       name: "DerivedValue_entity_fk",
@@ -81,6 +86,10 @@ export const derivedDirty = pgTable(
     lastError: text("lastError"),
   },
   (t) => [
+    check(
+      "DerivedDirty_no_retired_automatic_fields",
+      sql`split_part(${t.target}, '@', 1) NOT LIKE '%.automaticFields'`,
+    ),
     primaryKey({ columns: [t.target, t.ref] }),
     index("DerivedDirty_ready_idx").on(t.priority, t.readyAt),
   ],

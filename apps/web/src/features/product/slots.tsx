@@ -1,5 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";
-import { isNonFoodCategory } from "@cubby/shared";
 import { type FunctionComponent, useMemo } from "react";
 
 import type { CollectionActionProps } from "~/entity/entity-detail/collection-actions";
@@ -27,12 +27,21 @@ import { LabelNutritionReview } from "./label-nutrition-review";
 export const ProductNutrition: DetailSlotComponent<"product"> = ({
   record: product,
 }) => {
+  const effectiveProductFood = fieldValueOf(product.fields.food);
+  const effectiveProductPrice = fieldValueOf(product.fields.price);
+  const effectiveProductBrandName = fieldValueOf(product.fields.brandName);
+
   const mappings = useMemo(
-    () => getAllUnitMappingsFromProduct(product),
+    () =>
+      getAllUnitMappingsFromProduct({
+        ...product,
+        food: fieldValueOf(product.fields.food),
+        price: fieldValueOf(product.fields.price),
+      }),
     [product],
   );
   const labelNutrition: ProductLabelNutrition | null = product.labelNutrition;
-  const usdaNutritionInfo = product.food?.nutritionInfo ?? null;
+  const usdaNutritionInfo = effectiveProductFood?.nutritionInfo ?? null;
   // Which source leads (and its captions) is the server's `nutritionDisplay`;
   // this only picks the matching per-100 g figures for the interactive panels.
   const display = product.nutritionDisplay;
@@ -48,7 +57,7 @@ export const ProductNutrition: DetailSlotComponent<"product"> = ({
       <ProductNutritionLabel
         nutrients={nutrients}
         mappings={mappings}
-        portions={product.food?.portionInfoRaw ?? []}
+        portions={effectiveProductFood?.portionInfoRaw ?? []}
         servingGrams={labelNutrition?.servingGrams}
         inferredZeroNutrients={labelNutrition?.inferredZeroNutrients}
       />
@@ -61,11 +70,11 @@ export const ProductNutrition: DetailSlotComponent<"product"> = ({
       <NutrientDensityStats
         nutrients={nutrients}
         mappings={mappings}
-        price={product.pricing.effectivePrice ?? product.price}
+        price={effectiveProductPrice}
         mappingProduct={{
           id: product.id,
           name: product.name,
-          brandName: product.brandName,
+          brandName: effectiveProductBrandName,
         }}
       />
       {usdaNutritionInfo && (
@@ -93,10 +102,16 @@ export const ProductUnitMappings: DetailSlotComponent<"product"> = ({
   record: product,
 }) => {
   const mappings = useMemo(
-    () => getAllUnitMappingsFromProduct(product),
+    () =>
+      getAllUnitMappingsFromProduct({
+        ...product,
+        food: fieldValueOf(product.fields.food),
+        price: fieldValueOf(product.fields.price),
+      }),
     [product],
   );
-  const isNonFood = isNonFoodCategory(product.category);
+  const feature = fieldValueOf(product.fields.categoryFeature);
+  const isNonFood = feature !== null && feature !== "food";
   if (isNonFood && mappings.length === 0)
     return (
       <Description>
@@ -117,7 +132,11 @@ export const ProductUnitMappings: DetailSlotComponent<"product"> = ({
 
 export const ProductFitsWith: DetailSlotComponent<"product"> = ({
   record: product,
-}) => <RelatednessRail product={product} />;
+}) => (
+  <RelatednessRail
+    product={{ id: product.id, tags: fieldValueOf(product.fields.tags) ?? [] }}
+  />
+);
 
 /** The cookbooks whose physical copies this product is, from the server's report. */
 export const ProductCookbooks: DetailSlotComponent<"product"> = ({

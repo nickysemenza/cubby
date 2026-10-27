@@ -10,8 +10,9 @@ import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { assessmentChildHandle } from "@cubby/schemas/assessment";
 import { entityRefKey } from "@cubby/schemas/entity";
+import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
-import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   basisValueOf,
   requiresSuggestionReview,
@@ -550,17 +551,26 @@ async function automaticFieldFillRefusal(
   });
   if (!result.item) return "Automatic fill subject no longer exists";
   const live = z.record(z.string(), z.unknown()).parse(result.item);
-  const resolutions = fieldResolutionsSchema.parse(live.fieldResolutions ?? {});
-  const resolution = resolutions[row.field];
-  if (resolution?.mode === "none" || resolution?.mode === "explicit")
+  const governed = (key: string) =>
+    Object.hasOwn(entityFieldEnvelopeFields[entity], key);
+  const envelope = fieldEnvelopeFor(live, row.field);
+  // Local intent is independent of the effective result: explicit None is a saved decision.
+  const assignment = envelope?.current.assignment;
+  if (assignment?.kind === "none" || assignment?.kind === "value")
     return "Automatic fill preserves an existing field decision";
-  const effective = resolution ? resolution.value : live[row.field];
+  if (governed(row.field) && (!envelope || envelope.result.kind === "missing"))
+    return "Automatic fill requires an available current field result";
+  const effective = governed(row.field)
+    ? envelope && fieldValueOf(envelope)
+    : live[row.field];
   if (!empty(effective))
     return "Automatic fill preserves populated effective values";
   if (
-    !policy.basis.some(
-      (key) => key !== row.field && basisValueOf(live[key]) !== null,
-    )
+    !policy.basis.some((key) => {
+      const source = fieldEnvelopeFor(live, key);
+      const value = governed(key) ? source && fieldValueOf(source) : live[key];
+      return key !== row.field && basisValueOf(value) !== null;
+    })
   )
     return "Automatic fill requires supporting field evidence";
   // A saved clear is intentional too; unchanged saves advance the fingerprint.

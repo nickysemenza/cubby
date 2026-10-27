@@ -1,9 +1,9 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import type {
   RecipeFlowInstructionRef,
   RecipeFlowPlan,
   RecipeFlowWarning,
 } from "@cubby/schemas/recipe-flow";
+import type { RawRecipeOutput as RecipeOut } from "@cubby/schemas/recipe-raw-read";
 
 export type RecipeFlowValidationResult =
   | { ok: true; warnings: RecipeFlowWarning[] }

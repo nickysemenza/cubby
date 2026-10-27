@@ -1,5 +1,5 @@
+import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
-import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { render, screen, cleanup } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 
@@ -12,33 +12,57 @@ afterEach(() => {
   cleanup();
   harness?.dispose();
 });
-function explain(resolution: FieldResolution): FieldExplanationOutput {
+function explain(resolution: ReadableFieldEnvelope): FieldExplanationOutput {
   return {
     subject: { entityKind: "expense", entityId: "EXP-4K7M" },
     field: "trade",
     label: "Trade",
-    value: resolution.value,
     evaluatedAt: "2026-10-25T12:00:00Z",
     rule: {
       id: "synthetic-resolution",
       revision: 1,
       description: "Synthetic resolution",
     },
-    resolution,
+    envelope: resolution,
+    comparison: { kind: "unavailable", reason: "not_computable" },
     actions: [],
-    sources: [],
+    sources:
+      resolution.result.kind !== "missing" &&
+      resolution.result.decision.provenance?.kind === "inherited"
+        ? [
+            {
+              label:
+                resolution.result.decision.provenance.source.name ?? "Source",
+              entity: resolution.result.decision.provenance.source,
+              value: null,
+            },
+          ]
+        : [],
     truncated: false,
   };
 }
-const base: FieldResolution = {
-  mode: "explicit",
-  storedValue: "other",
-  value: "other",
-  fallbackValue: null,
-  source: "expense override",
-  sourceEntity: null,
-  matchesFallback: false,
-  canReset: false,
+const base: ReadableFieldEnvelope = {
+  current: {
+    assignment: {
+      kind: "value",
+      value: "other",
+      ownership: { kind: "record" },
+    },
+    controls: {
+      kind: "editable",
+      canSetNone: true,
+      canConfirm: false,
+      reset: { kind: "unavailable" },
+    },
+  },
+  result: {
+    kind: "live",
+    decision: {
+      outcome: { kind: "value", value: "other" },
+      provenance: { kind: "own", ownership: { kind: "record" } },
+    },
+  },
+  work: { kind: "idle" },
 };
 it("uses the declared enum label for the deciding value", () => {
   render(<DecisionChain data={explain(base)} />);
@@ -51,12 +75,20 @@ it("links the inherited source in the deciding level", () => {
     <DecisionChain
       data={explain({
         ...base,
-        mode: "inherit",
-        storedValue: null,
-        sourceEntity: {
-          entityKind: "purchase",
-          entityId: "PUR-4K7M",
-          name: "Synthetic purchase",
+        current: { ...base.current, assignment: { kind: "inherit" } },
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "value", value: "other" },
+            provenance: {
+              kind: "inherited",
+              source: {
+                entityKind: "purchase",
+                entityId: "PUR-4K7M",
+                name: "Synthetic purchase",
+              },
+            },
+          },
         },
       })}
     />,
@@ -66,18 +98,26 @@ it("links the inherited source in the deciding level", () => {
     screen.getByRole("link", { name: "Synthetic purchase" }),
   ).toHaveAttribute("href", "/purchases/PUR-4K7M");
 });
-it("retains a system decision's provenance without inventing a purchase allocation", () => {
+it("does not invent edit controls for an allocated result", () => {
   render(
     <DecisionChain
       data={explain({
         ...base,
-        mode: "allocated",
-        source: "reviewed reimbursement",
+        current: {
+          assignment: null,
+          controls: { kind: "readonly", reason: "allocated" },
+        },
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "empty", reason: "mixed" },
+            provenance: { kind: "allocated" },
+          },
+        },
       })}
     />,
   );
-  expect(screen.getByText("Reviewed reimbursement")).toBeVisible();
   expect(
-    screen.queryByText("Allocated across the purchase"),
+    screen.queryByRole("button", { name: "Use inherited" }),
   ).not.toBeInTheDocument();
 });

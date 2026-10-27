@@ -547,7 +547,7 @@ export function WorkQueuePage() {
 }
 
 function WorkQueue() {
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: "/work-queue" });
   const search = route.useSearch();
   const group = search.group;
   const inspection = useEntityPreview(undefined, PREVIEW_OPTIONS);

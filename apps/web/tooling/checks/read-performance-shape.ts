@@ -1,10 +1,10 @@
-import { listReadSchema } from "~/entity/model/list-read-schema";
 import { reportSlot } from "@cubby/schemas/entity-report";
 import { z } from "zod";
 import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
 import {
   entityListInputSchema,
   listEntities,
+  ENTITY_LIST_READ_SCHEMAS,
 } from "~/entity/generated/entity-lists.gen";
 /** Operator assertions, not inferred deployment facts. No free-form labels. */
 export const workloadContextSchema = z
@@ -55,7 +55,14 @@ export function requestedReadMetadata(
   if (operation !== "entity.list") return null;
   const entity = entitySchema.safeParse(input.entity);
   if (!entity.success) return null;
-  const declared = Object.keys(listReadSchema(entity.data).shape);
+  const schema = ENTITY_LIST_READ_SCHEMAS[entity.data].schema;
+  const fields = schema.shape.fields;
+  const declared = [
+    ...Object.keys(schema.shape).filter((key) => key !== "fields"),
+    ...(fields instanceof z.ZodObject
+      ? Object.keys(fields.shape).map((key) => `fields.${key}`)
+      : []),
+  ];
   const filters = record.safeParse(input.filters ?? {});
   const contract = entityListInputSchema.options.find(
     (option) => option.shape.entity.value === entity.data,

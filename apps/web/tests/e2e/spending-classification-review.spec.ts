@@ -1,3 +1,4 @@
+import { fieldEnvelope } from "@cubby/schemas/field-envelope";
 import { entityApi } from "./support/entity-api";
 import { z } from "zod";
 import {
@@ -68,12 +69,8 @@ test("reviews historical item classification and preserves explicit purpose", as
     return z
       .object({
         cost: z.number(),
-        spendingCategoryId: z.string().nullable(),
-        fieldResolutions: z.object({
-          spendingCategoryId: z.object({
-            mode: z.string(),
-            storedValue: z.string().nullable(),
-          }),
+        fields: z.object({
+          spendingCategoryId: fieldEnvelope(z.string().nullable(), z.string()),
         }),
       })
       .parse(await response.json());
@@ -100,13 +97,19 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(
     page.getByRole("button", { name: "Apply reviewed change" }),
   ).toBeVisible();
-  expect((await read()).spendingCategoryId).toBeNull();
+  expect((await read()).fields.spendingCategoryId).toMatchObject({
+    current: { assignment: { kind: "inherit" } },
+    result: { decision: { outcome: { kind: "empty" } } },
+  });
   await patch(expense, { cost: 61 });
   await page.getByRole("button", { name: "Apply reviewed change" }).click();
   await expect(
     page.getByText(/changed after preview; review a fresh preview/).first(),
   ).toBeVisible();
-  expect((await read()).spendingCategoryId).toBeNull();
+  expect((await read()).fields.spendingCategoryId).toMatchObject({
+    current: { assignment: { kind: "inherit" } },
+    result: { decision: { outcome: { kind: "empty" } } },
+  });
   await page.getByRole("button", { name: "Preview historical impact" }).click();
   await expect(
     page.getByRole("button", { name: "Apply reviewed change" }),
@@ -118,16 +121,25 @@ test("reviews historical item classification and preserves explicit purpose", as
   ).toBeVisible();
   expect(await read()).toMatchObject({
     cost: 61,
-    spendingCategoryId: clothing,
-    fieldResolutions: {
-      spendingCategoryId: { mode: "inherit", storedValue: null },
+    fields: {
+      spendingCategoryId: {
+        current: { assignment: { kind: "inherit" } },
+        result: { decision: { outcome: { kind: "value", value: clothing } } },
+      },
     },
   });
   await patch(expense, { spendingCategoryId: gifts });
   expect(await read()).toMatchObject({
-    spendingCategoryId: gifts,
-    fieldResolutions: {
-      spendingCategoryId: { mode: "explicit", storedValue: gifts },
+    fields: {
+      spendingCategoryId: {
+        current: { assignment: { kind: "value", value: gifts } },
+        result: {
+          decision: {
+            outcome: { kind: "value", value: gifts },
+            provenance: { kind: "own" },
+          },
+        },
+      },
     },
   });
 });

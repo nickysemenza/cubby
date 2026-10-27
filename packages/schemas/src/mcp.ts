@@ -18,26 +18,12 @@ import {
   ingredientUpdateData,
   type IngredientMcpOut,
 } from "./ingredient";
+import { locationUpdateData } from "./location";
 import {
-  inventoryMcpBulkMoveOut,
-  inventoryMcpListOut,
-  inventoryMcpOut,
-  type InventoryMcpOut,
-} from "./inventory";
-import {
-  locationMcpListOut,
-  locationMcpOut,
-  locationUpdateData,
-  type LocationMcpOut,
-} from "./location";
-import {
-  mealMcpListOut,
-  mealMcpOut,
   mealAddRecipeInput,
   mealCreateInput,
   mealUpdateData,
   shoppingListOut,
-  type MealMcpOut,
 } from "./meal";
 import { createPaginatedResponseSchema } from "./pagination";
 import {
@@ -45,20 +31,12 @@ import {
   allProblemsSchema,
   problemsCountSchema,
 } from "./problems";
-import {
-  productMcpListOut,
-  productMcpOut,
-  type ProductMcpOut,
-} from "./product";
+
 import { measureEstimate } from "./nutrition";
 import {
   recipeCostingExplain,
   recipeIdOut,
-  recipeMcpListOut,
-  recipeMcpOut,
-  recipeOut,
   recipesUsingIngredientOut,
-  type RecipeMcpOut,
 } from "./recipe";
 import {
   searchHitsOut,
@@ -79,23 +57,9 @@ export {
   mealUpdateData,
 };
 
-export {
-  ingredientMcpOut as mcpIngredientOut,
-  inventoryMcpOut as mcpInventoryOut,
-  locationMcpOut as mcpLocationOut,
-  mealMcpOut as mcpMealOut,
-  productMcpOut as mcpProductOut,
-  recipeMcpOut as mcpRecipeOut,
-};
+export { ingredientMcpOut as mcpIngredientOut };
 
-export type {
-  IngredientMcpOut as McpIngredientOut,
-  InventoryMcpOut as McpInventoryOut,
-  LocationMcpOut as McpLocationOut,
-  MealMcpOut as McpMealOut,
-  ProductMcpOut as McpProductOut,
-  RecipeMcpOut as McpRecipeOut,
-};
+export type { IngredientMcpOut as McpIngredientOut };
 
 const mcpBrandedServingOut = z.object({
   serving_size: z.number().nullable(),
@@ -149,18 +113,7 @@ export const usdaFoodMcpOut = mcpUsdaFoodOut.nullable();
 
 export {
   ingredientMcpOut,
-  inventoryMcpOut,
-  locationMcpOut,
-  mealMcpOut,
-  productMcpOut,
-  recipeMcpOut,
   ingredientMcpListOut,
-  inventoryMcpBulkMoveOut,
-  inventoryMcpListOut,
-  locationMcpListOut,
-  mealMcpListOut,
-  productMcpListOut,
-  recipeMcpListOut,
   recipesUsingIngredientOut,
   recipeIdOut,
   shoppingListOut,
@@ -193,8 +146,6 @@ export const recipeAvailabilityMcpOut = z.object({
 });
 
 export const scrapeRecipeMcpOut = importRecipeSchema;
-
-export const recipeDetailMcpOut = recipeOut;
 
 export const recipeCostingExplainDetail = z.enum(["full", "lines"]);
 export type RecipeCostingExplainDetail = z.infer<

@@ -1,4 +1,11 @@
-import { financialTransactionListResponse } from "@cubby/schemas/financial-transaction";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
+import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
+import { getEntityListOutputSchema } from "~/entity/generated/entity-lists.gen";
+const financialTransactionListResponse = getEntityListOutputSchema(
+  "financialTransaction",
+);
 import { testCompleteDataQuality } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,7 +30,73 @@ function transactionResponse({
 } = {}) {
   return financialTransactionListResponse.parse({
     items: [
-      {
+      entityReadFixture(entityFieldEnvelopeSchemas.financialTransaction.list, {
+        fields: {
+          merchant: fieldValueFixture(
+            entityFieldEnvelopeSchemas.financialTransaction.list.shape.fields
+              .shape["merchant"],
+            "Neighborhood Market",
+          ),
+          sourceRefs: fieldValueFixture(
+            entityFieldEnvelopeSchemas.financialTransaction.list.shape.fields
+              .shape["sourceRefs"],
+            [],
+          ),
+          itemization: fieldValueFixture(
+            entityFieldEnvelopeSchemas.financialTransaction.list.shape.fields
+              .shape["itemization"],
+            "bare",
+          ),
+          bookingCoverage: fieldValueFixture(
+            entityFieldEnvelopeSchemas.financialTransaction.list.shape.fields
+              .shape["bookingCoverage"],
+            "missing",
+          ),
+          documentCoverage: fieldValueFixture(
+            entityFieldEnvelopeSchemas.financialTransaction.list.shape.fields
+              .shape["documentCoverage"],
+            "unknown",
+          ),
+          itemizationCoverage: fieldValueFixture(
+            entityFieldEnvelopeSchemas.financialTransaction.list.shape.fields
+              .shape["itemizationCoverage"],
+            "unknown",
+          ),
+          productsCoverage: fieldValueFixture(
+            entityFieldEnvelopeSchemas.financialTransaction.list.shape.fields
+              .shape["productsCoverage"],
+            "unknown",
+          ),
+          spendingCategorySummary: fieldValueFixture(
+            entityFieldEnvelopeSchemas.financialTransaction.list.shape.fields
+              .shape["spendingCategorySummary"],
+            {
+              state: "unclassified",
+              categories: [],
+              lineCount: 0,
+              categorizedLineCount: 0,
+              uncategorizedLineCount: 0,
+              complete: false,
+              amountsKnown: false,
+            },
+          ),
+          coverage: fieldValueFixture(
+            entityFieldEnvelopeSchemas.financialTransaction.list.shape.fields
+              .shape["coverage"],
+            {
+              expectation: "unknown",
+              booking: "missing",
+              document: "unknown",
+              itemization: "unknown",
+              products: "unknown",
+            },
+          ),
+          dataQuality: fieldValueFixture(
+            entityFieldEnvelopeSchemas.financialTransaction.list.shape.fields
+              .shape["dataQuality"],
+            testCompleteDataQuality(),
+          ),
+        },
         id: "FTX-2345",
         accountId: "FAC-2345",
         purchaseId: null,
@@ -32,41 +105,21 @@ function transactionResponse({
         amount: 42.5,
         transactionDate: "2026-08-16",
         postedDate: "2026-08-16",
-        merchant: "Neighborhood Market",
+
         displayName: "Neighborhood Market",
         rawDescription: null,
         sourceCategory: null,
-        sourceRefs: [],
+
         notes: null,
         allocations,
         ledgerTransferId: null,
-        itemization: "bare",
-        bookingCoverage: "missing",
-        documentCoverage: "unknown",
-        itemizationCoverage: "unknown",
-        productsCoverage: "unknown",
+
         spendingCategoryName: null,
-        spendingCategorySummary: {
-          state: "unclassified",
-          categories: [],
-          lineCount: 0,
-          categorizedLineCount: 0,
-          uncategorizedLineCount: 0,
-          complete: false,
-          amountsKnown: false,
-        },
-        coverage: {
-          expectation: "unknown",
-          booking: "missing",
-          document: "unknown",
-          itemization: "unknown",
-          products: "unknown",
-        },
+
         accountName: "Household Card",
         createdAt: new Date("2026-08-16T00:00:00.000Z"),
         updatedAt: new Date("2026-08-16T00:00:00.000Z"),
-        dataQuality: testCompleteDataQuality(),
-      },
+      }),
     ],
     meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
   });

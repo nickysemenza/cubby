@@ -1,5 +1,4 @@
-import { plantingOut } from "@cubby/schemas/planting";
-import { taskOut } from "@cubby/schemas/project";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -7,6 +6,8 @@ import { ScheduleGrid } from "~/features/schedule/schedule-grid";
 import { mock } from "~/lib/test/mock-schema";
 
 import { calendarScheduleRows } from "./calendar-schedule";
+const plantingOut = entityFieldEnvelopeSchemas.planting.detail;
+const taskOut = entityFieldEnvelopeSchemas.task.detail;
 
 describe("calendarScheduleRows", () => {
   it("keeps each planting on one row with all milestones and leaves undated records visible", () => {

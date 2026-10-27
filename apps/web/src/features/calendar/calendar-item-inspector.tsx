@@ -1,4 +1,5 @@
 import { calendarItemKey, type CalendarItem } from "@cubby/schemas/calendar";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { Link } from "@tanstack/react-router";
 import { useId, useRef, useState } from "react";
@@ -14,6 +15,7 @@ import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-p
 import { formatCurrency } from "~/lib/number-format";
 import { Facts, FactsDensityProvider } from "~/ui/common/facts";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { DateRangeField } from "~/ui/forms/date-span-field";
 import {
@@ -105,11 +107,15 @@ function CalendarInspectorOverlay({
       <PopoverHeader className="border-b pb-2">
         <PopoverTitle>{item.title}</PopoverTitle>
         {item.kind === "meal" ? (
-          <EntityQualityFact
-            entity="meal"
-            id={item.id}
-            quality={item.dataQuality}
-          />
+          <FieldRecordValue record={item.source} field="dataQuality">
+            <EntityQualityFact
+              entity="meal"
+              id={item.id}
+              quality={
+                fieldValueOf(item.source.fields.dataQuality) ?? undefined
+              }
+            />
+          </FieldRecordValue>
         ) : null}
         <div className="text-muted-foreground">{itemMetadata(item)}</div>
       </PopoverHeader>

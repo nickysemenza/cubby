@@ -1,6 +1,13 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { useEffect, useMemo, useRef } from "react";
+import {
+  fieldDecisionOf,
+  fieldValueOf,
+  type ReadableFieldEnvelope,
+} from "@cubby/schemas/field-envelope";
+import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
+import { useQueries } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   type FieldValues,
   type Path,
@@ -12,9 +19,10 @@ import {
 import { z } from "zod";
 
 import { resolutionActionClassName } from "~/entity/fields/field-resolution";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import { DecisionValue } from "~/ui/derived/decision-chain";
-import { DecisionLevels } from "~/ui/derived/decision-levels";
-import { resolutionDecidedBy } from "~/ui/derived/meta";
+import { ResolutionEvidence } from "~/ui/derived/resolution-evidence";
+import { SourceStack } from "~/ui/derived/source-stack";
 import { ExplanationEntityLink } from "~/ui/derived/why-value";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -41,6 +49,7 @@ export function FormFieldResolution<TValues extends FieldValues>({
   entity?: Entity;
 }) {
   const context = useFieldSuggestionContext();
+  const [open, setOpen] = useState(false);
   const resolvedEntity = entity ?? context?.entity;
   const policy = useMemo(
     () =>
@@ -54,7 +63,8 @@ export function FormFieldResolution<TValues extends FieldValues>({
   // SAFETY: `field` comes from the mounted entity's declared form field model.
   const name = field as Path<TValues>;
   const value: unknown = useWatch({ control: form.control, name });
-  const formState = useFormState({ control: form.control, name });
+  const formState = useFormState({ control: form.control });
+  const savedBasis = !formState.isDirty;
   const changed = form.getFieldState(name, formState);
   const previousValue = useRef(JSON.stringify(value));
   const actionValue = useRef<string | undefined>(undefined);
@@ -85,8 +95,28 @@ export function FormFieldResolution<TValues extends FieldValues>({
     }
   }, [changed.isDirty, changed.isTouched, field, form, nonePatch, value]);
 
+  const explanationQueries: ReturnType<
+    typeof fieldExplanation.explain.queryOptions
+  >[] =
+    open && savedBasis && resolvedEntity && context?.entityId
+      ? [
+          {
+            ...fieldExplanation.explain.queryOptions({
+              entityKind: resolvedEntity,
+              entityId: context.entityId,
+              field,
+              surface: "detail",
+            }),
+            staleTime: 0,
+            refetchOnMount: "always" as const,
+          },
+        ]
+      : [];
+  const explanations = useQueries({ queries: explanationQueries });
   if (!policy) return null;
-  const resolution = context?.resolutionFor(field);
+  const resolution =
+    (savedBasis ? explanations[0]?.data?.envelope : null) ??
+    context?.resolutionFor(field);
   const applyPatch = (input: unknown) => {
     const patch = patchSchema.parse(input);
     if (Object.hasOwn(patch, field)) {
@@ -104,7 +134,11 @@ export function FormFieldResolution<TValues extends FieldValues>({
     }
   };
   const inheritedAction =
-    resolution && !resolution.canReset ? null : (
+    resolution &&
+    !(
+      resolution.current.controls.kind === "editable" &&
+      resolution.current.controls.reset.kind === "available"
+    ) ? null : (
       <Button
         type="button"
         size="xs"
@@ -112,11 +146,15 @@ export function FormFieldResolution<TValues extends FieldValues>({
         className={resolutionActionClassName}
         onClick={() => applyPatch(policy.reset)}
       >
-        {resolution?.fallbackValue === null ? "Clear value" : "Use inherited"}
+        Use inherited
       </Button>
     );
   const ownAction =
-    nonePatch && resolution?.mode !== "none" ? (
+    nonePatch &&
+    (!resolution ||
+      (resolution.current.controls.kind === "editable" &&
+        resolution.current.controls.canSetNone)) &&
+    resolution?.current.assignment?.kind !== "none" ? (
       <Button
         type="button"
         size="xs"
@@ -127,11 +165,8 @@ export function FormFieldResolution<TValues extends FieldValues>({
         Set to none
       </Button>
     ) : null;
-  const deciding = resolution
-    ? resolutionDecidedBy(resolution).level
-    : undefined;
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={<Button type="button" variant="link" size="xs" />}
       >
@@ -139,50 +174,126 @@ export function FormFieldResolution<TValues extends FieldValues>({
       </PopoverTrigger>
       <PopoverContent className="max-h-[85dvh] w-[min(25rem,calc(100vw-1rem))] overflow-y-auto">
         <PopoverTitle>Why this value</PopoverTitle>
-        <DecisionLevels deciding={deciding}>
-          {(level) => (
-            <>
-              {level === "own" ? (
-                <>
-                  <DecisionValue
-                    entity={resolvedEntity}
-                    field={field}
-                    value={resolution?.storedValue ?? null}
-                  />
-                  {ownAction}
-                </>
-              ) : null}
-              {level === "inherited" ? (
-                <>
-                  {resolution?.sourceEntity ? (
-                    <ExplanationEntityLink
-                      entity={resolution.sourceEntity.entityKind}
-                      id={resolution.sourceEntity.entityId}
-                      name={resolution.sourceEntity.name}
-                    />
-                  ) : null}
-                  {resolution?.fallbackValue !== null &&
-                  resolution?.fallbackValue !== undefined ? (
+        <div className="grid gap-2 pt-2">
+          <h3 className="text-xs font-medium">Your choice</h3>
+          <DecisionValue
+            entity={resolvedEntity}
+            field={field}
+            value={value ?? null}
+          />
+          <div className="flex gap-2">
+            {ownAction}
+            {inheritedAction}
+          </div>
+          {resolution?.current.controls.kind === "editable" &&
+          resolution.current.controls.canConfirm &&
+          policy.confirm ? (
+            <Button
+              type="button"
+              size="xs"
+              variant="link"
+              onClick={() =>
+                applyPatch({
+                  ...policy.confirm,
+                  [field]: resolution ? fieldValueOf(resolution) : null,
+                })
+              }
+            >
+              Keep this value
+            </Button>
+          ) : null}
+          {resolution?.current.controls.kind === "editable" &&
+          resolution.current.controls.reset.kind === "available" &&
+          resolution.current.controls.reset.preview.kind === "ready" ? (
+            <SourceStack
+              rows={[
+                {
+                  key: "reset",
+                  status: "deciding",
+                  title: "With inherited values",
+                  children: (
                     <DecisionValue
                       entity={resolvedEntity}
                       field={field}
-                      value={resolution.fallbackValue}
+                      value={fieldValueOf({
+                        result:
+                          resolution.current.controls.reset.preview.result,
+                      })}
                     />
-                  ) : null}
-                  {inheritedAction}
-                </>
-              ) : null}
-              {level === "default" && deciding === "default" ? (
-                <DecisionValue
-                  entity={resolvedEntity}
-                  field={field}
-                  value={resolution?.value ?? null}
-                />
-              ) : null}
-            </>
-          )}
-        </DecisionLevels>
+                  ),
+                },
+              ]}
+            />
+          ) : null}
+          <FormResolutionSource
+            resolution={resolution}
+            explanation={savedBasis ? explanations[0]?.data : undefined}
+            entity={resolvedEntity}
+            field={field}
+          />
+          {explanations[0]?.isFetching ? (
+            <p className="text-xs text-muted-foreground">
+              Loading source preview…
+            </p>
+          ) : null}
+          {explanations[0]?.error ? (
+            <p role="alert" className="text-xs text-destructive">
+              {explanations[0]?.error.message}
+            </p>
+          ) : null}
+        </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+function FormResolutionSource({
+  resolution,
+  explanation,
+  entity,
+  field,
+}: {
+  resolution: ReadableFieldEnvelope | null | undefined;
+  explanation: FieldExplanationOutput | undefined;
+  entity: Entity | undefined;
+  field: string;
+}) {
+  if (explanation?.resolutionEvidence)
+    return <ResolutionEvidence evidence={explanation.resolutionEvidence} />;
+  const provenance = resolution
+    ? fieldDecisionOf(resolution)?.provenance
+    : null;
+  const source =
+    provenance?.kind === "inherited" || provenance?.kind === "default"
+      ? provenance.source
+      : null;
+  if (!source) return null;
+  return (
+    <SourceStack
+      rows={[
+        {
+          key: source.entityId,
+          title: (
+            <ExplanationEntityLink
+              entity={source.entityKind}
+              id={source.entityId}
+              name={source.name ?? undefined}
+            />
+          ),
+          status:
+            resolution?.result.kind === "cached" &&
+            resolution.result.freshness === "stale"
+              ? "skipped"
+              : "deciding",
+          children: (
+            <DecisionValue
+              entity={entity}
+              field={field}
+              value={resolution ? fieldValueOf(resolution) : null}
+            />
+          ),
+        },
+      ]}
+    />
   );
 }

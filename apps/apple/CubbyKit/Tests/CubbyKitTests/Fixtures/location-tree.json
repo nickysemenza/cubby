@@ -4,12 +4,7 @@
     "name": "Home",
     "aliases": [],
     "tags": [],
-    "type": "house",
-    "product": null,
     "lastBulkInventory": null,
-    "aiDescription": null,
-    "images": [],
-    "valuation": null,
     "createdAt": "2026-01-01T00:00:00.000Z",
     "updatedAt": "2026-01-01T00:00:00.000Z",
     "childCount": 2,
@@ -21,12 +16,7 @@
         "name": "Garage",
         "aliases": [],
         "tags": [],
-        "type": "room",
-        "product": null,
         "lastBulkInventory": null,
-        "aiDescription": null,
-        "images": [],
-        "valuation": null,
         "createdAt": "2026-01-01T00:00:00.000Z",
         "updatedAt": "2026-01-01T00:00:00.000Z",
         "childCount": 1,
@@ -38,12 +28,7 @@
             "name": "Shelf A",
             "aliases": [],
             "tags": [],
-            "type": "shelf",
-            "product": null,
             "lastBulkInventory": "2026-08-01T12:00:00.000Z",
-            "aiDescription": null,
-            "images": [],
-            "valuation": null,
             "createdAt": "2026-01-01T00:00:00.000Z",
             "updatedAt": "2026-01-01T00:00:00.000Z",
             "childCount": 1,
@@ -55,12 +40,7 @@
                 "name": "Bin 1",
                 "aliases": [],
                 "tags": [],
-                "type": "box",
-                "product": null,
                 "lastBulkInventory": null,
-                "aiDescription": null,
-                "images": [],
-                "valuation": null,
                 "createdAt": "2026-01-01T00:00:00.000Z",
                 "updatedAt": "2026-01-01T00:00:00.000Z",
                 "childCount": 1,
@@ -72,76 +52,842 @@
                     "name": "Bin 2",
                     "aliases": [],
                     "tags": [],
-                    "type": "box",
-                    "product": null,
                     "lastBulkInventory": null,
-                    "aiDescription": null,
-                    "images": [],
-                    "valuation": null,
                     "createdAt": "2026-01-01T00:00:00.000Z",
                     "updatedAt": "2026-01-01T00:00:00.000Z",
                     "childCount": 0,
                     "directItemCount": 1,
                     "totalItemCount": 1,
                     "children": [],
-                    "dataQuality": {
-                      "status": "complete",
-                      "score": 100,
-                      "facets": [],
-                      "gaps": [],
-                      "exceptions": [],
-                      "relatedGaps": [],
-                      "relatedExceptions": []
-                    },
-                    "notes": null
+                    "notes": null,
+                    "fields": {
+                      "type": {
+                        "current": {
+                          "assignment": {
+                            "kind": "value",
+                            "value": "box",
+                            "ownership": {
+                              "kind": "record"
+                            }
+                          },
+                          "controls": {
+                            "kind": "editable",
+                            "canSetNone": false,
+                            "canConfirm": false,
+                            "reset": {
+                              "kind": "unavailable"
+                            }
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "value",
+                              "value": "box"
+                            },
+                            "provenance": {
+                              "kind": "own",
+                              "ownership": {
+                                "kind": "record"
+                              }
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "product": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "empty",
+                              "reason": "unset"
+                            },
+                            "provenance": {
+                              "kind": "computed"
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "aiDescription": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "empty",
+                              "reason": "unset"
+                            },
+                            "provenance": {
+                              "kind": "computed"
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "images": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "value",
+                              "value": []
+                            },
+                            "provenance": {
+                              "kind": "computed"
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "valuationLabel": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "valuation": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "dataQuality": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "value",
+                              "value": {
+                                "status": "complete",
+                                "score": 100,
+                                "facets": [],
+                                "gaps": [],
+                                "exceptions": [],
+                                "relatedGaps": [],
+                                "relatedExceptions": []
+                              }
+                            },
+                            "provenance": {
+                              "kind": "computed"
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "dataGaps": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "displayImages": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      }
+                    }
                   }
                 ],
-                "dataQuality": {
-                  "status": "complete",
-                  "score": 100,
-                  "facets": [],
-                  "gaps": [],
-                  "exceptions": [],
-                  "relatedGaps": [],
-                  "relatedExceptions": []
-                },
-                "notes": null
+                "notes": null,
+                "fields": {
+                  "type": {
+                    "current": {
+                      "assignment": {
+                        "kind": "value",
+                        "value": "box",
+                        "ownership": {
+                          "kind": "record"
+                        }
+                      },
+                      "controls": {
+                        "kind": "editable",
+                        "canSetNone": false,
+                        "canConfirm": false,
+                        "reset": {
+                          "kind": "unavailable"
+                        }
+                      }
+                    },
+                    "result": {
+                      "kind": "live",
+                      "decision": {
+                        "outcome": {
+                          "kind": "value",
+                          "value": "box"
+                        },
+                        "provenance": {
+                          "kind": "own",
+                          "ownership": {
+                            "kind": "record"
+                          }
+                        }
+                      }
+                    },
+                    "work": {
+                      "kind": "idle"
+                    }
+                  },
+                  "product": {
+                    "current": {
+                      "assignment": null,
+                      "controls": {
+                        "kind": "readonly",
+                        "reason": "computed"
+                      }
+                    },
+                    "result": {
+                      "kind": "live",
+                      "decision": {
+                        "outcome": {
+                          "kind": "empty",
+                          "reason": "unset"
+                        },
+                        "provenance": {
+                          "kind": "computed"
+                        }
+                      }
+                    },
+                    "work": {
+                      "kind": "idle"
+                    }
+                  },
+                  "aiDescription": {
+                    "current": {
+                      "assignment": null,
+                      "controls": {
+                        "kind": "readonly",
+                        "reason": "computed"
+                      }
+                    },
+                    "result": {
+                      "kind": "live",
+                      "decision": {
+                        "outcome": {
+                          "kind": "empty",
+                          "reason": "unset"
+                        },
+                        "provenance": {
+                          "kind": "computed"
+                        }
+                      }
+                    },
+                    "work": {
+                      "kind": "idle"
+                    }
+                  },
+                  "images": {
+                    "current": {
+                      "assignment": null,
+                      "controls": {
+                        "kind": "readonly",
+                        "reason": "computed"
+                      }
+                    },
+                    "result": {
+                      "kind": "live",
+                      "decision": {
+                        "outcome": {
+                          "kind": "value",
+                          "value": []
+                        },
+                        "provenance": {
+                          "kind": "computed"
+                        }
+                      }
+                    },
+                    "work": {
+                      "kind": "idle"
+                    }
+                  },
+                  "valuationLabel": {
+                    "current": {
+                      "assignment": null,
+                      "controls": {
+                        "kind": "readonly",
+                        "reason": "computed"
+                      }
+                    },
+                    "result": {
+                      "kind": "missing"
+                    },
+                    "work": {
+                      "kind": "idle"
+                    }
+                  },
+                  "valuation": {
+                    "current": {
+                      "assignment": null,
+                      "controls": {
+                        "kind": "readonly",
+                        "reason": "computed"
+                      }
+                    },
+                    "result": {
+                      "kind": "missing"
+                    },
+                    "work": {
+                      "kind": "idle"
+                    }
+                  },
+                  "dataQuality": {
+                    "current": {
+                      "assignment": null,
+                      "controls": {
+                        "kind": "readonly",
+                        "reason": "computed"
+                      }
+                    },
+                    "result": {
+                      "kind": "live",
+                      "decision": {
+                        "outcome": {
+                          "kind": "value",
+                          "value": {
+                            "status": "complete",
+                            "score": 100,
+                            "facets": [],
+                            "gaps": [],
+                            "exceptions": [],
+                            "relatedGaps": [],
+                            "relatedExceptions": []
+                          }
+                        },
+                        "provenance": {
+                          "kind": "computed"
+                        }
+                      }
+                    },
+                    "work": {
+                      "kind": "idle"
+                    }
+                  },
+                  "dataGaps": {
+                    "current": {
+                      "assignment": null,
+                      "controls": {
+                        "kind": "readonly",
+                        "reason": "computed"
+                      }
+                    },
+                    "result": {
+                      "kind": "missing"
+                    },
+                    "work": {
+                      "kind": "idle"
+                    }
+                  },
+                  "displayImages": {
+                    "current": {
+                      "assignment": null,
+                      "controls": {
+                        "kind": "readonly",
+                        "reason": "computed"
+                      }
+                    },
+                    "result": {
+                      "kind": "missing"
+                    },
+                    "work": {
+                      "kind": "idle"
+                    }
+                  }
+                }
               }
             ],
-            "dataQuality": {
-              "status": "complete",
-              "score": 100,
-              "facets": [],
-              "gaps": [],
-              "exceptions": [],
-              "relatedGaps": [],
-              "relatedExceptions": []
-            },
-            "notes": null
+            "notes": null,
+            "fields": {
+              "type": {
+                "current": {
+                  "assignment": {
+                    "kind": "value",
+                    "value": "shelf",
+                    "ownership": {
+                      "kind": "record"
+                    }
+                  },
+                  "controls": {
+                    "kind": "editable",
+                    "canSetNone": false,
+                    "canConfirm": false,
+                    "reset": {
+                      "kind": "unavailable"
+                    }
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "value",
+                      "value": "shelf"
+                    },
+                    "provenance": {
+                      "kind": "own",
+                      "ownership": {
+                        "kind": "record"
+                      }
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "product": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "empty",
+                      "reason": "unset"
+                    },
+                    "provenance": {
+                      "kind": "computed"
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "aiDescription": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "empty",
+                      "reason": "unset"
+                    },
+                    "provenance": {
+                      "kind": "computed"
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "images": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "value",
+                      "value": []
+                    },
+                    "provenance": {
+                      "kind": "computed"
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "valuationLabel": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "missing"
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "valuation": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "missing"
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "dataQuality": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "value",
+                      "value": {
+                        "status": "complete",
+                        "score": 100,
+                        "facets": [],
+                        "gaps": [],
+                        "exceptions": [],
+                        "relatedGaps": [],
+                        "relatedExceptions": []
+                      }
+                    },
+                    "provenance": {
+                      "kind": "computed"
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "dataGaps": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "missing"
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "displayImages": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "missing"
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              }
+            }
           }
         ],
-        "dataQuality": {
-          "status": "complete",
-          "score": 100,
-          "facets": [],
-          "gaps": [],
-          "exceptions": [],
-          "relatedGaps": [],
-          "relatedExceptions": []
-        },
-        "notes": null
+        "notes": null,
+        "fields": {
+          "type": {
+            "current": {
+              "assignment": {
+                "kind": "value",
+                "value": "room",
+                "ownership": {
+                  "kind": "record"
+                }
+              },
+              "controls": {
+                "kind": "editable",
+                "canSetNone": false,
+                "canConfirm": false,
+                "reset": {
+                  "kind": "unavailable"
+                }
+              }
+            },
+            "result": {
+              "kind": "live",
+              "decision": {
+                "outcome": {
+                  "kind": "value",
+                  "value": "room"
+                },
+                "provenance": {
+                  "kind": "own",
+                  "ownership": {
+                    "kind": "record"
+                  }
+                }
+              }
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "product": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "live",
+              "decision": {
+                "outcome": {
+                  "kind": "empty",
+                  "reason": "unset"
+                },
+                "provenance": {
+                  "kind": "computed"
+                }
+              }
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "aiDescription": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "live",
+              "decision": {
+                "outcome": {
+                  "kind": "empty",
+                  "reason": "unset"
+                },
+                "provenance": {
+                  "kind": "computed"
+                }
+              }
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "images": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "live",
+              "decision": {
+                "outcome": {
+                  "kind": "value",
+                  "value": []
+                },
+                "provenance": {
+                  "kind": "computed"
+                }
+              }
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "valuationLabel": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "missing"
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "valuation": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "missing"
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "dataQuality": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "live",
+              "decision": {
+                "outcome": {
+                  "kind": "value",
+                  "value": {
+                    "status": "complete",
+                    "score": 100,
+                    "facets": [],
+                    "gaps": [],
+                    "exceptions": [],
+                    "relatedGaps": [],
+                    "relatedExceptions": []
+                  }
+                },
+                "provenance": {
+                  "kind": "computed"
+                }
+              }
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "dataGaps": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "missing"
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "displayImages": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "missing"
+            },
+            "work": {
+              "kind": "idle"
+            }
+          }
+        }
       },
       {
         "id": "LOC-789A",
         "name": "Kitchen",
         "aliases": [],
         "tags": [],
-        "type": "room",
-        "product": null,
         "lastBulkInventory": null,
-        "aiDescription": null,
-        "images": [],
-        "valuation": null,
         "createdAt": "2026-01-01T00:00:00.000Z",
         "updatedAt": "2026-01-01T00:00:00.000Z",
         "childCount": 1,
@@ -153,79 +899,845 @@
             "name": "Bin 9",
             "aliases": [],
             "tags": [],
-            "type": "bag",
-            "product": null,
             "lastBulkInventory": null,
-            "aiDescription": null,
-            "images": [],
-            "valuation": null,
             "createdAt": "2026-01-01T00:00:00.000Z",
             "updatedAt": "2026-01-01T00:00:00.000Z",
             "childCount": 0,
             "directItemCount": 1,
             "totalItemCount": 1,
             "children": [],
-            "dataQuality": {
-              "status": "complete",
-              "score": 100,
-              "facets": [],
-              "gaps": [],
-              "exceptions": [],
-              "relatedGaps": [],
-              "relatedExceptions": []
-            },
-            "notes": null
+            "notes": null,
+            "fields": {
+              "type": {
+                "current": {
+                  "assignment": {
+                    "kind": "value",
+                    "value": "bag",
+                    "ownership": {
+                      "kind": "record"
+                    }
+                  },
+                  "controls": {
+                    "kind": "editable",
+                    "canSetNone": false,
+                    "canConfirm": false,
+                    "reset": {
+                      "kind": "unavailable"
+                    }
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "value",
+                      "value": "bag"
+                    },
+                    "provenance": {
+                      "kind": "own",
+                      "ownership": {
+                        "kind": "record"
+                      }
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "product": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "empty",
+                      "reason": "unset"
+                    },
+                    "provenance": {
+                      "kind": "computed"
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "aiDescription": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "empty",
+                      "reason": "unset"
+                    },
+                    "provenance": {
+                      "kind": "computed"
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "images": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "value",
+                      "value": []
+                    },
+                    "provenance": {
+                      "kind": "computed"
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "valuationLabel": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "missing"
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "valuation": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "missing"
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "dataQuality": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "value",
+                      "value": {
+                        "status": "complete",
+                        "score": 100,
+                        "facets": [],
+                        "gaps": [],
+                        "exceptions": [],
+                        "relatedGaps": [],
+                        "relatedExceptions": []
+                      }
+                    },
+                    "provenance": {
+                      "kind": "computed"
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "dataGaps": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "missing"
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "displayImages": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "missing"
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              }
+            }
           }
         ],
-        "dataQuality": {
-          "status": "complete",
-          "score": 100,
-          "facets": [],
-          "gaps": [],
-          "exceptions": [],
-          "relatedGaps": [],
-          "relatedExceptions": []
-        },
-        "notes": null
+        "notes": null,
+        "fields": {
+          "type": {
+            "current": {
+              "assignment": {
+                "kind": "value",
+                "value": "room",
+                "ownership": {
+                  "kind": "record"
+                }
+              },
+              "controls": {
+                "kind": "editable",
+                "canSetNone": false,
+                "canConfirm": false,
+                "reset": {
+                  "kind": "unavailable"
+                }
+              }
+            },
+            "result": {
+              "kind": "live",
+              "decision": {
+                "outcome": {
+                  "kind": "value",
+                  "value": "room"
+                },
+                "provenance": {
+                  "kind": "own",
+                  "ownership": {
+                    "kind": "record"
+                  }
+                }
+              }
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "product": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "live",
+              "decision": {
+                "outcome": {
+                  "kind": "empty",
+                  "reason": "unset"
+                },
+                "provenance": {
+                  "kind": "computed"
+                }
+              }
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "aiDescription": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "live",
+              "decision": {
+                "outcome": {
+                  "kind": "empty",
+                  "reason": "unset"
+                },
+                "provenance": {
+                  "kind": "computed"
+                }
+              }
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "images": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "live",
+              "decision": {
+                "outcome": {
+                  "kind": "value",
+                  "value": []
+                },
+                "provenance": {
+                  "kind": "computed"
+                }
+              }
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "valuationLabel": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "missing"
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "valuation": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "missing"
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "dataQuality": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "live",
+              "decision": {
+                "outcome": {
+                  "kind": "value",
+                  "value": {
+                    "status": "complete",
+                    "score": 100,
+                    "facets": [],
+                    "gaps": [],
+                    "exceptions": [],
+                    "relatedGaps": [],
+                    "relatedExceptions": []
+                  }
+                },
+                "provenance": {
+                  "kind": "computed"
+                }
+              }
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "dataGaps": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "missing"
+            },
+            "work": {
+              "kind": "idle"
+            }
+          },
+          "displayImages": {
+            "current": {
+              "assignment": null,
+              "controls": {
+                "kind": "readonly",
+                "reason": "computed"
+              }
+            },
+            "result": {
+              "kind": "missing"
+            },
+            "work": {
+              "kind": "idle"
+            }
+          }
+        }
       }
     ],
-    "dataQuality": {
-      "status": "complete",
-      "score": 100,
-      "facets": [],
-      "gaps": [],
-      "exceptions": [],
-      "relatedGaps": [],
-      "relatedExceptions": []
-    },
-    "notes": null
+    "notes": null,
+    "fields": {
+      "type": {
+        "current": {
+          "assignment": {
+            "kind": "value",
+            "value": "house",
+            "ownership": {
+              "kind": "record"
+            }
+          },
+          "controls": {
+            "kind": "editable",
+            "canSetNone": false,
+            "canConfirm": false,
+            "reset": {
+              "kind": "unavailable"
+            }
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": "house"
+            },
+            "provenance": {
+              "kind": "own",
+              "ownership": {
+                "kind": "record"
+              }
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "product": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "empty",
+              "reason": "unset"
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "aiDescription": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "empty",
+              "reason": "unset"
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "images": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": []
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "valuationLabel": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "valuation": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "dataQuality": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": {
+                "status": "complete",
+                "score": 100,
+                "facets": [],
+                "gaps": [],
+                "exceptions": [],
+                "relatedGaps": [],
+                "relatedExceptions": []
+              }
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "dataGaps": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "displayImages": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      }
+    }
   },
   {
     "id": "LOC-9ABC",
     "name": "Unknown",
     "aliases": [],
     "tags": [],
-    "type": "area",
-    "product": null,
     "lastBulkInventory": null,
-    "aiDescription": null,
-    "images": [],
-    "valuation": null,
     "createdAt": "2026-01-01T00:00:00.000Z",
     "updatedAt": "2026-01-01T00:00:00.000Z",
     "childCount": 0,
     "directItemCount": 0,
     "totalItemCount": 0,
     "children": [],
-    "dataQuality": {
-      "status": "complete",
-      "score": 100,
-      "facets": [],
-      "gaps": [],
-      "exceptions": [],
-      "relatedGaps": [],
-      "relatedExceptions": []
-    },
-    "notes": null
+    "notes": null,
+    "fields": {
+      "type": {
+        "current": {
+          "assignment": {
+            "kind": "value",
+            "value": "area",
+            "ownership": {
+              "kind": "record"
+            }
+          },
+          "controls": {
+            "kind": "editable",
+            "canSetNone": false,
+            "canConfirm": false,
+            "reset": {
+              "kind": "unavailable"
+            }
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": "area"
+            },
+            "provenance": {
+              "kind": "own",
+              "ownership": {
+                "kind": "record"
+              }
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "product": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "empty",
+              "reason": "unset"
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "aiDescription": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "empty",
+              "reason": "unset"
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "images": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": []
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "valuationLabel": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "valuation": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "dataQuality": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": {
+                "status": "complete",
+                "score": 100,
+                "facets": [],
+                "gaps": [],
+                "exceptions": [],
+                "relatedGaps": [],
+                "relatedExceptions": []
+              }
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "dataGaps": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "displayImages": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      }
+    }
   }
 ]

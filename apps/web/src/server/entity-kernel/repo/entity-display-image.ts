@@ -1,4 +1,3 @@
-import type { DerivedSidecar } from "@cubby/schemas/derived-value";
 import {
   displayImagesField,
   type DisplayImageSummary,
@@ -59,11 +58,6 @@ import { displayableImageSql } from "~/server/domains/image/repo/image-displayab
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import { suggestedMerchantVendorCandidatesSql } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { previousShortcodesFor } from "~/server/entity-kernel/repo/entity-identity";
-import {
-  derivedSidecarOf,
-  loadPageStoredMeta,
-  type PageStoredMeta,
-} from "~/server/generic/derived/repo/sidecar";
 import {
   compileTraversal,
   inheritedRelationSql,
@@ -912,7 +906,6 @@ export async function withUniversalEntityMedia<
       attachments?: EntityAttachmentRead[];
       redirectedFrom?: string | null;
       previousShortcodes?: string[];
-      derived?: DerivedSidecar;
     }
   >
 > {
@@ -931,7 +924,7 @@ export async function withUniversalEntityMedia<
     return entityId === undefined ? [] : [{ entityKind, entityId }];
   });
   const entityIds = refs.map((ref) => ref.entityId);
-  const [lists, attachments, previousShortcodes, stored] = await Promise.all([
+  const [lists, attachments, previousShortcodes] = await Promise.all([
     resolveEntityDisplayImageLists(db, refs),
     detail
       ? resolveEntityAttachments(db, entityKind, entityIds)
@@ -939,27 +932,7 @@ export async function withUniversalEntityMedia<
     detail
       ? previousShortcodesFor(db, entityIds)
       : Promise.resolve(new Map<string, string[]>()),
-    detail
-      ? loadPageStoredMeta(db, entityKind, entityIds)
-      : Promise.resolve<PageStoredMeta>(new Map()),
   ]);
-  const sidecars = detail
-    ? derivedSidecarOf(
-        publicRows.flatMap((row) => {
-          const internalId = resolved.get(row.id);
-          return internalId
-            ? [
-                {
-                  internalId,
-                  id: row.id,
-                  fieldResolutions: row.fieldResolutions,
-                },
-              ]
-            : [];
-        }),
-        stored,
-      )
-    : {};
   return hydrateImageReadProjection(
     db,
     publicRows.map((row) => {
@@ -970,7 +943,6 @@ export async function withUniversalEntityMedia<
       if (!detail) return { ...row, displayImages };
       const projected = {
         ...row,
-        derived: sidecars[row.id] ?? {},
         displayImages,
         attachments: entityId ? (attachments.get(entityId) ?? []) : [],
         // The kernel's get sets this when it followed a merge redirect.

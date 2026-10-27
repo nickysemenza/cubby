@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ImageSightingOut } from "@cubby/schemas/image-sighting";
 
 import { householdLocalDate } from "~/lib/household-date";
@@ -103,7 +104,10 @@ export const imageDetailFields = {
   "image-capture-location": (image) => ({
     value: renderCoordinates(image.captureLocation),
   }),
-  "image-sightings": (image) => ({
-    value: renderSightings(image.sightings),
-  }),
+  "image-sightings": (image) => {
+    const effectiveImageSightings = fieldValueOf(image.fields.sightings);
+    return {
+      value: renderSightings(effectiveImageSightings ?? undefined),
+    };
+  },
 } satisfies EntityDetailFieldRenderers<"image">;

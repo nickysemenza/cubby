@@ -26,7 +26,20 @@ const explanation = mock(fieldExplanationOutput, {
     subject: { entityKind: "product", entityId: productId },
     field: "dataQuality",
     label: "Quality",
-    value: 80,
+    envelope: {
+      current: {
+        assignment: null,
+        controls: { kind: "readonly", reason: "computed" },
+      },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: 80 },
+          provenance: { kind: "computed" },
+        },
+      },
+      work: { kind: "idle" },
+    },
     evaluatedAt: "2026-09-01T12:00:00Z",
     rule: {
       id: "product.data-quality",
@@ -34,7 +47,6 @@ const explanation = mock(fieldExplanationOutput, {
       description: "Synthetic weighted quality",
     },
     interpretation: undefined,
-    resolution: null,
     resolutionEvidence: null,
     qualityBreakdown: {
       score: 80,

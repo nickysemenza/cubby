@@ -241,7 +241,7 @@ struct RecountSessionTests {
                     ScanStrayOut(
                         entryId: InventoryEntryCode("INV-9999"),
                         location: .init(id: LocationCode("LOC-89AB"), name: "Bin 9"),
-                        amount: Amount(value: 1, unit: "each"), ambiguousQuantity: false)
+                        ambiguousQuantity: false, fields: scanAmountFields())
                 ])
         }
         session.submit("4006381333931")
@@ -441,7 +441,7 @@ struct RecountSessionTests {
                     ScanStrayOut(
                         entryId: InventoryEntryCode("INV-9999"),
                         location: .init(id: LocationCode("LOC-89AB"), name: "Bin 9"),
-                        amount: Amount(value: 1, unit: "each"), ambiguousQuantity: true)
+                        ambiguousQuantity: true, fields: scanAmountFields())
                 ])
         }
         session.submit("4006381333931")
@@ -467,7 +467,7 @@ struct RecountSessionTests {
                     ScanStrayOut(
                         entryId: InventoryEntryCode("INV-9999"),
                         location: .init(id: LocationCode("LOC-89AB"), name: "Bin 9"),
-                        amount: Amount(value: 1, unit: "each"), ambiguousQuantity: false)
+                        ambiguousQuantity: false, fields: scanAmountFields())
                 ])
         }
         session.submit("4006381333931")

@@ -1,6 +1,7 @@
 # ADR 0021: Derived values
 
-Status: Accepted; implementation tracked in #3309. Amends
+Status: Accepted; engine implementation tracked in #3309, unified field
+contract and editing experience in #3324. Amends
 [ADR 0015](0015-unified-durable-work-coordination.md): the `refresh.family`
 passes and `derived_refresh` Runs it coordinates are retired.
 
@@ -44,9 +45,27 @@ and turned one Product save into a 115–147 second rollback; #2855 removed them
   filter. One-hop lookups and indexed rollups stay compiled inline
   (`store: false`) when the list round-trip evidence shows them cheap. Quality
   moves into `DerivedValue`.
-- **One envelope.** Values keep their field slot; a per-row `derived` sidecar
-  carries state (fresh, stale, missing, waiting, failed), `decidedBy`
-  provenance and `asOf`, replacing `fieldResolutions` on web, Apple and MCP.
+- **One typed field envelope.** Governed and derived values live under the
+  record's `fields`, each with three independent parts: current authoritative
+  assignment and permitted actions; an effective result paired with its own
+  provenance; and background-work status. Ordinary fields remain simple.
+  Generated schemas preserve each field's stored and effective value types.
+  This replaces both `fieldResolutions` and the `derived` sidecar across web,
+  Apple and MCP; it supersedes the original ordinary-slot-plus-sidecar design.
+  A cached result and its provenance describe one computation. Current saved
+  intent, receipt ownership and action eligibility never come from that cache.
+- **Intent is independent of outcome.** Inherit, explicit value and explicit
+  None are distinct saved choices; allocation is an effective result mechanism,
+  not a saved assignment mode. Empty outcomes distinguish None, unset, blocked,
+  mixed and inapplicable. Missing means that no computation exists. Refresh
+  failure or waiting can coexist with either an old usable result or no result.
+  An own assignment that decisively wins updates the effective value
+  immediately, with the same precedence used by filtering and sorting.
+- **Reset follows sources.** Use inherited removes the override; Keep this
+  value creates an explicit assignment. Reset displays a valid fallback or
+  Updating, never the removed override relabeled as inherited. Actionable reads
+  expose current eligibility; exact fallback previews and explanation evidence
+  load on demand. Writes revalidate policy through the existing commands.
 - **Triggers mark, never expand.** Generated row triggers, guarded by changed
   declared input columns, upsert one `DerivedDirty` row for the written record
   and its own old and new relationship endpoints, with a sequence ticket. They
@@ -61,15 +80,32 @@ and turned one Product save into a 115–147 second rollback; #2855 removed them
   hash of its declared input projection; reverts reuse the response cache.
   Descriptive fields stay hands-off through the existing Automatic rules,
   which apply high-confidence additions to declared fill fields with receipts;
-  a stored `automaticFields` value records which current values those rules
-  decided, so the envelope marks them `auto` until a member edits or confirms
-  them. Money and identity fields keep explicit writes. (Revised during
+  receipt and audit evidence establishes which current values those rules
+  own. Member edits and same-value confirmation end automatic ownership
+  immediately. There is no `automaticFields` cache or dirty target; the cutover
+  retires those disposable rows while retaining receipts and audit evidence.
+  Money and
+  identity fields keep explicit writes. (Revised during
   implementation: deciding at read time without a write would have duplicated
   the Automatic rules and their receipts.)
+- **Valuation and descriptive Cost are distinct fields.** Product `price` keeps
+  numeric valuation and its existing assignments; it is inapplicable to services.
+  Readonly `cost` describes an item amount or a service charge average with its
+  matching count and latest charge. Physical Cost projects the complete selected
+  price result, provenance and work instead of maintaining a second price cache.
+  Service Cost publishes its tuple atomically. Cost sorting uses that same
+  selected result; valuation-presence filters and the Item prices footer exclude
+  services. Live charge evidence remains on demand, never a competing display
+  amount. Old scalar price caches cannot establish a historical service tuple.
 - **One explanation surface.** Clients render the envelope: a cell mark for
-  inherited and auto values, an immediate updating dot, and one popover with
-  the decision chain and stored versus live values. The drain rings the
-  existing doorbell after each publication.
+  inherited and auto values, an immediate updating dot, and one web popover or
+  native sheet/popover combining current assignment, permitted edits and source
+  evidence. One source-stack primitive renders ordered deciding, skipped and
+  blocked levels with specialized reference, category or image-strip content.
+  Image stacks are view-only. Multi-source allocations retain contributor
+  semantics rather than inventing a single deciding record. Live comparisons
+  are explicitly distinguished from the historical provenance of cached results.
+  The drain rings the existing doorbell after each publication.
 
 ## Considered options
 
@@ -80,12 +116,21 @@ and turned one Product save into a 115–147 second rollback; #2855 removed them
   list exceptions and the whole-inventory pre-pass remain.
 - **Application change registration**: writers forget to register and no-op
   saves register anyway (#3281, #3287).
+- **Keep effective values beside a metadata sidecar**: this leaves the
+  relationship between a value and its provenance implicit. Extending that
+  sidecar with the old edit object also lets cached metadata obscure current
+  assignment intent. #3324 chooses concrete field envelopes despite the larger
+  cross-client migration.
 
 ## Consequences
 
 The `refresh.family` passes, `derived_refresh` Runs, family enrollment in
 `recordChange`, quality publication, fingerprint supersession, read-time
-valuation preparation, `fieldResolutions` and progressive list loading are
-removed. Stored values can lag a save by seconds and show an updating dot;
-sorts and filters read the stored value meanwhile. Correctness depends on
-declared inputs, which the read-set check and reconciliation guard.
+valuation preparation and progressive list loading are removed by the engine
+work. #3324 completes the separately tracked field contract migration, removing
+`fieldResolutions`, the `derived` sidecar and their duplicate presentation
+adapters. Stored results can lag a save and show an updating indicator; sorts
+and filters use the same effective result, including decisive current own
+intent. Correctness depends on declared inputs, which the read-set check and
+reconciliation guard. Additional field materialization remains #3338, and
+Image list loading optimization remains #3325.

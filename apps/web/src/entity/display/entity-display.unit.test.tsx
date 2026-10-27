@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { PlantingOut } from "@cubby/schemas/planting";
+import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
+import { productCost } from "@cubby/schemas/product-fields";
 import type { CellData } from "@tanstack/react-table";
 import {
   fireEvent,
@@ -13,6 +14,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   EntityDisplayImagesProvider,
   entityDisplayImageKey,
@@ -48,16 +50,25 @@ it("renders proposed text and None independently of the current resolved value",
   const record = {
     id: "TSK-4K7M",
     trade: "plumbing",
-    fieldResolutions: {
+    fields: {
       trade: {
-        mode: "inherit",
-        storedValue: null,
-        value: "plumbing",
-        fallbackValue: "plumbing",
-        source: "project",
-        sourceEntity: null,
-        matchesFallback: true,
-        canReset: false,
+        current: {
+          assignment: { kind: "inherit" },
+          controls: {
+            kind: "editable",
+            canSetNone: true,
+            canConfirm: true,
+            reset: { kind: "unavailable" },
+          },
+        },
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "value", value: "plumbing" },
+            provenance: { kind: "default", source: null },
+          },
+        },
+        work: { kind: "idle" },
       },
     },
   };
@@ -184,16 +195,20 @@ describe("declared entity displays", () => {
       lineKind: "shipping",
       spendingCategoryId: null,
       spendingCategoryName: null,
-      fieldResolutions: {
+      fields: {
         spendingCategoryId: {
-          mode: "allocated",
-          storedValue: null,
-          value: null,
-          fallbackValue: null,
-          source: "Principal line allocation",
-          sourceEntity: null,
-          matchesFallback: false,
-          canReset: true,
+          current: {
+            assignment: { kind: "inherit" },
+            controls: { kind: "readonly", reason: "allocated" },
+          },
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "empty", reason: "mixed" },
+              provenance: { kind: "allocated" },
+            },
+          },
+          work: { kind: "idle" },
         },
       },
       spendingCategoryAllocations: [
@@ -1265,28 +1280,47 @@ it("opens an inherited scalar from stored intent and clears its explicit overrid
   const record = {
     id: "TSK-4K7M",
     trade: null,
-    fieldResolutions: {
+    fields: {
       trade: {
-        mode: "inherit",
-        storedValue: null,
-        value: "plumbing",
-        fallbackValue: "plumbing",
-        source: "project",
-        sourceEntity: null,
-        matchesFallback: true,
-        canReset: false,
+        current: {
+          assignment: { kind: "inherit" },
+          controls: {
+            kind: "editable",
+            canSetNone: true,
+            canConfirm: true,
+            reset: { kind: "unavailable" },
+          },
+        },
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "value", value: "plumbing" },
+            provenance: { kind: "default", source: null },
+          },
+        },
+        work: { kind: "idle" },
       },
     },
   };
   const save = vi.fn(async () => {});
   const explicit = {
     ...record,
-    fieldResolutions: {
+    fields: {
       trade: {
-        ...record.fieldResolutions.trade,
-        mode: "explicit",
-        storedValue: "plumbing",
-        canReset: true,
+        ...record.fields.trade,
+        current: {
+          assignment: {
+            kind: "value",
+            value: "plumbing",
+            ownership: { kind: "record" },
+          },
+          controls: {
+            kind: "editable",
+            canSetNone: true,
+            canConfirm: false,
+            reset: { kind: "available", preview: { kind: "not_loaded" } },
+          },
+        },
       },
     },
   };
@@ -1326,16 +1360,25 @@ it("edits the effective inherited checkbox and restores the nullable override", 
   const record = {
     id: "PRD-4K7M",
     stockTracked: null,
-    fieldResolutions: {
+    fields: {
       stockTracked: {
-        mode: "inherit",
-        storedValue: null,
-        value: true,
-        fallbackValue: true,
-        source: "category",
-        sourceEntity: null,
-        matchesFallback: true,
-        canReset: false,
+        current: {
+          assignment: { kind: "inherit" },
+          controls: {
+            kind: "editable",
+            canSetNone: true,
+            canConfirm: true,
+            reset: { kind: "unavailable" },
+          },
+        },
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "value", value: true },
+            provenance: { kind: "default", source: null },
+          },
+        },
+        work: { kind: "idle" },
       },
     },
   };
@@ -1360,14 +1403,29 @@ it("edits the effective inherited checkbox and restores the nullable override", 
   const explicit = {
     ...record,
     stockTracked: false,
-    fieldResolutions: {
+    fields: {
       stockTracked: {
-        ...record.fieldResolutions.stockTracked,
-        mode: "explicit",
-        storedValue: false,
-        value: false,
-        matchesFallback: false,
-        canReset: true,
+        ...record.fields.stockTracked,
+        current: {
+          assignment: {
+            kind: "value",
+            value: false,
+            ownership: { kind: "record" },
+          },
+          controls: {
+            kind: "editable",
+            canSetNone: true,
+            canConfirm: false,
+            reset: { kind: "available", preview: { kind: "not_loaded" } },
+          },
+        },
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "value", value: false },
+            provenance: { kind: "own", ownership: { kind: "record" } },
+          },
+        },
       },
     },
   };
@@ -1387,11 +1445,16 @@ it("edits the effective inherited checkbox and restores the nullable override", 
   );
   const undecided = {
     ...record,
-    fieldResolutions: {
+    fields: {
       stockTracked: {
-        ...record.fieldResolutions.stockTracked,
-        value: null,
-        fallbackValue: null,
+        ...record.fields.stockTracked,
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "empty", reason: "unset" },
+            provenance: null,
+          },
+        },
       },
     },
   };
@@ -1475,3 +1538,54 @@ it.each(["network", "primaryCardholderId"])(
     expect(save).not.toHaveBeenCalled();
   },
 );
+
+type PlantingOut = DetailRecordOf<"planting">;
+
+it("copies and totals the amount from the selected Cost snapshot", () => {
+  const row = {
+    id: "PRD-SYNTHETIC",
+    cost: { amount: 999 },
+    fields: {
+      cost: computedFieldEnvelope(productCost).parse({
+        current: {
+          assignment: null,
+          controls: { kind: "readonly", reason: "computed" },
+        },
+        result: {
+          kind: "cached",
+          computedAt: "2026-10-01T00:00:00Z",
+          freshness: "stale",
+          decision: {
+            outcome: {
+              kind: "value",
+              value: {
+                kind: "service_charge",
+                amount: 13,
+                chargeCount: 2,
+                latestCharge: 10,
+              },
+            },
+            provenance: { kind: "computed" },
+          },
+        },
+        work: {
+          kind: "failed",
+          error: "Synthetic Cost refresh failure",
+          retryAt: null,
+        },
+      }),
+    },
+  };
+  const columns = createEntityDisplayColumns(
+    "product",
+    createCubbyColumnHelper<typeof row>(),
+    undefined,
+    { only: ["cost"] },
+  );
+  const data = columns
+    .visit((column) => column.meta?.cellData)
+    .find((value) => value !== undefined);
+  if (!data) throw new Error("Missing Cost clipboard metadata");
+  expect(data.getCopyPayload(row)).toEqual({ text: "13", json: 13 });
+  expect(data.getNumericValue?.(row)).toBe(13);
+});

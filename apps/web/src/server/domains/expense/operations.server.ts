@@ -39,6 +39,7 @@ import {
 import { matchExpenses } from "~/server/domains/expense/repo/match";
 import { loadEffectiveInventoryOwnershipById } from "~/server/domains/inventory/repo/ownership";
 import { confirmInventoryExpenseBeneficiary } from "~/server/domains/inventory/repo/ownership-mutations";
+import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { listAll } from "~/server/generic/list/repo/list-all";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { TraceNames } from "~/server/observability/tracing";
@@ -286,7 +287,13 @@ async function confirmInventoryBeneficiary(
 }
 
 export const expenseHandlers = implementOperationDomain(expenseContract, {
-  chartData: (context, input) => expenseChartDataWorkflow(context.db, input),
+  chartData: async (context, input) =>
+    readPublicEntityRows({
+      db: context.db,
+      entity: "expense",
+      projection: "detail",
+      rows: await expenseChartDataWorkflow(context.db, input),
+    }),
   analytics: (context, input) => expenseAnalytics(context.db, input),
   spendSummary: (context, input) => expenseSpendSummary(context.db, input),
   monthlySummary: (context, input) => expenseMonthlySummary(context.db, input),
@@ -295,8 +302,19 @@ export const expenseHandlers = implementOperationDomain(expenseContract, {
   facetCounts: (context, input) =>
     expenseFacetCountsWorkflow(context.db, input),
   tradeAffinity: (context) => expenseTradeAffinity(context.db),
-  chargeContext: (context, input) =>
-    expenseChargeContextWorkflow(context.db, input),
+  chargeContext: async (context, input) => {
+    const result = await expenseChargeContextWorkflow(context.db, input);
+    if (!result) return null;
+    return {
+      ...result,
+      siblings: await readPublicEntityRows({
+        db: context.db,
+        entity: "expense",
+        projection: "detail",
+        rows: result.siblings,
+      }),
+    };
+  },
   inventoryOwnershipContext: (context, input) =>
     expenseInventoryOwnershipContext(context.db, input),
   vendorAttributionDefaults: (context, input) =>

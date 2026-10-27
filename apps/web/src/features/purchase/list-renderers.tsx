@@ -1,3 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+
 import { VendorOrderLink } from "~/entity/components/entity-ref-link";
 import { VendorCell } from "~/entity/components/vendor-cell";
 import { createTextColumn } from "~/entity/table/column-helpers";
@@ -22,10 +24,10 @@ const vendor: ListRenderer<"purchase"> = (helper) =>
         },
         cell: (info) => {
           const row = info.row.original;
-          return row.vendorName && row.vendorId ? (
+          return row.vendorName && fieldValueOf(row.fields.vendorId) ? (
             <VendorCell
               vendor={row.vendorName}
-              vendorId={row.vendorId}
+              vendorId={fieldValueOf(row.fields.vendorId)}
               logo={row.vendorLogo}
             />
           ) : (
@@ -89,7 +91,23 @@ const reconciliationStatus: ListRenderer<"purchase"> = (helper) =>
         id: "reconciliation",
         header: "Reconciles",
         meta: { className: "w-48", mobile: { slot: "meta", priority: 60 } },
-        cell: (info) => <ReconciliationStatus purchase={info.row.original} />,
+        cell: (info) => {
+          const row = info.row.original;
+          const expenseTotal = fieldValueOf(row.fields.expenseTotal);
+          const reconciliation = fieldValueOf(row.fields.reconciliation);
+          return expenseTotal !== null && reconciliation ? (
+            <ReconciliationStatus
+              purchase={{
+                statedTotal: row.statedTotal,
+                expenseTotal,
+                unpricedExpenseCount: row.unpricedExpenseCount,
+                reconciliation,
+              }}
+            />
+          ) : (
+            <NoneValue />
+          );
+        },
       }),
     );
   });

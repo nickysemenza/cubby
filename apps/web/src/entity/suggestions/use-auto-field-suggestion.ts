@@ -1,5 +1,6 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
 import { useCallback, useEffect, useRef } from "react";
 import {
@@ -247,7 +248,10 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       isDirty ||
       context.isFetching ||
       (resolution !== null &&
-        !(resolution.mode === "inherit" && resolution.value === null)) ||
+        !(
+          resolution.current.assignment?.kind === "inherit" &&
+          fieldValueOf(resolution) === null
+        )) ||
       !suggestion?.value ||
       suggestion.probability == null ||
       suggestion.probability < 0.85 ||

@@ -1,14 +1,16 @@
-import { type ImageOut, isDisplayableImageFile } from "@cubby/schemas/image";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { ImageOut } from "@cubby/schemas/image";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
-import { type InfLocation } from "@cubby/schemas/location";
+import { type LocationTreeNode } from "@cubby/schemas/location";
 
 const MAX_CHILD_PREVIEWS = 4;
 
 type LocationPrimaryVisualSource = "location" | "product" | "none";
 
 interface LocationChildVisual {
-  id: InfLocation["id"];
+  id: LocationTreeNode["id"];
   name: string;
   image: ImageOut;
 }
@@ -30,17 +32,18 @@ const firstDisplayable = (images: readonly ImageOut[] | undefined) =>
   images?.find(isDisplayableImageFile) ?? null;
 
 export function resolveLocationPrimaryVisual(
-  location: Pick<InfLocation, "images" | "product" | "displayImages">,
+  location: Pick<LocationTreeNode, "fields">,
   resolvedImage: ImageUrlSummary | null = null,
 ): ResolvedLocationPrimaryVisual {
-  const image = resolvedImage ?? location.displayImages?.[0] ?? null;
+  const image =
+    resolvedImage ?? fieldValueOf(location.fields.displayImages)?.[0] ?? null;
   if (!image) return { image: null, source: "none" };
   return {
     image: { ...image, url: preferredImageUrl(image) },
     source:
-      location.images.some(
+      (fieldValueOf(location.fields.images) ?? []).some(
         (own) => own.url === (image.representations?.original ?? image.url),
-      ) || !location.product
+      ) || !fieldValueOf(location.fields.product)
         ? "location"
         : "product",
   };
@@ -54,15 +57,14 @@ export function resolveLocationPrimaryVisual(
  * presentation is interactive or sits inside an existing location link.
  */
 export function resolveLocationVisual(
-  location: Pick<
-    InfLocation,
-    "images" | "product" | "children" | "displayImages"
-  >,
+  location: Pick<LocationTreeNode, "fields" | "children">,
   resolvedImage: ImageUrlSummary | null = null,
 ): ResolvedLocationVisual {
   const primary = resolveLocationPrimaryVisual(location, resolvedImage);
   const allChildVisuals = (location.children ?? []).flatMap((child) => {
-    const image = firstDisplayable(child.images);
+    const image = firstDisplayable(
+      fieldValueOf(child.fields.images) ?? undefined,
+    );
     return image ? [{ id: child.id, name: child.name, image }] : [];
   });
   const childVisuals = allChildVisuals.slice(0, MAX_CHILD_PREVIEWS);

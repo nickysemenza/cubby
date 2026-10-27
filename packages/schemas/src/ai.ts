@@ -10,7 +10,7 @@ import { vendorSpendingProfile } from "./spending-classification";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 import { batchOutSchema } from "./batch";
-import { fieldResolutionsSchema } from "./field-resolution";
+import { fieldEnvelope } from "./field-envelope";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { shortcodeEntities } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifier-fields";
@@ -865,7 +865,7 @@ export type ExternalIdKindSuggestionInput = z.infer<
 export const fieldSuggestionsOut = z.object({
   suggestions: z.record(z.string(), fieldSuggestionSchema.nullable()),
   /** Authoritative inheritance state for this exact draft snapshot. */
-  fieldResolutions: fieldResolutionsSchema.optional(),
+  fields: z.record(z.string(), fieldEnvelope(z.json(), z.json())).optional(),
   /** Requested targets the server allowed the decision model to evaluate. */
   eligibleTargets: z.array(z.string()).optional(),
   /** One entry per requested target; why `suggestions[target]` is or isn't a

@@ -4,13 +4,13 @@ import {
   type MeasureEstimate,
   type StoredNutritionTotals,
 } from "@cubby/schemas/nutrition";
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { sumBy } from "es-toolkit";
 import { useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { MarkdownText } from "~/entity/prose/markdown";
 import { formatCurrency } from "~/lib/number-format";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
@@ -377,3 +377,5 @@ export function RecipeMagazineView({
     </Stack>
   );
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

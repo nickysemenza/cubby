@@ -1,10 +1,8 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { labelField } from "./label-field.js";
 import { purchaseChildren } from "../child-tables/purchase.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
-import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { purchaseEvidenceCoverage } from "../purchase-evidence-policy";
 import { spendingCategoryShortcode } from "../identifier-fields";
 import { defineEntity } from "./definition.js";
@@ -296,7 +294,6 @@ export default defineEntity({
     },
   },
   model: {
-    stored: { automaticFields: automaticFields("purchase", "Purchase") },
     research: { fillFields: ["spendingCategoryId"] },
     fields: [
       {
@@ -614,16 +611,6 @@ export default defineEntity({
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
-        display: { detail: false, list: false },
-        key: "fieldResolutions",
-        kind: "json",
-        validation: {
-          read: optionalFieldResolutionsSchema,
-          create: null,
-          update: null,
-        },
-      },
-      {
         key: "itemizationExpectation",
         kind: "enum",
         nullable: true,
@@ -681,21 +668,21 @@ export default defineEntity({
           description:
             "An explicit Purchase itemization policy wins; otherwise the live Vendor policy supplies it, followed by the Purchase spending category.",
           projections: {
-            list: "fieldResolutions.itemizationExpectation.value",
-            detail: "fieldResolutions.itemizationExpectation.value",
-            summary: "fieldResolutions.itemizationExpectation.value",
+            list: "itemizationExpectation",
+            detail: "itemizationExpectation",
+            summary: "itemizationExpectation",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.itemizationExpectation.sourceEntity",
+              path: "fields.itemizationExpectation.result.decision.provenance.source",
               label: "Source",
             },
             {
-              path: "fieldResolutions.itemizationExpectation.storedValue",
+              path: "fields.itemizationExpectation.current.assignment.value",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.itemizationExpectation.fallbackValue",
+              path: "fields.itemizationExpectation.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -1469,7 +1456,6 @@ export default defineEntity({
       "productsCoverage",
       "coverage",
       "spendingCategorySummary",
-      "fieldResolutions",
       "spendingCategoryId",
       "spendingCategoryName",
       "spendingCategoryOrigin",

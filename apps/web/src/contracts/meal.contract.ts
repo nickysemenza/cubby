@@ -1,4 +1,5 @@
 import { plainDate } from "@cubby/schemas/base-entity";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import {
   ledgerPartyShortcode,
   mealShortcode,
@@ -136,7 +137,7 @@ export const mealContract = defineContract(
       exposure: "view",
       note: "entity_read.list on meals filtered by mealDate",
       input: schemas.mealDateRange,
-      output: schemas.mealListOut,
+      output: z.array(entityFieldEnvelopeSchemas.meal.list),
     }),
     upcomingSummary: query({
       exposure: "view",
@@ -179,7 +180,7 @@ export const mealContract = defineContract(
         ],
       },
       input: schemas.mealAddRecipeInput,
-      output: schemas.mealOut,
+      output: entityFieldEnvelopeSchemas.meal.list,
       invalidates: ["meal"],
     }),
     updateRecipe: mutation({
@@ -199,14 +200,14 @@ export const mealContract = defineContract(
         ],
       },
       input: schemas.mealUpdateRecipeInput,
-      output: schemas.mealOut,
+      output: entityFieldEnvelopeSchemas.meal.list,
       invalidates: ["meal"],
     }),
     removeRecipe: mutation({
       description: "Remove a planned recipe from its meal.",
       command: { label: "Remove recipe", confirmation: null },
       input: schemas.mealRecipeIdInput,
-      output: schemas.mealOut,
+      output: entityFieldEnvelopeSchemas.meal.list,
       invalidates: ["meal"],
     }),
     // Copies are plans: planned portions, no images, appended to the target days.
@@ -215,7 +216,7 @@ export const mealContract = defineContract(
         "Copy a Meal and its food entries to the requested date. The new Meal is a separate record; inspect it before further edits.",
       command: { label: "Duplicate meal", confirmation: null },
       input: mealDuplicateInput,
-      output: schemas.mealOut,
+      output: entityFieldEnvelopeSchemas.meal.list,
       invalidates: ["meal"],
     }),
     copyRange: mutation({

@@ -1,3 +1,4 @@
+import { fieldDecisionOf, fieldEnvelopeFor } from "./field-envelope";
 /**
  * The one registry and evaluator for classification-declared field policies:
  * whether a classification expects a field of the record it classifies, and
@@ -215,14 +216,8 @@ export function classificationFieldDisplayRefusal<TRecord extends object>(
   record: TRecord,
   field: string,
 ): string | null {
-  const mode = classificationValue(
-    {
-      classifier: "fieldResolutions",
-      readPath: `fieldResolutions.${field}.mode`,
-    },
-    record,
-  );
-  return mode === "allocated"
+  const envelope = fieldEnvelopeFor(record, field);
+  return envelope && fieldDecisionOf(envelope)?.provenance?.kind === "allocated"
     ? null
     : classificationFieldRefusal(entity, record, field);
 }

@@ -1,4 +1,4 @@
-import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
+import { rawProductWithMappingsAndFood } from "@cubby/schemas/product-raw-read";
 import { testShortcode } from "@cubby/schemas/testing";
 import { foodSummary } from "@cubby/usda";
 import { describe, expect, it } from "vitest";
@@ -13,7 +13,7 @@ import {
 // `food.nutritionInfo` is required once `food` is non-null, so the selection is
 // really gated on `food` being present at all.
 const productWithFood = (shortcode: string, price: number | null) =>
-  mock(productWithMappingsAndFoodOut, {
+  mock(rawProductWithMappingsAndFood, {
     seed: 1,
     overrides: {
       id: testShortcode("product", shortcode),
@@ -29,7 +29,7 @@ const productWithFood = (shortcode: string, price: number | null) =>
   });
 
 const productWithoutFood = (shortcode: string, price: number | null) =>
-  mock(productWithMappingsAndFoodOut, {
+  mock(rawProductWithMappingsAndFood, {
     seed: 2,
     overrides: {
       id: testShortcode("product", shortcode),
@@ -40,7 +40,7 @@ const productWithoutFood = (shortcode: string, price: number | null) =>
   });
 
 const productWithLabel = (shortcode: string, price: number | null) =>
-  mock(productWithMappingsAndFoodOut, {
+  mock(rawProductWithMappingsAndFood, {
     seed: 4,
     overrides: {
       id: testShortcode("product", shortcode),

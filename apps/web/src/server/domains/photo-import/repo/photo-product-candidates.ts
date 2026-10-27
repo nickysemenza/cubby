@@ -14,6 +14,8 @@ import type {
   PhotoRunImage,
   PhotoAcceptedSourceLine,
 } from "@cubby/schemas/photo-import-run";
+import { photoProductEvidence } from "@cubby/schemas/photo-import-run";
+import { productListInventoryEntryOut } from "@cubby/schemas/product";
 import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
 import { importExtractionOutcome } from "@cubby/schemas/purchase-import";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
@@ -55,6 +57,7 @@ import {
   ensureRun,
   aiCallRunInput,
 } from "~/server/domains/run/repo/ensure-run";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 const CANDIDATE_POOL_LIMIT = 240;
@@ -668,6 +671,25 @@ export async function loadPhotoProductEvidence(
         products.flatMap((item) => (item.categoryId ? [item.categoryId] : [])),
       ),
     ]);
+  const inventoryGroups = ids.map((id) => inventoryEntries.get(id) ?? []);
+  const publicInventory = await publicFieldEnvelopeRows({
+    db,
+    entity: "inventory",
+    schema: productListInventoryEntryOut,
+    rows: inventoryGroups.flat(),
+  });
+  let inventoryOffset = 0;
+  const publicInventoryByProduct = new Map(
+    ids.map((id, index) => {
+      const length = inventoryGroups[index]?.length ?? 0;
+      const rows = publicInventory.slice(
+        inventoryOffset,
+        inventoryOffset + length,
+      );
+      inventoryOffset += length;
+      return [id, rows] as const;
+    }),
+  );
   const expenseRows = ids.length
     ? await getDb(db)
         .select({
@@ -720,71 +742,71 @@ export async function loadPhotoProductEvidence(
   const expenseCountByProduct = new Map(
     expenseCounts.map((row) => [row.productId, row.count]),
   );
-  return new Map(
-    products.map((item) => [
-      item.id,
-      {
-        id: parseShortcodeFor("product", item.shortcode),
-        name: item.name,
-        coverUrl: covers.get(item.id) ?? null,
-        brandId: item.brandId,
-        brandName: item.brandName,
-        model: item.model,
-        notes: item.notes,
-        tags: item.tags,
-        category: item.categoryId
-          ? (categories.get(item.categoryId) ?? null)
+  const rows = products.map((item) => ({
+    id: parseShortcodeFor("product", item.shortcode),
+    name: item.name,
+    coverUrl: covers.get(item.id) ?? null,
+    brandId: item.brandId,
+    brandName: item.brandName,
+    model: item.model,
+    notes: item.notes,
+    tags: item.tags,
+    category: item.categoryId
+      ? (categories.get(item.categoryId) ?? null)
+      : null,
+    externalIds: mapProductExternalIds(
+      externalIds.filter((entry) => entry.entityId === item.id),
+    ),
+    identifiers: externalIds
+      .filter((entry) => entry.entityId === item.id)
+      .map((entry) => entry.externalId),
+    purchaseLineCount: expenseCountByProduct.get(item.id) ?? 0,
+    quantity: quantities.get(item.id),
+    inventoryEntries: publicInventoryByProduct.get(item.id) ?? [],
+    ownPhotos: (galleries[item.id] ?? [])
+      .filter((image) => image.source === "own")
+      .slice(0, 4)
+      .map((image) => ({
+        id: image.id,
+        url: preferredImageUrl(image),
+        capturedAt: image.capturedAt?.toISOString() ?? null,
+      })),
+    purchaseLines: expenseRows
+      .filter((row) => row.productId === item.id)
+      .slice(0, 3)
+      .map((row) => ({
+        expenseId: parseShortcodeFor("expense", row.expenseId),
+        purchaseId: row.purchaseCode
+          ? parseShortcodeFor("purchase", row.purchaseCode)
           : null,
-        externalIds: mapProductExternalIds(
-          externalIds.filter((entry) => entry.entityId === item.id),
-        ),
-        identifiers: externalIds
-          .filter((entry) => entry.entityId === item.id)
-          .map((entry) => entry.externalId),
-        purchaseLineCount: expenseCountByProduct.get(item.id) ?? 0,
-        quantity: quantities.get(item.id),
-        inventoryEntries: inventoryEntries.get(item.id) ?? [],
-        ownPhotos: (galleries[item.id] ?? [])
-          .filter((image) => image.source === "own")
-          .slice(0, 4)
-          .map((image) => ({
-            id: image.id,
-            url: preferredImageUrl(image),
-            capturedAt: image.capturedAt?.toISOString() ?? null,
-          })),
-        purchaseLines: expenseRows
-          .filter((row) => row.productId === item.id)
-          .slice(0, 3)
-          .map((row) => ({
-            expenseId: parseShortcodeFor("expense", row.expenseId),
-            purchaseId: row.purchaseCode
-              ? parseShortcodeFor("purchase", row.purchaseCode)
-              : null,
-            acceptedSourceLines: acceptedSourceLines.get(row.id) ?? [],
-            purchaseLabel: row.purchaseLabel,
-            name: row.name,
-            date: row.purchaseCode ? row.orderedDate : row.date,
-            dateLabel: row.purchaseCode
-              ? ("Ordered" as const)
-              : ("Paid" as const),
-            vendor: row.vendor,
-            vendorId: row.vendorCode
-              ? parseShortcodeFor("vendor", row.vendorCode)
-              : null,
-            cost: row.cost,
-            productQuantity: row.productQuantity,
-            movement:
-              row.productQuantity == null
-                ? ("unknown" as const)
-                : row.cost != null && row.cost < 0
-                  ? row.productQuantity === 0
-                    ? ("adjusted" as const)
-                    : ("exited" as const)
-                  : row.productQuantity < 0
-                    ? ("exited" as const)
-                    : ("acquired" as const),
-          })),
-      },
-    ]),
-  );
+        acceptedSourceLines: acceptedSourceLines.get(row.id) ?? [],
+        purchaseLabel: row.purchaseLabel,
+        name: row.name,
+        date: row.purchaseCode ? row.orderedDate : row.date,
+        dateLabel: row.purchaseCode ? ("Ordered" as const) : ("Paid" as const),
+        vendor: row.vendor,
+        vendorId: row.vendorCode
+          ? parseShortcodeFor("vendor", row.vendorCode)
+          : null,
+        cost: row.cost,
+        productQuantity: row.productQuantity,
+        movement:
+          row.productQuantity == null
+            ? ("unknown" as const)
+            : row.cost != null && row.cost < 0
+              ? row.productQuantity === 0
+                ? ("adjusted" as const)
+                : ("exited" as const)
+              : row.productQuantity < 0
+                ? ("exited" as const)
+                : ("acquired" as const),
+      })),
+  }));
+  const publicRows = await publicFieldEnvelopeRows({
+    db,
+    entity: "product",
+    schema: photoProductEvidence,
+    rows,
+  });
+  return new Map(products.map((item, index) => [item.id, publicRows[index]!]));
 }

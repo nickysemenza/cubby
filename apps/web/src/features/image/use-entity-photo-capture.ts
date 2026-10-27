@@ -1,3 +1,4 @@
+import { entityImageOf } from "@cubby/schemas/entity";
 /**
  * Capture a gallery entity's photo straight from the camera, with no entity
  * form in the way. The one place the upload→attach→cover sequence lives: any
@@ -45,15 +46,13 @@
  * files keep their pick order instead of each one briefly becoming the cover
  * in turn.
  */
-
-import { entityImageOf } from "@cubby/schemas/entity";
 import type { GalleryEntity } from "@cubby/schemas/entity-manifest";
 import type { ImageShortcode } from "@cubby/schemas/identifiers";
+import type { ImageOut } from "@cubby/schemas/image";
 import {
   ALLOWED_IMAGE_TYPES,
   MAX_IMAGE_UPLOAD_BYTES,
   imageOut,
-  type ImageOut,
 } from "@cubby/schemas/image";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";

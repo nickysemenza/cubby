@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { upc as upcSchema } from "@cubby/shared/upc";
 import { useCallback } from "react";
@@ -26,9 +27,10 @@ export function useUpcAwareCreate(
       if (parsed.success) {
         const product = await lookupUpc(parsed.data);
         if (!product) throw new Error("UPC lookup failed");
+        const brandName = fieldValueOf(product.fields.brandName);
         return {
           id: product.id,
-          name: `${product.name} (${product.brandName})`,
+          name: brandName ? `${product.name} (${brandName})` : product.name,
         };
       }
       return fallbackCreate(trimmed);

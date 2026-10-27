@@ -1,11 +1,10 @@
-import type {
-  PurchaseOut,
-  PurchaseReconciliation,
-} from "@cubby/schemas/purchase";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { PurchaseReconciliation } from "@cubby/schemas/purchase";
 import { reconcilePurchase } from "@cubby/schemas/purchase";
 import type { FC } from "react";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { formatCurrency } from "~/lib/number-format";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
@@ -38,7 +37,7 @@ type ReconciliationPurchase = {
   reconciliation?: PurchaseReconciliation;
   postedRefundTotal?: number;
   financialReconciliation?: Pick<
-    PurchaseOut["financialReconciliation"],
+    NonNullable<ReturnType<typeof financialReconciliationFor>>,
     "postedRefundTotal"
   >;
 };
@@ -86,3 +85,8 @@ export const ReconciliationStatus: FC<{
     </EnumPill>
   );
 };
+
+type PurchaseOut = DetailRecordOf<"purchase">;
+
+const financialReconciliationFor = (purchase: PurchaseOut) =>
+  fieldValueOf(purchase.fields.financialReconciliation);

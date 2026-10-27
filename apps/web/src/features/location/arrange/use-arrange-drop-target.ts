@@ -1,5 +1,5 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import { useDroppable } from "@dnd-kit/core";
 import { useEffect, useId, useRef } from "react";
 
@@ -8,7 +8,7 @@ import type { ArrangeDropData } from "./arrange-types";
 import { useArrangeDndState } from "./use-arrange-dnd";
 
 interface ArrangeDropTargetOptions {
-  roots: InfLocation[];
+  roots: LocationTreeNode[];
   locationId: LocationShortcode | null;
   onDragEnter?: () => void;
   onDragLeave?: () => void;

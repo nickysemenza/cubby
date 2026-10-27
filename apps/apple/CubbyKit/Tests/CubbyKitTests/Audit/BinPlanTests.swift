@@ -95,24 +95,30 @@ struct BinPlanTests {
         }
         let file = try GoldenVectors.decode(File.self, named: "bin-plan")
 
-        func json(_ node: Node) -> [String: Any] {
-            [
-                "id": node.code, "name": node.name, "aliases": [String](), "tags": [String](),
-                "type": node.parent == nil ? "house" : "box", "notes": NSNull(), "product": NSNull(),
-                "lastBulkInventory": NSNull(), "aiDescription": NSNull(), "images": [String](),
-                "valuation": NSNull(), "createdAt": "2026-01-01T00:00:00.000Z",
-                "updatedAt": "2026-01-01T00:00:00.000Z", "childCount": 0, "directItemCount": 0,
-                "totalItemCount": 0,
-                "dataQuality": [
-                    "status": "complete", "score": 100, "facets": [String](), "gaps": [String](),
-                    "exceptions": [String](), "relatedGaps": [String](), "relatedExceptions": [String](),
-                ] as [String: Any],
-                "children": file.nodes.filter { $0.parent == node.code }.map(json),
+        typealias F = FieldEnvelopeFixture
+        func json(_ node: Node) -> JSONValue {
+            let missing = F.envelope(
+                assignment: nil, controls: F.readonly("computed"), result: ["kind": "missing"])
+            var fields = Dictionary(
+                uniqueKeysWithValues: [
+                    "product", "aiDescription", "images", "valuationLabel", "valuation",
+                    "dataQuality", "dataGaps", "displayImages",
+                ].map { ($0, missing) })
+            let type = JSONValue.string(node.parent == nil ? "house" : "box")
+            fields["type"] = F.envelope(
+                assignment: F.value(type), controls: F.editable(),
+                result: F.live(F.decision(type, provenance: F.own)))
+            return [
+                "id": .string(node.code), "name": .string(node.name), "aliases": [], "tags": [],
+                "notes": .null, "lastBulkInventory": .null,
+                "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z",
+                "childCount": 0, "directItemCount": 0, "totalItemCount": 0,
+                "fields": .object(fields),
+                "children": .array(file.nodes.filter { $0.parent == node.code }.map(json)),
             ]
         }
-        let roots = file.nodes.filter { $0.parent == nil }.map(json)
-        let data = try JSONSerialization.data(withJSONObject: roots)
-        let tree = LocationTree(roots: try JSONDecoder.cubby().decode([LocationTreeNode].self, from: data))
+        let roots = JSONValue.array(file.nodes.filter { $0.parent == nil }.map(json))
+        let tree = LocationTree(roots: try roots.decoded([LocationTreeNode].self))
 
         for c in file.cases {
             let verdict = BinPlan.plan(

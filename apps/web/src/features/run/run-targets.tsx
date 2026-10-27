@@ -1,10 +1,10 @@
-import type { RunOut } from "@cubby/schemas/run";
 import { humanize } from "@cubby/shared";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import RTable from "~/entity/table/table";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
 import { useSectionCount } from "~/ui/data-table/detail-section-state";
@@ -346,3 +346,5 @@ export function RunTargets({ record }: { record: RunOut }) {
     </>
   );
 }
+
+type RunOut = DetailRecordOf<"run">;

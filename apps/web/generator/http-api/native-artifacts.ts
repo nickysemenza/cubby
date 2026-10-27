@@ -12,7 +12,6 @@ import { renderNativeOperations } from "./native-operations.ts";
 import { pascal, registerSchemaNames } from "./schema-names.ts";
 import { renderSwiftModels } from "./swift-models.ts";
 import { NATIVE_TYPED_RECORDS, TYPE_OVERRIDES } from "./type-overrides.ts";
-import { toWire } from "../../src/lib/operation-wire.ts";
 
 type EntityOutputs = ReadonlyMap<string, string | null>;
 
@@ -32,18 +31,15 @@ export async function renderDirectNativeArtifacts(
   for (const name of NATIVE_TYPED_RECORDS) {
     const exported = named.get(name);
     if (exported) {
-      records.set(name, toWire(exported, "output"));
+      records.set(name, exported);
       continue;
     }
     const entity = /^(?<entity>[A-Z][a-z]+)Detail$/u.exec(name)?.groups?.entity;
     if (!entity) throw new Error(`Missing native record ${name}`);
     records.set(
       name,
-      toWire(
-        getEntityDetailOutputSchema(
-          z.enum(detailEntities).parse(entity.toLowerCase()),
-        ),
-        "output",
+      getEntityDetailOutputSchema(
+        z.enum(detailEntities).parse(entity.toLowerCase()),
       ),
     );
   }
@@ -80,6 +76,15 @@ export async function renderDirectNativeArtifacts(
   const aliases = models.names.map(
     (name) => `public typealias ${name} = CubbyAPI.${name}`,
   );
+  // Record roots can share a registered schema with a differently named operation
+  // output. Keep the requested native API name without projecting a second model.
+  for (const [index, alias] of [...records.keys()].entries()) {
+    const reference = contract.records[index];
+    const model = reference && models.types.get(`native://${reference}`);
+    if (!model) throw new Error(`Missing native record model ${alias}`);
+    if (model !== alias && !models.names.includes(alias))
+      aliases.push(`public typealias ${alias} = CubbyAPI.${model}`);
+  }
   const photoAliases = {
     PhotoImportContentType: "PhotoImportStageInputItemsItemContentType",
     PhotoImportSourceEntity: "PhotoImportCommitInputImagesItemSourceEntity",

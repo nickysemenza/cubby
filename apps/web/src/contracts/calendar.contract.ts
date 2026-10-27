@@ -11,6 +11,7 @@ import {
   calendarRotateCredentialOut,
   calendarRotateFeedOut,
 } from "@cubby/schemas/calendar";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
@@ -30,7 +31,10 @@ export const calendarContract = defineContract(
     schedule: query({
       exposure: "view",
       input: calendarRangeInput,
-      output: calendarScheduleOut,
+      output: calendarScheduleOut.extend({
+        tasks: z.array(entityFieldEnvelopeSchemas.task.detail),
+        plantings: z.array(entityFieldEnvelopeSchemas.planting.detail),
+      }),
       cache: { tags: [["calendar", "range"]] },
     }),
     getFeed: query({

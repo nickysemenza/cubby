@@ -183,6 +183,42 @@ After deployment, verify and report:
 Report any check not performed; migration success alone is not deployment
 verification.
 
+### Field-envelope decision cutover
+
+`0045_field_envelope_decisions` takes `ACCESS EXCLUSIVE` on `DerivedDirty`,
+`DerivedValue`, invalidation capture and the affected source tables together
+with a 30-second lock timeout. It preserves retained cached values, sort columns,
+timestamps, input hashes and original metadata. Non-price non-null legacy
+snapshots receive typed outcome metadata; only recorded inherited,
+default or computed provenance is translated. Unsupported historical ownership
+stays unknown. Original metadata remains under `decidedBy.legacy` until the next
+ordinary publication replaces that disposable cache row.
+
+Old non-empty price snapshots may be valuations or service averages. Their raw
+values and metadata remain retained as legacy evidence; the reader and sort SQL
+withhold them until valuation-only recomputation. The migration does not invent
+a service Cost snapshot from a scalar without matching count/latest evidence.
+It separately queues live Products for the new service Cost publisher; physical
+Cost projects the selected price without a second cached value.
+It retires only `automaticFields` values and direct/fanout marks, replaces the
+affected trigger functions, and drops the now-unused AuditLog derived trigger.
+Checks on both cache tables reject late old-Worker writes to those retired
+targets. Automatic-rule receipts and audit rows are unchanged.
+
+The migration queues converted snapshots and legacy nulls lacking an outcome
+reason, including ambiguous prices. It advances dirty tickets while retaining attempts and raw refresh
+errors, and captures the existing drain Job invalidation. A typed empty result
+already stored is unchanged. The new reader withholds ambiguous legacy nulls
+until a typed result arrives; it never reconstructs their meaning from current
+assignments or receipts. No assignments, financial allocations, automatic-rule
+receipts or source records are modified.
+
+After deployment, verify those marks drain, cached empty results decode, refresh
+failures retain usable results, and reset does not display the removed override.
+Record any remaining failing targets and raw errors. This cutover has not been
+rehearsed against a retained production copy by the implementation's synthetic
+migration test; that test verifies preservation, retirement and late-write guards.
+
 ## Unified Job cutover
 
 This migration replaces the old job tables and removes business triggers. Use

@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 /**
  * The `/tools` Usage view — the projects x tools grid.
  *
@@ -55,6 +56,7 @@ import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { cellMonoDense, stickyRowHeaderPage } from "~/ui/matrix/matrix-chrome";
@@ -772,7 +774,7 @@ function MatrixTable({
                   entity="project"
                   id={column.projectId}
                   name={column.projectName}
-                  emoji={column.emoji}
+                  emoji={fieldValueOf(column.fields.emoji)}
                   className="absolute bottom-2 left-1 z-10 flex w-24 origin-bottom-left rotate-[-60deg]"
                 />
               </div>
@@ -832,7 +834,9 @@ function MatrixTable({
                 <div className="w-64 min-w-0">
                   <ToolIdentityLink row={row} />
                   <div className="truncate text-2xs text-slate">
-                    {row.brandName}
+                    <FieldRecordValue record={row} field="brandName">
+                      {fieldValueOf(row.fields.brandName)}
+                    </FieldRecordValue>
                     {!row.isInventoried && " · not in inventory"}
                   </div>
                 </div>

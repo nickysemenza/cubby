@@ -1,10 +1,13 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseChargeContextOut } from "@cubby/schemas/project";
 import { purchaseUpdateData } from "@cubby/schemas/purchase";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { expenseHandlers } from "~/server/domains/expense/operations.server";
 import { expenseChargeContextWorkflow } from "~/server/domains/expense/repo/charge-context";
 import {
   getExpenseByShortcode,
@@ -12,10 +15,12 @@ import {
 } from "~/server/domains/expense/repo/crud";
 import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
 import { expenseList } from "~/server/domains/expense/repo/lookup";
+import { purchaseHandlers } from "~/server/domains/purchase/operations/purchase.server";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { systemPrincipal } from "~/server/http/authenticate";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
@@ -307,6 +312,93 @@ describe("purchase inheritance lifecycle", () => {
         entityId: charge.shortcode,
       }),
     ).resolves.toMatchObject({ groups: [] });
+  });
+
+  it("returns canonical attach and charge contexts without losing inherited or allocated decisions", async () => {
+    const { source, keeper, item, first, second } = await fixture();
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic alternate project principal",
+      date: fixtureDate,
+      cost: 40,
+      costType: "materials",
+      lineKind: "principal",
+      purchaseId: source.id,
+      projectId: second.id,
+    });
+    const allocated = await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic allocated tax",
+      date: fixtureDate,
+      cost: 1,
+      costType: "materials",
+      lineKind: "tax",
+      purchaseId: source.id,
+      trade: null,
+    });
+    const readStored = () =>
+      getDb(ctx.db).query.expense.findMany({
+        orderBy: (row, { asc }) => [asc(row.id)],
+      });
+    const before = await readStored();
+    const request = () => ({
+      principal: systemPrincipal(buildKernelContext(ctx.db, ctx.actor.userId)),
+      headers: new Headers(),
+      signal: new AbortController().signal,
+    });
+    const candidates = await purchaseHandlers.operations.linkExpenseCandidates({
+      data: { purchaseId: keeper.shortcode, scope: "any" },
+      request: request(),
+    });
+    expect(candidates.ok).toBe(true);
+    if (!candidates.ok) throw new Error(candidates.error.message);
+    const inherited = candidates.data.candidates.find(
+      (row) => row.id === item.shortcode,
+    );
+    if (!inherited) throw new Error("Synthetic inherited candidate missing");
+    expect(fieldValueOf(inherited.fields.projectId)).toBe(first.shortcode);
+    expect(fieldValueOf(inherited.fields.trade)).toBe("building");
+    expect(inherited.fields.trade.result).toMatchObject({
+      kind: "live",
+      decision: { provenance: { kind: "inherited" } },
+    });
+    expect(inherited.current).toBeTruthy();
+    expect(inherited.filed).toBe(true);
+    expect(inherited.summary).toContain(first.name);
+    expect(inherited).not.toHaveProperty("trade");
+    expect(inherited).not.toHaveProperty("projectId");
+    const tax = candidates.data.candidates.find(
+      (row) => row.id === allocated.shortcode,
+    );
+    if (!tax) throw new Error("Synthetic allocated candidate missing");
+    for (const field of [tax.fields.projectId, tax.fields.trade]) {
+      expect(field.current.controls).toEqual({
+        kind: "readonly",
+        reason: "allocated",
+      });
+      expect(field.result).toMatchObject({
+        kind: "live",
+        decision: {
+          outcome: { kind: "empty", reason: "mixed" },
+          provenance: { kind: "allocated" },
+        },
+      });
+    }
+    expect(tax).not.toHaveProperty("fieldResolutions");
+    const charge = await expenseHandlers.operations.chargeContext({
+      data: item.shortcode,
+      request: request(),
+    });
+    expect(charge.ok).toBe(true);
+    if (!charge.ok || !charge.data)
+      throw new Error("Synthetic charge context missing");
+    const rawPurchase = await getPurchaseByID(ctx.db, source.id);
+    expect(fieldValueOf(charge.data.purchase.fields.vendorId)).toBe(
+      rawPurchase.vendorId,
+    );
+    expect(charge.data.purchase).not.toHaveProperty("vendorId");
+    expect(charge.data.siblings.map((row) => row.id)).toContain(
+      allocated.shortcode,
+    );
+    expect(await readStored()).toEqual(before);
   });
 
   it("sums fractional purchase amounts before converting to floating point", async () => {

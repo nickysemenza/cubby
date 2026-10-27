@@ -1,12 +1,12 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { financialTransactionOut } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { expenseOut } from "@cubby/schemas/project";
 import {
   type linkExpensesToPurchaseInput,
-  type purchaseSettlementCandidatesOut,
   splitExpenseDelta,
   type splitExpenseInput,
 } from "@cubby/schemas/purchase";
+import type { PurchaseOut } from "@cubby/schemas/purchase";
 
 import { purchaseContract } from "~/contracts/purchase.contract";
 import { suggestSettlementMatch } from "~/server/ai/settlement-candidate-rank";
@@ -41,7 +41,9 @@ import {
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 
@@ -95,16 +97,39 @@ async function loadSettlementTransaction(
   context: EntityKernelContext,
   transactionId: string,
 ) {
-  const result = await executeEntityAs(context, "get", {
-    entity: "financialTransaction",
-    id: parseShortcodeFor("financialTransaction", transactionId),
-    missing: "error",
-  });
-  if (!result.item)
+  const result =
+    await ENTITY_KERNEL_BINDINGS.financialTransaction.repository.get(
+      context,
+      parseShortcodeFor("financialTransaction", transactionId),
+    );
+  if (!result)
     throw new Error(
       "Entity kernel returned the wrong financial transaction detail",
     );
-  return financialTransactionOut.parse(result.item);
+  return financialTransactionOut.parse(result);
+}
+
+async function readPurchase(context: EntityKernelContext, row: PurchaseOut) {
+  return (
+    await readPublicEntityRows({
+      db: context.db,
+      entity: "purchase",
+      projection: "detail",
+      rows: [row],
+    })
+  )[0]!;
+}
+
+async function readSplitExpenses(
+  context: EntityKernelContext,
+  rows: Awaited<ReturnType<typeof splitExpenseWorkflow>>,
+) {
+  return readPublicEntityRows({
+    db: context.db,
+    entity: "expense",
+    projection: "detail",
+    rows,
+  });
 }
 
 export const purchaseHandlers = implementOperationDomain(purchaseContract, {
@@ -122,17 +147,28 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
         transaction: await loadSettlementTransaction(context, transactionId),
       })),
     );
+    const review = composeSettlementReview(
+      {
+        id: input.purchaseId,
+        date: purchase.date,
+        statedTotal: purchase.statedTotal,
+      },
+      ranked,
+    );
+    const transactions = await readPublicEntityRows({
+      db: context.db,
+      entity: "financialTransaction",
+      projection: "detail",
+      rows: review.candidates.map((candidate) => candidate.transaction),
+    });
     return {
-      advisory: true,
-      ...composeSettlementReview(
-        {
-          id: input.purchaseId,
-          date: purchase.date,
-          statedTotal: purchase.statedTotal,
-        },
-        ranked,
-      ),
-    } satisfies typeof purchaseSettlementCandidatesOut._output;
+      advisory: true as const,
+      ...review,
+      candidates: review.candidates.map((candidate, index) => ({
+        ...candidate,
+        transaction: transactions[index]!,
+      })),
+    };
   },
   checkSettlementAllocation: async (context, input) => {
     const transaction = await loadSettlementTransaction(
@@ -174,8 +210,10 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
       }),
     });
   },
-  link: (context, input) => linkExpensesToPurchaseWorkflow(context, input),
-  split: (context, input) => splitExpenseWorkflow(context, input),
+  link: async (context, input) =>
+    readPurchase(context, await linkExpensesToPurchaseWorkflow(context, input)),
+  split: async (context, input) =>
+    readSplitExpenses(context, await splitExpenseWorkflow(context, input)),
   splitStart: async (context, input) =>
     startSplitDraft(await loadSplitOriginal(context.db, input.expenseId)),
   checkSplit: (context, input) =>
@@ -238,11 +276,19 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
       throw new Error("Entity kernel returned the wrong expense detail");
     const items = await splitExpenseWorkflow(context, input);
     const { originalCost, partsSum, delta } = splitExpenseDelta(
-      expenseOut.parse(original.item).cost,
+      entityFieldEnvelopeSchemas.expense.detail.parse(original.item).cost,
       input.parts.map((part) => part.cost),
     );
-    return { items, originalCost, partsSum, delta };
+    return {
+      items: await readSplitExpenses(context, items),
+      originalCost,
+      partsSum,
+      delta,
+    };
   },
-  reclassifyDocument: (context, input) =>
-    reclassifyPurchaseDocument(context.db, input, context.actorContext),
+  reclassifyDocument: async (context, input) =>
+    readPurchase(
+      context,
+      await reclassifyPurchaseDocument(context.db, input, context.actorContext),
+    ),
 });

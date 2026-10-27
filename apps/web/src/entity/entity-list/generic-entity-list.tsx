@@ -1,3 +1,4 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
 import { isSlotListView } from "@cubby/schemas/entity-definitions/definition";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
@@ -30,6 +31,7 @@ import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityListFor } from "~/entity/entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
 import { ListTotalSummary } from "~/entity/entity-list/list-total-summary";
+import { readRecordField } from "~/entity/entity-references";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { compileFilterCodec, sortToParam } from "~/entity/filters";
 import {
@@ -74,7 +76,6 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
-import { DerivedSidecarProvider } from "~/ui/derived/sidecar-context";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -239,7 +240,16 @@ function useListColumns(
         createImageColumn(helper, {
           entity,
           id: imageId,
-          getImages: (row) => (hasDisplayImages(row) ? row.displayImages : []),
+          getImages: (row) => {
+            const effectiveRowDisplayImages = readRecordField(
+              row,
+              "displayImages",
+              displayImagesField.nullish(),
+            );
+            return hasDisplayImages(row)
+              ? (effectiveRowDisplayImages ?? [])
+              : [];
+          },
         }),
       );
       composed.visit(add);
@@ -748,15 +758,9 @@ function ServerListBody({
       }
     : null;
   const provided = listQuery ? (
-    <ListQueryProvider value={listQuery}>
-      <DerivedSidecarProvider value={list.derived ?? EMPTY_DERIVED}>
-        {body}
-      </DerivedSidecarProvider>
-    </ListQueryProvider>
+    <ListQueryProvider value={listQuery}>{body}</ListQueryProvider>
   ) : (
-    <DerivedSidecarProvider value={list.derived ?? EMPTY_DERIVED}>
-      {body}
-    </DerivedSidecarProvider>
+    body
   );
   return (
     <>
@@ -811,5 +815,3 @@ function ListTimeline({
     />
   );
 }
-
-const EMPTY_DERIVED = {};

@@ -1,4 +1,4 @@
-import type { RunOut } from "@cubby/schemas/run";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import {
   type transferPairLeg,
   transferPairJudgment,
@@ -15,6 +15,7 @@ import type {
   RunDetailStepsOut,
 } from "~/contracts/run-detail.contract";
 import { runDetailContract } from "~/contracts/run-detail.contract";
+import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
 import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -27,11 +28,11 @@ const NOW = Date.now();
 const ago = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
 
 // SAFETY: the detail body reads only the Run's shortcode, status, purpose and selected input.
-const run = {
+const run = entityReadFixture(entityFieldEnvelopeSchemas.run.detail, {
   id: "RUN-4K7M",
   status: "running",
   purpose: "sweep",
-} as RunOut;
+});
 
 const step = (
   key: string,

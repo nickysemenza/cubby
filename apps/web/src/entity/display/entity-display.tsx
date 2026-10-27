@@ -25,6 +25,7 @@ import {
 import { entityPreviewFieldKeys } from "@cubby/schemas/entity-preview";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { fieldValueOf, fieldDecisionOf } from "@cubby/schemas/field-envelope";
 import { resolvedListSchema } from "@cubby/schemas/field-resolution";
 import { flexRender } from "@tanstack/react-table";
 import prettyBytes from "pretty-bytes";
@@ -96,7 +97,7 @@ import {
   type MobileColumnMeta,
 } from "~/ui/data-table/table-meta";
 import { CellMagnitudeBar } from "~/ui/data-table/visuals/cell-visual";
-import { DerivedRecordValue } from "~/ui/derived/sidecar-context";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { WhyValueContents } from "~/ui/derived/why-value";
 import { ExternalLinkText } from "~/ui/external-link";
 import { Button } from "~/ui/primitives/button";
@@ -406,13 +407,22 @@ function resolutionEmptyLabel(
   explainMissing = false,
 ): ReactNode {
   const resolution = fieldResolutionFor(record, field.key);
-  if (!resolution || resolution.value !== null) return null;
+  if (!resolution || fieldValueOf(resolution) !== null) return null;
   // Allocations have multiple reference values rather than one scalar value.
-  if (resolution.mode === "allocated") return null;
+  if (fieldDecisionOf(resolution)?.provenance?.kind === "allocated")
+    return null;
   const labels = resolutionPolicyFor(entity, field.key)?.labels;
   const label =
-    resolution.mode === "inherit" ? labels?.unresolved : labels?.none;
-  const text = label ?? (explainMissing ? resolution.source : null);
+    resolution.current.assignment?.kind === "inherit"
+      ? labels?.unresolved
+      : labels?.none;
+  const text =
+    label ??
+    (explainMissing
+      ? fieldDecisionOf(resolution)?.outcome.kind === "empty"
+        ? "Not set"
+        : null
+      : null);
   return text ? <span className="text-muted-foreground">{text}</span> : null;
 }
 
@@ -500,7 +510,14 @@ function readScalarField<TRecord extends object>(
   // Read surfaces display the canonical value, including system rules that
   // supersede a stored override. Editors retain the stored assignment intent.
   const resolution = fieldResolutionFor(record, field.key);
-  const value = resolution ? resolution.value : stored;
+  const resolvedValue = resolution ? fieldValueOf(resolution) : null;
+  const root = field.readKey ?? field.key;
+  // A scalar inside a structured result must use that same selected snapshot.
+  const value = resolution
+    ? readPath?.startsWith(`${root}.`)
+      ? readPathValue({ [root]: resolvedValue }, readPath)
+      : resolvedValue
+    : stored;
   if (value === undefined || value === null)
     return { kind: "empty", raw: value === undefined ? undefined : null };
   // A path-backed value is projected off a nested row, so its runtime shape is
@@ -1262,9 +1279,9 @@ export function EntityBasicInfo<TRecord extends object>({
             fullWidth: isProseField(field.key, field.control),
             ...rendered,
             value: (
-              <DerivedRecordValue record={record} field={field.key}>
+              <FieldRecordValue record={record} field={field.key}>
                 {decoratedValue}
-              </DerivedRecordValue>
+              </FieldRecordValue>
             ),
             anchor: quality
               ? `${quality.prefix}-field-${field.key}`
@@ -1451,7 +1468,11 @@ function renderEditableField<TRecord extends object>(
   const format = field.display.format;
   const resolution = fieldResolutionFor(record, field.key);
   const editValue = resolution
-    ? (editableFieldValue.parse(resolution.storedValue) ?? null)
+    ? (editableFieldValue.parse(
+        resolution.current.assignment?.kind === "value"
+          ? resolution.current.assignment.value
+          : null,
+      ) ?? null)
     : value;
   const displayField = entityDisplayFields(entity, surface).find(
     (candidate) => candidate.key === field.key,
@@ -1575,19 +1596,23 @@ function renderEditableField<TRecord extends object>(
       return (
         <span className="inline-flex items-center gap-2">
           <Checkbox
-            checked={asBoolean(resolution ? resolution.value : value) === true}
+            checked={
+              asBoolean(resolution ? fieldValueOf(resolution) : value) === true
+            }
             indeterminate={
-              asBoolean(resolution ? resolution.value : value) === null
+              asBoolean(resolution ? fieldValueOf(resolution) : value) === null
             }
             onCheckedChange={(next) => {
               void save(next);
             }}
             aria-label={`Set ${field.label}`}
           />
-          {asBoolean(resolution ? resolution.value : value) === null ? (
+          {asBoolean(resolution ? fieldValueOf(resolution) : value) === null ? (
             <span className="text-xs text-muted-foreground">Undecided</span>
           ) : null}
-          {resolution?.canReset && field.nullable ? (
+          {resolution?.current.controls.kind === "editable" &&
+          resolution.current.controls.reset.kind === "available" &&
+          field.nullable ? (
             <Button
               type="button"
               variant="link"
@@ -1681,7 +1706,9 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
       const value =
         editableFieldValue.parse(
           resolution
-            ? resolution.storedValue
+            ? resolution.current.assignment?.kind === "value"
+              ? resolution.current.assignment.value
+              : null
             : record[field.readKey as keyof TRecord],
         ) ?? null;
       const save = async (next: EditableFieldValue): Promise<void> => {

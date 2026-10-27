@@ -1,3 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+
 import { createSingleEntityInlineLinkColumn } from "~/entity/table/column-helpers";
 import { InventoryValuationSummary } from "~/features/location/inventory-valuation-summary";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
@@ -20,21 +22,27 @@ const productLink: ListRenderer<"location"> = (helper) =>
 const valuationSummary: ListRenderer<"location"> = (helper) =>
   createCubbyColumnCollection((add) => {
     add(
-      helper.accessor((row) => row.valuation?.directValuation ?? null, {
-        id: "valuation",
-        header: "Valuation",
-        cell: (info) => (
-          <InventoryValuationSummary
-            valuation={info.row.original.valuation}
-            variant="compact"
-          />
-        ),
-        meta: {
-          className: "w-[180px]",
-          numeric: true,
-          mobile: { slot: "trailing", priority: 10 },
+      helper.accessor(
+        (row) => {
+          const effectiveRowValuation = fieldValueOf(row.fields.valuation);
+          return effectiveRowValuation?.directValuation ?? null;
         },
-      }),
+        {
+          id: "valuation",
+          header: "Valuation",
+          cell: (info) => (
+            <InventoryValuationSummary
+              valuation={info.row.original.fields.valuation}
+              variant="compact"
+            />
+          ),
+          meta: {
+            className: "w-[180px]",
+            numeric: true,
+            mobile: { slot: "trailing", priority: 10 },
+          },
+        },
+      ),
     );
   });
 

@@ -1,9 +1,10 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import type {
   RecipeFlowOperation,
   RecipeFlowPlan,
   RecipeFlowSource,
 } from "@cubby/schemas/recipe-flow";
+
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 
 interface RecipeFlowOperationPlacement {
   operation: RecipeFlowOperation;
@@ -187,3 +188,5 @@ export function buildRecipeFlowLayout(
       Math.max(0, ...operations.map((placement) => placement.column)) + 1,
   };
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

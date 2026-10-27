@@ -1,5 +1,6 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
-import type { InfLocation } from "@cubby/schemas/location";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
@@ -15,7 +16,7 @@ import { resolveLocationVisual } from "../../entity/presentation/location-visual
 type LocationVisualVariant = "hero" | "card" | "compact";
 
 interface LocationVisualProps {
-  location: InfLocation;
+  location: LocationTreeNode;
   variant: LocationVisualVariant;
   className?: string;
   /** Compact rendered width; ignored by card/hero variants. */
@@ -25,11 +26,11 @@ interface LocationVisualProps {
   showChildCount?: boolean;
 }
 
-function VisualFallback({ location }: { location: InfLocation }) {
+function VisualFallback({ location }: { location: LocationTreeNode }) {
   return (
     <LocationIcon
-      type={location.type}
-      product={location.product}
+      type={fieldValueOf(location.fields.type)}
+      product={fieldValueOf(location.fields.product)}
       size={20}
       className="text-muted-foreground"
     />
@@ -40,7 +41,7 @@ function SourceLink({
   location,
   children,
 }: {
-  location: InfLocation;
+  location: LocationTreeNode;
   children: ReactNode;
 }) {
   const image = useEntityDisplayImage(
@@ -48,22 +49,25 @@ function SourceLink({
       entityKind: "location",
       entityId: location.id,
     },
-    location.displayImages ? (location.displayImages[0] ?? null) : undefined,
+    location.fields.displayImages.result.kind === "missing"
+      ? undefined
+      : (fieldValueOf(location.fields.displayImages)?.[0] ?? null),
   );
   const visual = resolveLocationVisual(location, image);
-  if (visual.primarySource === "product" && location.product) {
+  const product = fieldValueOf(location.fields.product);
+  if (visual.primarySource === "product" && product) {
     return (
       <Link
         to="/products/$shortcode"
-        params={{ shortcode: location.product.id }}
-        aria-label={`Open product ${location.product.name}`}
+        params={{ shortcode: product.id }}
+        aria-label={`Open product ${product.name}`}
         className="block size-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
       >
         {children}
       </Link>
     );
   }
-  const ownPhoto = location.images.find(
+  const ownPhoto = (fieldValueOf(location.fields.images) ?? []).find(
     (owned) =>
       owned.url ===
       (visual.primaryImage?.representations?.original ??
@@ -88,7 +92,7 @@ function PrimaryImage({
   location,
   displayWidth,
 }: {
-  location: InfLocation;
+  location: LocationTreeNode;
   displayWidth: number;
 }) {
   const image = useEntityDisplayImage(
@@ -96,12 +100,14 @@ function PrimaryImage({
       entityKind: "location",
       entityId: location.id,
     },
-    location.displayImages ? (location.displayImages[0] ?? null) : undefined,
+    location.fields.displayImages.result.kind === "missing"
+      ? undefined
+      : (fieldValueOf(location.fields.displayImages)?.[0] ?? null),
   );
   const visual = resolveLocationVisual(location, image);
   const sourceLabel =
     visual.primarySource === "product"
-      ? `Product image of ${location.product?.name ?? location.name}`
+      ? `Product image of ${fieldValueOf(location.fields.product)?.name ?? location.name}`
       : `Photo of ${location.name}`;
 
   return (
@@ -122,7 +128,7 @@ function ChildContactSheet({
   location,
   interactive,
 }: {
-  location: InfLocation;
+  location: LocationTreeNode;
   interactive: boolean;
 }) {
   const image = useEntityDisplayImage(
@@ -130,7 +136,9 @@ function ChildContactSheet({
       entityKind: "location",
       entityId: location.id,
     },
-    location.displayImages ? (location.displayImages[0] ?? null) : undefined,
+    location.fields.displayImages.result.kind === "missing"
+      ? undefined
+      : (fieldValueOf(location.fields.displayImages)?.[0] ?? null),
   );
   const visual = resolveLocationVisual(location, image);
   if (visual.childVisuals.length === 0) return null;
@@ -182,13 +190,17 @@ function LocationVisualMedia({
       entityKind: "location",
       entityId: location.id,
     },
-    location.displayImages ? (location.displayImages[0] ?? null) : undefined,
+    location.fields.displayImages.result.kind === "missing"
+      ? undefined
+      : (fieldValueOf(location.fields.displayImages)?.[0] ?? null),
   );
   const visual = resolveLocationVisual(location, image);
   const hasIdentity =
     visual.primarySource === "location" || visual.primarySource === "product";
   const hasChildren = visual.childVisuals.length > 0;
-  const ownImageCount = location.images.filter(isDisplayableImageFile).length;
+  const ownImageCount = (fieldValueOf(location.fields.images) ?? []).filter(
+    isDisplayableImageFile,
+  ).length;
   // The hero is edge-to-edge on mobile (DetailPlate's w-screen slot); every
   // other variant is a card or rail tile.
   const primaryDisplayWidth = variant === "hero" ? 640 : 320;
@@ -256,7 +268,9 @@ export function LocationVisual({
       entityKind: "location",
       entityId: location.id,
     },
-    location.displayImages ? (location.displayImages[0] ?? null) : undefined,
+    location.fields.displayImages.result.kind === "missing"
+      ? undefined
+      : (fieldValueOf(location.fields.displayImages)?.[0] ?? null),
   );
   const visual = resolveLocationVisual(location, image);
 
@@ -304,7 +318,9 @@ export function LocationVisual({
   }
 
   const children = location.children ?? [];
-  const childLabel = locationChildGroupLabel(children);
+  const childLabel = locationChildGroupLabel(
+    children.map((child) => fieldValueOf(child.fields.type)),
+  );
   return (
     <figure
       className={cn(
@@ -324,7 +340,7 @@ export function LocationVisual({
       <figcaption className="grid grid-cols-2 border-t border-border bg-card">
         <span className="min-w-0 px-2 py-1 text-xs font-medium text-muted-foreground sm:py-2">
           {visual.primarySource === "product"
-            ? `Product · ${location.product?.name ?? "linked vessel"}`
+            ? `Product · ${fieldValueOf(location.fields.product)?.name ?? "linked vessel"}`
             : visual.primarySource === "location"
               ? "Location photo"
               : "Location"}

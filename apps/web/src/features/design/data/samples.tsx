@@ -1,6 +1,6 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import { locationShortcode } from "@cubby/schemas/identifiers";
-import type { infLocation, LocationType } from "@cubby/schemas/location";
+import { infLocation, type LocationType } from "@cubby/schemas/location";
 import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import type { WorkQueueGap } from "@cubby/schemas/work-queue";
 import { capitalize, SHORTCODE_CHARS } from "@cubby/shared";
@@ -41,20 +41,42 @@ const makeLocation = (
   locationSeq += 1;
   const suffix = shortcodeAlphabet[locationSeq];
   if (!suffix) throw new Error("Location demo fixture capacity exceeded");
-  const location: z.infer<typeof infLocation> = {
+  const computed = (value: unknown) => ({
+    current: {
+      assignment: null,
+      controls: { kind: "readonly", reason: "computed" },
+    },
+    result: {
+      kind: "live",
+      decision: {
+        outcome:
+          value === null
+            ? { kind: "empty", reason: "unset" }
+            : { kind: "value", value },
+        provenance: { kind: "computed" },
+      },
+    },
+    work: { kind: "idle" },
+  });
+  const location = infLocation.parse({
     id: locationShortcode.parse(`LOC-222${suffix}`),
     name,
     aliases: [],
-    product: null,
-    type,
     lastBulkInventory: null,
-    aiDescription: null,
     notes: null,
-    images: [],
-    valuation: null,
-    dataQuality: demoDataQuality,
+    fields: {
+      type: computed(type),
+      product: computed(null),
+      aiDescription: computed(null),
+      images: computed([]),
+      displayImages: computed([]),
+      valuation: computed(null),
+      valuationLabel: computed(null),
+      dataQuality: computed(demoDataQuality),
+      dataGaps: computed(null),
+    },
     ...ts,
-  };
+  });
   if (children !== undefined) location.children = children;
   return location;
 };

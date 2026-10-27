@@ -1,4 +1,5 @@
 import { relationMutationOut } from "@cubby/schemas/common";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import {
   linkExpensesToPurchaseInput,
   purchaseAttachProductsInput,
@@ -8,11 +9,11 @@ import {
   purchaseLinkExpensesCheckOut,
   purchaseLinkProductsCandidatesInput,
   purchaseLinkProductsCandidatesOut,
-  purchaseOut,
   purchaseSettlementAllocationCheckInput,
   purchaseSettlementAllocationCheckOut,
   purchaseSettlementCandidatesInput,
   purchaseSettlementCandidatesOut,
+  purchaseSettlementCandidate,
   purchaseSettlementSuggestInput,
   purchaseSettlementSuggestOut,
   purchaseSplitCheckInput,
@@ -21,11 +22,21 @@ import {
   purchaseSplitStartOut,
   reclassifyPurchaseDocumentInput,
   splitExpenseInput,
-  splitExpenseOut,
 } from "@cubby/schemas/purchase";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
+
+export const purchaseSettlementCandidateRead =
+  purchaseSettlementCandidate.extend({
+    transaction: entityFieldEnvelopeSchemas.financialTransaction.detail,
+  });
+const purchaseSettlementCandidatesRead = purchaseSettlementCandidatesOut.extend(
+  {
+    candidates: z.array(purchaseSettlementCandidateRead),
+  },
+);
+const splitExpenseRead = z.array(entityFieldEnvelopeSchemas.expense.detail);
 
 /**
  * `originalCost`/`partsSum`/`delta` confirm a priced split conserved its source
@@ -34,7 +45,7 @@ import { defineContract, mutation, query } from "~/contracts/define";
  * the original Expense.
  */
 export const splitExpenseWithDeltaOut = z.object({
-  items: splitExpenseOut,
+  items: splitExpenseRead,
   originalCost: z
     .number()
     .nullable()
@@ -60,7 +71,7 @@ export const purchaseContract = defineContract(
       description:
         "Rank possible Purchase matches for the supplied settlement evidence. This is read-only; confirm the paperwork and transaction before allocating settlement.",
       input: purchaseSettlementCandidatesInput,
-      output: purchaseSettlementCandidatesOut,
+      output: purchaseSettlementCandidatesRead,
       cache: { tags: [["purchase"], ["financialTransaction"]] },
     }),
     /**
@@ -90,13 +101,13 @@ export const purchaseContract = defineContract(
         "Re-parent existing Expenses onto ONE existing purchase — e.g. one plumbing transaction that spans both rough-in and fixtures. Only rewrites `purchaseId` on the given expenses: no cost/trade/costType/project changes, and the target purchase's identity (vendorId/orderId/date/statedTotal/documents) stays untouched aside from gaining those expenses. NOT for payment schedules: a contractor's progress payments are separate transactions and therefore separate purchases; use the Project rollup for that view. Refuses when `purchaseId` is not a live purchase.",
       command: { label: "Attach expenses", confirmation: null },
       input: linkExpensesToPurchaseInput,
-      output: purchaseOut,
+      output: entityFieldEnvelopeSchemas.purchase.detail,
       invalidates: ["purchase"],
     }),
     split: mutation({
       command: { label: "Split expense", confirmation: null },
       input: splitExpenseInput,
-      output: splitExpenseOut,
+      output: splitExpenseRead,
       invalidates: ["expense"],
     }),
     /**
@@ -156,7 +167,7 @@ export const purchaseContract = defineContract(
       description:
         "Reclassify one existing attachment on a Purchase. Primary evidence is exactly order_confirmation, sales_order, invoice, or receipt; payment receipts, credits, returns, quotes, estimates, contracts, statements, specifications, and other files stay useful but do not make the Purchase's itemization expected. Returns the Purchase with freshly computed dataQuality.",
       input: reclassifyPurchaseDocumentInput,
-      output: purchaseOut,
+      output: entityFieldEnvelopeSchemas.purchase.detail,
       invalidates: ["purchase"],
     }),
   },

@@ -2,21 +2,19 @@ import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { imageUrlSummary } from "./image-summary";
 import { plainDate } from "./base-entity";
-import { generatedVendorFieldSchemas } from "./generated/entity-field-schemas.vendor.gen";
+import { vendorFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.vendor.gen";
 import { vendorShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
 import { presenceFilter } from "./pagination";
-import { vendorBaseFilterFields, vendorOut } from "./generated/vendor.gen";
+import { vendorBaseFilterFields } from "./generated/vendor.gen";
 
 export {
   vendorCreateInput,
   vendorUpdateData,
   vendorUpdateInput,
-  vendorOut,
   type VendorCreateInput,
   type VendorUpdateData,
   type VendorUpdateInput,
-  type VendorOut,
 } from "./generated/vendor.gen";
 
 /** Comparison key for photo Brand evidence, member rejections and batch choices. */
@@ -26,6 +24,8 @@ export const brandNameKey = (text: string): string =>
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
+export const vendorOut = vendorFieldEnvelopeSchemas.output;
+export type VendorOut = z.output<typeof vendorOut>;
 
 /**
  * Vendor — the roster of places money goes. `Vendor ──< Purchase ──< Expense`:
@@ -70,7 +70,7 @@ export const vendorCoverageInput = z
   });
 export const vendorCoverageOut = z.object({
   vendor: z.object({ id: vendorShortcode, name: z.string() }),
-  latestPurchaseDate: generatedVendorFieldSchemas.read.latestPurchaseDate,
+  fields: vendorOut.shape.fields.pick({ latestPurchaseDate: true }),
   from: plainDate,
   to: plainDate,
   orderIds: z.array(z.string()),

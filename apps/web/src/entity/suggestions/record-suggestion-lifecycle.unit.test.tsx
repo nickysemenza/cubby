@@ -1,5 +1,4 @@
 import type { FieldSuggestionsInput } from "@cubby/schemas/ai";
-import { productTopLevelOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   act,
@@ -28,10 +27,15 @@ import {
 const id = testShortcode("product", "lifecycle");
 const categoryId = testShortcode("productCategory", "food");
 const ingredientId = testShortcode("ingredient", "apple");
-type PageRecord = Pick<
-  z.output<typeof productTopLevelOut>,
-  "id" | "name" | "brandName" | "categoryId"
-> & { ingredient?: null };
+// Minimal caller state for lifecycle races; public wire schemas have separate coverage.
+const pageRecordSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  brandName: z.string(),
+  categoryId: z.string().nullable(),
+  ingredient: z.null().optional(),
+});
+type PageRecord = z.output<typeof pageRecordSchema>;
 const baseRecord = {
   id,
   name: "Synthetic apple",

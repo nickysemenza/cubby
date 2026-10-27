@@ -1,7 +1,7 @@
-import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import { match } from "ts-pattern";
 
 import type { BaseKind, ConversionCoverage } from "~/lib/conversion-coverage";
+import type { RecipeCostingIngredient } from "~/lib/recipe-costing";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
 
@@ -116,7 +116,7 @@ interface GapAccumulator {
   productShortcode: string | null;
   lineUnit: string | null;
   lineKind: LineKind;
-  products: IngredientWithFoodLeanOut["product"];
+  products: RecipeCostingIngredient["product"];
   // `volume` is always false on the recipe path — volume isn't a totals blocker
   // for a specific line; it's a global-workbench-only signal.
   missing: MissingTotals;
@@ -161,7 +161,7 @@ const recipeGapFor = (
 const accumulateIngredientGap = (
   row: CostingIngredientRow,
   missing: MissingTotals,
-  ingMap: Record<string, IngredientWithFoodLeanOut>,
+  ingMap: Record<string, RecipeCostingIngredient>,
   byIngredientId: Map<string, GapAccumulator>,
 ) => {
   if (row.amounts.length === 0) return;
@@ -217,7 +217,7 @@ const ingredientGapFor = (
  * supertype, so it passes straight through.
  */
 interface FixInputs {
-  products: IngredientWithFoodLeanOut["product"];
+  products: RecipeCostingIngredient["product"];
   missing: MissingTotals;
   lineKind: LineKind;
 }
@@ -272,7 +272,7 @@ const classifyKind = (acc: FixInputs): IngredientTotalsGapKind | "done" => {
  * still a gap (add-weight-mapping), exactly as the per-recipe path treats it.
  */
 export const classifyIngredientFix = (input: {
-  products: IngredientWithFoodLeanOut["product"];
+  products: RecipeCostingIngredient["product"];
   coverage: ConversionCoverage;
   /** Kinds graded against (gradedKinds) — an N/A volume is excluded here. */
   applicable: readonly BaseKind[];
@@ -310,7 +310,7 @@ export const classifyIngredientFix = (input: {
  */
 export const deriveRecipeTotalsGaps = (
   costing: RecipeCosting,
-  ingMap: Record<string, IngredientWithFoodLeanOut>,
+  ingMap: Record<string, RecipeCostingIngredient>,
 ): RecipeTotalsGap[] => {
   const byIngredientId = new Map<string, GapAccumulator>();
   const recipeGaps: RecipeTotalsGap[] = [];

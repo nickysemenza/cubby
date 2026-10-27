@@ -271,6 +271,9 @@ const expenseSpendingCategoryFieldResolution = (
       mode: "allocated",
       storedValue: null,
       value: categories.length === 1 ? categories[0]! : null,
+      ...(categories.length !== 1
+        ? { emptyReason: categories.length === 0 ? "unset" : "mixed" }
+        : {}),
       fallbackValue: null,
       source: expenseSpendingCategoryAllocationSource(
         categories.length === 1,
@@ -359,6 +362,11 @@ const expenseProjectFieldResolution = (
     storedProjectShortcode,
     effectiveProjectShortcode,
   );
+  const allocatedProjects = new Set(
+    row.projectAllocations?.flatMap((allocation) =>
+      allocation.projectShortcode ? [allocation.projectShortcode] : [],
+    ),
+  );
   let sourceEntity: NonNullable<
     ExpenseOut["fieldResolutions"]
   >[string]["sourceEntity"] = effectiveProjectShortcode
@@ -379,6 +387,9 @@ const expenseProjectFieldResolution = (
     mode,
     storedValue: storedProjectShortcode,
     value: effectiveProjectShortcode,
+    ...(mode === "allocated" && effectiveProjectShortcode === null
+      ? { emptyReason: allocatedProjects.size > 1 ? "mixed" : "unset" }
+      : {}),
     fallbackValue: row.fallbackProjectShortcode ?? null,
     source,
     sourceEntity,
@@ -413,6 +424,9 @@ const allocatedShareResolution = <K extends "trades" | "costTypes">(
     // Every Expense keeps a stored cost type; editors seed from it.
     storedValue: key === "costTypes" ? row.costType : null,
     value: values.length === 1 ? values[0]! : null,
+    ...(values.length !== 1
+      ? { emptyReason: values.length === 0 ? "unset" : "mixed" }
+      : {}),
     fallbackValue: null,
     // Purchases carry no trade or cost-type default to name as a source.
     source: expenseSpendingCategoryAllocationSource(values.length === 1, false),

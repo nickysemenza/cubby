@@ -15,9 +15,10 @@ import { vendorOrderEvidence } from "@cubby/schemas/vendor-import-fields";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import { sqlEnumConstant, unwrapDb } from "~/server/db/helpers";
+import type { Database } from "~/server/db/database";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 export { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";

@@ -526,7 +526,7 @@ public actor CubbyClient {
         let output = try await native_inventory_locationSnapshot(
             body: .init(locationId: location, placement: .stock)
         )
-        return RecountSnapshot(rows: output.items.map(RecountRow.init), token: output.snapshotToken)
+        return try RecountSnapshot(rows: output.items.map(RecountRow.init), token: output.snapshotToken)
     }
 
     /// Products stocked in more than one location, for the Duplicate badge.
@@ -544,7 +544,9 @@ public actor CubbyClient {
     // MARK: - Locations
 
     public func locationTree() async throws -> LocationTree {
-        return LocationTree(roots: try await native_location_makeTree())
+        let roots = try await native_location_makeTree()
+        return LocationTree(
+            roots: try roots.map { try JSONValue(encoding: $0).decoded(LocationTreeNode.self) })
     }
 
     // MARK: - Specialist list presentations

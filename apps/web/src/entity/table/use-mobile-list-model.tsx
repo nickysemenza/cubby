@@ -14,7 +14,7 @@ import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { extractEntityTitle } from "~/ui/data-table/entity-utils";
 import type { MobileMetaValue } from "~/ui/data-table/mobile-card";
 import type { MobileColumnMeta, MobileSlot } from "~/ui/data-table/table-meta";
-import { DerivedRecordValue } from "~/ui/derived/sidecar-context";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { WhyValue } from "~/ui/derived/why-value";
 import { NoneValue } from "~/ui/primitives/none-value";
 
@@ -285,12 +285,12 @@ function collectMobileSlots<TItem extends RowData>(
         rendered
       );
     const resolutionValue = (
-      <DerivedRecordValue
+      <FieldRecordValue
         record={row.original}
         field={explanation?.field ?? colId}
       >
         {inspectedValue}
-      </DerivedRecordValue>
+      </FieldRecordValue>
     );
     const provenanceValue = meta?.provenance ? (
       <span className="inline-flex max-w-full min-w-0 items-center gap-1">

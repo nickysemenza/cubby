@@ -1,7 +1,6 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entityPreviewFieldKeys } from "@cubby/schemas/entity-preview";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
@@ -21,12 +20,7 @@ import { entityMcpGetCommandSchema } from "~/server/entity-kernel/contracts";
 import type { McpEntityExecutor } from "./kernel-actions";
 
 const recordResult = z.object({
-  item: z
-    .looseObject({
-      displayImages: z.array(z.object({ url: z.string() })).optional(),
-      fieldResolutions: fieldResolutionsSchema.optional(),
-    })
-    .nullable(),
+  item: z.looseObject({}).nullable(),
 });
 const scalar = z.union([z.string(), z.number(), z.boolean()]);
 type Card = z.infer<typeof entityCardsOutput>["items"][number];
@@ -104,13 +98,10 @@ export async function readEntityCards(
         field.kind === "dateRange"
       )
         continue;
-      const resolution = item.fieldResolutions?.[field.key];
-      const raw = resolution
-        ? resolution.value
-        : readPathValue(
-            item,
-            field.display.readPath ?? field.readKey ?? field.key,
-          );
+      const raw = readPathValue(
+        item,
+        field.display.readPath ?? field.readKey ?? field.key,
+      );
       const value = scalar.safeParse(raw);
       if (!value.success || value.data === "") continue;
       const option = (
@@ -138,6 +129,10 @@ export async function readEntityCards(
     const route = Object.entries(generatedBrowserRoutes).find(
       ([key]) => key === entity,
     )?.[1];
+    const images = z
+      .array(z.object({ url: z.string() }))
+      .nullish()
+      .parse(readPathValue(item, "displayImages"));
     const card: AvailableCard = {
       status: "available",
       shortcode,
@@ -152,7 +147,7 @@ export async function readEntityCards(
             getAppOrigin() ?? APP_ORIGIN,
           ).href
         : null,
-      imageUrl: item.displayImages?.[0]?.url ?? null,
+      imageUrl: images?.[0]?.url ?? null,
       facts,
     };
     reads.set(shortcode, card);

@@ -355,10 +355,11 @@ function detailFiles<E extends GenericDetailEntity>(
   const attachments = partitionEntityFiles(bag.attachments ?? []);
   // Product's domain gallery excludes confirmed labels; the universal
   // attachment list remains complete for documents and write preconditions.
+  // An empty outcome has no local gallery; the canonical cover can still apply.
   const images =
     entity === "product"
       ? partitionEntityFiles(
-          readRecordField(record, "images", z.array(imageOut).default([])),
+          readRecordField(record, "images", z.array(imageOut).nullish()) ?? [],
         ).images
       : attachments.images;
   const { documents } = attachments;

@@ -1,4 +1,5 @@
 import { EMAIL_LINK_STATE_LABEL } from "@cubby/schemas/email-fields";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { cn } from "~/lib/utils";
@@ -22,37 +23,45 @@ const STATE_CLASS = {
 const purchaseLinks: ListRenderer<"email"> = (helper) =>
   createCubbyColumnCollection((add) => {
     add(
-      helper.accessor("purchaseLinks", {
-        id: "purchaseLinks",
-        header: "Purchases",
-        enableSorting: false,
-        meta: { className: "w-56", mobile: { slot: "meta", priority: 40 } },
-        cell: (info) => {
-          const links = info.getValue();
-          if (!links.length) return <NoneValue />;
-          return (
-            <TruncatedList
-              items={links}
-              maxItems={2}
-              renderItem={(link) => (
-                <span
-                  key={link.purchaseId}
-                  className="inline-flex items-center gap-1"
-                >
-                  <EntityRefLink
-                    entity="purchase"
-                    id={link.purchaseId}
-                    name={link.purchaseId}
-                  />
-                  <span className={cn("text-2xs", STATE_CLASS[link.state])}>
-                    {EMAIL_LINK_STATE_LABEL[link.state]}
-                  </span>
-                </span>
-              )}
-            />
+      helper.accessor(
+        (row) => {
+          const effectiveRowPurchaseLinks = fieldValueOf(
+            row.fields.purchaseLinks,
           );
+          return effectiveRowPurchaseLinks ?? [];
         },
-      }),
+        {
+          id: "purchaseLinks",
+          header: "Purchases",
+          enableSorting: false,
+          meta: { className: "w-56", mobile: { slot: "meta", priority: 40 } },
+          cell: (info) => {
+            const links = info.getValue();
+            if (!links.length) return <NoneValue />;
+            return (
+              <TruncatedList
+                items={links}
+                maxItems={2}
+                renderItem={(link) => (
+                  <span
+                    key={link.purchaseId}
+                    className="inline-flex items-center gap-1"
+                  >
+                    <EntityRefLink
+                      entity="purchase"
+                      id={link.purchaseId}
+                      name={link.purchaseId}
+                    />
+                    <span className={cn("text-2xs", STATE_CLASS[link.state])}>
+                      {EMAIL_LINK_STATE_LABEL[link.state]}
+                    </span>
+                  </span>
+                )}
+              />
+            );
+          },
+        },
+      ),
     );
   });
 

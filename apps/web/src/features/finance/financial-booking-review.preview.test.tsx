@@ -1,8 +1,12 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
+const financialTransactionOut =
+  entityFieldEnvelopeSchemas.financialTransaction.detail;
 import {
   financialBookingInput,
   financialBookingPreview,
 } from "@cubby/schemas/financial-booking";
-import { financialTransactionOut } from "@cubby/schemas/financial-transaction";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
@@ -36,21 +40,37 @@ it("reviews a reimbursement against the chosen Purchase and commits its exact ap
   const purchaseId = testShortcode("purchase", "PUR-4K7M");
   const transaction = mock(financialTransactionOut, {
     overrides: {
+      fields: {
+        coverage: fieldValueFixture(
+          entityFieldEnvelopeSchemas.financialTransaction.detail.shape.fields
+            .shape["coverage"],
+          { booking: "missing" },
+        ),
+      },
       id: transactionId,
       amount: -40,
       kind: "income",
       status: "posted",
       postedDate: "2026-09-12",
       allocations: [],
-      coverage: { booking: "missing" },
     },
   });
   const purchase = mock(purchaseListItem, {
     overrides: {
+      fields: {
+        images: fieldValueFixture(
+          entityFieldEnvelopeSchemas.purchase.list.shape.fields.shape["images"],
+          [],
+        ),
+        displayImages: fieldValueFixture(
+          entityFieldEnvelopeSchemas.purchase.list.shape.fields.shape[
+            "displayImages"
+          ],
+          [],
+        ),
+      },
       id: purchaseId,
       displayName: "Synthetic shared lodge",
-      images: [],
-      displayImages: [],
     },
   });
   const review = mock(financialBookingPreview, {

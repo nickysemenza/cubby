@@ -1,12 +1,9 @@
 import { z } from "zod";
-import { derivedMeta } from "./derived-value";
+import { fieldEnvelope, fieldResult } from "./field-envelope";
 import { dataExceptionReason, dataQualityStatus } from "./data-quality-shape";
 import { entityRefSchema } from "./entity";
 import { reportRecordsBlock } from "./entity-report";
-import {
-  fieldResolutionSchema,
-  fieldResolutionSourceSchema,
-} from "./field-resolution";
+import { fieldResolutionSourceSchema } from "./field-resolution";
 
 export const fieldExplanationInput = entityRefSchema.extend({
   field: z.string().min(1),
@@ -123,16 +120,14 @@ export const fieldDecisionStep = z.object({
 });
 export type FieldDecisionStep = z.infer<typeof fieldDecisionStep>;
 
-/**
- * A stored derived field's published value next to a live recompute for this
- * one record (ADR 0021). `live` is null when the value cannot be recomputed
- * without paid work.
- */
-export const derivedExplanation = z.object({
-  meta: derivedMeta,
-  stored: z.json(),
-  live: z.json().nullable(),
-});
+/** A computed empty result is distinct from a comparison that cannot be run. */
+export const fieldLiveComparison = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("available"),
+    result: fieldResult(z.json()).options[1],
+  }),
+  z.object({ kind: z.literal("unavailable"), reason: z.string() }),
+]);
 
 /** A display image's precedence chain: one level per source, in order. */
 export const imageChainExplanation = z.object({
@@ -151,7 +146,7 @@ export const fieldExplanationOutput = z.object({
   subject: entityRefSchema,
   field: z.string(),
   label: z.string(),
-  value: z.json(),
+  envelope: fieldEnvelope(z.json(), z.json()),
   evaluatedAt: z.iso.datetime(),
   interpretation: z
     .object({
@@ -162,7 +157,7 @@ export const fieldExplanationOutput = z.object({
     })
     .optional(),
   qualityBreakdown: qualityBreakdown.optional(),
-  derived: derivedExplanation.optional(),
+  comparison: fieldLiveComparison,
   imageChain: imageChainExplanation.optional(),
   rule: z.object({
     id: z.string(),
@@ -170,7 +165,6 @@ export const fieldExplanationOutput = z.object({
     description: z.string(),
   }),
   sources: z.array(fieldExplanationSource),
-  resolution: fieldResolutionSchema.nullable(),
   resolutionEvidence: z
     .object({
       /** Evaluated sources in precedence order, with reasons and outcome labels. */

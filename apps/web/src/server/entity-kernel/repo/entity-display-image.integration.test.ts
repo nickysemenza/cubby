@@ -1,6 +1,7 @@
 import { entityRefKey } from "@cubby/schemas/entity";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { locationListItemOut } from "@cubby/schemas/location";
+import { rawLocationList } from "@cubby/schemas/location-raw-read";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
@@ -350,7 +351,7 @@ describe("entity display image resolver", () => {
     const plan = listReadPlan<typeof row>("location", {
       media: true,
       bindings: (bind) => [
-        bind(locationListItemOut.pick({ images: true }), (row) => ({
+        bind(rawLocationList.pick({ images: true }), (row) => ({
           images: row.images,
         })),
       ],
@@ -794,7 +795,7 @@ describe("entity display image resolver", () => {
       });
       if (detail.action !== "get" || !detail.item)
         throw new Error("Expected Product detail");
-      expect(detail.item.images).toMatchObject([
+      expect(fieldValueOf(detail.item.fields.images)).toMatchObject([
         { id: item.shortcode, purpose: "item" },
       ]);
       expect(detail.item.labelImages).toMatchObject([

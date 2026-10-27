@@ -1,6 +1,6 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import { useMemo, useState } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
@@ -110,3 +110,5 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
     </Stack>
   );
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

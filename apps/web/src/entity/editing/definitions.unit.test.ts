@@ -18,14 +18,35 @@ import {
 import type { EditableEntity } from "./types";
 
 const explicitNoneResolution = () => ({
-  mode: "none" as const,
-  storedValue: null,
-  value: null,
-  fallbackValue: null,
-  source: "Explicit choice",
-  sourceEntity: null,
-  matchesFallback: false,
-  canReset: true,
+  current: {
+    assignment: { kind: "none" },
+    controls: {
+      kind: "editable",
+      canSetNone: true,
+      canConfirm: false,
+      reset: {
+        kind: "available",
+        preview: {
+          kind: "ready",
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "empty", reason: "unset" },
+              provenance: null,
+            },
+          },
+        },
+      },
+    },
+  },
+  result: {
+    kind: "live",
+    decision: {
+      outcome: { kind: "empty", reason: "explicit_none" },
+      provenance: { kind: "own", ownership: { kind: "record" } },
+    },
+  },
+  work: { kind: "idle" },
 });
 
 describe("entity edit definitions", () => {
@@ -129,7 +150,7 @@ describe("entity edit definitions", () => {
         ...(entity === "task" ? mock(taskOut) : mock(projectOut)),
         name: "Synthetic work",
         images: [],
-        fieldResolutions: { [resolutionField]: explicitNoneResolution() },
+        fields: { [resolutionField]: explicitNoneResolution() },
       };
       const updateRequest = {
         entity,
@@ -414,9 +435,20 @@ describe("entity edit definitions", () => {
       const record = mock(productWithMappingsAndFoodOut, {
         seed: 5,
         overrides: {
-          images: [],
           notes: "Keep dry",
           labelNutrition,
+          fields: {
+            tags: {
+              current: {
+                assignment: {
+                  kind: "value",
+                  value: [],
+                  ownership: { kind: "record" },
+                },
+              },
+            },
+          },
+          externalIds: [],
           unitMappings: [
             {
               id: "6b1c2c1e-0000-4000-8000-000000000001",
@@ -450,6 +482,7 @@ describe("entity edit definitions", () => {
       ]);
       expect(values.barcode).toBeUndefined();
       const untouched = buildEntityEdit(resolved, request, values);
+      expect(untouched.ok ? [] : untouched.issues).toEqual([]);
       expect(untouched).toMatchObject({ ok: true, changed: false });
       if (!untouched.ok || untouched.command.operation !== "update")
         throw new Error("untouched edit must build an update");

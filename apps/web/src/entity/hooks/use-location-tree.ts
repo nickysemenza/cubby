@@ -4,7 +4,7 @@ import { location } from "~/integrations/tanstack-query/generated/catalog/locati
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 
 /**
- * Shared fetch for the raw location tree (`location.makeTree`).
+ * Shared fetch for the canonical location tree (`location.makeTree`).
  *
  * Used by the tree-graph and tree-view visualizations, which each transform the
  * result their own way. For inventory-weighted hierarchies (treemap, sunburst),

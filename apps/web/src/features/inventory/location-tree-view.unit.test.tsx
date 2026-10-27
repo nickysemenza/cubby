@@ -1,5 +1,4 @@
-import type { ImageOut } from "@cubby/schemas/image";
-import { imageOut } from "@cubby/schemas/image";
+import { imageOut, type ImageOut } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
@@ -13,6 +12,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { sampleLocations } from "~/features/design/data/samples";
+import { locationReadFixture } from "~/features/location/location-read.fixtures";
 import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -118,7 +118,7 @@ function treeData(): InfLocation[] {
       ],
     },
     garage,
-  ];
+  ].map(locationReadFixture);
 }
 
 describe("LocationTree", () => {

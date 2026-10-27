@@ -1,3 +1,4 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import type {
   CandidateEquivalence,
   EquivalenceReport,
@@ -5,9 +6,9 @@ import type {
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import type { recipeCostingExplainDetail } from "@cubby/schemas/mcp";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
-import type {
-  recipeCookbookScopeInput,
-  recipeIdInput,
+import {
+  type recipeCookbookScopeInput,
+  type recipeIdInput,
 } from "@cubby/schemas/recipe";
 import {
   recipeServingsForRead,
@@ -19,6 +20,8 @@ import { z } from "zod";
 
 import {
   recipeContract,
+  recipeGraphRead,
+  recipeDuplicateRead,
   recipeNutritionOut,
   recipeStreamsContract,
   recipeAvailabilityContract,
@@ -51,6 +54,7 @@ import {
   executeEntityAs,
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import {
   bindShortcodeResolver,
   resolveLiveShortcodes,
@@ -218,7 +222,12 @@ const compareEquivalences = (
   const mappingsById = new Map(
     ingredients.map((ingredient) => [
       ingredient.id,
-      getIngredientMappings(ingredient),
+      getIngredientMappings({
+        product: ingredient.product.map((product) => ({
+          ...product,
+          price: product.pricing.effectivePrice,
+        })),
+      }),
     ]),
   );
   const visible: CandidateEquivalence[] = [];
@@ -357,8 +366,24 @@ const withLineCoverage = async <T extends { id: string }>(
 });
 
 export const recipeHandlers = implementOperationDomain(recipeContract, {
-  getManyByIDs: (context, input) => getManyRecipesByIDs(context.db, input),
-  duplicate: (context, input) => duplicateWorkflow(context, input),
+  getManyByIDs: async (context, input) =>
+    publicFieldEnvelopeRows({
+      db: context.db,
+      entity: "recipe",
+      schema: recipeGraphRead,
+      rows: await getManyRecipesByIDs(context.db, input),
+    }),
+  duplicate: async (context, input) => {
+    const result = await duplicateWorkflow(context, input);
+    const [row] = await publicFieldEnvelopeRows({
+      db: context.db,
+      entity: "recipe",
+      schema: recipeDuplicateRead,
+      rows: [result],
+    });
+    if (!row) throw new Error("Duplicated recipe result is missing");
+    return row;
+  },
   getIngredientCooccurrence: (context, input) =>
     getIngredientCooccurrence(context.db, input?.minEdgeWeight ?? 2),
   getDependencyGraph: (context, input) =>
@@ -499,14 +524,11 @@ export const buildRecipeNutrition = (input: {
   });
 };
 
-const recipeServingBasis = z.object({
-  id: z.string(),
-  name: z.string(),
-  servings: z.number().nullable().optional(),
-  yield: z
-    .object({ value: z.number(), unit: z.string() })
-    .nullable()
-    .optional(),
+const recipeServingBasis = entityFieldEnvelopeSchemas.recipe.detail.pick({
+  id: true,
+  name: true,
+  fields: true,
+  yield: true,
 });
 
 /** Refuses a recipe with no effective serving basis instead of guessing. */

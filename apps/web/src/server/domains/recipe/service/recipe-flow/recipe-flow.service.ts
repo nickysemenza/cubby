@@ -1,5 +1,4 @@
 import type { RunId, RecipeId } from "@cubby/schemas/identifiers";
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import {
   type RecipeFlowAiPlan,
   type RecipeFlowArtifact,
@@ -9,6 +8,7 @@ import {
   recipeFlowArtifactSchema,
   safeNormalizeRecipeFlowAiPlan,
 } from "@cubby/schemas/recipe-flow";
+import type { RawRecipeOutput as RecipeOut } from "@cubby/schemas/recipe-raw-read";
 
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/policy/features";
 import { upsertAiAnalysis } from "~/server/ai/repo/ai-analysis";

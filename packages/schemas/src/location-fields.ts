@@ -1,4 +1,7 @@
-import { productCategorySummary } from "./product-category-fields";
+import {
+  rawProductCategorySummary,
+  productCategoryFeature,
+} from "./product-category-fields";
 import { locationTypeValues } from "@cubby/shared";
 import { z } from "zod";
 import { productShortcode, locationShortcode } from "./identifier-fields";
@@ -44,7 +47,8 @@ export const locationIdentityProductOut = z.object({
   name: z.string(),
   brandName: z.string().nullable(),
   model: z.string().nullable(),
-  category: productCategorySummary.nullable(),
+  category: rawProductCategorySummary.nullable(),
+  categoryFeature: productCategoryFeature.nullable(),
   price: moneyNullable,
 });
 export type LocationIdentityProductOut = z.infer<
@@ -69,7 +73,7 @@ export type InventoryItemForTree = z.infer<typeof inventoryItemForTree>;
 export function locationReadSchemas<S extends z.ZodRawShape>(
   base: z.ZodObject<S>,
 ) {
-  const locationProductCategory = productCategorySummary;
+  const locationProductCategory = rawProductCategorySummary;
 
   const locationInventoryProductOut = z.object({
     id: productShortcode,
@@ -81,6 +85,7 @@ export function locationReadSchemas<S extends z.ZodRawShape>(
     notes: z.string().nullable(),
     expectedQuantity: z.number().int().positive().nullable(),
     category: locationProductCategory.nullable(),
+    categoryFeature: productCategoryFeature.nullable(),
     price: moneyNullable,
     usdaUnavailable: z.boolean().nullable(),
     ...timestampedFields,

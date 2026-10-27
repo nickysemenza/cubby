@@ -1,4 +1,3 @@
-import type { RunOut } from "@cubby/schemas/run";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -9,6 +8,7 @@ import {
 import { useMemo, useState } from "react";
 
 import type { RunDecision } from "~/contracts/run-detail.contract";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { SuggestionActions } from "~/entity/suggestions/queue/suggestion-actions";
 import { SuggestionEvidence } from "~/entity/suggestions/queue/suggestion-evidence";
 import { acceptItem } from "~/entity/suggestions/queue/suggestion-review";
@@ -482,3 +482,5 @@ function QueueDecisionLedger(props: LedgerProps) {
     />
   );
 }
+
+type RunOut = DetailRecordOf<"run">;

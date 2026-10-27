@@ -1,12 +1,13 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   FinancialBookingCorrectionInput,
   FinancialBookingCorrectionPreview,
 } from "@cubby/schemas/financial-booking";
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
@@ -38,6 +39,10 @@ export function FinancialBookingCorrectionReview({
 }: {
   transaction: FinancialTransactionOut;
 }) {
+  const effectiveTransactionCoverage = fieldValueOf(
+    transaction.fields.coverage,
+  );
+
   const [kind, setKind] = useState<
     "attach_reimbursement" | "convert_to_transfer"
   >(transaction.amount < 0 ? "attach_reimbursement" : "convert_to_transfer");
@@ -57,7 +62,7 @@ export function FinancialBookingCorrectionReview({
     financialTransaction.commitBookingCorrection.mutationOptions(),
   );
   if (
-    transaction.coverage.booking !== "recorded" ||
+    effectiveTransactionCoverage?.booking !== "recorded" ||
     transaction.ledgerTransferId
   )
     return null;
@@ -190,3 +195,5 @@ export function FinancialBookingCorrectionReview({
     </Stack>
   );
 }
+
+type FinancialTransactionOut = DetailRecordOf<"financialTransaction">;

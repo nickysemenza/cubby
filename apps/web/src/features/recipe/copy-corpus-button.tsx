@@ -1,6 +1,7 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
-import type { RecipeOut } from "@cubby/schemas/recipe";
+
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 
 import { CopyDebugButton } from "./copy-debug-button";
 import {
@@ -61,3 +62,5 @@ export function CopyRecipeParseButton({ recipe }: { recipe: RecipeOut }) {
     />
   );
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

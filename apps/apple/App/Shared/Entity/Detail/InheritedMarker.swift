@@ -5,7 +5,7 @@ import SwiftUI
 /// visible after the muted value in list rows, beside the value on detail pages.
 struct InheritedMarker: View {
     var body: some View {
-        Image(systemName: FieldResolutionState.inheritedSymbol)
+        Image(systemName: FieldValueState.inheritedSymbol)
             .font(.caption)
             .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             .help("Inherited")
@@ -20,7 +20,7 @@ struct InheritedMarker: View {
             let separator = index == 0 ? "" : ", "
             guard segment.inherited else { return Text("\(line)\(separator)\(segment.text)") }
             return Text(
-                "\(line)\(separator)\(segment.text) \(Image(systemName: FieldResolutionState.inheritedSymbol))"
+                "\(line)\(separator)\(segment.text) \(Image(systemName: FieldValueState.inheritedSymbol))"
             )
         }
     }

@@ -6,7 +6,6 @@ import { z } from "zod";
 import { entityCardsOutput } from "~/contracts/entity-preview";
 import { listEntities } from "~/entity/generated/entity-lists.gen";
 import { isListMediaField } from "~/entity/model/list-read-fields";
-import { listReadSchema } from "~/entity/model/list-read-schema";
 import { unwrapDb } from "~/server/db/helpers";
 import { entityExternalId } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
@@ -17,6 +16,7 @@ import {
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import {
@@ -240,24 +240,47 @@ describe("entity_read field selection", () => {
     const listed = await read({
       action: "list",
       entity: "purchase",
-      fields: ["expenseTotal", "financialReconciliation.status"],
+      fields: [
+        "fields.expenseTotal",
+        "fields.financialReconciliation.result.decision.outcome.value.status",
+      ],
     });
     expect(listed.isError).not.toBe(true);
     const [item] = rows.parse(listed.structuredContent).items;
     expect(item).toEqual({
       id: purchase.shortcode,
-      expenseTotal: 12.5,
-      financialReconciliation: { status: expect.any(String) },
+      fields: {
+        expenseTotal: expect.objectContaining({
+          result: expect.objectContaining({
+            decision: expect.objectContaining({
+              outcome: { kind: "value", value: 12.5 },
+            }),
+          }),
+        }),
+        financialReconciliation: {
+          result: {
+            decision: { outcome: { value: { status: expect.any(String) } } },
+          },
+        },
+      },
     });
     const got = await read({
       action: "get",
       entity: "purchase",
       id: purchase.shortcode,
-      fields: ["id", "expenseTotal"],
+      fields: ["id", "fields.expenseTotal"],
     });
     expect(one.parse(got.structuredContent).item).toEqual({
       id: purchase.shortcode,
-      expenseTotal: 12.5,
+      fields: {
+        expenseTotal: expect.objectContaining({
+          result: expect.objectContaining({
+            decision: expect.objectContaining({
+              outcome: { kind: "value", value: 12.5 },
+            }),
+          }),
+        }),
+      },
     });
   });
 
@@ -271,9 +294,20 @@ describe("entity_read field selection", () => {
     expect(listed.isError).not.toBe(true);
     const declared = new Set(Object.keys(listReadSchema("purchase").shape));
     const [item] = rows.parse(listed.structuredContent).items;
-    expect(item).toHaveProperty("expenseTotal", 12.5);
+    expect(item).toHaveProperty(
+      "fields.expenseTotal.result.decision.outcome.value",
+      12.5,
+    );
     for (const [key, value] of Object.entries(item!)) {
-      expect(key === "id" || declared.has(key)).toBe(true);
+      const selectedKeys =
+        key === "fields"
+          ? Object.keys(z.record(z.string(), z.json()).parse(value))
+          : [key];
+      expect(
+        selectedKeys.every(
+          (selected) => selected === "id" || declared.has(selected),
+        ),
+      ).toBe(true);
       expect(
         Array.isArray(value) &&
           value.some((entry) => typeof entry === "object" && entry !== null),
@@ -326,6 +360,42 @@ describe("entity_read field selection", () => {
     });
   });
 
+  it("serves a name-only Location list without requiring unloaded governed fields", async () => {
+    const location = await insertWithShortcode(ctx.db, "location", {
+      name: "Synthetic selected cupboard",
+      type: "room",
+    });
+    const selected = await read({
+      action: "list",
+      entity: "location",
+      fields: ["name"],
+      filters: { ids: [location.shortcode] },
+    });
+    expect(selected.isError).not.toBe(true);
+    expect(rows.parse(selected.structuredContent).items).toEqual([
+      { id: location.shortcode, name: "Synthetic selected cupboard" },
+    ]);
+    const governed = await read({
+      action: "list",
+      entity: "location",
+      fields: ["fields.type"],
+      filters: { ids: [location.shortcode] },
+    });
+    expect(governed.isError).not.toBe(true);
+    expect(rows.parse(governed.structuredContent).items).toMatchObject([
+      {
+        id: location.shortcode,
+        fields: {
+          type: {
+            current: { assignment: { kind: "value", value: "room" } },
+            result: { decision: { outcome: { kind: "value", value: "room" } } },
+            work: { kind: "idle" },
+          },
+        },
+      },
+    ]);
+  });
+
   it("refuses an unknown field path naming the allowed keys", async () => {
     await world();
     const refused = await read({
@@ -337,7 +407,7 @@ describe("entity_read field selection", () => {
     const text = JSON.stringify(refused.content);
     expect(text).toContain("BAD_REQUEST");
     expect(text).toContain("notAField");
-    expect(text).toContain("expenseTotal");
+    expect(text).toContain("fields");
   });
 
   it("refuses an unknown nested segment and keeps valid nested paths", async () => {
@@ -345,16 +415,18 @@ describe("entity_read field selection", () => {
     const refused = await read({
       action: "list",
       entity: "purchase",
-      fields: ["financialReconciliation.notAField"],
+      fields: ["fields.financialReconciliation.notAField"],
     });
     expect(refused.isError).toBe(true);
     const text = JSON.stringify(refused.content);
     expect(text).toContain("MCP_FIELD_UNKNOWN");
-    expect(text).toContain("financialReconciliation.notAField");
+    expect(text).toContain("fields.financialReconciliation.notAField");
     const valid = await read({
       action: "list",
       entity: "purchase",
-      fields: ["financialReconciliation.status"],
+      fields: [
+        "fields.financialReconciliation.result.decision.outcome.value.status",
+      ],
     });
     expect(valid.isError).not.toBe(true);
   });
@@ -408,12 +480,14 @@ describe("entity_read field selection", () => {
       action: "get",
       entity: "spendingCategory",
       id: child.shortcode,
-      fields: ["fieldResolutions.stockTracked.value"],
+      fields: ["fields.stockTracked.result.decision.outcome.value"],
     });
     expect(resolved.isError).not.toBe(true);
     expect(one.parse(resolved.structuredContent).item).toEqual({
       id: child.shortcode,
-      fieldResolutions: { stockTracked: { value: false } },
+      fields: {
+        stockTracked: { result: { decision: { outcome: { value: false } } } },
+      },
     });
 
     const created = await createProductIdentityFixture(
@@ -485,13 +559,28 @@ describe("entity_read field selection", () => {
           }
         };
         const inspectEntity = async (entity: (typeof listEntities)[number]) => {
-          const keys = Object.keys(listReadSchema(entity).shape);
+          const published: z.core.$ZodType =
+            ENTITY_SCHEMA_BINDINGS[entity].mcpList;
+          if (!(published instanceof z.ZodObject))
+            throw new Error("Expected generated object schema");
+          const governed = published.shape["fields"];
+          const keys = Object.keys(listReadSchema(entity).shape).filter(
+            (key) =>
+              Object.hasOwn(published.shape, key) ||
+              (governed instanceof z.ZodObject &&
+                Object.hasOwn(governed.shape, key)),
+          );
           const fields = [
             ...new Set([
               ...keys.filter((field) => field !== "id").slice(0, 5),
               ...keys.filter(isListMediaField),
             ]),
-          ];
+          ].map((field) =>
+            governed instanceof z.ZodObject &&
+            Object.hasOwn(governed.shape, field)
+              ? `fields.${field}`
+              : field,
+          );
           const listedCompact = rows.safeParse(
             (await call({ action: "list", entity, resultDetail: "compact" }))
               ?.structuredContent,
@@ -506,7 +595,16 @@ describe("entity_read field selection", () => {
             ENTITY_SCHEMA_BINDINGS[entity].mcpDetail;
           const detailFields =
             detail instanceof z.ZodObject
-              ? fields.filter((field) => Object.hasOwn(detail.shape, field))
+              ? fields.filter((field) => {
+                  const [head, key] = field.split(".");
+                  if (head !== "fields")
+                    return Object.hasOwn(detail.shape, head ?? "");
+                  const roster = detail.shape["fields"];
+                  return (
+                    roster instanceof z.ZodObject &&
+                    Object.hasOwn(roster.shape, key ?? "")
+                  );
+                })
               : [];
           const gotCompact = one.safeParse(
             (

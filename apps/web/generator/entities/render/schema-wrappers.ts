@@ -57,7 +57,7 @@ const WRAPPERS = {
   recipe: "create+ update updateInput+ filtersBase",
   run: "out+ filters+",
   task: "create+ update+ updateInput+ out+ listItem+ filtersBase",
-  vendor: "create+ update+ updateInput+ out+ filtersBase",
+  vendor: "create+ update+ updateInput+ filtersBase",
   vendorAccount: "create+ update+ updateInput out+ filters+",
   wish: "create+ update+ updateInput+ out+ listItem+ filtersBase",
 } satisfies Record<string, string>;

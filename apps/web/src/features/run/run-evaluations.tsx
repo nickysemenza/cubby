@@ -1,6 +1,5 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import type { RunOut } from "@cubby/schemas/run";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
@@ -11,6 +10,7 @@ import { useState } from "react";
 
 import type { RunEvaluationsOut } from "~/contracts/run-detail.contract";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   formatMinutesLeft,
   formatPace,
@@ -96,7 +96,7 @@ function OutcomeGlyph({ outcome }: { outcome: Outcome }) {
  * moves now, where the time goes by record kind, and what each recent record
  * turned into. A discovery pass also shows its walk through every record.
  */
-export function RunEvaluations({ record }: { record: RunOut }) {
+export function RunEvaluations({ record }: { record: EvaluationRun }) {
   const [failedOnly, setFailedOnly] = useState(false);
   // Active statuses include pauses for polling; only running work has a live pace.
   const polling = live(record.status) ? LIVE_POLL_MS : false;
@@ -286,3 +286,5 @@ export function RunEvaluations({ record }: { record: RunOut }) {
     </div>
   );
 }
+
+type EvaluationRun = Pick<DetailRecordOf<"run">, "id" | "status">;

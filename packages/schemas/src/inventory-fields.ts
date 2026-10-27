@@ -1,3 +1,4 @@
+import { productCategoryFeature } from "./product-category-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { z } from "zod";
 import { moneyNullable } from "./money";
@@ -20,13 +21,11 @@ import { fdcId } from "@cubby/usda";
 import { productShortcode } from "./identifier-fields";
 import { gtin, externalIdOut } from "./external-id";
 import { timestampedFields } from "./base-entity";
-import { productCategory } from "./product-fields";
+import { rawProductCategory } from "./product-fields";
 import { imageOut } from "./entity-definitions/field-primitives";
 import { unitMappingOut } from "./unitmapping";
-import locationDefinition from "./entity-definitions/04-location.entity";
 import { locationListRefOut } from "./location-fields";
 import { displayImagesField } from "./display-images";
-const locationOut = locationDefinition.readSchemas.output;
 const productInventoryEmbedFields = {
   id: productShortcode,
   name: z.string(),
@@ -36,33 +35,35 @@ const productInventoryEmbedFields = {
   model: z.string().nullable(),
   notes: z.string().nullable(),
   expectedQuantity: z.number().int().positive().nullable(),
-  category: productCategory.nullable(),
+  category: rawProductCategory.nullable(),
+  categoryFeature: productCategoryFeature.nullable(),
   price: moneyNullable,
   usdaUnavailable: z.boolean().nullable(),
   ...timestampedFields,
 };
 
-export const productInventoryEmbedOut = z.object(productInventoryEmbedFields);
-export type ProductInventoryEmbedOut = z.infer<typeof productInventoryEmbedOut>;
+export const rawProductInventoryEmbed = z.object(productInventoryEmbedFields);
+export type RawProductInventoryEmbed = z.infer<typeof rawProductInventoryEmbed>;
 
-export const inventoryListProductOut = z.object({
+export const rawInventoryListProduct = z.object({
   id: productShortcode,
   name: z.string(),
   brandName: z.string().nullable(),
   primaryGtin: gtin.nullable(),
   fdc_id: fdcId.nullable(),
-  category: productCategory.nullable(),
+  category: rawProductCategory.nullable(),
+  categoryFeature: productCategoryFeature.nullable(),
   expectedQuantity: z.number().int().positive().nullable(),
   model: z.string().nullable(),
   price: moneyNullable,
   usdaUnavailable: z.boolean().nullable(),
 });
-export type InventoryListProductOut = z.infer<typeof inventoryListProductOut>;
+export type RawInventoryListProduct = z.infer<typeof rawInventoryListProduct>;
 
-export const inventoryListLocationOut = locationListRefOut;
-export type InventoryListLocationOut = z.infer<typeof inventoryListLocationOut>;
+export const rawInventoryListLocation = locationListRefOut;
+export type RawInventoryListLocation = z.infer<typeof rawInventoryListLocation>;
 
-export const inventoryDetailProductOut = z.object({
+export const rawInventoryDetailProduct = z.object({
   displayImages: displayImagesField.default([]),
   ...productInventoryEmbedFields,
   images: z.array(imageOut),
@@ -75,13 +76,13 @@ export function inventoryReadSchemas<S extends z.ZodRawShape>(
 ) {
   const list = base.extend({
     displayImages: displayImagesField,
-    product: inventoryListProductOut,
-    location: inventoryListLocationOut,
+    product: rawInventoryListProduct,
+    location: rawInventoryListLocation,
     displayName: z.string(),
   });
   const detail = base.extend({
-    product: inventoryDetailProductOut,
-    location: locationOut,
+    product: rawInventoryDetailProduct,
+    location: rawInventoryListLocation,
     displayName: z.string(),
   });
 

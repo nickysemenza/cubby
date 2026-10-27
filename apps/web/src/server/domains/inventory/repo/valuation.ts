@@ -83,8 +83,7 @@ const loadValuationGraphs = async (
         // ever adds nutrient edges, irrelevant here — and this query doesn't
         // load the column anyway.
         labelNutrition: null,
-        price: row.price,
-        pricing: { effectivePrice: exactPrices.get(row.id) ?? null },
+        price: exactPrices.get(row.id) ?? null,
       }),
     ]),
   );

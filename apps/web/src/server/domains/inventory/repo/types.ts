@@ -6,7 +6,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
-import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 
 import { type MappableImageRecord } from "~/server/db/helpers/transform";
 import {
@@ -20,7 +20,7 @@ import type { MappableProductExternalId } from "~/server/domains/product/repo/ex
 
 type ProductSelect = typeof product.$inferSelect & {
   brandName: string | null;
-  category: ProductCategorySummary | null;
+  category: RawProductCategorySummary | null;
 };
 type LocationSelect = typeof location.$inferSelect;
 

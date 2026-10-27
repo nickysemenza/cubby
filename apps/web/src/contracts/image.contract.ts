@@ -1,8 +1,8 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import {
   imageBrowserDeleteInput,
   imageBrowserDeleteOut,
   imageBrowserUpdateInput,
-  imageWithEntitySchema,
   imageHashIndexSchema,
   setPerceptualHashesInputSchema,
   setPerceptualHashesOutputSchema,
@@ -54,7 +54,7 @@ export const imageContract = defineContract(
     update: mutation({
       note: "entity.update on an image",
       input: imageBrowserUpdateInput,
-      output: imageWithEntitySchema,
+      output: entityFieldEnvelopeSchemas.image.detail,
       invalidates: ["image"],
     }),
     attachExisting: mutation({

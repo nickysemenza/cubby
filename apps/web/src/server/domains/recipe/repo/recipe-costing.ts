@@ -15,7 +15,7 @@ import {
   type RecipeId,
   type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
-import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
+import type { RawIngredientWithFoodLean as IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-raw-read";
 import {
   estimateCoverage,
   hasKnownEstimate,
@@ -23,7 +23,7 @@ import {
   nutrientKey,
   withMacros,
 } from "@cubby/schemas/nutrition";
-import type { RecipeGraphOut } from "@cubby/schemas/recipe";
+import type { RawRecipeGraph as RecipeGraphOut } from "@cubby/schemas/recipe-raw-read";
 import type {
   RecipeCostingExplain,
   RecipeTotals,

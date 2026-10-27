@@ -1,9 +1,5 @@
-import type {
-  ActionableTaskOut,
-  ActionableTasksOut,
-  BlockedTaskOut,
-  TaskFilters,
-} from "@cubby/schemas/project";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { TaskFilters } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { match } from "ts-pattern";
@@ -24,6 +20,10 @@ import { Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Badge } from "~/ui/primitives/badge";
 import { StaticTable } from "~/ui/primitives/static-table";
+
+type ActionableTasksOut = Awaited<ReturnType<typeof task.listActionable.call>>;
+type ActionableTaskOut = ActionableTasksOut["next"][number];
+type BlockedTaskOut = ActionableTasksOut["blocked"][number];
 
 /** A single chain node (task or project) as a linked breadcrumb chip. */
 function ChainNodeLink({
@@ -135,26 +135,28 @@ function TaskRows({
           id: "column-2",
           header: "Project",
           headClassName: "w-40",
-          cell: (t) =>
-            t.projectId && t.projectName && t.projectId ? (
+          cell: (t) => {
+            const projectId = fieldValueOf(t.fields.projectId);
+            return projectId && t.projectName ? (
               <EntityRefLink
                 displayImage={
                   displayImages[
                     entityDisplayImageKey({
                       entityKind: "project",
-                      entityId: t.projectId,
+                      entityId: projectId,
                     })
                   ] ?? null
                 }
                 entity="project"
                 data={{
-                  id: t.projectId,
+                  id: projectId,
                   name: t.projectName,
                 }}
               />
             ) : (
               <span className="text-muted-foreground">—</span>
-            ),
+            );
+          },
         },
         {
           id: "column-3",
@@ -206,16 +208,12 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
         entityKind: "task" as const,
         entityId: task.id,
       })),
-      ...data.next.flatMap((task) =>
-        task.projectId
-          ? [{ entityKind: "project" as const, entityId: task.projectId }]
-          : [],
-      ),
-      ...data.later.flatMap((task) =>
-        task.projectId
-          ? [{ entityKind: "project" as const, entityId: task.projectId }]
-          : [],
-      ),
+      ...[...data.next, ...data.later].flatMap((task) => {
+        const projectId = fieldValueOf(task.fields.projectId);
+        return projectId
+          ? [{ entityKind: "project" as const, entityId: projectId }]
+          : [];
+      }),
       ...data.blocked.flatMap((blocked) => [
         { entityKind: "task" as const, entityId: blocked.task.id },
         ...blocked.reasons.flatMap((reason) =>

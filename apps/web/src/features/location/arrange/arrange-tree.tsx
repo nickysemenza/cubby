@@ -2,7 +2,7 @@ import {
   type LocationShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import { ArrowBendDownRightIcon } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { useRef } from "react";
@@ -18,21 +18,21 @@ import { UnknownDock } from "./unknown-dock";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeTreeProps {
-  roots: InfLocation[];
+  roots: LocationTreeNode[];
   /** Max levels of children rendered below the zoom root before collapsing. */
   depth: number;
-  unknownRoot: InfLocation | null;
+  unknownRoot: LocationTreeNode | null;
   /** The zoomed-to location, from the URL. Undefined = Home. */
   at?: LocationShortcode;
   onSelect: (at: LocationShortcode | undefined) => void;
 }
 
 function resolveZoomPath(
-  roots: InfLocation[],
+  roots: LocationTreeNode[],
   at: LocationShortcode | undefined,
-  home: InfLocation | null,
+  home: LocationTreeNode | null,
 ) {
-  const ancestors: InfLocation[] = [];
+  const ancestors: LocationTreeNode[] = [];
   let level = roots;
   for (const id of at ? pathToNode(roots, at) : []) {
     const node = level.find((candidate) => candidate.id === id);
@@ -137,8 +137,8 @@ export function ArrangeTree({
 }
 
 interface TreeLevelProps {
-  nodes: InfLocation[];
-  roots: InfLocation[];
+  nodes: LocationTreeNode[];
+  roots: LocationTreeNode[];
   /** Depth relative to the zoom root — 0 for its direct children. */
   level: number;
   maxDepth: number;
@@ -204,8 +204,8 @@ function TreeLevel({ nodes, roots, level, maxDepth, onDrill }: TreeLevelProps) {
 }
 
 interface CollapsedRowProps {
-  node: InfLocation;
-  roots: InfLocation[];
+  node: LocationTreeNode;
+  roots: LocationTreeNode[];
   depth: number;
   onDrill: (id: LocationShortcode) => void;
 }
@@ -244,7 +244,7 @@ function CollapsedRow({ node, roots, depth, onDrill }: CollapsedRowProps) {
 interface BreadcrumbSegmentProps {
   label: string;
   locationId: LocationShortcode | null;
-  roots: InfLocation[];
+  roots: LocationTreeNode[];
   active: boolean;
   onClick: () => void;
 }

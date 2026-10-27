@@ -13,6 +13,7 @@ struct EntityFieldControl: View {
     @Binding var pickedTitles: [String: String]
     @State private var picking = false
     @State private var newToken = ""
+    @State private var explaining = false
 
     private var key: String { field.key }
     private var value: JSONValue { model.draft[key] ?? .null }
@@ -37,11 +38,9 @@ struct EntityFieldControl: View {
 
     @ViewBuilder
     private var footer: some View {
-        if let resolved = model.resolutionForEditor(field) {
-            resolutionLine(resolved)
-        } else if let original = model.original,
-            let saved = FieldResolutionPresentation(raw: original, field: field)
-        {
+        if let envelope = model.resolutionForEditor(field) {
+            resolutionLine(envelope)
+        } else if let original = model.original, let saved = FieldEnvelope.of(original, field: field) {
             resolutionLine(saved, stale: true)
         } else if model.isCreate, let policy = field.resolution, policy.none != nil {
             // A new record inherits by default; an explicit None must stay reachable before save.
@@ -66,17 +65,17 @@ struct EntityFieldControl: View {
     // MARK: - Resolution
 
     /// One secondary line under the control: the state marker, the effective value and where it
-    /// comes from, and a menu holding only the links that would change the field. A staged link
-    /// is an ordinary draft edit, so Save needs no separate notice.
+    /// comes from, and a menu holding the actions the saved envelope's current controls allow.
+    /// A staged action is an ordinary draft edit, so Save needs no separate notice.
     ///
-    /// `stale`: the draft differs from the saved record, so the server's effective value may no
-    /// longer hold (a reparent changes the source). Reset and Set to none stay offered from the
-    /// saved policy, staged as their plain patches; Confirm is withheld because it pins the saved
-    /// effective value.
+    /// `stale`: the draft differs from the saved record, so the saved result may no longer hold
+    /// (a reparent changes the source). Use inherited and Set to none stay offered from the saved
+    /// controls, staged as their plain patches; Keep this value is withheld because it pins the
+    /// saved effective value.
     @ViewBuilder
-    private func resolutionLine(_ resolved: FieldResolutionPresentation, stale: Bool = false) -> some View {
-        let state = resolved.state(field: field)
-        let offered = resolved.actions(field: field).filter { !stale || $0.kind != .confirm }
+    private func resolutionLine(_ envelope: FieldEnvelope, stale: Bool = false) -> some View {
+        let state = envelope.state(field: field)
+        let offered = envelope.actions(field: field).filter { !stale || $0.kind != .keepValue }
         let staged =
             stale
             ? offered.first { action in
@@ -86,17 +85,20 @@ struct EntityFieldControl: View {
         let actions = offered.filter { $0 != staged }
         let caption =
             stale
-            ? staged.map { "\($0.label) on save" } ?? "Inheritance updates when saved"
-            : resolutionCaption(resolved, hasActions: !actions.isEmpty)
-        if let caption {
+            ? staged.map(stagedCaption) ?? "Inheritance updates when saved"
+            : resolutionCaption(envelope, hasActions: !actions.isEmpty)
+        let explains = field.explanation != nil && model.recordID != nil
+        if caption != nil || !actions.isEmpty || explains {
             HStack(spacing: FieldGuideTokens.Space.xs) {
                 Image(systemName: state.systemImage).imageScale(.small).accessibilityHidden(true)
-                Text(caption).fixedSize(horizontal: false, vertical: true)
+                if let caption {
+                    Text(caption).fixedSize(horizontal: false, vertical: true)
+                }
                 Spacer(minLength: FieldGuideTokens.Space.sm)
-                if !actions.isEmpty {
+                if !actions.isEmpty || explains {
                     resolutionMenu {
                         ForEach(actions) { action in
-                            Button(actionLabel(action, resolved: resolved)) {
+                            Button(actionLabel(action, envelope: envelope)) {
                                 if stale {
                                     model.stage(action.payload)
                                 } else {
@@ -104,51 +106,94 @@ struct EntityFieldControl: View {
                                 }
                             }
                             .accessibilityIdentifier(
-                                "editor.\(model.descriptor.key.rawValue).\(key).\(action.kind == .useInherited ? "reset" : action.kind == .setNone ? "none" : action.kind.rawValue)"
+                                "editor.\(model.descriptor.key.rawValue).\(key).\(actionIdentifier(action.kind))"
                             )
+                        }
+                        if explains {
+                            Button("Why this value") { explaining = true }
+                                .accessibilityIdentifier(
+                                    "editor.\(model.descriptor.key.rawValue).\(key).explain")
                         }
                     }
                 }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-        }
-    }
-
-    /// The control shows the stored value, so an inherited value is named here with its source.
-    /// A plain Set here value with nothing to change needs no caption.
-    private func resolutionCaption(_ resolved: FieldResolutionPresentation, hasActions: Bool) -> String? {
-        switch resolved.resolution.mode {
-        case .inherit:
-            guard let value = valueText(resolved.effectiveValue) else {
-                return hasActions ? "Nothing to inherit" : nil
+            .sheet(isPresented: $explaining) {
+                if let id = model.recordID {
+                    NavigationStack {
+                        WhyThisValueView(
+                            field: field, subject: EntityRef(entity: model.descriptor.key, id: id),
+                            allowsActions: false
+                        ) { explaining = false }
+                    }
+                }
             }
-            return "\(value), inherited from \(resolved.sourceEntity?.name ?? resolved.resolution.source)"
-        case .unrecognized(let raw):
-            return "Unsupported resolution (\(raw))"
-        case .allocated:
-            return resolved.sourceText
-        case .none:
-            return resolved.emptyLabel(field: field)
-        case .explicit:
-            let state = resolved.state(field: field)
-            return state.tone == .set && !hasActions ? nil : state.label
+            if let failure = envelope.failure {
+                Text(failure)
+                    .font(.caption)
+                    .foregroundStyle(FieldGuideTokens.destructive)
+                    .textSelection(.enabled)
+            }
         }
     }
 
-    /// Use inherited names the value it brings back, so the menu says what Save will apply.
-    private func actionLabel(_ action: FieldResolutionAction, resolved: FieldResolutionPresentation) -> String
-    {
-        guard action.kind == .useInherited, let fallback = valueText(resolved.fallbackValue) else {
-            return action.label
+    /// A staged Use inherited shows only the server's ready preview; otherwise it is updating.
+    /// The removed own value is never presented as the inherited fallback.
+    private func stagedCaption(_ action: FieldAssignmentAction) -> String {
+        guard action.kind == .useInherited else { return "\(action.label) on save" }
+        guard let original = model.original, let saved = FieldEnvelope.of(original, field: field),
+            let preview = saved.resetPreview
+        else { return "Use inherited on save · Updating…" }
+        let text = preview.value.flatMap(valueText) ?? FieldEnvelope.label(for: preview, field: field)
+        return "Use inherited on save · \(text)"
+    }
+
+    /// The control shows the stored choice, so the effective value is named here with its source.
+    /// A plain Set here value with nothing to change needs no caption.
+    private func resolutionCaption(_ envelope: FieldEnvelope, hasActions: Bool) -> String? {
+        let state = envelope.state(field: field)
+        let shown = envelope.effectiveValue.flatMap(valueText) ?? envelope.emptyLabel(field: field)
+        switch state.tone {
+        case .allocated, .automatic:
+            return "\(state.label) · \(shown)"
+        case .unsupported, .missing, .none, .redundant:
+            return state.label
+        case .inherit, .fallback:
+            switch envelope.decision?.provenance {
+            case .inherited(let source)?:
+                return "\(shown), inherited from \(source.name ?? source.entityID)"
+            case .default(let source?)?:
+                return "\(shown), default from \(source.name ?? source.entityID)"
+            default:
+                return shown
+            }
+        case .computed:
+            return nil
+        case .set:
+            return hasActions ? state.label : nil
         }
-        return "\(action.label) (\(fallback))"
+    }
+
+    /// Use inherited names the value it brings back only from the server's ready preview.
+    private func actionLabel(_ action: FieldAssignmentAction, envelope: FieldEnvelope) -> String {
+        guard action.kind == .useInherited, let preview = envelope.resetPreview else { return action.label }
+        let text = preview.value.flatMap(valueText) ?? FieldEnvelope.label(for: preview, field: field)
+        return "\(action.label) (\(text))"
+    }
+
+    private func actionIdentifier(_ kind: FieldAssignmentAction.Kind) -> String {
+        switch kind {
+        case .useInherited: "reset"
+        case .setNone: "none"
+        case .keepValue: "keep"
+        }
     }
 
     private func valueText(_ value: JSONValue) -> String? {
         if field.reference != nil, let id = value.stringValue {
             return model.original.flatMap {
-                FieldResolutionPresentation.referenceName(in: $0, field: field, effectiveID: id)
+                FieldEnvelopePresentation.referenceName(in: $0, field: field, effectiveID: id)
             } ?? pickedTitles[id] ?? id
         }
         return EntityFieldValue.text(value, field: field)

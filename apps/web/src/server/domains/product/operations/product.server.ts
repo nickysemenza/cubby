@@ -5,7 +5,11 @@ import {
   buildPaginatedResponse,
   normalizeSorts,
 } from "@cubby/schemas/pagination";
-import { productExternalIdCollisionsOut } from "@cubby/schemas/product";
+import { productPickerItemOut } from "@cubby/schemas/product";
+import {
+  productListInventoryEntryOut,
+  productExternalIdCollisionsOut,
+} from "@cubby/schemas/product";
 import type {
   ProductListInventoryEntryOut,
   ProductQuantitySummaryOut,
@@ -78,6 +82,11 @@ import {
   listProductProjectUses,
   setProductProjectUses,
 } from "~/server/domains/project/repo/tools";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
+import {
+  readPublicEntityRow,
+  readPublicEntityRows,
+} from "~/server/generic/derived/service/public-read";
 import { semanticProductCandidates } from "~/server/generic/embedding/service/semantic-search.service";
 import { shouldUseSemanticComboboxFallback } from "~/server/generic/embedding/service/semantic/combobox-fallback";
 import { SEMANTIC_MATCH_MIN_SIMILARITY } from "~/server/generic/embedding/service/semantic/constants";
@@ -131,7 +140,16 @@ export async function searchProducts(
       ),
     })
   ) {
-    return buildPaginatedResponse(pagination, lexical.data, lexical.count);
+    return buildPaginatedResponse(
+      pagination,
+      await publicFieldEnvelopeRows({
+        db: context.db,
+        entity: "product",
+        schema: productPickerItemOut,
+        rows: lexical.data,
+      }),
+      lexical.count,
+    );
   }
   const semantic = await semanticProductCandidates(context.db, nameQuery, 5);
   const semanticIds = semantic
@@ -150,7 +168,12 @@ export async function searchProducts(
   );
   return buildPaginatedResponse(
     pagination,
-    data,
+    await publicFieldEnvelopeRows({
+      db: context.db,
+      entity: "product",
+      schema: productPickerItemOut,
+      rows: data,
+    }),
     Math.max(lexical.count, lexical.data.length + semanticItems.length),
   );
 }
@@ -160,7 +183,7 @@ async function applyProductUpcData(
   input: z.output<typeof productApplyUpcInput>,
 ) {
   const id = await productShortcodes.one(context.db, input.id);
-  return applyUpcDataWithSideEffects(
+  const result = await applyUpcDataWithSideEffects(
     {
       db: context.db,
       product: createProductWriteActions(context.db, context.usdaClient),
@@ -170,6 +193,13 @@ async function applyProductUpcData(
     { ...input, id },
     context.actorContext,
   );
+  const product = await readPublicEntityRow({
+    db: context.db,
+    entity: "product",
+    projection: "detail",
+    row: result,
+  });
+  return { ...product, sideEffects: result.sideEffects };
 }
 
 export const getProductSummariesWorkflow = (
@@ -197,9 +227,20 @@ export async function getProductInventoryEntriesWorkflow(
   if (input.ids.length === 0) return {};
   const ids = await productShortcodes.all(context.db, input.ids);
   const byId = await loadProductInventoryEntries(context.db, ids);
+  const groups = input.ids.map((_, index) => byId.get(ids[index]!) ?? []);
+  const rows = await publicFieldEnvelopeRows({
+    db: context.db,
+    entity: "inventory",
+    schema: productListInventoryEntryOut,
+    rows: groups.flat(),
+  });
   const entries: Record<string, ProductListInventoryEntryOut[]> = {};
-  for (const [index, shortcode] of input.ids.entries())
-    entries[shortcode] = byId.get(ids[index]!) ?? [];
+  let offset = 0;
+  for (const [index, shortcode] of input.ids.entries()) {
+    const length = groups[index]?.length ?? 0;
+    entries[shortcode] = rows.slice(offset, offset + length);
+    offset += length;
+  }
   return entries;
 }
 
@@ -228,7 +269,12 @@ export async function quickCreateProductWorkflow(
     context.actorContext,
   );
 
-  return product;
+  return readPublicEntityRow({
+    db: context.db,
+    entity: "product",
+    projection: "output",
+    row: product,
+  });
 }
 
 async function setProjectUses(
@@ -461,28 +507,53 @@ export const productHandlers = implementOperationDomain(productContract, {
   inventoryEntriesByIds: getProductInventoryEntriesWorkflow,
   quickCreate: quickCreateProductWorkflow,
   applyUpcData: applyProductUpcData,
-  findOrCreateByUPC: (context, input) =>
-    findOrCreateByUPC(
+  findOrCreateByUPC: async (context, input) => {
+    const result = await findOrCreateByUPC(
       context.db,
       context.usdaClient,
       context.upcLookupClient,
       input.upc,
       input.defaultName,
       context.actorContext,
-    ),
-  findOrCreateByCode: (context, input) =>
-    findOrCreateByCode(
+    );
+    return {
+      ...result,
+      product: await readPublicEntityRow({
+        db: context.db,
+        entity: "product",
+        projection: "output",
+        row: result.product,
+      }),
+    };
+  },
+  findOrCreateByCode: async (context, input) => {
+    const result = await findOrCreateByCode(
       context.db,
       context.usdaClient,
       context.upcLookupClient,
       input,
       context.actorContext,
-    ),
+    );
+    return {
+      ...result,
+      product: await readPublicEntityRow({
+        db: context.db,
+        entity: "product",
+        projection: "output",
+        row: result.product,
+      }),
+    };
+  },
   categoryDistribution: (context) => getCategoryDistribution(context.db),
   externalIdSourceOptions: (context) =>
     getProductExternalIdSourceOptions(context.db),
-  getByShortcodes: (context, input) =>
-    getProductsByShortcodes(context.db, input.shortcodes),
+  getByShortcodes: async (context, input) =>
+    readPublicEntityRows({
+      db: context.db,
+      entity: "product",
+      projection: "output",
+      rows: await getProductsByShortcodes(context.db, input.shortcodes),
+    }),
   mergePreview: async (context, input) => {
     const [keepId, mergeId] = await Promise.all([
       productShortcodes.one(context.db, input.keepId),
@@ -500,12 +571,24 @@ export const productHandlers = implementOperationDomain(productContract, {
       context.db,
       await productShortcodes.one(context.db, input.parentProductId),
     ),
-  kitComponentRows: async (context, input) =>
-    listKitComponentRows(
+  kitComponentRows: async (context, input) => {
+    const rows = await listKitComponentRows(
       context.db,
       await productShortcodes.all(context.db, input.parentProductIds),
       context.usdaClient,
-    ),
+    );
+    const products = await readPublicEntityRows({
+      db: context.db,
+      entity: "product",
+      projection: "list",
+      rows: rows.map((row) => row.product),
+    });
+    return rows.map((row, index) => {
+      const product = products[index];
+      if (!product) throw new Error("Missing serialized kit component Product");
+      return { ...row, product };
+    });
+  },
   kitMembership: async (context, input) =>
     listKitMembership(
       context.db,
@@ -527,13 +610,25 @@ export const productHandlers = implementOperationDomain(productContract, {
       await productShortcodes.one(context.db, input.productId),
       input,
     ),
-  lookupUpc: (context, input) =>
-    lookupUPC(
+  lookupUpc: async (context, input) => {
+    const result = await lookupUPC(
       context.db,
       context.usdaClient,
       context.upcLookupClient,
       input.upc,
-    ),
+    );
+    return {
+      ...result,
+      localProduct: result.localProduct
+        ? await readPublicEntityRow({
+            db: context.db,
+            entity: "product",
+            projection: "output",
+            row: result.localProduct,
+          })
+        : null,
+    };
+  },
   externalIdCollisions: async (context, input) =>
     productExternalIdCollisionsOut.parse(
       await findProductExternalIdCollisions(context.db, input),
@@ -541,7 +636,12 @@ export const productHandlers = implementOperationDomain(productContract, {
   verifyImages: async (context, input) => {
     const id = await productShortcodes.one(context.db, input.id);
     await verifyProductImages(context.db, id);
-    return getProductWithFood(context.db, context.usdaClient, id);
+    return readPublicEntityRow({
+      db: context.db,
+      entity: "product",
+      projection: "detail",
+      row: await getProductWithFood(context.db, context.usdaClient, id),
+    });
   },
 });
 

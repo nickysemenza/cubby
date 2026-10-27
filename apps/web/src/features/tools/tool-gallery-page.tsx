@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   ToolGalleryGroupBy,
   ToolGalleryGroupOut,
@@ -37,6 +38,7 @@ import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
@@ -44,6 +46,7 @@ import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Image } from "~/ui/primitives/image";
 import { Input } from "~/ui/primitives/input";
+import { NoneValue } from "~/ui/primitives/none-value";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { Spinner } from "~/ui/primitives/spinner";
 import { tryFormatAmount } from "~/ui/text/format-amount";
@@ -87,18 +90,36 @@ type ToolPlacementSummary = {
   installed: boolean;
 };
 
+function formatToolAmount(entry: ToolGalleryInventoryEntryOut): string {
+  const amount = fieldValueOf(entry.fields.amount);
+  return amount === null ? "—" : tryFormatAmount(amount);
+}
+function ToolAmount({ entry }: { entry: ToolGalleryInventoryEntryOut }) {
+  const amount = fieldValueOf(entry.fields.amount);
+  return (
+    <FieldRecordValue record={entry} field="amount">
+      {amount === null ? <NoneValue /> : tryFormatAmount(amount)}
+    </FieldRecordValue>
+  );
+}
+
 export function toolPlacementSummary(
   entries: ToolGalleryInventoryEntryOut[],
 ): ToolPlacementSummary {
   const installed = entries.some((entry) => entry.placement === "installed");
   if (entries.length === 1) {
     return {
-      label: tryFormatAmount(entries[0]!.amount),
+      label: formatToolAmount(entries[0]!),
       mixed: false,
       installed,
     };
   }
-  const units = new Set(entries.map((entry) => entry.amount.unit));
+  const units = new Set(
+    entries.flatMap((entry) => {
+      const amount = fieldValueOf(entry.fields.amount);
+      return amount ? [amount.unit] : [];
+    }),
+  );
   return {
     label: `${entries.length} placements${units.size > 1 ? " · Mixed amounts" : ""}`,
     mixed: units.size > 1,
@@ -141,7 +162,9 @@ export function ToolCard({
   onHoverEnd: () => void;
 }) {
   const placements = toolPlacementSummary(item.inventoryEntries);
-  const identity = [item.brandName, item.model].filter(Boolean).join(" · ");
+  const identity = [fieldValueOf(item.fields.brandName), item.model]
+    .filter(Boolean)
+    .join(" · ");
   const shownEntries = item.inventoryEntries.slice(0, 2);
 
   return (
@@ -204,7 +227,9 @@ export function ToolCard({
           className="mt-1 min-h-4 truncate text-xs text-muted-foreground"
           title={identity || undefined}
         >
-          {identity || "Unspecified maker"}
+          <FieldRecordValue record={item} field="brandName">
+            {identity || "Unspecified maker"}
+          </FieldRecordValue>
         </p>
 
         {compact ? (
@@ -226,7 +251,7 @@ export function ToolCard({
                     {toolLocationPath(entry)}
                   </span>
                   <span className="font-mono text-foreground tabular-nums">
-                    {tryFormatAmount(entry.amount)}
+                    <ToolAmount entry={entry} />
                   </span>
                 </div>
               ))}
@@ -240,7 +265,11 @@ export function ToolCard({
             <div className="mt-auto flex items-end justify-between gap-2 border-t border-[var(--border)] pt-2">
               <div className="min-w-0">
                 <p className="font-mono text-2xs text-foreground tabular-nums">
-                  {placements.label}
+                  {item.inventoryEntries.length === 1 ? (
+                    <ToolAmount entry={item.inventoryEntries[0]!} />
+                  ) : (
+                    placements.label
+                  )}
                 </p>
                 <p className="text-2xs text-muted-foreground">
                   {item.projectUseCount === 0
@@ -277,7 +306,7 @@ export function ToolInspectorSummary({ item }: { item: ToolGalleryItemOut }) {
               {toolLocationPath(entry)}
             </span>
             <span className="shrink-0 font-mono text-xs tabular-nums">
-              {tryFormatAmount(entry.amount)}
+              <ToolAmount entry={entry} />
             </span>
           </div>
         ))}

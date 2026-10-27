@@ -1,10 +1,13 @@
-import type { ImageOut } from "@cubby/schemas/image";
-import { imageOut } from "@cubby/schemas/image";
+import { imageOut, type ImageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
+import {
+  locationReadFixture,
+  type LocationFixtureOverrides,
+} from "~/features/location/location-read.fixtures";
 import { locationChildGroupLabel } from "~/lib/location-child-label";
 
 import { resolveLocationVisual } from "./location-visual-resolver";
@@ -48,24 +51,25 @@ const image = (id: string, overrides: Partial<ImageOut> = {}): ImageOut =>
 const location = (
   code: string,
   type: LocationType | null,
-  overrides: Partial<InfLocation> = {},
-): InfLocation => ({
-  id: testShortcode("location", `LOC-${code}`),
-  name: `Location ${code}`,
-  aliases: [],
-  type: type ?? "furniture",
-  product: null,
-  lastBulkInventory: null,
-  aiDescription: null,
-  images: [],
-  valuation: null,
-  dataQuality: testCompleteDataQuality(),
-  createdAt: new Date("2026-01-01T00:00:00Z"),
-  updatedAt: new Date("2026-01-01T00:00:00Z"),
-  children: [],
-  ...overrides,
-  notes: overrides.notes ?? null,
-});
+  overrides: LocationFixtureOverrides = {},
+): InfLocation =>
+  locationReadFixture({
+    id: testShortcode("location", `LOC-${code}`),
+    name: `Location ${code}`,
+    aliases: [],
+    type: type ?? "furniture",
+    product: null,
+    lastBulkInventory: null,
+    aiDescription: null,
+    images: [],
+    valuation: null,
+    dataQuality: testCompleteDataQuality(),
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
+    children: [],
+    ...overrides,
+    notes: overrides.notes ?? null,
+  });
 
 describe("resolveLocationVisual", () => {
   it("prefers an own photo over the linked product and children", () => {
@@ -144,17 +148,7 @@ describe("resolveLocationVisual", () => {
 
 describe("locationChildGroupLabel", () => {
   it("uses a homogeneous physical type and falls back for mixed children", () => {
-    expect(
-      locationChildGroupLabel([
-        location("AAAA", "drawer"),
-        location("BBBB", "drawer"),
-      ]),
-    ).toBe("drawers");
-    expect(
-      locationChildGroupLabel([
-        location("AAAA", "drawer"),
-        location("BBBB", "shelf"),
-      ]),
-    ).toBe("Compartments");
+    expect(locationChildGroupLabel(["drawer", "drawer"])).toBe("drawers");
+    expect(locationChildGroupLabel(["drawer", "shelf"])).toBe("Compartments");
   });
 });

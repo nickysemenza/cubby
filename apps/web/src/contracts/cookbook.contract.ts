@@ -1,6 +1,6 @@
 import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import { cookbookSummariesOut } from "@cubby/schemas/import-recipe";
-import { cookbookSummary, cookbookUpdateInput } from "@cubby/schemas/recipe";
+import { cookbookUpdateInput } from "@cubby/schemas/recipe";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
@@ -22,7 +22,7 @@ export const cookbookContract = defineContract(
       exposure: "view",
       note: "entity.update on a cookbook",
       input: z.object({ id: cookbookShortcode, data: cookbookUpdateInput }),
-      output: cookbookSummary,
+      output: z.object({ id: cookbookShortcode }),
       invalidates: ["recipeCookbook"],
     }),
   },

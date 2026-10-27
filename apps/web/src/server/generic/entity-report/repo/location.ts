@@ -80,14 +80,14 @@ export async function locationContentsValuationReport(
       figures: [
         {
           label: "Total value",
-          value: valuation?.totalValuation ?? 0,
+          value: valuation?.totalValuation ?? null,
           format: "money",
         },
       ],
     },
     {
       kind: "note",
-      text: `${countLabel(totalItems, "item")}${children.length > 0 ? ` across ${children.length} ${locationChildGroupLabel(children).toLowerCase()}` : ""}`,
+      text: `${countLabel(totalItems, "item")}${children.length > 0 ? ` across ${children.length} ${locationChildGroupLabel(children.map((child) => child.type)).toLowerCase()}` : ""}`,
     },
     ...(pricingNote ? [{ kind: "note" as const, text: pricingNote }] : []),
     ...(breakdown.length > 0

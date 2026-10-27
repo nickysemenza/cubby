@@ -4,10 +4,8 @@ import {
   normalizeGtin,
 } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
-import type {
-  ProductListInventoryEntryOut,
-  ProductTopLevelOut,
-} from "@cubby/schemas/product";
+import type { RawProductListInventoryEntryOut } from "@cubby/schemas/product-raw-read";
+import type { RawProductOutput } from "@cubby/schemas/product-raw-read";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda";
 import { and, eq, ilike, inArray, or, type SQL, sql } from "drizzle-orm";
 import { match } from "ts-pattern";
@@ -102,7 +100,7 @@ const productFoodLinkCondition = (lookups: readonly FoodLookupParam[]) =>
 export const findProductsByFoodIdentifiers = async (
   db: Database,
   rawLookups: readonly FoodLookupParam[],
-): Promise<ProductTopLevelOut[][]> => {
+): Promise<RawProductOutput[][]> => {
   if (rawLookups.length === 0) {
     return [];
   }
@@ -191,7 +189,7 @@ export const countProductsByFoodIdentifiers = async (
 export const findProductsByFoodIdentifier = async (
   db: Database,
   rawLookup?: FoodLookupParam,
-): Promise<ProductTopLevelOut[]> => {
+): Promise<RawProductOutput[]> => {
   if (!rawLookup) return [];
   return (await findProductsByFoodIdentifiers(db, [rawLookup]))[0] ?? [];
 };
@@ -225,7 +223,7 @@ export const getFoodLookupsForLinkedProducts = async (
 const findProductToAPI = async (
   db: Database,
   where: SQL | undefined,
-): Promise<ProductTopLevelOut | null> => {
+): Promise<RawProductOutput | null> => {
   const res = await getDb(db).query.product.findFirst({
     where,
     extras: {
@@ -277,7 +275,7 @@ const findProductToAPI = async (
 export const findProductByGtin = (
   db: Database,
   barcode: string,
-): Promise<ProductTopLevelOut | null> =>
+): Promise<RawProductOutput | null> =>
   findProductToAPI(db, and(productHasGtin(barcode), notDeleted(product)));
 
 /** External text can retrieve a candidate, but duplicate names never establish Brand identity. */
@@ -285,7 +283,7 @@ export const findProductByNameWithBrandClaim = async (
   db: Database,
   name: string,
   brandClaim: string | null | undefined,
-): Promise<ProductTopLevelOut | null> => {
+): Promise<RawProductOutput | null> => {
   const claim = parseBrandClaim(brandClaim);
   let brandId: import("@cubby/schemas/identifiers").VendorId | undefined;
   if (claim) {
@@ -334,8 +332,8 @@ export const findProductByNameWithBrandClaim = async (
 export const loadProductInventoryEntries = async (
   db: Database,
   ids: readonly ProductId[],
-): Promise<Map<ProductId, ProductListInventoryEntryOut[]>> => {
-  const out = new Map<ProductId, ProductListInventoryEntryOut[]>();
+): Promise<Map<ProductId, RawProductListInventoryEntryOut[]>> => {
+  const out = new Map<ProductId, RawProductListInventoryEntryOut[]>();
   if (ids.length === 0) return out;
 
   const rows = await getDb(db).query.inventoryEntry.findMany({

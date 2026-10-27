@@ -2,7 +2,7 @@ import {
   cookbookDiffInput,
   upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
-import type { CookbookFilters } from "@cubby/schemas/recipe";
+import { type CookbookFilters } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

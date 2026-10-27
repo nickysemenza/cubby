@@ -1,5 +1,4 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { locationReadSchemas } from "../location-fields";
 import { labelField } from "./label-field.js";
@@ -257,7 +256,6 @@ export default defineEntity(
       },
     },
     model: {
-      stored: { automaticFields: automaticFields("location", "Location") },
       hierarchy: { parentField: "parentId", maxDepth: 10 },
       fields: [
         {
@@ -557,6 +555,7 @@ Rules:
         labelField("valuationLabel", "Inventory valuation"),
         {
           key: "valuation",
+          storedKey: "valuationRollup",
           kind: "json",
           nullable: true,
           display: {
@@ -798,6 +797,57 @@ Rules:
       ],
     },
     fields: {
+      embedded: [
+        {
+          path: ["product"],
+          entity: "product",
+          projections: [
+            "output",
+            "list",
+            "detail",
+            "mcpOutput",
+            "mcpList",
+            "mcpDetail",
+          ],
+        },
+        {
+          path: ["children"],
+          entity: "location",
+          projections: ["list", "mcpList"],
+        },
+        {
+          path: ["parent"],
+          entity: "location",
+          projections: ["list", "mcpList"],
+        },
+        {
+          path: ["children"],
+          entity: "location",
+          recursive: true,
+          projections: ["detail", "mcpDetail"],
+        },
+        {
+          path: ["parent"],
+          entity: "location",
+          recursive: true,
+          projections: ["detail", "mcpDetail"],
+        },
+        {
+          path: ["inventoryItems"],
+          entity: "inventory",
+          projections: ["detail", "mcpDetail"],
+        },
+        {
+          path: ["inventoryEntries", "product"],
+          entity: "product",
+          projections: ["list", "mcpList"],
+        },
+        {
+          path: ["inventoryEntries"],
+          entity: "inventory",
+          projections: ["list", "mcpList"],
+        },
+      ],
       create: {
         module: "@cubby/schemas/location",
         export: "locationCreateInput",
@@ -806,12 +856,18 @@ Rules:
         module: "@cubby/schemas/location",
         export: "locationUpdateData",
       },
-      output: { module: "@cubby/schemas/location", export: "locationOut" },
-      list: {
-        module: "@cubby/schemas/location",
-        export: "locationListItemOut",
+      output: {
+        module: "@cubby/schemas/location-raw-read",
+        export: "rawLocationOutput",
       },
-      detail: { module: "@cubby/schemas/location", export: "infLocation" },
+      list: {
+        module: "@cubby/schemas/location-raw-read",
+        export: "rawLocationList",
+      },
+      detail: {
+        module: "@cubby/schemas/location-raw-read",
+        export: "rawLocationDetail",
+      },
     },
     storage: {
       indexes: [

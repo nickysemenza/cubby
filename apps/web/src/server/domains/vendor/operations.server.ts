@@ -1,11 +1,19 @@
 import type { fetchVendorLogoInput } from "@cubby/schemas/vendor";
-import { mergeVendorsOut } from "@cubby/schemas/vendor";
+import {
+  mergeVendorsOut,
+  vendorOut,
+  vendorCoverageOut,
+} from "@cubby/schemas/vendor";
 
 import { vendorContract } from "~/contracts/vendor.contract";
 import { getVendorCoverage } from "~/server/domains/vendor/repo/vendor";
 import { fetchAndAttachVendorLogo } from "~/server/domains/vendor/service/vendor-logo.service";
 import { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import {
+  publicFieldEnvelopeRows,
+  selectedFieldEnvelopeSchema,
+} from "~/server/generic/derived/repo/public-read";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 
@@ -17,7 +25,22 @@ const fetchVendorLogoWorkflow = bindWorkflow(
     .commit("fetch", async ({ context }, { input }) =>
       fetchAndAttachVendorLogo(context.db, input.id, context.actorContext),
     )
-    .output(({ fetch }) => fetch.output),
+    .call(
+      "enveloped",
+      async ({ context }, { fetch }) =>
+        (
+          await publicFieldEnvelopeRows({
+            db: context.db,
+            entity: "vendor",
+            schema: vendorOut,
+            rows: [fetch.output],
+          })
+        )[0],
+    )
+    .output(({ enveloped }) => {
+      if (!enveloped) throw new Error("Vendor logo read returned no record");
+      return enveloped;
+    }),
 );
 
 export const vendorHandlers = implementOperationDomain(vendorContract, {
@@ -32,5 +55,17 @@ export const vendorHandlers = implementOperationDomain(vendorContract, {
     });
   },
   fetchLogo: (context, input) => fetchVendorLogoWorkflow(context, input),
-  coverage: (context, input) => getVendorCoverage(context.db, input),
+  coverage: async (context, input) => {
+    const { latestPurchaseDate, ...coverage } = await getVendorCoverage(
+      context.db,
+      input,
+    );
+    const [row] = await publicFieldEnvelopeRows({
+      db: context.db,
+      entity: "vendor",
+      schema: selectedFieldEnvelopeSchema(vendorOut, ["latestPurchaseDate"]),
+      rows: [{ id: coverage.vendor.id, latestPurchaseDate }],
+    });
+    return vendorCoverageOut.parse({ ...coverage, fields: row?.fields });
+  },
 });

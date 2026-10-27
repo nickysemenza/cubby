@@ -1,9 +1,12 @@
-import type { ExpenseOut } from "@cubby/schemas/project";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
+import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import RTable from "~/entity/table/table";
 import { expenseVendorColumn } from "~/features/project/shared";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -12,42 +15,99 @@ import {
   useCubbyTable,
 } from "~/ui/data-table/table-features";
 
-const LINKED: ExpenseOut = {
-  id: testShortcode("expense", "EXP-4K7M"),
-  name: "Dust extractor",
-  cost: 500,
-  date: "2026-07-20",
-  bookingTransactionCode: null,
-  economicRole: "vendor",
-  spendingCategoryId: null,
-  spendingCategoryName: null,
-  lineKind: "principal",
-  lineBasis: "item_line",
-  costType: "tools",
-  trade: "other",
-  url: null,
-  notes: null,
-  future: false,
-  projectId: null,
-  projectName: null,
-  productId: null,
-  productQuantity: null,
-  productName: null,
-  purchaseId: testShortcode("purchase", "PUR-4K7M"),
-  purchaseDate: "2026-07-19",
-  purchaseDisplayLabel: null,
-  vendorId: testShortcode("vendor", "VEN-4K7M"),
-  vendorLogo: null,
-  vendor: "Tool Shop",
-  orderId: "ORDER-42",
-  orderUrl: null,
-  beneficiaries: [],
-  funders: [],
-  sourceClaims: [],
-  dataQuality: testCompleteDataQuality(),
-  createdAt: new Date("2026-07-20T00:00:00Z"),
-  updatedAt: new Date("2026-07-20T00:00:00Z"),
-};
+const LINKED: ExpenseOut = entityReadFixture(
+  entityFieldEnvelopeSchemas.expense.list,
+  {
+    fields: {
+      spendingCategoryId: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "spendingCategoryId"
+        ],
+        null,
+      ),
+      lineKind: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "lineKind"
+        ],
+        "principal",
+      ),
+      costType: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "costType"
+        ],
+        "tools",
+      ),
+      trade: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape["trade"],
+        "other",
+      ),
+      projectId: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "projectId"
+        ],
+        null,
+      ),
+      productId: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "productId"
+        ],
+        null,
+      ),
+      purchaseId: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "purchaseId"
+        ],
+        testShortcode("purchase", "PUR-4K7M"),
+      ),
+      vendor: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape["vendor"],
+        "Tool Shop",
+      ),
+      orderId: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape["orderId"],
+        "ORDER-42",
+      ),
+      dataQuality: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "dataQuality"
+        ],
+        testCompleteDataQuality(),
+      ),
+    },
+    id: testShortcode("expense", "EXP-4K7M"),
+    name: "Dust extractor",
+    cost: 500,
+    date: "2026-07-20",
+    bookingTransactionCode: null,
+    economicRole: "vendor",
+
+    spendingCategoryName: null,
+
+    lineBasis: "item_line",
+
+    url: null,
+    notes: null,
+    future: false,
+
+    projectName: null,
+
+    productQuantity: null,
+    productName: null,
+
+    purchaseDate: "2026-07-19",
+    purchaseDisplayLabel: null,
+    vendorId: testShortcode("vendor", "VEN-4K7M"),
+    vendorLogo: null,
+
+    orderUrl: null,
+    beneficiaries: [],
+    funders: [],
+    sourceClaims: [],
+
+    createdAt: new Date("2026-07-20T00:00:00Z"),
+    updatedAt: new Date("2026-07-20T00:00:00Z"),
+  },
+);
 
 const helper = createCubbyColumnHelper<ExpenseOut>();
 
@@ -105,11 +165,23 @@ describe("expenses Purchase column", () => {
   it("shows an empty value with an edit affordance when unattached", async () => {
     renderCell({
       ...LINKED,
-      purchaseId: null,
       purchaseDate: null,
       vendorId: null,
-      vendor: null,
-      orderId: null,
+      fields: {
+        ...LINKED.fields,
+        purchaseId: fieldValueFixture(
+          entityFieldEnvelopeSchemas.expense.list.shape.fields.shape.purchaseId,
+          null,
+        ),
+        vendor: fieldValueFixture(
+          entityFieldEnvelopeSchemas.expense.list.shape.fields.shape.vendor,
+          null,
+        ),
+        orderId: fieldValueFixture(
+          entityFieldEnvelopeSchemas.expense.list.shape.fields.shape.orderId,
+          null,
+        ),
+      },
     });
 
     const empty = await screen.findByText("(none)");
@@ -118,3 +190,5 @@ describe("expenses Purchase column", () => {
     expect(screen.getByRole("button", { name: "Edit vendor" })).toBeTruthy();
   });
 });
+
+type ExpenseOut = ListRowOf<"expense">;

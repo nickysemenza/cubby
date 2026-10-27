@@ -1,3 +1,4 @@
+import { fieldProvenance } from "@cubby/schemas/field-envelope";
 /**
  * Project's stored folded dates (ADR 0021): the effective start (the list's
  * recursive SQL, evaluated for changed projects only) and the completion year
@@ -49,6 +50,11 @@ export const projectDerivedComputes = {
   "project.startDate": sqlColumnCompute(
     { table: project, id: project.id, deletedAt: project.deletedAt },
     sql`(${projectStartDateSql})::text`,
+    {
+      provenance: sql`CASE WHEN ${project.startDate} IS NOT NULL
+        THEN ${JSON.stringify(fieldProvenance.parse({ kind: "own", ownership: { kind: "record" } }))}::jsonb
+        ELSE ${JSON.stringify(fieldProvenance.parse({ kind: "computed" }))}::jsonb END`,
+    },
   ),
   "project.completionYear": completionYearCompute,
 };

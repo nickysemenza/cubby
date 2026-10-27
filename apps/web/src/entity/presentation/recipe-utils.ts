@@ -37,7 +37,7 @@ export const formatMakes = (
 export const getEffectiveServings = recipeServingsForRead;
 
 /** How to express a per-portion figure: the count to divide totals by and the
- * noun to label it. Prefers an explicit servings count ("serving"); otherwise
+ * noun to label it. Prefers the resolved servings count ("serving"); otherwise
  * falls back to the yield count, labelled by its unit — so "makes 2 cups" reads
  * "/ cup" and "makes 12 churros" reads "/ churro". A "servings" yield unit reads
  * "serving"; the parser's bare-count sentinel ("whole") and a unitless yield

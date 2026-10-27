@@ -4,13 +4,12 @@ import {
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
-import { mealOut } from "@cubby/schemas/meal";
-import type {
-  MealKind,
-  MealOut,
-  MealRecipeOut,
-  MealType,
-} from "@cubby/schemas/meal";
+import type { MealKind, MealType } from "@cubby/schemas/meal";
+import {
+  rawMealOutput,
+  type RawMealOutput,
+  type RawMealRecipeOut,
+} from "@cubby/schemas/meal-raw-read";
 import {
   type NutritionTotals,
   totalsPreview,
@@ -80,7 +79,7 @@ type MealRow = {
   createdAt: Date;
   updatedAt: Date;
   recipes: Array<{
-    id: MealRecipeOut["id"];
+    id: RawMealRecipeOut["id"];
     mealId: MealId;
     recipeId: RecipeId;
     scale: number;
@@ -95,7 +94,7 @@ type MealRow = {
       shortcode: string;
       name: string;
       servings: number | null;
-      yield: MealRecipeOut["recipe"]["yield"];
+      yield: RawMealRecipeOut["recipe"]["yield"];
       totals: StoredRecipeTotals | null;
       totalsComputedAt: Date | null;
       deletedAt: Date | null;
@@ -107,7 +106,7 @@ type MealRow = {
 export const mealRecipeFields = (
   row: Pick<MealRow, "shortcode" | "recipes">,
 ) => {
-  const recipes: MealRecipeOut[] = livePlannedRecipes(row.recipes)
+  const recipes: RawMealRecipeOut[] = livePlannedRecipes(row.recipes)
     // `relations.meal.full.recipes` already filters soft-deleted occurrences
     // (`where: notDeleted(mealRecipe)`); the to-one `recipe` join can't be
     // filtered in `with`, so `mr.recipe.deletedAt` is the backstop here.
@@ -138,7 +137,7 @@ export const mealRecipeFields = (
   return { recipes, recipeNames: recipes.map((recipe) => recipe.recipe.name) };
 };
 
-export const mealTotalsFields = (recipes: readonly MealRecipeOut[]) => {
+export const mealTotalsFields = (recipes: readonly RawMealRecipeOut[]) => {
   const totals = aggregateTotals(recipes.map((recipe) => recipe.scaledTotals));
   const preview = totalsPreview(totals);
   return {
@@ -152,9 +151,9 @@ export const mealTotalsFields = (recipes: readonly MealRecipeOut[]) => {
 export const dbMealToAPI = (
   row: MealRow,
   dataQuality: DataQuality,
-): MealOut => {
+): RawMealOutput => {
   const recipes = mealRecipeFields(row);
-  return mealOut.parse({
+  return rawMealOutput.parse({
     id: parseShortcodeFor("meal", row.shortcode),
     date: row.date,
     name: row.name,

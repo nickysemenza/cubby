@@ -20,7 +20,6 @@ import {
   type SetPerceptualHashesInput,
   type SetPerceptualHashesOutput,
   type ImageUpdateInput,
-  type ImageWithEntity,
   type ProductImagePurpose,
   type StoredImageEmbeddedMetadata,
 } from "@cubby/schemas/image";
@@ -28,7 +27,6 @@ import {
   attachableImageEntityId,
   attachmentRoleForEntity,
   IMAGE_METADATA_REVISION,
-  imageWithEntitySchema,
   storedImageEmbeddedMetadataSchema,
 } from "@cubby/schemas/image";
 import {
@@ -37,6 +35,11 @@ import {
   type ImageMetadataOutcome,
   type ImageProvenanceEvidence,
 } from "@cubby/schemas/image-capture-fields";
+import {
+  rawImageDetail,
+  rawImageList,
+  type RawImageDetail,
+} from "@cubby/schemas/image-raw-read";
 import type { ImageSightingOut } from "@cubby/schemas/image-sighting";
 import {
   imageSightingSourceType,
@@ -1168,7 +1171,7 @@ const imageAssociations = (
 const imageWithRelationsToAPI = (
   imageData: ImageWithRelations,
   capturedByParty: { shortcode: string; name: string } | null = null,
-): ImageWithEntity => {
+): RawImageDetail => {
   return {
     id: parseShortcodeFor("image", imageData.shortcode),
     url: getR2PublicUrl(imageData.key),
@@ -1451,7 +1454,7 @@ const imageRead = (db: Database): ListReadOptions<ImageRelationRow> => ({
     );
     return [
       bind(
-        imageWithEntitySchema.pick({
+        rawImageDetail.pick({
           url: true,
           provenanceEvidenceLabel: true,
         }),
@@ -1462,11 +1465,11 @@ const imageRead = (db: Database): ListReadOptions<ImageRelationRow> => ({
           ),
         }),
       ),
-      bind(imageWithEntitySchema.pick({ associations: true }), (row) => ({
+      bind(rawImageDetail.pick({ associations: true }), (row) => ({
         associations: imageAssociations(row),
       })),
       parties.fields(
-        imageWithEntitySchema.pick({
+        rawImageDetail.pick({
           capturedByPartyId: true,
           capturedByName: true,
         }),
@@ -1483,21 +1486,21 @@ const imageRead = (db: Database): ListReadOptions<ImageRelationRow> => ({
         },
       ),
       representations.fields(
-        imageWithEntitySchema.pick({ representations: true }),
+        rawImageDetail.pick({ representations: true }),
         (row, loaded) => ({ representations: loaded.get(row.shortcode) }),
       ),
       issues.fields(
-        imageWithEntitySchema.pick({ processingIssue: true }),
+        rawImageDetail.pick({ processingIssue: true }),
         (row, loaded) => ({
           processingIssue: loaded.get(row.shortcode) ?? null,
         }),
       ),
       targets.fields(
-        imageWithEntitySchema.pick({ importTarget: true }),
+        rawImageDetail.pick({ importTarget: true }),
         (row, loaded) => ({ importTarget: loaded.get(row.shortcode) ?? null }),
       ),
       analyses.fields(
-        imageWithEntitySchema.pick({ analysisSummary: true }),
+        rawImageDetail.pick({ analysisSummary: true }),
         (row, loaded) => ({
           analysisSummary: loaded.get(row.shortcode) ?? null,
         }),
@@ -1562,15 +1565,12 @@ export const imageListRead = (
     { projection, readIntent },
     imageRead(db),
   );
-export const imageList = completeListReader(
-  imageWithEntitySchema,
-  imageListRead,
-);
+export const imageList = completeListReader(rawImageList, imageListRead);
 
 export const getImageById = async (
   db: Database,
   imageId: string,
-): Promise<ImageWithEntity> => {
+): Promise<RawImageDetail> => {
   const imageRecord = await getDb(db).query.image.findFirst({
     where: eq(image.id, imageId),
     with: imageEntityRelations,
@@ -1619,7 +1619,7 @@ export const getImageById = async (
 export const getImagesByShortcodes = async (
   db: Database,
   shortcodes: readonly string[],
-): Promise<ImageWithEntity[]> => {
+): Promise<RawImageDetail[]> => {
   if (shortcodes.length === 0) return [];
   const records = await getDb(db).query.image.findMany({
     where: and(
@@ -1734,7 +1734,7 @@ export const markImageUploaded = async (
   imageId: string,
   /** The stored bytes' SHA-256: processing reads only an upload with one. */
   sha256: string,
-): Promise<ImageWithEntity> => {
+): Promise<RawImageDetail> => {
   await updateAndReturn(
     db,
     image,

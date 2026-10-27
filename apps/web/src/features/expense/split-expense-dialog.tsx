@@ -1,13 +1,10 @@
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   parseShortcodeFor,
   type PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  costTypeSchema,
-  type ExpenseOut,
-  tradeSchema,
-} from "@cubby/schemas/project";
+import { costTypeSchema, tradeSchema } from "@cubby/schemas/project";
 import {
   type SplitPartDraft,
   purchaseSplitCheckInput,
@@ -29,6 +26,7 @@ import type { z } from "zod";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { entityDetailLink } from "~/entity/entities";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { Picker } from "~/entity/picker/picker";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { tradeOptions } from "~/entity/presentation/trade-options";
@@ -428,6 +426,8 @@ export function SplitExpenseDialog({
    */
   purchaseShortcode: PurchaseShortcode;
 }) {
+  const effectiveExpenseVendor = fieldValueOf(expense.fields.vendor);
+
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const draft = useSplitDraft(expense, open);
@@ -499,7 +499,7 @@ export function SplitExpenseDialog({
             canRemove={parts.length > 2}
             offersProduct={start.data?.productNote != null}
             productLabel={productLabel}
-            vendor={expense.vendor}
+            vendor={effectiveExpenseVendor}
             onChange={(patch) => draft.updatePart(part.key, patch)}
             onKeepProduct={(keep) => draft.setProductPart(part.key, keep)}
             onRemove={() => draft.removePart(part.key)}
@@ -550,3 +550,5 @@ export function SplitExpenseDialog({
     </Overlay>
   );
 }
+
+type ExpenseOut = DetailRecordOf<"expense">;

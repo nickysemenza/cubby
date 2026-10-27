@@ -1,4 +1,4 @@
-import { getCategoryColor } from "~/entity/presentation/category-theme";
+import { getFeatureColor } from "~/entity/presentation/category-theme";
 import { getLocationTypeColor } from "~/entity/presentation/location-type-theme";
 
 import type { LabelItem, SHEET_LAYOUTS, SheetFormat } from "./sheet-layouts";
@@ -17,7 +17,7 @@ function getLabelColor(item: LabelItem): string {
     return getLocationTypeColor(item.locationType);
   }
   if (item.entityKind === "product") {
-    return getCategoryColor(item.productCategory ?? null);
+    return getFeatureColor(item.productFeature);
   }
   return "hsl(0, 0%, 65%)";
 }

@@ -1,5 +1,4 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { mealReadSchemas } from "../meal-fields";
 import { mealChildren } from "../child-tables/meal.js";
@@ -13,7 +12,7 @@ import {
 } from "@cubby/schemas/meal-classification";
 import {
   mealRecipeInput,
-  mealRecipeOut,
+  rawMealRecipeOut,
   mealTotals,
 } from "@cubby/schemas/meal-fields";
 import { mealDate } from "@cubby/schemas/meal-shared";
@@ -176,7 +175,6 @@ export default defineEntity(
       },
     },
     model: {
-      stored: { automaticFields: automaticFields("meal", "Meal") },
       fields: [
         {
           key: "date",
@@ -323,7 +321,7 @@ Rules:
           },
           // Rendered by the `composition` detail slot.
           validation: {
-            read: z.array(mealRecipeOut),
+            read: z.array(rawMealRecipeOut),
             create: z.array(mealRecipeInput).optional(),
             update: null,
           },
@@ -631,21 +629,42 @@ Rules:
       ],
     },
     fields: {
+      embedded: [
+        {
+          path: ["recipes", "recipe"],
+          entity: "recipe",
+          projections: [
+            "output",
+            "list",
+            "detail",
+            "mcpOutput",
+            "mcpList",
+            "mcpDetail",
+          ],
+        },
+      ],
       create: { module: "@cubby/schemas/meal", export: "mealCreateInput" },
       update: { module: "@cubby/schemas/meal", export: "mealUpdateData" },
-      output: { module: "@cubby/schemas/meal", export: "mealOut" },
-      list: { module: "@cubby/schemas/meal", export: "mealListItemOut" },
+      output: {
+        module: "@cubby/schemas/meal-raw-read",
+        export: "rawMealOutput",
+      },
+      list: { module: "@cubby/schemas/meal-raw-read", export: "rawMealList" },
+      detail: {
+        module: "@cubby/schemas/meal-raw-read",
+        export: "rawMealDetail",
+      },
       mcpOutput: {
-        module: "@cubby/schemas/meal",
-        export: "mealMcpEntityOut",
+        module: "@cubby/schemas/meal-raw-read",
+        export: "rawMealMcpOutput",
       },
       mcpList: {
-        module: "@cubby/schemas/meal",
-        export: "mealMcpEntityOut",
+        module: "@cubby/schemas/meal-raw-read",
+        export: "rawMealMcpList",
       },
       mcpDetail: {
-        module: "@cubby/schemas/meal",
-        export: "mealMcpEntityOut",
+        module: "@cubby/schemas/meal-raw-read",
+        export: "rawMealMcpDetail",
       },
     },
     storage: {

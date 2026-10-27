@@ -2,7 +2,7 @@ import {
   type LocationShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
@@ -40,7 +40,7 @@ export function useArrangeMutations() {
       if (vars.action !== "bulkUpdate" || vars.entity !== "location") return;
       const dragId = z.array(z.string()).parse(vars.ids)[0];
       await queryClient.cancelQueries({ queryKey: treeKey });
-      const current = queryClient.getQueryData<InfLocation[]>(treeKey);
+      const current = queryClient.getQueryData<LocationTreeNode[]>(treeKey);
       if (current && dragId) {
         queryClient.setQueryData(
           treeKey,
@@ -66,7 +66,7 @@ export function useArrangeMutations() {
     onMutate: async (vars) => {
       const first = vars.items[0];
       await queryClient.cancelQueries({ queryKey: treeKey });
-      const current = queryClient.getQueryData<InfLocation[]>(treeKey);
+      const current = queryClient.getQueryData<LocationTreeNode[]>(treeKey);
       if (current && first) {
         queryClient.setQueryData(
           treeKey,

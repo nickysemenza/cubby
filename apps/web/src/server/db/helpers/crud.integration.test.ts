@@ -49,7 +49,7 @@ describe("keyed updates", () => {
           {
             keyValue: third.shortcode,
             patch: {
-              notes: sql`'computed'`,
+              notes: sql`${"computed"}::text`,
               tags: ["third"],
               lastBulkInventory: null,
             },

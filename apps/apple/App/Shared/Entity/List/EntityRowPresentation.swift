@@ -220,7 +220,7 @@ struct EntityRowPresentation: Sendable, Hashable {
                 names.isEmpty ? summary.classificationLabel : "\(summary.classificationLabel): \(names)"
             return Fact(id: key, label: field.label, value: text)
         }
-        if let names = FieldResolutionPresentation.allocatedReferenceLabel(in: row.raw, field: field) {
+        if let names = FieldEnvelopePresentation.allocatedReferenceLabel(in: row.raw, field: field) {
             return Fact(id: key, label: field.label, value: names)
         }
         // A declared `labelPath` is the text the server composed (or the name of the record
@@ -246,13 +246,13 @@ struct EntityRowPresentation: Sendable, Hashable {
             }
             return nil
         }
-        let resolution = FieldResolutionPresentation(raw: row.raw, field: field)
-        let inherited = resolution?.isInherited ?? false
+        let envelope = FieldEnvelope.of(row.raw, field: field)
+        let inherited = envelope?.isInherited ?? false
         if let reference = EntityFieldValue.reference(in: row.raw, field: field, surface: "list") {
             return Fact(
                 id: key, label: field.label, value: reference.name ?? reference.id, inherited: inherited)
         } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "list")
-            ?? resolution?.emptyLabel(field: field)
+            ?? envelope?.visibleEmptyLabel(field: field)
         {
             return Fact(
                 id: key, label: field.label, value: value,

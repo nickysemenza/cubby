@@ -1,14 +1,11 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import type { LocationTreeNode, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 
-import {
-  emptyPricingStatus,
-  mergePricingStatus,
-  type PricingStatus,
-} from "~/entity/presentation/calculate-inventory-valuation";
+import type { PricingStatus } from "~/entity/presentation/calculate-inventory-valuation";
 import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 
@@ -19,8 +16,8 @@ function toPricingStatus(
   counts:
     | { priced: number; missingPricing: number; miscNoPrice: number }
     | undefined,
-): PricingStatus {
-  if (!counts) return emptyPricingStatus();
+): PricingStatus | null {
+  if (!counts) return null;
   return {
     priced: { count: counts.priced, itemNames: [] },
     missingPricing: { count: counts.missingPricing, itemNames: [] },
@@ -42,10 +39,11 @@ export interface LocationHierarchyNode {
   value: number;
   directCount: number;
   totalCount: number;
-  directValuation: number;
-  totalValuation: number;
-  directPricingStatus: PricingStatus;
-  totalPricingStatus: PricingStatus;
+  directValuation: number | null;
+  totalValuation: number | null;
+  directPricingStatus: PricingStatus | null;
+  totalPricingStatus: PricingStatus | null;
+  valuation: LocationTreeNode["fields"]["valuation"];
   children?: LocationHierarchyNode[];
 }
 
@@ -76,27 +74,20 @@ export function useLocationHierarchy(
     const home = locations.data?.[0];
     if (!home) return null;
 
-    function transformNode(location: InfLocation): LocationHierarchyNode {
+    function transformNode(location: LocationTreeNode): LocationHierarchyNode {
       const children = location.children?.map(transformNode);
       // Read the persisted rollup (location.valuation) — direct = this location,
       // total = direct + all descendants (already rolled up server-side).
-      const v = location.valuation;
+      const v = fieldValueOf(location.fields.valuation);
       const directCount = v?.directItemCount ?? location.directItemCount ?? 0;
-      const directValuation = v?.directValuation ?? 0;
+      const directValuation = v?.directValuation ?? null;
       const directPricingStatus = toPricingStatus(v?.direct);
 
       const totalCount =
         v?.totalItemCount ??
         directCount + sumBy(children ?? [], (c) => c.totalCount);
-      const totalValuation =
-        v?.totalValuation ??
-        directValuation + sumBy(children ?? [], (c) => c.totalValuation);
-      const totalPricingStatus = v
-        ? toPricingStatus(v.total)
-        : mergePricingStatus([
-            directPricingStatus,
-            ...(children?.map((c) => c.totalPricingStatus) ?? []),
-          ]);
+      const totalValuation = v?.totalValuation ?? null;
+      const totalPricingStatus = toPricingStatus(v?.total);
 
       const value =
         valuationMode === "equalWeight" ? 1 : Math.max(1, totalCount);
@@ -105,7 +96,7 @@ export function useLocationHierarchy(
         name: location.name,
         id: location.id,
         shortcode: location.id,
-        type: location.type,
+        type: fieldValueOf(location.fields.type),
         value,
         directCount,
         totalCount,
@@ -113,6 +104,7 @@ export function useLocationHierarchy(
         totalValuation,
         directPricingStatus,
         totalPricingStatus,
+        valuation: location.fields.valuation,
         children: children?.length ? children : undefined,
       };
     }

@@ -1,3 +1,4 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   fireEvent,
@@ -9,6 +10,7 @@ import {
 import { afterEach, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import {
   productListItem,
   taskListItem,
@@ -31,20 +33,49 @@ afterEach(() => {
 const productName = "Example precision workshop tool";
 const product = mock(productListItem, {
   overrides: {
+    fields: {
+      displayImages: fieldValueFixture(
+        entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
+          "displayImages"
+        ],
+        [],
+      ),
+      cost: fieldValueFixture(
+        entityFieldEnvelopeSchemas.product.list.shape.fields.shape.cost,
+        { kind: "item", amount: 12 },
+      ),
+      price: fieldValueFixture(
+        entityFieldEnvelopeSchemas.product.list.shape.fields.shape["price"],
+        12,
+      ),
+      expenseCount: fieldValueFixture(
+        entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
+          "expenseCount"
+        ],
+        1,
+      ),
+      purchaseDate: fieldValueFixture(
+        entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
+          "purchaseDate"
+        ],
+        "2025-09-03",
+      ),
+      primaryGtin: fieldValueFixture(
+        entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
+          "primaryGtin"
+        ],
+        "012345678905",
+      ),
+    },
     id: testShortcode("product", "PRD-4K7M"),
     name: productName,
-    displayImages: [],
+
     externalIds: [],
-    price: 12,
+
     pricing: {
-      effectivePrice: 12,
-      source: "explicit",
       knownExpenseCount: 0,
       partial: false,
     },
-    expenseCount: 1,
-    purchaseDate: "2025-09-03",
-    primaryGtin: "012345678905",
   },
 });
 
@@ -176,7 +207,7 @@ it("fits populated declared money, count, date and identifier columns", async ()
   };
   await waitFor(() => {
     expect(width("expenseCount")).toBeLessThanOrEqual(40);
-    expect(width("price")).toBeLessThanOrEqual(80);
+    expect(width("cost")).toBeLessThanOrEqual(80);
     expect(width("purchaseDate")).toBeLessThanOrEqual(88);
     expect(width("primaryGtin")).toBeLessThanOrEqual(88);
   });
@@ -188,7 +219,7 @@ it("fits populated declared money, count, date and identifier columns", async ()
   expect(dateLines?.[0]).toHaveTextContent("Sep 3");
   expect(dateLines?.[1]).toBeVisible();
   expect(dateLines?.[1]?.textContent).toMatch(/^’25 · \d+y ago$/);
-  expect(row?.querySelector('[data-cell-col="price"]')).toHaveTextContent(
+  expect(row?.querySelector('[data-cell-col="cost"]')).toHaveTextContent(
     "$12.00",
   );
   expect(row?.querySelector('[data-cell-col="primaryGtin"]')).toHaveTextContent(
@@ -228,10 +259,15 @@ it("bulk-edits all matching identities including an unloaded record", async () =
   await page.viewport(1440, 900);
   const first = mock(taskListItem, {
     overrides: {
+      fields: {
+        trade: fieldValueFixture(
+          entityFieldEnvelopeSchemas.task.list.shape.fields.shape["trade"],
+          "other",
+        ),
+      },
       id: testShortcode("task", "TSK-4K7M"),
       name: "Example first task",
       status: "in_progress",
-      trade: "other",
     },
   });
   const second = {

@@ -1,11 +1,18 @@
-import { vendorShortcode } from "./identifier-fields";
-import productDefinition from "./entity-definitions/00-product.entity";
 import {
-  productQuantityLedgerOut,
+  rawProductResolveCandidate,
+  rawProductPickerItem,
+} from "./product-raw-read";
+import { withFieldEnvelopes } from "./field-envelope";
+import {
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+} from "./generated/entity-field-envelope-fields.product.gen";
+import { productFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.product.gen";
+import { rawProductOutput, rawProductList } from "./product-raw-read";
+import {
   productCookbookRefOut,
   productQuantityFields,
-  productListInventoryEntryOut,
-  productInventoryWithLocationOut,
+  rawProductInventoryWithLocationOut,
   productIngredientOut,
   productLocationRefOut,
 } from "./product-read-fields";
@@ -15,13 +22,11 @@ export {
   productQuantityLedgerOut,
   productCookbookRefOut,
   productQuantityFields,
-  productListInventoryEntryOut,
   productUnitPriceMappings,
   productOwnershipEvidenceOut,
   productNutritionDisplay,
   type ProductQuantityLedgerOut,
   type ProductCookbookRefOut,
-  type ProductListInventoryEntryOut,
   type ProductOwnershipEvidenceOut,
   type ProductNutritionDisplay,
 } from "./product-read-fields";
@@ -32,12 +37,13 @@ import {
   type ProductCategoryFeature,
 } from "./product-category-fields";
 import {
-  productTopLevelOut,
-  productWithMappingsOut,
-  productWithMappingsAndFoodOut,
-} from "./product-output-fields";
+  rawProductWithMappings,
+  rawProductWithMappingsAndFood,
+  rawProductMcpWithMappings,
+  rawProductMcpWithMappingsAndFood,
+} from "./product-raw-read";
 import { upc } from "@cubby/shared/upc";
-import { foodSummary, foodSummaryCompact } from "@cubby/usda";
+import { foodSummary } from "@cubby/usda";
 import { z } from "zod";
 import { locationRefOut } from "./location-fields";
 import { hasFdcLink, productRefOut } from "./product-fields";
@@ -45,36 +51,22 @@ import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { dateBound, dateRangeFields, numericRangeFields } from "./base-entity";
 import { amount } from "./codec";
 import { requiredName } from "./common";
-import { moneyNullable, positiveMoneyNullable } from "./money";
-import { externalIdKind, externalIdOut, externalIdSource } from "./external-id";
+import { moneyNullable } from "./money";
+import { externalIdKind, externalIdSource } from "./external-id";
 import {
   expenseShortcode,
-  imageShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
   productShortcode,
 } from "./identifiers";
-import {
-  imageOut,
-  imageAnalysisSummarySchema,
-  productImagePurpose,
-} from "./image";
+import { imageOut } from "./image";
 import { locationAncestorOut } from "./location";
-import {
-  createPaginatedResponseSchema,
-  oneOrMany,
-  presenceFilter,
-} from "./pagination";
+import { oneOrMany, presenceFilter } from "./pagination";
 import { plainDate, taskStatusSchema } from "./project";
-import { recipeUsageMcpEntityOut, recipeUsageOut } from "./recipe";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { generatedProductFieldSchemas } from "./generated/entity-field-schemas.product.gen";
-import {
-  mcpUnitMappingOut,
-  unitMappingOut,
-  unitMappingWithMetadata,
-} from "./unitmapping";
+import { unitMappingOut, unitMappingWithMetadata } from "./unitmapping";
 import { productCategory, productPricingOut } from "./product-fields";
 import type { ProductCategorySummary } from "./product-category-fields";
 import {
@@ -224,17 +216,17 @@ export const productResolveNamesInput = z.object({
 });
 export type ProductResolveNamesInput = z.infer<typeof productResolveNamesInput>;
 
-export const productResolveCandidateOut = z.object({
-  id: productShortcode,
-  name: productTopLevelOut.shape.name,
-  brandId: productTopLevelOut.shape.brandId,
-  brandName: productTopLevelOut.shape.brandName,
-  category: productTopLevelOut.shape.category,
-  // Same value-space narrowing as `productPickerItemOut.price` — the
-  // candidates ARE picker rows.
-  price: positiveMoneyNullable,
-  coverImageUrl: z.string().nullable(),
-});
+const productPickerFields = {
+  brandId: productFieldEnvelopeFields.brandId,
+  brandName: productFieldEnvelopeFields.brandName,
+  categoryFeature: productFieldEnvelopeFields.categoryFeature,
+  price: productFieldEnvelopeFields.price,
+};
+export const productResolveCandidateOut = withFieldEnvelopes(
+  rawProductResolveCandidate,
+  productPickerFields,
+  productPublicReadFields,
+);
 export type ProductResolveCandidateOut = z.infer<
   typeof productResolveCandidateOut
 >;
@@ -550,9 +542,9 @@ export type ProductAddToInventoryPreviewOut = z.infer<
 export type ProductPricingOut = z.infer<typeof productPricingOut>;
 
 const { coverImageUrl: _coverImageUrl, ...productTopLevelFields } =
-  productTopLevelOut.shape;
+  rawProductOutput.shape;
 
-export { productTopLevelOut };
+export const productTopLevelOut = productFieldEnvelopeSchemas.output;
 
 /**
  * find-or-create result: the product plus whether it was newly created (vs a
@@ -603,60 +595,38 @@ export type ProductFindOrCreateByUPCOut = z.infer<
   typeof productFindOrCreateByUPCOut
 >;
 
-export {
-  productWithMappingsOut,
-  productWithMappingsAndFoodOut,
-} from "./product-output-fields";
+export const productWithMappingsOut = withFieldEnvelopes(
+  rawProductWithMappings,
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+);
+export const productWithMappingsAndFoodOut = withFieldEnvelopes(
+  rawProductWithMappingsAndFood,
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+);
 export type ProductWithMappingsOut = z.infer<typeof productWithMappingsOut>;
 
 export type ProductWithMappingsAndFoodOut = z.infer<
   typeof productWithMappingsAndFoodOut
 >;
 
-const productExternalIdMcpEntityOut = externalIdOut.omit({ id: true });
-/**
- * Declared exception: a unit-mapping row's `id` is the ONLY handle
- * `syncProductUnitMappings` (repo/product/update-helpers.ts) accepts to update
- * an existing row in place — a mapping resent without it is hard-deleted and
- * reinserted, losing `createdAt`/`updatedAt` and its audit trail. External-id
- * rows are addressed by their identity in `entity.update` patch items and
- * stay id-less, but a unit mapping has no such key, so this child row
- * keeps its raw uuid across the MCP boundary — the same "id is the follow-up
- * write handle" carve-out as mealRecipe `id` and recipe section `lineId` (see
- * MCP_SERVER_INSTRUCTIONS in apps/web/src/server/mcp/server.ts).
- */
-const productUnitMappingMcpEntityOut = unitMappingOut;
+export const productWithMappingsMcpEntityOut = withFieldEnvelopes(
+  rawProductMcpWithMappings,
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+);
+export const productWithMappingsAndFoodMcpEntityOut = withFieldEnvelopes(
+  rawProductMcpWithMappingsAndFood,
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+);
 
-/** Product references embedded in MCP entity results never expose child-row ids, except unit mappings — see `productUnitMappingMcpEntityOut`. */
-export const productWithMappingsMcpEntityOut = productWithMappingsOut.extend({
-  externalIds: z.array(productExternalIdMcpEntityOut),
-  unitMappings: z.array(productUnitMappingMcpEntityOut),
-});
-
-export const productWithMappingsAndFoodMcpEntityOut =
-  productWithMappingsAndFoodOut.extend({
-    externalIds: z.array(productExternalIdMcpEntityOut),
-    unitMappings: z.array(productUnitMappingMcpEntityOut),
-    food: foodSummaryCompact.nullable(),
-  });
-
-export const productPickerItemOut = z.object({
-  id: productShortcode,
-  name: z.string(),
-  brandId: vendorShortcode.nullable(),
-  brandName: z.string().nullable(),
-  category: productCategory.nullable(),
-  // Read shape but constrained nonnegative like a write boundary; kept as-is
-  // (see money.ts convention note) rather than silently loosened here.
-  price: positiveMoneyNullable,
-  coverImageUrl: z.string().nullable(),
-  quantityLedger: productQuantityLedgerOut,
-  onHand: z.discriminatedUnion("state", [
-    z.object({ state: z.literal("none") }),
-    z.object({ state: z.literal("counted"), units: z.number() }),
-    z.object({ state: z.literal("mixed") }),
-  ]),
-});
+export const productPickerItemOut = withFieldEnvelopes(
+  rawProductPickerItem,
+  productPickerFields,
+  productPublicReadFields,
+);
 export type ProductPickerItemOut = z.infer<typeof productPickerItemOut>;
 export type ProductPickerOnHandOut = ProductPickerItemOut["onHand"];
 
@@ -686,10 +656,10 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
   ...productTopLevelFields,
   // Same derived cover rule as `productTopLevelOut`/the picker (see
   // `getProductCoverImageUrlsByProductIds`) — not a stored field.
-  coverImageUrl: productTopLevelOut.shape.coverImageUrl,
+  coverImageUrl: rawProductOutput.shape.coverImageUrl,
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
-  inventoryEntry: z.array(productInventoryWithLocationOut),
+  inventoryEntry: z.array(rawProductInventoryWithLocationOut),
   /**
    * Locations that ARE this product — a bin, tote or rack in service, as
    * opposed to `inventoryEntry`, which is stock held somewhere.
@@ -714,6 +684,12 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
   ...productQuantityFields,
 });
 
+export const productListInventoryEntryOut =
+  productFieldEnvelopeSchemas.list.shape.inventoryEntry.element;
+export type ProductListInventoryEntryOut = z.output<
+  typeof productListInventoryEntryOut
+>;
+
 /** Public product shortcode → its live stock entries and their locations. */
 export const productInventoryEntriesByIdOut = z.record(
   z.string(),
@@ -724,47 +700,25 @@ export type ProductInventoryEntriesByIdOut = z.infer<
 >;
 
 /** Generic MCP entity list row with storage-only child identifiers removed. */
-export const productListItemOut = productDefinition.readSchemas.list;
+export const productListItemOut = productFieldEnvelopeSchemas.list;
 export type ProductListItem = z.infer<typeof productListItemOut>;
-export const productDataGaps = productListItemOut.shape.dataGaps;
+export const productDataGaps = rawProductList.shape.dataGaps;
 
-export const productListItemMcpEntityOut = productListItemOut.extend({
-  externalIds: z.array(productExternalIdMcpEntityOut),
-  unitMappings: z.array(productUnitMappingMcpEntityOut),
-  food: foodSummaryCompact.nullable(),
-});
+export const productListItemMcpEntityOut = productFieldEnvelopeSchemas.mcpList;
 
 /** Generic MCP entity detail with storage-only child identifiers removed. */
-export const productWithFoodOut = productDefinition.readSchemas.detail;
+export const productWithFoodOut = productFieldEnvelopeSchemas.detail;
 export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;
 
-export const productWithFoodMcpEntityOut = productWithFoodOut.extend({
-  externalIds: z.array(productExternalIdMcpEntityOut),
-  unitMappings: z.array(productUnitMappingMcpEntityOut),
-  recipeUsages: z.array(recipeUsageMcpEntityOut),
-  food: foodSummaryCompact.nullable(),
-});
+export const productWithFoodMcpEntityOut =
+  productFieldEnvelopeSchemas.mcpDetail;
 
 /** Generic MCP create/update result with storage-only child identifiers removed. */
-export const productTopLevelMcpEntityOut = productTopLevelOut.extend({
-  externalIds: z.array(productExternalIdMcpEntityOut),
-});
+export const productTopLevelMcpEntityOut =
+  productFieldEnvelopeSchemas.mcpOutput;
 
-export const productWithFoodAndSideEffectsOut = z.object({
-  ...productTopLevelFields,
-  // Same derived cover rule as `productTopLevelOut`/the picker (see
-  // `getProductCoverImageUrlsByProductIds`) — not a stored field. Required so
-  // this shape stays assignable to `productTopLevelOut` for the generic
-  // entity kernel's create/update output typing.
-  coverImageUrl: productTopLevelOut.shape.coverImageUrl,
-  ingredient: productIngredientOut.nullable(),
-  unitMappings: z.array(unitMappingOut),
-  inventoryEntry: z.array(productInventoryWithLocationOut),
-  servingAsLocations: z.array(productLocationRefOut),
-  food: foodSummary.nullable(),
-  recipeUsages: z.array(recipeUsageOut),
+export const productWithFoodAndSideEffectsOut = productWithFoodOut.extend({
   sideEffects: mutationSideEffectsSchema,
-  ...productQuantityFields,
 });
 export type ProductWithFoodAndSideEffectsOut = z.infer<
   typeof productWithFoodAndSideEffectsOut
@@ -882,88 +836,6 @@ export const productQuickCreatePayload = z.object({
 export type ProductQuickCreatePayload = z.infer<
   typeof productQuickCreatePayload
 >;
-
-export const productMcpOut = z
-  .object(productTopLevelFields)
-  .pick({
-    id: true,
-    name: true,
-    brandId: true,
-    brandName: true,
-    model: true,
-    notes: true,
-    primaryGtin: true,
-    category: true,
-    tags: true,
-    price: true,
-    pricing: true,
-    fieldResolutions: true,
-    expectedQuantity: true,
-    itemImageCount: true,
-    labelImageCount: true,
-    fdc_id: true,
-    usdaUnavailable: true,
-    stockTracked: true,
-    kind: true,
-    labelNutrition: true,
-    dataQuality: true,
-  })
-  .extend({
-    effectivePrice: moneyNullable.describe(
-      "Resolved valuation/costing price: the manual `price` override when set, else the Expense-derived price. Same number as `pricing.effectivePrice` — this is what values stock and costs recipes.",
-    ),
-    imageCount: z.number().int().nonnegative(),
-    coverImageUrl: productTopLevelOut.shape.coverImageUrl,
-    externalIds: z.array(productExternalIdMcpEntityOut),
-    // USDA FoodData Central id — declared exception, not a cubby shortcode.
-    usdaFdcId: z.number().nullable(),
-    // No generated read field (the declaration has no read key for it).
-    ingredientId: generatedProductFieldSchemas.create.ingredientId,
-    unitMappings: z.array(mcpUnitMappingOut),
-  });
-export type ProductMcpOut = z.infer<typeof productMcpOut>;
-
-export const productMcpImageOut = imageOut
-  .pick({
-    id: true,
-    url: true,
-    key: true,
-    filename: true,
-    size: true,
-    contentType: true,
-    status: true,
-    width: true,
-    height: true,
-    detectedContentType: true,
-    sha256: true,
-    renderStatus: true,
-    storageStatus: true,
-    source: true,
-    sourcePageUrl: true,
-    sourceAssetUrl: true,
-    sourceName: true,
-    useOriginal: true,
-    verifiedAt: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    /** The ProductImage join role; null is distinct from an explicit item role. */
-    purpose: productImagePurpose.nullable(),
-    displayPosition: z.number().int().positive().nullable(),
-    isCover: z.boolean(),
-    // Populated only on a Product detail/get read, not list, to keep list cost
-    // flat — see `dbProductToAPI`/`splitProductImages`.
-    analysisSummary: imageAnalysisSummarySchema.nullable().optional(),
-  });
-
-export const productMcpDetailOut = productMcpOut.extend({
-  coverImageId: imageShortcode.nullable(),
-  images: z.array(productMcpImageOut),
-});
-export type ProductMcpDetailOut = z.infer<typeof productMcpDetailOut>;
-
-export const productMcpListOut = createPaginatedResponseSchema(productMcpOut);
 
 /**
  * Exact identifier ownership. The live unique index on (source, kind,

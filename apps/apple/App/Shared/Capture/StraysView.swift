@@ -39,6 +39,9 @@ struct StraysView: View {
                                 if row.ambiguousQuantity {
                                     StatusChip(text: "More than one unit", tone: .warning)
                                 }
+                                FieldValueStatus(
+                                    raw: (try? JSONValue(encoding: row)) ?? .null,
+                                    field: EntityCatalog[.inventory].field("amount"))
                             }
                         }
                     }

@@ -17,7 +17,7 @@ import {
   recipeServings,
   recipeSourceValues,
   recipeTags,
-  recipeTopLevelFields,
+  rawRecipeTopLevelFields,
   recipeTotals,
   recipeYieldSchema,
 } from "@cubby/schemas/recipe-shared";
@@ -184,22 +184,12 @@ export default defineEntity(
     model: {
       fields: [
         {
-          display: { detail: false, list: false },
-          key: "fieldResolutions",
-          kind: "json",
-          validation: {
-            read: recipeTopLevelFields.fieldResolutions,
-            create: null,
-            update: null,
-          },
-        },
-        {
           key: "name",
           kind: "text",
           control: { kind: "text" },
           display: { standard: "name" },
           validation: {
-            read: recipeTopLevelFields.name,
+            read: rawRecipeTopLevelFields.name,
             create: z.string().trim().min(1, "Recipe name is required"),
             update: z
               .string()
@@ -221,7 +211,7 @@ export default defineEntity(
             format: "external-link",
           },
           validation: {
-            read: recipeTopLevelFields.meta,
+            read: rawRecipeTopLevelFields.meta,
             create: recipeMeta,
             update: recipeMeta.optional(),
           },
@@ -233,7 +223,7 @@ export default defineEntity(
           control: { kind: "specialized", renderer: "structured-field" },
           display: { list: false, format: "amount" },
           validation: {
-            read: recipeTopLevelFields.yield,
+            read: rawRecipeTopLevelFields.yield,
             create: recipeYieldSchema.nullable().optional(),
             update: recipeYieldSchema.nullable().optional(),
           },
@@ -255,24 +245,24 @@ export default defineEntity(
               "An explicit serving count wins; otherwise a recipe yield measured in servings supplies the count. Clearing servings resumes the live yield fallback.",
             resolver: "field",
             projections: {
-              list: "fieldResolutions.servings.value",
-              detail: "fieldResolutions.servings.value",
-              summary: "fieldResolutions.servings.value",
+              list: "servings",
+              detail: "servings",
+              summary: "servings",
             },
             sourceDependencies: [
               {
-                path: "fieldResolutions.servings.storedValue",
+                path: "fields.servings.current.assignment.value",
                 label: "Stored servings",
               },
               {
-                path: "fieldResolutions.servings.fallbackValue",
+                path: "fields.servings.current.controls.reset.preview.result.decision.outcome.value",
                 label: "Serving yield",
               },
               { path: "yield", label: "Recipe yield" },
             ],
           },
           validation: {
-            read: recipeTopLevelFields.servings,
+            read: rawRecipeTopLevelFields.servings,
             create: recipeServings.nullable().optional(),
             update: recipeServings.nullable().optional(),
           },
@@ -285,7 +275,7 @@ export default defineEntity(
           control: { kind: "specialized", renderer: "tag-list" },
           display: { columnGroup: "Recipe" },
           validation: {
-            read: recipeTopLevelFields.tags,
+            read: rawRecipeTopLevelFields.tags,
             create: recipeTags.nullable().optional(),
             update: recipeTags.nullable().optional(),
           },
@@ -301,7 +291,7 @@ export default defineEntity(
           // `createEntityDisplayColumns`.
           display: { columnGroup: "Recipe", listHidden: true, width: "xl" },
           validation: {
-            read: recipeTopLevelFields.notes,
+            read: rawRecipeTopLevelFields.notes,
             create: recipeNotes.nullable().optional(),
             update: recipeNotes.nullable().optional(),
           },
@@ -458,7 +448,7 @@ export default defineEntity(
           key: "id",
           kind: "identifier",
           validation: {
-            read: recipeTopLevelFields.id,
+            read: rawRecipeTopLevelFields.id,
             create: null,
             update: null,
           },
@@ -468,7 +458,7 @@ export default defineEntity(
           kind: "timestamp",
           display: { list: false },
           validation: {
-            read: recipeTopLevelFields.createdAt,
+            read: rawRecipeTopLevelFields.createdAt,
             create: null,
             update: null,
           },
@@ -478,7 +468,7 @@ export default defineEntity(
           kind: "timestamp",
           display: { list: false },
           validation: {
-            read: recipeTopLevelFields.updatedAt,
+            read: rawRecipeTopLevelFields.updatedAt,
             create: null,
             update: null,
           },
@@ -508,7 +498,7 @@ export default defineEntity(
             ],
           },
           validation: {
-            read: recipeTopLevelFields.source,
+            read: rawRecipeTopLevelFields.source,
             create: null,
             update: null,
           },
@@ -698,7 +688,7 @@ export default defineEntity(
           control: { kind: "specialized", renderer: "entity-select" },
           display: { list: false },
           validation: {
-            read: recipeTopLevelFields.forkedFromRecipeId,
+            read: rawRecipeTopLevelFields.forkedFromRecipeId,
             create: recipeShortcode.nullable().optional(),
             update: recipeShortcode.nullable().optional(),
           },
@@ -712,7 +702,7 @@ export default defineEntity(
           kind: "text",
           nullable: true,
           validation: {
-            read: recipeTopLevelFields.forkedFromRecipeName,
+            read: rawRecipeTopLevelFields.forkedFromRecipeName,
             create: null,
             update: null,
           },
@@ -1004,7 +994,6 @@ export default defineEntity(
         "source",
         "yield",
         "servings",
-        "fieldResolutions",
         "tags",
         "notes",
         "sections",
@@ -1022,13 +1011,26 @@ export default defineEntity(
       ],
     },
     fields: {
+      embedded: [
+        {
+          path: ["sections", "ingredients", "recipe"],
+          entity: "recipe",
+          projections: ["output", "detail", "mcpOutput", "mcpDetail"],
+        },
+      ],
       create: { module: "@cubby/schemas/recipe", export: "recipeCreateInput" },
       update: { module: "@cubby/schemas/recipe", export: "recipeUpdateData" },
-      output: { module: "@cubby/schemas/recipe", export: "recipeOut" },
-      list: { module: "@cubby/schemas/recipe", export: "recipeListItemOut" },
+      output: {
+        module: "@cubby/schemas/recipe-raw-read",
+        export: "rawRecipeOutput",
+      },
+      list: {
+        module: "@cubby/schemas/recipe-raw-read",
+        export: "rawRecipeList",
+      },
       mcpOutput: {
-        module: "@cubby/schemas/recipe",
-        export: "recipeMcpEntityOut",
+        module: "@cubby/schemas/recipe-raw-read",
+        export: "rawRecipeMcpOutput",
       },
     },
     storage: {

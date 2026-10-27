@@ -342,13 +342,14 @@ export function entityCellData<TData, TId extends string>(
  * or wrong) and `"1,5 kg"` became `{value: 1, unit: ",5 kg"}`.
  */
 export function amountCellData<TData>(
-  getAmount: (row: TData) => Amount,
+  getAmount: (row: TData) => Amount | null,
   save: (row: TData, amount: Amount) => Promise<void>,
 ): ColumnCellData<TData, Amount> {
   return {
     kind: "amount",
     getCopyPayload: (row) => {
       const amount = getAmount(row);
+      if (amount === null) return null;
       const json: z.input<typeof amountSchema> = {
         value: amount.value,
         unit: amount.unit,

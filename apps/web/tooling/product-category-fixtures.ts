@@ -1,6 +1,6 @@
 import type {
   ProductCategoryFeature,
-  ProductCategorySummary,
+  RawProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
 import {
   type ProductCategoryId,
@@ -74,7 +74,7 @@ export const taxonomyShortcode = (
 
 export const categorySummaryFixture = (
   feature: ProductCategoryFeature,
-): ProductCategorySummary => ({
+): RawProductCategorySummary => ({
   id: taxonomyShortcode(feature),
   name: categoryNames[feature],
   path: [{ id: taxonomyShortcode(feature), name: categoryNames[feature] }],

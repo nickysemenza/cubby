@@ -15,9 +15,9 @@ import {
   isListMediaField,
   type ListReadRow,
 } from "~/entity/model/list-read-fields";
-import { listReadSchema } from "~/entity/model/list-read-schema";
 import { createAppError } from "~/server/errors/app-error";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
+import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
 
 export type ReadSelection =
   | { kind: "fields"; paths: string[][] }
@@ -183,35 +183,75 @@ function longText(entity: string, key: string) {
   );
 }
 
-/**
- * The one compact key set list and get share, decided from declarations:
- * non-media list-read fields both published read schemas require, minus child
- * collections and declared long text. A declared-optional key (server display
- * labels, detail-only enrichment) is one either read may omit, so it would
- * make list and get disagree; `fields` still selects it.
- */
+/** A governed field is selected as one complete envelope, including its controls. */
+function envelopeSchema(schema: z.core.$ZodType): boolean {
+  const node = peel(schema);
+  return (
+    node instanceof z.ZodObject &&
+    ["current", "result", "work"].every((key) => Object.hasOwn(node.shape, key))
+  );
+}
+
+/** An atomic envelope cannot drop child collections without changing its contract. */
+function containsObjectCollection(
+  schema: z.core.$ZodType,
+  seen = new Set<z.core.$ZodType>(),
+): boolean {
+  const node = peel(schema);
+  if (seen.has(node)) return false;
+  seen.add(node);
+  if (objectCollection(node)) return true;
+  if (node instanceof z.ZodUnion)
+    return node.options.some((option) =>
+      containsObjectCollection(option, seen),
+    );
+  return schemaKeys(node).some((key) =>
+    childSchemas(node, key).some((child) =>
+      containsObjectCollection(child, seen),
+    ),
+  );
+}
+
+/** The canonical public path for a flat repository loading key. */
+function publishedPath(schema: z.ZodObject, key: string): string[] | null {
+  if (Object.hasOwn(schema.shape, key)) return [key];
+  return childSchemas(schema, "fields").some(
+    (fields) => childSchemas(fields, key).length > 0,
+  )
+    ? ["fields", key]
+    : null;
+}
+
+/** Compact shares declared scalar reads across list and detail, retaining whole envelopes. */
 function compactKeys(entity: string): string[] {
   const list = publishedSchema(entity, "list");
   const detail = publishedSchema(entity, "get");
+  if (!list || !detail) return [];
   const listEntity = listEntityOf(entity);
-  // Media URLs and image rows are the bulk of a list row; compact omits them.
   const declared = listEntity
-    ? Object.keys(listReadSchema(listEntity).shape).filter(
-        (key) => !isListMediaField(key),
-      )
-    : list
-      ? schemaKeys(list)
+    ? Object.keys(listReadSchema(listEntity).shape)
+    : schemaKeys(list);
+  return declared.flatMap((key) => {
+    if (isListMediaField(key) || longText(entity, key)) return [];
+    const path = publishedPath(list, key);
+    if (!path || path.join(".") !== publishedPath(detail, key)?.join("."))
+      return [];
+    const schemas = [list, detail].flatMap((schema) =>
+      path.reduce<z.core.$ZodType[]>(
+        (nodes, segment) =>
+          nodes.flatMap((node) => childSchemas(node, segment)),
+        [schema],
+      ),
+    );
+    return schemas.every(
+      (schema) =>
+        !declaredOptional(schema) &&
+        !objectCollection(schema) &&
+        (!envelopeSchema(schema) || !containsObjectCollection(schema)),
+    )
+      ? [path.join(".")]
       : [];
-  return declared.filter(
-    (key) =>
-      [list, detail].every(
-        (schema) =>
-          !schema ||
-          (Object.hasOwn(schema.shape, key) &&
-            !declaredOptional(schema.shape[key]) &&
-            !objectCollection(schema.shape[key])),
-      ) && !longText(entity, key),
-  );
+  });
 }
 
 /** The selection a read command asked for, validated against the entity's published schema. */
@@ -253,12 +293,23 @@ export function selectionListFields(
   selection: ReadSelection,
 ): string[] | null {
   const declared = new Set(Object.keys(listReadSchema(entity).shape));
-  const keys =
+  const paths =
     selection.kind === "compact"
-      ? [...selection.keys]
-      : [...new Set(selection.paths.map(([head = ""]) => head))].filter(
-          (key) => key !== "id",
-        );
+      ? selection.keys.map((key) => key.split("."))
+      : selection.paths;
+  const keys = [
+    ...new Set(
+      paths.flatMap(([head = "", field]) => {
+        if (head === "id") return [];
+        if (head !== "fields") return [head];
+        if (field) return [field];
+        const published = publishedSchema(entity, "list");
+        return published
+          ? childSchemas(published, "fields").flatMap(schemaKeys)
+          : [];
+      }),
+    ),
+  ];
   return keys.every((key) => declared.has(key)) ? keys : null;
 }
 
@@ -329,6 +380,7 @@ function compactValue(
   value: SelectedValue,
 ): SelectedValue {
   if (schemas.length === 0 || schemas.some(objectCollection)) return undefined;
+  if (schemas.some(envelopeSchema)) return value;
   if (!schemas.some(objectLike)) return value;
   if (value instanceof Date || Array.isArray(value)) return value;
   const object = selectedObject.safeParse(value);
@@ -351,11 +403,12 @@ function selectItem(
 ): ListReadRow {
   if (selection.kind === "compact") {
     const source = selectedObject.parse(row);
-    const output: SelectedObject = { id: row.id };
+    let output: SelectedValue = { id: row.id };
     for (const key of selection.keys) {
-      if (!Object.hasOwn(source, key)) continue;
-      const compact = compactValue(childSchemas(published, key), source[key]);
-      if (compact !== undefined) output[key] = compact;
+      const selected = pick(source, key.split("."));
+      if (selected === undefined) continue;
+      const compact = compactValue([published], selected);
+      if (compact !== undefined) output = merge(output, compact);
     }
     return listReadRowSchema.parse(output);
   }
@@ -390,14 +443,26 @@ export function projectSelection(result: unknown, selection: ReadSelection) {
       `${parsed.entity} publishes no MCP ${parsed.action} schema to select from`,
     );
   // Field-selected list reads load only the selected columns, so every key is
-  // optional. Rebuild from the shape: `.partial()` throws on refined objects,
+  // optional, including the governed-field roster; each present envelope stays
+  // complete. Rebuild from the shape: `.partial()` throws on refined objects,
   // and object-level refinements check whole records, not selections.
   const row = z
     .object(
       Object.fromEntries(
         Object.entries(published.shape).map(([key, value]) => [
           key,
-          value.optional(),
+          key === "fields" && value instanceof z.ZodObject
+            ? z
+                .object(
+                  Object.fromEntries(
+                    Object.entries(value.shape).map(([field, envelope]) => [
+                      field,
+                      envelope.optional(),
+                    ]),
+                  ),
+                )
+                .optional()
+            : value.optional(),
         ]),
       ),
     )

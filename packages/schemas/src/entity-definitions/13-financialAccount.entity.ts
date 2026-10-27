@@ -1,5 +1,4 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import {
   financialAccountAuthorizedUsers,
   financialAccountFundingPeriods,
@@ -388,16 +387,6 @@ export default defineEntity({
         },
       },
       {
-        key: "fieldResolutions",
-        kind: "json",
-        display: { list: false, detail: false },
-        validation: {
-          read: optionalFieldResolutionsSchema,
-          create: null,
-          update: null,
-        },
-      },
-      {
         key: "authorizedUsers",
         collection: { key: ["ledgerPartyId", "validFrom"] },
         kind: "json",
@@ -696,7 +685,6 @@ export default defineEntity({
       update: ["full", "identity"],
     },
     output: [
-      "fieldResolutions",
       "network",
       "authorizedUserItems",
       "fundingPeriodItems",

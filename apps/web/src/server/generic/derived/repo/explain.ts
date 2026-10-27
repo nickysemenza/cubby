@@ -1,46 +1,44 @@
-import type { DerivedMeta } from "@cubby/schemas/derived-value";
-/**
- * A stored derived field's explanation (ADR 0021): the published value and
- * its meta beside a live recompute for this one record. Reads never write:
- * a differing live value waits for the queued recompute.
- */
 import type { Entity } from "@cubby/schemas/entity";
+import { fieldDecision } from "@cubby/schemas/field-envelope";
+import { fieldLiveComparison } from "@cubby/schemas/field-explanation";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { storedDerived } from "~/server/db/derived-declarations";
 import {
   type DerivedComputes,
+  computedDecision,
   isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
-import { loadStoredDerived } from "~/server/generic/derived/repo/read";
-
-export interface StoredDerivedExplanation {
-  readonly meta: DerivedMeta;
-  readonly stored: unknown;
-  readonly live: unknown;
-}
-
-export async function explainStoredDerived(
+/** The caller owns the read snapshot; comparisons never publish or replace its result. */
+export async function explainLiveDerived(
   db: Database | DrizzleTransaction,
   computes: DerivedComputes,
   entity: Entity,
   key: string,
   internalId: string,
-): Promise<StoredDerivedExplanation | null> {
+): Promise<z.output<typeof fieldLiveComparison> | null> {
   const declaration = storedDerived(entity, key);
   if (!declaration) return null;
   const compute = computes[declaration.compute];
-  const [stored, live] = await Promise.all([
-    loadStoredDerived(db, entity, [internalId], [key]),
-    // A sink writes its own table; its explanation has no single live value.
-    compute && !isDerivedSink(compute)
-      ? compute(db, [internalId])
-      : Promise.resolve(null),
-  ]);
-  const read = stored.get(internalId)?.get(key);
-  return {
-    meta: read?.meta ?? { state: "missing", decidedBy: null, asOf: null },
-    stored: read?.value ?? null,
-    live: live ? (live.get(internalId)?.value ?? null) : null,
-  };
+  if (!compute || isDerivedSink(compute))
+    return {
+      kind: "unavailable",
+      reason: "This computation publishes no single live field result",
+    };
+  const computed = (await compute(db, [internalId])).get(internalId);
+  if (!computed)
+    return {
+      kind: "unavailable",
+      reason: "The live computation produced no result for this record",
+    };
+  const metadata = computedDecision(computed);
+  const decision = fieldDecision(z.json()).parse({
+    provenance: metadata.provenance,
+    outcome:
+      metadata.outcome.kind === "value"
+        ? { kind: "value", value: computed.value }
+        : metadata.outcome,
+  });
+  return { kind: "available", result: { kind: "live", decision } };
 }

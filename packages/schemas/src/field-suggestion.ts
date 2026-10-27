@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { entityFieldModels } from "./entity-fields";
 import type { ShortcodeEntity } from "./entity-manifest";
-import { fieldResolutionsSchema } from "./field-resolution";
+import { fieldEnvelope } from "./field-envelope";
 
 const INHERITANCE_CONTEXT_KEYS = {
   expense: ["lineKind", "purchaseId", "productId", "projectId", "trade"],
@@ -40,7 +40,9 @@ export function fieldSuggestionResolutionContext(
   raw: unknown,
   keys: readonly string[],
 ): string | null {
-  const parsed = fieldResolutionsSchema.safeParse(raw);
+  const parsed = z
+    .record(z.string(), fieldEnvelope(z.unknown(), z.unknown()))
+    .safeParse(raw);
   if (!parsed.success) return null;
   const selected = new Set(keys);
   return JSON.stringify(

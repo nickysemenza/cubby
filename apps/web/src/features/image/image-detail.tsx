@@ -1,8 +1,9 @@
-import type { ImageWithEntity } from "@cubby/schemas/image";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { useState } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -17,12 +18,13 @@ export function ImageDetailMedia({ image }: ImageDetailProps) {
   const [preview, setPreview] = useState<"original" | "transparent" | null>(
     null,
   );
-  const transparent = image.representations?.transparent;
+  const transparent = fieldValueOf(image.fields.representations)?.transparent;
   const showTransparent =
     transparent &&
     (preview === "transparent" ||
       (preview === null &&
-        image.representations?.preferredKind === "transparent"));
+        fieldValueOf(image.fields.representations)?.preferredKind ===
+          "transparent"));
   return (
     <div className="space-y-2">
       {image.status === "UPLOADED" ? (
@@ -58,10 +60,14 @@ export function ImageDetailMedia({ image }: ImageDetailProps) {
           <Image
             src={
               preview === "original"
-                ? image.url
+                ? (fieldValueOf(image.fields.url) ?? undefined)
                 : showTransparent
-                  ? (transparent ?? image.url)
-                  : preferredImageUrl(image)
+                  ? (transparent ?? fieldValueOf(image.fields.url) ?? undefined)
+                  : preferredImageUrl({
+                      url: fieldValueOf(image.fields.url) ?? "",
+                      representations:
+                        fieldValueOf(image.fields.representations) ?? undefined,
+                    })
             }
             alt={image.filename}
             displayWidth={640}
@@ -93,3 +99,5 @@ export function ImageDetailMedia({ image }: ImageDetailProps) {
     </div>
   );
 }
+
+type ImageWithEntity = DetailRecordOf<"image">;

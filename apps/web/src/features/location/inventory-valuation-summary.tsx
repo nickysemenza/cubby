@@ -1,78 +1,48 @@
-import type { LocationValuation } from "@cubby/schemas/location";
-import { useMemo } from "react";
+import type { EntityFieldEnvelopeRead } from "@cubby/schemas/entity-field-envelopes";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 
 import { formatCurrency } from "~/lib/number-format";
 import { formatPricingCountsSummary } from "~/lib/pricing-counts";
-import { Row, Stack } from "~/ui/layout";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { Description } from "~/ui/primitives/description";
 import { NoneValue } from "~/ui/primitives/none-value";
-
-import {
-  calculateInventoryValuation,
-  formatPricingStatusSummary,
-  type InventoryItem,
-} from "../../entity/presentation/calculate-inventory-valuation";
 
 type Variant = "compact" | "full";
 
 interface InventoryValuationSummaryProps {
-  items?: InventoryItem[];
-  /**
-   * Persisted per-location rollup (location.valuation). When provided, the
-   * summary renders from it directly — no inventory fetch. Use this on the
-   * locations list/gallery (the row already carries it) to avoid a per-row
-   * `inventory.list(1000)`. `null` is treated as "not computed yet" → $0.
-   */
-  valuation?: LocationValuation | null;
+  /** The canonical rollup retains missing results and refresh diagnostics. */
+  valuation: EntityFieldEnvelopeRead<"location", "list">["fields"]["valuation"];
   variant?: Variant;
-  /** Hide the pricing status note (e.g., "no pricing for 2") - useful for compact cards */
+  /** Hide the pricing status note (e.g., "no pricing for 2"). */
   hidePricingStatus?: boolean;
   className?: string;
 }
 
 export function InventoryValuationSummary({
-  items,
   valuation,
   variant = "compact",
   hidePricingStatus = false,
   className,
 }: InventoryValuationSummaryProps) {
-  // Persisted-value mode: caller passed the precomputed rollup → no items scan.
-  const hasPersisted = valuation !== undefined;
-
-  const sourceItems = useMemo(() => items ?? [], [items]);
-
-  // Calculate valuation synchronously (no WASM needed - uses precomputed values)
-  const result = useMemo(
-    () => calculateInventoryValuation(sourceItems),
-    [sourceItems],
+  const effectiveValuation = fieldValueOf(valuation);
+  const pricingSummary = effectiveValuation
+    ? formatPricingCountsSummary(effectiveValuation.direct)
+    : null;
+  const value = (
+    <FieldRecordValue record={{ fields: { valuation } }} field="valuation">
+      {effectiveValuation === null ? (
+        <NoneValue />
+      ) : (
+        formatCurrency(effectiveValuation.directValuation)
+      )}
+    </FieldRecordValue>
   );
 
-  // Persisted rollup uses direct (items at this location) to match the
-  // location-filtered fetch this replaced. No brandName breakdown is stored,
-  // so the "full" variant's breakdown only shows in the fetch path.
-  const totalValuation = hasPersisted
-    ? (valuation?.directValuation ?? 0)
-    : result.totalValuation;
-  const pricingSummary = hasPersisted
-    ? formatPricingCountsSummary(valuation?.direct)
-    : formatPricingStatusSummary(result.pricingStatus);
-
   if (variant === "compact") {
-    // A $0.00 here means "empty" or "nothing priced", never a real value (the
-    // persisted counts can't even distinguish a true zero) — render the muted
-    // dash so real valuations stand out; the pricing note survives as a title.
-    if (totalValuation === 0) {
-      return (
-        <div className={className} title={pricingSummary ?? undefined}>
-          <NoneValue />
-        </div>
-      );
-    }
     return (
       <div className={className}>
         <Description as="div" size="xs">
-          {formatCurrency(totalValuation)}
+          {value}
           {!hidePricingStatus && pricingSummary && (
             <span className="ml-1">({pricingSummary})</span>
           )}
@@ -81,40 +51,13 @@ export function InventoryValuationSummary({
     );
   }
 
-  // full variant
   return (
     <div className={className}>
-      <div className="text-lg font-semibold">
-        {formatCurrency(totalValuation)}
-      </div>
-      {pricingSummary && (
+      <div className="text-lg font-semibold">{value}</div>
+      {!hidePricingStatus && pricingSummary && (
         <Description as="div" size="xs">
           {pricingSummary}
         </Description>
-      )}
-
-      {result.breakdown.length > 0 && (
-        <div className="mt-4">
-          <Description as="div" size="xs" className="mb-1 font-medium">
-            By brandName
-          </Description>
-          <Stack as="ul" gap="xs">
-            {result.breakdown.slice(0, 6).map((b) => (
-              <Row
-                as="li"
-                key={b.key}
-                align="center"
-                justify="between"
-                className="text-sm"
-              >
-                <span className="truncate pr-2">{b.label}</span>
-                <span className="tabular-nums">
-                  {formatCurrency(b.valuation)}
-                </span>
-              </Row>
-            ))}
-          </Stack>
-        </div>
       )}
     </div>
   );

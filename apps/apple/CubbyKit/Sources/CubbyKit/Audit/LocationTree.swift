@@ -1,12 +1,11 @@
 import CubbyAPI
 import Foundation
 
-/// One node of `location.makeTree`: the generated `InfLocation`, whose tree fields are optional
-/// on the wire because the same shape serves flat reads.
-public typealias LocationTreeNode = InfLocation
+/// The canonical recursive projection; root-only attachment metadata is outside the topology.
+public typealias LocationTreeNode = LocationTreeNodeOut
 
-extension InfLocation {
-    public var childNodes: [InfLocation] { children ?? [] }
+extension LocationTreeNodeOut {
+    public var childNodes: [LocationTreeNodeOut] { children ?? [] }
     public var directItems: Int { directItemCount ?? 0 }
     public var totalItems: Int { totalItemCount ?? 0 }
 }

@@ -421,7 +421,7 @@ function drawItemsOnLevels(
       const item = items[itemIdx]!; // guarded by itemIdx < items.length
       const ix = gx + 0.2 + col * 0.45;
       const iy = gy + d * 0.25;
-      const itemH = getItemHeight(item.category);
+      const itemH = getItemHeight(item.categoryFeature);
       const isHovered = hoveredItem === item.inventoryId;
       drawCuboid(
         ctx,

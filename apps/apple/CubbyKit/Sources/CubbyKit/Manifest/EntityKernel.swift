@@ -112,9 +112,7 @@ extension EntityDescriptor {
         let response = try await client.native_entity_list(body: body)
         guard let meta = response["meta"] else { throw EntityOperationError.unsupported(key, .list) }
         return ListPage(
-            items: (response["items"]?.arrayValue ?? []).map {
-                EntityRow.attachingDerived(to: $0, sidecars: meta["derived"])
-            }, meta: try meta.decoded())
+            items: response["items"]?.arrayValue ?? [], meta: try meta.decoded())
     }
 
     /// `entity.timeline` over the same filter state as `listPage`, plus `ids`, `from`, `to` and

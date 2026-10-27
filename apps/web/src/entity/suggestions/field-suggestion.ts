@@ -246,7 +246,7 @@ export function useEntitySuggestionsQuery({
   return {
     refetch: query.refetch,
     suggestions: query.data?.suggestions ?? EMPTY_SUGGESTIONS,
-    fieldResolutions: query.data?.fieldResolutions ?? EMPTY_FIELD_RESOLUTIONS,
+    fields: query.data?.fields ?? EMPTY_FIELD_RESOLUTIONS,
     eligibleTargets: query.data?.eligibleTargets ?? [],
     outcomes: query.data?.outcomes ?? EMPTY_OUTCOMES,
     isFetching: query.isFetching,

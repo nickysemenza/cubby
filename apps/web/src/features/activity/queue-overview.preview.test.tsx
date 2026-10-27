@@ -1,6 +1,6 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { shortcode } from "@cubby/schemas/identifiers";
 import { jobOut } from "@cubby/schemas/job-entity";
-import { runOut } from "@cubby/schemas/run";
 import { onlineManager } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
@@ -8,6 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { z } from "zod";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.gen";
 import { installFeatures } from "~/features/registry";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
@@ -17,16 +18,30 @@ import { mock } from "~/lib/test/mock-schema";
 import { QueueOverview, type QueueSearch } from "./queue-overview";
 
 installFeatures();
+const runOut = entityFieldEnvelopeSchemas.run.detail;
 const code = shortcode("JOB-4K7MN4K7MN");
 const run = mock(runOut, {
   overrides: {
+    fields: {
+      displayStatus: fieldValueFixture(
+        entityFieldEnvelopeSchemas.run.detail.shape.fields.shape[
+          "displayStatus"
+        ],
+        "running",
+      ),
+      stalled: fieldValueFixture(
+        entityFieldEnvelopeSchemas.run.detail.shape.fields.shape["stalled"],
+        true,
+      ),
+      waitingOn: fieldValueFixture(
+        entityFieldEnvelopeSchemas.run.detail.shape.fields.shape["waitingOn"],
+        "3 waiting for any Apple device",
+      ),
+    },
     id: shortcode("RUN-4K7MN"),
     displayName: "Synthetic photo Run",
     purpose: "photo_inventory",
     status: "running",
-    displayStatus: "running",
-    stalled: true,
-    waitingOn: "3 waiting for any Apple device",
   },
 });
 const work = mock(jobOut, {
@@ -76,7 +91,13 @@ beforeEach(async () => {
           // Complete rows carry their media.
           items: (entity === "run" ? [run] : [work]).map((row) => ({
             ...row,
-            displayImages: [],
+            fields: {
+              displayImages: fieldValueFixture(
+                entityFieldEnvelopeSchemas.job.detail.shape.fields.shape
+                  .displayImages,
+                [],
+              ),
+            },
           })),
           meta: {
             pageIndex: 0,
@@ -104,7 +125,13 @@ beforeEach(async () => {
         data: mock(getEntityDetailOutputSchema("job"), {
           overrides: {
             ...work,
-            displayImages: [],
+            fields: {
+              displayImages: fieldValueFixture(
+                entityFieldEnvelopeSchemas.job.detail.shape.fields.shape
+                  .displayImages,
+                [],
+              ),
+            },
             attachments: [],
             redirectedFrom: null,
             previousShortcodes: [],

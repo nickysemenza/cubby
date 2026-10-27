@@ -22,6 +22,10 @@ import {
   flattenCookbookRecipes,
   isLegacyCookbookRawJson,
 } from "@cubby/schemas/cookbook";
+import {
+  rawCookbookOutput,
+  type RawCookbookOutput,
+} from "@cubby/schemas/cookbook-raw-read";
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
@@ -37,11 +41,9 @@ import {
   upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { cookbookSummary } from "@cubby/schemas/recipe";
-import type {
-  CookbookFilters,
-  CookbookSummary,
-  CookbookUpdateInput,
+import {
+  type CookbookFilters,
+  type CookbookUpdateInput,
 } from "@cubby/schemas/recipe";
 import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
@@ -356,7 +358,7 @@ const cookbookRead = (db: Database): ListReadOptions<CookbookSummaryRow> => ({
     );
     return [
       covers.fields(
-        cookbookSummary.pick({ coverUrl: true, product: true }),
+        rawCookbookOutput.pick({ coverUrl: true, product: true }),
         (row, loaded) => ({
           coverUrl: loaded.get(entityRefKey("cookbook", row.id))?.url ?? null,
           product:
@@ -377,14 +379,14 @@ const cookbookRead = (db: Database): ListReadOptions<CookbookSummaryRow> => ({
 const hydrateCookbookSummaries = async (
   db: Database,
   rows: CookbookSummaryRow[],
-): Promise<CookbookSummary[]> =>
+): Promise<RawCookbookOutput[]> =>
   (
     await listReadPlan<CookbookSummaryRow>("cookbook", cookbookRead(db)).read(
       db,
       rows,
       { kind: "full" },
     )
-  ).map((row) => cookbookSummary.parse(row));
+  ).map((row) => rawCookbookOutput.parse(row));
 
 // `recipeCount` is the grouped count, not a column.
 const cookbookScaffold = listScaffold("cookbook", cookbook, {
@@ -410,14 +412,14 @@ export const cookbookListRead = (
   );
 
 export const cookbookList = completeListReader(
-  cookbookSummary,
+  rawCookbookOutput,
   cookbookListRead,
 );
 
 export const getCookbookSummary = async (
   db: Database,
   shortcode: string,
-): Promise<CookbookSummary | null> => {
+): Promise<RawCookbookOutput | null> => {
   const where = cookbookScaffold.where({ ids: [shortcode] });
   const rows = await selectCookbookSummaryRows(db, {
     where,
@@ -429,7 +431,9 @@ export const getCookbookSummary = async (
 };
 
 /** Every cookbook, by title: the `cookbook.list` roster the recipe pickers read. */
-export const listCookbooks = async (db: Database): Promise<CookbookSummary[]> =>
+export const listCookbooks = async (
+  db: Database,
+): Promise<RawCookbookOutput[]> =>
   (
     await listAll((pagination) =>
       cookbookList(db, {}, [{ orderBy: "name", direction: "asc" }], pagination),
@@ -496,7 +500,7 @@ export const setCookbookProduct = async (
   actor: ActorContext,
   id: CookbookId,
   productId: ProductId | null,
-): Promise<CookbookSummary> => {
+): Promise<RawCookbookOutput> => {
   const { shortcode } = await cookbookCrud.update(db, id, { productId }, actor);
   // Re-read through the shared projection outside the transaction so the
   // caller gets the same hydrated shape as the browse index without loading

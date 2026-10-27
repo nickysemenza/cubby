@@ -18,6 +18,7 @@ import {
   listGeneratedRelation,
 } from "~/server/generated/entity-relation-bindings.gen";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import {
   findRelatedSearchHits,
   findSearchHits,
@@ -100,11 +101,23 @@ const executeMerge = bindWorkflow(
         deleteStoredObjects(merged.detachedImageKeys),
       ),
     )
-    .output(({ input, merged }) =>
+    .call(
+      "enveloped",
+      async ({ context }, { owner, merged }) =>
+        (
+          await publicFieldEnvelopeRows({
+            db: context.db,
+            entity: owner.binding.entity,
+            schema: owner.binding.schemas.output,
+            rows: [merged.item],
+          })
+        )[0],
+    )
+    .output(({ input, merged, enveloped }) =>
       entityBrowserMutationResultSchema.parse({
         action: input.action,
         entity: input.entity,
-        item: merged.item,
+        item: enveloped,
         mergeSummary: merged.mergeSummary,
         sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
       }),

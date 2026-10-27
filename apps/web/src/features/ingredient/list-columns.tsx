@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   IngredientFilters,
   IngredientListItem,
@@ -145,6 +146,7 @@ export const ingredientListOverride = defineListOverride<
         ingredient.product.flatMap((product) =>
           getAllUnitMappingsFromProduct({
             ...product,
+            price: fieldValueOf(product.fields.price),
             food: foodByProductId[product.id] ?? null,
           }),
         ),

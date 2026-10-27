@@ -78,7 +78,12 @@ const productRenderers = {
   categoryId: productCategory,
   category: productCategory,
   externalIds: productExternalIds,
-} satisfies Partial<Record<keyof ProductListItem, CompactFieldRenderer>>;
+} satisfies Partial<
+  Record<
+    keyof ProductListItem | keyof ProductListItem["fields"],
+    CompactFieldRenderer
+  >
+>;
 
 /** A row-backed domain renderer shared by lists, relation tables, and shelves. */
 export function compactFieldRendererFor(

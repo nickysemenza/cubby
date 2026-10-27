@@ -1,4 +1,3 @@
-import type { LocationType } from "@cubby/schemas/location";
 import { useMemo } from "react";
 
 import {
@@ -11,6 +10,7 @@ import { Stack } from "~/ui/layout";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { TruncatedList } from "~/ui/truncated-list";
 
+import type { InlineRefLinkProps } from "./inline";
 import { InlineRefLink } from "./inline";
 
 type ListRefLinkProps = {
@@ -25,12 +25,12 @@ type ListRefLinkProps = {
   | { entity: "ingredient"; items?: { name: string; id: string }[] }
   | {
       entity: "product";
-      items?: { name: string; id: string; brandName: string | null }[];
+      items?: Extract<InlineRefLinkProps, { entity: "product" }>["data"][];
     }
   | { entity: "recipe"; items?: { name: string; id: string }[] }
   | {
       entity: "location";
-      items?: { name: string; id: string; type: LocationType | null }[];
+      items?: Extract<InlineRefLinkProps, { entity: "location" }>["data"][];
     }
   | {
       entity: "usda-food";
@@ -91,7 +91,7 @@ export function ListRefLink(props: ListRefLinkProps) {
           displayImage={null}
         />
       );
-    if (props.entity === "location" && "type" in item)
+    if (props.entity === "location" && "name" in item)
       return (
         <InlineRefLink
           key={key}
@@ -100,7 +100,7 @@ export function ListRefLink(props: ListRefLinkProps) {
           displayImage={imageOf("location", item.id)}
         />
       );
-    if (props.entity === "product" && "brandName" in item)
+    if (props.entity === "product" && "name" in item)
       return (
         <InlineRefLink
           key={key}

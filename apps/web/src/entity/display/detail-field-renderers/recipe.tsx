@@ -1,3 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+
 import {
   RecipeSourceLink,
   sourceLabel,
@@ -6,9 +8,12 @@ import {
 import type { EntityDetailFieldRenderers } from "./index";
 
 export const recipeDetailFields = {
-  "recipe-source": (recipe) => ({
-    value: sourceLabel(recipe.source) ? (
-      <RecipeSourceLink source={recipe.source} />
-    ) : undefined,
-  }),
+  "recipe-source": (recipe) => {
+    const effectiveRecipeSource = fieldValueOf(recipe.fields.source);
+    return {
+      value: sourceLabel(effectiveRecipeSource) ? (
+        <RecipeSourceLink source={effectiveRecipeSource} />
+      ) : undefined,
+    };
+  },
 } satisfies EntityDetailFieldRenderers<"recipe">;

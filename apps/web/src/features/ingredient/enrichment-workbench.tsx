@@ -1,4 +1,3 @@
-import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type {
   productCreateManyInput,
   productMarkUsdaUnavailableManyInput,
@@ -13,6 +12,7 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import type { z } from "zod";
 
+import type { IngredientEnrichmentRead } from "~/contracts/ingredient.contract";
 import { verbDef } from "~/entity/actions/action-verbs";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
@@ -86,7 +86,7 @@ const WORKBENCH_FILTER_OPTIONS = [
 
 type MergeSuggestion = { targetId: string; targetName: string };
 
-type EnrichmentTableRow = EnrichmentRow & {
+type EnrichmentTableRow = IngredientEnrichmentRead & {
   focusRank: number;
   suggestion: Suggestion | null;
   mergeSuggestion: MergeSuggestion | null;

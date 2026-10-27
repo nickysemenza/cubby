@@ -140,6 +140,7 @@ export const dateRangeBounds = (
 
 export type EntityPorts = Readonly<{
   repository: SourceRef | null;
+  fieldEnvelope: SourceRef | null;
   references: Readonly<{ label: SourceRef | null; resolver: SourceRef | null }>;
   filters: SourceRef | null;
   search: Readonly<{
@@ -346,6 +347,9 @@ export type CompiledEntity = Readonly<{
     mcpOutput: SourceRef;
     mcpList: SourceRef;
     mcpDetail: SourceRef;
+    embedded: NonNullable<
+      NonNullable<EntityDeclarationMetadata["fields"]>["embedded"]
+    >;
   }> | null;
   route: Readonly<ParsedEntityRoute> | null;
   filterAudit: boolean;
@@ -459,7 +463,15 @@ export const booleanValue = (
 
 export const declarationModules = new Map<
   string,
-  { path: string; enumExports: string[] }
+  {
+    path: string;
+    enumExports: string[];
+    readSchemas: {
+      output: z.ZodObject;
+      list: z.ZodObject;
+      detail: z.ZodObject;
+    };
+  }
 >();
 
 export const compileLoadedEntityDeclarations = (
@@ -493,6 +505,13 @@ export const loadEntityDeclarationBundle = async (): Promise<{
         );
       declarationModules.set(String(raw.key), {
         path: `../entity-definitions/${entry.name.replace(/\.ts$/, "")}`,
+        readSchemas: z
+          .object({
+            output: z.instanceof(z.ZodObject),
+            list: z.instanceof(z.ZodObject),
+            detail: z.instanceof(z.ZodObject),
+          })
+          .parse(raw.readSchemas),
         enumExports: Object.keys(module).filter((key) =>
           key.startsWith("generated"),
         ),

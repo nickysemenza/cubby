@@ -1,8 +1,6 @@
-import { automaticFields } from "./automatic-fields";
 import { categoryMappingSchema } from "../spending-classification";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
-import { optionalFieldResolutionsSchema } from "../field-resolution.js";
 import { spendingCategoryMappingMode } from "../spending-classification.js";
 import { spendingCategoryShortcode } from "../identifier-fields.js";
 import { productCategoryShortcode } from "../identifier-fields.js";
@@ -119,9 +117,6 @@ export default defineEntity({
     },
   },
   model: {
-    stored: {
-      automaticFields: automaticFields("productCategory", "ProductCategory"),
-    },
     hierarchy: {
       parentField: "parentId",
       // A three-level tree: at most two levels below any category.
@@ -149,17 +144,17 @@ export default defineEntity({
           description:
             "A category's own mapping (or block) wins; otherwise the nearest mapped ancestor within three levels supplies it.",
           projections: {
-            list: "fieldResolutions.effectiveSpendingCategory.value",
-            detail: "fieldResolutions.effectiveSpendingCategory.value",
-            summary: "fieldResolutions.effectiveSpendingCategory.value",
+            list: "effectiveSpendingCategory",
+            detail: "effectiveSpendingCategory",
+            summary: "effectiveSpendingCategory",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.effectiveSpendingCategory.sourceEntity",
+              path: "fields.effectiveSpendingCategory.result.decision.provenance.source",
               label: "Source",
             },
             {
-              path: "fieldResolutions.effectiveSpendingCategory.fallbackValue",
+              path: "fields.effectiveSpendingCategory.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -268,16 +263,6 @@ export default defineEntity({
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
           update: spendingCategoryShortcode.nullable().optional(),
-        },
-      },
-      {
-        display: { detail: false, list: false },
-        key: "fieldResolutions",
-        kind: "json",
-        validation: {
-          read: optionalFieldResolutionsSchema,
-          create: null,
-          update: null,
         },
       },
       {
@@ -507,21 +492,21 @@ Rules:
             "A permanent feature binding wins; otherwise the nearest live ancestor supplies the feature. Moving a category changes its ancestor fallback without replacing its own binding.",
           resolver: "field",
           projections: {
-            list: "fieldResolutions.feature.value",
-            detail: "fieldResolutions.feature.value",
-            summary: "fieldResolutions.feature.value",
+            list: "feature",
+            detail: "feature",
+            summary: "feature",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.feature.storedValue",
+              path: "fields.feature.current.assignment.value",
               label: "Permanent feature binding",
             },
             {
-              path: "fieldResolutions.feature.fallbackValue",
+              path: "fields.feature.current.controls.reset.preview.result.decision.outcome.value",
               label: "Ancestor feature",
             },
             {
-              path: "fieldResolutions.feature.sourceEntity",
+              path: "fields.feature.result.decision.provenance.source",
               label: "Source category",
             },
           ],
@@ -552,21 +537,21 @@ Rules:
             "A category's own stock-tracking decision wins; otherwise the nearest live ancestor with a decision supplies it. With neither, the category is undecided.",
           resolver: "field",
           projections: {
-            list: "fieldResolutions.stockTracked.value",
-            detail: "fieldResolutions.stockTracked.value",
-            summary: "fieldResolutions.stockTracked.value",
+            list: "stockTracked",
+            detail: "stockTracked",
+            summary: "stockTracked",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.stockTracked.storedValue",
+              path: "fields.stockTracked.current.assignment.value",
               label: "Category decision",
             },
             {
-              path: "fieldResolutions.stockTracked.fallbackValue",
+              path: "fields.stockTracked.current.controls.reset.preview.result.decision.outcome.value",
               label: "Ancestor decision",
             },
             {
-              path: "fieldResolutions.stockTracked.sourceEntity",
+              path: "fields.stockTracked.result.decision.provenance.source",
               label: "Source category",
             },
           ],
@@ -786,7 +771,6 @@ Rules:
       "emoji",
       "spendingCategoryMode",
       "spendingCategoryId",
-      "fieldResolutions",
       "effectiveFeature",
       "id",
       "name",

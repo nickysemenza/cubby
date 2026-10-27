@@ -1,5 +1,6 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
-  InfLocation,
+  LocationTreeNode,
   InventoryItemForTree,
   LocationType,
 } from "@cubby/schemas/location";
@@ -15,10 +16,13 @@ import {
 import { useLocationTree } from "~/entity/hooks/use-location-tree";
 import { LocationBreadcrumb } from "~/entity/presentation/location-breadcrumb";
 import { formatCurrency } from "~/lib/number-format";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Button } from "~/ui/primitives/button";
 import { ImageWithPreview } from "~/ui/primitives/image-with-preview";
+import { NoneValue } from "~/ui/primitives/none-value";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 import {
   Visualization,
   visualizationState,
@@ -55,7 +59,7 @@ export function LocationGallery() {
 }
 
 /** A compact outline indexes one continuous gallery; disclosure only hides contents. */
-export function LocationBrowser({ data }: { data: InfLocation[] }) {
+export function LocationBrowser({ data }: { data: LocationTreeNode[] }) {
   const index = useMemo(() => indexLocations(data), [data]);
   const isMobile = useIsMobile();
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>();
@@ -79,8 +83,8 @@ export function LocationBrowser({ data }: { data: InfLocation[] }) {
   const selectedId =
     selected && visibleIndex.byId.has(selected) ? selected : undefined;
   const entries = useMemo(() => {
-    const result: { location: InfLocation; depth: number }[] = [];
-    const visit = (locations: InfLocation[], depth: number) => {
+    const result: { location: LocationTreeNode; depth: number }[] = [];
+    const visit = (locations: LocationTreeNode[], depth: number) => {
       for (const location of locations) {
         result.push({ location, depth });
         visit(location.children ?? [], depth + 1);
@@ -227,7 +231,7 @@ export function LocationBrowser({ data }: { data: InfLocation[] }) {
               segments={path.map((node) => ({
                 id: node.id,
                 name: node.name,
-                type: node.type,
+                type: fieldValueOf(node.fields.type),
               }))}
               onSegmentClick={(id) => select(id)}
               className="max-sm:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_button]:min-h-11"
@@ -278,11 +282,12 @@ const LocationOverview = memo(function LocationOverview({
   location,
   query,
 }: {
-  location: InfLocation;
+  location: LocationTreeNode;
   query: string;
 }) {
   const [showContents, setShowContents] = useState(false);
   const items = location.inventoryItems ?? [];
+  const valuation = fieldValueOf(location.fields.valuation);
   const term = query.trim().toLocaleLowerCase();
   const matchingItems = term
     ? items.filter((item) =>
@@ -311,14 +316,20 @@ const LocationOverview = memo(function LocationOverview({
               {location.directItemCount ?? items.length} items here ·{" "}
               {location.totalItemCount ?? items.length} total
             </span>
-            {location.valuation && (
-              <span>{formatCurrency(location.valuation.totalValuation)}</span>
-            )}
-            <EntityQualityFact
-              entity="location"
-              id={location.id}
-              quality={location.dataQuality}
-            />
+            <FieldRecordValue record={location} field="valuation">
+              {valuation === null ? (
+                <NoneValue />
+              ) : (
+                formatCurrency(valuation.totalValuation)
+              )}
+            </FieldRecordValue>
+            <FieldRecordValue record={location} field="dataQuality">
+              <EntityQualityFact
+                entity="location"
+                id={location.id}
+                quality={fieldValueOf(location.fields.dataQuality) ?? undefined}
+              />
+            </FieldRecordValue>
           </div>
         </div>
         <Link
@@ -329,9 +340,9 @@ const LocationOverview = memo(function LocationOverview({
           Open record
         </Link>
       </div>
-      {location.images.length > 1 && (
+      {(fieldValueOf(location.fields.images) ?? []).length > 1 && (
         <div className="mt-2 flex gap-2 overflow-x-auto">
-          {location.images.map((image) => (
+          {(fieldValueOf(location.fields.images) ?? []).map((image) => (
             <ImageWithPreview
               key={image.id}
               src={image.url}
@@ -393,6 +404,7 @@ function InventoryContents({ items }: { items: InventoryItemForTree[] }) {
 }
 
 function InventoryContentsRow({ item }: { item: InventoryItemForTree }) {
+  const amount = fieldValueOf(item.fields.amount);
   const image = useEntityDisplayImage({
     entityKind: "product",
     entityId: item.productId,
@@ -424,7 +436,9 @@ function InventoryContentsRow({ item }: { item: InventoryItemForTree }) {
         <span className="truncate">{item.productName}</span>
       </Link>
       <span className="shrink-0 text-2xs text-muted-foreground tabular-nums">
-        {item.amount.value} {item.amount.unit}
+        <FieldRecordValue record={item} field="amount">
+          {amount ? tryFormatAmount(amount) : <NoneValue />}
+        </FieldRecordValue>
       </span>
     </li>
   );

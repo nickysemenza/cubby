@@ -1,7 +1,7 @@
-import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { SectionIngredientOut } from "@cubby/schemas/recipe";
 import { match } from "ts-pattern";
-import { z } from "zod";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   type CalculateTotalsResult,
   fromWAmount,
@@ -102,32 +102,35 @@ export const scaleRecipe = (recipe: RecipeOut, factor: number): RecipeOut => {
           value: wasm.scale_display_count(recipe.yield.value, factor),
         }
       : recipe.yield,
-    servings:
-      recipe.servings != null
-        ? wasm.scale_display_count(recipe.servings, factor)
-        : recipe.servings,
-  };
-  const servingResolution = recipe.fieldResolutions?.servings;
-  if (servingResolution) {
-    const values = z
-      .object({
-        storedValue: z.number().nullable(),
-        value: z.number().nullable(),
-        fallbackValue: z.number().nullable(),
-      })
-      .parse(servingResolution);
-    const scaleServingValue = (value: number | null) =>
-      value === null ? null : wasm.scale_display_count(value, factor);
-    // Transform the server's selected values for this display preview; provenance stays intact.
-    result.fieldResolutions = {
-      ...recipe.fieldResolutions,
+    fields: {
+      ...recipe.fields,
       servings: {
-        ...servingResolution,
-        storedValue: scaleServingValue(values.storedValue),
-        value: scaleServingValue(values.value),
-        fallbackValue: scaleServingValue(values.fallbackValue),
+        ...recipe.fields.servings,
+        result:
+          recipe.fields.servings.result.kind === "missing"
+            ? recipe.fields.servings.result
+            : {
+                ...recipe.fields.servings.result,
+                decision: {
+                  ...recipe.fields.servings.result.decision,
+                  outcome:
+                    recipe.fields.servings.result.decision.outcome.kind ===
+                    "value"
+                      ? {
+                          kind: "value",
+                          value: wasm.scale_display_count(
+                            recipe.fields.servings.result.decision.outcome
+                              .value,
+                            factor,
+                          ),
+                        }
+                      : recipe.fields.servings.result.decision.outcome,
+                },
+              },
       },
-    };
-  }
+    },
+  };
   return result;
 };
+
+type RecipeOut = DetailRecordOf<"recipe">;

@@ -1,4 +1,4 @@
-import type { Amount } from "@cubby/schemas/codec";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import type {
   InventoryShortcode,
   LocationShortcode,
@@ -16,7 +16,12 @@ import {
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import type {
+  InventoryEntryBase,
+  InventoryRelatedEntity,
+} from "~/ui/data-table/inventory-column-helpers";
 
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";
 import type { SearchProviderProps } from "../picker/with-search-hook";
@@ -59,16 +64,14 @@ function StubSearchProvider({
   });
 }
 
-interface TestEntry {
+interface TestEntry extends InventoryEntryBase {
   id: InventoryShortcode;
-  amount: Amount;
   location?: { id: LocationShortcode; name: string; type: LocationType | null };
 }
 
-interface ProductEntry {
+interface ProductEntry extends InventoryEntryBase {
   id: InventoryShortcode;
-  amount: Amount;
-  product?: { id: ProductShortcode; name: string; brandName: string };
+  product?: Extract<InventoryRelatedEntity, { entity: "product" }>["data"];
 }
 
 interface TestRow {
@@ -109,11 +112,22 @@ describe("InventoryEntriesCell", () => {
     const product: ProductEntry["product"] = {
       id: testShortcode("product", "prd-1"),
       name: "Bread Flour",
-      brandName: "Mill House",
+      fields: {
+        brandName: fieldValueFixture(
+          entityFieldEnvelopeSchemas.product.output.shape.fields.shape
+            .brandName,
+          "Mill House",
+        ),
+      },
     };
     const entry: ProductEntry = {
       id: testShortcode("inventory", "inv-product-1"),
-      amount: { value: 1, unit: "bag" },
+      fields: {
+        amount: fieldValueFixture(
+          entityFieldEnvelopeSchemas.inventory.list.shape.fields.shape.amount,
+          { value: 1, unit: "bag" },
+        ),
+      },
       product,
     };
 
@@ -171,7 +185,12 @@ describe("InventoryEntriesCell", () => {
     const onCreateEntry = vi.fn().mockResolvedValue(undefined);
     const entry: TestEntry = {
       id: testShortcode("inventory", "inv-1"),
-      amount: { value: 2, unit: "lb" },
+      fields: {
+        amount: fieldValueFixture(
+          entityFieldEnvelopeSchemas.inventory.list.shape.fields.shape.amount,
+          { value: 2, unit: "lb" },
+        ),
+      },
       location: {
         id: testShortcode("location", "loc-1"),
         name: "Pantry",
@@ -216,7 +235,12 @@ describe("InventoryEntriesCell", () => {
     const entries: TestEntry[] = [
       {
         id: testShortcode("inventory", "inv-1"),
-        amount: { value: 2, unit: "lb" },
+        fields: {
+          amount: fieldValueFixture(
+            entityFieldEnvelopeSchemas.inventory.list.shape.fields.shape.amount,
+            { value: 2, unit: "lb" },
+          ),
+        },
         location: {
           id: testShortcode("location", "loc-1"),
           name: "Pantry",
@@ -225,7 +249,12 @@ describe("InventoryEntriesCell", () => {
       },
       {
         id: testShortcode("inventory", "inv-2"),
-        amount: { value: 1, unit: "lb" },
+        fields: {
+          amount: fieldValueFixture(
+            entityFieldEnvelopeSchemas.inventory.list.shape.fields.shape.amount,
+            { value: 1, unit: "lb" },
+          ),
+        },
         location: {
           id: testShortcode("location", "loc-2"),
           name: "Fridge",

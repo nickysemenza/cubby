@@ -3,13 +3,17 @@ import type {
   MealRecipePreparationPortionOut,
   SaveMealRecipePreparationInput,
 } from "@cubby/schemas/meal";
+import type { MealKind } from "@cubby/schemas/meal-classification";
 
 import { formatCalendarDay } from "~/lib/date-format";
 
 type MealPreparationPortion = MealRecipePreparationPortionOut;
 export type MealPreparation = GetMealPreparationsOut["preparations"][number];
 export type MealPreparationsView = GetMealPreparationsOut;
-export type PreparationTargetOption = MealPreparationPortion["targetMeal"];
+export type PreparationTargetOption = MealPreparationPortion["targetMeal"] & {
+  mealKind: MealKind | null;
+};
+
 export type PreparationEaterOption = MealPreparationPortion["eater"];
 export type PreparationSaveRequest = SaveMealRecipePreparationInput;
 

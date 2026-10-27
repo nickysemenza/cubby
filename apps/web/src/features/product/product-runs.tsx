@@ -1,5 +1,6 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
+import { isServiceProductFeature } from "@cubby/schemas/product-category-fields";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
@@ -40,13 +41,17 @@ function JourneyStep({
 export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
   record: product,
 }) => {
+  const effectiveProductOnHandUnits = fieldValueOf(product.fields.onHandUnits);
+
   const purchases = useQuery(
     entityListFor("purchase").queryOptions({
       filters: { productId: parseShortcodeFor("product", product.id) },
       pagination: { pageIndex: 0, pageSize: 12 },
     }),
   );
-  const service = isServiceProductCategory(product.category);
+  const service = isServiceProductFeature(
+    fieldValueOf(product.fields.categoryFeature),
+  );
   const evidence = product.ownershipEvidence;
   const ownPhotos = product.attachments.filter(
     (image) => image.source === "own",
@@ -73,13 +78,17 @@ export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
           <JourneyStep
             label="Inventory"
             detail={
-              product.onHandUnits !== null && product.onHandUnits > 0
+              effectiveProductOnHandUnits !== null &&
+              effectiveProductOnHandUnits > 0
                 ? "Inventory recorded"
                 : evidence.state === "uncertain"
                   ? "Confirm whether you still own it before recording stock"
                   : "Record where it lives"
             }
-            complete={product.onHandUnits !== null && product.onHandUnits > 0}
+            complete={
+              effectiveProductOnHandUnits !== null &&
+              effectiveProductOnHandUnits > 0
+            }
           />
         </RecordList>
       ) : null}
@@ -92,7 +101,12 @@ export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
       {linkedPurchases.length ? (
         <RecordList aria-label="Purchase evidence">
           {linkedPurchases.map((purchase) => {
-            const matched = purchase.financialReconciliation.status === "match";
+            const effectivePurchaseFinancialReconciliation = fieldValueOf(
+              purchase.fields.financialReconciliation,
+            );
+
+            const matched =
+              effectivePurchaseFinancialReconciliation?.status === "match";
             return (
               <RecordRow
                 key={purchase.id}

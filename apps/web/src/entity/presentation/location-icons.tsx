@@ -1,5 +1,4 @@
 import { type LocationType, locationType } from "@cubby/schemas/location";
-import type { ProductCategory } from "@cubby/shared";
 
 import { Row } from "~/ui/layout";
 
@@ -11,7 +10,7 @@ import { getLocationGlyph, getLocationTypeColor } from "./location-type-theme";
  */
 interface LocationGlyphSource {
   type: LocationType | null;
-  product: { category: ProductCategory | null } | null;
+  product: Parameters<typeof getLocationGlyph>[0]["product"];
 }
 
 interface LocationIconProps extends LocationGlyphSource {

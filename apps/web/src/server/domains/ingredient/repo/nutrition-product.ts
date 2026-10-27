@@ -1,5 +1,5 @@
-import type { IngredientNutritionProductOut } from "@cubby/schemas/ingredient";
-import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product";
+import { type IngredientNutritionProductOut } from "@cubby/schemas/ingredient";
+import type { RawProductWithMappingsAndFood } from "@cubby/schemas/product-raw-read";
 
 import { buildNutritionDisplay } from "~/server/domains/product/repo/nutrition-display";
 
@@ -12,8 +12,8 @@ import { buildNutritionDisplay } from "~/server/domains/product/repo/nutrition-d
  * falling back to price.
  */
 export function selectNutritionProduct(
-  products: ProductWithMappingsAndFoodOut[],
-): ProductWithMappingsAndFoodOut | undefined {
+  products: RawProductWithMappingsAndFood[],
+): RawProductWithMappingsAndFood | undefined {
   return (
     products.find((p) => p.labelNutrition != null && p.price != null) ??
     products.find((p) => p.labelNutrition != null) ??
@@ -23,7 +23,7 @@ export function selectNutritionProduct(
 }
 
 export function buildIngredientNutritionProduct(
-  products: ProductWithMappingsAndFoodOut[],
+  products: RawProductWithMappingsAndFood[],
 ): IngredientNutritionProductOut | null {
   const product = selectNutritionProduct(products);
   if (!product) return null;

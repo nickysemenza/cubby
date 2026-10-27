@@ -3,7 +3,7 @@
  * isometric-geometry and isometric-scene; canvas lifecycle and pointer/touch
  * interaction live in use-isometric-pantry.
  */
-import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
+import { formatCategoryLabel, getFeatureColor } from "@cubby/shared";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowsOutSimpleIcon } from "@phosphor-icons/react/dist/csr/ArrowsOutSimple";
 import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
@@ -26,23 +26,34 @@ function CategoryLegend({
 }) {
   const categories = Array.from(
     new Map(
-      inventory
-        .map((item) => item.product.category)
-        .filter((category) => category != null)
-        .map((category) => [category.id, category]),
+      inventory.flatMap((item) =>
+        item.product.category
+          ? [
+              [
+                item.product.category.id,
+                {
+                  category: item.product.category,
+                  feature: item.categoryFeature,
+                },
+              ] as const,
+            ]
+          : [],
+      ),
     ).values(),
   ).sort((a, b) =>
-    formatCategoryLabel(a).localeCompare(formatCategoryLabel(b)),
+    formatCategoryLabel(a.category).localeCompare(
+      formatCategoryLabel(b.category),
+    ),
   );
   if (categories.length === 0) return null;
   return (
     <div className="absolute bottom-4 left-4 border border-[var(--border)] bg-card px-2 py-2">
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-        {categories.map((category) => (
+        {categories.map(({ category, feature }) => (
           <div key={category.id} className="flex items-center gap-2">
             <div
               className="size-2.5 shrink-0 rounded-sm"
-              style={{ backgroundColor: getCategoryColor(category) }}
+              style={{ backgroundColor: getFeatureColor(feature) }}
             />
             <span className="text-2xs leading-none text-muted-foreground">
               {formatCategoryLabel(category)}

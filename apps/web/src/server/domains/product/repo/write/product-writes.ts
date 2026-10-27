@@ -13,15 +13,16 @@ import type {
   ProductSummariesInput,
   ProductSummariesOut,
   ProductUpdateInput,
-  ProductWithFoodOut,
-  ProductTopLevelOut,
 } from "@cubby/schemas/product";
+import type {
+  RawProductDetail,
+  RawProductOutput,
+} from "@cubby/schemas/product-raw-read";
 import type { FoodSummary } from "@cubby/usda";
 import { eq, and } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
-import { selectListReadFields } from "~/entity/model/list-read-schema";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import { deleteStoredObjects } from "~/server/clients/s3";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
@@ -43,6 +44,7 @@ import {
   type UsdaFoodBatchPort,
 } from "~/server/domains/usda-food/repo/usda-helpers";
 import { createAppError } from "~/server/errors/app-error";
+import { selectListReadFields } from "~/server/generic/list/repo/list-read-schema";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -60,11 +62,11 @@ import {
 import { loadProductOwnershipEvidence } from "../ownership-evidence";
 import { getProductUnitMappingsByProductIds } from "../unit-mappings";
 
-export type ProductMutationSnapshot = Pick<ProductWithFoodOut, "id"> & {
-  ingredient: Pick<NonNullable<ProductWithFoodOut["ingredient"]>, "id"> | null;
+export type ProductMutationSnapshot = Pick<RawProductDetail, "id"> & {
+  ingredient: Pick<NonNullable<RawProductDetail["ingredient"]>, "id"> | null;
 };
 
-export type ProductWriteResult<TOutput = ProductWithFoodOut> = {
+export type ProductWriteResult<TOutput = RawProductDetail> = {
   output: TOutput;
   entityId: ProductId;
 };
@@ -95,7 +97,7 @@ const readProductMutationSnapshot = async (
 export const readProductMutationFields = async (
   db: Database,
   usdaClient: UsdaFoodLookupPort,
-  product: ProductTopLevelOut,
+  product: RawProductOutput,
   id: ProductId,
   fields: readonly string[],
 ): Promise<ListReadRow & ProductMutationSnapshot> => {
@@ -118,9 +120,9 @@ export const readProductMutationFields = async (
 };
 
 export type ProductWriteActions<
-  TOutput extends ProductMutationSnapshot = ProductWithFoodOut,
+  TOutput extends ProductMutationSnapshot = RawProductDetail,
 > = {
-  getProductByID(id: ProductId): Promise<ProductWithFoodOut>;
+  getProductByID(id: ProductId): Promise<RawProductDetail>;
   getProductMutationSnapshot(id: ProductId): Promise<ProductMutationSnapshot>;
   createProduct(
     data: ProductCreateInput,
@@ -137,7 +139,7 @@ export const getProductWithFood = async (
   db: Database,
   usdaClient: UsdaFoodLookupPort,
   id: ProductId,
-): Promise<ProductWithFoodOut> => {
+): Promise<RawProductDetail> => {
   const product = await getProductByIDRepo(db, id);
 
   const lookupParam = foodLookupParamFromProduct(product);
@@ -265,7 +267,7 @@ const createProductWithOutput = async <TOutput>(
   db: Database,
   data: ProductCreateInput,
   actor: ActorContext,
-  readOutput: (product: ProductTopLevelOut, id: ProductId) => Promise<TOutput>,
+  readOutput: (product: RawProductOutput, id: ProductId) => Promise<TOutput>,
 ): Promise<ProductWriteResult<TOutput>> => {
   const ingredientEntityId = data.ingredientId
     ? await resolveOrThrow(db, "ingredient", data.ingredientId)
@@ -307,7 +309,7 @@ const updateProductWithOutput = async <TOutput>(
   id: ProductId,
   data: ProductUpdateInput["data"],
   actor: ActorContext,
-  readOutput: (product: ProductTopLevelOut, id: ProductId) => Promise<TOutput>,
+  readOutput: (product: RawProductOutput, id: ProductId) => Promise<TOutput>,
 ): Promise<ProductWriteResult<TOutput>> => {
   // Explicit `== null` (not a truthy check): the falsy branch must narrow to
   // `null | undefined` so it matches the branded `IngredientId | null |
@@ -374,7 +376,7 @@ export const createProductReadActions = <
 >(
   db: Database,
   usdaClient: UsdaFoodLookupPort,
-  readOutput: (product: ProductTopLevelOut, id: ProductId) => Promise<TOutput>,
+  readOutput: (product: RawProductOutput, id: ProductId) => Promise<TOutput>,
 ): ProductWriteActions<TOutput> => ({
   getProductByID: (id) => getProductWithFood(db, usdaClient, id),
   getProductMutationSnapshot: (id) => readProductMutationSnapshot(db, id),

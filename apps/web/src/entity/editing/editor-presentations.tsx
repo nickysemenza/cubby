@@ -1,5 +1,6 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { EXPENSE_DISPOSITION_EDITOR } from "@cubby/schemas/expense-fields";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -64,7 +65,7 @@ export interface EntityEditorMediaInput {
   record?: EntityEditRecord;
   /** Uploaded-but-unattached images of this session, in gallery order. */
   pendingImages: readonly PendingImage[];
-  /** `record.images` — the gallery the shell already shows. */
+  /** The selected image field — the gallery the shell already shows. */
   existingImages: readonly PendingImage[];
 }
 
@@ -72,7 +73,7 @@ export interface EntityEditorMediaOutput {
   /** Rendered directly under the image block (e.g. an identify-from-photo button). */
   actions?: ReactNode;
   /**
-   * Further attached images that live outside `record.images` (a second
+   * Further attached images that live outside the selected image field (a second
    * image collection such as label photos), merged into the gallery's
    * existing images and deduplicated by id.
    */
@@ -399,6 +400,11 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
         />
         <div className="grid max-h-48 gap-1 overflow-y-auto border p-2">
           {productOptions.map((product) => {
+            const effectiveProductBrandName =
+              "fields" in product
+                ? fieldValueOf(product.fields.brandName)
+                : product.brandName;
+
             const checked = candidateIds.includes(product.id);
             const inputId = `${idPrefix}-${product.id}`;
             return (
@@ -412,7 +418,17 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
                   id={inputId}
                   checked={checked}
                   onCheckedChange={(value) =>
-                    toggleCandidate(product, value === true)
+                    toggleCandidate(
+                      {
+                        id: product.id,
+                        name: product.name,
+                        brandName:
+                          "fields" in product
+                            ? effectiveProductBrandName
+                            : product.brandName,
+                      },
+                      value === true,
+                    )
                   }
                 />
                 <Label
@@ -423,7 +439,9 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
                     {product.name}
                   </span>
                   <span className="block truncate text-muted-foreground">
-                    {product.brandName}
+                    {"fields" in product
+                      ? effectiveProductBrandName
+                      : product.brandName}
                   </span>
                 </Label>
               </Row>

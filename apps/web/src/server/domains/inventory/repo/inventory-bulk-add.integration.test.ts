@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -145,7 +146,10 @@ describe("addInventoryEntries", () => {
     const unchanged = await getProductInventoryEntriesWorkflow(context, {
       ids: [product.id],
     });
-    expect(unchanged[product.id]?.[0]?.amount).toMatchObject({
+    const retainedEntry = unchanged[product.id]?.[0];
+    expect(
+      retainedEntry && fieldValueOf(retainedEntry.fields.amount),
+    ).toMatchObject({
       value: 4,
       unit: "each",
     });

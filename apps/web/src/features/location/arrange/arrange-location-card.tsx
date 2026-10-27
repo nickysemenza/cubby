@@ -1,4 +1,5 @@
-import type { InfLocation } from "@cubby/schemas/location";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import { useDraggable } from "@dnd-kit/core";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
@@ -16,8 +17,8 @@ import type { LocationDragData } from "./arrange-types";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeLocationCardProps {
-  node: InfLocation;
-  roots: InfLocation[];
+  node: LocationTreeNode;
+  roots: LocationTreeNode[];
   active: boolean;
   onOpen: () => void;
 }
@@ -50,7 +51,9 @@ export function ArrangeLocationCard({
   const cover =
     useEntityDisplayImage(
       { entityKind: "location", entityId: node.id },
-      node.displayImages ? (node.displayImages[0] ?? null) : undefined,
+      node.fields.displayImages.result.kind === "missing"
+        ? undefined
+        : (fieldValueOf(node.fields.displayImages)?.[0] ?? null),
     ) ?? resolveLocationPrimaryVisual(node).image;
   return (
     <Row align="center" gap="tight" className="min-w-0">
@@ -89,7 +92,11 @@ export function ArrangeLocationCard({
           fill
           className="-my-1"
           fallback={
-            <LocationIcon type={node.type} product={node.product} size={14} />
+            <LocationIcon
+              type={fieldValueOf(node.fields.type)}
+              product={fieldValueOf(node.fields.product)}
+              size={14}
+            />
           }
           to="/locations/$shortcode"
           shortcode={node.id}

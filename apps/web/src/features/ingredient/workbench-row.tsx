@@ -1,10 +1,10 @@
 import type { Confidence } from "@cubby/schemas/ai";
-import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { countLabel } from "@cubby/shared/pluralize";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { useQuery } from "@tanstack/react-query";
 
+import type { IngredientEnrichmentRead } from "~/contracts/ingredient.contract";
 import { UsdaFoodSearchField } from "~/entity/picker/with-usda-food-search";
 import { RecipeUsagesTable } from "~/features/recipe/recipe-usages-table";
 import { ingredient } from "~/integrations/tanstack-query/generated/catalog/ingredient.gen";
@@ -32,7 +32,7 @@ export function EnrichmentWorkbenchInspector({
   initialConversion,
   onDone,
 }: {
-  row: EnrichmentRow;
+  row: IngredientEnrichmentRead;
   initialFood: UsdaFoodListRow | null;
   initialConversion?: EquivalenceDraft;
   onDone: () => void;

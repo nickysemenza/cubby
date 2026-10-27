@@ -1,30 +1,31 @@
-import type { Amount } from "@cubby/schemas/codec";
+import type { EntityFieldEnvelopeRead } from "@cubby/schemas/entity-field-envelopes";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   parseShortcodeFor,
   type ShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { LocationType } from "@cubby/schemas/location";
+
+import type { InlineRefLinkProps } from "~/entity/components/ref-link/inline";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
 import type { CellClipboardSpec } from "./cell-clipboard";
 import { entityCellData, specFromCellData } from "./cell-data";
 
-export interface InventoryEntryBase {
+export type InventoryEntryBase = {
   id: string;
-  amount: Amount;
-  location?: { id: string; name: string; type: LocationType | null };
-  product?: { id: string; name: string; brandName: string | null };
-}
-
+  fields: Pick<
+    EntityFieldEnvelopeRead<"inventory", "list">["fields"],
+    "amount"
+  >;
+};
 export type InventoryRelatedEntity =
   | {
       entity: "location";
-      data: { id: string; name: string; type: LocationType | null };
+      data: Extract<InlineRefLinkProps, { entity: "location" }>["data"];
     }
   | {
       entity: "product";
-      data: { id: string; name: string; brandName: string | null };
+      data: Extract<InlineRefLinkProps, { entity: "product" }>["data"];
     };
 
 /**

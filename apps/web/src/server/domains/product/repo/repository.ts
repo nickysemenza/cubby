@@ -2,8 +2,8 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   mergeProductsInput,
   productMergeSummaryOut,
-  productTopLevelOut,
 } from "@cubby/schemas/product";
+import { rawProductOutput } from "@cubby/schemas/product-raw-read";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -155,7 +155,7 @@ export const productRepository = defineRepository("product", {
   merge: {
     input: mergeProductsInput,
     output: z.object({
-      product: productTopLevelOut,
+      product: rawProductOutput,
       mergeSummary: productMergeSummaryOut,
     }),
     item: (output) => output.product,

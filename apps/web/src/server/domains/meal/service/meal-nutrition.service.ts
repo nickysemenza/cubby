@@ -23,6 +23,7 @@ import {
   batchEnrichWithFood,
   type UsdaFoodBatchPort,
 } from "~/server/domains/usda-food/repo/usda-helpers";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 
 export async function getMealNutrition(
   db: Database,
@@ -30,11 +31,21 @@ export async function getMealNutrition(
   usdaClient: UsdaFoodBatchPort,
 ) {
   const rows = await getMealNutritionRows(db, input);
+  const publicMeals = await publicFieldEnvelopeRows({
+    db,
+    entity: "meal",
+    schema: nutritionMeal,
+    rows: rows.meals.map((m) => ({ ...m, id: m.shortcode })),
+  });
+  const publicMealByCode = new Map(publicMeals.map((m) => [m.id, m]));
   const meals = new Map(
-    rows.meals.map((m) => [
-      m.id,
-      nutritionMeal.parse({ ...m, id: m.shortcode }),
-    ]),
+    rows.meals.map((m) => {
+      const projected = publicMealByCode.get(
+        parseShortcodeFor("meal", m.shortcode),
+      );
+      if (!projected) throw new Error("Nutrition read produced no public Meal");
+      return [m.id, projected] as const;
+    }),
   );
   const codes = [
     ...new Set(

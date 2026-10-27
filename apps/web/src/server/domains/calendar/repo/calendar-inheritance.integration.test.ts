@@ -1,4 +1,5 @@
 import { calendarRangeInput } from "@cubby/schemas/calendar";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -130,8 +131,19 @@ describe("calendar effective attribution", () => {
       title: "Calendar child",
       projectName: project.name,
       assignedProjectName: null,
-      trade: "building",
     });
+    const item = result.items[0];
+    if (!item || item.kind !== "task")
+      throw new Error("Synthetic calendar Task missing");
+    expect(fieldValueOf(item.source.fields.trade)).toBe("building");
+    expect(item.source.fields.trade.current.assignment).toEqual({
+      kind: "inherit",
+    });
+    expect(item.source.fields.trade.result).toMatchObject({
+      kind: "live",
+      decision: { provenance: { kind: "inherited" } },
+    });
+    expect(item).not.toHaveProperty("trade");
   });
 
   it("uses planting list filters, excludes other kinds, and retains existing schedule rows", async () => {

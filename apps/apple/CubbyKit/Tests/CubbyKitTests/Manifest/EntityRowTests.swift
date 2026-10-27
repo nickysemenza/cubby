@@ -7,15 +7,36 @@ import Testing
 struct EntityRowTests {
     private let product = EntityCatalog[.product]
 
-    @Test func attachesOnlyTheRecordsPublishedDerivedEnvelope() {
-        let input: JSONValue = ["id": "PRD-2345", "name": "Synthetic Product"]
-        let sidecars: JSONValue = [
-            "PRD-2345": ["price": ["state": "stale", "asOf": .null, "decidedBy": ["level": "computed"]]],
-            "PRD-6789": ["price": ["state": "fresh"]],
+    @Test func retainsTheCanonicalEnvelopeOnTheRow() {
+        let input: JSONValue = [
+            "id": "PRD-2345", "name": "Synthetic Product",
+            "fields": [
+                "price": [
+                    "result": [
+                        "kind": "cached",
+                        "decision": [
+                            "outcome": ["kind": "value", "value": 13]
+                        ], "freshness": "stale",
+                    ],
+                    "work": ["kind": "failed", "error": "Synthetic refresh failure"],
+                ],
+                "displayImages": [
+                    "result": [
+                        "kind": "live",
+                        "decision": [
+                            "outcome": [
+                                "kind": "value", "value": [["url": "https://images.example/canonical.jpg"]],
+                            ]
+                        ],
+                    ]
+                ],
+            ],
         ]
-        let row = product.row(from: EntityRow.attachingDerived(to: input, sidecars: sidecars))
-        #expect(row?.raw["derived"]?["price"]?["state"]?.stringValue == "stale")
-        #expect(EntityRow.attachingDerived(to: input, sidecars: nil) == input)
+        let row = product.row(from: input)
+        #expect(row?.raw == input)
+        #expect(row?.imageURL == URL(string: "https://images.example/canonical.jpg"))
+        #expect(row?.raw.pathText("price") == "13")
+        #expect(row?.raw["fields"]?["price"]?["work"]?["error"]?.stringValue == "Synthetic refresh failure")
     }
 
     @Test func nilWhenIdIsMissing() {
@@ -202,8 +223,9 @@ struct EntityRowTests {
         let detail = try row.decode(ProductDetail.self)
         #expect(detail.id == ProductCode("PRD-2345"))
         #expect(detail.name == row.title)
-        #expect(detail.primaryPlacement?.path == "Home › Garage › Shelf A")
-        #expect(detail.brandName == "Sample Manufacturer")
+        #expect(
+            try JSONValue(encoding: detail).pathText("primaryPlacement.path") == "Home › Garage › Shelf A")
+        #expect(try JSONValue(encoding: detail).pathText("brandName") == "Sample Manufacturer")
         #expect(detail.createdAt.timeIntervalSince1970 > 0)
         // The nutrition slot renders the server's display verbatim, so it must survive the typed decode.
         #expect(detail.nutritionDisplay.basis == "Per serving · 30 g")
@@ -253,8 +275,30 @@ struct EntityRowTests {
             ]
         ]
 
+        var fields = try #require(payload["fields"]?.objectValue)
+        fields["images"] = [
+            "current": ["assignment": .null, "controls": ["kind": "readonly", "reason": "computed"]],
+            "result": [
+                "kind": "live",
+                "decision": [
+                    "outcome": [
+                        "kind": "value", "value": payload.removeValue(forKey: "images") ?? .array([]),
+                    ],
+                    "provenance": ["kind": "computed"],
+                ],
+            ],
+            "work": ["kind": "idle"],
+        ]
+        payload["fields"] = .object(fields)
         let row = try #require(product.row(from: .object(payload)))
-        let attachment = try #require(try row.decode(ProductDetail.self).images.first)
+        let detail = try row.decode(ProductDetail.self)
+        guard case .live(let result) = detail.fields.images.result,
+            case .value(let outcome) = result.decision.outcome
+        else {
+            Issue.record("Expected an available image result")
+            return
+        }
+        let attachment = try #require(outcome.value.first)
         #expect(attachment.source == .catalog)
         #expect(attachment.purpose == .item)
     }

@@ -24,15 +24,6 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
         self.raw = raw
     }
 
-    /// List freshness travels beside rows; attach only this row's envelope before projection.
-    static func attachingDerived(to object: JSONValue, sidecars: JSONValue?) -> JSONValue {
-        guard var raw = object.objectValue, let id = raw["id"]?.stringValue,
-            let sidecar = sidecars?[id]
-        else { return object }
-        raw["derived"] = sidecar
-        return .object(raw)
-    }
-
     /// The row's `raw` payload as a typed alias (`row.decode(ProductDetail.self)`), for a slot
     /// that needs more than keyed access. `raw` was projected from the decoded typed value with
     /// the same date spelling `JSONDecoder.cubby()` reads, so the round trip is lossless.
@@ -50,14 +41,14 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
 extension EntityDescriptor {
     public func recordSymbol(in row: EntityRow) -> String {
         guard let field = recordIconEntityField,
-            let value = row.raw[field]?.stringValue,
+            let value = row.raw.recordValue(field)?.stringValue,
             let entity = EntityKey(rawValue: value)
         else { return sfSymbol }
         return EntityCatalog[entity].sfSymbol
     }
 
     public func recordEmoji(in row: EntityRow) -> String? {
-        recordEmojiField.flatMap { row.raw[$0]?.stringValue }
+        recordEmojiField.flatMap { row.raw.recordValue($0)?.stringValue }
     }
 
     /// Projects a raw list/detail row into an `EntityRow`. `nil` when the object carries no `id` —
@@ -66,7 +57,7 @@ extension EntityDescriptor {
         guard let id = object["id"]?.stringValue else { return nil }
 
         let title: String
-        if let value = object[titleField]?.stringValue, !value.isEmpty {
+        if let value = object.recordValue(titleField)?.stringValue, !value.isEmpty {
             title = value
         } else {
             title = id
@@ -80,11 +71,11 @@ extension EntityDescriptor {
                 let base = field.key.hasSuffix("Id") ? String(field.key.dropLast(2)) : field.key
                 let value: String?
                 if field.reference != nil {
-                    if let resolution = FieldResolutionPresentation(raw: object, field: field) {
-                        let id = resolution.effectiveValue.stringValue
+                    if let envelope = FieldEnvelope.of(object, field: field) {
+                        let id = envelope.effectiveValue?.stringValue
                         value =
                             id.flatMap {
-                                FieldResolutionPresentation.referenceName(
+                                FieldEnvelopePresentation.referenceName(
                                     in: object, field: field, effectiveID: $0)
                             } ?? id
                     } else {
@@ -121,7 +112,7 @@ extension EntityDescriptor {
     /// Native renders the preferred URL when present, falling back to the original for rows from
     /// older servers and images whose derivative is not ready.
     private static func imageURL(from object: JSONValue) -> URL? {
-        guard let first = object["displayImages"]?[0] else { return nil }
+        guard let first = object.recordValue("displayImages")?[0] else { return nil }
         let value =
             first["representations"]?["preferred"]?.stringValue
             ?? first["url"]?.stringValue

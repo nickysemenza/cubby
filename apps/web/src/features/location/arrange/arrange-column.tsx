@@ -1,6 +1,7 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type {
-  InfLocation,
+  LocationTreeNode,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
@@ -17,14 +18,14 @@ interface ArrangeColumnProps {
   /** The location this column represents (its cards are this location's children). */
   locationId: LocationShortcode | null;
   /** Header location, or null while the hierarchy is unavailable. */
-  headerLocation: InfLocation | null;
+  headerLocation: LocationTreeNode | null;
   /** Child-location cards to render. */
-  nodes: InfLocation[];
+  nodes: LocationTreeNode[];
   /** The header location's own inventory items (loose items at this location). */
   items: InventoryItemForTree[];
   /** Which child is currently opened as the next column (for active highlight). */
   activeChildId: LocationShortcode | null;
-  roots: InfLocation[];
+  roots: LocationTreeNode[];
   onOpenChild: (id: LocationShortcode) => void;
   /** The pinned Unknown staging column (dashed styling). */
   pinned?: boolean;
@@ -65,7 +66,11 @@ export function ArrangeColumn({
         {pinned ? (
           <QuestionIcon className="size-4 shrink-0 text-muted-foreground" />
         ) : headerLocation ? (
-          <LocationIcon type={headerLocation.type} product={null} size={16} />
+          <LocationIcon
+            type={fieldValueOf(headerLocation.fields.type)}
+            product={null}
+            size={16}
+          />
         ) : (
           <HouseIcon className="size-4 shrink-0 text-muted-foreground" />
         )}

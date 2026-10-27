@@ -1,4 +1,5 @@
 import type { DecisionStep } from "@cubby/schemas/decision-step";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 /**
  * ReceiveExpenseDialog — put the thing an expense bought onto a shelf.
  *
@@ -27,7 +28,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useRef, useState, type FC } from "react";
+import { Fragment, useRef, useState, type FC } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -38,7 +39,9 @@ import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-p
 import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
 import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog/inventory.gen";
 import { DecisionSteps } from "~/ui/common/decision-steps";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
@@ -88,7 +91,11 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   expenseName,
   expenseId,
 }) => {
-  const { data: context } = useQuery({
+  const {
+    data: context,
+    error,
+    refetch,
+  } = useQuery({
     ...inventoryOperations.receivingContext.queryOptions({ productId }),
     enabled: open,
     // Stock is the thing being decided; never decide on a cached count.
@@ -103,6 +110,15 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
       title="Receive into Inventory"
       description={`Put what "${expenseName}" bought onto a shelf.`}
     >
+      {error ? (
+        <ErrorDisplay
+          error={error}
+          title="receiving context"
+          onRetry={() => {
+            void refetch();
+          }}
+        />
+      ) : null}
       {context ? (
         <ReceiveBody
           productId={productId}
@@ -111,9 +127,9 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
           context={context}
           onDone={() => onOpenChange(false)}
         />
-      ) : (
+      ) : !error ? (
         <Description>Loading product…</Description>
-      )}
+      ) : null}
     </Overlay>
   );
 };
@@ -127,10 +143,6 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
 }) => {
   const stockedMatches = context.matches.filter(
     (match) => match.candidate.inventoryCount > 0,
-  );
-  const ownUnits = context.stock.reduce(
-    (sum, entry) => sum + entry.amount.value,
-    0,
   );
   // Every receiving default (counted?, prefill, unit, move/add/create) is the
   // server's; this dialog only renders it.
@@ -181,6 +193,10 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
       ? context.stock.find((entry) => entry.id === plan.entryId)
       : undefined;
 
+  const entryHereAmount = entryHere
+    ? fieldValueOf(entryHere.fields.amount)
+    : null;
+
   const countedNotice = alreadyCounted ? (
     <Stack gap="sm">
       {stockedMatches.map((match) => (
@@ -209,14 +225,20 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
       ))}
       {context.stock.length > 0 ? (
         <Description>
-          {productName} already has {ownUnits} on hand (
-          {context.stock
-            .map(
-              (entry) =>
-                `${entry.amount.value} ${entry.amount.unit} at ${entry.locationName}`,
-            )
-            .join(", ")}
-          ). Importing this purchase did not change it.
+          Existing {productName} stock:{" "}
+          {context.stock.map((entry, index) => {
+            const amount = fieldValueOf(entry.fields.amount);
+            return (
+              <Fragment key={entry.id}>
+                {index > 0 ? ", " : null}
+                <FieldRecordValue record={entry} field="amount">
+                  {amount ? `${amount.value} ${amount.unit}` : null}
+                </FieldRecordValue>
+                {` at ${entry.locationName}`}
+              </Fragment>
+            );
+          })}
+          . Importing this purchase did not change it.
         </Description>
       ) : null}
       {!unitsConfirmed ? (
@@ -299,8 +321,13 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
           // so top up the existing one instead.
           <Stack gap="sm">
             <Description>
-              Already stocked here: {entryHere.amount.value}{" "}
-              {entryHere.amount.unit}. Receiving adds to that count.
+              Already stocked here:{" "}
+              <FieldRecordValue record={entryHere} field="amount">
+                {entryHereAmount
+                  ? `${entryHereAmount.value} ${entryHereAmount.unit}`
+                  : null}
+              </FieldRecordValue>
+              . Receiving adds to that count.
             </Description>
             <Row gap="sm" align="center">
               <Input
@@ -318,14 +345,18 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
                 }
               />
               <Button
-                disabled={receive.isPending || !((addQuantity ?? 0) > 0)}
+                disabled={
+                  receive.isPending ||
+                  entryHereAmount === null ||
+                  !((addQuantity ?? 0) > 0)
+                }
                 onClick={() => {
                   const add = form.getValues("addQuantity");
-                  if (!add || !(add > 0)) return;
+                  if (!add || !(add > 0) || entryHereAmount === null) return;
                   receiveAction({
                     kind: "add",
                     entryId: entryHere.id,
-                    amount: { value: add, unit: entryHere.amount.unit },
+                    amount: { value: add, unit: entryHereAmount.unit },
                   });
                 }}
               >

@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
 
@@ -12,6 +13,7 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
@@ -40,7 +42,7 @@ function CookbookProductLink({
 
 const overrides = createCubbyColumnCollection<CookbookSummary>((add) => {
   add(
-    columnHelper.accessor("recipeCount", {
+    columnHelper.accessor((row) => fieldValueOf(row.fields.recipeCount), {
       id: "recipeCount",
       header: "Recipes",
       meta: {
@@ -54,15 +56,34 @@ const overrides = createCubbyColumnCollection<CookbookSummary>((add) => {
       // be read, so "12 / 40" would imply 28 recipes are one click away.
       cell: (info) => {
         const row = info.row.original;
-        const allImported = row.sourceRecipeCount <= row.recipeCount;
+        const recipeCount = fieldValueOf(row.fields.recipeCount);
+        const sourceRecipeCount = fieldValueOf(row.fields.sourceRecipeCount);
+        const needsReextract = fieldValueOf(row.fields.needsReextract);
+        const allImported =
+          recipeCount !== null &&
+          sourceRecipeCount !== null &&
+          sourceRecipeCount <= recipeCount;
         return (
           <Row as="span" align="center" justify="end" gap="xs">
-            <span className="tabular-nums">
-              {row.needsReextract || allImported
-                ? row.recipeCount
-                : `${row.recipeCount} / ${row.sourceRecipeCount}`}
-            </span>
-            {row.needsReextract && (
+            <FieldRecordValue record={row} field="recipeCount">
+              <span className="tabular-nums">
+                {recipeCount === null ? (
+                  <NoneValue />
+                ) : needsReextract ||
+                  allImported ||
+                  sourceRecipeCount === null ? (
+                  recipeCount
+                ) : (
+                  <>
+                    {recipeCount} /{" "}
+                    <FieldRecordValue record={row} field="sourceRecipeCount">
+                      {sourceRecipeCount}
+                    </FieldRecordValue>
+                  </>
+                )}
+              </span>
+            </FieldRecordValue>
+            {needsReextract && (
               <Badge
                 variant="warning"
                 title="Extracted with a retired format — re-extract from the EPUB"

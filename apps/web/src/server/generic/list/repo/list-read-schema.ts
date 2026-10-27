@@ -1,11 +1,12 @@
+import { type ListEntity } from "~/entity/generated/entity-lists.gen";
 import {
-  ENTITY_LIST_READ_SCHEMAS,
-  type ListEntity,
-} from "../generated/entity-lists.gen";
-import { type ListProjection, type ListReadRow } from "./list-read-fields";
+  type ListProjection,
+  type ListReadRow,
+} from "~/entity/model/list-read-fields";
+import { ENTITY_REPOSITORY_LIST_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 
 export const listReadSchema = (entity: ListEntity) =>
-  ENTITY_LIST_READ_SCHEMAS[entity].schema;
+  ENTITY_REPOSITORY_LIST_READ_SCHEMAS[entity].schema;
 
 /** Pick actual loaded fields; a missing dependency must fail instead of producing partial success. */
 export function selectListReadFields(
@@ -21,13 +22,13 @@ export function selectListReadFields(
   return output;
 }
 
-/** Finalize after repository and transport-owned loaders have supplied their fields. */
-export function selectListReadRows(
+/** Validate requested fields while retaining loaded dependencies for envelope construction. */
+export function validateListReadRows(
   entity: ListEntity,
   rows: ListReadRow[],
   fields: readonly string[],
 ): ListReadRow[] {
-  const read = ENTITY_LIST_READ_SCHEMAS[entity];
+  const read = ENTITY_REPOSITORY_LIST_READ_SCHEMAS[entity];
   return rows.map((row) => {
     // An optional field the complete list also omits stays absent; every
     // other field must be loaded. Check raw mapped values before a group's
@@ -36,11 +37,25 @@ export function selectListReadRows(
       (field) => !read.omittable.has(field) || Object.hasOwn(row, field),
     );
     selectListReadFields(row, loaded);
-    const validated: ListReadRow = { id: row.id };
+    const validated: ListReadRow = { ...row };
     for (const field of loaded)
       validated[field] = read.schema.shape[field].parse(row[field]);
     return validated;
   });
+}
+
+/** Select only requested fields for internal consumers that do not construct envelopes. */
+export function selectListReadRows(
+  entity: ListEntity,
+  rows: ListReadRow[],
+  fields: readonly string[],
+): ListReadRow[] {
+  return validateListReadRows(entity, rows, fields).map((row) =>
+    selectListReadFields(
+      row,
+      fields.filter((field) => Object.hasOwn(row, field)),
+    ),
+  );
 }
 
 export function projectListRows(
@@ -49,6 +64,6 @@ export function projectListRows(
   projection: ListProjection,
 ) {
   return projection.kind === "selected"
-    ? selectListReadRows(entity, rows, projection.fields)
+    ? validateListReadRows(entity, rows, projection.fields)
     : rows;
 }

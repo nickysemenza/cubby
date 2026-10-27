@@ -1,13 +1,15 @@
 import { ID_CHUNK_SIZE } from "@cubby/schemas/entity-media";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
-import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
-import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
+import type { RecipeGraphOut } from "@cubby/schemas/recipe";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { chunk, keyBy } from "es-toolkit";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { ingredient } from "~/integrations/tanstack-query/generated/catalog/ingredient.gen";
 import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
+import type { RecipeCostingIngredient } from "~/lib/recipe-costing";
 import {
   collectIngredientIds,
   collectSubRecipeIds,
@@ -16,7 +18,7 @@ import {
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 type RecipeCostingData = {
-  ingMap: Record<string, IngredientWithFoodLeanOut>;
+  ingMap: Record<string, RecipeCostingIngredient>;
   recipeMap: Record<string, RecipeGraphOut>;
 };
 
@@ -71,7 +73,26 @@ async function loadRecipeCostingData(
       ),
     ),
   );
-  const ingMap = keyBy(chunkResults.flat(), (ing) => ing.id);
+  const ingMap = keyBy(
+    chunkResults.flat().map((ing) => ({
+      id: ing.id,
+      name: ing.name,
+      naKinds: ing.naKinds,
+      product: ing.product.map((product) => {
+        const price = fieldValueOf(product.fields.price) ?? null;
+        return {
+          id: product.id,
+          unitMappings: product.unitMappings,
+          labelNutrition: product.labelNutrition,
+          fdc_id: product.fdc_id,
+          primaryGtin: fieldValueOf(product.fields.primaryGtin) ?? null,
+          food: fieldValueOf(product.fields.food) ?? null,
+          price,
+        };
+      }),
+    })),
+    (ing) => ing.id,
+  );
 
   return { ingMap, recipeMap: fetched };
 }
@@ -87,7 +108,7 @@ export function useRecipeCostingData(recipes: RecipeOut[]) {
 
   const [ingMap, setIngMap] = useState<Record<
     string,
-    IngredientWithFoodLeanOut
+    RecipeCostingIngredient
   > | null>(null);
   const [recipeMap, setRecipeMap] = useState<Record<string, RecipeGraphOut>>(
     {},
@@ -137,3 +158,5 @@ export function useRecipeCostingData(recipes: RecipeOut[]) {
 
   return { ingMap, recipeMap, isLoading };
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

@@ -1,4 +1,5 @@
 import { entityRefKey } from "@cubby/schemas/entity";
+import { rawSearchInventoryPlacement } from "@cubby/schemas/inventory-raw-read";
 import {
   type SearchComponentPlacement,
   type SearchDestination,
@@ -14,6 +15,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { executeSearchDocumentSql } from "~/server/generic/search/repo/search-document";
 import {
   findLexicalSearchCandidates,
@@ -33,7 +35,7 @@ const candidateRelationSchema = z.object({
   productId: z.uuid().nullable(),
 });
 
-const placementRowSchema = searchInventoryPlacementSchema.extend({
+const placementRowSchema = rawSearchInventoryPlacement.extend({
   productId: z.uuid(),
 });
 
@@ -166,8 +168,18 @@ async function loadProductPlacements(db: Database, productIds: string[]) {
       ORDER BY "locationPath", lp.placement, lp.shortcode
     `,
   );
+  const canonical = await publicFieldEnvelopeRows({
+    db,
+    entity: "inventory",
+    schema: searchInventoryPlacementSchema,
+    rows,
+  });
   const byProduct = new Map<string, SearchInventoryPlacement[]>();
-  for (const { productId, ...placement } of rows) {
+  for (const [index, row] of rows.entries()) {
+    const productId = row.productId;
+    const placement = canonical[index];
+    if (!placement)
+      throw new Error("Search placement batch lost a selected row");
     const placements = byProduct.get(productId) ?? [];
     placements.push(placement);
     byProduct.set(productId, placements);

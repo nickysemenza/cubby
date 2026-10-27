@@ -3,6 +3,7 @@ import type {
   inventoryReceivingContextInput,
   InventoryReceivingContextOut,
 } from "@cubby/schemas/inventory";
+import type { RawReceivingInventoryStock } from "@cubby/schemas/inventory-raw-read";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -24,7 +25,11 @@ import { deriveReceivingGuidance } from "./receiving-guidance";
 export async function getReceivingContext(
   db: Database,
   input: z.output<typeof inventoryReceivingContextInput>,
-): Promise<InventoryReceivingContextOut> {
+): Promise<
+  Omit<InventoryReceivingContextOut, "stock"> & {
+    stock: RawReceivingInventoryStock[];
+  }
+> {
   const productId = await resolveOrThrow(db, "product", input.productId);
   const [stockRows, queue, expectedQuantity] = await Promise.all([
     listProductStock(db, productId),

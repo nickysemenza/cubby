@@ -1295,11 +1295,66 @@ it.each(["create", "existing"] as const)(
       overrides: {
         id: productId,
         name: "Fixture shirt",
-        brandId: null,
-        brandName: null,
+        fields: {
+          brandId: {
+            current: {
+              assignment: { kind: "inherit" },
+              controls: {
+                kind: "editable",
+                canSetNone: false,
+                canConfirm: false,
+                reset: { kind: "unavailable" },
+              },
+            },
+            result: {
+              kind: "live",
+              decision: {
+                outcome: { kind: "empty", reason: "unset" },
+                provenance: null,
+              },
+            },
+            work: { kind: "idle" },
+          },
+          brandName: {
+            current: {
+              assignment: null,
+              controls: { kind: "readonly", reason: "computed" },
+            },
+            result: {
+              kind: "live",
+              decision: {
+                outcome: { kind: "empty", reason: "unset" },
+                provenance: null,
+              },
+            },
+            work: { kind: "idle" },
+          },
+          tags: {
+            current: {
+              assignment: {
+                kind: "value",
+                value: [],
+                ownership: { kind: "record" },
+              },
+              controls: {
+                kind: "editable",
+                canSetNone: false,
+                canConfirm: false,
+                reset: { kind: "unavailable" },
+              },
+            },
+            result: {
+              kind: "live",
+              decision: {
+                outcome: { kind: "value", value: [] },
+                provenance: { kind: "own", ownership: { kind: "record" } },
+              },
+            },
+            work: { kind: "idle" },
+          },
+        },
         model: null,
         notes: null,
-        tags: [],
         category: null,
         identifiers: [],
         externalIds: [],

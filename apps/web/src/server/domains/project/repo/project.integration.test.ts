@@ -1,17 +1,26 @@
-import { createProjectFromTasksInput } from "@cubby/schemas/project";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import {
+  createProjectFromTasksInput,
+  projectTreeInput,
+} from "@cubby/schemas/project";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { project as projectTable } from "~/server/db/schema";
-import { projectCreateFromTasksWorkflow } from "~/server/domains/project/operations.server";
+import {
+  projectCreateFromTasksWorkflow,
+  projectHandlers,
+} from "~/server/domains/project/operations.server";
 import {
   getTaskByShortcode,
   updateTask,
 } from "~/server/domains/task/repo/crud";
 import { executeEntity } from "~/server/entity-kernel";
+import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -21,6 +30,41 @@ import { projectTreePage } from "./tree";
 
 describe("project repository", () => {
   const ctx = withTestDb();
+
+  it("returns canonical Project and Task fields from the promotion operation", async () => {
+    const task = await createRepoEntity(ctx, "task", {
+      name: "Synthetic promotion task",
+      trade: "other",
+    });
+    const result = await projectHandlers.operations.createFromTasks({
+      data: createProjectFromTasksInput.parse({
+        taskIds: [task.output.id],
+        project: { name: "Synthetic promoted project", emoji: "🧰" },
+      }),
+      request: {
+        principal: systemPrincipal(
+          buildKernelContext(ctx.db, ctx.actor.userId),
+        ),
+        headers: new Headers(),
+        signal: new AbortController().signal,
+      },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(fieldValueOf(result.data.project.fields.emoji)).toBe("🧰");
+    expect(result.data.project).not.toHaveProperty("emoji");
+    expect(result.data.project).not.toHaveProperty("fieldResolutions");
+    const promoted = result.data.tasks[0];
+    if (!promoted) throw new Error("Expected the promoted Task");
+    expect(promoted.id).toBe(task.output.id);
+    expect(fieldValueOf(promoted.fields.projectId)).toBe(
+      result.data.project.id,
+    );
+    expect(promoted).not.toHaveProperty("projectId");
+    expect(promoted).not.toHaveProperty("fieldResolutions");
+    expect((await getTaskByShortcode(ctx.db, task.output.id))?.projectId).toBe(
+      result.data.project.id,
+    );
+  });
 
   it("promotes tasks through the registered workflow and returns committed project membership", async () => {
     const task = await createRepoEntity(ctx, "task", {
@@ -336,6 +380,45 @@ describe("project repository — WBS tree page", () => {
   const page = (pageIndex: number, pageSize: number) => ({
     pageIndex,
     pageSize,
+  });
+
+  it("returns canonical field envelopes from the paginated tree operation", async () => {
+    const parent = await createRepoEntity(ctx, "project", {
+      name: "Synthetic envelope root",
+      defaultTrade: "plumbing",
+    });
+    const child = await createRepoEntity(ctx, "project", {
+      name: "Synthetic envelope child",
+      parentProjectId: parent.output.id,
+    });
+    const result = await projectHandlers.operations.tree({
+      data: projectTreeInput.parse({
+        filters: {},
+        pagination: page(0, 1),
+        sort: [{ orderBy: "name", direction: "asc" }],
+      }),
+      request: {
+        principal: systemPrincipal(
+          buildKernelContext(ctx.db, ctx.actor.userId),
+        ),
+        headers: new Headers(),
+        signal: new AbortController().signal,
+      },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.data.meta.totalCount).toBe(1);
+    expect(result.data.items.map((row) => row.id)).toEqual(
+      expect.arrayContaining([parent.output.id, child.output.id]),
+    );
+    const row = result.data.items.find(
+      (candidate) => candidate.id === child.output.id,
+    );
+    expect(row).toBeDefined();
+    if (!row) throw new Error("Expected the matching descendant");
+    expect(fieldValueOf(row.fields.defaultTrade)).toBe("plumbing");
+    expect(row).not.toHaveProperty("defaultTrade");
+    expect(row).not.toHaveProperty("fieldResolutions");
+    expect(row).not.toHaveProperty("displayImages");
   });
 
   it("paginates by root, carrying descendants along with their root", async () => {

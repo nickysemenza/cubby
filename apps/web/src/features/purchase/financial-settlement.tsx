@@ -1,10 +1,10 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { useState } from "react";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import {
   captureRequest,
   financialTransactionEditRequest,
@@ -23,18 +23,7 @@ import { EnumPill } from "~/ui/primitives/enum-pill";
 import { LinkedTransactions } from "../finance/linked-transactions";
 import { MatchStatementButton } from "./match-statement";
 
-type FinancialPurchase = PurchaseOut & {
-  financialReconciliation: {
-    status: "unknown" | "pending" | "match" | "mismatch";
-    transactionCount: number;
-    postedTransactionCount: number;
-    outstandingTransactionCount: number;
-    postedTotal: number;
-    projectedTotal: number;
-    postedRefundTotal: number;
-    delta: number | null;
-  };
-};
+type FinancialPurchase = Pick<ListRowOf<"purchase">, "id" | "fields">;
 const settlementField = entityFieldModels.purchase.fields.find(
   (field) => field.key === "financialReconciliation",
 );
@@ -50,7 +39,8 @@ export function FinancialSettlementStatus({
 }: {
   purchase: FinancialPurchase;
 }) {
-  const settlement = purchase.financialReconciliation;
+  const settlement = fieldValueOf(purchase.fields.financialReconciliation);
+  if (!settlement) return null;
   const option = fieldEnumOptions("purchase", "financialReconciliation").find(
     (candidate) => candidate.value === settlement.status,
   );
@@ -73,7 +63,8 @@ function FinancialSettlement({
   onAddTransaction?: () => void;
   onEditTransaction?: (transaction: FinancialTransactionOut) => void;
 }) {
-  const settlement = purchase.financialReconciliation;
+  const settlement = fieldValueOf(purchase.fields.financialReconciliation);
+  if (!settlement) return null;
   return (
     <Stack gap="sm">
       <Row align="center" justify="between">
@@ -171,3 +162,5 @@ export function FinancialSettlementCell({
     </>
   );
 }
+
+type FinancialTransactionOut = ListRowOf<"financialTransaction">;

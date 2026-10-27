@@ -2,6 +2,7 @@ import {
   CALENDAR_PLANTING_MILESTONE_LABELS,
   type CalendarItem,
 } from "@cubby/schemas/calendar";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   MEAL_KIND_LABELS,
   MEAL_SLOT_DURATION_MINUTES,
@@ -178,20 +179,23 @@ const KIND_SPECS = {
     summary: (item) => item.title,
     // An unslotted meal has no time of day to claim, so it stays the full-day
     // banner it has always been rather than being parked at an invented hour.
-    timing: (item) =>
-      item.mealType
+    timing: (item) => {
+      const mealType = fieldValueOf(item.source.fields.mealType);
+      return mealType
         ? {
-            startMinutes: MEAL_TYPE_START_MINUTES[item.mealType],
+            startMinutes: MEAL_TYPE_START_MINUTES[mealType],
             durationMinutes: MEAL_SLOT_DURATION_MINUTES,
           }
-        : null,
+        : null;
+    },
     description: (item) => {
-      const parts = [...item.recipeNames];
+      const parts = [...(fieldValueOf(item.source.fields.recipeNames) ?? [])];
       // An eating-out meal carries no recipes and no cost, so without this it
       // produced an empty DESCRIPTION and the subscriber saw a bare title with
       // no hint of why nothing was planned.
-      if (item.mealKind !== "cooked") {
-        parts.push(MEAL_KIND_LABELS[item.mealKind]);
+      const mealKind = fieldValueOf(item.source.fields.mealKind);
+      if (mealKind !== null && mealKind !== "cooked") {
+        parts.push(MEAL_KIND_LABELS[mealKind]);
       }
       const stats: string[] = [];
       const kcal = item.mealTotals.nutrition.kcal;
@@ -213,7 +217,8 @@ const KIND_SPECS = {
       item.projectName ? `${item.projectName}: ${item.title}` : item.title,
     description: (item) => {
       const parts = [`Status: ${item.status.replace(/_/g, " ")}`];
-      if (item.trade) parts.push(`Trade: ${item.trade}`);
+      const trade = fieldValueOf(item.source.fields.trade);
+      if (trade) parts.push(`Trade: ${trade}`);
       if (item.projectName) parts.push(`Project: ${item.projectName}`);
       return parts.join("\n");
     },

@@ -2,7 +2,7 @@ import { entitySchema } from "@cubby/schemas/entity";
 import { fieldResolutionEvaluationSchema } from "@cubby/schemas/field-resolution";
 import {
   PRODUCT_CATEGORY_MAX_DEPTH,
-  type ProductCategorySummary,
+  type RawProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -26,7 +26,7 @@ const MAX_ANCESTOR_DEPTH = sql.raw(String(PRODUCT_CATEGORY_MAX_DEPTH - 1));
 
 /** A nullable JSON summary expression for product and relation projections. */
 export const categorySummarySql = (categoryIdExpr: SQL) =>
-  sql<ProductCategorySummary | null>`(
+  sql<RawProductCategorySummary | null>`(
     WITH RECURSIVE ancestors AS (
       SELECT c."id", c."parentId", c."shortcode", c."name", c."feature", 0 AS depth,
              ARRAY[c."id"] AS visited

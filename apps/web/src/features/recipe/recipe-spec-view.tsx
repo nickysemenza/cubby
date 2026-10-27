@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { uniq } from "es-toolkit";
 import { Fragment, memo, useMemo, useState } from "react";
 
@@ -363,7 +364,7 @@ export const RecipeSpecView = memo(function RecipeSpecView({
       return next;
     });
 
-  const footnote = sourceFootnote(recipe.source);
+  const footnote = sourceFootnote(fieldValueOf(recipe.fields.source));
   const missingWeight = tree.costing?.totals.missingByType.weight ?? [];
 
   return (

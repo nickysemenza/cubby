@@ -14,6 +14,7 @@ import {
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { summaryReportProjection } from "@cubby/schemas/entity-summary-report";
+import { fieldDecisionOf } from "@cubby/schemas/field-envelope";
 import { useQueries } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
@@ -59,7 +60,10 @@ export function isEmptySummaryCell<E extends GenericDetailEntity>(
   const field = fields.find((field) => field.key === slot.fields[0]);
   return (
     field !== undefined &&
-    fieldResolutionFor(record, field.key)?.mode !== "allocated" &&
+    (fieldResolutionFor(record, field.key)
+      ? fieldDecisionOf(fieldResolutionFor(record, field.key)!)?.provenance
+          ?.kind
+      : undefined) !== "allocated" &&
     field.readKey !== null &&
     readPathValue(record, field.display.readPath ?? field.readKey) == null
   );
@@ -409,7 +413,10 @@ export function DetailSummary<E extends GenericDetailEntity>({
                       ? overrides[field.key]?.(record)?.value
                       : undefined;
                   const allocated =
-                    fieldResolutionFor(record, field.key)?.mode === "allocated";
+                    (fieldResolutionFor(record, field.key)
+                      ? fieldDecisionOf(fieldResolutionFor(record, field.key)!)
+                          ?.provenance?.kind
+                      : undefined) === "allocated";
                   const absent =
                     field.readKey !== null &&
                     field.display.readPath === null &&

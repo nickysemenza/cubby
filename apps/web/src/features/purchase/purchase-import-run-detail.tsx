@@ -7,7 +7,6 @@ import {
 } from "@cubby/schemas/agent-conversation";
 import type { ReportRowState } from "@cubby/schemas/entity-report";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
-import type { RunOut } from "@cubby/schemas/run";
 import { runInputsErased } from "@cubby/schemas/run-fields";
 import { humanize } from "@cubby/shared";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
@@ -21,6 +20,7 @@ import {
 
 import type { RunDetail } from "~/contracts/run.contract";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { runHref } from "~/entity/routing/purchase-import-links";
 import {
@@ -961,3 +961,5 @@ function RunAgentActionRead({ record }: { record: RunOut }) {
     </>
   ) : null;
 }
+
+type RunOut = DetailRecordOf<"run">;

@@ -1,8 +1,9 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { ExpenseOut } from "@cubby/schemas/project";
+import { fieldDecisionOf } from "@cubby/schemas/field-envelope";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderDetailFieldValue } from "~/entity/display/entity-display";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { formatCurrency } from "~/lib/number-format";
 import { Stack } from "~/ui/layout";
 
@@ -22,7 +23,8 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
   // pushed its amount past the two-column facts.
   return (
     <Stack gap="xs" className="min-w-0">
-      {expense.fieldResolutions?.projectId?.mode === "allocated" ? (
+      {fieldDecisionOf(expense.fields.projectId)?.provenance?.kind ===
+      "allocated" ? (
         <Stack gap="xs" className="min-w-0">
           {(expense.projectAllocations ?? []).map((share) => (
             <div
@@ -70,3 +72,5 @@ export const expenseDetailFields = {
     value: <ExpenseProjectField expense={expense} />,
   }),
 } satisfies EntityDetailFieldRenderers<"expense">;
+
+type ExpenseOut = DetailRecordOf<"expense">;

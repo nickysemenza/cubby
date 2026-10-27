@@ -1,5 +1,6 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
-  InfLocation,
+  LocationTreeNode,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
@@ -8,11 +9,14 @@ import { useMemo, type ReactNode } from "react";
 import { EntityIcon } from "~/entity/entities";
 import { LocationIcon } from "~/entity/presentation/location-icons";
 import { TreeOutline, type OutlineNode } from "~/ui/common/tree-outline";
+import { FieldRecordValue } from "~/ui/derived/record-value";
+import { NoneValue } from "~/ui/primitives/none-value";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 
 import { LocationVisual } from "./location-visual";
 
 type LocationOutlineData =
-  | { kind: "location"; location: InfLocation }
+  | { kind: "location"; location: LocationTreeNode }
   | { kind: "inventory"; item: InventoryItemForTree };
 
 const NO_CONTENTS = new Set<string>();
@@ -58,7 +62,7 @@ function locationMark(node: OutlineNode<LocationOutlineData>) {
       />
     );
   const { location } = node.data;
-  return (location.displayImages?.length ?? 0) > 0 ? (
+  return (fieldValueOf(location.fields.displayImages)?.length ?? 0) > 0 ? (
     <LocationVisual
       location={location}
       variant="compact"
@@ -67,8 +71,8 @@ function locationMark(node: OutlineNode<LocationOutlineData>) {
     />
   ) : (
     <LocationIcon
-      type={location.type}
-      product={location.product}
+      type={fieldValueOf(location.fields.type)}
+      product={fieldValueOf(location.fields.product)}
       size={14}
       className="shrink-0 text-muted-foreground"
     />
@@ -89,7 +93,7 @@ export function LocationOutline({
   label = "Locations",
   revealMatches = false,
 }: {
-  locations: InfLocation[];
+  locations: LocationTreeNode[];
   expandedIds: ReadonlySet<string>;
   onToggle: (id: string) => void;
   selectedId?: string;
@@ -104,7 +108,7 @@ export function LocationOutline({
   const searching = Boolean(query.trim());
   const nodes = useMemo(() => {
     const visit = (
-      location: InfLocation,
+      location: LocationTreeNode,
     ): OutlineNode<LocationOutlineData> => ({
       id: location.id,
       name: location.name,
@@ -138,12 +142,16 @@ export function LocationOutline({
       renderIcon={locationMark}
       renderAction={onSelect ? undefined : locationAction}
       renderTrailing={(node) => {
-        if (node.data.kind === "inventory")
+        if (node.data.kind === "inventory") {
+          const amount = fieldValueOf(node.data.item.fields.amount);
           return (
             <span className="shrink-0 text-2xs text-muted-foreground tabular-nums">
-              {node.data.item.amount.value} {node.data.item.amount.unit}
+              <FieldRecordValue record={node.data.item} field="amount">
+                {amount ? tryFormatAmount(amount) : <NoneValue />}
+              </FieldRecordValue>
             </span>
           );
+        }
         const { location } = node.data;
         const direct =
           location.directItemCount ?? location.inventoryItems?.length ?? 0;

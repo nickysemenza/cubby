@@ -1,11 +1,12 @@
-import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { LocationTreeNode, LocationType } from "@cubby/schemas/location";
 
-export function indexLocations(locations: InfLocation[]) {
-  const byId = new Map<string, InfLocation>();
+export function indexLocations(locations: LocationTreeNode[]) {
+  const byId = new Map<string, LocationTreeNode>();
   const parents = new Map<string, string>();
   const branchIds = new Set<string>();
   const initiallyExpanded = new Set<string>();
-  const visit = (nodes: InfLocation[], parent?: string) => {
+  const visit = (nodes: LocationTreeNode[], parent?: string) => {
     for (const node of nodes) {
       byId.set(node.id, node);
       if (parent) parents.set(node.id, parent);
@@ -23,7 +24,7 @@ export function locationPath(
   id: string | undefined,
   index: ReturnType<typeof indexLocations>,
 ) {
-  const path: InfLocation[] = [];
+  const path: LocationTreeNode[] = [];
   let node = id ? index.byId.get(id) : undefined;
   while (node) {
     path.unshift(node);
@@ -35,7 +36,7 @@ export function locationPath(
 
 /** Keep matches and their lineage, never every descendant of a named match. */
 export function filterLocationTree(
-  locations: InfLocation[],
+  locations: LocationTreeNode[],
   {
     query = "",
     type = null,
@@ -51,7 +52,7 @@ export function filterLocationTree(
   const term = query.trim().toLocaleLowerCase();
   const active = Boolean(term || type || status !== "all");
   const totals = new Map<string, number>();
-  const visit = (nodes: InfLocation[]): InfLocation[] =>
+  const visit = (nodes: LocationTreeNode[]): LocationTreeNode[] =>
     nodes.flatMap((node) => {
       const children = visit(node.children ?? []);
       const directItemCount =
@@ -74,7 +75,7 @@ export function filterLocationTree(
         : node.inventoryItems;
       const hasItems = directItemCount > 0;
       const matches =
-        (!type || node.type === type) &&
+        (!type || fieldValueOf(node.fields.type) === type) &&
         (status === "all" || (status === "withItems" ? hasItems : !hasItems)) &&
         (!term ||
           node.name.toLocaleLowerCase().includes(term) ||

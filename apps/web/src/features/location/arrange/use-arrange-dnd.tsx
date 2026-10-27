@@ -1,5 +1,5 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import {
   type CollisionDetection,
   closestCorners,
@@ -51,7 +51,7 @@ export function useArrangeDndState(): ArrangeDndState {
 }
 
 interface ArrangeDndProviderProps {
-  roots: InfLocation[];
+  roots: LocationTreeNode[];
   moveLocation: (
     dragId: LocationShortcode,
     targetId: LocationShortcode | null,

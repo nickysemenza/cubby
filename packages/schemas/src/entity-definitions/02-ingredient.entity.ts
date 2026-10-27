@@ -398,6 +398,18 @@ export default defineEntity(
       ],
     },
     fields: {
+      embedded: [
+        {
+          path: ["product"],
+          entity: "product",
+          projections: ["list", "detail", "mcpList", "mcpDetail"],
+        },
+        {
+          path: ["recipe"],
+          entity: "recipe",
+          projections: ["detail", "mcpDetail"],
+        },
+      ],
       create: {
         module: "@cubby/schemas/ingredient",
         export: "ingredientCreateInput",
@@ -406,22 +418,25 @@ export default defineEntity(
         module: "@cubby/schemas/ingredient",
         export: "ingredientUpdateData",
       },
-      output: { module: "@cubby/schemas/ingredient", export: "ingredientOut" },
+      output: {
+        module: "@cubby/schemas/ingredient-raw-read",
+        export: "rawIngredientOutput",
+      },
       list: {
-        module: "@cubby/schemas/ingredient",
-        export: "ingredientListItemOut",
+        module: "@cubby/schemas/ingredient-raw-read",
+        export: "rawIngredientList",
       },
       detail: {
-        module: "@cubby/schemas/ingredient",
-        export: "ingredientWithFoodOut",
+        module: "@cubby/schemas/ingredient-raw-read",
+        export: "rawIngredientDetail",
       },
       mcpList: {
-        module: "@cubby/schemas/ingredient",
-        export: "ingredientListItemMcpEntityOut",
+        module: "@cubby/schemas/ingredient-raw-read",
+        export: "rawIngredientMcpList",
       },
       mcpDetail: {
-        module: "@cubby/schemas/ingredient",
-        export: "ingredientWithFoodMcpEntityOut",
+        module: "@cubby/schemas/ingredient-raw-read",
+        export: "rawIngredientMcpDetail",
       },
     },
     storage: {

@@ -1,3 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { locationListItemOut } from "@cubby/schemas/location";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
@@ -17,10 +19,43 @@ import {
 } from "./dialog-item";
 import { MoveInventoryDialog } from "./move-inventory-dialog";
 
-const asInventoryItem = (row: EntityActionRow): InventoryDialogItem | null => {
-  const parsed = inventoryDialogItemSchema.safeParse(row);
-  return parsed.success ? parsed.data : null;
+const inventoryMoveReadSchema = inventoryDialogItemSchema
+  .omit({ amount: true })
+  .extend({
+    fields: inventoryListItemOut.shape.fields.pick({
+      amount: true,
+      locationId: true,
+    }),
+  });
+
+const inventoryMoveSelection = (row: EntityActionRow) => {
+  const parsed = inventoryMoveReadSchema.safeParse(row);
+  if (!parsed.success) return null;
+  const { fields } = parsed.data;
+  const amount = fieldValueOf(fields.amount);
+  if (amount === null) {
+    return {
+      item: null,
+      reason:
+        fields.amount.work.kind === "failed"
+          ? fields.amount.work.error
+          : "Inventory amount is unavailable.",
+    };
+  }
+  if (
+    fields.amount.current.controls.kind !== "editable" ||
+    fields.locationId.current.controls.kind !== "editable"
+  ) {
+    return { item: null, reason: "This inventory entry cannot be moved." };
+  }
+  // A command snapshot captures the usable canonical value at action admission.
+  return {
+    item: inventoryDialogItemSchema.parse({ ...parsed.data, amount }),
+    reason: undefined,
+  };
 };
+const asInventoryItem = (row: EntityActionRow): InventoryDialogItem | null =>
+  inventoryMoveSelection(row)?.item ?? null;
 
 // Action admission must work before deferred list fields arrive.
 const locationActionItemSchema = locationListItemOut.pick({
@@ -28,10 +63,11 @@ const locationActionItemSchema = locationListItemOut.pick({
   name: true,
   parent: true,
 });
-const locationLabelItemSchema = locationListItemOut.pick({
-  id: true,
-  type: true,
-});
+const locationLabelItemSchema = locationListItemOut
+  .pick({
+    id: true,
+  })
+  .extend({ fields: locationListItemOut.shape.fields.pick({ type: true }) });
 const asLocationItem = (row: EntityActionRow) => {
   const parsed = locationActionItemSchema.safeParse(row);
   return parsed.success ? parsed.data : null;
@@ -42,19 +78,25 @@ function useMoveInventoryEntityAction(): EntityActionHandles {
 
   return {
     run: staged.stage,
-    availability: ({ rows }) =>
-      rows.length > 0 && rows.every((row) => asInventoryItem(row) !== null)
-        ? { status: "available" }
-        : { status: "hidden" },
+    availability: ({ rows }) => {
+      const selected = rows.map(inventoryMoveSelection);
+      if (rows.length === 0 || selected.some((item) => item === null))
+        return { status: "hidden" };
+      const refused = selected.find((item) => item?.reason !== undefined);
+      return refused?.reason
+        ? { status: "disabled", reason: refused.reason }
+        : { status: "available" };
+    },
     rowMenuItem: (row) => {
-      const item = asInventoryItem(row);
-      if (!item) return null;
+      const selected = inventoryMoveSelection(row);
+      if (!selected) return null;
       return (
         <VerbMenuItem
           verb="moveTo"
+          disabledReason={selected.reason}
           onSelect={(event) => {
             event.stopPropagation();
-            void staged.stage([item]);
+            void staged.stage([row]);
           }}
         />
       );
@@ -85,7 +127,9 @@ function usePrintLocationLabelsAction(): EntityActionHandles {
         return { status: "hidden" };
       }
       return parsed.every(
-        (result) => result.success && typeSupportsQrCode(result.data.type),
+        (result) =>
+          result.success &&
+          typeSupportsQrCode(fieldValueOf(result.data.fields.type)),
       )
         ? { status: "available" }
         : { status: "disabled", reason: QR_UNAVAILABLE };
@@ -117,7 +161,9 @@ function usePrintLocationLabelsAction(): EntityActionHandles {
     rowMenuItem: (row) => {
       const parsed = locationLabelItemSchema.safeParse(row);
       if (!parsed.success) return null;
-      const disabledReason = typeSupportsQrCode(parsed.data.type)
+      const disabledReason = typeSupportsQrCode(
+        fieldValueOf(parsed.data.fields.type),
+      )
         ? undefined
         : QR_UNAVAILABLE;
       return (

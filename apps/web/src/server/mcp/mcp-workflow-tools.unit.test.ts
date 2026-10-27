@@ -3,9 +3,9 @@ import { mealRecipeId as mealRecipeIdSchema } from "@cubby/schemas/identifiers";
 import {
   getMealPreparationsOut,
   mealNutritionOut,
-  mealOut,
   nutritionMeal,
 } from "@cubby/schemas/meal";
+import { rawMealOutput } from "@cubby/schemas/meal-raw-read";
 import {
   buildNutrition,
   type NutritionTotals,
@@ -29,7 +29,6 @@ import {
 import {
   buildRecipeNutrition,
   costingExplanation,
-  effectiveRecipeServings,
 } from "~/server/domains/recipe/operations/recipe.server";
 import { pageProblemTypeSlice } from "~/server/generic/problems/operations/problems.server";
 
@@ -111,17 +110,10 @@ describe("MCP workflow tools", () => {
         },
       ],
     });
-    expect(effectiveRecipeServings({ servings: null, yield: null })).toBeNull();
-    expect(
-      effectiveRecipeServings({ yield: { value: 1, unit: "loaf" } }),
-    ).toBeNull();
-    expect(
-      effectiveRecipeServings({ yield: { value: 8, unit: "servings" } }),
-    ).toBe(8);
   });
 
   it("nutrition.plan_recipe defaults to compact coverage and opts into nutrition", () => {
-    const meal = mock(mealOut, {
+    const meal = mock(rawMealOutput, {
       overrides: { name: "Dinner", totals: knownTotals, recipes: [] },
     });
     const mealRecipeId = mealRecipeIdSchema.parse(

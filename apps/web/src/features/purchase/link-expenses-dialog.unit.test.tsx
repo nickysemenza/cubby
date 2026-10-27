@@ -1,4 +1,9 @@
-import { purchaseOut } from "@cubby/schemas/purchase";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { purchaseLinkExpenseCandidate } from "@cubby/schemas/purchase";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
+const purchaseOut = entityFieldEnvelopeSchemas.purchase.detail;
+
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,7 +32,17 @@ afterEach(() => {
 
 const purchase = mock(purchaseOut, {
   seed: 3,
-  overrides: { id: testShortcode("purchase", "PUR-4K7M"), expenseTotal: 100 },
+  overrides: {
+    fields: {
+      expenseTotal: fieldValueFixture(
+        entityFieldEnvelopeSchemas.purchase.detail.shape.fields.shape[
+          "expenseTotal"
+        ],
+        100,
+      ),
+    },
+    id: testShortcode("purchase", "PUR-4K7M"),
+  },
 });
 
 const candidate = (id: string, name: string, filed: boolean) => ({
@@ -35,8 +50,16 @@ const candidate = (id: string, name: string, filed: boolean) => ({
   name,
   date: null,
   cost: 10,
-  trade: null,
-  projectId: null,
+  fields: {
+    trade: fieldValueFixture(
+      purchaseLinkExpenseCandidate.shape.fields.shape.trade,
+      null,
+    ),
+    projectId: fieldValueFixture(
+      purchaseLinkExpenseCandidate.shape.fields.shape.projectId,
+      null,
+    ),
+  },
   projectName: null,
   current: filed ? "Sample Supply" : "unattached",
   filed,

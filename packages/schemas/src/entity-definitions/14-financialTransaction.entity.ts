@@ -1,10 +1,8 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { automaticFields } from "./automatic-fields";
 import { financialTransactionReadSchemas } from "../financial-transaction-fields";
 import { financialTransactionChildren } from "../child-tables/financialTransaction.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
 import { financialTransactionCoverage } from "../purchase-evidence-policy";
-import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { spendingCategoryShortcode } from "../identifier-fields";
 import { defineEntity } from "./definition.js";
 import { displayItemsField, labelField } from "./label-field.js";
@@ -223,12 +221,6 @@ export default defineEntity(
       },
     },
     model: {
-      stored: {
-        automaticFields: automaticFields(
-          "financialTransaction",
-          "FinancialTransaction",
-        ),
-      },
       fields: [
         { key: "bookingDecisionFingerprint", kind: "text", nullable: true },
         { key: "bookingExpenseFingerprint", kind: "text", nullable: true },
@@ -504,16 +496,6 @@ export default defineEntity(
           },
         },
         {
-          display: { detail: false, list: false },
-          key: "fieldResolutions",
-          kind: "json",
-          validation: {
-            read: optionalFieldResolutionsSchema,
-            create: null,
-            update: null,
-          },
-        },
-        {
           key: "itemizationExpectation",
           description:
             "Leave blank to use the effective policy from linked records and the spending category.",
@@ -578,21 +560,21 @@ export default defineEntity(
             description:
               "Reviewed reimbursement expects no itemization. Otherwise an explicit transaction policy wins, followed by linked purchase policies and the transaction spending category.",
             projections: {
-              list: "fieldResolutions.itemizationExpectation.value",
-              detail: "fieldResolutions.itemizationExpectation.value",
-              summary: "fieldResolutions.itemizationExpectation.value",
+              list: "itemizationExpectation",
+              detail: "itemizationExpectation",
+              summary: "itemizationExpectation",
             },
             sourceDependencies: [
               {
-                path: "fieldResolutions.itemizationExpectation.sourceEntity",
+                path: "fields.itemizationExpectation.result.decision.provenance.source",
                 label: "Source",
               },
               {
-                path: "fieldResolutions.itemizationExpectation.storedValue",
+                path: "fields.itemizationExpectation.current.assignment.value",
                 label: "Stored override",
               },
               {
-                path: "fieldResolutions.itemizationExpectation.fallbackValue",
+                path: "fields.itemizationExpectation.current.controls.reset.preview.result.decision.outcome.value",
                 label: "Inherited value",
               },
             ],
@@ -1355,7 +1337,6 @@ export default defineEntity(
         "spendingCategorySummary",
         "spendingCategoryId",
         "spendingCategoryName",
-        "fieldResolutions",
         "itemizationExpectation",
         "id",
         "accountId",

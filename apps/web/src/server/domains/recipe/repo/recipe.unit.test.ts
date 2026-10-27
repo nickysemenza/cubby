@@ -1,9 +1,9 @@
 import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
+import { recipeUsageOut } from "@cubby/schemas/recipe";
 import {
-  recipeGraphOut,
-  recipeOut,
-  recipeUsageOut,
-} from "@cubby/schemas/recipe";
+  rawRecipeGraph as recipeGraphOut,
+  rawRecipeOutput as recipeOut,
+} from "@cubby/schemas/recipe-raw-read";
 import {
   testCompleteDataQuality,
   testEntityId,

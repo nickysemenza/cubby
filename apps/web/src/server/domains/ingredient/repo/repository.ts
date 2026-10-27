@@ -1,9 +1,9 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   ingredientMergeInput,
-  ingredientOut,
   mergeSummary as ingredientMergeSummary,
 } from "@cubby/schemas/ingredient";
+import { rawIngredientOutput as ingredientOut } from "@cubby/schemas/ingredient-raw-read";
 import { z } from "zod";
 
 import { getIngredientByID as getIngredientDetail } from "~/server/domains/ingredient/repo/ingredient-with-food";

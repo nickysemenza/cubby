@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
@@ -112,7 +113,7 @@ function StagedAddToInventoryDialog({
     return {
       id: soleProduct.id,
       name: detail.name,
-      brandName: detail.brandName,
+      brandName: fieldValueOf(detail.fields.brandName),
     };
   }, [soleProduct, detail]);
 

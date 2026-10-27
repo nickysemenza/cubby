@@ -284,17 +284,22 @@ struct GenericEntityEditModelTests {
         #expect(!model.isDirty)
     }
 
+    private typealias F = FieldEnvelopeFixture
+
+    private static func category(
+        assignment: JSONValue, reset: JSONValue = ["kind": "unavailable"], result: JSONValue
+    ) -> JSONValue {
+        F.envelope(assignment: assignment, controls: F.editable(reset: reset), result: result)
+    }
+
     @Test func inheritedReadDoesNotBecomeStoredDraftOrUnchangedPatch() throws {
-        let original: JSONValue = [
-            "lineKind": "principal",
-            "spendingCategoryId": "SPC-4K7M",
-            "fieldResolutions": [
-                "spendingCategoryId": [
-                    "mode": "inherit", "storedValue": .null, "value": "SPC-4K7M", "fallbackValue": "SPC-4K7M",
-                    "source": "purchase", "sourceEntity": .null, "matchesFallback": true, "canReset": false,
-                ]
-            ],
-        ]
+        let original = F.row(
+            ["lineKind": "principal"],
+            fields: [
+                "spendingCategoryId": Self.category(
+                    assignment: F.inherit,
+                    result: F.live(F.decision("SPC-4K7M", provenance: F.inherited("purchase", "PUR-4K7M"))))
+            ])
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"), client: try makeClient(),
             original: original)
@@ -303,28 +308,42 @@ struct GenericEntityEditModelTests {
         #expect(!model.canSave)
     }
 
+    /// A stale cached value is a result, not stored intent: the draft keeps S.
+    @Test func cachedEffectiveValueNeverSeedsTheDraft() throws {
+        let original = F.row(
+            ["lineKind": "principal"],
+            fields: [
+                "spendingCategoryId": Self.category(
+                    assignment: F.value("SPC-8K7M"),
+                    result: F.cached(
+                        F.decision("SPC-4K7M", provenance: F.inherited("purchase", "PUR-4K7M")),
+                        freshness: "stale"))
+            ])
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"), client: try makeClient(),
+            original: original)
+        #expect(model.draft["spendingCategoryId"] == .string("SPC-8K7M"))
+        #expect(try model.patch().isEmpty)
+    }
+
     @Test func resolutionResetStagesDeclaredPatchOnlyWhenServerAllowsIt() throws {
-        func original(_ canReset: Bool) -> JSONValue {
-            [
-                "lineKind": "principal", "spendingCategoryId": "SPC-8K7M", "notes": "Keep this",
-                "fieldResolutions": [
-                    "spendingCategoryId": [
-                        "mode": "explicit", "storedValue": "SPC-8K7M", "value": "SPC-8K7M",
-                        "fallbackValue": "SPC-4K7M",
-                        "source": "explicit", "sourceEntity": .null, "matchesFallback": false,
-                        "canReset": .bool(canReset),
-                    ]
-                ],
-            ]
+        func original(_ reset: JSONValue) -> JSONValue {
+            F.row(
+                ["lineKind": "principal", "notes": "Keep this"],
+                fields: [
+                    "spendingCategoryId": Self.category(
+                        assignment: F.value("SPC-8K7M"), reset: reset,
+                        result: F.live(F.decision("SPC-8K7M", provenance: F.own)))
+                ])
         }
         let blocked = GenericEntityEditModel(
             descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"), client: try makeClient(),
-            original: original(false))
+            original: original(["kind": "unavailable"]))
         #expect(!blocked.stageResolutionReset("spendingCategoryId"))
         #expect(try blocked.patch().isEmpty)
         let allowed = GenericEntityEditModel(
             descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"), client: try makeClient(),
-            original: original(true))
+            original: original(F.resetNotLoaded))
         #expect(allowed.stageResolutionReset("spendingCategoryId"))
         let resetPatch = try allowed.patch()
         #expect(resetPatch.values.isEmpty)
@@ -332,39 +351,38 @@ struct GenericEntityEditModelTests {
         #expect(allowed.draft["notes"] == .string("Keep this"))
     }
 
+    /// A saved acknowledgement drops the pre-write envelope; its controls are not reused.
     @Test func acknowledgedFieldDoesNotKeepStaleResolutionEvidence() throws {
         let field = try #require(EntityCatalog[.expense].field("spendingCategoryId"))
-        let original: JSONValue = [
-            "spendingCategoryId": "SPC-4K7M",
-            "fieldResolutions": [
-                "spendingCategoryId": [
-                    "mode": "inherit", "storedValue": .null, "value": "SPC-4K7M", "fallbackValue": "SPC-4K7M",
-                    "source": "purchase", "sourceEntity": .null, "matchesFallback": true, "canReset": false,
-                ]
-            ],
-        ]
+        let original = F.row(
+            ["lineKind": "principal"],
+            fields: [
+                "spendingCategoryId": Self.category(
+                    assignment: F.inherit, reset: F.resetNotLoaded,
+                    result: F.live(F.decision("SPC-4K7M", provenance: F.inherited("purchase", "PUR-4K7M"))))
+            ])
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"), client: try makeClient(),
             original: original)
         model.acknowledgeSavedField(
             "spendingCategoryId", value: .string("SPC-8K7M"), reviewedDraftValue: .null)
         let saved = try #require(model.original)
-        #expect(FieldResolutionPresentation(raw: saved, field: field) == nil)
+        #expect(FieldEnvelope.of(saved, field: field) == nil)
+        #expect(saved.recordValue("spendingCategoryId") == .string("SPC-8K7M"))
+        #expect(model.resolutionForEditor(field) == nil)
+        #expect(!model.stageResolutionReset(field.key))
         #expect(try model.patch().values["spendingCategoryId"] == nil)
     }
 
     @Test func editedAssignmentOrDependencyCannotPresentSavedResolutionAsCurrent() throws {
         let field = try #require(EntityCatalog[.expense].field("spendingCategoryId"))
-        let original: JSONValue = [
-            "spendingCategoryId": "SPC-8K7M", "purchaseId": "PUR-4K7M",
-            "fieldResolutions": [
-                "spendingCategoryId": [
-                    "mode": "explicit", "storedValue": "SPC-8K7M", "value": "SPC-8K7M",
-                    "fallbackValue": "SPC-4K7M", "source": "explicit", "sourceEntity": .null,
-                    "matchesFallback": false, "canReset": true,
-                ]
-            ],
-        ]
+        let original = F.row(
+            ["purchaseId": "PUR-4K7M"],
+            fields: [
+                "spendingCategoryId": Self.category(
+                    assignment: F.value("SPC-8K7M"), reset: F.resetNotLoaded,
+                    result: F.live(F.decision("SPC-8K7M", provenance: F.own)))
+            ])
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"),
             client: try makeClient(), original: original)
@@ -379,60 +397,77 @@ struct GenericEntityEditModelTests {
         #expect(!model.stageResolutionReset(field.key))
     }
 
+    /// Draft classifiers replace the saved envelope in the applicability record.
+    @Test func applicabilityRecordReadsDraftedGovernedKeys() throws {
+        let original = F.row(
+            ["lineKind": "principal"],
+            fields: [
+                "spendingCategoryId": Self.category(
+                    assignment: F.inherit,
+                    result: F.live(F.decision("SPC-4K7M", provenance: F.inherited("purchase", "PUR-4K7M"))))
+            ])
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"), client: try makeClient(),
+            original: original)
+        #expect(model.applicabilityRecord.recordValue("spendingCategoryId") == .null)
+        model.draft["spendingCategoryId"] = .string("SPC-8K7M")
+        #expect(model.applicabilityRecord.recordValue("spendingCategoryId") == .string("SPC-8K7M"))
+    }
+
     /// A manual picker choice after reset must replace the staged inheritance intent.
     @Test func referenceSelectionAfterResetRestoresExplicitIntent() throws {
         let prefix = try #require(EntityCatalog[.ledgerParty].shortcodePrefix)
         let first = prefix + "4K7M"
         let second = prefix + "8K7M"
         for key in [EntityKey.task, .project] {
-            let original: JSONValue = [
-                "assigneeId": .string(first),
-                "fieldResolutions": [
-                    "assigneeId": [
-                        "mode": "explicit", "storedValue": .string(first), "value": .string(first),
-                        "fallbackValue": .null, "source": "Override", "sourceEntity": .null,
-                        "matchesFallback": false, "canReset": true,
-                    ]
-                ],
-            ]
+            let original = F.row(
+                fields: [
+                    "assigneeId": F.envelope(
+                        assignment: F.value(.string(first)),
+                        controls: F.editable(canSetNone: true, reset: F.resetNotLoaded),
+                        result: F.live(F.decision(.string(first), provenance: F.own)))
+                ])
             let model = GenericEntityEditModel(
                 descriptor: EntityCatalog[key], mode: .update(id: "synthetic-record"),
                 client: try makeClient(), original: original)
             #expect(model.stageResolutionReset("assigneeId"))
+            #expect(try model.patch().values["assigneeMode"] == .string("inherit"))
             #expect(model.stageReferenceSelection("assigneeId", value: .string(second)))
             let patch = try model.patch()
             #expect(patch.values["assigneeId"] == .string(second))
-            #expect(patch.values["assigneeMode"] == .string("explicit"))
+            // The stored intent is already explicit, so the mode is unchanged and not resent.
+            #expect(patch.values["assigneeMode"] == nil)
+            #expect(model.draft["assigneeMode"] == .string("explicit"))
             #expect(model.stageReferenceSelection("assigneeId", value: .null))
-            #expect(try model.patch().values["assigneeMode"] == .string("explicit"))
+            #expect(try model.patch().cleared.contains("assigneeId"))
+            #expect(model.draft["assigneeMode"] == .string("explicit"))
         }
     }
 
-    /// Confirm pins the inherited owner explicitly; Set to Household is explicit with no owner.
+    /// Keep this value pins the current inherited owner explicitly; Set to Household is
+    /// explicit with no owner. Both come from current controls.
     @Test func ownershipResolutionActionsStageTheDeclaredPatch() throws {
         let prefix = try #require(EntityCatalog[.ledgerParty].shortcodePrefix)
         let owner = prefix + "4K7M"
-        let original: JSONValue = [
-            "ownerLedgerPartyId": .string(owner),
-            "fieldResolutions": [
-                "ownerLedgerPartyId": [
-                    "mode": "inherit", "storedValue": .null, "value": .string(owner),
-                    "fallbackValue": .string(owner), "source": "purchase", "sourceEntity": .null,
-                    "matchesFallback": false, "canReset": false,
-                ]
-            ],
-        ]
+        let original = F.row(
+            fields: [
+                "ownerLedgerPartyId": F.envelope(
+                    assignment: F.inherit, controls: F.editable(canSetNone: true, canConfirm: true),
+                    result: F.live(F.decision(.string(owner), provenance: F.inherited("product", "PRD-4K7M")))
+                )
+            ])
         func model() throws -> GenericEntityEditModel {
             GenericEntityEditModel(
                 descriptor: EntityCatalog[.inventory], mode: .update(id: "synthetic-entry"),
                 client: try makeClient(), original: original)
         }
-        let confirming = try model()
-        #expect(!confirming.stageResolution(.useInherited, for: "ownerLedgerPartyId"))
-        #expect(confirming.stageResolution(.confirm, for: "ownerLedgerPartyId"))
-        let confirmed = try confirming.patch()
-        #expect(confirmed.values["ownershipMode"] == .string("explicit"))
-        #expect(confirmed.values["ownerLedgerPartyId"] == .string(owner))
+        let keeping = try model()
+        #expect(keeping.draft["ownerLedgerPartyId"] == .null)
+        #expect(!keeping.stageResolution(.useInherited, for: "ownerLedgerPartyId"))
+        #expect(keeping.stageResolution(.keepValue, for: "ownerLedgerPartyId"))
+        let kept = try keeping.patch()
+        #expect(kept.values["ownershipMode"] == .string("explicit"))
+        #expect(kept.values["ownerLedgerPartyId"] == .string(owner))
 
         let household = try model()
         #expect(household.stageResolution(.setNone, for: "ownerLedgerPartyId"))
@@ -440,6 +475,28 @@ struct GenericEntityEditModelTests {
         #expect(cleared.values["ownershipMode"] == .string("explicit"))
         // The stored owner is already null under inherit, so the mode alone carries Household.
         #expect(cleared.values["ownerLedgerPartyId"] == nil)
+    }
+
+    /// None and inherit stay distinct stored intents: an untouched explicit None saves nothing,
+    /// and Use inherited from None sends only the mode.
+    @Test func explicitNoneStaysDistinctFromInherit() throws {
+        let original = F.row(
+            fields: [
+                "ownerLedgerPartyId": F.envelope(
+                    assignment: F.none,
+                    controls: F.editable(canSetNone: true, canConfirm: true, reset: F.resetNotLoaded),
+                    result: F.live(F.emptyDecision("explicit_none", provenance: F.own)))
+            ])
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.inventory], mode: .update(id: "synthetic-entry"),
+            client: try makeClient(), original: original)
+        #expect(model.draft["ownerLedgerPartyId"] == .null)
+        #expect(try model.patch().isEmpty)
+        #expect(!model.stageResolution(.setNone, for: "ownerLedgerPartyId"))
+        #expect(model.stageResolutionReset("ownerLedgerPartyId"))
+        let reset = try model.patch()
+        #expect(reset.values["ownershipMode"] == .string("inherit"))
+        #expect(reset.values["ownerLedgerPartyId"] == nil)
     }
 
     @Test func updateSendsExactlyTheChangedAndClearedKeys() async throws {

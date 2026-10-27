@@ -1,8 +1,12 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
-  type RecipeOut,
-  recipeOut,
-  sectionIngredientOut,
-} from "@cubby/schemas/recipe";
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
+const recipeOut = entityFieldEnvelopeSchemas.recipe.detail;
+import { sectionIngredientOut } from "@cubby/schemas/recipe";
 import type { RecipeFlowPlan } from "@cubby/schemas/recipe-flow";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
@@ -16,13 +20,25 @@ const usageIds = [
   "00000000-0000-4000-8000-000000000004",
 ];
 
-const recipe: RecipeOut = recipeOut.parse({
+const recipe: RecipeOut = entityReadFixture(recipeOut, {
+  fields: {
+    images: fieldValueFixture(
+      entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape["images"],
+      [],
+    ),
+    dataQuality: fieldValueFixture(
+      entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape[
+        "dataQuality"
+      ],
+      testCompleteDataQuality(),
+    ),
+  },
   id: testShortcode("recipe", "RCP-FLOW"),
   name: "Flow",
   meta: null,
   forkedFromRecipeId: null,
   forkedFromRecipeName: null,
-  images: [],
+
   sections: [
     {
       id: SECTION_ID,
@@ -58,7 +74,6 @@ const recipe: RecipeOut = recipeOut.parse({
   ],
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
-  dataQuality: testCompleteDataQuality(),
 });
 
 const plan: RecipeFlowPlan = {
@@ -159,3 +174,5 @@ describe("buildRecipeFlowLayout", () => {
     ]);
   });
 });
+
+type RecipeOut = DetailRecordOf<"recipe">;

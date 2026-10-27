@@ -1,6 +1,7 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily, feedbackAuthority } from "@cubby/schemas/assessment";
 import type { AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { and, desc, eq, sql } from "drizzle-orm";
@@ -50,7 +51,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
-import { automaticFieldsComputes } from "~/server/generic/assessment/repo/automatic-fields";
+import { loadCurrentFieldOwnership } from "~/server/generic/assessment/repo/automatic-fields";
 import {
   applyAutomaticRules,
   listAutomaticRules,
@@ -63,11 +64,6 @@ import {
   canAutomaticallyFillField,
   acceptSuggestion,
 } from "~/server/generic/assessment/repo/suggestion-review";
-import {
-  claimDerivedMarks,
-  prepareDerivedPage,
-  publishDerivedPage,
-} from "~/server/generic/derived/repo/drain";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type Ctx = ReturnType<typeof withTestDb>;
@@ -937,22 +933,11 @@ describe("automatic field assignments", () => {
         .where(eq(assessmentState.runId, sweep.id));
       expect(state?.status).toBe("applied");
       if (!state) throw new Error("Missing automatic application");
-      const drain = async () => {
-        for (let page = 0; page < 10; page++) {
-          const marks = (await claimDerivedMarks(ctx.db)).filter((mark) =>
-            mark.target.startsWith("product.automaticFields"),
-          );
-          if (!marks.length) return;
-          const plan = await prepareDerivedPage(
-            ctx.db,
-            automaticFieldsComputes,
-            marks,
-          );
-          expect([...plan.failed]).toEqual([]);
-          await publishDerivedPage(ctx.db, plan);
-        }
-        throw new Error("Automatic provenance did not settle");
-      };
+      expect(
+        (
+          await loadCurrentFieldOwnership(ctx.db, "product", [state.recordId])
+        ).get(state.recordId)?.categoryId,
+      ).toEqual({ kind: "automatic", receiptId: state.id, confidence: 0.9 });
       const list = async () =>
         executeEntity(kernelCtx(ctx), {
           action: "list",
@@ -960,22 +945,24 @@ describe("automatic field assignments", () => {
           filters: { ids: [item.id] },
           pagination: { pageIndex: 0, pageSize: 10 },
         });
-      await drain();
       expect(await list()).toMatchObject({
-        meta: {
-          derived: {
-            [item.id]: {
+        items: [
+          {
+            id: item.id,
+            fields: {
               categoryId: {
-                state: "fresh",
-                decidedBy: { level: "suggested", auto: true, confidence: 0.9 },
+                current: {
+                  assignment: {
+                    kind: "value",
+                    ownership: { kind: "automatic", confidence: 0.9 },
+                  },
+                },
               },
             },
           },
-        },
+        ],
       });
-      expect(JSON.stringify((await list()).meta?.derived)).not.toContain(
-        '"automaticFields"',
-      );
+      expect((await list()).meta).not.toHaveProperty("derived");
       if (action === "confirm") {
         await reviewAssessment(ctx.db, kernelCtx(ctx), {
           assessmentId: state.id,
@@ -1004,10 +991,29 @@ describe("automatic field assignments", () => {
             }),
           );
       }
-      await drain();
+      // Authority changes synchronously, without waiting for background work.
       expect(
-        (await list()).meta?.derived?.[item.id]?.categoryId?.decidedBy,
-      ).not.toMatchObject({ auto: true });
+        (
+          await loadCurrentFieldOwnership(ctx.db, "product", [state.recordId])
+        ).get(state.recordId)?.categoryId,
+      ).toBeUndefined();
+      const refreshed = await list();
+      expect(refreshed.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: item.id,
+            fields: expect.objectContaining({
+              categoryId: expect.objectContaining({
+                current: expect.objectContaining({
+                  assignment: expect.objectContaining({
+                    ownership: { kind: "record" },
+                  }),
+                }),
+              }),
+            }),
+          }),
+        ]),
+      );
     },
   );
   // Failure: stored NULL hides a populated effective value derived from order evidence.
@@ -1034,11 +1040,16 @@ describe("automatic field assignments", () => {
       id: merchant.id,
       missing: "error",
     });
-    expect(effective).toMatchObject({
-      item: {
-        fieldResolutions: { itemizationExpectation: { value: "required" } },
-      },
-    });
+    if (
+      effective.action !== "get" ||
+      effective.entity !== "vendor" ||
+      !effective.item
+    )
+      throw new Error("Synthetic Vendor read returned no Vendor");
+    expect(fieldValueOf(effective.item.fields.itemizationExpectation)).toBe(
+      "required",
+    );
+    expect(effective.item).not.toHaveProperty("fieldResolutions");
     const pending = await seedPending(ctx, {
       entity: "vendor",
       recordId: stored!.id,

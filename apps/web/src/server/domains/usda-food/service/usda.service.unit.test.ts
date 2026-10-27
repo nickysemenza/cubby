@@ -1,11 +1,11 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import {
-  type ProductTopLevelOut,
-  productTopLevelOut,
-} from "@cubby/schemas/product";
-import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
+import { testShortcode } from "@cubby/schemas/testing";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import type { DataType, FoodLookupParam, FoodSummary } from "@cubby/usda";
 import { describe, expect, it, vi } from "vitest";
+
+import { mock } from "~/lib/test/mock-schema";
 
 import { USDAService, type USDAServiceClient } from "./usda.service";
 
@@ -62,48 +62,16 @@ const LINKED_COUNTS_BY_UPC = new Map([
   ["000000000005", 0],
 ]);
 
-const dummyProducts = (count: number): ProductTopLevelOut[] =>
+const dummyProducts = (
+  count: number,
+): FoodSummaryWithLinkedProducts["linkedProducts"] =>
   Array.from({ length: count }, (_, index) =>
-    productTopLevelOut.parse({
-      id: testShortcode("product", `PRD-USDA-${index}`),
-      name: `Linked product ${index}`,
-      aliases: [],
-      tags: [],
-      primaryGtin: null,
-      fdc_id: null,
-      growsPlantId: null,
-      brandId: "VEN-22222",
-      brandName: "Test",
-      model: null,
-      notes: null,
-      labelNutrition: null,
-      expectedQuantity: null,
-      categoryId: null,
-      category: null,
-      images: [],
-      labelImages: [],
-      itemImageCount: 0,
-      labelImageCount: 0,
-      classificationEvidence: "",
-      coverImageUrl: null,
-      externalIds: [],
-      price: null,
-      pricing: {
-        derivedPrice: null,
-        effectivePrice: null,
-        source: "none",
-        knownExpenseCount: 0,
-        unknownExpenseCount: 0,
-        knownUnitCount: 0,
-        partial: false,
+    mock(entityFieldEnvelopeSchemas.product.output, {
+      seed: index + 1,
+      overrides: {
+        id: testShortcode("product", `PRD-USDA-${index}`),
+        name: `Linked product ${index}`,
       },
-      usdaUnavailable: null,
-      stockTracked: null,
-      kind: null,
-      commodity: false,
-      dataQuality: testCompleteDataQuality(),
-      createdAt: new Date("2026-01-01"),
-      updatedAt: new Date("2026-01-01"),
     }),
   );
 

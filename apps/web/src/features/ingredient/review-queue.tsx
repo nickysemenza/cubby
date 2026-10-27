@@ -1,8 +1,8 @@
-import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import { getErrorMessage } from "@cubby/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import type { IngredientEnrichmentRead } from "~/contracts/ingredient.contract";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import {
   useActionMutation,
@@ -55,7 +55,7 @@ export function ReviewQueue({
   rows,
   onExit,
 }: {
-  rows: EnrichmentRow[];
+  rows: IngredientEnrichmentRead[];
   onExit: () => void;
 }) {
   const cache = useProposalCache();
@@ -65,11 +65,11 @@ export function ReviewQueue({
   // after it. The component unmounts on exit, so re-entering review re-freezes
   // against the browse filter as it stands then.
   const stopsById = useMemo(
-    () => new Map<string, EnrichmentRow>(rows.map((r) => [r.id, r])),
+    () => new Map<string, IngredientEnrichmentRead>(rows.map((r) => [r.id, r])),
     [rows],
   );
   const candidateIds = useMemo(() => rows.map((r) => r.id), [rows]);
-  const pass = useQueuePass<EnrichmentRow>({
+  const pass = useQueuePass<IngredientEnrichmentRead>({
     scopeKey: REVIEW_SCOPE,
     candidateIds,
     stopsById,

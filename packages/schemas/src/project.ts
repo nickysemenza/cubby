@@ -1,3 +1,24 @@
+import {
+  purchaseFieldEnvelopeFields,
+  purchasePublicReadFields,
+} from "./generated/entity-field-envelope-fields.purchase.gen";
+import {
+  rawToolProductIdentity,
+  rawToolGalleryInventoryEntry,
+} from "./project-tool-raw-read";
+import {
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+} from "./generated/entity-field-envelope-fields.product.gen";
+import {
+  inventoryFieldEnvelopeFields,
+  inventoryPublicReadFields,
+} from "./generated/entity-field-envelope-fields.inventory.gen";
+import {
+  projectFieldEnvelopeFields,
+  projectPublicReadFields,
+} from "./generated/entity-field-envelope-fields.project.gen";
+import { withFieldEnvelopes } from "./field-envelope";
 import { dateRangeSchema, storedDateRangeSchema } from "./date-range";
 import { countLabel } from "@cubby/shared/pluralize";
 import { z } from "zod";
@@ -15,8 +36,6 @@ import {
   hasValidExpenseDate,
   EXPENSE_DATE_REQUIRED_MESSAGE,
 } from "./expense-fields";
-import { inventoryPlacementValues, locationTypeValues } from "@cubby/shared";
-import { amount } from "./codec";
 import { reportCommand } from "./entity-report";
 import { financialReconciliationSummary } from "./financial-reconciliation";
 import {
@@ -36,7 +55,6 @@ import {
   projectBaseFilterFields,
   projectCreateInput,
   projectOut,
-  projectListItemOut,
 } from "./generated/project.gen";
 import {
   taskBaseFilterFields,
@@ -85,9 +103,7 @@ import type { ShortcodeEntity } from "./entity-manifest";
 import {
   anyShortcodeSchema,
   expenseShortcode,
-  inventoryShortcode,
   ledgerPartyShortcode,
-  locationShortcode,
   productShortcode,
   projectShortcode,
   purchaseShortcode,
@@ -95,7 +111,6 @@ import {
   vendorShortcode,
 } from "./identifiers";
 import {
-  createPaginatedResponseSchemaWithContext,
   createPaginatedResponseSchema,
   entityFilterList,
   partyFilterList,
@@ -184,10 +199,6 @@ export const projectTreeInput = z.object({
   filters: projectFiltersSchema,
   ...sortPaginationFields,
 });
-export const projectTreeOut = createPaginatedResponseSchemaWithContext(
-  projectListItemOut,
-  "project",
-);
 
 export const taskBulkMoveInput = z.object({
   ids: z.array(taskShortcode).min(1),
@@ -290,14 +301,6 @@ export const createProjectFromTasksInput = z.object({
 });
 export type CreateProjectFromTasksInput = z.infer<
   typeof createProjectFromTasksInput
->;
-
-export const createProjectFromTasksOut = z.object({
-  project: projectOut,
-  tasks: z.array(taskOut),
-});
-export type CreateProjectFromTasksOut = z.infer<
-  typeof createProjectFromTasksOut
 >;
 
 export const blockedReasonSchema = z.object({
@@ -466,16 +469,21 @@ export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;
 
 export type ExpenseSortField = GeneratedEntitySortField<"expense">;
 
+export const expenseChargeContextPurchaseOut = withFieldEnvelopes(
+  z.object({
+    id: purchaseShortcode,
+    orderId: z.string().nullable(),
+    displayLabel: z.string().nullable(),
+    date: plainDate.nullable(),
+    vendorId: vendorShortcode,
+    vendorName: z.string().nullable(),
+  }),
+  { vendorId: purchaseFieldEnvelopeFields.vendorId },
+  purchasePublicReadFields,
+);
 export const expenseChargeContextOut = z
   .object({
-    purchase: z.object({
-      id: purchaseShortcode,
-      orderId: z.string().nullable(),
-      displayLabel: z.string().nullable(),
-      date: plainDate.nullable(),
-      vendorId: vendorShortcode,
-      vendorName: z.string().nullable(),
-    }),
+    purchase: expenseChargeContextPurchaseOut,
     siblings: z.array(expenseOut),
   })
   .nullable();
@@ -1054,11 +1062,23 @@ const projectToolEconomicsFields = {
   grossLifetimeAcquisitionCost: positiveMoney,
 };
 
-const projectResourceIdentity = z.object({
-  productId: productShortcode,
-  productName: z.string(),
-  brandName: z.string().nullable(),
-});
+/** Bounded live Product fields shared by tool reports; economics remain report metrics. */
+const projectResourceIdentity = withFieldEnvelopes(
+  rawToolProductIdentity,
+  { brandName: productFieldEnvelopeFields.brandName },
+  productPublicReadFields,
+);
+const toolProjectFields = withFieldEnvelopes(
+  z.object({
+    emoji: z.string().nullable(),
+    kind: projectKindSchema.nullable(),
+  }),
+  {
+    emoji: projectFieldEnvelopeFields.emoji,
+    kind: projectFieldEnvelopeFields.kind,
+  },
+  projectPublicReadFields,
+).shape.fields;
 
 export const projectResourceOut = projectResourceIdentity.extend({
   category: reusableResourceCategory,
@@ -1127,7 +1147,7 @@ export const productProjectUsesOut = projectResourceIdentity.extend({
       projectId: projectShortcode,
       projectName: z.string(),
       status: projectStatusSchema,
-      kind: projectKindSchema.nullable(),
+      fields: toolProjectFields.pick({ kind: true }),
       projectPurchaseCost: positiveMoneyNullable,
       sharedWindow: projectSharedWindowOut.nullable(),
       attachedAt: z.date(),
@@ -1242,30 +1262,24 @@ export const toolGalleryInput = z.object({
 export type ToolGalleryInput = z.input<typeof toolGalleryInput>;
 export type ToolGalleryFilters = z.infer<typeof toolGalleryInput>;
 
-export const toolGalleryInventoryEntryOut = z.object({
-  id: inventoryShortcode,
-  amount,
-  placement: z.enum(inventoryPlacementValues),
-  location: z.object({
-    id: locationShortcode,
-    name: z.string(),
-    ancestors: z.array(
-      z.object({
-        id: locationShortcode,
-        name: z.string(),
-        type: z.enum(locationTypeValues).nullable(),
-      }),
-    ),
+export const toolGalleryInventoryEntryOut = withFieldEnvelopes(
+  rawToolGalleryInventoryEntry.extend({
+    location: rawToolGalleryInventoryEntry.shape.location.extend({
+      ancestors: z.array(
+        rawToolGalleryInventoryEntry.shape.location.shape.ancestors.element.omit(
+          { type: true },
+        ),
+      ),
+    }),
   }),
-});
+  { amount: inventoryFieldEnvelopeFields.amount },
+  inventoryPublicReadFields,
+);
 export type ToolGalleryInventoryEntryOut = z.infer<
   typeof toolGalleryInventoryEntryOut
 >;
 
-export const toolGalleryItemOut = z.object({
-  productId: productShortcode,
-  productName: z.string(),
-  brandName: z.string().nullable(),
+export const toolGalleryItemOut = projectResourceIdentity.extend({
   model: z.string().nullable(),
   coverImageUrl: z.url().nullable(),
   extraImageCount: z.number().int().nonnegative(),
@@ -1323,9 +1337,8 @@ export type ProjectToolMatrixFilters = z.infer<typeof projectToolMatrixInput>;
 export const projectToolMatrixColumnOut = z.object({
   projectId: projectShortcode,
   projectName: z.string(),
-  emoji: z.string().nullable(),
+  fields: toolProjectFields.pick({ emoji: true, kind: true }),
   status: projectStatusSchema,
-  kind: projectKindSchema.nullable(),
   startDate: plainDate.nullable(),
   endDate: plainDate.nullable(),
   startSource: projectDateSourceSchema,

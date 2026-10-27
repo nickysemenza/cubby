@@ -1,10 +1,12 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { expenseOut } from "@cubby/schemas/project";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -12,6 +14,7 @@ import {
   entityBrowserMutationCommandSchema,
   type EntityBrowserMutationInput,
 } from "~/server/entity-kernel/contracts";
+import { buildFieldEnvelopeRow } from "~/server/generic/derived/repo/envelope";
 
 import {
   CalendarInspectorBody,
@@ -19,6 +22,7 @@ import {
   EditableCalendarItem,
 } from "./calendar-item-inspector";
 import { calendarItemEditDescriptor } from "./calendar-kind-registry";
+import { expenseCalendarSourceFixture } from "./calendar-source.fixtures";
 
 const expense: Extract<CalendarItem, { kind: "expense" }> = {
   kind: "expense",
@@ -29,45 +33,58 @@ const expense: Extract<CalendarItem, { kind: "expense" }> = {
   interaction: "move",
   cost: 79,
   future: true,
-  vendor: "Target",
-  trade: "other",
+  source: expenseCalendarSourceFixture(
+    testShortcode("expense", "EXP-1111"),
+    "other",
+    "Target",
+  ),
   projectName: null,
   productName: "Souper Cubes",
   displayImages: [],
 };
 
-const savedExpense: ExpenseOut = expenseOut.parse({
-  id: expense.id,
-  name: "Large freezer tray",
-  cost: 79,
-  date: "2026-08-18",
-  lineKind: "principal",
-  costType: "materials",
-  lineBasis: "item_line",
-  trade: "other",
-  future: true,
-  vendor: "Target",
-  vendorId: null,
-  vendorLogo: null,
-  spendingCategoryName: null,
-  projectId: null,
-  projectName: null,
-  productId: null,
-  productName: "Souper Cubes",
-  productQuantity: null,
-  purchaseId: null,
-  orderId: null,
-  orderUrl: null,
-  notes: null,
-  url: null,
-  purchaseDate: null,
-  purchaseDisplayLabel: null,
-  sourceClaims: [],
-  beneficiaries: [],
-  funders: [],
-  createdAt: new Date("2026-08-18T12:00:00Z"),
-  updatedAt: new Date("2026-08-18T12:00:00Z"),
-  dataQuality: testCompleteDataQuality(),
+const savedExpense: ExpenseOut = buildFieldEnvelopeRow({
+  entity: "expense",
+  schema: entityFieldEnvelopeSchemas.expense.detail,
+  row: {
+    attachments: [],
+    displayImages: [],
+    redirectedFrom: null,
+    previousShortcodes: [],
+    ...expenseOut.parse({
+      id: expense.id,
+      name: "Large freezer tray",
+      cost: 79,
+      date: "2026-08-18",
+      lineKind: "principal",
+      costType: "materials",
+      lineBasis: "item_line",
+      trade: "other",
+      future: true,
+      vendor: "Target",
+      vendorId: null,
+      vendorLogo: null,
+      spendingCategoryName: null,
+      projectId: null,
+      projectName: null,
+      productId: null,
+      productName: "Souper Cubes",
+      productQuantity: null,
+      purchaseId: null,
+      orderId: null,
+      orderUrl: null,
+      notes: null,
+      url: null,
+      purchaseDate: null,
+      purchaseDisplayLabel: null,
+      sourceClaims: [],
+      beneficiaries: [],
+      funders: [],
+      createdAt: new Date("2026-08-18T12:00:00Z"),
+      updatedAt: new Date("2026-08-18T12:00:00Z"),
+      dataQuality: testCompleteDataQuality(),
+    }),
+  },
 });
 
 function editableDescriptor(item: CalendarItem) {
@@ -289,3 +306,5 @@ it("owns mobile calendar form actions and blocks dismissal during its write", as
     vi.unstubAllGlobals();
   }
 });
+
+type ExpenseOut = DetailRecordOf<"expense">;

@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { Link } from "@tanstack/react-router";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -18,7 +19,7 @@ const usdaFoodLink: ListRenderer<"product"> = (helper) =>
         // check, and most products have no USDA link.
         meta: { className: "w-32" },
         cell: ({ row }) => {
-          const food = row.original.food;
+          const food = fieldValueOf(row.original.fields.food);
           return food ? (
             <EntityRefLink entity="usda-food" data={food} />
           ) : (
@@ -34,34 +35,40 @@ const usdaFoodLink: ListRenderer<"product"> = (helper) =>
 const tagLinks: ListRenderer<"product"> = (helper) =>
   createCubbyColumnCollection((add) => {
     add(
-      helper.accessor("tags", {
-        id: "tags",
-        header: "Tags",
-        meta: { className: "w-40", mobile: { slot: "meta", priority: 60 } },
-        cell: (info) => {
-          const tags = info.getValue();
-          if (!tags.length) return <NoneValue />;
-          return (
-            <TruncatedList
-              items={tags}
-              maxItems={2}
-              // `stopPropagation`: rows carry the preview onRowClick and
-              // TanStack's Link preventDefaults without stopping propagation,
-              // so the chip would also open the sheet.
-              renderItem={(tag) => (
-                <Link
-                  key={tag}
-                  to="/products"
-                  search={{ tags: tag }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Badge variant="outline">{tag}</Badge>
-                </Link>
-              )}
-            />
-          );
+      helper.accessor(
+        (row) => {
+          const effectiveRowTags = fieldValueOf(row.fields.tags);
+          return effectiveRowTags ?? [];
         },
-      }),
+        {
+          id: "tags",
+          header: "Tags",
+          meta: { className: "w-40", mobile: { slot: "meta", priority: 60 } },
+          cell: (info) => {
+            const tags = info.getValue();
+            if (!tags.length) return <NoneValue />;
+            return (
+              <TruncatedList
+                items={tags}
+                maxItems={2}
+                // `stopPropagation`: rows carry the preview onRowClick and
+                // TanStack's Link preventDefaults without stopping propagation,
+                // so the chip would also open the sheet.
+                renderItem={(tag) => (
+                  <Link
+                    key={tag}
+                    to="/products"
+                    search={{ tags: tag }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Badge variant="outline">{tag}</Badge>
+                  </Link>
+                )}
+              />
+            );
+          },
+        },
+      ),
     );
   });
 

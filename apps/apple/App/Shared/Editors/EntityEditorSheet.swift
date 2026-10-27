@@ -5,10 +5,10 @@ import SwiftUI
 /// edit identifiers, aliases, source references, unit mappings and label nutrition; structured-field
 /// editors retain a read-only summary and a named web handoff. Required web-only fields keep create
 /// on web. DraftDismissalState and inline validation preserve edits until Save or explicit discard.
-/// One field's resolution link a detail screen asks the editor to stage.
+/// A detail assignment action is staged only when the fresh record still offers it.
 struct ResolutionActionRequest: Hashable, Identifiable {
     let field: String
-    let kind: FieldResolutionAction.Kind
+    let kind: FieldAssignmentAction.Kind
     var id: String { "\(field):\(kind.rawValue)" }
 }
 
@@ -17,8 +17,8 @@ struct EntityEditorSheet: View {
     let mode: GenericEntityEditModel.Mode
     /// The loaded record for an update editor opened from a detail screen (skips the fetch).
     var original: JSONValue? = nil
-    /// A detail resolution link (Use inherited, Confirm, Set to …) staged for review; Save
-    /// remains the only write.
+    /// A detail assignment action (Use inherited, Keep this value, Set to …) staged for review;
+    /// Save remains the only write.
     var resolutionAction: ResolutionActionRequest? = nil
     /// Values a detail action derived (a detected nutrition panel) staged for review as the
     /// person's own edits; Save remains the only write.
@@ -36,6 +36,7 @@ struct EntityEditorSheet: View {
     @State private var pickedTitles: [String: String] = [:]
     @State private var uploadStatus: String?
     @State private var suggestionFeedbackError: String?
+    @State private var resolutionNotice: String?
     @State private var isUploading = false
     @State private var draftDismissal = DraftDismissalState()
     @State private var allowsDismissal = false
@@ -197,6 +198,12 @@ struct EntityEditorSheet: View {
             if let context {
                 Section { Text(context.description).foregroundStyle(.secondary) }
             }
+            if let resolutionNotice {
+                Section {
+                    Text(resolutionNotice).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("editor.resolution.notice")
+                }
+            }
             if !handoffRequiredFields.isEmpty {
                 Section {
                     Text("This record needs additional fields available on web to create it.")
@@ -348,7 +355,12 @@ struct EntityEditorSheet: View {
     /// Applies staged values after the model has baselined its loaded draft.
     private func finishLoad(_ loaded: GenericEntityEditModel, identity: EditorIdentity) {
         guard !Task.isCancelled, initializedIdentity == identity, model === loaded else { return }
-        if let resolutionAction { loaded.stageResolution(resolutionAction.kind, for: resolutionAction.field) }
+        resolutionNotice = nil
+        if let resolutionAction, !loaded.stageResolution(resolutionAction.kind, for: resolutionAction.field) {
+            // The fresh read is the authority: the action may no longer be offered.
+            let label = descriptor.field(resolutionAction.field)?.label ?? resolutionAction.field
+            resolutionNotice = "That choice is no longer available for \(label). Review the current value."
+        }
         loaded.stage(stagedValues)
         seedPickedTitles(loaded)
         suggestions?.invalidate()
@@ -452,12 +464,28 @@ struct EntityEditorSheet: View {
         "id": "PRJ-4K7M", "name": "Backyard deck refresh", "status": "planning", "emoji": "🪵",
         "locations": ["Back deck"], "costEstimate": 450,
         "assignee": ["id": "LPY-2B9C", "name": "Alex"],
-        "fieldResolutions": [
+        "fields": [
             "assigneeId": [
-                "mode": "inherit", "storedValue": .null, "value": "LPY-2B9C", "fallbackValue": "LPY-2B9C",
-                "source": "parent project",
-                "sourceEntity": ["entityKind": "project", "entityId": "PRJ-9Q3R", "name": "Yard upkeep"],
-                "matchesFallback": false, "canReset": false,
+                "current": [
+                    "assignment": ["kind": "inherit"],
+                    "controls": [
+                        "kind": "editable", "canSetNone": true, "canConfirm": false,
+                        "reset": ["kind": "unavailable"],
+                    ],
+                ],
+                "result": [
+                    "kind": "live",
+                    "decision": [
+                        "outcome": ["kind": "value", "value": "LPY-2B9C"],
+                        "provenance": [
+                            "kind": "inherited",
+                            "source": [
+                                "entityKind": "project", "entityId": "PRJ-9Q3R", "name": "Yard upkeep",
+                            ],
+                        ],
+                    ],
+                ],
+                "work": ["kind": "idle"],
             ]
         ],
     ]

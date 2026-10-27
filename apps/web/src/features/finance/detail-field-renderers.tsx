@@ -1,3 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+
 import {
   EntityRefLink,
   EntityFilterLink,
@@ -12,19 +14,29 @@ import type { EntityDetailFieldRenderers } from "../../entity/display/detail-fie
 import { renderSpendingCategorySummary } from "../../entity/display/detail-field-renderers/spending-category-summary";
 
 export const financialTransactionDetailFields = {
-  "spending-category-summary": (transaction) => ({
-    value: renderSpendingCategorySummary(
-      transaction.spendingCategorySummary,
-      true,
-    ),
-  }),
-  "financial-transaction-vendor-inference": (transaction) => ({
-    value:
-      transaction.vendorInference?.status === "suggested" ||
-      transaction.vendorInference?.status === "ambiguous" ? (
-        <PossibleVendor inference={transaction.vendorInference} />
-      ) : undefined,
-  }),
+  "spending-category-summary": (transaction) => {
+    const effectiveTransactionSpendingCategorySummary = fieldValueOf(
+      transaction.fields.spendingCategorySummary,
+    );
+    return {
+      value: renderSpendingCategorySummary(
+        effectiveTransactionSpendingCategorySummary,
+        true,
+      ),
+    };
+  },
+  "financial-transaction-vendor-inference": (transaction) => {
+    const effectiveTransactionVendorInference = fieldValueOf(
+      transaction.fields.vendorInference,
+    );
+    return {
+      value:
+        effectiveTransactionVendorInference?.status === "suggested" ||
+        effectiveTransactionVendorInference?.status === "ambiguous" ? (
+          <PossibleVendor inference={effectiveTransactionVendorInference} />
+        ) : undefined,
+    };
+  },
   // One card line can settle several Purchases, so this shows the
   // allocation set rather than the single derived mirror — which is NULL
   // precisely when the answer is interesting.

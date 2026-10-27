@@ -263,16 +263,25 @@ describe("useAutoFieldSuggestion", () => {
         textFields={["name"]}
         operations={operationsReturning(() => ({ suggestions: {} }))}
         record={{
-          fieldResolutions: {
+          fields: {
             projectId: {
-              mode: "inherit",
-              storedValue: null,
-              value: "PRJ-OLD",
-              fallbackValue: "PRJ-OLD",
-              source: "Parent task",
-              sourceEntity: null,
-              matchesFallback: true,
-              canReset: false,
+              current: {
+                assignment: { kind: "inherit" },
+                controls: {
+                  kind: "editable",
+                  canSetNone: true,
+                  canConfirm: true,
+                  reset: { kind: "unavailable" },
+                },
+              },
+              result: {
+                kind: "live",
+                decision: {
+                  outcome: { kind: "value", value: "PRJ-OLD" },
+                  provenance: { kind: "default", source: null },
+                },
+              },
+              work: { kind: "idle" },
             },
           },
         }}
@@ -496,16 +505,25 @@ describe("useAutoFieldSuggestion", () => {
       input.basisMode === "suggested"
         ? {
             suggestions: {},
-            fieldResolutions: {
+            fields: {
               trade: {
-                mode: "inherit",
-                storedValue: null,
-                value: "plumbing",
-                fallbackValue: "plumbing",
-                source: "Project default",
-                sourceEntity: null,
-                matchesFallback: true,
-                canReset: false,
+                current: {
+                  assignment: { kind: "inherit" },
+                  controls: {
+                    kind: "editable",
+                    canSetNone: true,
+                    canConfirm: true,
+                    reset: { kind: "unavailable" },
+                  },
+                },
+                result: {
+                  kind: "live",
+                  decision: {
+                    outcome: { kind: "value", value: "plumbing" },
+                    provenance: { kind: "default", source: null },
+                  },
+                },
+                work: { kind: "idle" },
               },
             },
             eligibleTargets: [],
@@ -577,16 +595,25 @@ describe("useAutoFieldSuggestion", () => {
     let form!: UseFormReturn<FieldValues>;
     const operations = operationsReturning(() => ({
       suggestions: { trade: tradeSuggestion },
-      fieldResolutions: {
+      fields: {
         trade: {
-          mode: "inherit",
-          storedValue: null,
-          value: "plumbing",
-          fallbackValue: "plumbing",
-          source: "Project default",
-          sourceEntity: null,
-          matchesFallback: true,
-          canReset: false,
+          current: {
+            assignment: { kind: "inherit" },
+            controls: {
+              kind: "editable",
+              canSetNone: true,
+              canConfirm: true,
+              reset: { kind: "unavailable" },
+            },
+          },
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "value", value: "plumbing" },
+              provenance: { kind: "default", source: null },
+            },
+          },
+          work: { kind: "idle" },
         },
       },
       eligibleTargets: [],
@@ -617,16 +644,25 @@ describe("useAutoFieldSuggestion", () => {
     let form!: UseFormReturn<FieldValues>;
     const operations = operationsReturning(() => ({
       suggestions: { trade: tradeSuggestion },
-      fieldResolutions: {
+      fields: {
         trade: {
-          mode: "inherit",
-          storedValue: null,
-          value: null,
-          fallbackValue: null,
-          source: "No trade source",
-          sourceEntity: null,
-          matchesFallback: true,
-          canReset: false,
+          current: {
+            assignment: { kind: "inherit" },
+            controls: {
+              kind: "editable",
+              canSetNone: true,
+              canConfirm: false,
+              reset: { kind: "unavailable" },
+            },
+          },
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "empty", reason: "unset" },
+              provenance: null,
+            },
+          },
+          work: { kind: "idle" },
         },
       },
       eligibleTargets: ["trade"],

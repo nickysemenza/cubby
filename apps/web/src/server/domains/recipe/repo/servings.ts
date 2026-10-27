@@ -1,11 +1,8 @@
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
-import {
-  resolveRecipeServingValue,
-  type RecipeServingBasis,
-} from "@cubby/schemas/recipe-shared";
+import { resolveRecipeServingValue } from "@cubby/schemas/recipe-shared";
 
 export const resolveRecipeServings = (
-  recipe: Pick<RecipeServingBasis, "servings" | "yield">,
+  recipe: Parameters<typeof resolveRecipeServingValue>[0],
 ): FieldResolutions => {
   const storedValue = recipe.servings ?? null;
   const fallbackValue = resolveRecipeServingValue({

@@ -27,9 +27,12 @@
  */
 import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  projectToolMatrixRowOut,
+  projectToolMatrixColumnOut,
+} from "@cubby/schemas/project";
 import type {
   ProjectToolMatrixCellOut,
-  ProjectToolMatrixColumnOut,
   ProjectToolMatrixFilters,
   ProjectToolMatrixGroupOut,
   ProjectToolMatrixOut,
@@ -44,6 +47,7 @@ import {
   UNASSIGNED_TRADE_LABEL,
   UNKNOWN_MANUFACTURER_LABEL,
 } from "@cubby/schemas/project";
+import type { rawToolProductIdentity } from "@cubby/schemas/project-tool-raw-read";
 import {
   and,
   asc,
@@ -57,6 +61,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import type { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
@@ -84,6 +89,7 @@ import {
 } from "~/server/domains/expense/repo/expense-inheritance";
 import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import { loadProductOwnershipTimelines } from "~/server/domains/product/repo/ownership";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
@@ -732,7 +738,10 @@ export async function projectToolMatrix(
   }
 
   // Rows, grouped and ordered. Group membership is decided here, not in React.
-  const rows: ProjectToolMatrixRowOut[] = rowRecords.map((record) => {
+  const rows: Array<
+    Omit<ProjectToolMatrixRowOut, "fields"> &
+      z.output<typeof rawToolProductIdentity>
+  > = rowRecords.map((record) => {
     const trade = tradeByProduct.get(record.productId) ?? null;
     const groupKey =
       filters.groupBy === "trade"
@@ -770,7 +779,7 @@ export async function projectToolMatrix(
     rowCount: rows.filter((row) => row.groupKey === key).length,
   }));
 
-  const columns: ProjectToolMatrixColumnOut[] = columnRecords.map((record) => ({
+  const columns = columnRecords.map((record) => ({
     projectId: parseShortcodeFor("project", record.shortcode),
     projectName: record.name,
     emoji: record.emoji,
@@ -784,11 +793,25 @@ export async function projectToolMatrix(
     suggestedCount: suggestedByProject.get(record.id) ?? 0,
   }));
 
+  const [publicColumns, publicRows] = await Promise.all([
+    publicFieldEnvelopeRows({
+      db,
+      entity: "project",
+      schema: projectToolMatrixColumnOut,
+      rows: columns.map((row) => ({ ...row, id: row.projectId })),
+    }),
+    publicFieldEnvelopeRows({
+      db,
+      entity: "product",
+      schema: projectToolMatrixRowOut,
+      rows: rows.map((row) => ({ ...row, id: row.productId })),
+    }),
+  ]);
   return {
     groupBy: filters.groupBy,
     groups,
-    columns,
-    rows,
+    columns: publicColumns,
+    rows: publicRows,
     cells,
     columnPagination: {
       page: resolvedPage,

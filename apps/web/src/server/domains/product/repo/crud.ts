@@ -32,20 +32,18 @@ import {
   type ListGroupSummary,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import type {
-  ProductFilters,
-  ProductPickerItemOut,
-} from "@cubby/schemas/product";
+import type { ProductFilters } from "@cubby/schemas/product";
 import {
-  productListItemOut,
   impliedProductFeature,
   type ProductCreateInput,
-  type ProductTopLevelOut,
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
 import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
-import { type ProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import { type RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { productQuantityVarianceState } from "@cubby/schemas/product-fields";
+import type { RawProductPickerItem } from "@cubby/schemas/product-raw-read";
+import { rawProductList } from "@cubby/schemas/product-raw-read";
+import type { RawProductOutput } from "@cubby/schemas/product-raw-read";
 import {
   and,
   asc,
@@ -60,7 +58,6 @@ import {
 import { QueryBuilder } from "drizzle-orm/pg-core";
 import { groupBy, uniq } from "es-toolkit";
 
-import { projectListRows } from "~/entity/model/list-read-schema";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -144,6 +141,10 @@ import {
   productHasGtin,
   productMatchesGtinTerm,
 } from "~/server/domains/product/repo/gtin";
+import {
+  enrichProductListItems,
+  prefetchProductFoods,
+} from "~/server/domains/product/repo/list-enrichment";
 import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
 import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
@@ -184,7 +185,8 @@ import {
   listReadPlan,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
-import { withPageDerived } from "~/server/generic/list/repo/page-derived";
+import { projectListRows } from "~/server/generic/list/repo/list-read-schema";
+import { withPageFields } from "~/server/generic/list/repo/page-fields";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
   resolveAllOrThrow,
@@ -202,10 +204,6 @@ import {
   type ProductRetainingEdgeKey,
 } from "./edge-roles";
 import {
-  enrichProductListItems,
-  prefetchProductFoods,
-} from "./list-enrichment";
-import {
   dbProductToAPI,
   splitProductImages,
   mapProductExternalIds,
@@ -220,7 +218,8 @@ import {
 } from "./mappers";
 import { ownershipExitExpensePredicate } from "./ownership";
 import {
-  hasDerivedProductPriceSql,
+  productReadPriceSql,
+  productReadCostSql,
   enrichProductRowsWithPricing,
   loadEffectiveProductPricesById,
   loadProductPriceSum,
@@ -339,7 +338,8 @@ const productScaffold = listScaffold("product", product, {
       sql`${product.categoryId}`,
     ),
     // Stored (ADR 0021): the kit walk per row made price sorts ~300 ms.
-    price: storedDerivedSql("product", "price", product.id),
+    price: productReadPriceSql,
+    cost: productReadCostSql,
     primaryGtin: sql.raw(
       `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +
         `WHERE pei."entityId" = "Product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
@@ -438,7 +438,7 @@ const productScaffold = listScaffold("product", product, {
       value: hasUnknownQuantityLinesSql(product.id),
       set: unknownQuantityLinesReadSql(),
     },
-    priced: sql`NOT ${serviceCategorySql(sql`${product.categoryId}`)} AND (${product.price} IS NOT NULL OR ${hasDerivedProductPriceSql(product.id)})`,
+    priced: sql`NOT ${serviceCategorySql(sql`${product.categoryId}`)} AND ${productReadPriceSql} IS NOT NULL`,
     effectiveOwner: ownedProducts.predicate<AnyOfValue>((prepared, value) => {
       const ids = selectProductIdsByOwner(
         prepared,
@@ -786,7 +786,11 @@ const readProductListPage = async (
   const selectedExtras: ProductListExtras = {};
   if (relationFields || derivedFields)
     selectedExtras.category = extras.category;
-  if (wantsListGroup(projection, "quality"))
+  if (
+    wantsListGroup(projection, "quality") ||
+    (projection.kind === "selected" &&
+      projection.fields.includes("classificationEvidence"))
+  )
     selectedExtras.classificationEvidence = extras.classificationEvidence;
   if (derivedFields)
     Object.assign(selectedExtras, {
@@ -877,7 +881,7 @@ export const productList = async (
   );
   return {
     ...metadata,
-    data: data.map((row) => productListItemOut.parse(row)),
+    data: data.map((row) => rawProductList.parse(row)),
   };
 };
 
@@ -899,7 +903,27 @@ export const listProductsRead = async (
   projection: ListProjection = { kind: "full" },
   preparation?: ListPreparationScope,
 ): Promise<ProductListReadResult> => {
-  const foodFields = productListItemOut.pick({
+  // Unit-price envelopes recompute from selected valuation and current conversion
+  // facts. Retain those inputs until the public selected schema strips them.
+  if (
+    projection.kind === "selected" &&
+    projection.fields.some((field) =>
+      ["unitPrice", "unitPriceLabel", "unitPriceDetailLabel"].includes(field),
+    )
+  )
+    projection = {
+      ...projection,
+      fields: [
+        ...new Set([
+          ...projection.fields,
+          "category",
+          "unitMappings",
+          "food",
+          "labelNutrition",
+        ]),
+      ],
+    };
+  const foodFields = rawProductList.pick({
     food: true,
     unitPrice: true,
     unitPriceMappings: true,
@@ -1003,34 +1027,34 @@ export const listProductsRead = async (
       });
       return [
         bind(
-          productListItemOut.pick({ modelPresence: true, notesPresence: true }),
+          rawProductList.pick({ modelPresence: true, notesPresence: true }),
           (row) => ({
             modelPresence: Boolean(row.model),
             notesPresence: Boolean(row.notes),
           }),
         ),
+        bind(rawProductList.pick({ dataGaps: true }), (_row, { quality }) => {
+          if (!quality)
+            throw new Error("Product data gaps require loaded quality");
+          return {
+            dataGaps: rawProductList.shape.dataGaps.parse(
+              quality.gaps.map((gap) => gap.check),
+            ),
+          };
+        }),
         bind(
-          productListItemOut.pick({ dataGaps: true }),
-          (_row, { quality }) => {
-            if (!quality)
-              throw new Error("Product data gaps require loaded quality");
-            return {
-              dataGaps: productListItemOut.shape.dataGaps.parse(
-                quality.gaps.map((gap) => gap.check),
-              ),
-            };
-          },
-        ),
-        bind(
-          productListItemOut.pick({
+          rawProductList.pick({
             category: true,
             categoryId: true,
+            categoryFeature: true,
             growsPlantId: true,
             ingredient: true,
           }),
           (row) => ({
             category: row.category ?? null,
             categoryId: row.category?.id ?? null,
+            // The existing category SQL resolves inheritance before the compact public projection.
+            categoryFeature: row.category?.feature ?? null,
             growsPlantId: row.growsPlant
               ? parseShortcodeFor("plant", row.growsPlant.shortcode)
               : null,
@@ -1041,7 +1065,7 @@ export const listProductsRead = async (
           }),
         ),
         inventory.fields(
-          productListItemOut.pick({ inventoryEntry: true }),
+          rawProductList.pick({ inventoryEntry: true }),
           (row, loaded) => {
             const value = loaded.get(row.id);
             if (!value) throw new Error("Product inventory was not loaded");
@@ -1049,7 +1073,7 @@ export const listProductsRead = async (
           },
         ),
         relations.fields(
-          productListItemOut.pick({
+          rawProductList.pick({
             externalIds: true,
             unitMappings: true,
             primaryGtin: true,
@@ -1072,7 +1096,7 @@ export const listProductsRead = async (
           },
         ),
         relations.fields(
-          productListItemOut.pick({
+          rawProductList.pick({
             images: true,
             labelImages: true,
             itemImageCount: true,
@@ -1089,7 +1113,7 @@ export const listProductsRead = async (
           },
         ),
         stock.fields(
-          productListItemOut.pick({
+          rawProductList.pick({
             pricing: true,
             fieldResolutions: true,
             primaryPlacement: true,
@@ -1146,12 +1170,11 @@ export const listProductsRead = async (
             };
           },
         ),
-        owners.fields(
-          productListItemOut.pick({ owners: true }),
-          (row, loaded) => ({ owners: loaded.get(row.id) ?? [] }),
-        ),
+        owners.fields(rawProductList.pick({ owners: true }), (row, loaded) => ({
+          owners: loaded.get(row.id) ?? [],
+        })),
         bind(
-          productListItemOut.pick({
+          rawProductList.pick({
             expenseCount: true,
             expenseTotal: true,
             componentCount: true,
@@ -1212,9 +1235,9 @@ export const listProductsRead = async (
     ...(projection.kind === "base"
       ? {
           data: await plan.read(db, results, projection, filtered.context),
-          derived: undefined,
+          fieldReads: undefined,
         }
-      : await withPageDerived(db, "product", results, () =>
+      : await withPageFields(db, "product", results, () =>
           plan.read(db, results, projection, filtered.context),
         )),
   };
@@ -1378,7 +1401,7 @@ export const productSearch = async (
   >,
   sorts: SortParams[],
   pagination: PaginationParams,
-): Promise<{ data: ProductPickerItemOut[]; count: number }> => {
+): Promise<{ data: RawProductPickerItem[]; count: number }> => {
   const name = filters.nameFilter;
   const whereClause = and(
     notDeleted(product),
@@ -1449,7 +1472,7 @@ export const productSearch = async (
 export const getProductPickerItemsByIds = async (
   db: Database,
   ids: ProductId[],
-): Promise<ProductPickerItemOut[]> => {
+): Promise<RawProductPickerItem[]> => {
   if (ids.length === 0) return [];
   const rows = await getDb(db).query.product.findMany({
     // `inArray`, NOT sql`col = ANY(${arr})`: drizzle expands a JS array in a
@@ -1630,7 +1653,7 @@ export const createProduct = async (
   data: ProductRepoCreateInput,
   actor: ActorContext,
   reads: ProductCreateReads = defaultProductCreateReads,
-): Promise<ProductTopLevelOut> =>
+): Promise<RawProductOutput> =>
   (await createProductRecord(db, data, actor, reads)).output;
 
 /** `createProduct` with the inserted row's id, so a caller never re-resolves the code it just minted. */
@@ -1639,7 +1662,7 @@ export function createProductRecord(
   data: ProductRepoCreateInput,
   actor: ActorContext,
   reads?: ProductCreateReads,
-): Promise<{ output: ProductTopLevelOut; entityId: ProductId }>;
+): Promise<{ output: RawProductOutput; entityId: ProductId }>;
 export function createProductRecord<TOutput>(
   db: Database,
   data: ProductRepoCreateInput,
@@ -1659,7 +1682,7 @@ export async function createProductRecord<TOutput>(
     tx: DrizzleTransaction,
     row: typeof product.$inferSelect,
   ) => Promise<TOutput>,
-): Promise<{ output: ProductTopLevelOut | TOutput; entityId: ProductId }> {
+): Promise<{ output: RawProductOutput | TOutput; entityId: ProductId }> {
   const {
     ingredientId,
     unitMappings,
@@ -1821,7 +1844,7 @@ export async function createProductRecord<TOutput>(
       };
       const qualities = await reads.loadProductDataQualities(tx, [created.id]);
       const categoryDetails = await tx.execute<{
-        category: ProductCategorySummary | null;
+        category: RawProductCategorySummary | null;
         categoryStockTracking: Awaited<
           ReturnType<typeof loadCategoryStockTracking>
         >;
@@ -1880,7 +1903,7 @@ export function updateProduct(
   id: ProductId,
   data: ProductRepoUpdateData,
   actor: ActorContext,
-): Promise<{ product: ProductTopLevelOut; detachedImageKeys: string[] }>;
+): Promise<{ product: RawProductOutput; detachedImageKeys: string[] }>;
 export function updateProduct<TOutput>(
   db: Database,
   id: ProductId,
@@ -1901,7 +1924,7 @@ export async function updateProduct<TOutput>(
     row: typeof product.$inferSelect,
   ) => Promise<TOutput>,
 ): Promise<{
-  product: ProductTopLevelOut | TOutput;
+  product: RawProductOutput | TOutput;
   detachedImageKeys: string[];
 }> {
   const {
@@ -2498,7 +2521,7 @@ export const quickCreateProduct = async (
   db: Database,
   data: QuickCreateProductInput,
   actor: ActorContext,
-): Promise<ProductTopLevelOut> =>
+): Promise<RawProductOutput> =>
   (await quickCreateProductRecord(db, data, actor)).output;
 
 /** `quickCreateProduct` with the inserted row's id, so a caller never re-resolves the code it just minted. */
@@ -2506,7 +2529,7 @@ export const quickCreateProductRecord = async (
   db: Database,
   data: QuickCreateProductInput,
   actor: ActorContext,
-): Promise<{ output: ProductTopLevelOut; entityId: ProductId }> => {
+): Promise<{ output: RawProductOutput; entityId: ProductId }> => {
   const incomingGtin = resolvePrimaryProductCodeInput(data.barcode);
   const categoryId = await resolveProductCategory(
     db,

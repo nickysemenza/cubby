@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ProductCategory } from "@cubby/shared";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -16,7 +17,7 @@ export function CategoryLabel({ category }: CategoryLabelProps) {
     <EntityRefLink
       entity="productCategory"
       id={category.id}
-      name={category.path.map((node) => node.name).join(" / ")}
+      name={category.path.map((node) => node.name).join(" / ") || category.name}
     />
   );
 }
@@ -38,7 +39,10 @@ export function CategoryLabelById({
   if (category)
     return (
       <CategoryLabel
-        category={{ ...category, feature: category.effectiveFeature }}
+        category={{
+          ...category,
+          path: fieldValueOf(category.fields.path) ?? [],
+        }}
       />
     );
   if (!error && (isLoading || !isComplete)) {

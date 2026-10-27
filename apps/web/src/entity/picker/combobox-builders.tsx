@@ -2,14 +2,23 @@ import { displayImagesField } from "@cubby/schemas/display-images";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
+  fieldValueOf,
+  fieldEnvelopeFor,
+  type ReadableFieldEnvelope,
+} from "@cubby/schemas/field-envelope";
+import {
   type LocationShortcode,
   parseShortcodeFor,
   type ProductShortcode,
   type ShortcodeFor,
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import type { InfLocation, LocationType } from "@cubby/schemas/location";
-import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
+import type { LocationTreeNode, LocationType } from "@cubby/schemas/location";
+import { locationType } from "@cubby/schemas/location";
+import {
+  isServiceProductFeature,
+  productCategoryFeature,
+} from "@cubby/schemas/product-category-fields";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import {
   formatCategoryLabel,
@@ -213,7 +222,8 @@ export const buildProductComboboxItem = (
   product: {
     id: ProductShortcode;
     name: string;
-    brandName: string | null;
+    brandName?: string | null;
+    fields?: Record<string, ReadableFieldEnvelope>;
     category?: ProductCategory | null;
     coverImageUrl?: string | null;
     displayImages?: Array<{
@@ -248,7 +258,14 @@ export const buildProductComboboxItem = (
     product.displayImages?.[0]?.url ??
     null;
   const base = productPickerBase(product, coverImageUrl);
-  return isServiceProductCategory(product.category) || !ledger || !onHand
+  const feature = fieldEnvelopeFor(product, "categoryFeature");
+  return isServiceProductFeature(
+    feature
+      ? productCategoryFeature.nullable().parse(fieldValueOf(feature))
+      : null,
+  ) ||
+    !ledger ||
+    !onHand
     ? base
     : withProductInventoryPresentation(base, ledger, onHand, intent);
 };
@@ -286,8 +303,11 @@ function productPickerBase(
   product: ProductPickerInput,
   coverImageUrl: string | null,
 ): ComboboxItem<ProductShortcode> {
+  const brand = fieldEnvelopeFor(product, "brandName");
   const secondary = [
-    product.brandName,
+    brand
+      ? z.string().nullable().parse(fieldValueOf(brand))
+      : product.brandName,
     product.category ? formatCategoryLabel(product.category) : null,
   ]
     .filter(Boolean)
@@ -400,11 +420,16 @@ function withProductInventoryPresentation(
 export const buildLocationComboboxItem = (location: {
   id: LocationShortcode;
   name: string;
-  type: LocationType | null;
+  type?: LocationType | null;
+  fields?: Record<string, ReadableFieldEnvelope>;
   aliases?: string[] | null;
   ancestors?: Array<{ id?: string; name: string }> | null;
   coverImage?: { url: string } | null;
 }): ComboboxItem<LocationShortcode> => {
+  const type = fieldEnvelopeFor(location, "type");
+  const currentType = type
+    ? locationType.nullable().parse(fieldValueOf(type))
+    : (location.type ?? null);
   const ancestors = location.ancestors;
   const rootAncestor = ancestors?.[0];
   const root = {
@@ -423,12 +448,12 @@ export const buildLocationComboboxItem = (location: {
         ? [ancestors.map((ancestor) => ancestor.name).join(" › ")]
         : []),
     ],
-    secondary: location.type ?? undefined,
+    secondary: currentType ?? undefined,
     thumb: {
       imageUrl: location.coverImage?.url ?? null,
       fallback: (
         <LocationIcon
-          type={location.type}
+          type={currentType}
           product={null}
           size={14}
           className="text-muted-foreground"
@@ -451,10 +476,13 @@ export const buildLocationComboboxItem = (location: {
  * search endpoint returns.
  */
 export const buildLocationComboboxItemFromDetail = (
-  location: InfLocation,
+  location: LocationTreeNode,
 ): ComboboxItem<LocationShortcode> =>
   buildLocationComboboxItem({
-    ...location,
+    id: location.id,
+    name: location.name,
+    aliases: location.aliases,
+    fields: { type: location.fields.type },
     // `locationToSegments` is root→leaf and includes the location itself.
     ancestors: locationToSegments(location).slice(0, -1),
     coverImage: resolveLocationPrimaryVisual(location).image,

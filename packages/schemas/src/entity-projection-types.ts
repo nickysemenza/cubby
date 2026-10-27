@@ -57,6 +57,7 @@ export type GeneratedEntityFieldModel<E extends string = Entity> = {
     label: string;
     description: DeclaredField["description"];
     readKey: string | null;
+    storedKey: NonNullable<DeclaredField["storedKey"]> | null;
     reference: DeclaredField["reference"];
     explanation: DeclaredField["explanation"];
     resolution: {
@@ -468,6 +469,7 @@ type EntityFilterDescriptorMetadata = {
 
 type EntityPortSourceRoster = {
   repository: EntityPortSourceRef | null;
+  fieldEnvelope: EntityPortSourceRef | null;
 
   references: {
     label: EntityPortSourceRef | null;

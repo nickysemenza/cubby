@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { BowlFoodIcon } from "@phosphor-icons/react/dist/csr/BowlFood";
 import { ForkKnifeIcon } from "@phosphor-icons/react/dist/csr/ForkKnife";
@@ -51,15 +52,11 @@ function FoodNutrientDensity({
       canSeeStoredMappings={false}
       nutrients={food.nutritionInfo.nutrientsPer100}
       mappings={mappings}
-      price={
-        pricedProduct
-          ? (pricedProduct.pricing.effectivePrice ?? pricedProduct.price)
-          : null
-      }
+      price={pricedProduct ? fieldValueOf(pricedProduct.fields.price) : null}
       mappingProduct={{
         id: mappingProduct.id,
         name: mappingProduct.name,
-        brandName: mappingProduct.brandName,
+        brandName: fieldValueOf(mappingProduct.fields.brandName),
       }}
     />
   );
@@ -90,8 +87,7 @@ export const USDAFoodDetail: React.FC<{
   // only to give the "needs a weight mapping" nudge somewhere to link when
   // nothing is priced yet — that branch never renders a $ figure regardless.
   const pricedProduct = useMemo(
-    () =>
-      linkedProducts.find((p) => (p.pricing.effectivePrice ?? p.price) != null),
+    () => linkedProducts.find((p) => fieldValueOf(p.fields.price) != null),
     [linkedProducts],
   );
   const nutrientDensityMappings = useMemo(
@@ -110,8 +106,7 @@ export const USDAFoodDetail: React.FC<{
             // product's own label override; the food's own nutrients are
             // what's being inspected here regardless.
             labelNutrition: null,
-            price: pricedProduct.price,
-            pricing: pricedProduct.pricing,
+            price: fieldValueOf(pricedProduct.fields.price),
           })
         : [],
     [pricedProduct, food],

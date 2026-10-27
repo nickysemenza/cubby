@@ -14,13 +14,14 @@ import { declaredClassificationPolicies } from "@cubby/schemas/classification-fi
  * with `ih` plus their nesting depth, so nested chains never shadow the row
  * they read.
  */
-import type { Entity } from "@cubby/schemas/entity";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import {
   type GeneratedInherit,
   generatedEntityListFields,
 } from "@cubby/schemas/entity-list-fields";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { type SQL, sql } from "drizzle-orm";
+import { z } from "zod";
 
 /** The row an effective value reads: a table alias in scope, or its id. */
 export type InheritedRow = string | { readonly id: SQL };
@@ -190,17 +191,18 @@ const decisionSql = (
   { field, column }: Readonly<{ field: string; column: string }>,
   alias: string,
   depth: number,
+  detail = false,
 ): SQL => {
   const chain = chainOf(entity, field);
   if (chain === null) {
     const value = ref(alias, column);
-    return sql`SELECT ${value} AS v, ${ref(alias, "id")} AS src WHERE ${value} IS NOT NULL`;
+    return sql`SELECT ${value} AS v, ${ref(alias, "id")} AS src${detail ? sql`, ${literal(entity)} AS source_entity` : sql``} WHERE ${value} IS NOT NULL`;
   }
   const decided = name(`ih${depth}d`);
-  return sql`SELECT ${decided}.v, ${decided}.src FROM (SELECT 0 AS prio, ${ownValue(chain, alias)} AS v, ${ref(alias, "id")} AS src WHERE ${ownDecides(chain, alias)}${sql.join(
+  return sql`SELECT ${decided}.v, ${decided}.src${detail ? sql`, ${decided}.source_entity` : sql``} FROM (SELECT 0 AS prio, ${ownValue(chain, alias)} AS v, ${ref(alias, "id")} AS src${detail ? sql`, ${literal(entity)} AS source_entity` : sql``} WHERE ${ownDecides(chain, alias)}${sql.join(
     chain.from.map(
       (source, index) =>
-        sql` UNION ALL ${sourceSql(entity, chain, source, index + 1, alias, depth)}`,
+        sql` UNION ALL ${sourceSql(entity, chain, source, index + 1, alias, depth, detail)}`,
     ),
     sql``,
   )}) ${decided} ORDER BY ${decided}.prio LIMIT 1`;
@@ -214,6 +216,7 @@ const sourceSql = (
   prio: number,
   alias: string,
   depth: number,
+  detail = false,
 ): SQL => {
   const rank = sql.raw(String(prio));
   switch (source.kind) {
@@ -242,7 +245,7 @@ const sourceSql = (
           : fieldValueSql(entity, source.whileSame, alias, depth + 1),
         depth + 1,
       );
-      return sql`SELECT ${rank} AS prio, ${found}.v, ${found}.src FROM (
+      return sql`SELECT ${rank} AS prio, ${found}.v, ${found}.src${detail ? sql`, ${literal(entity)} AS source_entity` : sql``} FROM (
         WITH RECURSIVE ${name(walk)} AS (
           SELECT ${select(node)}, 1 AS ih_depth, array_remove(ARRAY[${ref(alias, "id")}, ${ref(node, "id")}], NULL) AS ih_visited
           FROM ${table} ${name(node)}
@@ -260,7 +263,7 @@ const sourceSql = (
     case "effective": {
       const path = pathFrom(entity, source.hops, alias, depth, `s${prio}p`);
       const decided = name(`ih${depth}e${prio}`);
-      return sql`SELECT ${rank} AS prio, ${decided}.v, ${decided}.src FROM ${path.tables} CROSS JOIN LATERAL (${decisionSql(path.target, source, path.leaf, depth + 1)}) ${decided} WHERE ${path.where}${source.when ? sql` AND ${ref(path.leaf, source.when.column)} = ${literal(source.when.value)}` : sql``}`;
+      return sql`SELECT ${rank} AS prio, ${decided}.v, ${decided}.src${detail ? sql`, ${decided}.source_entity` : sql``} FROM ${path.tables} CROSS JOIN LATERAL (${decisionSql(path.target, source, path.leaf, depth + 1, detail)}) ${decided} WHERE ${path.where}${source.when ? sql` AND ${ref(path.leaf, source.when.column)} = ${literal(source.when.value)}` : sql``}`;
     }
   }
 };
@@ -271,13 +274,14 @@ const fallbackRowSql = (
   chain: GeneratedInherit,
   alias: string,
   depth: number,
+  detail = false,
 ) => {
   const row = name(`ih${depth}u`);
   return {
     row,
     from: sql`(${sql.join(
       chain.from.map((source, index) =>
-        sourceSql(entity, chain, source, index + 1, alias, depth),
+        sourceSql(entity, chain, source, index + 1, alias, depth, detail),
       ),
       sql` UNION ALL `,
     )}) ${row} WHERE ${applicableSql(entity, inheritedFieldOfColumn(entity, chain.column) ?? chain.column, alias)} ORDER BY ${row}.prio LIMIT 1`,
@@ -348,6 +352,60 @@ export const inheritedFieldSql = <T = unknown>(
   atRow(entity, row, (alias, depth) =>
     inheritedSql(entity, requireChain(entity, field), alias, depth),
   ) as SQL<T>;
+
+/** Resolver facts only; callers hydrate sources and validate the field's read value. */
+const inheritedDecisionSource = z.object({
+  entityKind: entitySchema,
+  entityId: z.string(),
+});
+export const inheritedFieldDecisionSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("value"),
+    value: z.json(),
+    source: inheritedDecisionSource.nullable(),
+  }),
+  z.object({
+    kind: z.literal("empty"),
+    reason: z.enum(["explicit_none", "unset", "not_applicable"]),
+    source: inheritedDecisionSource.nullable(),
+  }),
+]);
+export type InheritedFieldDecision = z.output<
+  typeof inheritedFieldDecisionSchema
+>;
+
+/**
+ * On-demand counterfactual after clearing only this field's local assignment.
+ * The same deciding-source traversal carries terminal identity through nested
+ * effective hops; ordinary value queries do not build this JSON projection.
+ */
+export const inheritedFieldDecisionSql = (
+  entity: Entity,
+  field: string,
+  row?: InheritedRow,
+): SQL<InheritedFieldDecision> =>
+  // SAFETY: SQL constructs the discriminated shape parsed by the exported schema.
+  atRow(entity, row, (alias, depth) => {
+    const chain = requireChain(entity, field);
+    const { from, row: decided } = fallbackRowSql(
+      entity,
+      chain,
+      alias,
+      depth,
+      true,
+    );
+    const source = sql`jsonb_build_object('entityKind', ${decided}.source_entity, 'entityId', ${decided}.src)`;
+    const absent =
+      chain.empty === "array"
+        ? sql`jsonb_build_object(${literal("kind")}, 'value', 'value', '[]'::jsonb, ${literal("source")}, NULL)`
+        : sql`jsonb_build_object(${literal("kind")}, ${literal(inheritedFieldDecisionSchema.options[1].shape.kind.value)}, 'reason', ${literal(inheritedFieldDecisionSchema.options[1].shape.reason.enum.unset)}, ${literal("source")}, NULL)`;
+    return sql`CASE WHEN NOT ${applicableSql(entity, field, alias)}
+      THEN jsonb_build_object(${literal("kind")}, ${literal(inheritedFieldDecisionSchema.options[1].shape.kind.value)}, 'reason', ${literal(inheritedFieldDecisionSchema.options[1].shape.reason.enum.not_applicable)}, ${literal("source")}, NULL)
+      ELSE COALESCE((SELECT CASE WHEN ${decided}.v IS NULL
+        THEN jsonb_build_object(${literal("kind")}, ${literal(inheritedFieldDecisionSchema.options[1].shape.kind.value)}, 'reason', ${literal(inheritedFieldDecisionSchema.options[1].shape.reason.enum.explicit_none)}, ${literal("source")}, ${source})
+        ELSE jsonb_build_object(${literal("kind")}, 'value', 'value', to_jsonb(${decided}.v), ${literal("source")}, ${source})
+        END FROM ${from}), ${absent}) END`;
+  }) as SQL<InheritedFieldDecision>;
 
 /**
  * Which declared source supplies the fallback and the record that decided

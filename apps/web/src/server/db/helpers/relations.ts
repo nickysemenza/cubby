@@ -53,7 +53,6 @@ import {
   mealRecipe,
   product,
   productUnitMappings,
-  recipe,
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
@@ -335,18 +334,10 @@ export const relations = {
         // `inventoryEntry`, which is stock held somewhere. Scalar columns only;
         // the detail table renders a name, a type and a link.
         locations: { where: notDeleted(location) },
-        // A product may be the physical copy for many cookbooks. Filter both
-        // sides at the query boundary so the detail projection cannot expose a
-        // deleted book or count deleted recipes.
+        // Cookbook identities only; recipe counts belong to their owning report.
         cookbooks: {
           where: notDeleted(cookbook),
           orderBy: asc(cookbook.name),
-          with: {
-            recipes: {
-              where: notDeleted(recipe),
-              columns: { deletedAt: true },
-            },
-          },
         },
         inventoryEntry: {
           where: notDeleted(inventoryEntry),

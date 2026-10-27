@@ -94,6 +94,7 @@ import {
   ensureRun,
 } from "~/server/domains/run/repo/ensure-run";
 import { appErrorFromUnknown, createAppError } from "~/server/errors/app-error";
+import { readPublicEntityRow } from "~/server/generic/derived/service/public-read";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
 import {
@@ -665,12 +666,17 @@ export async function setCookbookProductWorkflow(
   const productId = input.productId
     ? await productShortcodes.one(context.db, input.productId)
     : null;
-  return setCookbookProduct(
-    context.db,
-    context.actorContext,
-    cookbookId,
-    productId,
-  );
+  return readPublicEntityRow({
+    db: context.db,
+    entity: "cookbook",
+    projection: "output",
+    row: await setCookbookProduct(
+      context.db,
+      context.actorContext,
+      cookbookId,
+      productId,
+    ),
+  });
 }
 
 type DeleteCookbookInput = z.output<typeof cookbookIdInput>;

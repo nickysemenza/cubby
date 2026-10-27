@@ -1,3 +1,4 @@
+import { optionalFieldResolutionsSchema } from "../field-resolution";
 import {
   detailSummarySchema,
   detailSurfacesSchema,
@@ -273,6 +274,7 @@ const buildMetadataSchemas = () => {
   const entityFieldValidationMetadataSchema = z
     .object({
       read: declaredZodSchema.nullable().optional().default(null),
+      publicRead: declaredZodSchema.optional(),
       create: declaredZodSchema.nullable().optional().default(null),
       update: declaredZodSchema.nullable().optional().default(null),
     })
@@ -689,6 +691,8 @@ const buildMetadataSchemas = () => {
       labelOverride: nonEmptyString().optional(),
       description: nonEmptyString().nullable().optional().default(null),
       readKeyOverride: nonEmptyString().nullable().optional(),
+      /** Existing DerivedValue key supplying this public field snapshot. */
+      storedKey: nonEmptyString().optional(),
       reference: entityFieldReferenceMetadataSchema
         .nullable()
         .optional()
@@ -762,7 +766,7 @@ const buildMetadataSchemas = () => {
        * may differ from stored intent. UI cleanup actions execute these exact
        * ordinary update patches; `inherit` declares the effective value that
        * reads, filters, sorts and groups compile (`effectiveFieldSql`), and
-       * repositories own `fieldResolutions` provenance. */
+       * repositories own internal resolver evidence. */
       resolution: z
         .strictObject({
           /** Absent for a field that only inherits: clients get no actions. */
@@ -820,8 +824,8 @@ const buildMetadataSchemas = () => {
             .optional()
             .default(null),
           redundancy: z.enum(["eligible", "intentional"]).default("eligible"),
-          /** "Confirm" pins the inherited value: this patch plus the field
-           * set to `fieldResolutions[key].fallbackValue`. Absent = no action. */
+          /** "Keep this value" pins the selected effective value: this patch plus
+           * the current result under the field key. Absent = no action. */
           confirm: z
             .record(z.string(), z.json())
             .nullable()
@@ -2543,6 +2547,29 @@ const buildMetadataSchemas = () => {
       mcpOutput: sourceRefMetadataSchema.optional(),
       mcpList: sourceRefMetadataSchema.optional(),
       mcpDetail: sourceRefMetadataSchema.optional(),
+      embedded: z
+        .array(
+          z
+            .object({
+              path: z.array(nonEmptyString()).min(1),
+              entity: nonEmptyString(),
+              recursive: z.boolean().optional(),
+              projections: z
+                .array(
+                  z.enum([
+                    "output",
+                    "list",
+                    "detail",
+                    "mcpOutput",
+                    "mcpList",
+                    "mcpDetail",
+                  ]),
+                )
+                .min(1),
+            })
+            .strict(),
+        )
+        .optional(),
     })
     .strict();
 
@@ -2945,6 +2972,11 @@ const buildMetadataSchemas = () => {
       ports: z
         .object({
           repository: sourceRefMetadataSchema.nullable(),
+          /** Pure final projection over selected envelopes and already loaded facts. */
+          fieldEnvelope: sourceRefMetadataSchema
+            .nullable()
+            .optional()
+            .default(null),
           references: z
             .object({
               label: sourceRefMetadataSchema.nullable(),
@@ -3202,9 +3234,9 @@ type OwnCheckId<D> = D extends {
 export type ReadSchemaFacts<D> = Readonly<{
   ownDataCheck: z.ZodEnum<{ [Id in OwnCheckId<D>]: Id }>;
 }>;
-type BaseReadFields<D> = (D extends ReadableDeclaration
-  ? ReadFieldSchemas<D>
-  : {}) &
+type BaseReadFields<D> = {
+  fieldResolutions: typeof optionalFieldResolutionsSchema;
+} & (D extends ReadableDeclaration ? ReadFieldSchemas<D> : {}) &
   (D extends { capabilities: { dataQuality: object } }
     ? { dataQuality: typeof dataQuality }
     : {});
@@ -3254,6 +3286,8 @@ export function defaultReadSchemas<
     : {};
   // SAFETY: the validated keyed field map and raw quality capability exactly mirror BaseReadFields<D>; field instances are retained.
   const base = z.object({
+    // Resolver evidence is internal to raw reads, never an entity field descriptor.
+    fieldResolutions: optionalFieldResolutionsSchema,
     ...fields,
     ...(declaration.capabilities?.dataQuality ? { dataQuality } : {}),
   }) as BaseReadSchema<D>;
@@ -3274,11 +3308,11 @@ export function defineEntity<
 export function defineEntity<const T extends EntityDeclaration>(
   declaration: ValidDeclaration<T>,
 ): T & { readSchemas: DefaultReadSchemas<T> };
-export function defineEntity(
-  declaration: EntityDeclaration,
+export function defineEntity<const T extends EntityDeclaration>(
+  declaration: T,
   compose?: (
-    base: z.ZodObject,
-    facts: ReadSchemaFacts<EntityDeclaration>,
+    base: BaseReadSchema<T>,
+    facts: ReadSchemaFacts<T>,
   ) => RawReadSchemas,
 ): EntityDeclaration & { readSchemas: RawReadSchemas } {
   const schemas = defaultReadSchemas(declaration);
@@ -3339,7 +3373,7 @@ type ReadableDeclaration = {
       key: string;
       readKeyOverride?: string | null;
       readKey?: string | null;
-      validation?: { read?: z.ZodType | null };
+      validation?: { read?: z.ZodType | null; publicRead?: z.ZodType };
     }[];
     output: readonly string[];
   };
@@ -3469,6 +3503,40 @@ export function fieldSchemasOf<
     update: modeFieldSchemas(definition, "update"),
     read: defaultReadSchemas(definition).output.shape,
   };
+}
+
+type PublicReadFieldSchemas<D extends ReadableDeclaration> = {
+  [
+    F in D["model"]["fields"][number] as F extends {
+      validation: { publicRead: z.ZodType };
+    }
+      ? F extends { readKeyOverride: infer K extends string }
+        ? K
+        : F extends { readKey: infer K extends string }
+          ? K
+          : F["key"]
+      : never
+  ]: F extends { validation: { publicRead: infer S extends z.ZodType } }
+    ? S
+    : never;
+};
+
+/** Explicit outward projections leave repository calculation inputs intact. */
+export function publicReadFieldSchemas<const D extends ReadableDeclaration>(
+  definition: D,
+): PublicReadFieldSchemas<D> {
+  const entries = definition.model.fields.flatMap((field) =>
+    field.validation?.publicRead
+      ? [
+          [
+            field.readKeyOverride ?? field.readKey ?? field.key,
+            field.validation.publicRead,
+          ],
+        ]
+      : [],
+  );
+  // SAFETY: only declared publicRead schemas enter the map, under their exact declared read key.
+  return Object.fromEntries(entries) as PublicReadFieldSchemas<D>;
 }
 
 /** Compose domain projections from the same declared fields without importing generated code. */

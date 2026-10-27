@@ -1307,7 +1307,27 @@ describe("record suggestions", () => {
       seed: 1,
       overrides: {
         id: record.id,
-        tags: ["ecosystem", "mount"],
+        fields: {
+          tags: {
+            current: {
+              assignment: {
+                kind: "value",
+                value: ["ecosystem", "mount"],
+                ownership: { kind: "record" },
+              },
+            },
+            result: {
+              kind: "live",
+              decision: {
+                outcome: {
+                  kind: "value",
+                  value: ["ecosystem", "mount"],
+                },
+                provenance: { kind: "own", ownership: { kind: "record" } },
+              },
+            },
+          },
+        },
       },
     });
     render(
@@ -1474,16 +1494,25 @@ describe("record suggestions", () => {
         operations={operations}
         readRecord={async () => ({
           ...record,
-          fieldResolutions: {
+          fields: {
             trade: {
-              mode: "inherit",
-              storedValue: null,
-              value: "electrical",
-              fallbackValue: "electrical",
-              source: "Project default",
-              sourceEntity: null,
-              matchesFallback: true,
-              canReset: false,
+              current: {
+                assignment: { kind: "inherit" },
+                controls: {
+                  kind: "editable",
+                  canSetNone: true,
+                  canConfirm: true,
+                  reset: { kind: "unavailable" },
+                },
+              },
+              result: {
+                kind: "live",
+                decision: {
+                  outcome: { kind: "value", value: "electrical" },
+                  provenance: { kind: "default", source: null },
+                },
+              },
+              work: { kind: "idle" },
             },
           },
         })}
@@ -1606,16 +1635,41 @@ describe("record suggestions", () => {
       id: testShortcode("task", "redundant"),
       name: "Replace electrical panel",
       trade: "plumbing",
-      fieldResolutions: {
+      fields: {
         trade: {
-          mode: "explicit" as const,
-          storedValue: "plumbing",
-          value: "plumbing",
-          fallbackValue: "electrical",
-          source: "Task override",
-          sourceEntity: null,
-          matchesFallback: false,
-          canReset: true,
+          current: {
+            assignment: {
+              kind: "value",
+              value: "plumbing",
+              ownership: { kind: "record" },
+            },
+            controls: {
+              kind: "editable",
+              canSetNone: true,
+              canConfirm: false,
+              reset: {
+                kind: "available",
+                preview: {
+                  kind: "ready",
+                  result: {
+                    kind: "live",
+                    decision: {
+                      outcome: { kind: "value", value: "electrical" },
+                      provenance: null,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "value", value: "plumbing" },
+              provenance: { kind: "own", ownership: { kind: "record" } },
+            },
+          },
+          work: { kind: "idle" },
         },
       },
     };
@@ -1671,13 +1725,23 @@ describe("record suggestions", () => {
       }),
     };
     const resolution = {
-      storedValue: null,
-      value: null,
-      fallbackValue: null,
-      source: "Purchase default",
-      sourceEntity: null,
-      matchesFallback: false,
-      canReset: false,
+      current: {
+        assignment: { kind: "inherit" },
+        controls: {
+          kind: "editable",
+          canSetNone: true,
+          canConfirm: false,
+          reset: { kind: "unavailable" },
+        },
+      },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "empty", reason: "unset" },
+          provenance: null,
+        },
+      },
+      work: { kind: "idle" },
     };
     render(
       <RecordSuggestionsProvider
@@ -1689,9 +1753,22 @@ describe("record suggestions", () => {
             lineKind: "principal",
             projectId: null,
             trade: null,
-            fieldResolutions: {
-              projectId: { ...resolution, mode: "inherit" },
-              trade: { ...resolution, mode: "none" },
+            fields: {
+              projectId: resolution,
+              trade: {
+                ...resolution,
+                current: {
+                  ...resolution.current,
+                  assignment: { kind: "none" },
+                },
+                result: {
+                  kind: "live",
+                  decision: {
+                    outcome: { kind: "empty", reason: "explicit_none" },
+                    provenance: { kind: "own", ownership: { kind: "record" } },
+                  },
+                },
+              },
             },
           },
         ]}

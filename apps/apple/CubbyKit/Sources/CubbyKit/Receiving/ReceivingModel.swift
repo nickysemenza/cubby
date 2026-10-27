@@ -246,10 +246,23 @@ extension CubbyClient: ReceivingService {
         return ReceivingSnapshot(
             productID: productID,
             productName: productRow?.title ?? productID.rawValue,
-            stock: loaded.stock.map {
-                ReceivingStock(
-                    id: $0.id, locationID: $0.locationId, locationName: $0.locationName,
-                    value: $0.amount.value, unit: $0.amount.unit)
+            stock: try loaded.stock.map { entry in
+                let raw = try JSONValue(encoding: entry)
+                let amountField = FieldEnvelope.of(raw, key: "amount")
+                let locationField = FieldEnvelope.of(raw, key: "locationId")
+                guard let amountValue = amountField?.effectiveValue,
+                    let locationValue = locationField?.effectiveValue
+                else {
+                    throw UnsupportedNativeResponse(
+                        context: amountField?.failure ?? locationField?.failure
+                            ?? "Inventory stock amount or location is unavailable",
+                        raw: raw)
+                }
+                let amount = try amountValue.decoded(Amount.self)
+                let locationID = try locationValue.decoded(LocationCode.self)
+                return ReceivingStock(
+                    id: entry.id, locationID: locationID, locationName: entry.locationName,
+                    value: amount.value, unit: amount.unit)
             },
             matches: loaded.matches.map {
                 ReceivingMatch(

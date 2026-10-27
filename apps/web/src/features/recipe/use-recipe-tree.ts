@@ -1,7 +1,8 @@
-import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
-import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
+import type { RecipeGraphOut } from "@cubby/schemas/recipe";
 import { useMemo } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import type { RecipeCostingIngredient } from "~/lib/recipe-costing";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
 
 import { getIngredientName } from "../../entity/presentation/recipe-utils";
@@ -24,7 +25,7 @@ import { WASM_YIELD_PORTS } from "./yield-ports";
  */
 export function useRecipeTree(
   scaledRecipe: RecipeOut,
-  ingMap: Record<string, IngredientWithFoodLeanOut> | null,
+  ingMap: Record<string, RecipeCostingIngredient> | null,
   recipeMap: Record<string, RecipeGraphOut>,
   enabled: boolean,
 ) {
@@ -49,3 +50,5 @@ export function useRecipeTree(
 
   return { tree, costingById };
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

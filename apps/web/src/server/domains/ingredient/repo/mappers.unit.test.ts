@@ -1,8 +1,6 @@
-import {
-  ingredientOut,
-  ingredientWithRecipesAndProductOut,
-} from "@cubby/schemas/ingredient";
-import { productWithMappingsOut } from "@cubby/schemas/product";
+import { rawIngredientWithRecipesAndProduct as ingredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient-raw-read";
+import { rawIngredientOutput as ingredientOut } from "@cubby/schemas/ingredient-raw-read";
+import { rawProductWithMappings } from "@cubby/schemas/product-raw-read";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { productRowFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
@@ -233,7 +231,7 @@ describe("ingredient product mappers", () => {
     expect(result.images).toHaveLength(1);
     expect(result.externalIds).toHaveLength(1);
     expect(result.unitMappings).toHaveLength(1);
-    expect(productWithMappingsOut.parse(result)).toEqual(result);
+    expect(rawProductWithMappings.parse(result)).toEqual(result);
   });
 
   it("maps lean ingredient products with empty ancillary arrays", () => {
@@ -262,7 +260,7 @@ describe("ingredient product mappers", () => {
       externalIds: [],
       unitMappings: [{ id: UNIT_MAPPING_ID }],
     });
-    expect(productWithMappingsOut.parse(result)).toEqual(result);
+    expect(rawProductWithMappings.parse(result)).toEqual(result);
   });
 
   it("maps full ingredient rows without leaking DB-only recipe fields", async () => {

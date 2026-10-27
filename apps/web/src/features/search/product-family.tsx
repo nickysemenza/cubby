@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   SearchDestination,
   SearchHit,
@@ -11,6 +12,8 @@ import { type ReactNode, useCallback, useState } from "react";
 import { enumFieldLabel } from "~/entity/display/enum-field-display";
 import { entities } from "~/entity/entities";
 import { cn } from "~/lib/utils";
+import { FieldRecordValue } from "~/ui/derived/record-value";
+import { NoneValue } from "~/ui/primitives/none-value";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 
 import {
@@ -38,14 +41,23 @@ interface ProductFamilyChild {
   /** Placements show a pin; kit contents and matched records their media. */
   media: SearchDestination | null;
   title: string;
-  detail: string;
+  detail: ReactNode;
   /** The placement's shortcode; matched records already name theirs. */
   code: string | null;
   match: SearchHit | null;
 }
 
-const placementDetail = (placement: SearchInventoryPlacement) =>
-  `${tryFormatAmount(placement.amount)} · ${enumFieldLabel("inventory", "placement", placement.placement)}`;
+const placementDetail = (placement: SearchInventoryPlacement) => {
+  const amount = fieldValueOf(placement.fields.amount);
+  return (
+    <>
+      <FieldRecordValue record={placement} field="amount">
+        {amount === null ? <NoneValue /> : tryFormatAmount(amount)}
+      </FieldRecordValue>{" "}
+      · {enumFieldLabel("inventory", "placement", placement.placement)}
+    </>
+  );
+};
 
 export const productFamilyHasChildren = (group: ProductSearchGroup) =>
   group.placements.length > 0 ||
@@ -128,13 +140,14 @@ export function productFamilyChildren(
         },
         media: component,
         title: component.title,
-        detail: [
-          componentQuantity > 1
-            ? `${componentQuantity}× kit content`
-            : "Kit content",
-          placement.locationPath,
-          placementDetail(placement),
-        ].join(" · "),
+        detail: (
+          <>
+            {componentQuantity > 1
+              ? `${componentQuantity}× kit content`
+              : "Kit content"}{" "}
+            · {placement.locationPath} · {placementDetail(placement)}
+          </>
+        ),
         code: placement.id,
         match: null,
       }),

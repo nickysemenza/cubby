@@ -49,9 +49,18 @@ describe("purchase reconciliation statuses", () => {
         purchase={fromPartial<
           Parameters<typeof FinancialSettlementStatus>[0]["purchase"]
         >({
-          financialReconciliation: {
-            status: "match",
-            transactionCount: 2,
+          fields: {
+            financialReconciliation: {
+              result: {
+                kind: "live",
+                decision: {
+                  outcome: {
+                    kind: "value",
+                    value: { status: "match", transactionCount: 2 },
+                  },
+                },
+              },
+            },
           },
         })}
       />,

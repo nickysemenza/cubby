@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { displayImagesField } from "./display-images";
-import { derivedSidecar } from "./derived-value";
 import { entityAttachmentRoleValues } from "./entity-attachment";
 import { detailBreadcrumbSchema } from "./entity-detail-summary";
 import { imageOut } from "./entity-definitions/field-primitives";
@@ -17,7 +16,6 @@ export const entityAttachmentList = z.array(entityAttachmentRead);
 
 const listMediaFields = z.object({ displayImages: displayImagesField });
 const detailMediaFields = z.object({
-  derived: derivedSidecar,
   displayImages: displayImagesField,
   attachments: entityAttachmentList,
   /** The code a read asked for when it was a merged-away code (ADR 0006). */

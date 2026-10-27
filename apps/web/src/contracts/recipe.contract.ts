@@ -175,20 +175,23 @@ const recipeLineReparseOut = z.object({
   changed: z.array(z.enum(["amount", "modifier", "name"])),
 });
 
+export const recipeGraphRead = recipeGraphListOut.element;
+export const recipeDuplicateRead = recipeWithSideEffectsOut;
+
 export const recipeContract = defineContract(
   "recipe",
   {
     getManyByIDs: query({
       note: "entity_read.get per id, or entity_read.list with an ids filter on recipes",
       input: recipeIdsInput,
-      output: recipeGraphListOut,
+      output: z.array(recipeGraphRead),
       cache: { tags: [["recipe"]] },
     }),
     duplicate: mutation({
       note: "entity_read.get the recipe, then entity.create the copy",
       command: { label: "Duplicate recipe", confirmation: null },
       input: recipeIdInput,
-      output: recipeWithSideEffectsOut,
+      output: recipeDuplicateRead,
       invalidates: ["recipeList"],
     }),
     getIngredientCooccurrence: query({

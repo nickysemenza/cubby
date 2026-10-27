@@ -1,18 +1,17 @@
+import { rawSearchInventoryPlacement } from "./inventory-raw-read";
+import { withFieldEnvelopes } from "./field-envelope";
+import {
+  inventoryFieldEnvelopeFields,
+  inventoryPublicReadFields,
+} from "./generated/entity-field-envelope-fields.inventory.gen";
 import { z } from "zod";
-import { inventoryPlacementValues } from "@cubby/shared";
-import { amount } from "./codec";
 import {
   embeddableEntities,
   type EmbeddableEntity,
   searchableEntities,
   type ShortcodeEntity,
 } from "./entity-manifest";
-import {
-  anyShortcodeSchema,
-  inventoryShortcode,
-  locationShortcode,
-  nonEmptyTuple,
-} from "./identifiers";
+import { anyShortcodeSchema, nonEmptyTuple } from "./identifiers";
 import {
   activeRelatednessPairKeys,
   embeddingReadinessSchema,
@@ -166,13 +165,14 @@ export const searchDestinationSchema = searchHitSchema.pick({
 });
 export type SearchDestination = z.infer<typeof searchDestinationSchema>;
 
-export const searchInventoryPlacementSchema = z.object({
-  id: inventoryShortcode,
-  locationId: locationShortcode,
-  locationPath: z.string(),
-  amount,
-  placement: z.enum(inventoryPlacementValues),
-});
+export const searchInventoryPlacementSchema = withFieldEnvelopes(
+  rawSearchInventoryPlacement,
+  {
+    locationId: inventoryFieldEnvelopeFields.locationId,
+    amount: inventoryFieldEnvelopeFields.amount,
+  },
+  inventoryPublicReadFields,
+);
 export type SearchInventoryPlacement = z.infer<
   typeof searchInventoryPlacementSchema
 >;

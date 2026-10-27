@@ -1,5 +1,5 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { useEffect, useMemo, useRef } from "react";
@@ -11,9 +11,9 @@ import { findNode, pathToNode } from "./arrange-tree-utils";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeBoardProps {
-  roots: InfLocation[];
+  roots: LocationTreeNode[];
   depth: number;
-  unknownRoot: InfLocation | null;
+  unknownRoot: LocationTreeNode | null;
   /** The drilled-to location, from the URL. Undefined = Home. */
   at?: LocationShortcode;
   onSelect: (at: LocationShortcode | undefined) => void;
@@ -21,9 +21,9 @@ interface ArrangeBoardProps {
 
 interface ColumnModel {
   locationId: LocationShortcode | null;
-  headerLocation: InfLocation | null;
-  nodes: InfLocation[];
-  items: InfLocation["inventoryItems"];
+  headerLocation: LocationTreeNode | null;
+  nodes: LocationTreeNode[];
+  items: LocationTreeNode["inventoryItems"];
   activeChildId: LocationShortcode | null;
 }
 
@@ -142,8 +142,8 @@ export function ArrangeBoard({
 }
 
 interface BoardBreadcrumbProps {
-  roots: InfLocation[];
-  home: InfLocation | null;
+  roots: LocationTreeNode[];
+  home: LocationTreeNode | null;
   path: LocationShortcode[];
   /** Jump to a path prefix of the given length (0 = Home). */
   onJump: (prefixLength: number) => void;
@@ -178,7 +178,7 @@ function BoardBreadcrumb({ roots, home, path, onJump }: BoardBreadcrumbProps) {
 }
 
 interface BreadcrumbCrumbProps {
-  roots: InfLocation[];
+  roots: LocationTreeNode[];
   locationId: LocationShortcode | null;
   label: string;
   icon?: React.ReactNode;

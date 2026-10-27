@@ -4,10 +4,15 @@ import {
   financialTransactionShortcode,
   shortcode,
 } from "@cubby/schemas/identifiers";
-import type { ExpenseOut } from "@cubby/schemas/project";
+import {
+  expenseChargeContextPurchaseOut,
+  type ExpenseOut,
+} from "@cubby/schemas/project";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import { composeExpenseSettlementSection } from "./expense-settlement";
 import { composeFinancialSettlementSection } from "./purchase-financial-settlement";
@@ -210,7 +215,12 @@ const context = {
     orderId: "ORD-1001",
     displayLabel: null,
     date: "2026-03-02",
-    vendorId: shortcode("VEN-4K7M"),
+    fields: {
+      vendorId: fieldValueFixture(
+        expenseChargeContextPurchaseOut.shape.fields.shape.vendorId,
+        shortcode("VEN-4K7M"),
+      ),
+    },
     vendorName: "Example Hardware",
   },
   siblings: [line("5N8P", 20), line("6Q9R", null)],

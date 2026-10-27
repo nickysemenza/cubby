@@ -1,4 +1,3 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { getTableColumns, getTableName, is } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -30,33 +29,13 @@ const missing = (table: string, columns: readonly string[]) => {
 };
 
 describe("stored derived declarations", () => {
-  it("publishes automatic provenance for every fill entity without a list field", () => {
-    const expected = Object.entries(entityFieldModels)
-      .filter(([, model]) =>
-        model.fields.some(
-          (field) =>
-            field.control?.suggest?.mode === "fill" &&
-            !field.control.suggest.reviewRequired,
-        ),
-      )
-      .map(([entity]) => entity);
-    const declarations = storedDerivedDeclarations().filter(
-      (entry) => entry.key === "automaticFields",
-    );
-    expect(declarations.map((entry) => entry.entity)).toEqual(expected);
-    for (const declaration of declarations) {
-      expect(declaration.publishes).toBe("derivedValue");
-      expect(
-        entityFieldModels[declaration.entity].fields.map((field) => field.key),
-      ).not.toContain("automaticFields");
-      expect(declaration.inputs.map((input) => input.table)).toEqual([
-        declaration.table,
-        "AssessmentState",
-        "Assessment",
-        "Feedback",
-        "AuditLog",
-      ]);
-    }
+  it("keeps current automatic ownership out of the derived cache and trigger targets", () => {
+    expect(
+      storedDerivedDeclarations().filter(
+        (entry) => entry.key === "automaticFields",
+      ),
+    ).toEqual([]);
+    expect(derivedTriggerDdl()).not.toContain("automaticFields");
   });
   it("name only real tables and columns", () => {
     const problems = storedDerivedDeclarations().flatMap((declaration) => [

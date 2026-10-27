@@ -1,9 +1,7 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
-import { imageWithEntitySchema } from "@cubby/schemas/image";
-import { cookbookSummary } from "@cubby/schemas/recipe";
-import { runOut } from "@cubby/schemas/run";
 import { testShortcode } from "@cubby/schemas/testing";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import {
@@ -17,6 +15,7 @@ import {
 import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.gen";
 import { inventoryListItem } from "~/entity/generated/entity-lists.gen";
 import { installFeatures } from "~/features/registry";
@@ -59,35 +58,27 @@ const fixtureOverrides = {
   meal: { recipes: [], totals: emptyTotals, attachments: [] },
   recipe: { totals: emptyTotals, attachments: [] },
   financialTransaction: {
-    status: "posted",
+    status: "posted" as const,
     postedDate: "2026-09-21",
     attachments: [],
   },
   // Candidate rows hydrate product images over the transport; none here.
   wish: { candidates: [], attachments: [] },
-} as const;
-const NO_ATTACHMENTS = { attachments: [] } as const;
+};
+const NO_ATTACHMENTS = { attachments: [] };
 
 /** A schema-valid detail record for any generic detail entity. */
-function recordFor<E extends GenericDetailEntity>(
-  entity: E,
-): DetailRecordOf<E> {
+function recordFor<E extends GenericDetailEntity>(entity: E): DetailRecordOf<E>;
+function recordFor(entity: GenericDetailEntity) {
   const seed = 7;
   const overrides = Object.hasOwn(fixtureOverrides, entity)
     ? fixtureOverrides[entity as keyof typeof fixtureOverrides]
     : NO_ATTACHMENTS;
-  const schema =
-    entity === "image"
-      ? imageWithEntitySchema
-      : entity === "cookbook"
-        ? cookbookSummary
-        : entity === "run"
-          ? runOut
-          : getEntityDetailOutputSchema(entity as never);
+  const schema = getEntityDetailOutputSchema(entity);
   return mock(schema, {
     seed,
-    overrides: overrides as never,
-  }) as DetailRecordOf<E>;
+    overrides,
+  });
 }
 
 // Relation tables and timeline sections read through the transport; canned
@@ -234,7 +225,17 @@ describe("GenericEntityDetail", () => {
     const record = recordFor("task");
     // SAFETY: `testShortcode` mints a valid project shortcode.
     const projectId = testShortcode("project", "PRJ-DECK");
-    const linked = { ...record, projectId, projectName: "Deck rebuild" };
+    const linked = {
+      ...record,
+      projectName: "Deck rebuild",
+      fields: {
+        ...record.fields,
+        projectId: fieldValueFixture(
+          entityFieldEnvelopeSchemas.task.detail.shape.fields.shape.projectId,
+          projectId,
+        ),
+      },
+    };
     render(
       <GenericEntityDetail
         entity="task"
@@ -274,7 +275,16 @@ describe("GenericEntityDetail", () => {
   it("renders a product whose external ids are structured records", () => {
     const product = mock(getEntityDetailOutputSchema("product"), {
       seed: 11,
-      overrides: { attachments: [], images: [], labelImages: [] },
+      overrides: {
+        attachments: [],
+        labelImages: [],
+        fields: {
+          images: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.detail.shape.fields.shape.images,
+            [],
+          ),
+        },
+      },
     });
     expect(product.externalIds.length).toBeGreaterThan(0);
     render(
@@ -295,20 +305,29 @@ describe("GenericEntityDetail", () => {
     // one, so it must not gain a link the list cannot honour exactly. (Brand
     // reads in its summary cell, so the facts omit it.)
     const record = recordFor("product");
+    const fields = entityFieldEnvelopeSchemas.product.detail.shape.fields.shape;
+    const category = categorySummaryFixture("tools");
     const product = {
       ...record,
-      brandName: "Milwaukee",
-      brandId: testShortcode("vendor", "VEN-TEST"),
       model: "2853-20",
-      category: categorySummaryFixture("tools"),
-      tags: [],
+      category,
       externalIds: [],
       ingredient: null,
-      food: null,
-      primaryGtin: null,
       fdc_id: null,
       cookbooks: [],
-      growsPlantId: null,
+      fields: {
+        ...record.fields,
+        brandName: fieldValueFixture(fields.brandName, "Milwaukee"),
+        brandId: fieldValueFixture(
+          fields.brandId,
+          testShortcode("vendor", "VEN-TEST"),
+        ),
+        categoryId: fieldValueFixture(fields.categoryId, category.id),
+        tags: fieldValueFixture(fields.tags, []),
+        food: fieldValueFixture(fields.food, null),
+        primaryGtin: fieldValueFixture(fields.primaryGtin, null),
+        growsPlantId: fieldValueFixture(fields.growsPlantId, null),
+      },
     };
     render(
       <GenericEntityDetail
@@ -341,7 +360,17 @@ describe("GenericEntityDetail", () => {
     const { container, rerender } = render(
       <GenericEntityDetail
         entity="product"
-        record={{ ...record, brandId: testShortcode("vendor", "VEN-TEST") }}
+        record={{
+          ...record,
+          fields: {
+            ...record.fields,
+            brandId: fieldValueFixture(
+              entityFieldEnvelopeSchemas.product.detail.shape.fields.shape
+                .brandId,
+              testShortcode("vendor", "VEN-TEST"),
+            ),
+          },
+        }}
         operations={operations}
       />,
       { wrapper: harness.wrapper },
@@ -372,7 +401,17 @@ describe("GenericEntityDetail", () => {
     rerender(
       <GenericEntityDetail
         entity="product"
-        record={{ ...record, brandId: null }}
+        record={{
+          ...record,
+          fields: {
+            ...record.fields,
+            brandId: fieldValueFixture(
+              entityFieldEnvelopeSchemas.product.detail.shape.fields.shape
+                .brandId,
+              null,
+            ),
+          },
+        }}
         operations={operations}
       />,
     );
@@ -387,12 +426,21 @@ describe("GenericEntityDetail", () => {
     const record = recordFor("product");
     const book = {
       ...record,
-      brandId: testShortcode("vendor", "VEN-TEST"),
-      primaryGtin: "09780306406157",
       externalIds: [],
       ingredient: null,
-      food: null,
       cookbooks: [],
+      fields: {
+        ...record.fields,
+        primaryGtin: fieldValueFixture(
+          entityFieldEnvelopeSchemas.product.detail.shape.fields.shape
+            .primaryGtin,
+          "09780306406157",
+        ),
+        food: fieldValueFixture(
+          entityFieldEnvelopeSchemas.product.detail.shape.fields.shape.food,
+          null,
+        ),
+      },
     };
     const { container } = render(
       <GenericEntityDetail

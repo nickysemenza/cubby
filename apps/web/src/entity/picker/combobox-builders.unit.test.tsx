@@ -1,8 +1,12 @@
+import { locationPickerAncestorOut } from "@cubby/schemas/location";
+import { productResolveCandidateOut } from "@cubby/schemas/product";
 import type { SearchHit } from "@cubby/schemas/search";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render } from "@testing-library/react";
 import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import {
   buildLocationComboboxItem,
@@ -75,6 +79,33 @@ describe("entity picker value adapters", () => {
         { itemId: "shortcode" },
       ),
     ).toMatchObject({ id: vendor, shortcode: vendor });
+  });
+
+  it("reads canonical current picker metadata without requiring raw aliases", () => {
+    expect(
+      buildProductComboboxItem({
+        id: testShortcode("product", "PRD-4K7M"),
+        name: "Synthetic drill",
+        fields: {
+          brandName: fieldValueFixture(
+            productResolveCandidateOut.shape.fields.shape.brandName,
+            "Synthetic maker",
+          ),
+        },
+      }).secondary,
+    ).toBe("Synthetic maker");
+    expect(
+      buildLocationComboboxItem({
+        id: testShortcode("location", "LOC-4K7M"),
+        name: "Synthetic shelf",
+        fields: {
+          type: fieldValueFixture(
+            locationPickerAncestorOut.shape.fields.shape.type,
+            "shelf",
+          ),
+        },
+      }).secondary,
+    ).toBe("shelf");
   });
 
   it("keeps the expense vendor adapter name-valued", () => {
@@ -245,6 +276,12 @@ describe("product stock picker evidence", () => {
       {
         ...base,
         category: categorySummaryFixture("software"),
+        fields: {
+          categoryFeature: fieldValueFixture(
+            productResolveCandidateOut.shape.fields.shape.categoryFeature,
+            "software",
+          ),
+        },
         onHand: { state: "counted", units: 2 },
       },
       "stock",

@@ -29,6 +29,7 @@ import {
 import { projectTreePage } from "~/server/domains/project/repo/tree";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -112,6 +113,28 @@ export async function projectSetToolUsageWorkflow(
   };
 }
 
+async function readDashboard(
+  db: Database,
+  input: Parameters<typeof projectDashboardSummary>[1],
+) {
+  const dashboard = await projectDashboardSummary(db, input);
+  const [projects, nextTasks] = await Promise.all([
+    readPublicEntityRows({
+      db,
+      entity: "project",
+      projection: "detail",
+      rows: dashboard.projects,
+    }),
+    readPublicEntityRows({
+      db,
+      entity: "task",
+      projection: "detail",
+      rows: dashboard.nextTasks,
+    }),
+  ]);
+  return { ...dashboard, projects, nextTasks };
+}
+
 export const projectHandlers = implementOperationDomain(projectContract, {
   getDependencyGraph: async (context, input) =>
     getProjectDependencyGraph(
@@ -127,14 +150,41 @@ export const projectHandlers = implementOperationDomain(projectContract, {
       normalizeSorts(input.sort),
       input.pagination,
     );
-    return buildPaginatedResponse(input.pagination, page.data, page.count, {
+    const rows = await readPublicEntityRows({
+      db: context.db,
+      entity: "project",
+      projection: "list",
+      rows: page.data,
+    });
+    return buildPaginatedResponse(input.pagination, rows, page.count, {
       sums: page.sums,
     });
   },
-  dashboardSummary: (context, input) =>
-    projectDashboardSummary(context.db, input),
-  createFromTasks: (context, input) =>
-    projectCreateFromTasksWorkflow(context.db, input, context.actorContext),
+  dashboardSummary: (context, input) => readDashboard(context.db, input),
+  createFromTasks: async (context, input) => {
+    const created = await projectCreateFromTasksWorkflow(
+      context.db,
+      input,
+      context.actorContext,
+    );
+    const [project, tasks] = await Promise.all([
+      readPublicEntityRows({
+        db: context.db,
+        entity: "project",
+        projection: "output",
+        rows: [created.project],
+      }),
+      readPublicEntityRows({
+        db: context.db,
+        entity: "task",
+        projection: "output",
+        rows: created.tasks,
+      }),
+    ]);
+    const row = project[0];
+    if (!row) throw new Error("Project promotion produced no public Project");
+    return { project: row, tasks };
+  },
   toolSuggestions: async (context, input) =>
     suggestProjectTools(
       context.db,
@@ -148,7 +198,7 @@ export const projectHandlers = implementOperationDomain(projectContract, {
   // schema's "no status condition", so an unscoped call doesn't balloon with
   // completed-project history.
   houseStatus: (context, input) =>
-    projectDashboardSummary(context.db, {
+    readDashboard(context.db, {
       statusScope: [...LIVE_PROJECT_STATUSES],
       ...input,
     }),

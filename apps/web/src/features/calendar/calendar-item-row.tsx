@@ -1,4 +1,5 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { capitalize } from "@cubby/shared";
 
@@ -9,6 +10,7 @@ import { InheritedMarker } from "~/entity/fields/field-resolution";
 import { formatCurrency } from "~/lib/number-format";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { cn } from "~/lib/utils";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { Badge } from "~/ui/primitives/badge";
 
@@ -191,9 +193,11 @@ function CalendarItemCompact({
           {presentation.compactBadge.label}
         </Badge>
       )}
-      {item.kind === "project" && item.projectKind && (
+      {item.kind === "project" && fieldValueOf(item.source.fields.kind) && (
         <span className="shrink-0 text-muted-foreground">
-          {capitalize(item.projectKind)}
+          <FieldRecordValue record={item.source} field="kind">
+            {capitalize(fieldValueOf(item.source.fields.kind) ?? "")}
+          </FieldRecordValue>
         </span>
       )}
       {span && (

@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { entityApi } from "./support/entity-api";
 import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -97,10 +98,15 @@ test("a staged photo and reviewed placement commit one Product with one each", a
       }),
     ),
   );
-  expect(committed.product.images.map((image) => image.id)).toEqual([
-    staged.imageId,
-  ]);
-  expect(committed.inventory.amount).toEqual({ value: 1, unit: "each" });
+  expect(
+    (fieldValueOf(committed.product.fields.images) ?? []).map(
+      (image) => image.id,
+    ),
+  ).toEqual([staged.imageId]);
+  expect(fieldValueOf(committed.inventory.fields.amount)).toEqual({
+    value: 1,
+    unit: "each",
+  });
 
   const product = toWire(productWithFoodOut, "output").parse(
     await json(
@@ -163,7 +169,7 @@ test("scanning a product already on the shelf confirms it without changing its a
   const after = toWire(inventoryWithLocationAndProductOut, "output").parse(
     await json(await entityApi(page.request).get("inventory", entry.id, {})),
   );
-  expect(after.amount).toEqual({ value: 2, unit: "each" });
+  expect(fieldValueOf(after.fields.amount)).toEqual({ value: 2, unit: "each" });
 });
 
 test("a recount commits its resolutions against the loaded snapshot and refuses a stale one", async ({

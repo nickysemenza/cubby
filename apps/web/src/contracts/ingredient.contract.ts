@@ -1,3 +1,4 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import * as schemas from "@cubby/schemas/ingredient";
 import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";
 import { z } from "zod";
@@ -6,9 +7,15 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 const mergeOutput = z.object({
   ingredient: schemas.ingredientOut,
-  mergeSummary: schemas.ingredientMergeOut.shape.mergeSummary,
+  mergeSummary: schemas.mergeSummary,
   sideEffects: mutationSideEffectsSchema,
 });
+
+export const ingredientManyRead = schemas.ingredientWithFoodLeanOut;
+export const ingredientEnrichmentRead = schemas.enrichmentRowOut;
+export type IngredientEnrichmentRead = z.output<
+  typeof ingredientEnrichmentRead
+>;
 
 export const ingredientContract = defineContract(
   "ingredient",
@@ -16,7 +23,7 @@ export const ingredientContract = defineContract(
     getByName: query({
       note: "entity_read.resolve reports ingredientHits by name or alias; entity_read.search on ingredients",
       input: schemas.ingredientNameFilterInput,
-      output: schemas.ingredientWithFoodOut.nullable(),
+      output: entityFieldEnvelopeSchemas.ingredient.detail.nullable(),
       cache: { profile: "stable" },
     }),
     matchNames: query({
@@ -27,7 +34,7 @@ export const ingredientContract = defineContract(
     getManyByIDs: query({
       note: "entity_read.get per id, or entity_read.list with an ids filter on ingredients",
       input: schemas.ingredientIdsInput,
-      output: schemas.ingredientWithFoodLeanListOut,
+      output: z.array(ingredientManyRead),
     }),
     recipeUsages: query({
       exposure: "capability",
@@ -45,7 +52,7 @@ export const ingredientContract = defineContract(
     }),
     enrichmentWorkbench: query({
       input: schemas.enrichmentWorkbenchInput,
-      output: schemas.enrichmentRowsOut,
+      output: z.array(ingredientEnrichmentRead),
     }),
     merge: mutation({
       note: "entity.merge with entity ingredient",

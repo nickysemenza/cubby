@@ -10,15 +10,13 @@ import type {
   LocationId,
   ProductId,
 } from "@cubby/schemas/identifiers";
-import {
-  inventoryDisplayName,
-  inventoryListItemOut,
-} from "@cubby/schemas/inventory";
+import { inventoryDisplayName } from "@cubby/schemas/inventory";
 import type {
   InventoryPlacement,
   inventoryFiltersSchema,
 } from "@cubby/schemas/inventory";
 import { inventoryValuationStatus } from "@cubby/schemas/inventory-fields";
+import { rawInventoryList } from "@cubby/schemas/inventory-raw-read";
 import {
   type PaginationParams,
   type SortParams,
@@ -186,34 +184,27 @@ const inventoryReader = createEntityReader({
   entity: "inventory",
   fetchById: fetchInventoryById,
   fromDB: async (db, row: InventoryEntryDeepDB) => {
-    const [
-      pricing,
-      ownership,
-      dataQualities,
-      locationQualities,
-      valuations,
-      productImages,
-    ] = await Promise.all([
-      loadProductPricing(db, [row.product]),
-      loadInventoryOwnershipTraces(db, [row]),
-      loadDataQualities(db, "inventory", [row.id]),
-      loadDataQualities(db, "location", [row.location.id]),
-      loadStoredInventoryValuations(db, [row.id]),
-      resolveEntityDisplayImageLists(
-        db,
-        [row].map((entry) => ({
-          entityKind: "product",
-          entityId: entry.product.id,
-        })),
-      ),
-    ]);
+    const [pricing, ownership, dataQualities, valuations, productImages] =
+      await Promise.all([
+        loadProductPricing(db, [row.product]),
+        loadInventoryOwnershipTraces(db, [row]),
+        loadDataQualities(db, "inventory", [row.id]),
+
+        loadStoredInventoryValuations(db, [row.id]),
+        resolveEntityDisplayImageLists(
+          db,
+          [row].map((entry) => ({
+            entityKind: "product",
+            entityId: entry.product.id,
+          })),
+        ),
+      ]);
     return dbInventoryEntryToAPI(
       row,
       valuations.get(row.id) ?? null,
       requireLoadedProductPricing(pricing, row.product.id),
       // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
       dataQualities.get(row.id)!,
-      locationQualities.get(row.location.id)!,
       ownership.get(row.id),
       productImages.get(entityRefKey("product", row.product.id)) ?? [],
     );
@@ -399,20 +390,20 @@ export const inventoryentryListRead = async (
           };
         });
         return [
-          bind(inventoryListItemOut.pick({ amount: true }), (row) => ({
+          bind(rawInventoryList.pick({ amount: true }), (row) => ({
             amount: parseInventoryAmount(row),
           })),
-          bind(inventoryListItemOut.pick({ displayName: true }), (row) => ({
+          bind(rawInventoryList.pick({ displayName: true }), (row) => ({
             displayName: inventoryDisplayName({
               productName: row.productName,
               locationName: row.locationName,
             }),
           })),
-          bind(inventoryListItemOut.pick({ valuation: true }), (row) => ({
+          bind(rawInventoryList.pick({ valuation: true }), (row) => ({
             valuation: row.valuation,
           })),
           ownership.fields(
-            inventoryListItemOut.pick({
+            rawInventoryList.pick({
               ownerLedgerPartyId: true,
               effectiveOwnership: true,
               fieldResolutions: true,
@@ -425,7 +416,11 @@ export const inventoryentryListRead = async (
             },
           ),
           references.fields(
-            inventoryListItemOut.pick({ product: true, location: true }),
+            rawInventoryList.pick({
+              product: true,
+              location: true,
+              locationId: true,
+            }),
             (row, loaded) => {
               const entry = loaded.byId.get(row.id);
               if (!entry)
@@ -433,6 +428,10 @@ export const inventoryentryListRead = async (
                   "Inventory product/location references were not loaded",
                 );
               return {
+                locationId: parseShortcodeFor(
+                  "location",
+                  entry.location.shortcode,
+                ),
                 location: {
                   id: parseShortcodeFor("location", entry.location.shortcode),
                   name: entry.location.name,
@@ -497,7 +496,7 @@ export const inventoryentryListSummary = async (
   return { valuation: Number.isNaN(value) ? 0 : value };
 };
 export const inventoryentryList = completeListReader(
-  inventoryListItemOut,
+  rawInventoryList,
   inventoryentryListRead,
 );
 
@@ -607,34 +606,27 @@ const hydrateInventoryEntry = async (
     );
   }
 
-  const [
-    pricing,
-    ownership,
-    dataQualities,
-    locationQualities,
-    valuations,
-    productImages,
-  ] = await Promise.all([
-    loadProductPricing(db, [result.product]),
-    loadInventoryOwnershipTraces(db, [result]),
-    loadDataQualities(db, "inventory", [result.id]),
-    loadDataQualities(db, "location", [result.location.id]),
-    loadStoredInventoryValuations(db, [result.id]),
-    resolveEntityDisplayImageLists(
-      db,
-      [result].map((entry) => ({
-        entityKind: "product",
-        entityId: entry.product.id,
-      })),
-    ),
-  ]);
+  const [pricing, ownership, dataQualities, valuations, productImages] =
+    await Promise.all([
+      loadProductPricing(db, [result.product]),
+      loadInventoryOwnershipTraces(db, [result]),
+      loadDataQualities(db, "inventory", [result.id]),
+
+      loadStoredInventoryValuations(db, [result.id]),
+      resolveEntityDisplayImageLists(
+        db,
+        [result].map((entry) => ({
+          entityKind: "product",
+          entityId: entry.product.id,
+        })),
+      ),
+    ]);
   // SAFETY: `result` was just fetched live by id, so its quality was evaluated.
   return dbInventoryEntryToAPI(
     result,
     valuations.get(result.id) ?? null,
     requireLoadedProductPricing(pricing, result.product.id),
     dataQualities.get(result.id)!,
-    locationQualities.get(result.location.id)!,
     ownership.get(result.id),
     productImages.get(entityRefKey("product", result.product.id)) ?? [],
   );
@@ -881,50 +873,38 @@ export const getInventoryByLocationIds = async (
     ...relations.inventory.full,
   });
 
-  const [
-    pricing,
-    ownership,
-    dataQualities,
-    locationQualities,
-    valuations,
-    productImages,
-  ] = await Promise.all([
-    loadProductPricing(
-      db,
-      results.map((entry) => entry.product),
-    ),
-    loadInventoryOwnershipTraces(db, results),
-    loadDataQualities(
-      db,
-      "inventory",
-      results.map((entry) => entry.id),
-    ),
-    loadDataQualities(
-      db,
-      "location",
-      results.map((entry) => entry.location.id),
-    ),
-    loadStoredInventoryValuations(
-      db,
-      results.map((row) => row.id),
-    ),
-    resolveEntityDisplayImageLists(
-      db,
-      results.map((entry) => ({
-        entityKind: "product",
-        entityId: entry.product.id,
-      })),
-    ),
-  ]);
+  const [pricing, ownership, dataQualities, valuations, productImages] =
+    await Promise.all([
+      loadProductPricing(
+        db,
+        results.map((entry) => entry.product),
+      ),
+      loadInventoryOwnershipTraces(db, results),
+      loadDataQualities(
+        db,
+        "inventory",
+        results.map((entry) => entry.id),
+      ),
+
+      loadStoredInventoryValuations(
+        db,
+        results.map((row) => row.id),
+      ),
+      resolveEntityDisplayImageLists(
+        db,
+        results.map((entry) => ({
+          entityKind: "product",
+          entityId: entry.product.id,
+        })),
+      ),
+    ]);
   return results.map((entry) =>
     dbInventoryEntryToAPI(
       entry,
       valuations.get(entry.id) ?? null,
       requireLoadedProductPricing(pricing, entry.product.id),
-      // SAFETY: `entry` came from `results`, which `dataQualities`/
-      // `locationQualities` were loaded for.
+      // SAFETY: `entry` came from `results`, whose Inventory quality was loaded.
       dataQualities.get(entry.id)!,
-      locationQualities.get(entry.location.id)!,
       ownership.get(entry.id),
       productImages.get(entityRefKey("product", entry.product.id)) ?? [],
     ),

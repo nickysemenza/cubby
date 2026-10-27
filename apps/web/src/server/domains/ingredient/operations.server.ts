@@ -4,14 +4,18 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   type ingredientIdInput,
-  ingredientMergeOut,
+  mergeSummary,
   type ingredientMergeInput,
   ingredientOut,
   type ingredientResolvableNamesInput,
 } from "@cubby/schemas/ingredient";
 import type { z } from "zod";
 
-import { ingredientContract } from "~/contracts/ingredient.contract";
+import {
+  ingredientContract,
+  ingredientEnrichmentRead,
+  ingredientManyRead,
+} from "~/contracts/ingredient.contract";
 import type { Database } from "~/server/db";
 import { findUnlinkedProductCandidates } from "~/server/domains/ingredient/repo/crud";
 import {
@@ -30,6 +34,8 @@ import {
   resolveEntity,
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
+import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
@@ -129,37 +135,60 @@ export async function mergeWorkflow(
   });
   return {
     ingredient: ingredientOut.parse(result.item),
-    mergeSummary: ingredientMergeOut.shape.mergeSummary.parse(
-      result.mergeSummary,
-    ),
+    mergeSummary: mergeSummary.parse(result.mergeSummary),
     sideEffects: result.sideEffects,
   };
 }
 
 export const ingredientHandlers = implementOperationDomain(ingredientContract, {
-  getByName: (context, input) =>
-    getIngredientByName(context.db, context.usdaClient, input.nameFilter),
-  matchNames: (context, input) => getIngredientMatches(context.db, input.names),
-  getManyByIDs: async (context, input) =>
-    getIngredientsByIDs(
+  getByName: async (context, input) => {
+    const row = await getIngredientByName(
       context.db,
       context.usdaClient,
-      await ingredients.all(context.db, input.ids),
-    ),
+      input.nameFilter,
+    );
+    return row
+      ? ((
+          await readPublicEntityRows({
+            db: context.db,
+            entity: "ingredient",
+            projection: "detail",
+            rows: [row],
+          })
+        )[0] ?? null)
+      : null;
+  },
+  matchNames: (context, input) => getIngredientMatches(context.db, input.names),
+  getManyByIDs: async (context, input) =>
+    publicFieldEnvelopeRows({
+      db: context.db,
+      entity: "ingredient",
+      schema: ingredientManyRead,
+      rows: await getIngredientsByIDs(
+        context.db,
+        context.usdaClient,
+        await ingredients.all(context.db, input.ids),
+      ),
+    }),
   recipeUsages: (context, input) => recipeUsagesWorkflow(context.db, input),
   resolveOrCreate: (context, input) =>
     resolveOrCreateIngredients(context, input.names),
   enrichmentWorkbench: async (context, input) =>
-    enrichmentWorkbench(context.db, context.usdaClient, {
-      recipeId: input?.recipeId
-        ? await recipes.one(context.db, input.recipeId)
-        : undefined,
-      focusId: input?.focusId
-        ? await ingredients.one(context.db, input.focusId)
-        : undefined,
-      focusShortcode: input?.focusId
-        ? parseShortcodeFor("ingredient", input.focusId)
-        : undefined,
+    publicFieldEnvelopeRows({
+      db: context.db,
+      entity: "ingredient",
+      schema: ingredientEnrichmentRead,
+      rows: await enrichmentWorkbench(context.db, context.usdaClient, {
+        recipeId: input?.recipeId
+          ? await recipes.one(context.db, input.recipeId)
+          : undefined,
+        focusId: input?.focusId
+          ? await ingredients.one(context.db, input.focusId)
+          : undefined,
+        focusShortcode: input?.focusId
+          ? parseShortcodeFor("ingredient", input.focusId)
+          : undefined,
+      }),
     }),
   merge: (context, input) => mergeWorkflow(context, input),
 });

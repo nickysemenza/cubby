@@ -6,11 +6,12 @@ import {
 } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { fieldDecisionOf, fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
 import {
   fieldExplanationSource,
   type FieldExplanationOutput,
 } from "@cubby/schemas/field-explanation";
-import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { humanize, parseShortcode } from "@cubby/shared";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { useQuery } from "@tanstack/react-query";
@@ -218,7 +219,11 @@ function ownCheckFact(value: ExplanationValue, data: FieldExplanationOutput) {
 }
 
 function visibleSources(data: FieldExplanationOutput) {
-  const named = data.resolution?.sourceEntity;
+  const provenance = fieldDecisionOf(data.envelope)?.provenance;
+  const named =
+    provenance?.kind === "inherited" || provenance?.kind === "default"
+      ? provenance.source
+      : null;
   return data.sources.flatMap((source) => {
     if (
       named &&
@@ -446,7 +451,7 @@ type WhyValueProps = {
   field: string;
   label: string;
   surface?: "list" | "detail" | "summary";
-  resolution?: FieldResolution | null;
+  resolution?: ReadableFieldEnvelope | null;
   onSet?: () => void;
   pendingSuggestion?: ReactNode;
   qualityChecks?: NonNullable<
@@ -537,7 +542,7 @@ export function WhyValueContents({
       ) : null}
       {result.isPending ? (
         <p className="text-muted-foreground">Loading…</p>
-      ) : result.isError ? (
+      ) : result.isError && result.data === undefined ? (
         <Stack gap="sm">
           <ErrorDisplay error={result.error} title="this explanation" />
           <Button
@@ -551,6 +556,21 @@ export function WhyValueContents({
         </Stack>
       ) : (
         <>
+          {result.isError ? (
+            <div className="grid gap-1">
+              <ErrorDisplay
+                error={result.error}
+                title="refreshing this explanation"
+              />
+              <Button
+                size="xs"
+                variant="link"
+                onClick={() => void result.refetch()}
+              >
+                Retry explanation
+              </Button>
+            </div>
+          ) : null}
           <DecisionChain
             data={result.data}
             onSet={onSet}
@@ -558,7 +578,7 @@ export function WhyValueContents({
           />
           {result.data.interpretation ? (
             <div className="grid gap-1 text-xs leading-5">
-              {!result.data.resolution && !result.data.resolutionEvidence ? (
+              {!result.data.resolutionEvidence ? (
                 <p className="font-medium">
                   {result.data.interpretation.result}
                 </p>
@@ -679,11 +699,11 @@ function ExplanationTechnicalDetails({
             },
             {
               label: "Result code",
-              value: String(data.value),
+              value: String(fieldValueOf(data.envelope)),
               className: "font-mono",
               hide:
-                !z.string().safeParse(data.value).success ||
-                data.interpretation?.result === data.value,
+                !z.string().safeParse(fieldValueOf(data.envelope)).success ||
+                data.interpretation?.result === fieldValueOf(data.envelope),
             },
             {
               label: "Evaluated",
@@ -707,14 +727,9 @@ function ExplanationTechnicalDetails({
 }
 
 function ExplanationFooter({ data }: { data: FieldExplanationOutput }) {
-  const derived = data.derived ?? {
-    meta: { state: "fresh" as const, decidedBy: null, asOf: null },
-    stored: data.value,
-    live: data.value,
-  };
   return (
     <footer className="sticky bottom-0 z-10 -mx-3 -mb-3 border-t border-border bg-popover px-3 py-2">
-      <DerivedFreshness derived={derived} context={data} />
+      <DerivedFreshness envelope={data.envelope} context={data} />
     </footer>
   );
 }

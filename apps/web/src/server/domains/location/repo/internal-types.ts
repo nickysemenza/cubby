@@ -3,8 +3,8 @@
  * Types used across location modules.
  */
 
-import type { InventoryItemForTree } from "@cubby/schemas/location";
-import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import type { InventoryItemForTree } from "@cubby/schemas/location-fields";
+import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 
 import { type MappableImageRecord } from "~/server/db/helpers/transform";
 import {
@@ -30,7 +30,7 @@ type ProductSelect = typeof product.$inferSelect & { brandName: string | null };
  * Only identity columns; canonical media is prepared separately for the location.
  */
 export type LocationIdentityProductRow = ProductSelect & {
-  category: ProductCategorySummary | null;
+  category: RawProductCategorySummary | null;
 };
 
 export type LocationListDB = LocationSelect & {
@@ -42,7 +42,7 @@ export type LocationListDB = LocationSelect & {
       // The stored valuation (ADR 0021), attached by the caller.
       valuation: number | null;
       product: ProductSelect & {
-        category: ProductCategorySummary | null;
+        category: RawProductCategorySummary | null;
         /** The stored effective price JSON, or the explicit price before publication. */
         effectivePrice: unknown;
         externalIds?: MappableProductExternalId[];
