@@ -1489,13 +1489,33 @@ export default defineEntity({
     ],
   },
   fields: {
+    embedded: [
+      {
+        path: ["images"],
+        entity: "image",
+        projections: [
+          "output",
+          "list",
+          "detail",
+          "mcpOutput",
+          "mcpList",
+          "mcpDetail",
+        ],
+      },
+    ],
     create: {
       module: "@cubby/schemas/purchase",
       export: "purchaseCreateInput",
     },
     update: { module: "@cubby/schemas/purchase", export: "purchaseUpdateData" },
-    output: { module: "@cubby/schemas/purchase", export: "purchaseOut" },
-    list: { module: "@cubby/schemas/purchase", export: "purchaseListItemOut" },
+    output: {
+      module: "@cubby/schemas/purchase-raw-read",
+      export: "rawPurchaseOut",
+    },
+    list: {
+      module: "@cubby/schemas/purchase-raw-read",
+      export: "rawPurchaseListItemOut",
+    },
   },
   // One vendor order, receipt, or deliberately separate purchase event — the
   // home for vendor-side truth (literal stated total, documents, identity).

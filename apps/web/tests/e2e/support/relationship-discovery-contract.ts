@@ -1,3 +1,4 @@
+import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { z } from "zod";
 
 import { seedRelationshipReviewPrerequisite } from "../fixtures/finance";
@@ -10,7 +11,9 @@ import {
 import { expect, test } from "./e2e-test";
 
 export const projectAssignment = z.object({
-  projectId: z.string().nullable(),
+  fields: z.object({
+    projectId: fieldEnvelope(z.string().nullable(), z.string()),
+  }),
 });
 
 /**
@@ -24,8 +27,10 @@ export function relationshipDiscoveryContract() {
     const fixture = await seedRelationshipReviewPrerequisite(page, name);
     await gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
     const assignment = async () =>
-      (await readExpense(page, fixture.expense.id, projectAssignment))
-        .projectId;
+      fieldValueOf(
+        (await readExpense(page, fixture.expense.id, projectAssignment)).fields
+          .projectId,
+      );
     const proposals = page.getByRole("region", {
       name: "Pending suggestions",
       exact: true,

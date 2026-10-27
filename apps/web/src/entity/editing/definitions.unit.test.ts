@@ -6,6 +6,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { householdLocalDate } from "~/lib/household-date";
 import { mock } from "~/lib/test/mock-schema";
 
@@ -58,8 +59,16 @@ describe("entity edit definitions", () => {
 
           network: "visa",
         },
-        providerVendorId: testShortcode("vendor", "BANK"),
-        network: "visa",
+        fields: {
+          providerVendorId: fieldValueFixture(
+            financialAccountOut.shape.fields.shape.providerVendorId,
+            testShortcode("vendor", "BANK"),
+          ),
+          network: fieldValueFixture(
+            financialAccountOut.shape.fields.shape.network,
+            "visa",
+          ),
+        },
       },
     });
     const request = {

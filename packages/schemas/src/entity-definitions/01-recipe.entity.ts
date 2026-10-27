@@ -1013,6 +1013,11 @@ export default defineEntity(
     fields: {
       embedded: [
         {
+          path: ["images"],
+          entity: "image",
+          projections: ["output", "detail", "mcpOutput", "mcpDetail"],
+        },
+        {
           path: ["sections", "ingredients", "recipe"],
           entity: "recipe",
           projections: ["output", "detail", "mcpOutput", "mcpDetail"],

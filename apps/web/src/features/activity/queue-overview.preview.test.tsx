@@ -48,11 +48,19 @@ const work = mock(jobOut, {
   overrides: {
     id: code,
     kind: "image.device",
-    lane: "apple_device",
+    fields: {
+      lane: fieldValueFixture(jobOut.shape.fields.shape.lane, "apple_device"),
+      waitingOn: fieldValueFixture(
+        jobOut.shape.fields.shape.waitingOn,
+        "Waiting for any Apple device",
+      ),
+      runName: fieldValueFixture(
+        jobOut.shape.fields.shape.runName,
+        run.displayName,
+      ),
+    },
     state: "queued",
-    waitingOn: "Waiting for any Apple device",
     runId: run.id,
-    runName: run.displayName,
     imageId: null,
     locationId: null,
     error: "Synthetic retained diagnostic",
@@ -92,6 +100,7 @@ beforeEach(async () => {
           items: (entity === "run" ? [run] : [work]).map((row) => ({
             ...row,
             fields: {
+              ...row.fields,
               displayImages: fieldValueFixture(
                 entityFieldEnvelopeSchemas.job.detail.shape.fields.shape
                   .displayImages,
@@ -126,6 +135,7 @@ beforeEach(async () => {
           overrides: {
             ...work,
             fields: {
+              ...work.fields,
               displayImages: fieldValueFixture(
                 entityFieldEnvelopeSchemas.job.detail.shape.fields.shape
                   .displayImages,

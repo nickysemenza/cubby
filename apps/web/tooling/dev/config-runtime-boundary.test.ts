@@ -44,6 +44,7 @@ test("repository list tracing stays independent of Worker Env consumers", () => 
       "observability/list-read-tracing.ts",
       "observability/tracing.ts",
       "generic/list/repo/list-contracts.ts",
+      "generic/derived/repo/read-context.ts",
     ]);
     const leaks = files
       .filter((file) => file.startsWith(server))

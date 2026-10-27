@@ -65,11 +65,13 @@ interface NamedMergeRow extends MergeDisplayRow {
 
 const productMergeRowSchema = z.union([
   duplicateProductIdentitySchema.shape.products.element,
-  // List actions can run before the relations enrichment supplies the barcode.
+  // Suggestion merge reviews carry only Product identity; list rows may also
+  // omit the barcode until relation enrichment completes.
   productListItemOut.pick({ id: true, name: true }).extend({
     fields: productListItemOut.shape.fields
       .pick({ primaryGtin: true })
-      .partial(),
+      .partial()
+      .optional(),
   }),
 ]);
 type ProductMergeRow = z.output<typeof productMergeRowSchema>;
@@ -318,7 +320,7 @@ const entityDefinitions = withEntityNames({
       rowLabel: (row) => <span className="truncate">{row.name}</span>,
       rowStat: (row) => {
         const primaryGtin =
-          "fields" in row && row.fields.primaryGtin
+          "fields" in row && row.fields?.primaryGtin
             ? fieldValueOf(row.fields.primaryGtin)
             : null;
         const gtins =

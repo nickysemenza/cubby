@@ -1,5 +1,6 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import {
   purchaseProductOut,
   productPurchaseOut,
@@ -369,7 +370,16 @@ describe("EntityRelationTable", () => {
             category.id,
           ),
         },
-        category,
+        category: {
+          id: category.id,
+          name: category.name,
+          fields: {
+            path: fieldValueFixture(
+              productCategorySummary.shape.fields.shape.path,
+              category.path,
+            ),
+          },
+        },
       },
     });
     expect(product.externalIds.length).toBeGreaterThan(0);

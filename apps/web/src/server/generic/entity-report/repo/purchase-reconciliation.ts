@@ -1,4 +1,4 @@
-import type { PurchaseOut } from "@cubby/schemas/purchase";
+import type { RawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 
 import { reconciliationLabel } from "~/server/generic/list/repo/list-display-labels";
 
@@ -18,7 +18,7 @@ const NOTES = {
     "Posted refund evidence fully explains why the expenses are below the original stated total. The stated total remains the literal paperwork amount, and spend remains the expenses.",
   mismatch:
     "The expenses don't add up to what the purchase stated, and posted refund evidence doesn't fully explain the difference. Review the expenses, stated total, or settlement evidence.",
-} satisfies Record<PurchaseOut["reconciliation"], string>;
+} satisfies Record<RawPurchaseOut["reconciliation"], string>;
 
 /**
  * What the paperwork said against what the lines add up to. A stated total is a cue, never spend:
@@ -26,7 +26,7 @@ const NOTES = {
  */
 export const composeReconciliationSection = (
   purchase: Pick<
-    PurchaseOut,
+    RawPurchaseOut,
     "statedTotal" | "expenseTotal" | "reconciliation"
   >,
 ) =>
@@ -73,7 +73,7 @@ export const composeReconciliationSection = (
 
 export const purchaseReconciliationReport = (
   purchase: Pick<
-    PurchaseOut,
+    RawPurchaseOut,
     "statedTotal" | "expenseTotal" | "reconciliation"
   >,
 ) => sectionBlocks(composeReconciliationSection(purchase));

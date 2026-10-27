@@ -77,10 +77,31 @@ struct WhereIsProductIntent: AppIntent {
             throw IntentContext.Failure.notFound("product called \(product.title)")
         }
         RecentEntities.record(row.id)
-        guard let path = row.raw["primaryPlacement"]?["path"]?.stringValue else {
-            return .result(dialog: "\(row.title) isn't stocked anywhere.")
+        return .result(dialog: "\(Self.placementDescription(for: row))")
+    }
+
+    static func placementDescription(for row: EntityRow) -> String {
+        guard let value = row.raw["fields"]?["primaryPlacement"], let envelope = FieldEnvelope(value) else {
+            return "Location for \(row.title) is unavailable."
         }
-        return .result(dialog: "\(row.title) is in \(path).")
+        switch envelope.result {
+        case .missing, .unsupported:
+            return "Location for \(row.title) is unavailable."
+        case .live(let decision), .cached(let decision, _, _):
+            switch decision.outcome {
+            case .empty(.unsupported):
+                return "Location for \(row.title) is unavailable."
+            case .empty:
+                return "\(row.title) isn't stocked anywhere."
+            case .value:
+                guard let path = row.raw.pathValue("primaryPlacement.path")?.stringValue else {
+                    return "Location for \(row.title) is unavailable."
+                }
+                return "\(row.title) is in \(path)."
+            case .unsupported:
+                return "Location for \(row.title) is unavailable."
+            }
+        }
     }
 }
 

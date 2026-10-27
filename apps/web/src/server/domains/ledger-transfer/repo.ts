@@ -13,10 +13,12 @@ import type {
   LedgerSourceClaimOut,
   LedgerTransferCreateInput,
   LedgerTransferFilters,
-  LedgerTransferOut,
   LedgerTransferUpdateData,
 } from "@cubby/schemas/ledger-transfer";
-import { ledgerTransferOut } from "@cubby/schemas/ledger-transfer";
+import {
+  type RawLedgerTransferOut,
+  rawLedgerTransferOut,
+} from "@cubby/schemas/ledger-transfer-raw-read";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -151,8 +153,8 @@ const classificationFor = (row: LedgerTransferRow) =>
 const toOut = (
   row: LedgerTransferRow,
   dataQuality: DataQuality,
-): LedgerTransferOut =>
-  ledgerTransferOut.parse({
+): RawLedgerTransferOut =>
+  rawLedgerTransferOut.parse({
     id: parseShortcodeFor("ledgerTransfer", row.shortcode),
     fromPartyId: parseShortcodeFor("ledgerParty", row.fromPartyShortcode),
     toPartyId: parseShortcodeFor("ledgerParty", row.toPartyShortcode),
@@ -180,7 +182,7 @@ const toOut = (
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: LedgerTransferRow[],
-): Promise<LedgerTransferOut[]> => {
+): Promise<RawLedgerTransferOut[]> => {
   const dataQualities = await loadDataQualities(
     db,
     "ledgerTransfer",
@@ -224,13 +226,13 @@ const selectTransfersRead = (
 const transferRead = {
   bindings: (bind) => [
     bind(
-      ledgerTransferOut.pick({ fromPartyId: true, toPartyId: true }),
+      rawLedgerTransferOut.pick({ fromPartyId: true, toPartyId: true }),
       (row) => ({
         fromPartyId: parseShortcodeFor("ledgerParty", row.fromPartyShortcode!),
         toPartyId: parseShortcodeFor("ledgerParty", row.toPartyShortcode!),
       }),
     ),
-    bind(ledgerTransferOut.pick({ sourceClaims: true }), (row) => {
+    bind(rawLedgerTransferOut.pick({ sourceClaims: true }), (row) => {
       if (row.sourceClaims === undefined)
         throw new Error("Ledger transfer source claims were not loaded");
       return {
@@ -241,7 +243,7 @@ const transferRead = {
         })),
       };
     }),
-    bind(ledgerTransferOut.pick({ evidenceTransactionIds: true }), (row) => {
+    bind(rawLedgerTransferOut.pick({ evidenceTransactionIds: true }), (row) => {
       if (row.evidenceTransactionIds === undefined)
         throw new Error("Ledger transfer evidence was not loaded");
       return {
@@ -250,8 +252,8 @@ const transferRead = {
         ),
       };
     }),
-    bind(ledgerTransferOut.pick({ classification: true }), (row) => ({
-      classification: ledgerTransferOut.shape.classification.parse(
+    bind(rawLedgerTransferOut.pick({ classification: true }), (row) => ({
+      classification: rawLedgerTransferOut.shape.classification.parse(
         row.fromPartyId === row.toPartyId
           ? "internal_move"
           : row.toPartyKind === "household"
@@ -667,7 +669,7 @@ export const listLedgerTransfersRead = async (
   );
 
 const listLedgerTransfers = completeListReader(
-  ledgerTransferOut,
+  rawLedgerTransferOut,
   listLedgerTransfersRead,
 );
 

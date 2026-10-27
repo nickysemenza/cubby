@@ -261,6 +261,7 @@ describe("location mappers", () => {
           notes: null,
           expectedQuantity: null,
           category: categorySummaryFixture("food"),
+          categoryFeature: "food",
           price: 4.5,
           usdaUnavailable: null,
           createdAt: CREATED_AT,

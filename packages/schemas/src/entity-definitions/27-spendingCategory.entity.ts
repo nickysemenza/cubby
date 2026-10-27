@@ -451,8 +451,8 @@ export default defineEntity({
       export: "spendingCategoryUpdateData",
     },
     output: {
-      module: "@cubby/schemas/spending-category",
-      export: "spendingCategoryOut",
+      module: "@cubby/schemas/spending-category-raw-read",
+      export: "rawSpendingCategoryOut",
     },
   },
   storage: {

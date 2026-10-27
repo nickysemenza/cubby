@@ -1117,8 +1117,24 @@ Rules:
   fields: {
     create: { module: "@cubby/schemas/project", export: "projectCreateInput" },
     update: { module: "@cubby/schemas/project", export: "projectUpdateData" },
-    output: { module: "@cubby/schemas/project", export: "projectOut" },
-    list: { module: "@cubby/schemas/project", export: "projectListItemOut" },
+    output: { module: "@cubby/schemas/work-raw-read", export: "rawProjectOut" },
+    list: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawProjectListItemOut",
+    },
+    detail: { module: "@cubby/schemas/work-raw-read", export: "rawProjectOut" },
+    mcpOutput: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawProjectOut",
+    },
+    mcpList: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawProjectListItemOut",
+    },
+    mcpDetail: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawProjectOut",
+    },
   },
   storage: {
     indexes: [

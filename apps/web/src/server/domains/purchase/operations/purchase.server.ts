@@ -1,12 +1,12 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
-import { financialTransactionOut } from "@cubby/schemas/financial-transaction";
+import { rawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   type linkExpensesToPurchaseInput,
   splitExpenseDelta,
   type splitExpenseInput,
 } from "@cubby/schemas/purchase";
-import type { PurchaseOut } from "@cubby/schemas/purchase";
+import type { RawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 
 import { purchaseContract } from "~/contracts/purchase.contract";
 import { suggestSettlementMatch } from "~/server/ai/settlement-candidate-rank";
@@ -106,10 +106,10 @@ async function loadSettlementTransaction(
     throw new Error(
       "Entity kernel returned the wrong financial transaction detail",
     );
-  return financialTransactionOut.parse(result);
+  return rawFinancialTransactionOut.parse(result);
 }
 
-async function readPurchase(context: EntityKernelContext, row: PurchaseOut) {
+async function readPurchase(context: EntityKernelContext, row: RawPurchaseOut) {
   return (
     await readPublicEntityRows({
       db: context.db,

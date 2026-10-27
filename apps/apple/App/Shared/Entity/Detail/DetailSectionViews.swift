@@ -967,7 +967,7 @@ struct EntityJournalEntryRow: View {
     var columns: [String]? = nil
 
     private var images: [URL] {
-        row.raw["displayImages"]?.arrayValue?.compactMap { image in
+        row.raw.recordValue("displayImages")?.arrayValue?.compactMap { image in
             let value =
                 image["representations"]?["preferred"]?.stringValue
                 ?? image["url"]?.stringValue

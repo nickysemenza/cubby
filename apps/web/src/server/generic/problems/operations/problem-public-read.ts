@@ -55,8 +55,17 @@ export async function publicProblemGroups<S extends z.ZodType>(
   return schema.parse(groups);
 }
 
-export async function publicProblemSlice(db: Database, value: unknown) {
-  const slice = sliceSchema.parse(value);
+export async function publicProblemSlice(
+  db: Database,
+  value: unknown,
+  page?: { pageIndex: number; pageSize: number },
+) {
+  const raw = sliceSchema.parse(value);
+  // Only the requested page needs authoritative current field facts.
+  const start = page ? page.pageIndex * page.pageSize : 0;
+  const slice = page
+    ? { ...raw, items: raw.items.slice(start, start + page.pageSize) }
+    : raw;
   const groups = await publicProblemGroups(
     db,
     { [slice.type]: slice.items },

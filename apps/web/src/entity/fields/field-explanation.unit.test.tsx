@@ -3,9 +3,13 @@ import { render, screen } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { DecisionChain } from "~/ui/derived/decision-chain";
-import { ReadableExplanationValue } from "~/ui/derived/why-value";
+import {
+  ReadableExplanationValue,
+  WhyValueContents,
+} from "~/ui/derived/why-value";
+import { Popover, PopoverContent } from "~/ui/primitives/popover";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {
@@ -46,6 +50,8 @@ it.each(["fresh", "stale"] as const)(
       name: "Synthetic source",
     };
     const data = fromPartial<FieldExplanationOutput>({
+      rule: { id: "synthetic", revision: 1, description: "Synthetic rule" },
+      evaluatedAt: "2026-10-01T00:00:00Z",
       subject: { entityKind: "expense", entityId: "EXP-2345" },
       field: "trade",
       envelope: {
@@ -64,6 +70,10 @@ it.each(["fresh", "stale"] as const)(
         },
         work: { kind: "idle" },
       },
+      comparison: {
+        kind: "unavailable",
+        reason: "Cached source evidence differs from current sources",
+      },
       sources: [
         {
           label: "Synthetic current source",
@@ -72,12 +82,33 @@ it.each(["fresh", "stale"] as const)(
         },
       ],
     });
-    render(<DecisionChain data={data} />, { wrapper: harness.wrapper });
+    harness.queryClient.setQueryData(
+      fieldExplanation.explain.queryKey({
+        entityKind: "expense",
+        entityId: "EXP-2345",
+        field: "trade",
+        surface: "detail",
+      }),
+      data,
+    );
+    render(
+      <Popover open>
+        <PopoverContent>
+          <WhyValueContents
+            entity="expense"
+            id="EXP-2345"
+            field="trade"
+            label="Trade"
+          />
+        </PopoverContent>
+      </Popover>,
+      { wrapper: harness.wrapper },
+    );
     expect(
-      screen.getByRole("list", { name: "Value sources" }),
+      screen.getByRole("list", { name: "Current evidence sources" }),
     ).toHaveTextContent("skipped");
     expect(
-      screen.getByRole("list", { name: "Value sources" }),
+      screen.getByRole("list", { name: "Current evidence sources" }),
     ).not.toHaveTextContent("deciding");
   },
 );

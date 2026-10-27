@@ -191,7 +191,7 @@ struct EntityRowPresentation: Sendable, Hashable {
     }
 
     static func needsData(in row: EntityRow) -> Bool {
-        row.raw["dataQuality"]?["status"]?.stringValue == "needs_data"
+        row.raw.recordValue("dataQuality")?["status"]?.stringValue == "needs_data"
     }
 
     /// One column's fact for `row`, the unit `resolve` assembles; a table cell asks for its own
@@ -204,7 +204,7 @@ struct EntityRowPresentation: Sendable, Hashable {
             let text: String
             if field.readKey == nil {
                 text = "Not assessed"
-            } else if let status = row.raw[key]?["status"]?.stringValue {
+            } else if let status = row.raw.recordValue(key)?["status"]?.stringValue {
                 text = field.valueOptions?.first { $0.value == status }?.label ?? "Unavailable"
             } else {
                 text = "Unavailable"

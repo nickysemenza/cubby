@@ -2621,6 +2621,30 @@ Rules:
     fields: {
       embedded: [
         {
+          path: ["images"],
+          entity: "image",
+          projections: [
+            "output",
+            "list",
+            "detail",
+            "mcpOutput",
+            "mcpList",
+            "mcpDetail",
+          ],
+        },
+        {
+          path: ["labelImages"],
+          entity: "image",
+          projections: [
+            "output",
+            "list",
+            "detail",
+            "mcpOutput",
+            "mcpList",
+            "mcpDetail",
+          ],
+        },
+        {
           path: ["category"],
           entity: "productCategory",
           projections: [

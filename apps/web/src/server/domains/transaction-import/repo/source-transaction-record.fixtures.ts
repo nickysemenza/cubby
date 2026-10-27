@@ -2,13 +2,11 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import {
   sourceTransactionRecordFilters,
-  sourceTransactionRecordOut,
   type SourceTransactionRecordLegacyFilters,
 } from "@cubby/schemas/source-transaction-record";
-import {
-  transactionImportFilters,
-  transactionImportOut,
-} from "@cubby/schemas/transaction-import";
+import { rawSourceTransactionRecordOut } from "@cubby/schemas/source-transaction-record-raw-read";
+import { transactionImportFilters } from "@cubby/schemas/transaction-import";
+import { rawTransactionImportOut } from "@cubby/schemas/transaction-import-raw-read";
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR } from "tooling/test-setup";
 
@@ -24,11 +22,11 @@ import {
 import { recordSourceTransactionRecords } from "./source-transaction-record";
 
 const listSources = completeListReader(
-  sourceTransactionRecordOut,
+  rawSourceTransactionRecordOut,
   listSourceTransactionRecordsRead,
 );
 const listImports = completeListReader(
-  transactionImportOut,
+  rawTransactionImportOut,
   listTransactionImportsRead,
 );
 

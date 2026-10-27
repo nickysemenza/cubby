@@ -1,3 +1,4 @@
+import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { seedProductPrerequisite } from "./fixtures/catalog";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
@@ -451,15 +452,20 @@ test("Suggestions lists every family with named records and category pills, and 
     )
     .toEqual([]);
   await expect
-    .poll(
-      async () =>
+    .poll(async () =>
+      fieldValueOf(
         (
           await readExpense(
             page,
             charge.id,
-            z.object({ productId: z.string().nullable() }),
+            z.object({
+              fields: z.object({
+                productId: fieldEnvelope(z.string().nullable(), z.string()),
+              }),
+            }),
           )
-        ).productId,
+        ).fields.productId,
+      ),
     )
     .toBe(item.id);
   await expect(connection).toHaveCount(0);

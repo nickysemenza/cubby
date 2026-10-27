@@ -11,12 +11,11 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   type PlantCreateInput,
   type PlantFilters,
-  type PlantOut,
   type PlantUpdateData,
   type ResolvePlantsInput,
   type ResolvePlantsOutput,
-  plantOut,
 } from "@cubby/schemas/plant";
+import { type RawPlantOut, rawPlantOut } from "@cubby/schemas/plant-raw-read";
 import { eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -92,12 +91,15 @@ const scaffold = listScaffold("plant", plant);
 
 const plantReadOptions = {
   bindings: (bind) => [
-    bind(plantOut.pick({ gardenGuideKey: true, displayName: true }), (row) => ({
-      gardenGuideKey: resolveGardenGuideKey(row.gardenGuideKey),
-      displayName: plantDisplayName(row.name, row.gardenGuideKey),
-    })),
     bind(
-      plantOut.pick({
+      rawPlantOut.pick({ gardenGuideKey: true, displayName: true }),
+      (row) => ({
+        gardenGuideKey: resolveGardenGuideKey(row.gardenGuideKey),
+        displayName: plantDisplayName(row.name, row.gardenGuideKey),
+      }),
+    ),
+    bind(
+      rawPlantOut.pick({
         guideSowWindow: true,
         guideTransplantWindow: true,
         routes: true,
@@ -118,9 +120,9 @@ const plantRead = listReadPlan<PlantRow>("plant", plantReadOptions);
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: PlantRow[],
-): Promise<PlantOut[]> =>
+): Promise<RawPlantOut[]> =>
   (await plantRead.read(db, rows, { kind: "full" })).map((row) =>
-    plantOut.parse(row),
+    rawPlantOut.parse(row),
   );
 
 export const listPlantsRead = (
@@ -139,7 +141,7 @@ export const listPlantsRead = (
     },
   );
 
-export const listPlants = completeListReader(plantOut, listPlantsRead);
+export const listPlants = completeListReader(rawPlantOut, listPlantsRead);
 
 type PlantWrite = Omit<Partial<PlantUpdateData>, "ingredientId"> & {
   ingredientId?: IngredientId | null;

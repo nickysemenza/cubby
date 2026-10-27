@@ -1,6 +1,6 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
-import { vendorOut } from "@cubby/schemas/vendor";
+const vendorOut = entityFieldEnvelopeSchemas.vendor.detail;
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -22,6 +22,9 @@ const VENDOR_ID = testShortcode("vendor", "VEN-WORK");
 const IMAGE_ID = testShortcode("image", "IMG-WORK");
 
 const vendor = entityReadFixture(vendorOut, {
+  attachments: [],
+  redirectedFrom: null,
+  previousShortcodes: [],
   id: VENDOR_ID,
   name: "Fixture vendor",
   website: null,
@@ -52,7 +55,17 @@ const vendor = entityReadFixture(vendorOut, {
 
 const imageRecord = entityReadFixture(entityFieldEnvelopeSchemas.image.detail, {
   id: IMAGE_ID,
-  url: "https://example.test/fixture.jpg",
+  fields: {
+    url: fieldValueFixture(
+      entityFieldEnvelopeSchemas.image.detail.shape.fields.shape.url,
+      "https://example.test/fixture.jpg",
+    ),
+    representations: fieldValueFixture(
+      entityFieldEnvelopeSchemas.image.detail.shape.fields.shape
+        .representations,
+      null,
+    ),
+  },
   key: "fixtures/fixture.jpg",
   filename: "fixture.jpg",
   size: 1024,
@@ -76,7 +89,6 @@ const imageRecord = entityReadFixture(entityFieldEnvelopeSchemas.image.detail, {
   capturePlaceName: null,
   captureDeviceLabel: null,
   capturedByPartyId: null,
-  capturedByName: null,
   captureAttribution: "none",
   provenanceEvidence: null,
   sourceEvidence: null,
@@ -124,12 +136,12 @@ afterEach(() => {
   harness.dispose();
 });
 
-function seedVendorInspector() {
+function seedVendorInspector(record = vendor) {
   const detailOptions = entityPreviewQueryOptions("vendor", VENDOR_ID);
   harness.queryClient.setQueryDefaults(detailOptions.queryKey, {
     staleTime: Number.POSITIVE_INFINITY,
   });
-  harness.queryClient.setQueryData(detailOptions.queryKey, vendor);
+  harness.queryClient.setQueryData(detailOptions.queryKey, record);
 
   const relationshipOptions = entityGraph.graph.queryOptions({
     roots: [vendorRoot],
@@ -281,3 +293,43 @@ describe("EntityWorkbenchInspector", () => {
     );
   });
 });
+
+it("shows the inspector's governed cover snapshot", async () => {
+  seedVendorInspector({
+    ...vendor,
+    fields: {
+      ...vendor.fields,
+      displayImages: fieldValueFixture(
+        vendorOut.shape.fields.shape.displayImages,
+        [{ id: "IMG-4K7M", url: "https://example.test/current-cover.jpg" }],
+      ),
+    },
+  });
+  renderInspector();
+  expect(
+    await screen.findByRole("img", { name: "Fixture vendor" }),
+  ).toHaveAttribute("src", expect.stringContaining("current-cover.jpg"));
+});
+
+it.each([{ images: undefined }, { images: [] }])(
+  "never revives a retired inspector cover for missing or empty outcomes",
+  async ({ images }) => {
+    const record = {
+      ...vendor,
+      displayImages: [
+        { id: "IMG-4K7M", url: "https://example.test/stale-cover.jpg" },
+      ],
+      fields: {
+        ...vendor.fields,
+        displayImages: fieldValueFixture(
+          vendorOut.shape.fields.shape.displayImages,
+          images,
+        ),
+      },
+    };
+    seedVendorInspector(record);
+    renderInspector();
+    await screen.findByRole("heading", { name: "Fixture vendor" });
+    expect(screen.queryByRole("img", { name: "Fixture vendor" })).toBeNull();
+  },
+);

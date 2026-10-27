@@ -1373,7 +1373,7 @@ describe("record suggestions", () => {
     expect(commands).toHaveLength(1);
   });
 
-  it("saves a remove (prune) suggestion by patching the array field, preserving other tags", async () => {
+  it("saves a removal after an unrelated tag addition, preserving the new tag", async () => {
     const record = fixtureRecord({
       id: testShortcode("product", "tag-remove"),
       name: "Rain shell",
@@ -1438,7 +1438,20 @@ describe("record suggestions", () => {
         records={[record]}
         fieldKeys={["tags"]}
         operations={operations}
-        readRecord={async () => record}
+        readRecord={async () =>
+          fixtureRecord({
+            ...record,
+            fields: {
+              ...record.fields,
+              tags: fixtureField([
+                "jacquemus",
+                "ecosystem",
+                "mount",
+                "compatibility",
+              ]),
+            },
+          })
+        }
         mutationPort={createEntityMutationPort({
           execute: async (command) => {
             commands.push(command);
@@ -1467,7 +1480,7 @@ describe("record suggestions", () => {
       action: "update",
       entity: "product",
       id: record.id,
-      data: { tags: ["ecosystem", "mount"] },
+      data: { tags: ["ecosystem", "mount", "compatibility"] },
     });
   });
 

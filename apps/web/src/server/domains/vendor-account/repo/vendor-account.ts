@@ -11,11 +11,13 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   VendorAccountCreateInput,
   VendorAccountFilters,
-  VendorAccountOut,
   VendorAccountUpdateData,
 } from "@cubby/schemas/vendor-account";
-import { vendorAccountOut } from "@cubby/schemas/vendor-account";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
+import {
+  type RawVendorAccountOut,
+  rawVendorAccountOut,
+} from "@cubby/schemas/vendor-account-raw-read";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import {
   and,
@@ -312,14 +314,14 @@ const accountRead = {
     });
     return [
       activity.fields(
-        vendorAccountOut.pick({ lastRunAt: true, lastSuccessAt: true }),
+        rawVendorAccountOut.pick({ lastRunAt: true, lastSuccessAt: true }),
         (row, loaded) => ({
           lastRunAt: loaded.get(row.id)?.lastRunAt ?? null,
           lastSuccessAt: loaded.get(row.id)?.lastSuccessAt ?? null,
         }),
       ),
       counts.fields(
-        vendorAccountOut.pick({ purchaseCount: true }),
+        rawVendorAccountOut.pick({ purchaseCount: true }),
         (row, loaded) => ({ purchaseCount: loaded.get(row.id) ?? 0 }),
       ),
     ];
@@ -338,9 +340,9 @@ const hydrateRead = (
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: VendorAccountRow[],
-): Promise<VendorAccountOut[]> =>
+): Promise<RawVendorAccountOut[]> =>
   (await hydrateRead(db, rows, { kind: "full" })).map((row) =>
-    vendorAccountOut.parse(row),
+    rawVendorAccountOut.parse(row),
   );
 
 // `lastRunAt` and `displayName` are computed, not columns.
@@ -383,13 +385,13 @@ export const listVendorAccountsRead = (
   );
 
 const listVendorAccounts = completeListReader(
-  vendorAccountOut,
+  rawVendorAccountOut,
   listVendorAccountsRead,
 );
 
 const reader = createEntityReader<
   VendorAccountRow,
-  VendorAccountOut,
+  RawVendorAccountOut,
   "vendorAccount",
   Database | DrizzleTransaction
 >({

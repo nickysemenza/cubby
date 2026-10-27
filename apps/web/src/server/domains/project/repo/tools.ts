@@ -479,11 +479,17 @@ async function listProjectResources(
       ),
     };
   });
-  return publicFieldEnvelopeRows({
+  // Resource category labels the report role, not the Product's nested taxonomy reference.
+  const identities = await publicFieldEnvelopeRows({
     db,
     entity: "product",
-    schema: projectResourceOut,
+    schema: projectResourceOut.omit({ category: true }),
     rows: resources.map((row) => ({ ...row, id: row.productId })),
+  });
+  return identities.map((identity, index) => {
+    const resource = resources[index];
+    if (!resource) throw new Error("Missing Project resource evidence");
+    return { ...identity, category: resource.category };
   });
 }
 

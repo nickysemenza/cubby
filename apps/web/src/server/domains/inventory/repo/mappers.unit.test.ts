@@ -200,6 +200,7 @@ describe("inventory mappers", () => {
 
     expect(result).toEqual({
       id: testShortcode("inventory", "INV-TEST"),
+      locationId: testShortcode("location", "LOC-TEST"),
       amount: { value: 2, unit: "each" },
       valuation: 9,
       verifiedAt: null,
@@ -263,6 +264,7 @@ describe("inventory mappers", () => {
         notes: "Keep dry",
         expectedQuantity: null,
         category: categorySummaryFixture("food"),
+        categoryFeature: "food",
         createdAt: CREATED_AT,
         updatedAt: UPDATED_AT,
         unitMappings: [

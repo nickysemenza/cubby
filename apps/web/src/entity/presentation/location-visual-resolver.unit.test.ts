@@ -1,9 +1,15 @@
 import { imageOut, type ImageOut } from "@cubby/schemas/image";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
 import {
   locationReadFixture,
   type LocationFixtureOverrides,
@@ -12,8 +18,35 @@ import { locationChildGroupLabel } from "~/lib/location-child-label";
 
 import { resolveLocationVisual } from "./location-visual-resolver";
 
+const rawStorageCategory = categorySummaryFixture("storage");
+const storageCategory = productCategorySummary.parse({
+  id: rawStorageCategory.id,
+  name: rawStorageCategory.name,
+  fields: {
+    path: fieldValueFixture(
+      productCategorySummary.shape.fields.shape.path,
+      rawStorageCategory.path,
+    ),
+  },
+});
+
 const image = (id: string, overrides: Partial<ImageOut> = {}): ImageOut =>
-  imageOut.parse({
+  entityReadFixture(imageOut, {
+    fields: {
+      url: fieldValueFixture(
+        imageOut.shape.fields.shape.url,
+        `https://example.test/${id}.jpg`,
+      ),
+      representations: fieldValueFixture(
+        imageOut.shape.fields.shape.representations,
+        {
+          original: `https://example.test/${id}.jpg`,
+          transparent: null,
+          preferred: `https://example.test/${id}.jpg`,
+          preferredKind: "original",
+        },
+      ),
+    },
     id: testShortcode("image", `IMG-${id}`),
     url: `https://example.test/${id}.jpg`,
     key: `${id}.jpg`,
@@ -78,13 +111,13 @@ describe("resolveLocationVisual", () => {
     const result = resolveLocationVisual(
       location("AAAA", null, {
         images: [own],
-        displayImages: [own],
+        displayImages: [{ ...own, url: publicImageUrl(own) }],
         product: {
           id: testShortcode("product", "PRD-AAAA"),
           name: "Two drawer box",
           brandName: "Example",
           model: null,
-          category: categorySummaryFixture("storage"),
+          category: storageCategory,
 
           price: 50,
         },
@@ -92,7 +125,10 @@ describe("resolveLocationVisual", () => {
       }),
     );
 
-    expect(result.primaryImage).toEqual(own);
+    expect(result.primaryImage).toMatchObject({
+      id: own.id,
+      url: publicImageUrl(own),
+    });
     expect(result.primarySource).toBe("location");
     expect(result.childVisuals).toHaveLength(1);
   });
@@ -102,13 +138,13 @@ describe("resolveLocationVisual", () => {
     const childImage = image("child");
     const child = location("BBBB", "drawer", { images: [childImage] });
     const productBacked = location("AAAA", null, {
-      displayImages: [product],
+      displayImages: [{ ...product, url: publicImageUrl(product) }],
       product: {
         id: testShortcode("product", "PRD-AAAA"),
         name: "Two drawer box",
         brandName: "Example",
         model: null,
-        category: categorySummaryFixture("storage"),
+        category: storageCategory,
 
         price: null,
       },

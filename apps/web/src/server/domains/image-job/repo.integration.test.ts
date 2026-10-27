@@ -1,8 +1,11 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
 import { job as durableJob } from "~/server/db/retained-tables";
@@ -105,9 +108,11 @@ describe("image job cost", () => {
         id: target.shortcode,
       }),
     );
-    expect(read).toMatchObject({
-      item: { chargedCost: 1.75, standardCost: 3.5 },
-    });
+    const { item } = z
+      .object({ item: entityFieldEnvelopeSchemas.imageJob.detail })
+      .parse(read);
+    expect(fieldValueOf(item.fields.chargedCost)).toBe(1.75);
+    expect(fieldValueOf(item.fields.standardCost)).toBe(3.5);
   });
 
   it("shows the Device holding a live lease, its expiry, and the device backlog", async () => {
@@ -182,16 +187,16 @@ describe("image job cost", () => {
           id: shortcode,
         }),
       );
-    expect(await read(held.shortcode)).toMatchObject({
-      item: {
-        state: "leased",
-        leaseDeviceId: device.shortcode,
-        leaseExpiresAt,
-      },
+    const reply = z.object({
+      item: entityFieldEnvelopeSchemas.imageJob.detail,
     });
-    expect(await read(parked.shortcode)).toMatchObject({
-      item: { leaseDeviceId: null, leaseExpiresAt: null },
-    });
+    const active = reply.parse(await read(held.shortcode)).item;
+    expect(fieldValueOf(active.fields.state)).toBe("leased");
+    expect(active.leaseDeviceId).toBe(device.shortcode);
+    expect(fieldValueOf(active.fields.leaseExpiresAt)).toEqual(leaseExpiresAt);
+    const waiting = reply.parse(await read(parked.shortcode)).item;
+    expect(waiting.leaseDeviceId).toBeNull();
+    expect(fieldValueOf(waiting.fields.leaseExpiresAt)).toBeNull();
     expect(await readDeviceBacklog(ctx.db)).toMatchObject({
       waiting: 1,
       workingDevices: 1,

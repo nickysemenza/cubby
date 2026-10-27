@@ -10,10 +10,10 @@
 import { type ProjectId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProjectDashboardSummaryInput,
-  ProjectDashboardSummaryOut,
   ProjectTaskStatusBreakdown,
   TaskStatus,
 } from "@cubby/schemas/project";
+import type { RawProjectDashboardSummaryOut } from "@cubby/schemas/work-raw-read";
 import type { SQL } from "drizzle-orm";
 import {
   and,
@@ -93,7 +93,7 @@ const TASK_STATUS_FIELD = {
 export async function projectDashboardSummary(
   db: Database,
   filters: ProjectDashboardSummaryInput,
-): Promise<ProjectDashboardSummaryOut> {
+): Promise<RawProjectDashboardSummaryOut> {
   // ONE whole-tree load for the entire request. `computeAttentionItems` is
   // global by construction (see attention.ts) and used to re-derive exactly
   // this — same tree query, same batched project aggregates — so it is handed

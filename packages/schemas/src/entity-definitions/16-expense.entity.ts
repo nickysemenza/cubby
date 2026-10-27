@@ -1378,8 +1378,24 @@ Rules:
   fields: {
     create: { module: "@cubby/schemas/project", export: "expenseCreateInput" },
     update: { module: "@cubby/schemas/project", export: "expenseUpdateData" },
-    output: { module: "@cubby/schemas/project", export: "expenseOut" },
-    list: { module: "@cubby/schemas/project", export: "expenseListItemOut" },
+    output: { module: "@cubby/schemas/work-raw-read", export: "rawExpenseOut" },
+    list: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawExpenseListItemOut",
+    },
+    detail: { module: "@cubby/schemas/work-raw-read", export: "rawExpenseOut" },
+    mcpOutput: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawExpenseOut",
+    },
+    mcpList: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawExpenseListItemOut",
+    },
+    mcpDetail: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawExpenseOut",
+    },
   },
   storage: {
     indexes: [

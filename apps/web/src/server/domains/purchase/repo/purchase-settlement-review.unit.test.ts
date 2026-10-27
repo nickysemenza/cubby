@@ -1,4 +1,4 @@
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
+import { type RawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
 import {
   financialTransactionShortcode,
   shortcode,
@@ -17,14 +17,14 @@ const purchase = {
 };
 const candidate = (
   suffix: string,
-  overrides: Partial<FinancialTransactionOut> = {},
+  overrides: Partial<RawFinancialTransactionOut> = {},
   rank: {
     days?: number;
     exactAmount?: boolean;
     merchantMatches?: boolean;
   } = {},
 ) => ({
-  transaction: fromPartial<FinancialTransactionOut>({
+  transaction: fromPartial<RawFinancialTransactionOut>({
     id: ftx(suffix),
     kind: "purchase",
     amount: 42.5,

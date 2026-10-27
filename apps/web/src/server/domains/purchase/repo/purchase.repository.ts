@@ -2,6 +2,7 @@ import {
   mergePurchasesInput,
   mergePurchasesOut,
 } from "@cubby/schemas/purchase";
+import { rawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 
 import {
   asActor,
@@ -66,7 +67,7 @@ export const purchaseRepository = defineRepository("purchase", {
   },
   merge: {
     input: mergePurchasesInput,
-    output: mergePurchasesOut,
+    output: mergePurchasesOut.extend({ purchase: rawPurchaseOut }),
     item: (output) => output.purchase,
     summary: (output) => output.mergeSummary,
     execute: async (ctx, input) => {

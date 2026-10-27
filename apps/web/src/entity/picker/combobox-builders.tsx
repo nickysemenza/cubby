@@ -14,7 +14,10 @@ import {
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
-import { publicImageUrl } from "@cubby/schemas/image-summary";
+import {
+  publicImageUrl,
+  preferredImageUrl,
+} from "@cubby/schemas/image-summary";
 import type { LocationTreeNode, LocationType } from "@cubby/schemas/location";
 import { locationType } from "@cubby/schemas/location";
 import type { ProductCategorySummary as ProductCategory } from "@cubby/schemas/product-category-fields";
@@ -118,9 +121,12 @@ function recordRowProjection<E extends ShortcodeType>(
 /** `displayImages[0]` is the server-resolved cover for every entity that
  * declares images; the record's emoji (or entity glyph) stands in otherwise. */
 function recordThumb(entity: ShortcodeType, record: PickerRecord): PickerThumb {
-  const cover = displayImagesField.safeParse(record.displayImages).data?.[0];
+  const envelope = fieldEnvelopeFor(record, "displayImages");
+  const cover = envelope
+    ? displayImagesField.nullable().parse(fieldValueOf(envelope))?.[0]
+    : undefined;
   return {
-    imageUrl: cover?.url ?? null,
+    imageUrl: cover ? preferredImageUrl(cover) : null,
     fallback: (
       <RecordEmoji
         entity={entity}
@@ -226,10 +232,6 @@ export const buildProductComboboxItem = (
     fields?: Record<string, ReadableFieldEnvelope>;
     category?: ProductCategory | null;
     coverImageUrl?: string | null;
-    displayImages?: Array<{
-      url: string;
-      representations?: { preferred: string };
-    }>;
     aliases?: string[] | null;
     quantityLedger?: {
       acquiredUnits: number;
@@ -252,11 +254,15 @@ export const buildProductComboboxItem = (
 ): ComboboxItem<ProductShortcode> => {
   const ledger = product.quantityLedger;
   const onHand = product.onHand ?? deriveProductOnHand(product, ledger);
-  const coverImageUrl =
-    product.coverImageUrl ??
-    product.displayImages?.[0]?.representations?.preferred ??
-    product.displayImages?.[0]?.url ??
-    null;
+  const coverEnvelope = fieldEnvelopeFor(product, "displayImages");
+  const cover = coverEnvelope
+    ? displayImagesField.nullable().parse(fieldValueOf(coverEnvelope))?.[0]
+    : undefined;
+  const coverImageUrl = Object.hasOwn(product.fields ?? {}, "displayImages")
+    ? cover
+      ? preferredImageUrl(cover)
+      : null
+    : (product.coverImageUrl ?? null);
   const base = productPickerBase(product, coverImageUrl);
   const feature = fieldEnvelopeFor(product, "categoryFeature");
   return isServiceProductFeature(

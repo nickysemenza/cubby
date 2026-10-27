@@ -338,7 +338,6 @@ describe("product mappers", () => {
           location: {
             id: testShortcode("location", "LOC-TEST"),
             name: "Pantry",
-            type: "room",
           },
         },
       ],

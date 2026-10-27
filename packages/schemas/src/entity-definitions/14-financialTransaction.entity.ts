@@ -1374,8 +1374,8 @@ export default defineEntity(
         export: "financialTransactionUpdateData",
       },
       output: {
-        module: "@cubby/schemas/financial-transaction",
-        export: "financialTransactionOut",
+        module: "@cubby/schemas/financial-transaction-raw-read",
+        export: "rawFinancialTransactionOut",
       },
     },
     // A settlement-side event. Amounts are evidence only: they never participate

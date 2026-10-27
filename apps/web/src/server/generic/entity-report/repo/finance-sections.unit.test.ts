@@ -1,14 +1,12 @@
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
+import { type RawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
 import {
   expenseShortcode,
   financialTransactionShortcode,
   shortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  expenseChargeContextPurchaseOut,
-  type ExpenseOut,
-} from "@cubby/schemas/project";
-import type { PurchaseOut } from "@cubby/schemas/purchase";
+import { expenseChargeContextPurchaseOut } from "@cubby/schemas/project";
+import type { RawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
+import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
@@ -22,8 +20,8 @@ const pur = shortcode("PUR-2345");
 const ftx = (suffix: string) =>
   financialTransactionShortcode.parse(`FTX-${suffix}`);
 
-const purchase = (overrides: Partial<PurchaseOut> = {}) =>
-  fromPartial<PurchaseOut>({
+const purchase = (overrides: Partial<RawPurchaseOut> = {}) =>
+  fromPartial<RawPurchaseOut>({
     id: pur,
     date: "2026-03-02",
     statedTotal: 100,
@@ -98,9 +96,9 @@ describe("composeReconciliationSection", () => {
 
 const transaction = (
   suffix: string,
-  overrides: Partial<FinancialTransactionOut> = {},
+  overrides: Partial<RawFinancialTransactionOut> = {},
 ) =>
-  fromPartial<FinancialTransactionOut>({
+  fromPartial<RawFinancialTransactionOut>({
     id: ftx(suffix),
     displayName: "Example Hardware",
     accountName: "Example Card",
@@ -199,9 +197,9 @@ describe("composeFinancialSettlementSection", () => {
 const line = (
   suffix: string,
   cost: number | null,
-  overrides: Partial<ExpenseOut> = {},
+  overrides: Partial<RawExpenseOut> = {},
 ) =>
-  fromPartial<ExpenseOut>({
+  fromPartial<RawExpenseOut>({
     id: expenseShortcode.parse(`EXP-${suffix}`),
     name: `Line ${suffix}`,
     cost,

@@ -5,8 +5,8 @@ import {
   type FieldResolution,
 } from "@cubby/schemas/field-resolution";
 import { expenseId, projectShortcode } from "@cubby/schemas/identifiers";
-import { expenseOut } from "@cubby/schemas/project";
 import { resolveRecipeServingValue } from "@cubby/schemas/recipe-shared";
+import { rawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
@@ -230,7 +230,7 @@ async function expenseInheritanceResetPreview(
     projectId: z.string().nullable().parse(storedProject.storedValue),
     productId: row.productId,
     purchaseId: row.purchaseId,
-    trade: expenseOut.shape.trade.parse(storedTrade.storedValue),
+    trade: rawExpenseOut.shape.trade.parse(storedTrade.storedValue),
     costType: row.costType,
   } satisfies ExpenseFieldDraft;
   const current = (await resolveDraftExpenseFields(db, draft))[field];

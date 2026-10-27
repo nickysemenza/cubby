@@ -284,7 +284,17 @@ extension InitiateUploadWithoutEntity {
 }
 
 extension ImageOut {
-    public var imageURL: URL? { URL(string: url) }
+    public var imageURL: URL? {
+        switch fields.url.result {
+        case .live(let result):
+            guard case .value(let outcome) = result.decision.outcome else { return nil }
+            return URL(string: outcome.value)
+        case .cached(let result):
+            guard case .value(let outcome) = result.decision.outcome else { return nil }
+            return URL(string: outcome.value)
+        case .missing, .unrecognized: return nil
+        }
+    }
 }
 
 extension ImageWithEntity {

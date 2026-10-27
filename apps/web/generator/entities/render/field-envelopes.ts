@@ -8,23 +8,6 @@ import {
   type EntityArtifacts,
 } from "../declarations.ts";
 
-/** Shared attachment reads remain raw in declarations and become public here. */
-const imageSlots = {
-  product: ["images", "labelImages"],
-  recipe: ["images"],
-  ingredient: ["images"],
-  cookbook: ["images"],
-  location: ["images"],
-  inventory: ["images"],
-  meal: ["images"],
-  task: ["images"],
-  vendor: ["logo"],
-  expense: ["images"],
-  gardenEntry: ["images"],
-} satisfies Record<string, readonly string[]>;
-const imageSlotsFor = (entity: string): readonly string[] =>
-  Object.entries(imageSlots).find(([key]) => key === entity)?.[1] ?? [];
-
 /** The declaration owns whether a field needs assignment or derivation facts. */
 const governedFields = (entity: CompiledEntity) =>
   entity.fieldModel.fields.filter(
@@ -113,14 +96,16 @@ export const renderFieldEnvelopeArtifacts = (
       ["mcpList", contract.mcpList],
       ["mcpDetail", contract.mcpDetail],
     ] as const;
-    const imagePaths = [
-      ...imageSlotsFor(entity.key).map((key) => [key]),
-      ...contract.embedded
-        .filter((binding) => !binding.recursive)
-        .flatMap((binding) =>
-          imageSlotsFor(binding.entity).map((key) => [...binding.path, key]),
-        ),
-    ];
+    const imagePaths = contract.embedded
+      .filter((binding) => !binding.recursive && binding.entity !== "image")
+      .flatMap((binding) =>
+        (
+          entities.find((target) => target.key === binding.entity)?.contract
+            ?.embedded ?? []
+        )
+          .filter((child) => !child.recursive && child.entity === "image")
+          .map((child) => [...binding.path, ...child.path]),
+      );
     const hasReadPath = (
       schema: z.core.$ZodType,
       path: readonly string[],
@@ -152,7 +137,7 @@ export const renderFieldEnvelopeArtifacts = (
           const owners = contract.embedded.filter(
             (binding) =>
               !binding.recursive &&
-              binding.path.length === path.length - 1 &&
+              binding.path.length < path.length &&
               binding.path.every((part, index) => part === path[index]),
           );
           if (
@@ -174,6 +159,69 @@ export const renderFieldEnvelopeArtifacts = (
     const nested = [...contract.embedded, ...imageBindings].sort(
       (left, right) => right.path.length - left.path.length,
     );
+    const assertDeclaredImages = (
+      schema: z.core.$ZodType,
+      path: readonly string[],
+      projection: (typeof readImports)[number][0],
+      active: ReadonlySet<z.core.$ZodType>,
+    ): void => {
+      if (
+        active.has(schema) ||
+        contract.embedded.some(
+          (binding) =>
+            binding.recursive &&
+            binding.projections.includes(projection) &&
+            binding.path.every((key, index) => key === path[index]),
+        )
+      )
+        return;
+      const seen = new Set(active).add(schema);
+      if (
+        schema instanceof z.ZodType &&
+        schema.meta()?.["x-cubby-live-entity"] === "image"
+      ) {
+        if (
+          !nested.some(
+            (binding) =>
+              binding.entity === "image" &&
+              binding.projections.includes(projection) &&
+              binding.path.length === path.length &&
+              binding.path.every((key, index) => key === path[index]),
+          )
+        )
+          throw new EntityDeclarationError(
+            `${entity.key}.${path.join(".")} requires a declared image embedding for ${projection}`,
+          );
+        return;
+      }
+      if (
+        schema instanceof z.ZodLazy ||
+        schema instanceof z.ZodNullable ||
+        schema instanceof z.ZodOptional ||
+        schema instanceof z.ZodDefault
+      ) {
+        assertDeclaredImages(schema.unwrap(), path, projection, seen);
+      } else if (schema instanceof z.ZodArray) {
+        assertDeclaredImages(schema.element, path, projection, seen);
+      } else if (
+        schema instanceof z.ZodDiscriminatedUnion ||
+        schema instanceof z.ZodUnion
+      ) {
+        for (const option of schema.options)
+          assertDeclaredImages(option, path, projection, seen);
+      } else if (schema instanceof z.ZodObject) {
+        for (const [key, child] of Object.entries(schema.shape))
+          assertDeclaredImages(child, [...path, key], projection, seen);
+      }
+    };
+    for (const [projection] of readImports) {
+      const schema = projection.toLowerCase().endsWith("list")
+        ? declaration.readSchemas.list
+        : projection.toLowerCase().endsWith("detail")
+          ? declaration.readSchemas.detail
+          : declaration.readSchemas.output;
+      assertDeclaredImages(schema, [], projection, new Set());
+    }
     const nestedTargets = [...new Set(nested.map((binding) => binding.entity))];
     const nestedKeys = new Set<string>();
     for (const binding of nested) {

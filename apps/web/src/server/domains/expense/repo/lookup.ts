@@ -1,8 +1,9 @@
 import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { expenseCostSign, expenseListItemOut } from "@cubby/schemas/project";
+import { expenseCostSign } from "@cubby/schemas/project";
 import type { ExpenseFilters } from "@cubby/schemas/project";
+import { rawExpenseListItemOut } from "@cubby/schemas/work-raw-read";
 import { and, inArray, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -369,7 +370,7 @@ const expenseRead = (db: Database): ListReadOptions<ExpenseListRow> => ({
     });
     return [
       allocations.fields(
-        expenseListItemOut.pick({
+        rawExpenseListItemOut.pick({
           projectId: true,
           projectName: true,
           productId: true,
@@ -403,7 +404,7 @@ const expenseRead = (db: Database): ListReadOptions<ExpenseListRow> => ({
         },
       ),
       spending.fields(
-        expenseListItemOut.pick({
+        rawExpenseListItemOut.pick({
           trade: true,
           purchaseDate: true,
           purchaseDisplayLabel: true,
@@ -417,7 +418,7 @@ const expenseRead = (db: Database): ListReadOptions<ExpenseListRow> => ({
           }),
       ),
       allocations.fields(
-        expenseListItemOut.pick({ fieldResolutions: true }),
+        rawExpenseListItemOut.pick({ fieldResolutions: true }),
         (row, loaded) =>
           expenseResolutionFields({
             ...expenseJoinedRow(row),
@@ -425,7 +426,7 @@ const expenseRead = (db: Database): ListReadOptions<ExpenseListRow> => ({
             spendingCategoryAllocations: loaded.spending.get(row.id),
           }),
       ),
-      bind(expenseListItemOut.pick({ vendorLogo: true }), (row) =>
+      bind(rawExpenseListItemOut.pick({ vendorLogo: true }), (row) =>
         expenseMediaFields(expenseJoinedRow(row)),
       ),
     ];
@@ -433,7 +434,7 @@ const expenseRead = (db: Database): ListReadOptions<ExpenseListRow> => ({
 });
 
 export const expenseList = completeListReader(
-  expenseListItemOut,
+  rawExpenseListItemOut,
   expenseListRead,
 );
 export const expenseListSummary = async (

@@ -94,6 +94,7 @@ describe("Calendar selected source envelopes", () => {
         decision: { provenance: { kind: "inherited" } },
       });
       expect(item).not.toHaveProperty("trade");
+      expect(item.source).not.toHaveProperty("fieldResolutions");
     }
     const projectItem = result.items.find(
       (item) => item.kind === "project" && item.id === project.shortcode,

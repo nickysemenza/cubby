@@ -5,17 +5,19 @@ import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   FinancialTransactionCreateInput,
   FinancialTransactionFilters,
-  FinancialTransactionOut,
   FinancialTransactionSourceOptionsOut,
   FinancialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
 import {
   financialTransactionAllocationIntegrity,
   financialTransactionKind,
-  financialTransactionOut,
   financialTransactionSettlementViolation,
 } from "@cubby/schemas/financial-transaction";
 import { descriptorProcessors } from "@cubby/schemas/financial-transaction-fields";
+import {
+  rawFinancialTransactionOut,
+  type RawFinancialTransactionOut,
+} from "@cubby/schemas/financial-transaction-raw-read";
 import {
   type FinancialTransactionId,
   type FinancialTransactionShortcode,
@@ -178,7 +180,7 @@ type FinancialTransactionRow = Awaited<
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: FinancialTransactionRow[],
-): Promise<FinancialTransactionOut[]> => {
+): Promise<RawFinancialTransactionOut[]> => {
   const ids = rows.map((row) => row.id);
   const [dataQualities, sourceRefs, categorySummaries] = await Promise.all([
     loadDataQualities(db, "financialTransaction", ids),
@@ -204,12 +206,12 @@ const toOut = (
   dataQuality: DataQuality,
   sourceRefs: SettlementRef[],
   spendingCategorySummary: SpendingCategorySummary,
-): FinancialTransactionOut => {
+): RawFinancialTransactionOut => {
   const allocations = (row.allocations ?? []).map((allocation) => ({
     purchaseId: parseShortcodeFor("purchase", allocation.purchaseId),
     amount: Number(allocation.amount),
   }));
-  return financialTransactionOut.parse({
+  return rawFinancialTransactionOut.parse({
     id: parseShortcodeFor("financialTransaction", row.shortcode),
     accountId: parseShortcodeFor("financialAccount", row.accountShortcode),
     // DERIVED, not stored: the sole Purchase this transaction settled, or null
@@ -295,7 +297,7 @@ const selectTransactionsRead = (
     .from(financialTransaction);
 };
 // Partial bindings retain field validators; full reads retain settlement refinements.
-const transactionFields = z.object(financialTransactionOut.shape);
+const transactionFields = z.object(rawFinancialTransactionOut.shape);
 const transactionRead = (
   db: Database,
 ): ListReadOptions<
@@ -320,7 +322,7 @@ const transactionRead = (
         rows.map((row) => ({
           id: parseShortcodeFor("financialTransaction", row.shortcode),
           kind: financialTransactionKind.parse(row.kind),
-          status: financialTransactionOut.shape.status.parse(row.status),
+          status: rawFinancialTransactionOut.shape.status.parse(row.status),
           amount: row.amount,
           merchant: row.merchant,
           allocations: row.allocations ?? [],
@@ -495,14 +497,14 @@ export const listFinancialTransactions = async (
     readIntent,
   );
   return parseCompleteListRead(
-    financialTransactionOut,
+    rawFinancialTransactionOut,
     Promise.resolve(result),
   );
 };
 
 const financialTransactionReader = createEntityReader<
   FinancialTransactionRow,
-  FinancialTransactionOut,
+  RawFinancialTransactionOut,
   "financialTransaction",
   Database | DrizzleTransaction
 >({

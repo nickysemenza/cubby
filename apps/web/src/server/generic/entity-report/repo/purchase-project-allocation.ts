@@ -1,4 +1,4 @@
-import type { PurchaseOut } from "@cubby/schemas/purchase";
+import type { RawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 import type { RelatedSummaryOutput } from "@cubby/schemas/related-view";
 
 import { formatCurrency } from "~/lib/number-format";
@@ -65,7 +65,7 @@ const composeProjectAllocationSection = (
 
 export const purchaseProjectAllocationReport = async (
   db: Database,
-  purchase: Pick<PurchaseOut, "id" | "expenseTotal">,
+  purchase: Pick<RawPurchaseOut, "id" | "expenseTotal">,
 ) => {
   const purchaseId = purchase.id;
   return sectionBlocks(

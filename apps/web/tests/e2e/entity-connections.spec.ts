@@ -1,3 +1,4 @@
+import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { z } from "zod";
 import { assessmentReviewBatchOut } from "@cubby/schemas/assessment";
 import { and, eq } from "drizzle-orm";
@@ -54,9 +55,14 @@ test("RTable connection review commits the chosen Expense", async ({
     readExpense(
       page,
       line.id,
-      z.object({ productId: z.string().nullable(), cost: z.number() }),
+      z.object({
+        fields: z.object({
+          productId: fieldEnvelope(z.string().nullable(), z.string()),
+        }),
+        cost: z.number(),
+      }),
     );
-  expect((await saved()).productId).toBeNull();
+  expect(fieldValueOf((await saved()).fields.productId)).toBeNull();
   await gotoAuthenticatedPage(
     page,
     `/products?searchQuery=${encodeURIComponent(name)}`,
@@ -69,7 +75,7 @@ test("RTable connection review commits the chosen Expense", async ({
     name: "Pending suggestions",
     exact: true,
   });
-  expect((await saved()).productId).toBeNull();
+  expect(fieldValueOf((await saved()).fields.productId)).toBeNull();
   await expect(review).toContainText("This Expense acquired this Product");
   const [application] = await Promise.all([
     page.waitForResponse((response) =>

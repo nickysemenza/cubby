@@ -441,7 +441,7 @@ export default defineEntity({
   fields: {
     create: { module: "@cubby/schemas/plant", export: "plantCreateInput" },
     update: { module: "@cubby/schemas/plant", export: "plantUpdateData" },
-    output: { module: "@cubby/schemas/plant", export: "plantOut" },
+    output: { module: "@cubby/schemas/plant-raw-read", export: "rawPlantOut" },
   },
   storage: {
     indexes: [{ on: ["gardenGuideKey"] }],

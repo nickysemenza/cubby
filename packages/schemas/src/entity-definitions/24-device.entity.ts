@@ -458,8 +458,8 @@ export default defineEntity({
       export: "deviceUpdateData",
     },
     output: {
-      module: "@cubby/schemas/device",
-      export: "deviceOut",
+      module: "@cubby/schemas/device-raw-read",
+      export: "rawDeviceOut",
     },
   },
   storage: {

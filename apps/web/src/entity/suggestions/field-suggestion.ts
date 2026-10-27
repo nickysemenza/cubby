@@ -49,7 +49,18 @@ export function suggestionRecordFieldValue<TRecord extends object>(
   key: string,
   // oxlint-disable-next-line anti-slop/no-unknown-returns -- Declared suggestion paths cross heterogeneous field types; callers parse the value or normalize it with basisValueOf.
 ): unknown {
-  const readKey = fieldByKey(entity, key)?.readKey ?? key;
+  const field = fieldByKey(entity, key);
+  if (field?.readKey === null) {
+    const path = field.display.readPath;
+    if (!path) return undefined;
+    // Intent-only references load through their declared projection; an empty
+    // projected relation is loaded, while an absent projection is deferred.
+    const projected = readPathValue(record, path);
+    if (projected !== undefined) return projected;
+    const root = path.split(".")[0]?.split("[")[0];
+    return root && readPathValue(record, root) === null ? null : undefined;
+  }
+  const readKey = field?.readKey ?? key;
   if (Object.hasOwn(entityFieldEnvelopeFields[entity], readKey)) {
     const envelope = fieldEnvelopeFor(record, readKey);
     return envelope && envelope.result.kind !== "missing"

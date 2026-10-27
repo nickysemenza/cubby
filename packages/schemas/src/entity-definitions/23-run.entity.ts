@@ -1097,8 +1097,8 @@ export default defineEntity({
     create: null,
     update: null,
     output: {
-      module: "@cubby/schemas/run",
-      export: "runOut",
+      module: "@cubby/schemas/run-raw-read",
+      export: "rawRunOut",
     },
   },
   // One durable attempt to discover, fetch, extract, write, and audit evidence.

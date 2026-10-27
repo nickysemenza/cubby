@@ -4,13 +4,13 @@ import {
   type ProjectId,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { projectListItemOut } from "@cubby/schemas/project";
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
 import type {
   ProjectAttentionItem,
   ProjectFilters,
   ProjectOptionsOut,
 } from "@cubby/schemas/project";
+import { rawProjectListItemOut } from "@cubby/schemas/work-raw-read";
 import { and, asc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
@@ -390,7 +390,7 @@ export const projectListRead = async (
             );
             return [
               settings.fields(
-                projectListItemOut.pick({ locations: true }),
+                rawProjectListItemOut.pick({ locations: true }),
                 (row, loaded) => {
                   const value = loaded.get(row.id);
                   if (!value)
@@ -399,7 +399,7 @@ export const projectListRead = async (
                 },
               ),
               settings.fields(
-                projectListItemOut.pick({
+                rawProjectListItemOut.pick({
                   assigneeId: true,
                   assigneeName: true,
                   defaultTrade: true,
@@ -414,7 +414,7 @@ export const projectListRead = async (
                 },
               ),
               hierarchy.fields(
-                projectListItemOut.pick({
+                rawProjectListItemOut.pick({
                   parentProjectId: true,
                   parentProjectName: true,
                   childProjectIds: true,
@@ -447,7 +447,7 @@ export const projectListRead = async (
                   tree: await hierarchy.load(page),
                 }))
                 .fields(
-                  projectListItemOut.pick({
+                  rawProjectListItemOut.pick({
                     blockedByIds: true,
                     blockingIds: true,
                   }),
@@ -471,7 +471,7 @@ export const projectListRead = async (
                   }),
                 ),
               urls.fields(
-                projectListItemOut.pick({
+                rawProjectListItemOut.pick({
                   googleDriveFolderUrl: true,
                   notionPageUrl: true,
                 }),
@@ -486,7 +486,7 @@ export const projectListRead = async (
                 },
               ),
               rollups.fields(
-                projectListItemOut.pick({
+                rawProjectListItemOut.pick({
                   rollup: true,
                   spent: true,
                   taskProgress: true,
@@ -523,7 +523,7 @@ export const projectListRead = async (
 };
 
 export const projectList = completeListReader(
-  projectListItemOut,
+  rawProjectListItemOut,
   projectListRead,
 );
 export const projectListSummary = async (

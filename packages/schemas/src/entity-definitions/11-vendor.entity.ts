@@ -1260,6 +1260,18 @@ export default defineEntity({
   fields: {
     embedded: [
       {
+        path: ["logo"],
+        entity: "image",
+        projections: [
+          "output",
+          "list",
+          "detail",
+          "mcpOutput",
+          "mcpList",
+          "mcpDetail",
+        ],
+      },
+      {
         path: ["purchasedCategories"],
         entity: "productCategory",
         projections: [

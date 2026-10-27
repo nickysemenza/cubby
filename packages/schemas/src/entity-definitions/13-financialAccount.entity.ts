@@ -719,8 +719,8 @@ export default defineEntity({
       export: "financialAccountUpdateData",
     },
     output: {
-      module: "@cubby/schemas/financial-account",
-      export: "financialAccountOut",
+      module: "@cubby/schemas/financial-account-raw-read",
+      export: "rawFinancialAccountOut",
     },
   },
   storage: {

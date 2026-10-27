@@ -241,26 +241,34 @@ function CardScalarFields({
 
 describe("EntityPrimitiveFields", () => {
   it("edits the card network through its generic scalar control", async () => {
-    let submitted: unknown;
-    render(
-      <CardScalarFields
-        onSubmit={(values) => {
-          submitted = values;
-        }}
-      />,
-    );
-    const picker = screen.getByRole("combobox", { name: "Network" });
-    picker.focus();
-    fireEvent.keyDown(picker, { key: "ArrowDown" });
-    const item = screen.getByRole("option", { name: "Mastercard" });
-    fireEvent.mouseMove(item);
-    fireEvent.click(item);
-    fireEvent.submit(screen.getByRole("button", { name: "Save card fields" }));
-    await waitFor(() =>
-      expect(submitted).toEqual({
-        network: "mastercard",
-      }),
-    );
+    const harness = createBrowserTestHarness();
+    try {
+      let submitted: unknown;
+      render(
+        <CardScalarFields
+          onSubmit={(values) => {
+            submitted = values;
+          }}
+        />,
+        { wrapper: harness.wrapper },
+      );
+      const picker = screen.getByRole("combobox", { name: "Network" });
+      picker.focus();
+      fireEvent.keyDown(picker, { key: "ArrowDown" });
+      const item = screen.getByRole("option", { name: "Mastercard" });
+      fireEvent.mouseMove(item);
+      fireEvent.click(item);
+      fireEvent.submit(
+        screen.getByRole("button", { name: "Save card fields" }),
+      );
+      await waitFor(() =>
+        expect(submitted).toEqual({
+          network: "mastercard",
+        }),
+      );
+    } finally {
+      harness.dispose();
+    }
   });
   it("composes relationship provenance into editor help and accessibility", () => {
     render(<WishAcquisitionFields />);
@@ -277,19 +285,24 @@ describe("EntityPrimitiveFields", () => {
   });
 
   it("keeps serialized image ordering in the specialized image editor", () => {
-    render(<LocationMainFields />);
-    expect(screen.getByRole("textbox", { name: "Name" })).toBeVisible();
-    // Serialized image ordering must never surface as a text control.
-    expect(
-      screen.getAllByRole("textbox").map((el) => el.getAttribute("name")),
-    ).toEqual(["name", "notes"]);
-    expect(screen.queryByLabelText(/image order/i)).not.toBeInTheDocument();
-    // `type` is the only combobox: its manifest `control.kind: "select"`
-    // (added for `control.suggest`, see `04-location.entity.ts`) is the sole
-    // legitimate one in this section; `imageOrder`'s JSON must never surface
-    // as a second one.
-    expect(screen.getByRole("combobox", { name: "Type" })).toBeVisible();
-    expect(screen.getAllByRole("combobox")).toHaveLength(1);
+    const harness = createBrowserTestHarness();
+    try {
+      render(<LocationMainFields />, { wrapper: harness.wrapper });
+      expect(screen.getByRole("textbox", { name: "Name" })).toBeVisible();
+      // Serialized image ordering must never surface as a text control.
+      expect(
+        screen.getAllByRole("textbox").map((el) => el.getAttribute("name")),
+      ).toEqual(["name", "notes"]);
+      expect(screen.queryByLabelText(/image order/i)).not.toBeInTheDocument();
+      // `type` is the only combobox: its manifest `control.kind: "select"`
+      // (added for `control.suggest`, see `04-location.entity.ts`) is the sole
+      // legitimate one in this section; `imageOrder`'s JSON must never surface
+      // as a second one.
+      expect(screen.getByRole("combobox", { name: "Type" })).toBeVisible();
+      expect(screen.getAllByRole("combobox")).toHaveLength(1);
+    } finally {
+      harness.dispose();
+    }
   });
 
   it("renders a suggestion hint for a select field declared with control.suggest", async () => {

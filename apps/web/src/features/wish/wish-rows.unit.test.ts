@@ -1,6 +1,12 @@
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import type { WishCandidateOut, WishListItemOut } from "@cubby/schemas/wish";
+import { wishListItemOut } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
+
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
 
 import { buildWishRows, wishSubRows } from "./wish-rows";
 
@@ -24,19 +30,33 @@ const wish = (
   shortcode: string,
   candidates: WishCandidateOut[] = [],
 ): WishListItemOut => {
-  return {
+  return entityReadFixture(wishListItemOut, {
     id: testShortcode("wish", shortcode),
     name: `Wish ${shortcode}`,
     notes: null,
     acquiredAt: null,
     candidates,
-    candidateCount: candidates.length,
-    priceRange: null,
-    displayImages: [],
-    dataQuality: testCompleteDataQuality(),
+    fields: {
+      candidateCount: fieldValueFixture(
+        wishListItemOut.shape.fields.shape.candidateCount,
+        candidates.length,
+      ),
+      priceRange: fieldValueFixture(
+        wishListItemOut.shape.fields.shape.priceRange,
+        null,
+      ),
+      displayImages: fieldValueFixture(
+        wishListItemOut.shape.fields.shape.displayImages,
+        [],
+      ),
+      dataQuality: fieldValueFixture(
+        wishListItemOut.shape.fields.shape.dataQuality,
+        testCompleteDataQuality(),
+      ),
+    },
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
-  };
+  });
 };
 
 describe("buildWishRows", () => {

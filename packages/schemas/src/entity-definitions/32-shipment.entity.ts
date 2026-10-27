@@ -406,7 +406,10 @@ export default defineEntity({
   fields: {
     create: null,
     update: { module: "@cubby/schemas/shipment", export: "shipmentUpdateData" },
-    output: { module: "@cubby/schemas/shipment", export: "shipmentOut" },
+    output: {
+      module: "@cubby/schemas/shipment-raw-read",
+      export: "rawShipmentOut",
+    },
   },
   storage: {
     indexes: [{ on: ["purchaseId"] }, { on: ["carrierId", "trackingNumber"] }],

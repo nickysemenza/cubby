@@ -1,3 +1,4 @@
+import { fieldResolutionsSchema } from "./field-resolution";
 import { withFieldEnvelopes } from "./field-envelope";
 import {
   mealFieldEnvelopeFields,
@@ -103,11 +104,15 @@ export const rawCalendarMealSource = z.object({
   displayImages: displayImagesField.default([]),
 });
 export const rawCalendarTaskSource = z.object({
+  // Keep resolver provenance through occurrence assembly; public envelopes consume it.
+  fieldResolutions: fieldResolutionsSchema.optional(),
   id: taskShortcode,
   trade: tradeSchema,
   displayImages: displayImagesField.default([]),
 });
 export const rawCalendarExpenseSource = z.object({
+  // Keep resolver provenance through occurrence assembly; public envelopes consume it.
+  fieldResolutions: fieldResolutionsSchema.optional(),
   id: expenseShortcode,
   trade: tradeSchema.nullable(),
   vendor: z.string().nullable(),

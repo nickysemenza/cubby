@@ -984,10 +984,34 @@ export default defineEntity({
     ],
   },
   fields: {
+    embedded: [
+      {
+        path: ["images"],
+        entity: "image",
+        projections: [
+          "output",
+          "list",
+          "detail",
+          "mcpOutput",
+          "mcpList",
+          "mcpDetail",
+        ],
+      },
+    ],
     create: { module: "@cubby/schemas/project", export: "taskCreateInput" },
     update: { module: "@cubby/schemas/project", export: "taskUpdateData" },
-    output: { module: "@cubby/schemas/project", export: "taskOut" },
-    list: { module: "@cubby/schemas/project", export: "taskListItemOut" },
+    output: { module: "@cubby/schemas/work-raw-read", export: "rawTaskOut" },
+    list: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawTaskListItemOut",
+    },
+    detail: { module: "@cubby/schemas/work-raw-read", export: "rawTaskOut" },
+    mcpOutput: { module: "@cubby/schemas/work-raw-read", export: "rawTaskOut" },
+    mcpList: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawTaskListItemOut",
+    },
+    mcpDetail: { module: "@cubby/schemas/work-raw-read", export: "rawTaskOut" },
   },
   storage: {
     indexes: [{ on: ["status"] }, { on: ["dueDate"] }],

@@ -16,16 +16,18 @@ import {
   type ProductCategoryCreateInput,
   type ProductCategoryFeature,
   type ProductCategoryFilters,
-  type ProductCategoryOut,
   type RawProductCategorySummary,
   type ProductCategoryUpdateData,
-  productCategoryOut,
 } from "@cubby/schemas/product-category";
 import {
   PRODUCT_CATEGORY_MAX_DEPTH as MAX_PRODUCT_CATEGORY_DEPTH,
   productCategoryFeature,
   rawProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
+import {
+  type RawProductCategoryOut,
+  rawProductCategoryOut,
+} from "@cubby/schemas/product-category-raw-read";
 import type { categoryMappingSchema } from "@cubby/schemas/spending-classification";
 import {
   and,
@@ -332,7 +334,7 @@ const categoryRead = {
       ),
     );
     return [
-      bind(productCategoryOut.pick({ feature: true }), (row) => ({
+      bind(rawProductCategoryOut.pick({ feature: true }), (row) => ({
         feature: parseFeature(row.feature),
       })),
       bind
@@ -351,13 +353,13 @@ const categoryRead = {
           );
         })
         .fields(
-          productCategoryOut.pick({ effectiveFeature: true }),
+          rawProductCategoryOut.pick({ effectiveFeature: true }),
           (row, loaded) => ({
             effectiveFeature: loaded.get(row.id) ?? null,
           }),
         ),
       mappings.fields(
-        productCategoryOut.pick({
+        rawProductCategoryOut.pick({
           spendingCategoryMapping: true,
           effectiveSpendingCategory: true,
         }),
@@ -367,7 +369,7 @@ const categoryRead = {
         }),
       ),
       paths.fields(
-        productCategoryOut.pick({ path: true, pathLabel: true }),
+        rawProductCategoryOut.pick({ path: true, pathLabel: true }),
         (row, loaded) => {
           const path = loaded.get(row.id) ?? [];
           return {
@@ -389,7 +391,7 @@ const categoryRead = {
           mappings: await mappings.load(page),
         }))
         .fields(
-          productCategoryOut.pick({ fieldResolutions: true }),
+          rawProductCategoryOut.pick({ fieldResolutions: true }),
           (row, loaded) => ({
             fieldResolutions: {
               ...categoryResolutions(row, loaded.facts.get(row.id)),
@@ -400,7 +402,7 @@ const categoryRead = {
           }),
         ),
       counts.fields(
-        productCategoryOut.pick({ productCount: true }),
+        rawProductCategoryOut.pick({ productCount: true }),
         (row, loaded) => ({ productCount: loaded.get(row.id) ?? 0 }),
       ),
     ];
@@ -430,9 +432,9 @@ function mappedCategoryIdentity(
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: CategoryRow[],
-): Promise<ProductCategoryOut[]> =>
+): Promise<RawProductCategoryOut[]> =>
   (await hydrateRead(db, rows, { kind: "full" })).map((row) =>
-    productCategoryOut.parse(row),
+    rawProductCategoryOut.parse(row),
   );
 
 export const buildProductCategoryWhere = (filters: ProductCategoryFilters) =>
@@ -456,7 +458,7 @@ export const listProductCategoriesRead = (
   );
 
 export const listProductCategories = completeListReader(
-  productCategoryOut,
+  rawProductCategoryOut,
   listProductCategoriesRead,
 );
 

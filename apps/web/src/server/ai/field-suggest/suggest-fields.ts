@@ -28,14 +28,15 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
-import {
-  fieldEnvelope,
-  type ReadableFieldEnvelope,
-} from "@cubby/schemas/field-envelope";
+import { fieldEnvelope } from "@cubby/schemas/field-envelope";
 import {
   type FieldResolution,
   type FieldResolutions,
 } from "@cubby/schemas/field-resolution";
+import {
+  fieldSuggestionResolutionEvidence,
+  type FieldSuggestionResolutionEvidence,
+} from "@cubby/schemas/field-suggestion";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
@@ -218,12 +219,12 @@ async function resolveSuggestionInheritance(
 
 function fieldResolutionContext(
   raw: string | null | undefined,
-): Record<string, ReadableFieldEnvelope> {
+): Record<string, FieldSuggestionResolutionEvidence> {
   if (!raw) return {};
   try {
     const parsed: unknown = JSON.parse(raw);
     return z
-      .record(z.string(), fieldEnvelope(z.unknown(), z.unknown()))
+      .record(z.string(), fieldSuggestionResolutionEvidence)
       .catch({})
       .parse(parsed);
   } catch {

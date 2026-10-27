@@ -22,6 +22,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { foodSummary } from "@cubby/usda";
 import { describe, expect, it } from "vitest";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { mock } from "~/lib/test/mock-schema";
 
 import {
@@ -33,7 +34,7 @@ import {
 
 describe("canonical Product MCP attachments", () => {
   it("retains the published image evidence without reconstructing a second Product shape", () => {
-    const attachment = mock(rawProductOutput.shape.images.element, {
+    const rawAttachment = mock(rawProductOutput.shape.images.element, {
       seed: 1,
       overrides: {
         id: testShortcode("image", "IMG-EXAMPLE"),
@@ -42,6 +43,17 @@ describe("canonical Product MCP attachments", () => {
         purpose: null,
       },
     });
+    const image = mock(entityFieldEnvelopeSchemas.image.output, { seed: 3 });
+    const attachment = {
+      ...rawAttachment,
+      fields: {
+        ...image.fields,
+        url: fieldValueFixture(
+          entityFieldEnvelopeSchemas.image.output.shape.fields.shape.url,
+          rawAttachment.url,
+        ),
+      },
+    };
     const schema = entityFieldEnvelopeSchemas.product.mcpDetail;
     const product = mock(schema, { seed: 2 });
     const result = schema.parse({

@@ -1,5 +1,5 @@
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
-import type { PurchaseOut } from "@cubby/schemas/purchase";
+import { type RawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
+import type { RawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
@@ -19,7 +19,7 @@ import { settlementLabel } from "~/server/generic/list/repo/list-display-labels"
  */
 const linkedItem = (
   purchaseId: string,
-  transaction: FinancialTransactionOut,
+  transaction: RawFinancialTransactionOut,
 ) => {
   const slice =
     transaction.allocations.length > 1
@@ -56,8 +56,8 @@ const linkedItem = (
  * and the one verb opens a review that allocates only on an explicit, validated save.
  */
 export const composeFinancialSettlementSection = (
-  purchase: Pick<PurchaseOut, "id" | "financialReconciliation">,
-  linked: readonly FinancialTransactionOut[],
+  purchase: Pick<RawPurchaseOut, "id" | "financialReconciliation">,
+  linked: readonly RawFinancialTransactionOut[],
 ) => {
   const settlement = purchase.financialReconciliation;
   return sectionOut({
@@ -110,7 +110,7 @@ export const composeFinancialSettlementSection = (
 
 export const purchaseFinancialSettlementReport = async (
   db: Database,
-  purchase: Pick<PurchaseOut, "id" | "financialReconciliation">,
+  purchase: Pick<RawPurchaseOut, "id" | "financialReconciliation">,
 ) => {
   const purchaseId = purchase.id;
   const linked = await listAll((pagination) =>

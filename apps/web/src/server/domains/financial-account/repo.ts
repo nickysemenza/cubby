@@ -6,14 +6,16 @@ import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import {
   type FinancialAccountCreateInput,
   type FinancialAccountFilters,
-  type FinancialAccountOut,
   type FinancialAccountUpdateData,
   financialAccountCardNumbers,
   financialAccountIdentity,
   financialAccountIdentityKind,
-  financialAccountOut,
   financialAccountSourceAliases,
 } from "@cubby/schemas/financial-account";
+import {
+  type RawFinancialAccountOut,
+  rawFinancialAccountOut,
+} from "@cubby/schemas/financial-account-raw-read";
 import {
   type FinancialAccountId,
   type FinancialAccountShortcode,
@@ -217,7 +219,7 @@ type FinancialAccountRow = Awaited<ReturnType<typeof selectAccounts>>[number];
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: FinancialAccountRow[],
-): Promise<FinancialAccountOut[]> => {
+): Promise<RawFinancialAccountOut[]> => {
   const dataQualities = await loadDataQualities(
     db,
     "financialAccount",
@@ -230,10 +232,10 @@ const hydrate = async (
 const toOut = (
   row: FinancialAccountRow,
   dataQuality: DataQuality,
-): FinancialAccountOut => {
+): RawFinancialAccountOut => {
   const sourceAliases = financialAccountSourceAliases.parse(row.sourceAliases);
   const cardNumbers = financialAccountCardNumbers.parse(row.cardNumbers);
-  return financialAccountOut.parse({
+  return rawFinancialAccountOut.parse({
     id: parseShortcodeFor("financialAccount", row.shortcode),
     name: row.name,
     authorizedUserItems: row.authorizedUserItems,
@@ -290,20 +292,20 @@ const selectAccountsRead = (
 };
 const accountRead = {
   bindings: (bind) => [
-    bind(financialAccountOut.pick({ fieldResolutions: true }), (row) => ({
+    bind(rawFinancialAccountOut.pick({ fieldResolutions: true }), (row) => ({
       fieldResolutions: cardholderResolution(row),
     })),
-    bind(financialAccountOut.pick({ primaryCardholderId: true }), (row) => ({
+    bind(rawFinancialAccountOut.pick({ primaryCardholderId: true }), (row) => ({
       primaryCardholderId: row.primaryCardholderShortcode
         ? parseShortcodeFor("ledgerParty", row.primaryCardholderShortcode)
         : null,
     })),
-    bind(financialAccountOut.pick({ ledgerPartyId: true }), (row) => ({
+    bind(rawFinancialAccountOut.pick({ ledgerPartyId: true }), (row) => ({
       ledgerPartyId: row.ledgerPartyShortcode
         ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
         : null,
     })),
-    bind(financialAccountOut.pick({ providerVendorId: true }), (row) => ({
+    bind(rawFinancialAccountOut.pick({ providerVendorId: true }), (row) => ({
       providerVendorId: row.providerVendorShortcode
         ? parseShortcodeFor("vendor", row.providerVendorShortcode)
         : null,
@@ -360,7 +362,7 @@ export const listFinancialAccountsRead = (
   );
 
 export const listFinancialAccounts = completeListReader(
-  financialAccountOut,
+  rawFinancialAccountOut,
   listFinancialAccountsRead,
 );
 

@@ -1,3 +1,5 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
+import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { locationPickerAncestorOut } from "@cubby/schemas/location";
 import { productResolveCandidateOut } from "@cubby/schemas/product";
 import type { SearchHit } from "@cubby/schemas/search";
@@ -141,7 +143,12 @@ describe("generic record picture", () => {
     const item = buildRecordComboboxItem("recipe", {
       id: recipe,
       name: "Winter stew",
-      displayImages: [{ id: testShortcode("image", "IMG-2ABC"), url: cover }],
+      fields: {
+        displayImages: fieldValueFixture(
+          computedFieldEnvelope(displayImagesField),
+          [{ id: testShortcode("image", "IMG-2ABC"), url: cover }],
+        ),
+      },
     });
     expect(item.thumb?.imageUrl).toBe(cover);
     expect(item.thumb?.fallback).toBeTruthy();
@@ -350,3 +357,37 @@ describe("product stock picker evidence", () => {
     );
   });
 });
+
+it.each([{ images: undefined }, { images: [] }])(
+  "keeps missing and empty picker covers authoritative",
+  ({ images }) => {
+    const fields = {
+      displayImages: fieldValueFixture(
+        computedFieldEnvelope(displayImagesField),
+        images,
+      ),
+    };
+    const snapshot = [
+      {
+        id: testShortcode("image", "IMG-4K7M"),
+        url: "https://example.test/stale.jpg",
+      },
+    ];
+    expect(
+      buildRecordComboboxItem("recipe", {
+        id: "RCP-4K7M",
+        name: "Synthetic stew",
+        fields,
+        displayImages: snapshot,
+      }).thumb?.imageUrl,
+    ).toBeNull();
+    expect(
+      buildProductComboboxItem({
+        id: testShortcode("product", "PRD-4K7M"),
+        name: "Synthetic kettle",
+        fields,
+        coverImageUrl: "https://example.test/stale.jpg",
+      }).thumb?.imageUrl,
+    ).toBeNull();
+  },
+);

@@ -1,10 +1,15 @@
 import { gardenEntryOut } from "@cubby/schemas/garden-entry";
+import { imageOut } from "@cubby/schemas/image";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { fromAny } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -34,22 +39,48 @@ afterEach(() => {
   harness.dispose();
 });
 
-const image = (id: string, filename: string) => ({
-  id,
-  url: `https://example.com/${filename}`,
-  filename,
-  key: filename,
-});
+const image = (id: string, filename: string) =>
+  entityReadFixture(imageOut, {
+    contentType: "image/jpeg",
+    status: "UPLOADED",
+    useOriginal: false,
+    width: 800,
+    height: 600,
+    fields: {
+      url: fieldValueFixture(
+        imageOut.shape.fields.shape.url,
+        `https://example.com/${filename}`,
+      ),
+      representations: fieldValueFixture(
+        imageOut.shape.fields.shape.representations,
+        {
+          original: `https://example.com/${filename}`,
+          transparent: null,
+          preferred: `https://example.com/${filename}`,
+          preferredKind: "original",
+        },
+      ),
+    },
+    id: testShortcode("image", id),
+    url: `https://example.com/${filename}`,
+    filename,
+    key: filename,
+  });
+
+const recordImageId = testShortcode("image", "IMG-RECORD");
 
 describe("editor presentation media hook", () => {
-  const record = {
-    ...mock(gardenEntryOut, {
-      seed: 7,
-      overrides: { images: [] },
-    }),
-    // A record image the shell's gallery already shows.
-    images: [image("IMG-RECORD", "record.jpg")],
-  };
+  const record = mock(gardenEntryOut, {
+    seed: 7,
+    overrides: {
+      fields: {
+        // A record image the shell's gallery already shows.
+        images: fieldValueFixture(gardenEntryOut.shape.fields.shape.images, [
+          image("IMG-RECORD", "record.jpg"),
+        ]),
+      },
+    },
+  });
   const request = {
     entity: "gardenEntry" as const,
     operation: "update" as const,
@@ -67,8 +98,18 @@ describe("editor presentation media hook", () => {
     ),
     // The record image again (deduplicated) plus a second collection.
     extraExistingImages: [
-      image("IMG-RECORD", "record.jpg"),
-      image("IMG-LABEL", "label.jpg"),
+      {
+        id: recordImageId,
+        url: "https://example.com/record.jpg",
+        filename: "record.jpg",
+        key: "record.jpg",
+      },
+      {
+        id: testShortcode("image", "IMG-LABEL"),
+        url: "https://example.com/label.jpg",
+        filename: "label.jpg",
+        key: "label.jpg",
+      },
     ],
     documents: <p>Manuals go here</p>,
   });
@@ -184,9 +225,9 @@ describe("image block attachment roles", () => {
     await waitFor(() =>
       expect(screen.getByTestId("image-fields")).toHaveTextContent(
         JSON.stringify({
-          imageOrder: ["IMG-RECORD"],
-          pendingImageIds: ["IMG-RECORD"],
-          pendingImagePurposes: { "IMG-RECORD": "label" },
+          imageOrder: [recordImageId],
+          pendingImageIds: [recordImageId],
+          pendingImagePurposes: { [recordImageId]: "label" },
         }),
       ),
     );

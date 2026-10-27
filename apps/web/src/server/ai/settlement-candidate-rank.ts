@@ -4,10 +4,8 @@
  * rather than semantic exclusions made by the deterministic sort. A ranking
  * never authorizes a settlement write.
  */
-import {
-  SETTLEMENT_CANDIDATE_LIMIT,
-  type FinancialTransactionOut,
-} from "@cubby/schemas/financial-transaction";
+import { SETTLEMENT_CANDIDATE_LIMIT } from "@cubby/schemas/financial-transaction";
+import { type RawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
 import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
 import {
   type PurchaseSettlementSuggestOut,
@@ -40,7 +38,7 @@ export interface SettlementSubject {
 
 interface TiedCandidate {
   id: string;
-  transaction: FinancialTransactionOut;
+  transaction: RawFinancialTransactionOut;
   conflicts: readonly SettlementConflictKind[];
 }
 
@@ -85,7 +83,7 @@ export const settlementSelectionSpec: AiSelectionSpec<TiedCandidate> = {
 export async function suggestSettlementMatch(args: {
   subject: SettlementSubject;
   ranks: readonly SettlementRank[];
-  loadTransaction: (id: string) => Promise<FinancialTransactionOut>;
+  loadTransaction: (id: string) => Promise<RawFinancialTransactionOut>;
   openUsage: () => Promise<AiSelectionUsage>;
   decisionPort?: DecisionPort;
 }): Promise<PurchaseSettlementSuggestOut> {

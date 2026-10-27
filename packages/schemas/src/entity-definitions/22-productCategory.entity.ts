@@ -798,8 +798,8 @@ Rules:
       export: "productCategoryUpdateData",
     },
     output: {
-      module: "@cubby/schemas/product-category",
-      export: "productCategoryOut",
+      module: "@cubby/schemas/product-category-raw-read",
+      export: "rawProductCategoryOut",
     },
   },
   storage: {

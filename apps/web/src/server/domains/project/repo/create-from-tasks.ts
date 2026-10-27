@@ -10,11 +10,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
 import { projectCreateInput } from "@cubby/schemas/project";
-import type {
-  CreateProjectFromTasksInput,
-  ProjectOut,
-  TaskOut,
-} from "@cubby/schemas/project";
+import type { CreateProjectFromTasksInput } from "@cubby/schemas/project";
+import type { RawProjectOut, RawTaskOut } from "@cubby/schemas/work-raw-read";
 import { and, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -42,7 +39,7 @@ export async function createProjectFromTasks(
   input: CreateProjectFromTasksInput,
   actor: ActorContext,
 ): Promise<{
-  output: { project: ProjectOut; tasks: TaskOut[] };
+  output: { project: RawProjectOut; tasks: RawTaskOut[] };
   projectEntityId: ProjectId;
   taskEntityIds: TaskId[];
 }> {

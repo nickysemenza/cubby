@@ -10,8 +10,8 @@ import {
   recipeId,
   vendorId,
 } from "@cubby/schemas/identifiers";
-import { expenseOut } from "@cubby/schemas/project";
 import { recipeYieldSchema } from "@cubby/schemas/recipe-shared";
+import { rawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -43,7 +43,7 @@ const recipeResetState = z.object({
   yield: recipeYieldSchema.nullable(),
 });
 const projectTradeResetFact = z.object({
-  value: expenseOut.shape.trade,
+  value: rawExpenseOut.shape.trade,
   source: z.object({ position: z.number().int().nonnegative(), id: z.uuid() }),
 });
 

@@ -1,4 +1,6 @@
-import { expenseOut } from "@cubby/schemas/project";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+const expenseOut = entityFieldEnvelopeSchemas.expense.detail;
 import { z } from "zod";
 import { buildEntity } from "tooling/factories/build";
 
@@ -56,11 +58,13 @@ test("unclassified Expense explains its role gap and resolution preserves money"
   const stored = await readExpense(
     page,
     item.id,
-    expenseOut.pick({ cost: true, lineKind: true, dataQuality: true }),
+    expenseOut.pick({ cost: true, fields: true }),
   );
   expect(stored.cost).toBe(-2.13);
-  expect(stored.lineKind).toBe("principal");
-  expect(stored.dataQuality.gaps.map((gap) => gap.check)).not.toContain(
+  expect(fieldValueOf(stored.fields.lineKind)).toBe("principal");
+  const quality = fieldValueOf(stored.fields.dataQuality);
+  if (!quality) throw new Error("Updated Expense quality result missing");
+  expect(quality.gaps.map((gap) => gap.check)).not.toContain(
     "expense_receipt_role",
   );
 });
@@ -118,16 +122,15 @@ test("capture keeps pending role controls available and saves an explicitly sele
       items: z.array(
         expenseOut.pick({
           name: true,
-          lineKind: true,
-          productId: true,
+          fields: true,
           cost: true,
         }),
       ),
     })
     .parse(await listed.json()).items;
-  expect(rows.find((row) => row.name === name)).toMatchObject({
-    lineKind: "principal",
-    productId: product.id,
-    cost: 2.13,
-  });
+  const saved = rows.find((row) => row.name === name);
+  if (!saved) throw new Error("Created principal Expense missing");
+  expect(fieldValueOf(saved.fields.lineKind)).toBe("principal");
+  expect(fieldValueOf(saved.fields.productId)).toBe(product.id);
+  expect(saved.cost).toBe(2.13);
 });

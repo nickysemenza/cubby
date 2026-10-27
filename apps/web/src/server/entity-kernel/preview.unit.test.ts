@@ -210,9 +210,7 @@ describe("previewEntity field suggestions", () => {
         projectMode: "explicit",
         trade: null,
       });
-      expect(input.basis.__resolutionContext).toBe(
-        JSON.stringify(fieldResolutions),
-      );
+      expect(input.basis.__resolutionContext).toBeUndefined();
       const suggestions: FieldSuggestionsOut["suggestions"] =
         input.basisMode === "suggested"
           ? {

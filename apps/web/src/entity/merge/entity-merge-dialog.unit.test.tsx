@@ -1,3 +1,4 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { testShortcode } from "@cubby/schemas/testing";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -5,6 +6,10 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { entities } from "~/entity/entities";
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 
 import { EntityMergeDialog } from "./entity-merge-dialog";
@@ -94,18 +99,35 @@ describe("EntityMergeDialog impact preview", () => {
   });
 
   it("fixed mode: a blocking disposition on a selected candidate leaves Merge enabled", async () => {
-    const keeper = {
+    const keeper = entityReadFixture(entityFieldEnvelopeSchemas.vendor.output, {
       id: testShortcode("vendor", "VND-4K7M"),
       name: "Acme Supply",
       purchaseCount: 3,
       spend: 120,
-    };
-    const candidate = {
-      id: testShortcode("vendor", "VND-4K7N"),
-      name: "Acme Supply Co",
-      purchaseCount: 1,
-      spend: 40,
-    };
+      fields: {
+        purchaseCount: fieldValueFixture(
+          entityFieldEnvelopeSchemas.vendor.output.shape.fields.shape
+            .purchaseCount,
+          3,
+        ),
+      },
+    });
+    const candidate = entityReadFixture(
+      entityFieldEnvelopeSchemas.vendor.output,
+      {
+        id: testShortcode("vendor", "VND-4K7N"),
+        name: "Acme Supply Co",
+        purchaseCount: 1,
+        spend: 40,
+        fields: {
+          purchaseCount: fieldValueFixture(
+            entityFieldEnvelopeSchemas.vendor.output.shape.fields.shape
+              .purchaseCount,
+            1,
+          ),
+        },
+      },
+    );
 
     const config = entities.vendor.mergeable;
     if (!config?.candidateQuery) {
@@ -149,24 +171,64 @@ describe("EntityMergeDialog impact preview", () => {
 
 describe("EntityMergeDialog generic kernel merge", () => {
   it("keeps an undated Purchase selectable instead of filtering it from merge candidates", async () => {
-    const keeper = {
-      id: testShortcode("purchase", "PUR-4K7M"),
-      vendorId: testShortcode("vendor", "VND-4K7M"),
-      vendorName: "Synthetic supplier",
-      date: "2026-03-01",
-      orderId: "KNOWN-ORDER",
-      displayLabel: null,
-      expenseCount: 1,
-      expenseTotal: 20,
-    };
-    const candidate = {
-      ...keeper,
-      id: testShortcode("purchase", "PUR-4K7N"),
-      date: null,
-      orderId: "UNDATED-ORDER",
-      expenseCount: 0,
-      expenseTotal: 0,
-    };
+    const keeper = entityReadFixture(
+      entityFieldEnvelopeSchemas.purchase.output,
+      {
+        id: testShortcode("purchase", "PUR-4K7M"),
+        vendorId: testShortcode("vendor", "VND-4K7M"),
+        vendorName: "Synthetic supplier",
+        date: "2026-03-01",
+        orderId: "KNOWN-ORDER",
+        displayLabel: null,
+        expenseCount: 1,
+        expenseTotal: 20,
+        fields: {
+          vendorId: fieldValueFixture(
+            entityFieldEnvelopeSchemas.purchase.output.shape.fields.shape
+              .vendorId,
+            testShortcode("vendor", "VND-4K7M"),
+          ),
+          expenseCount: fieldValueFixture(
+            entityFieldEnvelopeSchemas.purchase.output.shape.fields.shape
+              .expenseCount,
+            1,
+          ),
+          expenseTotal: fieldValueFixture(
+            entityFieldEnvelopeSchemas.purchase.output.shape.fields.shape
+              .expenseTotal,
+            20,
+          ),
+        },
+      },
+    );
+    const candidate = entityReadFixture(
+      entityFieldEnvelopeSchemas.purchase.output,
+      {
+        ...keeper,
+        id: testShortcode("purchase", "PUR-4K7N"),
+        date: null,
+        orderId: "UNDATED-ORDER",
+        expenseCount: 0,
+        expenseTotal: 0,
+        fields: {
+          vendorId: fieldValueFixture(
+            entityFieldEnvelopeSchemas.purchase.output.shape.fields.shape
+              .vendorId,
+            testShortcode("vendor", "VND-4K7M"),
+          ),
+          expenseCount: fieldValueFixture(
+            entityFieldEnvelopeSchemas.purchase.output.shape.fields.shape
+              .expenseCount,
+            0,
+          ),
+          expenseTotal: fieldValueFixture(
+            entityFieldEnvelopeSchemas.purchase.output.shape.fields.shape
+              .expenseTotal,
+            0,
+          ),
+        },
+      },
+    );
     const config = entities.purchase.mergeable;
     if (!config?.candidateQuery)
       throw new Error("Purchase candidate query missing");

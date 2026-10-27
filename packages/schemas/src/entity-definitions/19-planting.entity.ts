@@ -628,8 +628,14 @@ export default defineEntity({
       export: "plantingCreateInput",
     },
     update: { module: "@cubby/schemas/planting", export: "plantingUpdateData" },
-    output: { module: "@cubby/schemas/planting", export: "plantingOut" },
-    list: { module: "@cubby/schemas/planting", export: "plantingListItemOut" },
+    output: {
+      module: "@cubby/schemas/planting-raw-read",
+      export: "rawPlantingOut",
+    },
+    list: {
+      module: "@cubby/schemas/planting-raw-read",
+      export: "rawPlantingListItemOut",
+    },
   },
   storage: {
     indexes: [{ on: ["status"] }],

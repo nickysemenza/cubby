@@ -385,7 +385,11 @@ function basisForFingerprint(
 ): FieldSuggestionSource["basis"] {
   if (!isRemove) return basis;
   const { [field]: _omitted, ...rest } = basis;
-  return rest;
+  const context = rest.__resolutionContext;
+  if (context == null) return rest;
+  const envelopes = z.record(z.string(), z.json()).parse(JSON.parse(context));
+  const { [field]: _targetEnvelope, ...dependencies } = envelopes;
+  return { ...rest, __resolutionContext: JSON.stringify(dependencies) };
 }
 
 /** Generic over whichever text-array field the prune target names: re-reads
@@ -545,12 +549,14 @@ function suggestionRequestsForRecord(
     const basis = recordSuggestionBasis(entity, basisTargets, record);
     const currentValue = recordValue(entity, record, target.key).value;
     const readKey = field?.readKey ?? target.key;
-    const loaded = Object.hasOwn(entityFieldEnvelopeFields[entity], readKey)
-      ? suggestionRecordFieldValue(entity, record, target.key) !== undefined
-      : record[readKey] !== undefined ||
-        (field?.reference != null &&
-          record[target.key.replace(/Ids?$/u, "")] !== undefined) ||
-        currentValue !== null;
+    const loaded =
+      field?.readKey === null ||
+      Object.hasOwn(entityFieldEnvelopeFields[entity], readKey)
+        ? suggestionRecordFieldValue(entity, record, target.key) !== undefined
+        : record[readKey] !== undefined ||
+          (field?.reference != null &&
+            record[target.key.replace(/Ids?$/u, "")] !== undefined) ||
+          currentValue !== null;
     if (
       !loaded ||
       !isBasisSufficient(entity, ownTargets, basis) ||
@@ -747,13 +753,16 @@ function storedSuggestionIndex(
   if (entity === "product") {
     for (const record of records) {
       const parsed = z
-        .object({
+        .looseObject({
           id: z.string(),
-          categoryId: z.string().nullable(),
           category: productCategorySummary,
         })
         .safeParse(record);
-      if (parsed.success && parsed.data.categoryId === parsed.data.category.id)
+      if (
+        parsed.success &&
+        suggestionRecordFieldValue(entity, parsed.data, "categoryId") ===
+          parsed.data.category.id
+      )
         categories.set(parsed.data.id, parsed.data.category);
     }
   }

@@ -1,3 +1,6 @@
+import { taskFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.task.gen";
+import { projectFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.project.gen";
+import { expenseFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.expense.gen";
 import {
   purchaseFieldEnvelopeFields,
   purchasePublicReadFields,
@@ -50,54 +53,53 @@ import { generatedExpenseFieldSchemas } from "./generated/entity-field-schemas.e
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { projectKindSchema, projectStatusSchema } from "./project-fields";
 import { taskStatusSchema, tradeSchema } from "./task-fields";
-import { expenseBaseFilterFields, expenseOut } from "./generated/expense.gen";
+import { expenseBaseFilterFields } from "./generated/expense.gen";
 import {
   projectBaseFilterFields,
   projectCreateInput,
-  projectOut,
 } from "./generated/project.gen";
-import {
-  taskBaseFilterFields,
-  taskOut,
-  type TaskOut,
-} from "./generated/task.gen";
+import { taskBaseFilterFields } from "./generated/task.gen";
 
 export {
   taskCreateInput,
   taskUpdateData,
   taskUpdateInput,
-  taskOut,
-  taskListItemOut,
   type TaskCreateInput,
   type TaskUpdateData,
   type TaskUpdateInput,
-  type TaskOut,
-  type TaskListItemOut,
 } from "./generated/task.gen";
 
 export {
   projectCreateInput,
   projectUpdateData,
   projectUpdateInput,
-  projectOut,
-  projectListItemOut,
   type ProjectCreateInput,
   type ProjectUpdateData,
   type ProjectUpdateInput,
-  type ProjectOut,
-  type ProjectListItemOut,
 } from "./generated/project.gen";
 
 export {
   expenseUpdateData,
   expenseUpdateInput,
-  expenseOut,
-  expenseListItemOut,
   type ExpenseUpdateData,
   type ExpenseUpdateInput,
-  type ExpenseOut,
-  type ExpenseListItemOut,
 } from "./generated/expense.gen";
+
+export const taskOut = taskFieldEnvelopeSchemas.output;
+export const taskListItemOut = taskFieldEnvelopeSchemas.list;
+export type TaskOut = z.output<typeof taskOut>;
+export type TaskListItemOut = z.output<typeof taskListItemOut>;
+
+export const projectOut = projectFieldEnvelopeSchemas.output;
+export const projectListItemOut = projectFieldEnvelopeSchemas.list;
+export type ProjectOut = z.output<typeof projectOut>;
+export type ProjectListItemOut = z.output<typeof projectListItemOut>;
+
+export const expenseOut = expenseFieldEnvelopeSchemas.output;
+export const expenseListItemOut = expenseFieldEnvelopeSchemas.list;
+export type ExpenseOut = z.output<typeof expenseOut>;
+export type ExpenseListItemOut = z.output<typeof expenseListItemOut>;
+
 export { TRADE_LABELS } from "./task-fields";
 import type { ShortcodeEntity } from "./entity-manifest";
 import {

@@ -35,6 +35,11 @@ describe("garden schedule", () => {
   it("groups by current location and leaves free-text plans undated", () => {
     const planting = fromPartial<PlantingOut>({
       fields: {
+        expectedHarvest: fieldValueFixture(
+          entityFieldEnvelopeSchemas.planting.list.shape.fields.shape
+            .expectedHarvest,
+          null,
+        ),
         status: fieldValueFixture(
           entityFieldEnvelopeSchemas.planting.list.shape.fields.shape["status"],
           "planned",
@@ -54,8 +59,6 @@ describe("garden schedule", () => {
       plannedWindow: "after the rain",
       season: null,
       transplantedOn: null,
-
-      expectedHarvestEnd: null,
     });
     const rows = plantingScheduleRows([planting], 2026);
     expect(rows.map((row) => [row.name, row.depth])).toEqual([
@@ -70,6 +73,11 @@ describe("garden schedule", () => {
     const plantId = testShortcode("plant", "basil");
     const planting = fromPartial<PlantingOut>({
       fields: {
+        expectedHarvest: fieldValueFixture(
+          entityFieldEnvelopeSchemas.planting.list.shape.fields.shape
+            .expectedHarvest,
+          null,
+        ),
         status: fieldValueFixture(
           entityFieldEnvelopeSchemas.planting.list.shape.fields.shape["status"],
           "growing",
@@ -90,8 +98,6 @@ describe("garden schedule", () => {
       plannedWindow: null,
       season: { start: "2026-05-01", end: null },
       transplantedOn: null,
-
-      expectedHarvestEnd: null,
     });
     const rows = plantingScheduleRows(
       [planting],

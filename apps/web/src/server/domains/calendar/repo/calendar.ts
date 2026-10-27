@@ -17,7 +17,6 @@ import type {
   CalendarSourceKind,
   CalendarRangeInput,
   CalendarRangeOut,
-  CalendarScheduleOut,
 } from "@cubby/schemas/calendar";
 import {
   calendarSources,
@@ -34,6 +33,7 @@ import {
   mealTypeRank,
 } from "@cubby/schemas/meal-classification";
 import type { NutritionTotals } from "@cubby/schemas/nutrition";
+import type { RawCalendarScheduleOut } from "@cubby/schemas/work-raw-read";
 import type { SQL } from "drizzle-orm";
 import {
   and,
@@ -762,7 +762,7 @@ export async function getCalendarRange(
 export async function getCalendarSchedule(
   db: Database,
   input: CalendarRangeInput,
-): Promise<CalendarScheduleOut> {
+): Promise<RawCalendarScheduleOut> {
   const endInclusive = shiftPlainDate(input.endDateExclusive, -1);
   const [taskCondition, plantingCondition] = await Promise.all([
     calendarSourceWhere(db, input, "task"),

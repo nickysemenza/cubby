@@ -1,7 +1,9 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { SECTION_ACTION_IDS } from "@cubby/schemas/entity-section-actions";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -44,7 +46,9 @@ describe("RecordsBlockView finance verbs", () => {
           ],
         }}
         entity="expense"
-        record={{ id: "EXP-2345" }}
+        record={entityReadFixture(entityFieldEnvelopeSchemas.expense.detail, {
+          id: "EXP-2345",
+        })}
       />,
       { wrapper: harness.wrapper },
     );

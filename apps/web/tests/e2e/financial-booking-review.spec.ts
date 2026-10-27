@@ -1,3 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { entityApi } from "./support/entity-api";
 import {
   financialBookingPreview,
@@ -161,8 +163,8 @@ test("reviews spending in the browser with stale and replay guards", async ({
     result.purchaseId,
     {},
   );
-  const purchase = z
-    .object({ expenseTotal: z.number() })
-    .parse(await purchaseResponse.json());
-  expect(purchase.expenseTotal).toBe(125);
+  const purchase = entityFieldEnvelopeSchemas.purchase.detail.parse(
+    await purchaseResponse.json(),
+  );
+  expect(fieldValueOf(purchase.fields.expenseTotal)).toBe(125);
 });

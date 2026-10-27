@@ -3,7 +3,7 @@ import {
   financialTransactionFieldEnvelopeFields,
   financialTransactionPublicReadFields,
 } from "./generated/entity-field-envelope-fields.financialTransaction.gen";
-import financialTransactionDefinition from "./entity-definitions/14-financialTransaction.entity";
+import { rawFinancialTransactionOut } from "./financial-transaction-raw-read";
 import { postedRequiresDate } from "./financial-transaction-fields";
 import { cents, dollars } from "@cubby/shared";
 import { z } from "zod";
@@ -385,8 +385,11 @@ export type MerchantVendorInferenceInput = z.infer<
 export type FinancialTransactionSortField =
   GeneratedEntitySortField<"financialTransaction">;
 
-export const financialTransactionOut =
-  financialTransactionDefinition.readSchemas.output;
+export const financialTransactionOut = withFieldEnvelopes(
+  rawFinancialTransactionOut,
+  financialTransactionFieldEnvelopeFields,
+  financialTransactionPublicReadFields,
+);
 export type FinancialTransactionOut = z.infer<typeof financialTransactionOut>;
 
 export const financialTransactionListResponse = createPaginatedResponseSchema(

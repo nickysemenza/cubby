@@ -40,7 +40,7 @@ import {
   projectAttentionItemSchema,
   projectAttentionTypeSchema,
 } from "@cubby/schemas/project";
-import { purchaseOut } from "@cubby/schemas/purchase";
+import { rawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 import {
   isMiscProduct,
   isNonFoodCategory,
@@ -729,8 +729,9 @@ const exactProblemPresentationRowSchema = z.object({
   expenseTotal: z.number().nullish(),
   expenseCount: z.number().nullish(),
   unpricedExpenseCount: z.number().nullish(),
-  reconciliation: purchaseOut.shape.reconciliation.nullish(),
-  financialReconciliation: purchaseOut.shape.financialReconciliation.nullish(),
+  reconciliation: rawPurchaseOut.shape.reconciliation.nullish(),
+  financialReconciliation:
+    rawPurchaseOut.shape.financialReconciliation.nullish(),
 });
 
 type FastProblemCard =

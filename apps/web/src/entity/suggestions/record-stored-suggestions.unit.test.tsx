@@ -1,5 +1,6 @@
 import type { SuggestionReviewRow } from "@cubby/schemas/ai";
 import { suggestionReviewRowSchema } from "@cubby/schemas/ai";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { shortcode } from "@cubby/schemas/identifiers";
 import {
   productCategorySummary,
@@ -10,6 +11,7 @@ import {
   suggestionListInput,
 } from "@cubby/schemas/suggestion-list";
 import { testShortcode } from "@cubby/schemas/testing";
+import { parseShortcode } from "@cubby/shared";
 import {
   fireEvent,
   act,
@@ -20,7 +22,9 @@ import {
 } from "@testing-library/react";
 import { Profiler } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { MobileCardView } from "~/entity/table/mobile-card-view";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
@@ -42,11 +46,47 @@ import {
   type StoredSuggestionOperations,
 } from "./record-suggestions";
 
+function recordFixture<T extends { id: string }>(input: T) {
+  const entity = parseShortcode(input.id)?.type;
+  if (!entity) throw new Error("Synthetic record identity missing");
+  const row = z.looseObject({ id: z.string() }).parse(input);
+  const schemas = entityFieldEnvelopeSchemas[entity].detail.shape.fields.shape;
+  const fields = z.record(z.string(), z.unknown()).parse(row.fields ?? {});
+  for (const [key, schema] of Object.entries(schemas)) {
+    if (!(schema instanceof z.ZodType))
+      throw new Error("Synthetic field schema missing");
+    if (Object.hasOwn(row, key))
+      fields[key] = fieldValueFixture(schema, row[key]);
+    else {
+      const nestedKey = key.replace(/Ids?$/u, "");
+      if (
+        !Object.hasOwn(fields, key) &&
+        nestedKey !== key &&
+        Object.hasOwn(row, nestedKey)
+      ) {
+        const nested = z
+          .object({ id: z.string() })
+          .nullable()
+          .safeParse(row[nestedKey]);
+        if (nested.success)
+          fields[key] = fieldValueFixture(schema, nested.data?.id ?? null);
+      }
+    }
+  }
+  for (const [key, schema] of Object.entries(schemas)) {
+    if (schema instanceof z.ZodType && !Object.hasOwn(fields, key))
+      fields[key] = fieldValueFixture(schema, undefined);
+  }
+  const result = { ...input, fields };
+  for (const key of Object.keys(schemas)) Reflect.deleteProperty(result, key);
+  return result;
+}
+
 const rowId = "11111111-1111-4111-8111-111111111111";
-const record = {
+const record = recordFixture({
   id: testShortcode("product", "stored-suggestion"),
   categoryId: null,
-};
+});
 const suggestion = (overrides: Partial<SuggestionReviewRow> = {}) =>
   ({
     id: rowId,
@@ -143,7 +183,11 @@ function setup(
   currentCategory?: ProductCategorySummary,
 ) {
   const currentRecord = currentCategory
-    ? { ...record, categoryId: currentCategory.id, category: currentCategory }
+    ? recordFixture({
+        ...record,
+        categoryId: currentCategory.id,
+        category: currentCategory,
+      })
     : record;
   const harness = createBrowserTestHarness();
   const operations: StoredSuggestionOperations = {
@@ -291,22 +335,26 @@ describe("stored suggestions in generic list cells", () => {
     "withholds a stored ancestor correction from cell and bulk acceptance (hierarchy loaded: %s)",
     async (hierarchyLoaded) => {
       const harness = createBrowserTestHarness();
-      const base = {
+      const base = recordFixture({
         ...record,
         name: "Synthetic driver",
         categoryId: "CAT-BBBB",
-      };
+      });
       const specific = hierarchyLoaded
         ? {
             ...base,
             category: {
               id: "CAT-BBBB",
               name: "Drivers",
-              feature: "tools",
-              path: [
-                { id: "CAT-AAAA", name: "Tools" },
-                { id: "CAT-BBBB", name: "Drivers" },
-              ],
+              fields: {
+                path: fieldValueFixture(
+                  productCategorySummary.shape.fields.shape.path,
+                  [
+                    { id: "CAT-AAAA", name: "Tools" },
+                    { id: "CAT-BBBB", name: "Drivers" },
+                  ],
+                ),
+              },
             },
           }
         : base;
@@ -374,12 +422,12 @@ describe("stored suggestions in generic list cells", () => {
         applied: true,
       }),
     );
-    const expense = {
+    const expense = recordFixture({
       id: testShortcode("expense", "suggestion-editor"),
       name: "Synthetic expense",
       cost: 10,
       costType: "services",
-    };
+    });
     const operations = validatedStoredOperations([
       suggestion({
         entity: "expense",
@@ -433,19 +481,19 @@ describe("stored suggestions in generic list cells", () => {
 
   it("keeps presentation-only fields out of a scoped correction editor", async () => {
     const harness = createBrowserTestHarness();
-    const location = {
+    const location = recordFixture({
       id: testShortcode("location", "suggestion-editor"),
       name: "Synthetic room",
       type: "room",
       tags: [],
-    };
+    });
     const operations = validatedStoredOperations([
       suggestion({
         entity: "location",
         recordId: location.id,
         field: "type",
         currentValue: "room",
-        suggestedValue: "storage",
+        suggestedValue: "cabinet",
       }),
     ]);
     const review = vi.fn(
@@ -499,19 +547,19 @@ describe("stored suggestions in generic list cells", () => {
 
   it("renders a suggested field omitted by its bespoke presentation", async () => {
     const harness = createBrowserTestHarness();
-    const transaction = {
+    const transaction = recordFixture({
       id: testShortcode("financialTransaction", "suggestion-editor"),
       amount: 10,
       transactionDate: new Date("2025-01-01T00:00:00.000Z"),
-      itemizationExpectation: "receipt",
-    };
+      itemizationExpectation: "required",
+    });
     const operations = validatedStoredOperations([
       suggestion({
         entity: "financialTransaction",
         recordId: transaction.id,
         field: "itemizationExpectation",
-        currentValue: "receipt",
-        suggestedValue: "invoice",
+        currentValue: "required",
+        suggestedValue: "not_expected",
       }),
     ]);
     const review = vi.fn(
@@ -561,7 +609,7 @@ describe("stored suggestions in generic list cells", () => {
         expect.objectContaining({
           assessmentId: rowId,
           verdict: "wrong",
-          correction: { present: true, value: "receipt" },
+          correction: { present: true, value: "required" },
           intent: "apply",
         }),
       ),
@@ -834,7 +882,12 @@ describe("stored suggestions in generic list cells", () => {
         id: "CAT-AAAA",
         name: "Tools",
         feature: "tools",
-        path: [{ id: "CAT-AAAA", name: "Tools" }],
+        fields: {
+          path: fieldValueFixture(
+            productCategorySummary.shape.fields.shape.path,
+            [{ id: "CAT-AAAA", name: "Tools" }],
+          ),
+        },
       }),
     );
     expect(await screen.findByText("Current category")).toBeInTheDocument();

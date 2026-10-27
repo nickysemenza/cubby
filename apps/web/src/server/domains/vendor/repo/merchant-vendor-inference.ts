@@ -1,11 +1,11 @@
 import {
-  type FinancialTransactionOut,
   financialTransactionSettlementViolation,
   type MerchantVendorCandidate,
   type MerchantVendorInference,
   merchantVendorInference,
   purchaseSettlementKinds,
 } from "@cubby/schemas/financial-transaction";
+import { type RawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sql, type SQL } from "drizzle-orm";
 
@@ -158,7 +158,7 @@ export const merchantVendorInferenceFor = async (
   ) ?? noInference();
 
 type VendorInferenceTransaction = Pick<
-  FinancialTransactionOut,
+  RawFinancialTransactionOut,
   "id" | "kind" | "amount" | "status" | "merchant"
 > & { allocations: readonly unknown[]; ledgerTransferId: string | null };
 
@@ -203,7 +203,7 @@ export async function enrichFinancialTransactionVendorRead<
 
 export async function enrichFinancialTransactionsWithVendorInference(
   db: Database | DrizzleTransaction,
-  transactions: readonly FinancialTransactionOut[],
-): Promise<FinancialTransactionOut[]> {
+  transactions: readonly RawFinancialTransactionOut[],
+): Promise<RawFinancialTransactionOut[]> {
   return enrichFinancialTransactionVendorRead(db, transactions);
 }

@@ -116,20 +116,26 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
         };
       const definition = problemQuery(key.data);
       if (!definition) throw new Error("Problem query registry is incomplete");
-      return pageProblemTypeSlice(
-        await publicProblemSlice(
+      const slice = await publicProblemSlice(
+        context.db,
+        await (
+          await problemExecution()
+        ).findProblemByType(
           context.db,
-          await (
-            await problemExecution()
-          ).findProblemByType(
-            context.db,
-            definition.key,
-            context.upcLookupClient,
-            context.usdaClient,
-          ),
+          definition.key,
+          context.upcLookupClient,
+          context.usdaClient,
         ),
         input,
       );
+      return {
+        ...projectProblemTypeSlice(slice),
+        meta: {
+          pageIndex: input.pageIndex,
+          pageSize: input.pageSize,
+          totalCount: slice.total,
+        },
+      };
     }
     const detectors = await problemDetectors();
     const [fast, coverage, upc, tracker, views] = await Promise.all([

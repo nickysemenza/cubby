@@ -1,12 +1,8 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  emailFilters,
-  emailOut,
-  type EmailFilters,
-  type EmailOut,
-} from "@cubby/schemas/email";
+import { emailFilters, type EmailFilters } from "@cubby/schemas/email";
 import { emailImportOutcome } from "@cubby/schemas/email-fields";
+import { rawEmailOut, type RawEmailOut } from "@cubby/schemas/email-raw-read";
 import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import {
   mailboxClassification,
@@ -467,7 +463,7 @@ const emailRead = (
     });
     return [
       bind(
-        emailOut.pick({ displayName: true, relevanceLabel: true }),
+        rawEmailOut.pick({ displayName: true, relevanceLabel: true }),
         (row) => ({
           displayName:
             row.subject?.trim() || row.sender?.trim() || row.shortcode,
@@ -480,7 +476,7 @@ const emailRead = (
         }),
       ),
       facts.fields(
-        emailOut.pick({
+        rawEmailOut.pick({
           linked: true,
           reviewConflict: true,
           purchaseLinks: true,
@@ -547,14 +543,14 @@ export const listEmailsRead = emailListRead(null);
 const readerFor = (viewer: EmailViewer) =>
   createEntityReader<
     EmailRow,
-    EmailOut,
+    RawEmailOut,
     "email",
     Database | DrizzleTransaction
   >({
     entity: "email",
     fetchById: createEntityRowFetcher(emailTable),
     fromDB: async (db, row) =>
-      emailOut.parse(
+      rawEmailOut.parse(
         (await hydrateRead(db, [row], { kind: "full" }, viewer))[0],
       ),
   });
@@ -568,7 +564,7 @@ export const emailRepository = defineRepository("email", {
     sorts: SortParams[],
     pagination: PaginationParams,
   ) =>
-    completeListReader(emailOut, emailListRead(ctx.actorContext))(
+    completeListReader(rawEmailOut, emailListRead(ctx.actorContext))(
       ctx.db,
       filters,
       sorts,

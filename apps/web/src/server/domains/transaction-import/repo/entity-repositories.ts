@@ -4,15 +4,17 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { sourceTransactionRecordUpdateData } from "@cubby/schemas/source-transaction-record";
 import {
   sourceTransactionRecordMatchState,
-  sourceTransactionRecordOut,
-  type SourceTransactionRecordOut,
   type SourceTransactionRecordFilters,
 } from "@cubby/schemas/source-transaction-record";
 import {
-  transactionImportOut,
-  type TransactionImportOut,
-  type TransactionImportFilters,
-} from "@cubby/schemas/transaction-import";
+  rawSourceTransactionRecordOut,
+  type RawSourceTransactionRecordOut,
+} from "@cubby/schemas/source-transaction-record-raw-read";
+import { type TransactionImportFilters } from "@cubby/schemas/transaction-import";
+import {
+  rawTransactionImportOut,
+  type RawTransactionImportOut,
+} from "@cubby/schemas/transaction-import-raw-read";
 import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -189,29 +191,33 @@ const sourceRead = {
       return new Map(result.map((row) => [row.id, row.providerData]));
     });
     return [
-      bind(sourceTransactionRecordOut.pick({ displayName: true }), (row) => ({
-        displayName:
-          row.rawDescription ||
-          row.merchant ||
-          row.accountDescriptor ||
-          "Source transaction record",
-      })),
+      bind(
+        rawSourceTransactionRecordOut.pick({ displayName: true }),
+        (row) => ({
+          displayName:
+            row.rawDescription ||
+            row.merchant ||
+            row.accountDescriptor ||
+            "Source transaction record",
+        }),
+      ),
       state.fields(
-        sourceTransactionRecordOut.pick({
+        rawSourceTransactionRecordOut.pick({
           matchState: true,
           transactionId: true,
         }),
         (row, loaded) => ({
-          matchState: sourceTransactionRecordOut.shape.matchState.parse(
+          matchState: rawSourceTransactionRecordOut.shape.matchState.parse(
             loaded.get(row.id)?.matchState,
           ),
-          transactionId: sourceTransactionRecordOut.shape.transactionId.parse(
-            loaded.get(row.id)?.transactionId ?? null,
-          ),
+          transactionId:
+            rawSourceTransactionRecordOut.shape.transactionId.parse(
+              loaded.get(row.id)?.transactionId ?? null,
+            ),
         }),
       ),
       related.fields(
-        sourceTransactionRecordOut.pick({
+        rawSourceTransactionRecordOut.pick({
           importFingerprint: true,
           supersededBy: true,
         }),
@@ -221,12 +227,12 @@ const sourceRead = {
         }),
       ),
       inference.fields(
-        sourceTransactionRecordOut.pick({ vendorInference: true }),
+        rawSourceTransactionRecordOut.pick({ vendorInference: true }),
         (row, loaded) => ({
           vendorInference:
             loaded.states.get(row.id)?.matchState === "unmatched" &&
             row.merchant
-              ? sourceTransactionRecordOut.shape.vendorInference.parse(
+              ? rawSourceTransactionRecordOut.shape.vendorInference.parse(
                   loaded.inferences.get(normalizeMerchant(row.merchant)) ?? {
                     status: "none",
                     candidates: [],
@@ -236,9 +242,9 @@ const sourceRead = {
         }),
       ),
       provider.fields(
-        sourceTransactionRecordOut.pick({ providerData: true }),
+        rawSourceTransactionRecordOut.pick({ providerData: true }),
         (row, loaded) => ({
-          providerData: sourceTransactionRecordOut.shape.providerData.parse(
+          providerData: rawSourceTransactionRecordOut.shape.providerData.parse(
             loaded.get(row.id) ?? null,
           ),
         }),
@@ -266,7 +272,7 @@ const importRead = {
     });
     return [
       counts.fields(
-        transactionImportOut.pick({ rowCountStored: true }),
+        rawTransactionImportOut.pick({ rowCountStored: true }),
         (row, loaded) => ({ rowCountStored: loaded.get(row.id) ?? 0 }),
       ),
     ];
@@ -304,7 +310,7 @@ export const listSourceTransactionRecordsRead = (
     },
   );
 const listSources = completeListReader(
-  sourceTransactionRecordOut,
+  rawSourceTransactionRecordOut,
   listSourceTransactionRecordsRead,
 );
 export const listTransactionImportsRead = (
@@ -321,20 +327,20 @@ export const listTransactionImportsRead = (
     { read: importRead },
   );
 const listImports = completeListReader(
-  transactionImportOut,
+  rawTransactionImportOut,
   listTransactionImportsRead,
 );
 
 const sourceReader = createEntityReader<
   SourceRow,
-  SourceTransactionRecordOut,
+  RawSourceTransactionRecordOut,
   "sourceTransactionRecord",
   ReaderDb
 >({
   entity: "sourceTransactionRecord",
   fetchById: createEntityRowFetcher(sourceTransactionRecord),
   fromDB: async (db, row) =>
-    sourceTransactionRecordOut.parse(
+    rawSourceTransactionRecordOut.parse(
       (
         await listReadPlan<SourceRow>(
           "sourceTransactionRecord",
@@ -345,14 +351,14 @@ const sourceReader = createEntityReader<
 });
 const importReader = createEntityReader<
   ImportRow,
-  TransactionImportOut,
+  RawTransactionImportOut,
   "transactionImport",
   ReaderDb
 >({
   entity: "transactionImport",
   fetchById: createEntityRowFetcher(transactionImport),
   fromDB: async (db, row) =>
-    transactionImportOut.parse(
+    rawTransactionImportOut.parse(
       (
         await listReadPlan<ImportRow>("transactionImport", importRead).read(
           db,

@@ -1,4 +1,4 @@
-import { plantOut } from "@cubby/schemas/plant";
+import { rawPlantOut } from "@cubby/schemas/plant-raw-read";
 import { z } from "zod";
 
 import {
@@ -46,7 +46,7 @@ export const plantRepository = defineRepository("plant", {
   update: asActor(updatePlant),
   merge: {
     input: mergeInput,
-    output: z.object({ plant: plantOut, mergeSummary: plantMergeSummary }),
+    output: z.object({ plant: rawPlantOut, mergeSummary: plantMergeSummary }),
     item: (output) => output.plant,
     summary: (output) => output.mergeSummary,
     execute: async (ctx, input) => {

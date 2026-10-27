@@ -8,7 +8,7 @@ import type {
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { TaskOut } from "@cubby/schemas/project";
+import type { RawTaskOut } from "@cubby/schemas/work-raw-read";
 import { sql } from "drizzle-orm";
 
 import { taskDueDatePrecedence } from "~/lib/task-dates";
@@ -42,11 +42,11 @@ export const effectiveTaskDueDateSql = (alias?: string) => {
  * don't load the relation (e.g. actionable.ts's batch fetch) just get a null
  * `parentTaskName`, which is correct there since subtask rows never surface.
  */
-type TaskRow<T extends TaskOut["trade"] | null = TaskOut["trade"]> = {
+type TaskRow<T extends RawTaskOut["trade"] | null = RawTaskOut["trade"]> = {
   id: TaskId;
   shortcode: string;
   name: string;
-  status: TaskOut["status"];
+  status: RawTaskOut["status"];
   assigneeId: LedgerPartyId | null;
   assignee?: { name: string; shortcode: string; deletedAt: Date | null } | null;
   projectId: ProjectId | null;
@@ -55,7 +55,7 @@ type TaskRow<T extends TaskOut["trade"] | null = TaskOut["trade"]> = {
   dueDate: string | null;
   dueEndDate: string | null;
   trade: T;
-  fieldResolutions?: TaskOut["fieldResolutions"];
+  fieldResolutions?: RawTaskOut["fieldResolutions"];
   sortOrder: number | null;
   createdAt: Date;
   updatedAt: Date;
@@ -75,7 +75,7 @@ type TaskRow<T extends TaskOut["trade"] | null = TaskOut["trade"]> = {
 
 export const dbTaskToAPI = <
   Q extends DataQuality | undefined,
-  T extends TaskOut["trade"] | null,
+  T extends RawTaskOut["trade"] | null,
 >(
   row: TaskRow<T>,
   blockedByIds: TaskShortcode[],
@@ -83,7 +83,10 @@ export const dbTaskToAPI = <
   subtaskCount: number,
   doneSubtaskCount: number,
   dataQuality: Q,
-): Omit<TaskOut, "dataQuality" | "trade"> & { dataQuality: Q; trade: T } => ({
+): Omit<RawTaskOut, "dataQuality" | "trade"> & {
+  dataQuality: Q;
+  trade: T;
+} => ({
   id: parseShortcodeFor("task", row.shortcode),
   assigneeId: brandJoinShortcode(
     "ledgerParty",

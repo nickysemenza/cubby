@@ -241,7 +241,17 @@ struct EntityRowTests {
         payload["images"] = [
             [
                 "id": "IMG-2345",
-                "url": "https://images.example/catalog.jpg",
+                "fields": [
+                    "url": FieldEnvelopeFixture.envelope(
+                        result: FieldEnvelopeFixture.live(
+                            FieldEnvelopeFixture.decision(
+                                "https://images.example/catalog.jpg", provenance: ["kind": "computed"]))),
+                    "representations": FieldEnvelopeFixture.envelope(result: FieldEnvelopeFixture.missing),
+                    "capturedByName": FieldEnvelopeFixture.envelope(result: FieldEnvelopeFixture.missing),
+                    "sightings": FieldEnvelopeFixture.envelope(result: FieldEnvelopeFixture.missing),
+                    "provenanceEvidenceLabel": FieldEnvelopeFixture.envelope(
+                        result: FieldEnvelopeFixture.missing),
+                ],
                 "key": "products/catalog.jpg",
                 "filename": "catalog.jpg",
                 "size": 123,
@@ -268,7 +278,6 @@ struct EntityRowTests {
                 "capturePlaceName": .null,
                 "captureDeviceLabel": .null,
                 "capturedByPartyId": .null,
-                "capturedByName": .null,
                 "provenanceEvidence": .null,
                 "sourceEvidence": .null,
                 "purpose": "item",

@@ -415,6 +415,20 @@ export default defineEntity({
     ],
   },
   fields: {
+    embedded: [
+      {
+        path: ["images"],
+        entity: "image",
+        projections: [
+          "output",
+          "list",
+          "detail",
+          "mcpOutput",
+          "mcpList",
+          "mcpDetail",
+        ],
+      },
+    ],
     create: {
       module: "@cubby/schemas/garden-entry",
       export: "gardenEntryCreateInput",
@@ -423,10 +437,13 @@ export default defineEntity({
       module: "@cubby/schemas/garden-entry",
       export: "gardenEntryUpdateData",
     },
-    output: { module: "@cubby/schemas/garden-entry", export: "gardenEntryOut" },
+    output: {
+      module: "@cubby/schemas/garden-entry-raw-read",
+      export: "rawGardenEntryOut",
+    },
     list: {
-      module: "@cubby/schemas/garden-entry",
-      export: "gardenEntryListItemOut",
+      module: "@cubby/schemas/garden-entry-raw-read",
+      export: "rawGardenEntryListItemOut",
     },
   },
   storage: {

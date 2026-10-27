@@ -1,10 +1,16 @@
 import { imageOut, type ImageOut } from "@cubby/schemas/image";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { cleanup, render, screen } from "@testing-library/react";
 import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
 import {
   locationReadFixture,
   type LocationFixtureOverrides,
@@ -28,8 +34,35 @@ function renderVisual(visual: React.ReactNode) {
   return render(visual, { wrapper: harness.wrapper });
 }
 
+const rawStorageCategory = categorySummaryFixture("storage");
+const storageCategory = productCategorySummary.parse({
+  id: rawStorageCategory.id,
+  name: rawStorageCategory.name,
+  fields: {
+    path: fieldValueFixture(
+      productCategorySummary.shape.fields.shape.path,
+      rawStorageCategory.path,
+    ),
+  },
+});
+
 const image = (id: string): ImageOut =>
-  imageOut.parse({
+  entityReadFixture(imageOut, {
+    fields: {
+      url: fieldValueFixture(
+        imageOut.shape.fields.shape.url,
+        `https://example.test/${id}.jpg`,
+      ),
+      representations: fieldValueFixture(
+        imageOut.shape.fields.shape.representations,
+        {
+          original: `https://example.test/${id}.jpg`,
+          transparent: null,
+          preferred: `https://example.test/${id}.jpg`,
+          preferredKind: "original",
+        },
+      ),
+    },
     id: testShortcode("image", `IMG-${id}`),
     url: `https://example.test/${id}.jpg`,
     key: `${id}.jpg`,
@@ -89,13 +122,15 @@ const location = (
 
 const containerLocation = (overrides: LocationFixtureOverrides = {}) =>
   location("AAAA", "Abrasives box", null, {
-    displayImages: [image("product")],
+    displayImages: [
+      { ...image("product"), url: publicImageUrl(image("product")) },
+    ],
     product: {
       id: testShortcode("product", "PRD-AAAA"),
       name: "Two drawer tool box",
       brandName: "Example",
       model: "EX-2",
-      category: categorySummaryFixture("storage"),
+      category: storageCategory,
 
       price: 50,
     },
@@ -138,7 +173,9 @@ describe("LocationVisual", () => {
       <LocationVisual
         location={containerLocation({
           images: [image("own")],
-          displayImages: [image("own")],
+          displayImages: [
+            { ...image("own"), url: publicImageUrl(image("own")) },
+          ],
         })}
         variant="hero"
         interactive

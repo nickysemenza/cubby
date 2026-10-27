@@ -5,11 +5,13 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { EntityLinkKind } from "@cubby/schemas/entity-links";
 import {
   type GardenEntryFilters,
-  gardenEntryOut,
-  gardenEntryListItemOut,
   type gardenEntryCreateInput,
   type gardenEntryUpdateData,
 } from "@cubby/schemas/garden-entry";
+import {
+  rawGardenEntryOut,
+  rawGardenEntryListItemOut,
+} from "@cubby/schemas/garden-entry-raw-read";
 import {
   parseEntityId,
   parseShortcodeFor,
@@ -19,11 +21,13 @@ import {
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   type PlantingFilters,
-  plantingOut,
-  plantingListItemOut,
   type plantingCreateInput,
   type plantingUpdateData,
 } from "@cubby/schemas/planting";
+import {
+  rawPlantingOut,
+  rawPlantingListItemOut,
+} from "@cubby/schemas/planting-raw-read";
 import { isPlantingSourceFeature } from "@cubby/schemas/product-category-relations";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { z } from "zod";
@@ -151,7 +155,7 @@ const validatePlantingSource = async (
   }
 };
 
-// The joins `plantingOut`'s name/guide projections read; shared by the row
+// The joins `rawPlantingOut`'s name/guide projections read; shared by the row
 // read and the list so both parse the same shape.
 const plantingReferences = {
   plant: {
@@ -263,7 +267,7 @@ const mapPlantingRead = (
 };
 
 const mapPlanting = (row: PlantingWithReferences, dataQuality: DataQuality) =>
-  plantingOut.parse(mapPlantingRead(row, { kind: "full" }, dataQuality));
+  rawPlantingOut.parse(mapPlantingRead(row, { kind: "full" }, dataQuality));
 
 type GardenEntryWithReferences = typeof gardenEntry.$inferSelect & {
   location: { shortcode: string; name: string };
@@ -351,7 +355,7 @@ const mapEntryRead = (
 };
 
 const mapEntry = (row: GardenEntryWithReferences, dataQuality: DataQuality) =>
-  gardenEntryOut.parse(mapEntryRead(row, { kind: "full" }, dataQuality));
+  rawGardenEntryOut.parse(mapEntryRead(row, { kind: "full" }, dataQuality));
 
 export const getPlanting = async (db: GardenDb, id: PlantingId) => {
   const row = await plantingRow(db, id);
@@ -924,11 +928,11 @@ export const plantingListRead = async (
       read: {
         media: true,
         bindings: (bind) => [
-          bind(plantingListItemOut.pick({ displayName: true }), (row) => ({
+          bind(rawPlantingListItemOut.pick({ displayName: true }), (row) => ({
             displayName: plantingDisplayName(row.plant),
           })),
           bind(
-            plantingListItemOut.pick({
+            rawPlantingListItemOut.pick({
               plantId: true,
               sourceProductId: true,
               locationId: true,
@@ -941,7 +945,7 @@ export const plantingListRead = async (
             plantingRelationFields,
           ),
           bind(
-            plantingListItemOut.pick({
+            rawPlantingListItemOut.pick({
               guideSowWindow: true,
               guideTransplantWindow: true,
               expectedHarvestStart: true,
@@ -965,7 +969,7 @@ export const plantingList = async (
   const result = await plantingListRead(db, filters, pagination, sorts, {
     kind: "full",
   });
-  return parseCompleteListRead(plantingListItemOut, Promise.resolve(result));
+  return parseCompleteListRead(rawPlantingListItemOut, Promise.resolve(result));
 };
 
 const JOURNAL_LINK: EntityLinkKind = "gardenEntryPlanting";
@@ -1032,15 +1036,18 @@ export const gardenEntryListRead = async (
             ),
           );
           return [
-            bind(gardenEntryListItemOut.pick({ displayName: true }), (row) => ({
-              displayName: gardenEntryDisplayName({
-                kind: row.kind,
-                observedOn: row.observedOn,
-                locationName: row.location.name,
-              }),
-            })),
             bind(
-              gardenEntryListItemOut.pick({
+              rawGardenEntryListItemOut.pick({ displayName: true }),
+              (row) => ({
+                displayName: gardenEntryDisplayName({
+                  kind: row.kind,
+                  observedOn: row.observedOn,
+                  locationName: row.location.name,
+                }),
+              }),
+            ),
+            bind(
+              rawGardenEntryListItemOut.pick({
                 locationId: true,
                 locationName: true,
               }),
@@ -1053,13 +1060,13 @@ export const gardenEntryListRead = async (
               }),
             ),
             plantings.fields(
-              gardenEntryListItemOut.pick({
+              rawGardenEntryListItemOut.pick({
                 plantingIds: true,
                 plantings: true,
               }),
               (row, loaded) => entryPlantingFields(loaded.get(row.id) ?? []),
             ),
-            bind(gardenEntryListItemOut.pick({ images: true }), (row) => ({
+            bind(rawGardenEntryListItemOut.pick({ images: true }), (row) => ({
               images: mapImages(
                 (row.images ?? []).flatMap((entry) =>
                   "image" in entry ? [entry] : [],
@@ -1082,5 +1089,8 @@ export const gardenEntryList = async (
   const result = await gardenEntryListRead(db, filters, pagination, sorts, {
     kind: "full",
   });
-  return parseCompleteListRead(gardenEntryListItemOut, Promise.resolve(result));
+  return parseCompleteListRead(
+    rawGardenEntryListItemOut,
+    Promise.resolve(result),
+  );
 };

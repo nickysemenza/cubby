@@ -4,7 +4,7 @@ import type {
   PurchaseShortcode,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import type { ExpenseOut, ExpenseFilters } from "@cubby/schemas/project";
+import type { ExpenseFilters } from "@cubby/schemas/project";
 import type { rawPurchaseLinkExpenseCandidate } from "@cubby/schemas/purchase";
 import type {
   LinkExpenseScope,
@@ -12,6 +12,7 @@ import type {
   purchaseLinkExpensesCheckOut,
   purchaseLinkProductsCandidatesOut,
 } from "@cubby/schemas/purchase";
+import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { cents, dollars } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import type { z } from "zod";
@@ -64,7 +65,7 @@ export const expenseFiltersForScope = (
 
 /** The expense list's fields an attach candidate is worded from. */
 export type LinkExpenseRow = Pick<
-  ExpenseOut,
+  RawExpenseOut,
   | "id"
   | "name"
   | "date"

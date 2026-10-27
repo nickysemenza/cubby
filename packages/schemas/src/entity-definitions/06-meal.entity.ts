@@ -631,6 +631,18 @@ Rules:
     fields: {
       embedded: [
         {
+          path: ["images"],
+          entity: "image",
+          projections: [
+            "output",
+            "list",
+            "detail",
+            "mcpOutput",
+            "mcpList",
+            "mcpDetail",
+          ],
+        },
+        {
           path: ["recipes", "recipe"],
           entity: "recipe",
           projections: [

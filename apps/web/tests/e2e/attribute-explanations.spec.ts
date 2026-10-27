@@ -58,7 +58,7 @@ test("product location detail preserves its partial gap and nested ownership evi
     .click();
   await expect(
     page
-      .getByRole("list", { name: "Value sources", exact: true })
+      .getByRole("list", { name: "Current evidence sources", exact: true })
       .getByText("Stock not tracked", { exact: true }),
   ).toBeVisible({ timeout: 30_000 });
   await expect(

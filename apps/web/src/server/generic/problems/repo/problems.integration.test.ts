@@ -27,7 +27,10 @@ import {
   publishQualityFixtures,
 } from "~/server/testing/quality.fixtures";
 
-import { publicProblemGroups } from "../operations/problem-public-read";
+import {
+  publicProblemGroups,
+  publicProblemSlice,
+} from "../operations/problem-public-read";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
   backgroundQueue = captureBackgroundQueue();
@@ -847,6 +850,18 @@ describe("problems — charges not reconciling", () => {
       { purchasesNotReconciling },
       problemsFastSchema.pick({ purchasesNotReconciling: true }),
     );
+    const page = await publicProblemSlice(
+      ctx.db,
+      {
+        type: "purchasesNotReconciling",
+        total: 2,
+        items: [purchasesNotReconciling[0], { id: 42 }],
+      },
+      { pageIndex: 0, pageSize: 1 },
+    );
+    expect(page.total).toBe(2);
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]).toMatchObject({ id: purchasesNotReconciling[0]?.id });
     const publicRow = selected.purchasesNotReconciling[1];
     expect(publicRow).not.toHaveProperty("expenseTotal");
     expect(publicRow).not.toHaveProperty("expenseCount");

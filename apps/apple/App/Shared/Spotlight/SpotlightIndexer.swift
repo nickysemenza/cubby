@@ -73,7 +73,7 @@ actor SpotlightIndexer {
         return rows.map { row in
             let attributes = CSSearchableItemAttributeSet(contentType: .text)
             attributes.title = row.title
-            let path = row.raw["primaryPlacement"]?["path"]?.stringValue
+            let path = row.raw.pathValue("primaryPlacement.path")?.stringValue
             attributes.contentDescription = path ?? row.subtitle ?? descriptor.singular.capitalized
             attributes.keywords = [descriptor.singular, descriptor.plural, row.id]
             if let location = path?.components(separatedBy: " › ").last {

@@ -44,7 +44,13 @@ it("reviews a reimbursement against the chosen Purchase and commits its exact ap
         coverage: fieldValueFixture(
           entityFieldEnvelopeSchemas.financialTransaction.detail.shape.fields
             .shape["coverage"],
-          { booking: "missing" },
+          {
+            expectation: "unknown",
+            booking: "missing",
+            document: "unknown",
+            itemization: "unknown",
+            products: "unknown",
+          },
         ),
       },
       id: transactionId,

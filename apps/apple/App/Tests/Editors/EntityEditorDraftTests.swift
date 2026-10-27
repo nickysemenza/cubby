@@ -91,4 +91,48 @@ struct EntityEditorDraftTests {
         #expect(!dismissed)
         #expect(photoState.confirmation == .discardChanges)
     }
+    @Test func imageEditorRetainsAttachmentIdentityWhenURLIsUnavailable() {
+        let original: JSONValue = [
+            "attachments": [
+                [
+                    "id": "IMG-4K7M", "filename": "Synthetic photo.jpg",
+                    "fields": [
+                        "url": [
+                            "result": [
+                                "kind": "live",
+                                "decision": [
+                                    "outcome": [
+                                        "kind": "value", "value": "https://image.example/current.jpg",
+                                    ]
+                                ],
+                            ]
+                        ]
+                    ],
+                ],
+                [
+                    "id": "IMG-4K7N", "filename": "Missing photo.jpg",
+                    "url": "https://stale.example/missing.jpg",
+                    "fields": ["url": ["result": ["kind": "missing"]]],
+                ],
+                [
+                    "id": "IMG-4K7P", "filename": "Empty photo.jpg", "url": "https://stale.example/empty.jpg",
+                    "fields": [
+                        "url": [
+                            "result": [
+                                "kind": "live",
+                                "decision": ["outcome": ["kind": "empty", "reason": "unset"]],
+                            ]
+                        ]
+                    ],
+                ],
+            ]
+        ]
+        let images = EntityImageBlock.existingImages(in: original)
+        #expect(images.count == 3)
+        #expect(images[ImageCode("IMG-4K7M")]?.url?.absoluteString == "https://image.example/current.jpg")
+        #expect(images[ImageCode("IMG-4K7N")]?.url == nil)
+        #expect(images[ImageCode("IMG-4K7P")]?.url == nil)
+        #expect(images[ImageCode("IMG-4K7N")]?.filename == "Missing photo.jpg")
+    }
+
 }

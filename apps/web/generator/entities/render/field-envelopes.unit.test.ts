@@ -1,3 +1,4 @@
+import { renderSchemaWrapperArtifacts } from "./schema-wrappers.ts";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -10,6 +11,26 @@ import {
 import { renderFieldEnvelopeArtifacts } from "./field-envelopes.ts";
 
 describe("recursive field projections", () => {
+  it("publishes canonical wrappers while declaration inputs remain raw", async () => {
+    const entities = await loadEntityDeclarations();
+    const wrappers = renderSchemaWrapperArtifacts(entities);
+    for (const artifact of wrappers) {
+      expect(artifact.source).not.toContain("definition.readSchemas");
+      expect(artifact.source).not.toContain("withEntityListMedia");
+    }
+    const planting = wrappers.find((artifact) =>
+      artifact.relativePath.endsWith("/planting.gen.ts"),
+    );
+    expect(planting?.source).toContain(
+      "plantingOut = plantingFieldEnvelopeSchemas.output",
+    );
+    expect(planting?.source).toContain(
+      "plantingListItemOut = plantingFieldEnvelopeSchemas.list",
+    );
+    expect(
+      entities.find((entity) => entity.key === "planting")?.contract?.output,
+    ).toMatchObject({ export: "rawPlantingOut" });
+  });
   it("emits a typed lazy Location fixpoint without expanding Recipe scalar snapshots", async () => {
     const artifacts = renderFieldEnvelopeArtifacts(
       await loadEntityDeclarations(),
@@ -60,6 +81,27 @@ describe("recursive field projections", () => {
       artifact.relativePath.endsWith("entity-field-envelope-nested.gen.ts"),
     );
     expect(nested?.source).toContain('{"path":["images"],"entity":"image"}');
+  });
+
+  it("rejects a live Image leaf without its declared embedding", async () => {
+    const entities = await loadEntityDeclarations();
+    expect(() =>
+      renderFieldEnvelopeArtifacts(
+        entities.map((entity) =>
+          entity.key === "product" && entity.contract
+            ? {
+                ...entity,
+                contract: {
+                  ...entity.contract,
+                  embedded: entity.contract.embedded.filter(
+                    (binding) => binding.path.join(".") !== "images",
+                  ),
+                },
+              }
+            : entity,
+        ),
+      ),
+    ).toThrow("product.images requires a declared image embedding");
   });
 
   it("emits declared domain envelope ports without importing repository adapters", async () => {
@@ -119,6 +161,7 @@ describe("recursive field projections", () => {
       contract: {
         ...location.contract,
         embedded: [
+          ...location.contract.embedded,
           {
             path: ["product"],
             entity: "product",

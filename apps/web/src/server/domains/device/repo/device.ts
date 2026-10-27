@@ -2,10 +2,12 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   type DeviceCreateInput,
   type DeviceFilters,
-  type DeviceOut,
   type DeviceUpdateData,
-  deviceOut,
 } from "@cubby/schemas/device";
+import {
+  type RawDeviceOut,
+  rawDeviceOut,
+} from "@cubby/schemas/device-raw-read";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -100,7 +102,7 @@ const deviceRead = {
     const clock = bind.batch(async () => ({ now: new Date() }));
     return [
       clock.fields(
-        deviceOut.pick({ updateRequired: true, inactive: true }),
+        rawDeviceOut.pick({ updateRequired: true, inactive: true }),
         (row, { now }) => ({
           updateRequired: appleAppVersionTooOld(row.appVersion),
           inactive: deviceInactive(row.lastSeenAt, now),
@@ -113,9 +115,9 @@ const devicePlan = listReadPlan<DeviceRow>("device", deviceRead);
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: DeviceRow[],
-): Promise<DeviceOut[]> =>
+): Promise<RawDeviceOut[]> =>
   (await devicePlan.read(db, rows, { kind: "full" })).map((row) =>
-    deviceOut.parse(row),
+    rawDeviceOut.parse(row),
   );
 
 export const buildDeviceWhere = (filters: DeviceFilters) =>
@@ -137,7 +139,7 @@ export const listDevicesRead = (
     },
   );
 
-export const listDevices = completeListReader(deviceOut, listDevicesRead);
+export const listDevices = completeListReader(rawDeviceOut, listDevicesRead);
 
 const deviceCrud = createEntityCrud({
   table: device,

@@ -2,9 +2,9 @@ import { activityIconEntity } from "@cubby/schemas/activity";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { describeJobRollup } from "@cubby/schemas/job";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { RunFilters, RunOut } from "@cubby/schemas/run";
-import { runOut } from "@cubby/schemas/run";
+import type { RunFilters } from "@cubby/schemas/run";
 import { runPurpose, runStatus, runWorkLabel } from "@cubby/schemas/run-fields";
+import { type RawRunOut, rawRunOut } from "@cubby/schemas/run-raw-read";
 import {
   runWorkSamples,
   readRunWorkPhase,
@@ -149,11 +149,11 @@ const runRead = {
       };
     });
     return [
-      costs.fields(runOut.pick({ chargedCost: true }), (row, loaded) => ({
+      costs.fields(rawRunOut.pick({ chargedCost: true }), (row, loaded) => ({
         chargedCost: loaded.get(row.id) ?? 0,
       })),
       lineage.fields(
-        runOut.pick({
+        rawRunOut.pick({
           successorRunId: true,
           waitingOn: true,
           stalled: true,
@@ -175,7 +175,7 @@ const runRead = {
         },
       ),
       bind(
-        runOut.pick({ displayName: true, iconEntity: true }),
+        rawRunOut.pick({ displayName: true, iconEntity: true }),
         (row, { references }) => {
           const vendor = references.get("vendorId");
           const party = references.get("ledgerPartyId");
@@ -189,7 +189,7 @@ const runRead = {
           };
         },
       ),
-      bind(runOut.pick({ wallTime: true }), (row) => ({
+      bind(rawRunOut.pick({ wallTime: true }), (row) => ({
         wallTime: row.endedAt
           ? formatDuration(
               Math.max(0, row.endedAt.getTime() - row.startedAt.getTime()),
@@ -197,7 +197,7 @@ const runRead = {
           : "In progress",
       })),
       steps.fields(
-        runOut.pick({ workProgress: true, activityAt: true }),
+        rawRunOut.pick({ workProgress: true, activityAt: true }),
         (row, { byRun, now }) => {
           const runSteps = byRun.get(row.id) ?? [];
           const samples = runWorkSamples.safeParse(row.liveProgress?.work).data;
@@ -250,10 +250,10 @@ function runDisplayStatusOf(
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: RunRow[],
-): Promise<RunOut[]> =>
+): Promise<RawRunOut[]> =>
   (
     await listReadPlan<RunRow>("run", runRead).read(db, rows, { kind: "full" })
-  ).map((row) => runOut.parse(row));
+  ).map((row) => rawRunOut.parse(row));
 
 const scaffold = listScaffold("run", runTable, {
   derived: {
@@ -275,11 +275,11 @@ export const listRunsRead = (
     { filters, sorts, pagination, projection, readIntent },
     { read: runRead },
   );
-export const listRuns = completeListReader(runOut, listRunsRead);
+export const listRuns = completeListReader(rawRunOut, listRunsRead);
 
 const reader = createEntityReader<
   RunRow,
-  RunOut,
+  RawRunOut,
   "run",
   Database | DrizzleTransaction
 >({
@@ -304,7 +304,7 @@ export async function getRunHeaderByShortcode(db: Database, shortcode: string) {
     )
     .limit(1);
   if (!row) return undefined;
-  const schema = runOut.omit({ dataQuality: true });
+  const schema = rawRunOut.omit({ dataQuality: true });
   return schema.parse(
     (
       await listReadPlan<RunRow>("run", runRead).read(

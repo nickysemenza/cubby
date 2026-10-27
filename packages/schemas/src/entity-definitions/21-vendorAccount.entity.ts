@@ -335,8 +335,8 @@ export default defineEntity({
       export: "vendorAccountUpdateData",
     },
     output: {
-      module: "@cubby/schemas/vendor-account",
-      export: "vendorAccountOut",
+      module: "@cubby/schemas/vendor-account-raw-read",
+      export: "rawVendorAccountOut",
     },
   },
   storage: {

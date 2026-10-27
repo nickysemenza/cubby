@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -24,7 +25,14 @@ afterEach(() => {
 });
 
 function gardenEntryPort(action: "create" | "update" = "create") {
-  const created = mock(gardenEntryOut, { seed: 3, overrides: { images: [] } });
+  const created = mock(gardenEntryOut, {
+    seed: 3,
+    overrides: {
+      fields: {
+        images: fieldValueFixture(gardenEntryOut.shape.fields.shape.images, []),
+      },
+    },
+  });
   const transport = vi.fn(async () =>
     entityBrowserMutationResultSchema.parse({
       action,
@@ -110,7 +118,12 @@ describe("EntityEditDialog generic create", () => {
     const record = mock(gardenEntryOut, {
       seed: 4,
       overrides: {
-        images: [],
+        fields: {
+          images: fieldValueFixture(
+            gardenEntryOut.shape.fields.shape.images,
+            [],
+          ),
+        },
         plantingIds: [currentPlantingId],
         plantings: [{ id: currentPlantingId, name: "Current planting" }],
       },

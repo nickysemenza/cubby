@@ -89,7 +89,7 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
+import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import { type ListContext } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -869,9 +869,7 @@ const loadLocationCoverImages = async (
     ids.flatMap((id) => {
       const cover = covers.get(entityRefKey("location", id))?.[0];
       const record = cover ? byCode.get(cover.id) : undefined;
-      return record && cover
-        ? [[id, { ...record, url: preferredImageUrl(cover) }]]
-        : [];
+      return record && cover ? [[id, record]] : [];
     }),
   );
 };
@@ -946,19 +944,43 @@ export const locationSearch = async (
     loadLocationAncestors(db, ids),
     loadLocationCoverImages(db, ids),
   ]);
-  const references = await publicFieldEnvelopeRows({
+  const referenceRows = [
+    ...rows.map((row) => ({
+      id: parseShortcodeFor("location", row.shortcode),
+      name: row.name,
+      type: parseLocationType(row.type),
+    })),
+    ...rows.flatMap((row) => ancestorsById.get(row.id) ?? []),
+  ];
+  const coverEntries = [...coverById];
+  const coverSchema = locationPickerItemOut.shape.coverImage.unwrap();
+  type PublicRead = Parameters<
+    typeof publicFieldEnvelopeBatch
+  >[0]["reads"][number];
+  const serialized = await publicFieldEnvelopeBatch({
     db,
-    entity: "location",
-    schema: locationPickerAncestorOut,
-    rows: [
-      ...rows.map((row) => ({
-        id: parseShortcodeFor("location", row.shortcode),
-        name: row.name,
-        type: parseLocationType(row.type),
+    reads: [
+      ...referenceRows.map((row): PublicRead => ({
+        entity: "location",
+        schema: locationPickerAncestorOut,
+        row,
       })),
-      ...rows.flatMap((row) => ancestorsById.get(row.id) ?? []),
+      ...coverEntries.map(([, row]): PublicRead => ({
+        entity: "image",
+        schema: coverSchema,
+        row,
+      })),
     ],
   });
+  const references = serialized
+    .slice(0, referenceRows.length)
+    .map((row) => locationPickerAncestorOut.parse(row));
+  const covers = serialized
+    .slice(referenceRows.length)
+    .map((row) => coverSchema.parse(row));
+  const publicCoverById = new Map(
+    coverEntries.map(([id], index) => [id, covers[index]]),
+  );
   let offset = rows.length;
   return {
     ...page,
@@ -970,7 +992,7 @@ export const locationSearch = async (
         ...references[index],
         aliases: row.aliases ?? [],
         ancestors,
-        coverImage: coverById.get(row.id) ?? null,
+        coverImage: publicCoverById.get(row.id) ?? null,
       });
     }),
   };
