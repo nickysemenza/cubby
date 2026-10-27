@@ -16,6 +16,8 @@ import { defineContract, query } from "~/contracts/define";
 const WORK_QUEUE_TAGS: readonly CacheTag[] = [
   ...ENTITY_ROOT_TAGS,
   ["problems"],
+  // Suggestion and connection reviews refresh the pending-suggestions source.
+  ["workQueue"],
 ];
 
 export const workQueueContract = defineContract(

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import { featureRegistry } from "~/entity/feature-registry";
+import { problemActionsFor } from "~/entity/problems/problem-actions";
+import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import { installFeatures } from "~/features/registry";
 
 // Failure mode: a Problem declares a remediation the queue renders nothing
@@ -10,7 +11,9 @@ describe("workActions", () => {
   it("performs every declared Problem action", () => {
     installFeatures();
     const declared = problemQueryDeclarations().flatMap((definition) =>
-      definition.actions.map((action) => `${definition.key}:${action.id}`),
+      problemActionsFor(definition.key).map(
+        (action) => `${definition.key}:${action.id}`,
+      ),
     );
     expect(declared.length).toBeGreaterThan(0);
     const handlers = featureRegistry().workActions;

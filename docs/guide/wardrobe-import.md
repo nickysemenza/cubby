@@ -18,9 +18,6 @@ keeps each Run to one owner and a short list of locations.
   [photo inventory skill](../../.agents/skills/photo-inventory-import/SKILL.md).
 - **Create the Locations** the clothes live in (for example "Closet", "Dresser
   — top drawer"). Inventory needs a real Location to receive into.
-- **Turn on image work.** On the Problems page, the image work card must show
-  queued work resumed and new upload processing enabled; otherwise photo
-  descriptions and cutouts wait in the queue.
 - **Keep an Apple device available** for cutouts: a Mac running Cubby, or an
   iPhone with Cubby in the foreground, with **Automatic work on this device**
   on in Settings. Cutouts are optional; the import works without them.

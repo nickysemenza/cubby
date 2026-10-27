@@ -363,8 +363,10 @@ export function defineRelationList<
     ...list.filters.map(inputFieldsOf),
   ) as FiltersInputFields<Fs>;
   // Surfaces that compose declared filters at runtime (Suggestions) extend
-  // this open shape with their own scope and paging.
-  const runtimeFilterFields: Record<string, z.ZodType> = Object.assign(
+  // this object with their own scope and paging. Its keys are not known
+  // statically, so it types none of them: an index signature would erase the
+  // extending fields' own types.
+  const runtimeFilterFields: Record<never, z.ZodType> = Object.assign(
     {},
     ...list.filters.map(inputFieldsOf),
   );

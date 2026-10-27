@@ -203,9 +203,9 @@ const suggestionScope = z.object({
   status: suggestionStatus.default("pending"),
   runId: runShortcode.optional(),
 });
-export const suggestionListFilters = suggestionDeclaredFilters
-  .extend(suggestionScope.shape)
-  .and(suggestionScope);
+export const suggestionListFilters = suggestionDeclaredFilters.extend(
+  suggestionScope.shape,
+);
 export type SuggestionListFilters = z.output<typeof suggestionListFilters>;
 
 export const SUGGESTION_LIST_PAGE_MAX = 200;
@@ -217,9 +217,9 @@ const suggestionPaging = z.object({
   limit: z.number().int().min(1).max(SUGGESTION_LIST_PAGE_MAX).default(50),
   group: suggestionFilterDeclaration.groupInput,
 });
-export const suggestionListInput = suggestionDeclaredFilters
-  .extend(suggestionPaging.shape)
-  .and(suggestionPaging);
+export const suggestionListInput = suggestionDeclaredFilters.extend(
+  suggestionPaging.shape,
+);
 export type SuggestionListInput = z.input<typeof suggestionListInput>;
 
 /** One account × month section of the grouped statement list. */

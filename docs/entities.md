@@ -3356,7 +3356,7 @@ actionable checks of their own; absence of checks does not mean 100.
 
 Every live Vendor expects a displayable logo, including vendors with no
 purchases or accounts. Its missing-logo gap appears once in the Work queue as
-shared Research work. An `unavailable` waiver closes that gap. The logo coverage meter counts all live vendors. Order-evidence and
+shared Research work. An `unavailable` waiver closes that gap. Order-evidence and
 website checks retain their purchase-based applicability.
 
 Run uses the shared quality score, filters, sorting, and explanation. Its

@@ -21,9 +21,9 @@ describe("request correlation header", () => {
             status: 503,
             headers: { "cf-ray": "synthetic-body-ray" },
           }),
-        "/api/operations/workQueue.list",
+        "/api/operations/workQueue.queue",
         undefined,
-        { operation: "workQueue.list" },
+        { operation: "workQueue.queue" },
       ),
     ).rejects.toMatchObject({
       message: expect.stringContaining("Synthetic response disconnected"),
@@ -45,9 +45,9 @@ describe("request correlation header", () => {
     });
     const error = await fetchWithRequestDiagnostics(
       async () => new Response(body, { status: 502 }),
-      "/api/operations/workQueue.list",
+      "/api/operations/workQueue.queue",
       undefined,
-      { operation: "workQueue.list" },
+      { operation: "workQueue.queue" },
     ).catch((error: unknown) => error);
     expect(error).toMatchObject({
       message: expect.stringContaining("[REDACTED]"),
@@ -71,15 +71,15 @@ describe("request correlation header", () => {
             status: 503,
             headers: { "cf-ray": "synthetic-ray-SJC" },
           }),
-        "/api/operations/workQueue.list",
-        { headers: { "x-cubby-operation": "workQueue.list" } },
+        "/api/operations/workQueue.queue",
+        { headers: { "x-cubby-operation": "workQueue.queue" } },
       ),
     ).rejects.toMatchObject({
       message: expect.stringContaining("SQLSTATE 53300"),
       data: {
         code: "HTTP_ERROR",
         diagnostics: {
-          operation: "workQueue.list",
+          operation: "workQueue.queue",
           stage: "http",
           cfRayId: "synthetic-ray-SJC",
           http: { status: 503, body },
@@ -96,8 +96,8 @@ describe("request correlation header", () => {
             status: 503,
             headers: { "cf-ray": "synthetic-empty-SJC" },
           }),
-        "/api/operations/workQueue.list",
-        { headers: { "x-cubby-operation": "workQueue.list" } },
+        "/api/operations/workQueue.queue",
+        { headers: { "x-cubby-operation": "workQueue.queue" } },
       ),
     ).rejects.toMatchObject({
       message: expect.stringContaining("empty response body"),

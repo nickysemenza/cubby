@@ -1,4 +1,5 @@
 import { humanize } from "@cubby/shared";
+import type { z } from "zod";
 import { connectionRelation } from "./entity-connections";
 import { shortcodeEntities } from "./entity-manifest";
 import { entitySummary } from "./generated/entity-summary.gen";
@@ -253,5 +254,14 @@ export const suggestionFilterDeclaration = declare(
   [...byColumn.values()],
   true,
 );
+// SAFETY: `filterInput` is built from these same declarations at runtime; the
+// views' union of columns types each search key it accepts.
 export const suggestionDeclaredFilters =
-  suggestionFilterDeclaration.filterInput;
+  suggestionFilterDeclaration.filterInput as z.ZodObject<
+    {
+      [K in SuggestionFilterSearchKey]: z.ZodOptional<
+        z.ZodType<string | string[]>
+      >;
+    },
+    z.core.$strict
+  >;

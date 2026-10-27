@@ -504,8 +504,10 @@ export async function suggestionCountsByFamily(
         if (
           "pendingCounts" in presentation &&
           presentation.pendingCounts &&
-          !Object.keys(suggestionDeclaredFilters.shape).some(
-            (name) => filters[name] !== undefined,
+          !Object.entries(filters).some(
+            ([name, value]) =>
+              value !== undefined &&
+              Object.hasOwn(suggestionDeclaredFilters.shape, name),
           )
         ) {
           pending = await presentation.pendingCounts(db, familyScope);

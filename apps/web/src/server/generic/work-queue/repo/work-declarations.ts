@@ -154,7 +154,21 @@ export const entityProblemSources = (
       entity,
       link: { kind: "record" },
       reasons: [{ key: definition.key, label: definition.title }],
-      actions: workProblemActions(definition.key),
+      actions: [
+        ...workProblemActions(definition.key),
+        // The reason group continues in the entity list with the Problem's
+        // own filters; the client resolves them from the Problem key.
+        ...(definition.continuation.kind === "entity-list"
+          ? [
+              {
+                id: "open-list",
+                label: `Open in ${entitySummary[entity].plural} list`,
+                scope: "group" as const,
+                target: "guided-flow" as const,
+              },
+            ]
+          : []),
+      ],
       candidates: (db, scope) => candidates(db, source, scope, filters),
     };
     return [source];

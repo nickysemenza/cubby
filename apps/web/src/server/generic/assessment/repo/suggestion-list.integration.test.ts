@@ -314,7 +314,7 @@ describe("cross-family Suggestion list", () => {
     expect(
       (
         await listSuggestionPage(ctx.db, {
-          ownerExclude: ["LPR-2A2A"],
+          ownerExclude: ["LPY-2A2A"],
         })
       ).items.map((row) => row.id),
     ).toEqual(page.items.map((row) => row.id));
