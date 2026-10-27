@@ -247,4 +247,28 @@ describe("work activity", () => {
       ).recent,
     ).toEqual([]);
   });
+  it("counts a running Job with an expired lease as waiting work", async () => {
+    const now = new Date();
+    await enqueueJob(ctx.db, {
+      key: "synthetic-activity-expired",
+      kind: "embedding.cleanup",
+      input: {},
+    });
+    const expiredAt = new Date(now.getTime() - 5 * 60_000);
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "running",
+        leaseToken: crypto.randomUUID(),
+        leaseExpiresAt: expiredAt,
+        lastClaimedAt: new Date(now.getTime() - 120 * 60_000),
+      })
+      .where(eq(job.key, "synthetic-activity-expired"));
+    const activity = await readWorkActivity(ctx.db, now);
+    const stream = activity.streams.find(
+      (entry) => entry.kind === "embedding.cleanup",
+    );
+    expect(stream).toMatchObject({ running: 0, due: 1 });
+    expect(stream?.oldestDueAt).toBe(expiredAt.toISOString());
+  });
 });

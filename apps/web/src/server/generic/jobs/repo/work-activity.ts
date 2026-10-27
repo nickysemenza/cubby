@@ -31,6 +31,9 @@ export async function readWorkActivity(
   const since = (minutes: number) =>
     sql`${at} - ${minutes} * interval '1 minute'`;
   const due = jobDue(now);
+  // An expired lease is reclaimable work: it waits (since its expiry) rather
+  // than running, so a stalled worker cannot make a stream read as quiet.
+  const waiting = sql`${due} AND NOT ("Job".state = ${jobState.enum.running} AND "Job"."leaseExpiresAt" > ${at})`;
   const live = sql`"Job".state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}, ${jobState.enum.paused})`;
   const requester = alias(run, "r");
   const rows = await getDb(db).execute<{
@@ -60,7 +63,7 @@ export async function readWorkActivity(
     SELECT "Job".kind,
       "Job".feature,
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.running} AND "Job"."leaseExpiresAt" > ${at})::int AS "running",
-      count(*) FILTER (WHERE ${due} AND "Job".state <> ${jobState.enum.running})::int AS "due",
+      count(*) FILTER (WHERE ${waiting})::int AS "due",
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.retry_wait} AND "Job"."availableAt" > ${at})::int AS "backingOff",
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.queued} AND "Job"."availableAt" > ${at})::int AS "scheduled",
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.paused})::int AS "paused",
@@ -68,7 +71,8 @@ export async function readWorkActivity(
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.completed} AND "Job"."updatedAt" > ${since(RECENT_MINUTES.completed)})::int AS "completed",
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.failed} AND "Job"."updatedAt" > ${since(RECENT_MINUTES.failed)})::int AS "failed",
       max("Job"."updatedAt") FILTER (WHERE "Job".state = ${jobState.enum.completed}) AS "lastCompletedAt",
-      min("Job"."availableAt") FILTER (WHERE ${due} AND "Job".state <> ${jobState.enum.running}) AS "oldestDueAt",
+      min(CASE WHEN "Job".state = ${jobState.enum.running} THEN "Job"."leaseExpiresAt" ELSE "Job"."availableAt" END)
+        FILTER (WHERE ${waiting}) AS "oldestDueAt",
       ARRAY(
         SELECT r.shortcode FROM activity_jobs stream
         CROSS JOIN LATERAL (
