@@ -58,9 +58,7 @@
     },
     // Every CI Vitest project in one run. CUBBY_VITEST_SHARD (`index/count`)
     // splits the files across CI runners; each shard's blob feeds the merged
-    // report. Builds the Worker inside the command rather than through
-    // `dependsOn`: build-cf's key includes HEAD for provenance, so as a
-    // dependency it would rebuild before every cache hit here.
+    // report. No Vitest project needs the built Worker.
     "vitest-ci": {
       "command": "pnpm exec node tooling/dev-services/test-services.ts -- vitest run --project unit --project mcp-contract --project ui --project capability --project scripts --project packages --project integration --project workers --shard=${CUBBY_VITEST_SHARD:-1/1}",
       "options": {
@@ -85,6 +83,9 @@
         "{projectRoot}/.vitest/attachments"
       ]
     },
+    // The one owner of Worker build staleness: keyed on content only, so the
+    // same sources at any commit share one output. Release identity is a
+    // deploy-time Worker value (`getSourceRelease`), never bundle content.
     "build-cf": {
       "command": "pnpm run build:cf",
       "options": {
@@ -104,6 +105,8 @@
       "inputs": [
         "default",
         "^default",
+        // Browser specs and their support never reach the bundle.
+        "!{projectRoot}/tests/**/*",
         "{workspaceRoot}/scripts/**",
         "{workspaceRoot}/packages/**",
         "{workspaceRoot}/*.{json,jsonc,yaml,yml,toml,lock}",
@@ -115,26 +118,21 @@
         {
           "dependentTasksOutputFiles": "apps/web/src/server/generated/playbooks.gen.ts"
         },
-        // The bundle embeds source identity, and its provenance requires HEAD.
-        { "runtime": "git rev-parse HEAD" },
-        { "runtime": "git rev-parse --abbrev-ref HEAD" },
-        { "env": "CUBBY_SOURCE_COMMIT" },
-        { "env": "CUBBY_SOURCE_BRANCH" },
         { "env": "CUBBY_DEV_PREVIEW_BUILD" },
+        // Defines import.meta.env.CUBBY_LOCAL_TELEMETRY (vite.config.ts).
+        { "env": "CUBBY_DEV_TELEMETRY" },
         {
           "dependentTasksOutputFiles": "packages/wasm/**/*"
         }
       ],
-      "outputs": [
-        "{projectRoot}/.cloudflare/output",
-        "{projectRoot}/.cloudflare/web-build-provenance.json"
-      ]
+      "outputs": ["{projectRoot}/.cloudflare/output"]
     },
     // The required desktop browser lane. CUBBY_E2E_SHARD (`index/count`)
     // splits it across CI runners; the restored run bundle is the evidence of
-    // the run that produced a cached pass. See vitest-ci for the build.
+    // the run that produced a cached pass. Browser lanes serve the built
+    // Worker through `dependsOn` build-cf.
     "e2e": {
-      "command": "pnpm exec tsx tooling/build-cf.ts --ensure && pnpm run test:e2e:ci:desktop --workers=2 --shard=${CUBBY_E2E_SHARD:-1/1}",
+      "command": "pnpm run test:e2e:ci:desktop --workers=2 --shard=${CUBBY_E2E_SHARD:-1/1}",
       "options": {
         "cwd": "apps/web"
       },
@@ -147,7 +145,8 @@
         {
           "projects": ["cubby-checks"],
           "target": "generate"
-        }
+        },
+        "build-cf"
       ],
       "inputs": ["webGate", { "env": "CUBBY_E2E_SHARD" }],
       "outputs": [
@@ -156,12 +155,13 @@
       ]
     },
     "tester-army": {
-      "command": "pnpm run test:e2e:agent:web",
+      "command": "pnpm run test:e2e:ci:agent:web",
       "options": { "cwd": "apps/web" },
       "cache": true,
       "dependsOn": [
         { "projects": ["cubby-checks"], "target": "wasm" },
-        { "projects": ["cubby-checks"], "target": "generate" }
+        { "projects": ["cubby-checks"], "target": "generate" },
+        "build-cf"
       ],
       "inputs": [
         "webGate",
@@ -173,7 +173,7 @@
     },
     // Informative only (never a merge gate); keyed like the other web lanes.
     "e2e-purchase-import": {
-      "command": "pnpm exec tsx tooling/build-cf.ts --ensure && pnpm run test:e2e:ci:purchase-import",
+      "command": "pnpm run test:e2e:ci:purchase-import",
       "options": {
         "cwd": "apps/web"
       },
@@ -186,7 +186,8 @@
         {
           "projects": ["cubby-checks"],
           "target": "generate"
-        }
+        },
+        "build-cf"
       ],
       "inputs": ["webGate"],
       "outputs": ["{projectRoot}/playwright-report"]

@@ -9,7 +9,7 @@ import {
 import { createLogger } from "@cubby/worker-tracing";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 
-import { afterResponse } from "~/server/cf-env";
+import { afterResponse, getSourceRelease } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { emitTelemetry } from "~/server/observability/telemetry";
 
@@ -177,7 +177,7 @@ async function emitAiUsage(
       queueType: "telemetry",
       eventId: input.eventId ?? crypto.randomUUID(),
       occurredAt: new Date().toISOString(),
-      release: __GIT_COMMIT__,
+      release: getSourceRelease().commit,
       type: "ai_usage",
       feature: input.feature,
       provider: input.provider,

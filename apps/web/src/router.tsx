@@ -5,6 +5,7 @@ import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 
 import { RoutePending } from "~/entity/navigation/route-pending";
+import { SENTRY_RELEASE_META } from "~/lib/build-metadata";
 import { installPreloadErrorRecovery } from "~/lib/deploy-recovery";
 import { isSupersededViewTransitionError } from "~/lib/error-utils";
 import { installJsProfiler } from "~/lib/perf/js-self-profile";
@@ -73,7 +74,10 @@ export const getRouter = () => {
         (!import.meta.env.CUBBY_LOCAL_RUNTIME ||
           import.meta.env.CUBBY_LOCAL_TELEMETRY),
       dataCollection: SENTRY_DATA_COLLECTION,
-      release: `cubby@${__GIT_COMMIT__}`,
+      // Server-rendered by the root route from the Worker's release values.
+      release: document.querySelector<HTMLMetaElement>(
+        `meta[name="${SENTRY_RELEASE_META}"]`,
+      )?.content,
       environment: sentryEnvironment(
         window.location.origin,
         isProd ? "production" : "development",

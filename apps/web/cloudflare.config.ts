@@ -121,6 +121,11 @@ export const productionWorker = defineWorker({
     R2_SECRET_ACCESS_KEY: bindings.secret(),
     // Also queries Workers Observability for the Run page's inline Job logs.
     AI_GATEWAY_API_KEY: bindings.secret(),
+    // Release identity: deploy uploads these with each Worker version
+    // (`cf deploy --secrets-file`), so the build output stays commit-free.
+    CUBBY_SOURCE_COMMIT: bindings.secret(),
+    CUBBY_SOURCE_BRANCH: bindings.secret(),
+    CUBBY_SOURCE_DATE: bindings.secret(),
 
     NODE_ENV: bindings.text("production"),
     ALLOW_SIGNUP: bindings.text("false"),

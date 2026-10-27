@@ -15,10 +15,6 @@ import {
   type E2ERunIdentity,
 } from "#web/tooling/e2e-run-bundle.ts";
 import {
-  gitRevision,
-  webBuildSourceFingerprint,
-} from "#web/tooling/web-build-provenance.ts";
-import {
   WORKERD_EXPLORER_ANNOTATION,
   WORKERD_LOGS_ATTACHMENT,
 } from "#web/tooling/e2e-workerd-logs.ts";
@@ -27,14 +23,6 @@ import { discoverHmrSession } from "./hmr-session";
 
 /** `lane: "hmr"` (playwright.dev.config.ts) tests the live dev session, not dist. */
 type ReporterOptions = { lane?: "built" | "hmr" };
-
-/** Vite serves current source, so freshness is the source fingerprint holding still. */
-function hmrIdentity(repoRoot: string) {
-  return {
-    ...gitRevision(repoRoot),
-    fingerprint: webBuildSourceFingerprint(repoRoot),
-  };
-}
 
 /**
  * Writes the sanitized E2E run bundle (with failed tests' workerd logs) and
@@ -52,7 +40,7 @@ class E2EHarnessReporter implements Reporter {
   private runStatus = "interrupted";
   private testMs = 0;
   private started?: E2ERunIdentity;
-  private hmrStarted?: ReturnType<typeof hmrIdentity> & {
+  private hmrStarted?: E2ERunIdentity & {
     session: ReturnType<typeof discoverHmrSession>["session"];
   };
 
@@ -62,7 +50,7 @@ class E2EHarnessReporter implements Reporter {
     const repoRoot = path.resolve(import.meta.dirname, "../../../../..");
     if (this.options.lane === "hmr")
       this.hmrStarted = {
-        ...hmrIdentity(repoRoot),
+        ...captureE2ERunIdentity(repoRoot),
         session: discoverHmrSession().session,
       };
     else this.started = captureE2ERunIdentity(repoRoot);
@@ -129,7 +117,7 @@ class E2EHarnessReporter implements Reporter {
       evidence: [resultsPath, logsDir],
       kind: "browser",
       ...(hmr
-        ? this.hmrBundle(repoRoot)
+        ? this.hmrBundle()
         : { status: this.runStatus, started: this.started }),
       command: [
         "pnpm",
@@ -167,29 +155,21 @@ class E2EHarnessReporter implements Reporter {
   }
 
   /** The tested runtime is the session's live source, not a built Worker. */
-  private hmrBundle(
-    repoRoot: string,
-  ): Pick<E2ERunBundleInput, "status" | "build"> {
+  private hmrBundle(): Pick<E2ERunBundleInput, "status" | "started" | "build"> {
     const started = this.hmrStarted;
     if (!started) throw new Error("HMR lane ended without a start identity");
-    const ended = hmrIdentity(repoRoot);
-    const changed =
-      started.commit !== ended.commit ||
-      started.dirty !== ended.dirty ||
-      started.fingerprint !== ended.fingerprint;
+    const { session, ...source } = started;
     return {
-      status: changed ? "changed-during-run" : this.runStatus,
+      status: this.runStatus,
+      started: source,
       build: {
-        fingerprint: started.fingerprint,
-        sourceFresh: !changed,
-        matchesSource: !changed && !started.dirty,
+        fingerprint: null,
+        matchesSource: true,
         details: {
-          reason: changed ? "changed-during-run" : "hmr-session",
-          sourceCommit: started.commit,
-          sourceDirty: started.dirty,
-          devId: started.session.id,
-          devProfile: started.session.profile,
-          sessionStartedAt: started.session.startedAt,
+          reason: "hmr-session",
+          devId: session.id,
+          devProfile: session.profile,
+          sessionStartedAt: session.startedAt,
         },
       },
     };

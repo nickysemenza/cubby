@@ -1044,10 +1044,14 @@ expose the active trace ID. These references also survive native API decoding.
 Source maps for `apps/web` are generated and uploaded at deploy by
 `sentryTanstackStart` (`vite.config.ts`), under release `cubby@<short sha>` —
 the same value the browser (`router.tsx`) and Worker (`worker-sentry.ts`) SDKs
-report via `Sentry.init`/`withSentry`. The plugin does not inject the release
-into chunks (`release.inject: false`): stamping the commit into every chunk
-would change every client asset's content on every deploy, so each deploy would
-re-upload them all. Client `.map` files are deleted from
+report via `Sentry.init`/`withSentry`. No commit reaches the bundle: the plugin
+does not inject the release (`release.inject: false`), and the runtimes read
+`CUBBY_SOURCE_COMMIT`, `CUBBY_SOURCE_BRANCH` and `CUBBY_SOURCE_DATE` through
+`getSourceRelease` (`apps/web/src/server/cf-env.ts`). Deploy uploads those as
+the Worker version's secrets (`cf deploy --secrets-file`); the root document
+passes the release to browser Sentry in a `cubby-release` meta tag. Identical
+sources therefore build identical output at any commit, and unchanged client
+assets are not re-uploaded. Unset values read as `unknown`. Client `.map` files are deleted from
 the Build Output assets directory afterward so none are served as Worker static assets. Server
 maps remain in the Build Output Worker bundle for diagnostics. The build removes sourcemap
 entries from the native Build Output manifest so `cf deploy --prebuilt` does

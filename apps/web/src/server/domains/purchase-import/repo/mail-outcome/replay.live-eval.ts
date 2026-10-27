@@ -13,9 +13,8 @@ import { and, desc, eq } from "drizzle-orm";
 import { localSecret } from "tooling/local-secret";
 import { call, from, mcp } from "tooling/purchase-agent-script";
 import { withTestDb } from "tooling/test-setup";
-import { holdWorkerdHarness } from "tooling/workerd-harness";
 import { withWorkerdRuntime } from "tooling/workerd-runtime";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { user } from "~/server/db/auth.schema";
@@ -179,11 +178,6 @@ const unavailable = (caseNumber: number, failure: string) => ({
 // ledger writes; comparison publishes grades; a missing outcome counts as parity.
 describe("isolated Mail coordinator replay", () => {
   const ctx = withTestDb(); // A fresh throwaway database for each case.
-  // A stale Worker rebuild takes minutes; it must not spend a case's budget.
-  beforeAll(async () => {
-    const release = await holdWorkerdHarness();
-    await release();
-  }, 30 * 60_000);
   afterAll(() => {
     for (const [index] of cases.entries()) {
       if (!reports.some((report) => report.case === index + 1))

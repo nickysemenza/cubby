@@ -24,7 +24,10 @@ import { AuthenticatedAppShell } from "~/features/shell/authenticated-app-shell"
 import { MainNav } from "~/features/shell/main-nav";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
-import { buildMetadataQueryOptions } from "~/lib/build-metadata";
+import {
+  buildMetadataQueryOptions,
+  SENTRY_RELEASE_META,
+} from "~/lib/build-metadata";
 import { FLAGS } from "~/lib/flags";
 import {
   isNativeRunEvidence,
@@ -126,11 +129,15 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
   },
   loader: ({ context }) =>
     context.queryClient.ensureQueryData(buildMetadataQueryOptions),
-  head: () => ({
+  head: ({ loaderData }) => ({
     meta: [
       {
         charSet: "utf-8",
       },
+      // Browser Sentry reads the deployed release before hydration (router.tsx).
+      ...(loaderData
+        ? [{ name: SENTRY_RELEASE_META, content: loaderData.sentryRelease }]
+        : []),
       {
         // Phone layouts are authored at 1×, so prevent accidental zoom-out
         // without blocking pinch-to-enlarge accessibility. Deliberately omit

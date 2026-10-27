@@ -3,6 +3,8 @@ import { existsSync, realpathSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 
+import { readSourceIdentity, sourceReleaseVars } from "../source-identity.ts";
+
 export interface DevProfile {
   schemaVersion: 1;
   id: string;
@@ -169,6 +171,15 @@ function localVars({
   return vars;
 }
 
+/** The footer and telemetry release; absent outside a Git checkout. */
+function localSourceRelease(repoRoot: string) {
+  try {
+    return sourceReleaseVars(readSourceIdentity(repoRoot));
+  } catch {
+    return {};
+  }
+}
+
 export function resolveDevProfile(
   root: string,
   inherited: Partial<NodeJS.ProcessEnv> = process.env,
@@ -232,7 +243,7 @@ export function resolveDevProfile(
     profile,
     port,
     inspectorPort,
-    vars,
+    vars: { ...vars, ...localSourceRelease(repoRoot) },
     integration,
   };
 }

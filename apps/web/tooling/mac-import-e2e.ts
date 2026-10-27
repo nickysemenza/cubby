@@ -33,7 +33,7 @@ import {
 } from "./mac-owned-process";
 import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
 import { leaseNamedDatabase } from "./test-database-lease";
-import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
+import { buildWebWorker } from "./build-cf";
 import { appleFfiFingerprint } from "cubby/tooling/apple-ffi";
 import { digestFiles, walkFiles } from "cubby/tooling/tree-digest";
 
@@ -247,7 +247,6 @@ async function reuseNativeBuild(reuseManifest: string): Promise<void> {
 }
 
 function saveArtifact(): void {
-  const webBuild = readWebBuildProvenance(repoRoot);
   const actions = path.join(artifacts, "actions.jsonl");
   const results = path.join(artifacts, "run-results.json");
   writeFileSync(
@@ -324,10 +323,9 @@ function saveArtifact(): void {
     },
     build: {
       fingerprint: binaryFingerprint,
+      // The Worker is Nx-built from the recorded checkout.
       matchesSource: Boolean(
-        binaryFingerprint &&
-        sourceFingerprint === nativeSourceFingerprint() &&
-        webBuild.matchesSource,
+        binaryFingerprint && sourceFingerprint === nativeSourceFingerprint(),
       ),
       details: {
         app: "Cubby.app",
@@ -340,7 +338,6 @@ function saveArtifact(): void {
         sourceFingerprintVersion: 2,
         binaryFingerprintFormat: "app-bundle-v1",
         cacheBinaryFingerprint: cacheBinaryFingerprint ?? "unbuilt",
-        webFingerprint: webBuild.fingerprint ?? "unbuilt",
       },
     },
   });
@@ -640,22 +637,7 @@ async function main(): Promise<void> {
     );
     driver.evidence.push(identityEvidence);
     phase = "web-build";
-    await ensureWebBuild(
-      repoRoot,
-      async (skipCache) => {
-        const environment: NodeJS.ProcessEnv = {
-          ...process.env,
-          NX_DAEMON: "false",
-        };
-        if (skipCache) environment.NX_SKIP_NX_CACHE = "true";
-        await run(
-          "pnpm",
-          ["exec", "nx", "run", "@cubby/web:build-cf", "--outputStyle=stream"],
-          environment,
-        );
-      },
-      process.env.CUBBY_E2E_PREBUILT_WEB === "1",
-    );
+    await buildWebWorker();
     phase = "database";
     if (process.env.CUBBY_SIM_DB_EXTERNAL !== "1") {
       await run(

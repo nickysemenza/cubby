@@ -112,7 +112,7 @@ describe("photo coordinator model eval", () => {
           scopes: ["openid", "profile", "email", "offline_access"],
         });
 
-      // Closes workerd, the database environment and the harness lock even
+      // Closes workerd and the database environment even
       // when a case or the report fails, before Vitest releases the database.
       await withWorkerdRuntime(
         {

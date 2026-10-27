@@ -1,11 +1,12 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ensureWebBuild } from "./web-build-provenance";
+import { buildWebWorker } from "./build-cf";
 
 /**
  * Small native smoke by default; select affected domain lanes or --all for
- * extended acceptance. Lanes stay sequential and share one Worker build.
+ * extended acceptance. Lanes stay sequential; after the first Nx build each
+ * lane's own build-cf run is a cache hit.
  */
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -49,34 +50,12 @@ const time = (run: () => number) => {
   const status = run();
   return { status, seconds: Math.round((Date.now() - started) / 1000) };
 };
-const repoRoot = path.resolve(webRoot, "../..");
 const buildStarted = Date.now();
-const buildAction = await ensureWebBuild(
-  repoRoot,
-  (skipCache) => {
-    const status =
-      spawnSync(
-        "pnpm",
-        ["exec", "nx", "run", "@cubby/web:build-cf", "--outputStyle=stream"],
-        {
-          cwd: repoRoot,
-          stdio: "inherit",
-          env: {
-            ...process.env,
-            NX_DAEMON: "false",
-            ...(skipCache && { NX_SKIP_NX_CACHE: "true" }),
-          },
-        },
-      ).status ?? 1;
-    if (status !== 0) process.exit(status);
-  },
-  process.env.CUBBY_E2E_PREBUILT_WEB === "1",
-);
+await buildWebWorker();
 const build = {
   status: 0,
   seconds: Math.round((Date.now() - buildStarted) / 1000),
 };
-console.log(`[local-e2e] Web build ${buildAction}`);
 
 const results = [{ name: "web build", ...build }];
 for (const lane of selected) {
@@ -90,7 +69,6 @@ for (const lane of selected) {
           {
             cwd: webRoot,
             stdio: "inherit",
-            env: { ...process.env, CUBBY_E2E_PREBUILT_WEB: "1" },
           },
         ).status ?? 1,
     ),

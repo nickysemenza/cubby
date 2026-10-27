@@ -582,17 +582,15 @@ with SuperJSON and checking both settlement `ok === true` and operation
 Compare related layout bounds in one browser evaluation so their rectangles
 come from the same render state.
 
-Playwright E2E and the coupled Workers harness share a per-worktree lock at
-`/tmp/cubby-harness-<worktree hash>.lock` (`apps/web/tooling/dev-services/harness-lock.ts`,
-managed by `proper-lockfile`). It keeps one checkout's suites from rebuilding
-its Worker under each other or starving each other of CPU; other worktrees run
-concurrently on the shared test services. The library refreshes the lock
-while held and reclaims it after an interrupted process. Child processes inherit
-the owner marker and pass through. `test:e2e:watch` (`--ui`) skips the lock, since
-its idle session would otherwise hold it indefinitely. Only the profiles marked
-"yes" below take it; a Playwright run holds it from global setup, and its
-workers pass through. The only machine-wide
-lock, `/tmp/cubby-native-device.lock`, serializes simulator lanes
+Playwright E2E and the workerd harness serve the built Worker; Nx's
+`@cubby/web:build-cf` alone decides whether it is current (a content-keyed
+cache hit, or a rebuild). Entry points run it first: `pnpm test:e2e` and the
+other human-facing scripts call it, and the browser targets declare it in
+`dependsOn`. A harness never rebuilds, and there is no per-worktree harness
+lock: a rebuild while another of the checkout's suites runs replaces the
+Worker under it, so finish edits before starting overlapping suites. The only
+machine-wide lock, `/tmp/cubby-native-device.lock`
+(`apps/web/tooling/dev-services/harness-lock.ts`), serializes simulator lanes
 (`sim-e2e.ts`); the Mac import lane keeps its own fixture lease.
 
 A spec's `test.use` of a

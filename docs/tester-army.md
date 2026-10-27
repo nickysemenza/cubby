@@ -14,8 +14,8 @@ There is one gateway route per model, without funding fallbacks.
 Every journey uses the shared `withSeededE2ERuntime` fixture over
 `createE2EWorkerRuntime`: its own IntegreSQL database lease, authentication,
 Worker, bindings and local object storage, all released after that journey.
-The template and built Worker are reused. The suite holds the existing worktree
-harness lock across build preparation and execution. Ordinary journeys use the `offline`
+The template and built Worker are reused; Nx's `build-cf` prepares the Worker
+before the suite starts. Ordinary journeys use the `offline`
 profile; import journeys use `coupled` for real background/telemetry consumers
 and scripted external peers. The same fixture support is available to
 Playwright; Tester Army adds the browser goals, not a separate application

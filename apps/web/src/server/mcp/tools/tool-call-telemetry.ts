@@ -11,6 +11,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
+import { getSourceRelease } from "~/server/cf-env";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { getRegisteredTool } from "./tool-catalog";
@@ -154,7 +155,7 @@ export function installToolCallTelemetryHandler(server: McpServer): void {
               queueType: "telemetry",
               eventId: crypto.randomUUID(),
               occurredAt: new Date().toISOString(),
-              release: __GIT_COMMIT__,
+              release: getSourceRelease().commit,
               type: "mcp_tool_call",
               toolName,
               outcome,

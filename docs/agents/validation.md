@@ -142,10 +142,11 @@ For every deletion, record the stronger retained regression, lack of runtime
 behavior, or deliberate rare-case coverage tradeoff in the deleting commit.
 Preserve consequential ordinary-workflow regressions before removal.
 
-Reuse a healthy HMR session for iteration and fingerprint-verified builds.
+Reuse a healthy HMR session for iteration and Nx-cached Worker builds.
 Finish source edits and formatting before starting a web build, and keep the
-checkout unchanged through its E2E run. Build fingerprints include tests and
-tooling under `src`; queue the build after implementation lanes settle.
+checkout unchanged through its E2E run. Nx's `build-cf` key is the build's
+content (including tooling and tests under `src`, excluding `apps/web/tests`),
+not the commit; queue the build after implementation lanes settle.
 For test-speed investigations, extract the existing GitHub reports, traces and
 job logs before considering a local run. Label cache replays and timings from
 other revisions; missing timing artifacts do not justify rerunning a whole tier.
@@ -159,7 +160,7 @@ of generating enough records to saturate it. Assert committed outcomes and the
 forbidden work directly, rather than pinning throughput, exact catalog
 membership, or incidental response sizes. Large populations belong only in an
 explicit performance measurement that needs that scale.
-Report setup separately from scenario time. A failed provenance/startup check
+Report setup separately from scenario time. A failed build/startup check
 is not a scenario result. Before declaring shared schema inputs ready, run the
 read-only `loadEntityDeclarationBundle` strict probe from an ESM entrypoint
 (`.mts` with `tsx --tsconfig apps/web/tsconfig.json`); do not use `tsx -e`,
@@ -293,15 +294,15 @@ the failure evidence being reviewed.
 Finish cold artifact preparation before launching checks that consume it:
 concurrent wasm-pack invocations can race installation of the shared wasm-bindgen CLI.
 Reuse valid input-hash results at handoff. Finish edits and commits, including staged formatting hooks, before starting
-immutable-build verification. The web stamp records HEAD as well as source bytes:
-even a commit with unchanged runtime content invalidates it. Wait for commit hooks
+immutable-build verification. The web build is keyed on content alone: a commit
+with unchanged build inputs reuses it. Wait for commit hooks
 to finish, then build and run dependent prebuilt checks without Git mutations in
 parallel; use healthy HMR for suitable iteration.
 Nx reports task durations/cache hits, the dev supervisor records startup phase
 timings, and GitHub records named check steps; use those before adding telemetry.
 Wait for a build runner's terminal success before starting a dependent prebuilt
 Worker or browser check. A yielded session is still running; a completed client
-bundle alone does not establish a finished Worker build and provenance stamp.
+bundle alone does not establish a finished Worker build.
 
 ## PR screenshots
 

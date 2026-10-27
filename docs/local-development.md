@@ -187,7 +187,8 @@ it). An open HMR socket is not activity: forgotten preview panes and test
 browsers hold one indefinitely. A runtime whose supervisor was killed closes
 itself within 15 seconds. Built preview (`pnpm --dir apps/web preview:cf`)
 uses the same supervisor and runs `vite preview` against the native Build Output.
-Preview provenance cannot satisfy production prebuilt reuse.
+Preview builds run `build:cf` directly with `CUBBY_DEV_PREVIEW_BUILD`, which
+Nx's `build-cf` key also includes, so a later Nx build replaces their output.
 The lifecycle plugin's idle and orphan checks currently apply to HMR only.
 
 ## Tooling layout
@@ -201,7 +202,10 @@ Worker entry and R2 transport. The warm HMR lane's `dev-runtime.hmr.ts`
 verifies dev login, browser HMR, the synthetic USDA/UPC fixtures and local R2
 routing against the running session; `storage.unit.test.ts` owns the R2 adapter
 contract, and the Problems pack seeder asserts its own failed/pending work.
-Build provenance and disposable E2E tooling remain separate.
+Nx-owned builds and disposable E2E tooling remain separate. The dev profile
+sets `CUBBY_SOURCE_COMMIT`, `CUBBY_SOURCE_BRANCH` and `CUBBY_SOURCE_DATE` from
+the checkout (`tooling/source-identity.ts`) for the footer and telemetry, as
+the workerd harness does for built Workers.
 
 Core corpus values use an independent seeded Faker instance and the existing
 Zod create-input schemas. Scenario states and relationships remain explicit;
@@ -449,8 +453,8 @@ and deletes only those records after each case, retaining failed deletions for
 retry. `dev-runtime.hmr.ts` covers the development Worker's own contracts:
 native and one-click dev login mint real sessions, a Vite HMR update reaches the
 page without navigation, the synthetic USDA release and UPC cache load, and one
-dummy-signed R2 upload is served through signed, public and CDN paths. Sanitized artifacts identify the source revision and fingerprint; source
-changes during the run fail provenance. HMR evidence helps local iteration;
+dummy-signed R2 upload is served through signed, public and CDN paths. Sanitized artifacts identify the commit, branch and
+worktree state; a commit or first edit during the run marks it `changed-during-run`. HMR evidence helps local iteration;
 GitHub still gates the final head with built Workers.
 
 Default simulator smoke proves search and detail navigation, while headless
@@ -461,11 +465,11 @@ the full journey and its named regressions remain available unchanged.
 ## Focused browser validation
 
 Use the persistent HMR session to explore fixtures. Acceptance uses a built
-Worker, disposable databases, and separate storage. Build once, then run a
-focused file or the last failed selection:
+Worker, disposable databases, and separate storage. `test:e2e` first runs
+`nx run @cubby/web:build-cf`, a content-keyed cache hit when the build is
+current, then runs a focused file or the last failed selection:
 
 ```sh
-pnpm --dir apps/web build:cf
 pnpm --dir apps/web test:e2e tests/e2e/browser-operation-dispatch.spec.ts --workers=2
 pnpm --dir apps/web test:e2e --last-failed
 pnpm --dir apps/web test:e2e:affected
@@ -477,16 +481,18 @@ The Cloudflare Vite plugin v2 emits `.cloudflare/output/v0/` from
 generated Wrangler config. Its public Wrangler harness API remains available
 for binding access, Durable Object controls, Workflow introspection and logs.
 
-`test:e2e:affected` reuses the current
-fingerprint-checked web build or rebuilds it, then runs Playwright's
+`test:e2e:affected` reuses or rebuilds the web build through Nx, then runs Playwright's
 `--only-changed=origin/main`, which selects spec
 files that changed or import a changed file. It is a local heuristic: specs
 can reach app code through the browser without importing it, so an app-only
 change can select nothing. Name the spec that covers the route, or run the full `test:e2e`; CI
-runs every spec. Append `--list` to preview the selection. Direct runs reject
-stale prebuilt output before database setup, so rebuild after editing source. The retained watch command prepares an
-initial build and keeps the built Worker and Playwright UI available for
-iteration. HMR and watch results serve different validation boundaries.
+runs every spec. Append `--list` to preview the selection. A bare `playwright test` serves
+whatever output exists; use the scripts, which build through Nx first. The watch
+command builds once, opens the Playwright UI, and reruns the Nx build after each
+burst of edits (`build-cf.ts --watch`): every rebuild is the complete
+client/Worker pair, and edits outside the build's inputs are cache hits. A test
+started mid-rebuild can see the output being replaced; rerun it after
+`[web watch] current`. HMR and watch results serve different validation boundaries.
 
 Read the failed scenario and artifact summary before rerunning. Use
 `--last-failed` after a relevant fix; do not repeat an unchanged failure merely

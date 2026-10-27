@@ -1,4 +1,4 @@
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import tailwindcss from "@tailwindcss/vite";
@@ -25,10 +25,6 @@ if (process.env.CUBBY_VITEST_ENSURED === undefined) {
     });
   process.env.CUBBY_VITEST_ENSURED = "1";
 }
-
-const gitCommit = execSync("git rev-parse --short HEAD", {
-  encoding: "utf-8",
-}).trim();
 
 /**
  * `vite-plugin-wasm` with its "inline the WASM as a base64 data URI" branch
@@ -238,10 +234,6 @@ if (!Number.isSafeInteger(groupZeroMaxWorkers) || groupZeroMaxWorkers < 1) {
 }
 export default defineConfig({
   define: {
-    __GIT_COMMIT__: JSON.stringify(gitCommit),
-    __SOURCE_COMMIT__: JSON.stringify(gitCommit),
-    __SOURCE_BRANCH__: JSON.stringify("test"),
-    __BUILD_DATE__: JSON.stringify("2026-01-01T00:00:00.000Z"),
     __R2_PUBLIC_URL__: JSON.stringify(readR2PublicUrl()),
   },
   // https://github.com/Menci/vite-plugin-wasm#usage
@@ -493,8 +485,6 @@ export default defineConfig({
           // brings its own module runner, and the root WASM/alias plugins
           // target Node.
           plugins: [cloudflareTest(workersTestPluginOptions())],
-          // The Sentry-instrumented agent host reads the release the app build defines.
-          define: { __GIT_COMMIT__: JSON.stringify("workers-test") },
           resolve: { tsconfigPaths: true },
           test: {
             name: "workers",

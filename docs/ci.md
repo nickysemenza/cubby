@@ -30,7 +30,7 @@ own workflow.
 The required test matrix runs entirely on GitHub-hosted runners: four browser
 shards and four Vitest shards use `ubuntu-latest`. Browser shards use two workers
 each. Every shard restores or builds its own web output through Nx before
-testing; the build ensure verifies provenance and supports standalone tests.
+testing; Nx's content-keyed `build-cf` is the only staleness check.
 There is no shared-build producer or artifact prerequisite between shards.
 
 Plan, reporting and the final gate use `ubuntu-slim`. Validation and optional
@@ -184,10 +184,9 @@ it live in the [validation policy](agents/validation.md) and
   — measured 2026-09-16, the web unit tier took 196s instead of 24s under
   `run-many`'s default parallelism and tripped a 5s test timeout.
 - Selected targets replay from the Nx cache when their content is unchanged.
-  The browser targets build the Worker inside their own command
-  (`build-cf.ts --ensure`) rather than through `dependsOn`, because the
-  `build-cf` key includes the Git commit for provenance and would rebuild before
-  every replay.
+  The browser targets reach the Worker through `dependsOn: build-cf`, whose key
+  is the build's content alone; the commit and branch are deploy-time Worker
+  values, so an unchanged build is a cache hit at any commit.
 - The textual order of the `run-many -t` list is not an execution-order
   contract; Nx dependencies provide the ordering (WASM before its consumers,
   web build before E2E). `verify:local:full` sets `NX_SKIP_NX_CACHE=true` so
@@ -207,7 +206,7 @@ unexpected skipped test without freezing the suite to a hand-maintained count;
 a Vitest `-t` run accepts tests the pattern left out but still fails when the
 pattern matches nothing or a matched test is skipped.
 Browser verification always follows the current web build: the `e2e` target
-runs `build-cf.ts --ensure` first.
+depends on `build-cf`.
 The web build itself ensures current WASM and generated contracts before
 bundling. Native CLI, test, and app commands ensure generated contracts before
 compilation; artifact freshness belongs to these consumers, not Git hooks.
@@ -434,8 +433,8 @@ failure. Service-backed projects (`integration`,
 `capability`, `workers`) retry a failed test once on CI; Node unit, tooling and
 package projects never retry.
 Desktop Chromium runs as Playwright shards through the
-`e2e` target, each restoring or building the Worker with the run's source commit and branch
-provenance. Phone-web and WebKit browser coverage was removed from PR CI and the
+`e2e` target, each restoring or building the content-keyed Worker; run bundles
+record the tested commit, branch and worktree state. Phone-web and WebKit browser coverage was removed from PR CI and the
 Playwright suite; native checks remain separate. There is no coverage mode.
 The disposable PostgreSQL container uses `fsync=off`, `synchronous_commit=off`,
 and `full_page_writes=off`, matching the local test-service settings. These
@@ -551,7 +550,12 @@ GitHub can disable public-repository schedules after 60 inactive days; the
 without waiting for post-merge CI. Required PR checks gate merging. It uses
 `.github/actions/deploy-worker` to build once, apply committed production migrations
 with the existing runner, then run `cf deploy --prebuilt --mode production`
-against `.cloudflare/output/v0/`. The Cloudflare Vite plugin v2 builds this
+against `.cloudflare/output/v0/`. The bundle carries no commit: the action's
+`Record source release` step writes `CUBBY_SOURCE_COMMIT` (short SHA),
+`CUBBY_SOURCE_BRANCH` and `CUBBY_SOURCE_DATE` from `tooling/source-identity.ts`,
+and `--secrets-file` uploads them with the Worker version while existing
+secrets are inherited. The Sentry plugin still names and uploads the build's
+maps as `cubby@<short SHA>` with `inject: false`, matching the runtime release. The Cloudflare Vite plugin v2 builds this
 output from `cloudflare.config.ts`. It checks
 current main before building and again after migration, before deployment.
 Keep build, migration and deployment as named steps in the existing action;
