@@ -1,0 +1,25 @@
+apps/web/src/server/db/helpers/index.ts
+  s_9fb58b1f0c0012::t_d60f38c3dbe148 67
+apps/web/src/server/db/helpers/relations.ts
+  s_9fb58b1f0c0012::t_2d3bb86429482c 173
+apps/web/src/server/domains/inventory/repo/crud.ts
+  s_9fb58b1f0c0012::t_8f936c2a285449 333
+apps/web/src/server/domains/vendor/repo/vendor.ts
+  s_9fb58b1f0c0012::t_6a67c21ddca0e9 305
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "650291dcad6ecd8d81ccd253ee3d603d612427b9",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
