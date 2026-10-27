@@ -386,6 +386,8 @@ test("expense category pills agree with quality for direct, allocated, and missi
   });
   const { id: principal } = await createEntityFixture(page, "expense", {
     name: `${tag} principal`,
+    lineKind: "principal",
+    lineBasis: "item_line",
     costType: "services",
     trade: "other",
     purchaseId,
@@ -405,6 +407,8 @@ test("expense category pills agree with quality for direct, allocated, and missi
   );
   await createEntityFixture(page, "expense", {
     name: `${tag} second principal`,
+    lineKind: "principal",
+    lineBasis: "item_line",
     costType: "services",
     trade: "other",
     purchaseId,
@@ -422,6 +426,8 @@ test("expense category pills agree with quality for direct, allocated, and missi
   });
   const { id: missing } = await createEntityFixture(page, "expense", {
     name: `${tag} unclassified`,
+    lineKind: "principal",
+    lineBasis: "item_line",
     costType: "services",
     trade: "other",
     cost: 10,

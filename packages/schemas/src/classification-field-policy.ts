@@ -1,4 +1,8 @@
-import { fieldDecisionOf, fieldEnvelopeFor } from "./field-envelope";
+import {
+  fieldDecisionOf,
+  fieldEnvelopeFor,
+  fieldValueOf,
+} from "./field-envelope";
 /**
  * The one registry and evaluator for classification-declared field policies:
  * whether a classification expects a field of the record it classifies, and
@@ -153,8 +157,16 @@ export function classificationValue<TRecord extends object>(
   policy: { readonly classifier: string; readonly readPath: string },
   record: TRecord,
 ): string | null {
-  let value: unknown = record;
-  for (const segment of policy.readPath.split(".")) {
+  const segments = policy.readPath.split(".");
+  const first = segments[0];
+  // Internal rows and editing drafts carry stored keys; public reads carry envelopes.
+  const envelope =
+    first && !Object.hasOwn(record, first)
+      ? fieldEnvelopeFor(record, first)
+      : undefined;
+  let value: unknown = envelope ? fieldValueOf(envelope) : record;
+  if (envelope) segments.shift();
+  for (const segment of segments) {
     if (typeof value === "string") {
       try {
         value = JSON.parse(value);
