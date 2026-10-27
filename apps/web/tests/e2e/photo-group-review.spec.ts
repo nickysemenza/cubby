@@ -842,9 +842,7 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
   await expect(
     group.getByRole("button", { name: "Confirm identity", exact: true }),
   ).toHaveCount(0);
-  await expect(
-    page.locator("#photo-item-g1").locator("..").getByRole("checkbox"),
-  ).toBeDisabled();
+  await expect(page.locator("#photo-select-g1")).toBeDisabled();
   await expect(
     group.getByRole("button", { name: /^Create product and / }),
   ).toBeDisabled();
@@ -868,9 +866,7 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
   await page
     .getByRole("button", { name: "Select all ready items", exact: true })
     .click();
-  await expect(
-    page.locator("#photo-item-g1").locator("..").getByRole("checkbox"),
-  ).not.toBeChecked();
+  await expect(page.locator("#photo-select-g1")).not.toBeChecked();
   await page
     .getByRole("button", { name: "Approve 1 selected item", exact: true })
     .click();
@@ -885,9 +881,7 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
     group.getByRole("button", { name: /^Create product and / }),
   ).toBeDisabled();
   await group.getByRole("button", { name: "Resolved", exact: true }).click();
-  await expect(
-    page.locator("#photo-item-g1").locator("..").getByRole("checkbox"),
-  ).toBeEnabled();
+  await expect(page.locator("#photo-select-g1")).toBeEnabled();
   await group.getByRole("button", { name: /^Create product and / }).click();
   await page.locator("#photo-item-g1").click();
   await expect(
