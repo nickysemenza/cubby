@@ -1,0 +1,73 @@
+apps/web/src/contracts/run-detail.contract.ts
+  s_b5f2d60d9120a2::t_f604fea7d1bfd8 87
+apps/web/src/features/run/run-detail.preview.test.tsx
+  s_b5f2d60d9120a2::t_693cf26f73571d 248
+apps/web/src/features/run/run-evaluations.tsx
+  s_b5f2d60d9120a2::t_32cdd99b3895bb 107,263
+apps/web/src/server/ai/repo/ai-evaluation-requests.ts
+  s_b5f2d60d9120a2::t_e81b38ba8e7ced 45,47,114,119,133,181-189,191-192,241,249-250
+apps/web/src/server/ai/repo/ai-evaluation.ts
+  s_b5f2d60d9120a2::t_cc64e7866b1697 6-11,19,35,37-38,44-48,56-200,203,205,207-208,214,216-217,228-233,236,239,247-251,267-268,273,301-302,306,313,315-330,337-340,342-343,345-350,352-357,360,370-374,377-381,383,385-393,396-397,401-402,405-406,409,416-419,422,439-446,453-474,501-502,504-507,510-511,519,521,544,562-566,569-574,584-585,595-608,610-624,631-655,658-670,674-689,691-695,697-714,719-724,730-743,745-747,749
+apps/web/src/server/ai/repo/evaluation-page.ts
+  s_b5f2d60d9120a2::t_6735df167ae708 7,9,11,41-42
+apps/web/src/server/domains/purchase-import/repo/gmail/admitted-source.ts
+  s_b5f2d60d9120a2::t_8d0e9ed6949be5 4,192-193,195-196,205-208
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassification-continuation.ts
+  s_b5f2d60d9120a2::t_0b845117a1ee1e 4,7,75-76,84-95
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassification-work.ts
+  s_b5f2d60d9120a2::t_03ea8beb55c260 6,10,106,116,119
+apps/web/src/server/domains/purchase-import/repo/gmail/refresh-evaluation-state.ts
+  s_b5f2d60d9120a2::t_a61f6e4e740e55 1,3-4,69-70
+apps/web/src/server/domains/purchase-import/service/gmail/reclassification-target.ts
+  s_b5f2d60d9120a2::t_9135ef2a6ebeea 5,7,33,115-121
+apps/web/src/server/domains/purchase-import/service/gmail/refresh-evaluation.ts
+  s_b5f2d60d9120a2::t_c0c0d59a6df371 5,19
+apps/web/src/server/domains/run/repo/ai-refresh-state.ts
+  s_b5f2d60d9120a2::t_2edf2ec49c9917 31,137,158,259,263-267,313,315
+apps/web/src/server/domains/run/repo/ai-work-state.ts
+  s_b5f2d60d9120a2::t_14250d51487abf 21
+apps/web/src/server/domains/run/service/ai-evaluation-drain.ts
+  s_b5f2d60d9120a2::t_0e58ef68d3f1b8 1-403
+apps/web/src/server/domains/run/service/ai-refresh.ts
+  s_b5f2d60d9120a2::t_1eaf88766da8fb 53-54,56-57,81,99,116,772,775,778-809,811-816,820-824,826-842,844-877,879-883,885-889,891-892,894-898,903-906,908-912,914-917,919-947,949-957,959-960,965-966,968-972,974-980,1004-1010,1226-1241,1244,1252-1256,1258,1260,1268,1278-1281,1286,1297,1322,1334-1336,1341-1343,1347-1365,1368-1372,1375,1377-1403,1488-1539,1588
+apps/web/src/server/domains/run/service/ai-work.ts
+  s_b5f2d60d9120a2::t_dbc8452efe08e7 16,170,173,176-190,194
+apps/web/src/server/domains/run/service/suggestion-sweep.ts
+  s_b5f2d60d9120a2::t_e6ec119e354fb4 36-41,445,597
+apps/web/src/server/generic/jobs/repo/job-queue.ts
+  s_b5f2d60d9120a2::t_0163ccb2b10bb6 73-75,90-91,97-98
+apps/web/src/server/generic/jobs/service/drain.ts
+  s_b5f2d60d9120a2::t_9e6b501b1e1f48 45-49,102,129
+apps/web/src/server/generic/run-detail/repo/run-evaluations.ts
+  s_b5f2d60d9120a2::t_53586193b32d3d 17,22
+apps/web/src/server/workflows/jobs.ts
+  s_b5f2d60d9120a2::t_c082de94c0adb4 18,34,76
+apps/web/src/server/workflows/runs/control.ts
+  s_b5f2d60d9120a2::t_22e2afb85df4d1 9,11-14,22-23,199,221,231-238,240-244,296
+apps/web/src/server/workflows/runs/job-execution.ts
+  s_b5f2d60d9120a2::t_765900ddf6a971 30-32,167-168,172
+apps/web/src/server/workflows/runs/lifecycle.ts
+  s_b5f2d60d9120a2::t_c0a99140e8de8f 128,162-176
+apps/web/tooling/ai-work.ts
+  s_b5f2d60d9120a2::t_f4d0bb44860de8 6,9,11,17,68,92-100,104,117,128
+packages/schemas/src/entity-definitions/32-job.entity.ts
+  s_b5f2d60d9120a2::t_49401cd0ae06f8 438,446
+packages/schemas/src/relationship-query-definitions.ts
+  s_b5f2d60d9120a2::t_a64d62464049da 46,48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3e5ba03d0ae45731e142b189048d006fc0fc83a5",
+  "prompts": {},
+  "sessions": {
+    "s_b5f2d60d9120a2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dffdbf53-fa71-4d15-b8b0-381d918ace21",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
