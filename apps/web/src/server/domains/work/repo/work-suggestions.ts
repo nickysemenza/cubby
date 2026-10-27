@@ -35,7 +35,7 @@ import {
   reviewFamilyDeclarations,
 } from "~/server/generic/assessment/repo/review-families";
 import { reviewableSuggestionSql } from "~/server/generic/assessment/repo/suggestion-review";
-import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
+import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
 import { recordScope } from "~/server/generic/work-queue/repo/work-declarations";
 import {

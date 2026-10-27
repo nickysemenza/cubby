@@ -1,6 +1,4 @@
 import { workQueueInput } from "@cubby/schemas/work-queue";
-import { sql } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";

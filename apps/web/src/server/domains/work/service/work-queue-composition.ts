@@ -53,5 +53,6 @@ export const workQueueComposition = (): WorkQueueComposition => {
       ...diagnosticWorkSources(context),
     ],
     deferrals: [plannedPurchaseWorkDeferral()],
+    incompleteProjectIds: context.incompleteProjectIds,
   };
 };

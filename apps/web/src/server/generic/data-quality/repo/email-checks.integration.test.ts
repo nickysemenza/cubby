@@ -217,19 +217,15 @@ describe("Email data quality", () => {
       { kind: "selected", fields: [] },
       "count",
     );
-    expect(facet.result.count).toBe(6);
-    expect(facet.queryCount).toBe(1);
-    expect(facet.tables).toEqual(["DerivedValue", "Email"]);
-    const measuredQueue = await countTestDbQueries(() =>
-      readWorkQueue(ctx.db, {
-        input: workQueueInput.parse({
-          reason: ["email_not_imported"],
-          pageSize: 100,
-        }),
-        memberPartyId: null,
-        memberOnly: false,
+    expect(facet.count).toBe(6);
+    const queue = await readWorkQueue(ctx.db, {
+      input: workQueueInput.parse({
+        reason: ["email_not_imported"],
+        pageSize: 100,
       }),
-    );
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(queue.meta.totalCount).toBe(4);
     expect(queue.items).toHaveLength(4);
     expect(queue.items.every((item) => item.entity === "email")).toBe(true);

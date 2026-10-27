@@ -43,7 +43,10 @@ function UnusedIngredientDelete({
         remove.mutate(
           target.scope === "group"
             ? { allFromProblem: problemKey, alsoDeleteProducts }
-            : { ingredientIds: target.row.id ? [target.row.id] : [], alsoDeleteProducts },
+            : {
+                ingredientIds: target.row.id ? [target.row.id] : [],
+                alsoDeleteProducts,
+              },
         )
       }
     />

@@ -80,7 +80,7 @@ export interface DeclaredFilterDescriptor {
  */
 export interface FilterColumn {
   /** The table column, when `value` reads one; a relation list has none. */
-  readonly column?: AnyColumn;
+  readonly column?: AnyColumn | SQL;
   readonly value: AnyColumn | SQL;
   readonly kind: string;
   readonly nullable: boolean;
@@ -161,7 +161,7 @@ const referencePredicate = (
   );
   if (!target)
     throw new Error(
-      `${label} id filter over ${source?.name ?? "a column"} references ${String(reference)}, which has no shortcode table`,
+      `${label} id filter over ${source instanceof SQL ? "expression" : (source?.name ?? "a column")} references ${String(reference)}, which has no shortcode table`,
     );
   // A reference to a soft-deleted record is no value, as the group key and
   // the related-path filters read it.
@@ -427,9 +427,15 @@ export function compileDeclaredFilters(
     request: ListFilterValues,
     excluding: boolean,
   ): Array<SQL | undefined> => [
-    ...(set.extra?.(request, excluding, excluding
-      ? membership === "certain" ? "possible" : "certain"
-      : membership) ?? []),
+    ...(set.extra?.(
+      request,
+      excluding,
+      excluding
+        ? membership === "certain"
+          ? "possible"
+          : "certain"
+        : membership,
+    ) ?? []),
     ...set.descriptors
       .filter((descriptor) => descriptor.stored !== null)
       .map((descriptor) => columnPredicate(set, descriptor, request)),

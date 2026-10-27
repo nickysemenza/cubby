@@ -1,4 +1,3 @@
-import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { z } from "zod";
 
 import type { FilterKind } from "./entity-definitions/definition";
@@ -17,7 +16,6 @@ import {
   oneOrMany,
   presenceFilter,
   sortDirection,
-  tokenFilter,
 } from "./pagination";
 
 /**
@@ -210,7 +208,6 @@ const descriptorOf = (filter: RelationFilter): RelationFilterDescriptor => ({
 });
 
 const textList = z.string().min(1).max(200);
-
 
 /** The input keys one filter accepts, by its kind. */
 const inputFieldsOf = (filter: RelationFilter) => {

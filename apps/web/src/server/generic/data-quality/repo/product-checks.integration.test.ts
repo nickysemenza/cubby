@@ -253,7 +253,7 @@ describe("stored Product quality", () => {
         /work_product_price|\bkpe\.|"knownCost"|"knownUnitCount"/,
       );
       expect(
-        measured.result.items.some(
+        researched.items.some(
           (row) => row.family === "research" && row.id === item.id,
         ),
       ).toBe(true);

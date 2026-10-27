@@ -143,10 +143,7 @@ export const diagnosticWorkSources = (
             ? { attentionItems: await context.attentionItems(db, scope) }
             : declaration.diagnostic === "tools-used-outside-ownership"
               ? {
-                  projectDateWindows: context.load(db).then((loaded) => ({
-                    tree: loaded,
-                    dateWindows: loaded.dateWindows,
-                  })),
+                  projectDateWindows: context.load(db),
                 }
               : {},
           { kind: "count" },

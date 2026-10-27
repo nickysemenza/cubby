@@ -5,7 +5,7 @@ import { compileProblemFilters } from "~/entity/problems/problem-filter-semantic
 import { project as table } from "~/server/db/schema";
 import { buildProjectWhere } from "~/server/domains/project/repo/lookup";
 import type { ProjectWorkContext } from "~/server/domains/project/repo/work-context";
-import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
+import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import {
   entityProblemSources,
   recordScope,

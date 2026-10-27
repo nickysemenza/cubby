@@ -4,7 +4,7 @@ import { and, getTableName, sql } from "drizzle-orm";
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { task as table } from "~/server/db/schema";
 import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
-import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
+import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import {
   entityProblemSources,
   recordScope,

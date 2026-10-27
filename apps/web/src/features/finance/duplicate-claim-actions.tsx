@@ -206,7 +206,9 @@ export function DuplicateAccountAliasAction(props: WorkActionProps) {
       {...props}
       problemKey="duplicateFinancialAccountSourceAliases"
     >
-      {(item, close) => <DuplicateAccountAliasFix variant={item} close={close} />}
+      {(item, close) => (
+        <DuplicateAccountAliasFix variant={item} close={close} />
+      )}
     </ProblemItemsAction>
   );
 }

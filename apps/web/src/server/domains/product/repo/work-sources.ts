@@ -5,7 +5,7 @@ import { compileProblemFilters } from "~/entity/problems/problem-filter-semantic
 import { product as table } from "~/server/db/schema";
 import { buildProductWhere } from "~/server/domains/product/repo/crud";
 import { productWorkReadContext } from "~/server/domains/product/repo/work-read-context";
-import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
+import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import {
   entityProblemSources,
   gapDeclaration,

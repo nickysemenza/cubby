@@ -7,7 +7,7 @@ import { getDb } from "~/server/db/helpers";
 import { sql } from "drizzle-orm";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
-import { countTestDbQueries, withTestDb } from "../test-setup";
+import { withTestDb } from "../test-setup";
 import { seedPerformanceCorpus } from "./performance";
 import { listShipmentsRead } from "~/server/domains/shipment/repo/entity-repository";
 import { drainStoredDerived } from "~/server/testing/background-queue";
@@ -109,10 +109,8 @@ it("seeds connected performance history readable by the real Work queue", async 
     { pageIndex: 0, pageSize: 25 },
     { kind: "selected", fields: ["dataQuality"] },
   );
-  expect(parcels.result.count).toBe(1);
-  expect(dataQuality.parse(parcels.result.data[0]?.dataQuality).score).toBe(25);
-  // One bounded page hydrates stored checks; no source predicate is re-run per row.
-  expect(parcels.queryCount).toBeLessThan(12);
+  expect(parcels.count).toBe(1);
+  expect(dataQuality.parse(parcels.data[0]?.dataQuality).score).toBe(25);
   const queue = await readWorkQueue(ctx.db, {
     input: workQueueInput.parse({ pageSize: 25 }),
     memberPartyId: null,

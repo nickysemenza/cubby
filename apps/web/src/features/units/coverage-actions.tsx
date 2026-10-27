@@ -1,7 +1,8 @@
+import { Link } from "@tanstack/react-router";
+
 import type { WorkActionProps } from "~/entity/work-queue/work-actions";
 import { ProblemItemsAction } from "~/features/work-queue/problem-items-action";
 import { Button } from "~/ui/primitives/button";
-import { Link } from "@tanstack/react-router";
 
 import { UnitCoverageInlineFix } from "./unit-coverage-fix";
 
@@ -14,7 +15,10 @@ export function IslandedMappingsAction(props: WorkActionProps) {
       matches={(item, id) => item.id === id}
     >
       {(item, close) => (
-        <UnitCoverageInlineFix item={{ kind: "islanded", ...item }} close={close} />
+        <UnitCoverageInlineFix
+          item={{ kind: "islanded", ...item }}
+          close={close}
+        />
       )}
     </ProblemItemsAction>
   );

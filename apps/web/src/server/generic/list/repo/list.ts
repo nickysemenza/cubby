@@ -111,6 +111,25 @@ import {
 } from "~/server/observability/list-read-tracing";
 
 import {
+  compileDeclaredFilters,
+  type DeclaredFilterDescriptor,
+  descriptorValueKeys,
+  entitySubtreeToggle,
+  type FilterColumn,
+  isHierarchyEntity,
+  matchAll,
+  nonEmpty,
+  optionalBoolean,
+  optionalDate,
+  optionalNumber,
+  optionalText,
+  optionalTextList,
+  rangeBound,
+  rangeOrPresence,
+  requestedIdsSql,
+  textPredicate,
+} from "./declared-filters";
+import {
   type DerivedSqlArg,
   derivedFieldsOf,
   derivedOrderBy,
@@ -137,25 +156,6 @@ import {
   type RowsSqlArg,
   shortcodeIdsSql,
 } from "./field-compiler";
-import {
-  compileDeclaredFilters,
-  type DeclaredFilterDescriptor,
-  descriptorValueKeys,
-  entitySubtreeToggle,
-  type FilterColumn,
-  isHierarchyEntity,
-  matchAll,
-  nonEmpty,
-  optionalBoolean,
-  optionalDate,
-  optionalNumber,
-  optionalText,
-  optionalTextList,
-  rangeBound,
-  rangeOrPresence,
-  requestedIdsSql,
-  textPredicate,
-} from "./declared-filters";
 import { readGroupedQuery } from "./grouped-query";
 import {
   listReadPlan,
@@ -1023,7 +1023,9 @@ export function declaredFilterPredicates<Filters extends object>(
   );
   const values = listFilterValues.parse(filters);
   const derivedDescriptors = descriptorsFor(entity).filter(
-    (descriptor): descriptor is DeclaredFilterDescriptor & { derived: string } =>
+    (
+      descriptor,
+    ): descriptor is DeclaredFilterDescriptor & { derived: string } =>
       descriptor.derived !== null,
   );
   /** The row set a derived descriptor's `via` starts at, if any. */
@@ -1038,80 +1040,85 @@ export function declaredFilterPredicates<Filters extends object>(
       column: (descriptor, key) => storedColumn(entity, table, descriptor, key),
       subtree: entitySubtreeToggle(entity),
       extra: (values, excluding, mode) => {
-        const input = excluding && derivedInput
-          ? { ...derivedInput, context: derivedInput.context.excluding() }
-          : derivedInput;
+        const input =
+          excluding && derivedInput
+            ? { ...derivedInput, context: derivedInput.context.excluding() }
+            : derivedInput;
         return [
-    hasSuggestTargets
-      ? suggestionPredicate(
-          entity,
-          table,
-          suggestionKinds.parse(values.suggestionKind),
-          presenceFilter.parse(values.suggestionPresenceFilter),
-        )
-      : undefined,
-    ...derivedDescriptors
-      .filter((descriptor) => rowSetOf(descriptor) === null)
-      .flatMap((descriptor) => {
-        const field = derivedFieldsOf(entity)[descriptor.derived];
-        return derivedFilterPredicates(
-          entity,
-          table,
-          descriptor,
-          values,
-          input,
-        ).map((predicate) => {
-          if (!predicate || !descriptorResultKey(entity, descriptor) || !field)
-            return predicate;
-          const available = descriptorAvailabilitySql(
-            entity,
-            table,
-            descriptor,
-            input,
-          );
-          const outcome = available
-            ? sql`CASE WHEN ${available} THEN COALESCE(${predicate}, false) ELSE NULL::boolean END`
-            : predicate;
-          return mode === "certain"
-            ? sql`(${outcome}) IS TRUE`
-            : sql`(${outcome}) IS NOT FALSE`;
-        });
-      }),
-    ...descriptorsFor(entity).map((descriptor) =>
-      descriptor.anyOf === null
-        ? undefined
-        : anyOfPredicate(
-            entity,
-            table,
-            descriptor,
-            descriptor.anyOf,
-            values,
-            input,
+          hasSuggestTargets
+            ? suggestionPredicate(
+                entity,
+                table,
+                suggestionKinds.parse(values.suggestionKind),
+                presenceFilter.parse(values.suggestionPresenceFilter),
+              )
+            : undefined,
+          ...derivedDescriptors
+            .filter((descriptor) => rowSetOf(descriptor) === null)
+            .flatMap((descriptor) => {
+              const field = derivedFieldsOf(entity)[descriptor.derived];
+              return derivedFilterPredicates(
+                entity,
+                table,
+                descriptor,
+                values,
+                input,
+              ).map((predicate) => {
+                if (
+                  !predicate ||
+                  !descriptorResultKey(entity, descriptor) ||
+                  !field
+                )
+                  return predicate;
+                const available = descriptorAvailabilitySql(
+                  entity,
+                  table,
+                  descriptor,
+                  input,
+                );
+                const outcome = available
+                  ? sql`CASE WHEN ${available} THEN COALESCE(${predicate}, false) ELSE NULL::boolean END`
+                  : predicate;
+                return mode === "certain"
+                  ? sql`(${outcome}) IS TRUE`
+                  : sql`(${outcome}) IS NOT FALSE`;
+              });
+            }),
+          ...descriptorsFor(entity).map((descriptor) =>
+            descriptor.anyOf === null
+              ? undefined
+              : anyOfPredicate(
+                  entity,
+                  table,
+                  descriptor,
+                  descriptor.anyOf,
+                  values,
+                  input,
+                ),
           ),
-    ),
-    ...[...new Set(derivedDescriptors.map(rowSetOf))].flatMap((rows) =>
-      rows === null
-        ? []
-        : (() => {
-            const predicate = rowSetPredicates(
-              entity,
-              table,
-              rows,
-              derivedDescriptors.filter(
-                (descriptor) => rowSetOf(descriptor) === rows,
-              ),
-              values,
-              input,
-            );
-            return [
-              predicate === undefined
-                ? undefined
-                : mode === "certain"
-                  ? sql`(${predicate}) IS TRUE`
-                  : sql`(${predicate}) IS NOT FALSE`,
-            ];
-          })(),
-    ),
+          ...[...new Set(derivedDescriptors.map(rowSetOf))].flatMap((rows) =>
+            rows === null
+              ? []
+              : (() => {
+                  const predicate = rowSetPredicates(
+                    entity,
+                    table,
+                    rows,
+                    derivedDescriptors.filter(
+                      (descriptor) => rowSetOf(descriptor) === rows,
+                    ),
+                    values,
+                    input,
+                  );
+                  return [
+                    predicate === undefined
+                      ? undefined
+                      : mode === "certain"
+                        ? sql`(${predicate}) IS TRUE`
+                        : sql`(${predicate}) IS NOT FALSE`,
+                  ];
+                })(),
+          ),
         ];
       },
     },
@@ -2522,7 +2529,11 @@ const PRESENCE = presenceFilter.unwrap().enum;
 const facetValueSql = (
   entity: Entity,
   descriptor: DeclaredFilterDescriptor,
-  { value, kind, reference }: FilterColumn,
+  {
+    value,
+    kind,
+    reference,
+  }: Pick<FilterColumn, "value" | "kind" | "reference">,
 ): SQL | null => {
   switch (descriptor.kind) {
     case "boolean":

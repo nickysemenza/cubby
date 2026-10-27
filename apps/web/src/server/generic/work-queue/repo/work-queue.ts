@@ -11,6 +11,7 @@ import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { oneOrManyValues } from "@cubby/schemas/pagination";
+import type { ProjectAttentionReport } from "@cubby/schemas/project";
 import {
   workExecutor,
   workQueueGapChecks,
@@ -55,6 +56,9 @@ import {
 export interface WorkQueueComposition {
   readonly sources: readonly WorkSource[];
   readonly deferrals: readonly SQL[];
+  readonly incompleteProjectIds?: () => Promise<
+    ProjectAttentionReport["incompleteProjectIds"]
+  >;
 }
 
 interface WorkQueueRead {
@@ -396,6 +400,7 @@ async function queryWorkQueue(
     meta: {
       pageIndex: input.pageIndex,
       pageSize: input.pageSize,
+      incompleteProjectIds: await composition.incompleteProjectIds?.(),
       totalCount: row.total,
       viewCounts: row.viewCounts,
       reasons,

@@ -29,11 +29,11 @@ import {
   createNameColumn,
 } from "~/entity/table/column-helpers";
 import { ListWorkbench } from "~/entity/table/list-workbench";
-import { CoverageChips } from "~/features/units/coverage-chips";
 import {
   createManyProductsStream,
   markProductsUsdaUnavailableStream,
 } from "~/features/product/product-streams";
+import { CoverageChips } from "~/features/units/coverage-chips";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { ingredient } from "~/integrations/tanstack-query/generated/catalog/ingredient.gen";

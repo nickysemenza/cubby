@@ -118,7 +118,9 @@ export function NeedsYou() {
                     </HomeRow>
                   );
                 })}
-                <ProblemsRow count={needsYou.data.meta.viewCounts.problems ?? 0} />
+                <ProblemsRow
+                  count={needsYou.data.meta.viewCounts.problems ?? 0}
+                />
               </HomeList>
             </DenseCellContext.Provider>
           </EntityDisplayImagesProvider>

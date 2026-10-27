@@ -9,7 +9,7 @@ import {
   workImageOwners,
   workImageIsShared,
 } from "~/server/domains/image/repo/work-owners";
-import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
+import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import {
   entityProblemSources,
   recordScope,

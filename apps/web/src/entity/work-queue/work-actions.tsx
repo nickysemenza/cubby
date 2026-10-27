@@ -1,11 +1,6 @@
 import type { WorkAction, WorkQueueRow } from "@cubby/schemas/work-queue";
 import { Link } from "@tanstack/react-router";
-import {
-  type ComponentType,
-  type ReactNode,
-  Suspense,
-  useState,
-} from "react";
+import { type ComponentType, type ReactNode, Suspense, useState } from "react";
 
 import { featureRegistry } from "~/entity/feature-registry";
 import {
@@ -27,7 +22,11 @@ import { Button } from "~/ui/primitives/button";
  */
 export type WorkActionTarget =
   | { readonly scope: "item"; readonly row: WorkQueueRow }
-  | { readonly scope: "group"; readonly reason: string; readonly count: number };
+  | {
+      readonly scope: "group";
+      readonly reason: string;
+      readonly count: number;
+    };
 
 export interface WorkActionProps {
   readonly action: WorkAction;

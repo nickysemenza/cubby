@@ -52,7 +52,10 @@ export function useBackfill<TResult>({
   run,
   invalidateTags,
   toastResult,
-}: Pick<BackfillButtonProps<TResult>, "run" | "invalidateTags" | "toastResult">) {
+}: Pick<
+  BackfillButtonProps<TResult>,
+  "run" | "invalidateTags" | "toastResult"
+>) {
   const queryClient = useQueryClient();
   const { start, running, progress } = useBulkStream<unknown, TResult>();
   return {
