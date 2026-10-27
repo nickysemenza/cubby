@@ -72,7 +72,7 @@ const commitPhotoGroupSkip = z.object({
   reason: z.string().trim().min(1).max(500),
 });
 
-const commitPhotoGroupProductCreate = z.object({
+const photoGroupProductFields = z.object({
   name: z.string().trim().min(1).max(500),
   categoryId: productCategoryShortcode.nullable().optional(),
   brandId: vendorShortcode
@@ -93,6 +93,21 @@ const commitPhotoGroupProductCreate = z.object({
   tags: z.array(z.string().trim().min(1)).max(50).optional(),
 });
 
+const onePhotoBrandChoice = (
+  value: Pick<
+    z.input<typeof photoGroupProductFields>,
+    "brandId" | "brandCreate"
+  >,
+) => !(value.brandId && value.brandCreate);
+const photoBrandChoiceError = {
+  message: "Choose an existing Brand or create one, not both",
+  path: ["brandCreate"],
+};
+const commitPhotoGroupProductCreate = photoGroupProductFields.refine(
+  onePhotoBrandChoice,
+  photoBrandChoiceError,
+);
+
 export type CommitPhotoGroupProductCreate = z.infer<
   typeof commitPhotoGroupProductCreate
 >;
@@ -103,7 +118,10 @@ export const photoGroupReview = z.object({
   /** Regrouping combines predecessor concerns without truncating their evidence. */
   unresolvedReason: z.string().trim().min(1).nullable(),
   stockIntent: z.enum(["evidence", "counted", "historical", "receive"]),
-  productChanges: commitPhotoGroupProductCreate.partial().optional(),
+  productChanges: photoGroupProductFields
+    .partial()
+    .refine(onePhotoBrandChoice, photoBrandChoiceError)
+    .optional(),
   /** Exact evidence names the member declined; retained across regrouping. */
   rejectedBrandNames: z.array(z.string().trim().min(1)).optional(),
   /** Server-owned revision of an explicit field selection; ordinary saves retain it. */

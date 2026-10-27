@@ -1137,12 +1137,14 @@ it("reviews evidence-matched brands in the workbench without replacing explicit 
     {
       ...proposedSweater,
       groupKey: "first-shirt",
+      origin: "coordinator",
       product: { kind: "create", create: { name: "First fixture shirt" } },
       brandEvidence: evidence,
     },
     {
       ...proposedSweater,
       groupKey: "second-shirt",
+      origin: "coordinator",
       product: { kind: "create", create: { name: "Second fixture shirt" } },
       brandEvidence: evidence,
     },
@@ -1169,6 +1171,16 @@ it("reviews evidence-matched brands in the workbench without replacing explicit 
         unresolvedReason: null,
         rejectedBrandNames: ["Fixture Apparel"],
       },
+    },
+    {
+      ...proposedSweater,
+      groupKey: "member-empty",
+      origin: "member",
+      product: {
+        kind: "create",
+        create: { name: "Member cleared brand", brandId: null },
+      },
+      brandEvidence: evidence,
     },
   ];
   const publish = () =>

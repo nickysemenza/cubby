@@ -376,8 +376,8 @@ async function linkedCodes(db: Database, rows: readonly ProposalRow[]) {
   return {
     createBrandId: brandCodeOf,
     create: (row: ProposalRow) => ({
+      ...storedCreate.parse(row.productCreate),
       brandId: brandCodeOf(row),
-      ...storedCreate.omit({ brandId: true }).parse(row.productCreate),
       categoryId: row.productCreateCategoryId
         ? (categoryById.get(row.productCreateCategoryId) ?? null)
         : null,
@@ -1021,6 +1021,11 @@ async function recordPhotoBrandRejection(
         )
         .flatMap((evidence) => evidence.matches.map((match) => match.id)),
     );
+    const changes = entry.group.review.productChanges;
+    if (changes?.brandId && rejectedVendors.has(changes.brandId)) {
+      delete changes.brandId;
+      entry.brandId = null;
+    }
     if (rejectedVendors.size) {
       const crud = buildCrudServices(txDb);
       for (const suggestion of previous?.review?.fieldSuggestions ?? []) {
@@ -1565,6 +1570,10 @@ export async function updatePhotoGroupProductDraft(
             create: {
               ...group.product.create,
               name: input.name,
+              brandCreate:
+                input.brandId === undefined
+                  ? group.product.create.brandCreate
+                  : undefined,
               categoryId: input.categoryId ?? undefined,
               brandId:
                 input.brandId === undefined

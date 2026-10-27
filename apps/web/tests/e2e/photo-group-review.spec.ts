@@ -905,8 +905,9 @@ async function seedEvidenceReview(
   evidence = false,
 ) {
   const productName = `Synthetic shell jacket blue XL ${Date.now()}`;
+  const brandName = `Synthetic Outfitters ${Date.now()}`;
   const brand = await createEntityFixture(page, "vendor", {
-    name: "Synthetic Outfitters",
+    name: brandName,
   });
   const existing = await seedProductPrerequisite(page, {
     name: productName,
@@ -929,7 +930,7 @@ async function seedEvidenceReview(
     );
     await attachProductImagePrerequisite(page, cover.id, existing.id, "item");
     const vendor = await createEntityFixture(page, "vendor", {
-      name: "Example Outfitters",
+      name: `Example Outfitters ${Date.now()}`,
       website: "https://example.test",
     });
     const purchase = await createEntityFixture(page, "purchase", {
@@ -987,7 +988,7 @@ async function seedEvidenceReview(
     groups,
   });
   expect(saved.ok(), await saved.text()).toBeTruthy();
-  return { productName, runName, seed, groups };
+  return { productName, runName, seed, groups, brandName };
 }
 
 test("distinguishes attach and create and exposes saved photo evidence", async ({
@@ -1118,13 +1119,13 @@ test("keeps proposed edits separate while saved product evidence loads, fails, a
   page,
   e2eRuntime,
 }) => {
-  const { seed, groups } = await seedEvidenceReview(
+  const { seed, groups, brandName } = await seedEvidenceReview(
     page,
     e2eRuntime.objectStorageUrl,
   );
   await seedPhotoReviewLabelText(
     seed.itemImage.shortcode,
-    "Synthetic Outfitters\nSJ-104\nSynthetic shell jacket blue XL",
+    `${brandName}\nSJ-104\nSynthetic shell jacket blue XL`,
   );
   const attach = page.locator("#photo-group-g1");
   // Evidence keeps the saved value; pending edits appear separately as a diff.

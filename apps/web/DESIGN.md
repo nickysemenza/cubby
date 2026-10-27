@@ -488,7 +488,7 @@ analysis out of the review workspace.
 Brand evidence names the source-photo count, distinguishes existing-brand
 selection from proposed brand creation, and records rejection in the proposal.
 Evidence-matched bulk brand edits preview their exact new, unbranded Products;
-explicit choices and rejections remain untouched. Existing Product changes retain
+member-reviewed groups, explicit choices and rejections remain untouched. Existing Product changes retain
 Current/Proposed comparison and only selected fields apply.
 Proposal saves never imply applied records. Individual and ready-item batch
 approval show the Product and stock outcome; unresolved identity/grouping or

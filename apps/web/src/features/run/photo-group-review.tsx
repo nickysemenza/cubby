@@ -16,6 +16,7 @@ import type {
   PhotoGroupProposalGroup,
   PhotoRunImage,
   ReviewPhotoGroupsAction,
+  ReviewPhotoGroupsOutput,
 } from "@cubby/schemas/photo-import-run";
 import {
   reviewPhotoGroupsOutput,
@@ -224,24 +225,32 @@ export function usePhotoRunReview(
   });
 }
 
+function publishPhotoReview(
+  queryClient: ReturnType<typeof useQueryClient>,
+  runId: string,
+  data: ReviewPhotoGroupsOutput,
+) {
+  queryClient.setQueryData(photoImport.review.queryKey({ runId }), (old) =>
+    old
+      ? {
+          ...old,
+          review: {
+            runId: data.runId,
+            runStatus: data.runStatus,
+            proposals: data.proposals,
+            unassignedImageIds: data.unassignedImageIds,
+          },
+        }
+      : old,
+  );
+}
+
 function useReviewAction(runId: string) {
   const queryClient = useQueryClient();
   const { mutateAsync: execute } = useWorkflowCommand({
     onResult: ({ result }) => {
       const data = reviewPhotoGroupsOutput.parse(result);
-      queryClient.setQueryData(photoImport.review.queryKey({ runId }), (old) =>
-        old
-          ? {
-              ...old,
-              review: {
-                runId: data.runId,
-                runStatus: data.runStatus,
-                proposals: data.proposals,
-                unassignedImageIds: data.unassignedImageIds,
-              },
-            }
-          : old,
-      );
+      publishPhotoReview(queryClient, runId, data);
     },
   });
   return useMutation({
@@ -944,7 +953,12 @@ function IdentityDecision({
   const resolve = useMutation({
     mutationFn: (
       input: Parameters<typeof photoImport.resolveConcern.call>[0],
-    ) => photoImport.resolveConcern.call(input),
+    ) =>
+      session.save(async () => {
+        // Resolution joins the same barrier as field saves before any next edit.
+        const data = await photoImport.resolveConcern.call(input);
+        publishPhotoReview(queryClient, runId, data);
+      }),
     onSuccess: async (_data, input) => {
       session.acknowledge(replyId, input.reply ?? "");
       void invalidateOperationTags(queryClient, ripple.runOnly);
@@ -1697,6 +1711,8 @@ function PhotoBrandEvidence({
         const matching = proposals.filter(
           (other) =>
             other.state === "proposed" &&
+            (other.origin === "coordinator" ||
+              other.origin === "external_agent") &&
             !other.blockedReason &&
             other.brandEvidence?.length === 1 &&
             other.product.kind === "create" &&
@@ -1715,9 +1731,10 @@ function PhotoBrandEvidence({
             ),
         );
         const selected =
-          chosen?.brandCreate?.name === item.name ||
-          (item.matches.length === 1 &&
-            chosen?.brandId === item.matches[0]?.id);
+          Boolean(
+            chosen?.brandCreate &&
+            brandNameKey(chosen.brandCreate.name) === brandNameKey(item.name),
+          ) || item.matches.some((match) => chosen?.brandId === match.id);
         return (
           <div
             key={item.name}
@@ -1803,8 +1820,8 @@ function PhotoBrandEvidence({
                 summary={`Use ${item.name} for ${matching.length} matching items`}
               >
                 <p className="mb-2 text-muted-foreground">
-                  Only new Products with matching photo evidence and no selected
-                  brand. Existing choices stay unchanged.
+                  Only untouched new Products with matching photo evidence and
+                  no selected brand. Member-reviewed choices stay unchanged.
                 </p>
                 <RecordList aria-label="Matching brand proposals">
                   {matching.map((other) => (

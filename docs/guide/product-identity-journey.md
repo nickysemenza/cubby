@@ -31,7 +31,9 @@ physical copy.
 Ready item details remain available in the compact review workbench; genuine concerns open for review.
 The web can apply all ready groups directly or a selected subset, with Product
 and stock effects visible before approval. Autosave barriers, revision checks
-and independent batch failures remain in force.
+and independent batch failures remain in force. Resolving an identity concern
+joins the save barrier and publishes its confirmed review snapshot before the
+next field edit can save.
 
 Photo Brand evidence names its supporting images and exact live Vendor name/alias
 matches. A single unambiguous marketed-label match prefills a new Product draft; it can stage an existing Product correction without applying it. Unknown names require an explicit Brand claim or member
