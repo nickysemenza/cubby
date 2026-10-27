@@ -14,6 +14,6 @@ wait text "All photos" 60000
 click "label=\"All photos\""
 wait text "Photos" 60000
 back
-wait text "Browse catalog" 60000
-click "label=\"Browse catalog\""
-wait text "Browse" 60000
+wait "id=browse.catalog.product" 60000
+click "id=browse.catalog.product label=Products"
+wait "id=browse.product.list" 60000

@@ -39,6 +39,7 @@ import {
   getSearchResultHref,
   getSearchResultRoute,
   SearchResultMedia,
+  searchHitContext,
 } from "../../entity/presentation/search-utils";
 import {
   ProductFamilyChildContent,
@@ -377,9 +378,9 @@ function SearchRow({
         >
           {item.title}
         </Link>
-        {item.facts.length > 0 && (
+        {searchHitContext(item) && (
           <span className="block truncate text-xs text-muted-foreground">
-            {item.facts.join(" · ")}
+            {searchHitContext(item)}
           </span>
         )}
         {group.linkedProduct && (
@@ -568,7 +569,7 @@ function MobileSearchResults({
                   <MobileCard
                     variant="row"
                     title={group.primary.title}
-                    subtitle={group.primary.facts.join(" · ")}
+                    subtitle={searchHitContext(group.primary) ?? undefined}
                     imageSlot={
                       <SearchResultMedia
                         item={group.primary}
@@ -614,12 +615,12 @@ function MobileSearchResults({
             subtitle={
               group.linkedProduct
                 ? [
-                    item.facts.join(" · "),
+                    searchHitContext(item),
                     `Linked to ${group.linkedProduct.title}`,
                   ]
                     .filter(Boolean)
                     .join(" · ")
-                : item.facts.join(" · ")
+                : (searchHitContext(item) ?? undefined)
             }
             imageSlot={<SearchResultMedia item={item} variant="mobile" />}
             rightValues={[

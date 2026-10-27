@@ -9,6 +9,9 @@ export const wasm: ImmutableWasm<typeof instance> = instrumentWasm(instance);
 export const wasmFormat = {
   format_currency: instance.format_currency,
   format_number: instance.format_number,
+  format_count: instance.format_count,
+  format_plain_date: instance.format_plain_date,
+  format_text: instance.format_text,
   format_compact_estimate: instance.format_compact_estimate,
   format_estimate: instance.format_estimate,
   format_kcal: instance.format_kcal,

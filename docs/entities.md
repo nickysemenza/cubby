@@ -345,8 +345,7 @@ when a required state is missing rather than adding a parallel override path.
 `presentation.detail.summary` owns the ordered header cells for every entity.
 The generic header renders up to eight applicable cells beneath the identity
 and actions; it does not add another Overview section. The first four cells are
-the record's glance: native lays them two across under the hero (one column at
-accessibility sizes) and web fills the first grid row; the rest follow. There is
+the record's glance, which each client's DESIGN.md lays out first. There is
 no separate glance declaration, so order the slots so the first four answer the
 record's main question. A field a `fields` slot shows is omitted from later
 field sections and relation context fields on both clients, so on web the cell
@@ -403,13 +402,9 @@ precision and use the event id to break ties. Data-only web consumers use
 
 ## Declaration contracts
 
-Compiled default fact sections reuse the declaration's edit groups, with
-remaining read-only coverage and summaries grouped afterward; a record's own
-facts come before workflow slots. These synthesized groups explicitly use the
-Overview workspace, independently of the legacy `overviewSections` IDs used by
-native overview metadata; otherwise new edit-group IDs would fall into Evidence
-after workflow sections. Explicit detail sections retain their order and declared
-workspace. Web detail renders every section in one full-width
+Detail sections are authored for reading (`detail.sections` below); nothing is
+derived from edit groups. A section keeps its declared `workspace`, else a
+timeline joins Evidence and a relation Work. Web detail renders every section in one full-width
 column in declaration order — there is no supporting rail. A section's
 `placement` is `primary` (shares a ruled plane with its neighbors) or `full`
 (its own plane); journal presentations keep their relation-first ordering. Web identity/media composition follows
@@ -514,9 +509,8 @@ names (`phosphor` is checked against the browser registry's icon map at compile
 time; `sfSymbol` reaches the native catalog verbatim). The generator emits it
 as part of `entitySummary` (`packages/schemas/src/generated/entity-summary.gen.ts`,
 data only, safe for eagerly-loaded client code), spreads it into the inspector,
-and writes `domain`/`sfSymbol`/`emptyState` onto the Swift `EntityDescriptor`:
-native list empty states print the declared title and description and offer
-`actionLabel` as a create button when the entity has a native create plan.
+and writes `domain`/`sfSymbol`/`emptyState` onto the Swift `EntityDescriptor`,
+so web and native unfiltered empty lists print the same copy and create label.
 `nativeBrowse` (default `true`) declares whether the root appears in native
 Browse and the native sidebar (`EntityCatalog.browsable`). Set it to `false`
 only for operator plumbing whose list serves no member task on a phone or Mac
@@ -545,8 +539,8 @@ the gallery capability. The breadcrumb field is a reference or a placement
 `breadcrumb: [{ entity, id, name }]`, outermost first: a location or placement
 yields the location and its ancestors, any other reference the one record, and
 Product supplies its primary placement's path. Web trails it in the header
-before the record code; native captions the hero with it and the `when`, and
-keeps the record code in More → Copy shortcode. Actions derive from capabilities: the hero gets
+before the record code; native captions the hero with it
+([Continuous record detail](../apps/apple/DESIGN.md#continuous-record-detail)). Actions derive from capabilities: the hero gets
 `edit` with an update contract and `delete` for a mutable entity with kernel-owned
 deletion. Shared and additional hero actions are deduplicated. Web always offers
 Copy code independently of the hero allowlist. Merge remains a list/selection
@@ -554,10 +548,8 @@ workflow rather than a universal detail action. A list gets `bulkEdit` (bulk upd
 `merge` (kernel merge), and `delete` (kernel delete). `hero.extraActions` and
 `list.extraActions` add workflow verbs; list extras precede the derived list actions.
 `detail.quickActions` and `list.quickActions` promote one or two of those
-declared verbs (generation fails on any other): web renders detail quick
-actions as filled header buttons and puts list quick actions first in row
-menus; native shows them as filled buttons under the hero and as the leading
-swipe (iOS) and first context-menu items (Mac). They leave the More menu.
+declared verbs (generation fails on any other); each client's DESIGN.md owns
+their placement, and they leave the More menu.
 Web record-level slot actions render once in the detail header through
 `DetailActionTarget` (`apps/web/src/entity/entity-detail/detail-action-bar.tsx`).
 Collection verbs derive from the declared sections and `reportSlotActions`;
@@ -867,10 +859,11 @@ status.
 
 **Structured values.** A field whose control renderer is in
 `STRUCTURED_VALUE_RENDERERS` (`external-ids`, `label-nutrition`,
-`source-aliases`, `source-refs`, `unit-mappings`), or a `structured-field` marked `implemented` in
+`source-aliases`, `source-refs`, `unit-mappings`), or a `structured-field` listed in
 `nativeCoverage.structuredField`,
-is an object or array of objects that **both clients edit with one generic editor** over the same
-generated description: CubbyKit's `StructuredValueControl` and web's `StructuredValueField`
+is an object or array of objects edited with one generic editor per client over the same
+generated description. Every `structuredField` entry is currently a `handoff`: native shows its
+read-only summary and opens the declared web section, so only the renderers above edit natively: CubbyKit's `StructuredValueControl` and web's `StructuredValueField`
 (`apps/web/src/entity/editing/structured-value-field.tsx`, which binds existing form primitives to
 nested react-hook-form paths; the older bespoke product and finance editors stay where they exist). A
 field joins only with a read-to-input vector in

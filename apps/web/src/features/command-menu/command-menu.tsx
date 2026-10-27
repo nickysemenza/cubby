@@ -41,6 +41,7 @@ import {
   getSearchMatchText,
   getSearchResultRoute,
   SearchResultMedia,
+  searchHitContext,
 } from "../../entity/presentation/search-utils";
 import { installFeatures } from "../registry";
 import {
@@ -761,9 +762,9 @@ function SearchEntityResultItem({
       <SearchResultMedia item={item} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">{item.title}</div>
-        {item.facts.length > 0 && (
+        {searchHitContext(item) && (
           <div className="truncate text-xs text-muted-foreground">
-            {item.facts.join(" · ")}
+            {searchHitContext(item)}
           </div>
         )}
         {group.linkedProduct && (

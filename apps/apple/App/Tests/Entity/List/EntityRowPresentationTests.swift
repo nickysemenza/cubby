@@ -370,7 +370,7 @@ struct EntityRowPresentationTests {
             descriptor: descriptor, row: row, photoMode: true)
 
         #expect(presentation.facts.first?.id == "date")
-        #expect(presentation.facts.first?.value != "2026-09-08")
+        #expect(presentation.facts.first?.value == "Sep 8, 2026")
         #expect(presentation.factLine?.contains("Date:") == true)
         #expect(presentation.accessibilityText.contains("Date,") == true)
         #expect(!presentation.facts.contains { $0.id == "photo-date" })

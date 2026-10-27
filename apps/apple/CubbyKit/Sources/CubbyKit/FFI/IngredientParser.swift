@@ -97,6 +97,18 @@ public enum ValueFormat {
         CubbyFFI.formatNumber(value: value)
     }
 
+    public static func count(_ value: Double, maxFractionDigits: UInt32 = 0) -> String {
+        CubbyFFI.formatCount(value: value, maxFractionDigits: maxFractionDigits)
+    }
+
+    public static func plainDate(_ value: String) -> String {
+        CubbyFFI.formatPlainDate(value: value)
+    }
+
+    public static func text(_ value: String?, emptyLabel: String? = nil, detail: Bool = false) -> String {
+        CubbyFFI.formatText(value: value, emptyLabel: emptyLabel, detail: detail)
+    }
+
     /// `2 cups`, `3 each`, `2 - 3 tsp`; a missing unit renders a bare count (`1.5`).
     public static func amount(unit: String?, value: Double, upperValue: Double? = nil) -> String {
         CubbyFFI.formatAmount(unit: unit ?? "", value: value, upperValue: upperValue)

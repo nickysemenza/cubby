@@ -76,7 +76,7 @@
 			<key>UIApplicationShortcutItemIconSymbolName</key>
 			<string>checklist</string>
 			<key>UIApplicationShortcutItemTitle</key>
-			<string>Start audit</string>
+			<string>Audit a shelf</string>
 			<key>UIApplicationShortcutItemType</key>
 			<string>cubby://audit</string>
 		</dict>

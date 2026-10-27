@@ -193,13 +193,17 @@ export async function readProductDetail(
   const coverImageUrl = covers.get(row.id) ?? null;
   const primaryPlacement = placements.get(row.id)?.primaryPlacement ?? null;
   // The hero breadcrumb walks the primary placement's ancestry, which the
-  // breadcrumbs phase already loaded for every stocked location.
+  // breadcrumbs phase already loaded for every stocked location and every
+  // Location installed as this Product (a placement with no Inventory entry).
   const placed =
     primaryPlacement === null
       ? undefined
-      : breadcrumbed.inventoryEntry.find(
+      : (breadcrumbed.inventoryEntry.find(
           (entry) => entry.location.shortcode === primaryPlacement.locationId,
-        )?.location;
+        )?.location ??
+        breadcrumbed.locations?.find(
+          (installed) => installed.shortcode === primaryPlacement.locationId,
+        ));
 
   const mapped = dbProductToAPI(
     {

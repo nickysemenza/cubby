@@ -359,17 +359,13 @@ struct SearchContent: View {
 private struct SearchHitRow: View {
     let hit: SearchHit
 
-    private var context: String? {
-        hit.facts.isEmpty ? nil : hit.facts.joined(separator: " · ")
-    }
-
     var body: some View {
         RecordListRow(
             title: hit.title, imageURL: hit.imageURL,
             symbol: hit.key.map(entitySymbol(for:)) ?? "questionmark.square",
             emoji: hit.emoji.valueIfPresent.flatMap { $0 }
         ) {
-            if let context { Text(context) }
+            if let context = hit.context { Text(context) }
         } rail: {
             EmptyView()
         } supplement: {

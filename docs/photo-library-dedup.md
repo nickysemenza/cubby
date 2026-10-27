@@ -178,11 +178,9 @@ upload failures retain the selection, offer individual Retry controls, and requi
 an explicit Continue without failed photos before omitting them. Done clears only
 confirmed imported photos from selection. View import opens the Run console.
 
-The Run console keeps upload and description progress, per-photo recovery,
-Start grouping and attention. Reviewing proposed groups (candidates, Product
-edits, ownership, approve and discard) is web's: the console's `photo-batch`
-slot is one row, Review photo groups on web, that opens `run/<id>#photo-batch`.
-Send to computer shares the same anchor.
+Group review is web's; the Run console's native and web split is in
+[Photo runs hand off review](../apps/apple/DESIGN.md#photo-runs-hand-off-review).
+Send to computer shares the console's `#photo-batch` anchor.
 
 The native app owns a journal in Application Support, excluded from backup, and
 copies selected files before starting uploads. A selection journal records Photos

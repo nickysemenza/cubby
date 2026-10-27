@@ -1,11 +1,7 @@
-import CubbyAPISupport
-import Foundation
-
 /// The display formats a catalog field renders identically on web and native: fixed en-US shapes,
 /// independent of the device locale, pinned by `packages/shared/golden-vectors/display-format.json`.
-/// Currency, bare numbers, and nutrition cells come from the one Rust implementation the web also
-/// calls (`ValueFormat`); only `plainDate` is Swift (the web twin is `formatCalendarDay`; Rust has
-/// no timezone database). Change a rule by editing the vector first, then Rust (and `plainDate`).
+/// Every rule comes from the Rust implementation the web also calls (`ValueFormat`). Plain dates
+/// are calendar components, without zone conversion. Change the vector first, then Rust.
 public enum DisplayFormat {
     /// `currency` and `signedCurrency`: USD with grouping and cents (`-$5.00`). The sign is never
     /// spelled `+`; the web only colours it.
@@ -15,12 +11,11 @@ public enum DisplayFormat {
 
     /// `plainDate`: a real `YYYY-MM-DD` day as `MMM d, yyyy`; anything else comes back unchanged.
     public static func plainDate(_ value: String) -> String {
-        guard let day = PlainDate(rawValue: value).date(in: .gmt) else { return value }
-        return day.formatted(
-            Date.VerbatimFormatStyle(
-                format: "\(month: .abbreviated) \(day: .defaultDigits), \(year: .defaultDigits)",
-                locale: Locale(identifier: "en_US_POSIX"), timeZone: .gmt,
-                calendar: Calendar(identifier: .gregorian)))
+        ValueFormat.plainDate(value)
+    }
+
+    public static func text(_ value: String?, emptyLabel: String? = nil, detail: Bool = false) -> String {
+        ValueFormat.text(value, emptyLabel: emptyLabel, detail: detail)
     }
 
     /// A bare numeric field: the shortest round-trip decimal, no grouping and no rounding — what

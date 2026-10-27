@@ -4,7 +4,8 @@
 //! Pinned by `packages/shared/golden-vectors/display-format.json`, which the
 //! tests below read directly (its amounts render through
 //! [`crate::format_amount_labeled`]); the web and Swift suites read the same file
-//! as binding checks. Dates stay platform code (no timezone database here).
+//! as binding checks. Plain dates are Gregorian calendar components, with no
+//! timezone conversion; timestamps stay platform code.
 
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "wasm")]
@@ -139,6 +140,95 @@ pub fn format_number(value: f64) -> String {
     } else {
         value.to_string()
     }
+}
+
+/// A grouped count, rounded half away from zero, with no trailing zeroes.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn format_count(value: f64, max_fraction_digits: u32) -> String {
+    if !value.is_finite() {
+        return format_number(value).replace("Infinity", "∞");
+    }
+    let (int, mut frac) = round_half_away(value.abs(), max_fraction_digits as usize);
+    while frac.ends_with('0') {
+        frac.pop();
+    }
+    let sign = if value < 0.0 && int.bytes().chain(frac.bytes()).any(|digit| digit != b'0') {
+        "-"
+    } else {
+        ""
+    };
+    let int = group_thousands(&int);
+    if frac.is_empty() {
+        format!("{sign}{int}")
+    } else {
+        format!("{sign}{int}.{frac}")
+    }
+}
+
+/// Missing or empty text uses the declared label, otherwise `—` in a list or
+/// `Not recorded` in detail. Nonempty text (including `0` and `No`) is evidence.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn format_text(value: Option<String>, empty_label: Option<String>, detail: bool) -> String {
+    value.filter(|value| !value.is_empty()).unwrap_or_else(|| {
+        empty_label.unwrap_or_else(|| if detail { "Not recorded" } else { "—" }.to_string())
+    })
+}
+
+/// A real Gregorian `YYYY-MM-DD` day as `MMM d, yyyy`. Invalid inputs stay
+/// visible unchanged. Calendar components need no timezone database.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn format_plain_date(value: &str) -> String {
+    let bytes = value.as_bytes();
+    if bytes.len() != 10
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || !bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit())
+    {
+        return value.to_string();
+    }
+    let component = |start: usize, end: usize| {
+        bytes[start..end]
+            .iter()
+            .fold(0_u32, |number, digit| number * 10 + u32::from(digit - b'0'))
+    };
+    let year = component(0, 4);
+    let month = component(5, 7);
+    let day = component(8, 10);
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days = match month {
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if leap {
+                29
+            } else {
+                28
+            }
+        }
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        _ => 0,
+    };
+    if year == 0 || day == 0 || day > days {
+        return value.to_string();
+    }
+    let name = match month {
+        1 => "Jan",
+        2 => "Feb",
+        3 => "Mar",
+        4 => "Apr",
+        5 => "May",
+        6 => "Jun",
+        7 => "Jul",
+        8 => "Aug",
+        9 => "Sep",
+        10 => "Oct",
+        11 => "Nov",
+        12 => "Dec",
+        _ => return value.to_string(),
+    };
+    format!("{name} {day}, {year}")
 }
 
 fn compact_number_text(value: f64, unit: WCompactUnit) -> String {
@@ -309,11 +399,38 @@ mod tests {
     }
 
     #[derive(Deserialize)]
+    struct DateVector {
+        #[serde(rename = "in")]
+        input: String,
+        out: String,
+    }
+
+    #[derive(Deserialize)]
+    struct TextVector {
+        value: Option<String>,
+        #[serde(rename = "emptyLabel")]
+        empty_label: Option<String>,
+        detail: bool,
+        out: String,
+    }
+
+    #[derive(Deserialize)]
+    struct CountVector {
+        value: f64,
+        decimals: u32,
+        out: String,
+    }
+
+    #[derive(Deserialize)]
     struct Vectors {
         currency: Vec<ValueVector>,
         #[serde(rename = "signedCurrency")]
         signed_currency: Vec<ValueVector>,
         number: Vec<ValueVector>,
+        #[serde(rename = "plainDate")]
+        plain_date: Vec<DateVector>,
+        text: Vec<TextVector>,
+        count: Vec<CountVector>,
         #[serde(rename = "compactEstimate")]
         compact_estimate: Vec<EstimateVector>,
         estimate: Vec<LabelVector>,
@@ -347,6 +464,27 @@ mod tests {
     fn number_matches_the_shared_vectors() {
         for v in vectors().number {
             assert_eq!(format_number(v.value), v.out, "value {}", v.value);
+        }
+    }
+
+    #[test]
+    fn plain_date_matches_the_shared_vectors() {
+        for v in vectors().plain_date {
+            assert_eq!(format_plain_date(&v.input), v.out, "input {}", v.input);
+        }
+    }
+
+    #[test]
+    fn text_matches_the_shared_vectors() {
+        for v in vectors().text {
+            assert_eq!(format_text(v.value, v.empty_label, v.detail), v.out);
+        }
+    }
+
+    #[test]
+    fn count_matches_the_shared_vectors() {
+        for v in vectors().count {
+            assert_eq!(format_count(v.value, v.decimals), v.out);
         }
     }
 

@@ -322,6 +322,7 @@ struct EntityListView: View {
         }
         if descriptor.primarySearch != nil {
             Button("Search", systemImage: "magnifyingglass") { searchPresented = true }
+                .accessibilityIdentifier("browse.\(key.rawValue).search")
             if !searchText.isEmpty {
                 Button("Clear search", systemImage: "xmark.circle") { clearSearch() }
             }

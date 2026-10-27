@@ -237,9 +237,8 @@ device · M working · about X at the current pace", the pace omitted without a 
 no device claimed work recently and this one is not processing, says to keep Cubby open on a Mac.
 Below the device, Activity lists Runs in progress and Runs needing attention (the manifest's
 `in-progress` and `attention` saved views, which exclude system AI passes, each bounded to 10) and
-reloads every 15 s while on screen. The
-household job queue — lanes, waiting reasons, Job retries and leases — is web's; Activity ends with
-one **Open work queue on web** row to `/work-queue`.
+reloads every 15 s while on screen. The household job queue is web's
+([Activity hands off the job queue](DESIGN.md#activity-hands-off-the-job-queue)).
 
 On iOS, a `BGProcessingTaskRequest` (`com.nickysemenza.cubby.image-queue`)
 requires external power and network connectivity for opportunistic overnight

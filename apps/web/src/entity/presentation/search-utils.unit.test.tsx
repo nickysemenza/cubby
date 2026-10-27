@@ -2,7 +2,7 @@ import { searchHitSchema, type SearchHit } from "@cubby/schemas/search";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { SearchResultMedia } from "./search-utils";
+import { SearchResultMedia, searchHitContext } from "./search-utils";
 
 /**
  * `SearchDocument.typeHint` is a denormalized snapshot, so a row keeps whatever
@@ -51,5 +51,21 @@ describe("SearchResultMedia", () => {
       <SearchResultMedia item={hit({ typeHint: "shelf" })} />,
     );
     expect(container.querySelector("svg")).not.toBeNull();
+  });
+});
+
+describe("searchHitContext", () => {
+  it("keeps the subtitle for kinds that project no facts", () => {
+    expect(
+      searchHitContext(hit({ subtitle: "Synthetic Author", facts: [] })),
+    ).toBe("Synthetic Author");
+  });
+
+  it("prefers declared facts over the subtitle", () => {
+    expect(
+      searchHitContext(
+        hit({ subtitle: "Pantry", facts: ["Home › Pantry", "2 on hand"] }),
+      ),
+    ).toBe("Home › Pantry · 2 on hand");
   });
 });

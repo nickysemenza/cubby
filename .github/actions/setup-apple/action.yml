@@ -162,11 +162,14 @@ runs:
           spm-clones-v1-${{ runner.os }}-
 
     # App version/build settings affect products, not dependency module identity.
+    # The generated CubbyFFI header is a module input like a binary package: a
+    # changed FFI surface must drop precompiled modules, or a restored
+    # CubbyFFI_FFI module replays without the new functions.
     - name: Hash the package graph
       id: packages
       if: inputs.build-cache == 'true'
       shell: bash
-      run: echo "hash=${{ hashFiles('apps/apple/packages.yml', 'apps/apple/CubbyKit/Package.swift', 'apps/apple/CubbyKit/Package.resolved', 'apps/apple/Package.resolved') }}" >> "$GITHUB_OUTPUT"
+      run: echo "hash=${{ hashFiles('apps/apple/packages.yml', 'apps/apple/CubbyKit/Package.swift', 'apps/apple/CubbyKit/Package.resolved', 'apps/apple/Package.resolved', 'apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework/*/Headers/*.h') }}" >> "$GITHUB_OUTPUT"
     - name: Define shared cache paths
       id: paths
       if: inputs.build-cache == 'true'
