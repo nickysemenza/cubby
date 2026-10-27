@@ -84,9 +84,7 @@ type ManifestPreviewEntity = Exclude<HoverPreviewEntity, "usda-food">;
 
 const titleValue = z.string().nullish();
 const recordId = z.string();
-const displayImageUrls = z.looseObject({
-  displayImages: z.array(z.looseObject({ url: z.string() })),
-});
+const displayImageUrls = z.array(z.looseObject({ url: z.string() })).nullish();
 
 export function manifestPreviewCard<E extends ManifestPreviewEntity>(
   entity: E,
@@ -106,7 +104,7 @@ export function manifestPreviewCard<E extends ManifestPreviewEntity>(
     ? readDisplayReferenceField(data, breadcrumbField)
     : null;
   const thumbUrl = hero.images
-    ? displayImageUrls.safeParse(data).data?.displayImages[0]?.url
+    ? readRecordField(data, "displayImages", displayImageUrls)?.[0]?.url
     : undefined;
   const stats = entityPreviewFacts(entity, data);
 

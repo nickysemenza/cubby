@@ -2,10 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { shortcodeSchema } from "@cubby/schemas/identifiers";
-import {
-  imageUrlSummary,
-  type ImageUrlSummary,
-} from "@cubby/schemas/image-summary";
+import { imageUrlSummary } from "@cubby/schemas/image-summary";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { z } from "zod";
@@ -15,6 +12,7 @@ import {
   entityPreviewQueryOptions,
   isDetailEntity,
 } from "~/entity/entity-query";
+import { readRecordField } from "~/entity/entity-references";
 import type { DetailEntity } from "~/entity/generated/entity-details.gen";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Spinner } from "~/ui/primitives/spinner";
@@ -28,7 +26,6 @@ const isNamedEntity = (
   isBrowserRoutedEntity(entity) && isDetailEntity(entity);
 
 const namedRecordSchema = z.looseObject({
-  displayImages: z.array(imageUrlSummary).optional().catch(undefined),
   emoji: z.string().nullish(),
 });
 
@@ -133,23 +130,31 @@ export function ByIdRefLink({
         // Absent stays `undefined` so the chip falls back to the surrounding
         // display-image provider's cover.
         displayImage={
-          record.success ? record.data.displayImages?.[0] : undefined
+          record.success
+            ? readRecordField(
+                record.data,
+                "displayImages",
+                z.array(imageUrlSummary).nullish(),
+              )?.[0]
+            : undefined
         }
       />
     );
   }
 
   if (isFetchableEntity(entityKind) && query.data) {
-    // SAFETY: entityPreviewQueryOptions selects a generated detail operation
-    // whose fetchable-entity outputs all carry canonical displayImages.
-    const data = query.data as { displayImages: ImageUrlSummary[] };
+    const cover = readRecordField(
+      query.data,
+      "displayImages",
+      z.array(imageUrlSummary).nullish(),
+    )?.[0];
     return (
       <InlineRefLink
-        displayImage={data.displayImages[0] ?? null}
+        displayImage={cover ?? null}
         entity={entityKind}
         // SAFETY: the preview query options and this discriminant are selected
         // by the same fetchable entity guard above.
-        data={data as never}
+        data={query.data as never}
         bare={bare}
       />
     );

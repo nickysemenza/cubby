@@ -24,7 +24,8 @@ struct SourceStackView<Content: View>: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel(showsTitles ? "\(level.title), \(level.status.label)" : level.status.label)
+                .accessibilityLabel(
+                    showsTitles ? "\(level.title), \(level.status.label)" : level.status.label)
             }
         }
         .accessibilityElement(children: .contain)

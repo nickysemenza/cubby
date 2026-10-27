@@ -1,3 +1,4 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   act,
@@ -14,6 +15,7 @@ import {
   entityDisplayImageKey,
 } from "~/entity/entity-media/entity-display-images";
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { Facts } from "~/ui/common/facts";
 import { DenseCellContext } from "~/ui/common/stacked-value";
@@ -184,6 +186,33 @@ describe("EntityRefLink with entity data", () => {
 });
 
 describe("EntityRefLink record identity", () => {
+  it("resolves a fetched Product whose cover exists only inside its envelope", async () => {
+    const id = "PRD-4K7M";
+    const queryKey = entityPreviewQueryOptions("product", id).queryKey;
+    harness.queryClient.setQueryDefaults(queryKey, { enabled: false });
+    renderLink(<EntityRefLink entity="product" id={id} name={null} />);
+    await act(async () => {
+      harness.queryClient.setQueryData(queryKey, {
+        id,
+        name: "Synthetic enveloped product",
+        fields: {
+          displayImages: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.detail.shape.fields.shape
+              .displayImages,
+            [{ id: "IMG-4K7M", url: "https://images.example/enveloped.jpg" }],
+          ),
+        },
+      });
+    });
+    expect(
+      await screen.findByRole("link", { name: "Synthetic enveloped product" }),
+    ).toHaveAttribute("href", `/products/${id}`);
+    expect(screen.getByRole("presentation")).toHaveAttribute(
+      "src",
+      expect.stringContaining("enveloped.jpg"),
+    );
+  });
+
   it("uses the same canonical image for audit pills even with a null placeholder", () => {
     renderLink(
       <EntityDisplayImagesProvider
