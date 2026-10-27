@@ -69,6 +69,31 @@ commands own writes. Add a Work source in the owning domain rather than
 introducing another task ledger, workflow engine, or entity-specific queue
 state. Queue reads explain current work without launching inference or
 mutations.
+commands own writes. Extend their shared projections rather than introducing
+another task ledger, workflow engine, or entity-specific queue state.
+Queue reads explain current work without launching inference or mutations.
+The Reason filter selects stable `reasonKeys`, including data-check keys,
+Problem keys and branch keys such as `reconciliation:purchase-unsettled`.
+`reasonExclude` keeps rows with none of the selected reasons; other failed
+checks remain visible in each retained row's reason. Type, Owner, Family and
+Executor also accept their corresponding `Exclude` inputs. Owner values are
+Ledger Party shortcodes; `@me` resolves before the queue read. Shared work lists
+every current member, and unresolved work has no owners.
+The web queue and member MCP read share this filtered server path. Filters
+exclude unrelated source preparation before paging, while totals, view counts
+and group counts still describe all matching work. Only selected rows receive
+quality and display images; listing does not reconstruct every source's review
+evidence. Domain repositories export their sources, reasons and actions; the
+Work service composes them explicitly. Problem action ids include their problem
+key, so action handlers stay unambiguous across sources. Counts and reason-group
+actions share the same filtered relation.
+
+Pending reviewable suggestions produce one row per live record, combining their
+family reason keys and opening that record's Suggestions. Statement proposals
+belong to their financial account. There are no family-only suggestion rows.
+Purchase amounts are the sum of live Expense costs, including credits; other
+records carry their own amount and calendar date. Planned purchases are deferred
+across every family before counting or paging.
 
 The queue is a [Declared list](terminology.md) over its sources' union, so its
 filters behave as entity list filters do: Type, Owner, Family, Executor and

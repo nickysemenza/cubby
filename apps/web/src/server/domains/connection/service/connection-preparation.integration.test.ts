@@ -1,4 +1,4 @@
-import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { workQueueInput } from "@cubby/schemas/work-queue";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
@@ -30,13 +30,13 @@ import {
   PRIMARY_MODEL,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
-import { readWorkQueueWith } from "~/server/generic/work-queue/repo/work-queue";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -609,18 +609,14 @@ describe("connection preparation and publication authority", () => {
         integration: { kind: "field-review", field: "subjectProductId" },
       }),
     );
-    const before = await readWorkQueueWith(
-      async () => ({ selections: [], incompleteProjectIds: [] }),
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({ pageSize: 100 }),
-      false,
-      ctx.actor,
-    );
+    const before = await readWorkQueue(ctx.db, {
+      input: workQueueInput.parse({ pageSize: 100 }),
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(before.items).toContainEqual(
       expect.objectContaining({
-        key: "suggestions:field",
-        suggestionFamily: "field",
+        reasonKeys: ["suggestions:field"],
       }),
     );
     await getDb(ctx.db)
@@ -628,18 +624,14 @@ describe("connection preparation and publication authority", () => {
       .set({ name: "Synthetic renamed target evidence" })
       .where(eq(product.id, item.entityId));
     expect(await readEntityConnections(ctx.db, source)).toEqual([]);
-    const after = await readWorkQueueWith(
-      async () => ({ selections: [], incompleteProjectIds: [] }),
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({ pageSize: 100 }),
-      false,
-      ctx.actor,
-    );
+    const after = await readWorkQueue(ctx.db, {
+      input: workQueueInput.parse({ pageSize: 100 }),
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(after.items).toContainEqual(
       expect.objectContaining({
-        key: "suggestions:field",
-        suggestionFamily: "field",
+        reasonKeys: ["suggestions:field"],
       }),
     );
   });

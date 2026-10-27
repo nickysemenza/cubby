@@ -6,8 +6,7 @@ import type {
   WorkFamily,
   WorkLink,
 } from "@cubby/schemas/work-queue";
-import { SQL, sql } from "drizzle-orm";
-import type { PgSelect } from "drizzle-orm/pg-core";
+import { SQL, sql, type SQLWrapper } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
@@ -45,7 +44,7 @@ export interface WorkCte {
 
 /** One source's candidates: its Drizzle select plus any CTEs it reads. */
 export interface WorkCandidates {
-  readonly query: PgSelect | SQL;
+  readonly query: SQLWrapper;
   readonly ctes?: readonly WorkCte[];
 }
 
@@ -83,7 +82,7 @@ const literal = (value: Value, cast: string): SQL =>
     : sql`${value}${sql.raw(cast)}`;
 
 export interface WorkCandidateColumns {
-  readonly entity: ShortcodeEntity | null;
+  readonly entity: ShortcodeEntity | SQL | null;
   readonly id: SQL | null;
   readonly name: SQL;
   /** Unique per row within the source; defaults to `<source>:<id>`. */
@@ -102,20 +101,23 @@ export interface WorkCandidateColumns {
  * The shared row shape every source's select projects, so the queue can
  * union them. Columns are typed and named once here.
  */
-export const workCandidateColumns = (
+const workCandidateColumns = (
   source: Pick<WorkSource, "id" | "family" | "executor">,
   columns: WorkCandidateColumns,
 ) => {
   const executor =
-    columns.executor ?? (source.executor === "dynamic" ? null : source.executor);
+    columns.executor ??
+    (source.executor === "dynamic" ? null : source.executor);
   if (executor === null)
-    throw new Error(`Work source ${source.id} has a dynamic executor but no column`);
+    throw new Error(
+      `Work source ${source.id} has a dynamic executor but no column`,
+    );
   const id = columns.id === null ? sql`NULL` : columns.id;
   return {
     source: sql<string>`${source.id}::text`.as("source"),
-    entity: sql<
-      string | null
-    >`${literal(columns.entity, "::text")}`.as("entity"),
+    entity: sql<string | null>`${literal(columns.entity, "::text")}`.as(
+      "entity",
+    ),
     id: sql<string | null>`(${id})::text`.as("id"),
     name: sql<string>`coalesce((${columns.name})::text, '')`.as("name"),
     key: sql<string>`${
@@ -178,7 +180,8 @@ export const scopeAdmitsReasons = (
   const include = scope.reasons ? new Set(scope.reasons) : undefined;
   return reasons.some(
     (reason) =>
-      !exclude.has(reason.key) && (include === undefined || include.has(reason.key)),
+      !exclude.has(reason.key) &&
+      (include === undefined || include.has(reason.key)),
   );
 };
 

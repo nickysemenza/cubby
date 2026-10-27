@@ -8,9 +8,11 @@ import {
 } from "./filter-sentinel-fields";
 import type { ShortcodeEntity } from "./entity-manifest";
 import type { GeneratedGroupChoice } from "./generated/entity-list-fields.gen";
-import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
+import { shortcodeSchema } from "./identifier-fields";
+import { nonEmptyTuple } from "./identifier-fields";
 import {
   entityFilter,
+  partyFilter,
   normalizeSorts,
   oneOrMany,
   presenceFilter,
@@ -229,10 +231,12 @@ const inputFieldsOf = (filter: RelationFilter) => {
       };
     }
     default: {
-      const values = filter.options?.length
-        ? z.enum(nonEmptyTuple(filter.options.map((option) => option.value)))
-        : filter.reference
-          ? referenceValue(filter.reference, filter.currentMember)
+      const values = filter.reference
+        ? filter.currentMember
+          ? partyFilter(shortcodeSchema(filter.reference))
+          : entityFilter(shortcodeSchema(filter.reference))
+        : filter.options?.length
+          ? z.enum(nonEmptyTuple(filter.options.map((option) => option.value)))
           : textList;
       return {
         [filter.columnId]: describe(

@@ -34,7 +34,10 @@ import {
   compileDeclaredFilters,
   type DeclaredFilterSet,
 } from "~/server/generic/list/repo/declared-filters";
-import { listFilterValues } from "~/server/generic/list/repo/field-compiler";
+import {
+  listFilterValues,
+  type ListFilterValues,
+} from "~/server/generic/list/repo/field-compiler";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -63,6 +66,12 @@ interface WorkQueueRead {
   readonly record?: WorkScope["record"];
 }
 
+type RecordRead = {
+  entity: ShortcodeEntity;
+  id: string;
+  quality?: DataQuality;
+};
+
 const column = (name: string): SQL => sql`${sql.identifier(name)}`;
 
 /** The declared filters compiled over the routed relation's columns. */
@@ -76,7 +85,7 @@ const filterSet: DeclaredFilterSet = {
     reference: null,
   }),
 };
-const filterPredicate = (values: Record<string, unknown>): SQL | undefined =>
+const filterPredicate = (values: ListFilterValues): SQL | undefined =>
   and(...compileDeclaredFilters(filterSet, listFilterValues.parse(values)));
 
 /** Prunes a source the request's filters would drop entirely. */
@@ -85,17 +94,23 @@ const admits = (
   input: z.output<typeof workQueueInput>,
   scope: WorkScope,
 ): boolean => {
-  const pick = (include: unknown, exclude: unknown, value: string | null) => {
+  const pick = (
+    include: string | string[] | undefined,
+    exclude: string | string[] | undefined,
+    value: string | null,
+  ) => {
     if (value === null) return true;
-    const included = oneOrManyValues(include as string | string[] | undefined);
-    const excluded = oneOrManyValues(exclude as string | string[] | undefined);
+    const included = oneOrManyValues(include);
+    const excluded = oneOrManyValues(exclude);
     return (
       (!included || included.includes(value)) &&
       !(excluded ?? []).includes(value)
     );
   };
   return (
-    (!scope.record || !source.entity || source.entity === scope.record.entity) &&
+    (!scope.record ||
+      !source.entity ||
+      source.entity === scope.record.entity) &&
     pick(input.family, input.familyExclude, source.family) &&
     pick(
       input.executor,
@@ -114,7 +129,9 @@ async function boundedAll<T, R>(
 ): Promise<R[]> {
   const results: R[] = [];
   for (let start = 0; start < items.length; start += 4)
-    results.push(...(await Promise.all(items.slice(start, start + 4).map(run))));
+    results.push(
+      ...(await Promise.all(items.slice(start, start + 4).map(run))),
+    );
   return results;
 }
 
@@ -169,7 +186,7 @@ async function queryWorkQueue(
     SELECT 1 FROM unnest(owners) owner
     WHERE owner IS NULL OR NOT EXISTS (SELECT 1 FROM members member WHERE member.id = owner))`;
   const memberFence = read.memberOnly
-    ? sql`(shared OR (cardinality(owners) > 0 AND NOT EXISTS (
+    ? sql`(shared OR ((${resolved}) AND NOT EXISTS (
         SELECT 1 FROM unnest(owners) owner WHERE owner IS DISTINCT FROM ${read.memberPartyId}::uuid)))`
     : undefined;
   const search = input.query
@@ -190,7 +207,7 @@ async function queryWorkQueue(
   );
   const selectedView = input.view ? viewPredicates[input.view] : undefined;
 
-  const sortExpressions: Record<string, SQL> = {
+  const sortExpressions = {
     executor: sql`array_position(ARRAY[${sql.join(
       workExecutor.options.map((value) => sql`${value}`),
       sql`, `,
@@ -244,7 +261,7 @@ async function queryWorkQueue(
         .sortsOf(input.sort)
         .map(
           (sort) =>
-            sql`${sortExpressions[sort.orderBy] ?? sql`name`} ${sort.direction === "desc" ? sql`DESC` : sql`ASC`} NULLS LAST`,
+            sql`${Object.entries(sortExpressions).find(([key]) => key === sort.orderBy)?.[1] ?? sql`name`} ${sort.direction === "desc" ? sql`DESC` : sql`ASC`} NULLS LAST`,
         ),
       sql`name ASC`,
       sql`key ASC`,
@@ -283,7 +300,7 @@ async function queryWorkQueue(
       ) routing
     ),
     filtered AS MATERIALIZED (
-      SELECT * FROM routed ${population ? sql`WHERE ${population}` : sql``}
+      SELECT * FROM routed work ${population ? sql`WHERE ${population}` : sql``}
     ),
     eligible AS (
       SELECT * FROM filtered ${selectedView ? sql`WHERE ${selectedView}` : sql``}
@@ -340,7 +357,9 @@ async function queryWorkQueue(
       total: z.number(),
       viewCounts: z.record(z.string(), z.number()),
       groups: z
-        .array(z.object({ key: z.string(), label: z.string(), count: z.number() }))
+        .array(
+          z.object({ key: z.string(), label: z.string(), count: z.number() }),
+        )
         .nullable(),
       items: z.array(pageRow),
     })
@@ -481,9 +500,9 @@ export async function readRecordWorkQueueWith(
   read: Pick<WorkQueueRead, "memberPartyId" | "memberOnly"> & { id: string },
 ) {
   const parsed = parseShortcode(read.id);
-  if (!parsed) throw new Error(`Work queue record ${read.id} is not a shortcode`);
-  const record: { entity: ShortcodeEntity; id: string; quality?: DataQuality } =
-    { entity: parsed.type, id: parsed.shortcode };
+  if (!parsed)
+    throw new Error(`Work queue record ${read.id} is not a shortcode`);
+  const record: RecordRead = { entity: parsed.type, id: parsed.shortcode };
   const entity = scoredEntities.find((kind) => kind === parsed.type);
   if (entity) {
     const entityId = (

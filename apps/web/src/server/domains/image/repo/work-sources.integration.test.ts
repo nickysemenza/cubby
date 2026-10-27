@@ -1,5 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { workQueueInput } from "@cubby/schemas/work-queue";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -12,13 +12,13 @@ import {
   feedback,
   vendorAccount,
 } from "~/server/db/schema";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
-import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   readRecordWorkQueue,
   readWorkQueue,
-} from "~/server/generic/work-queue/service/work-queue-read";
+} from "~/server/domains/work/service/work-queue-read";
+import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
 
 // Work must expose pending descriptions without inventing application authority,
@@ -63,8 +63,8 @@ describe("image Suggestions in Work", () => {
     });
   }
   const input = () =>
-    workQueueHouseholdInput.parse({
-      source: "suggestion",
+    workQueueInput.parse({
+      family: "suggestion",
       pageSize: 20,
     });
 
@@ -103,16 +103,20 @@ describe("image Suggestions in Work", () => {
       jobs: await getDb(ctx.db).select().from(job),
       feedback: await getDb(ctx.db).select().from(feedback),
     };
-    const queue = await readWorkQueue(ctx.db, null, input(), false);
+    const queue = await readWorkQueue(ctx.db, {
+      input: input(),
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(queue.items).toHaveLength(2);
     expect(queue.items).toContainEqual(
       expect.objectContaining({
         entity: "image",
         id: first.shortcode,
-        source: "suggestion",
-        kind: "review",
-        reason: "2 pending image descriptions",
-        waitingFor: { kind: "either" },
+        family: "suggestion",
+        executor: "human",
+        reason: "Pending suggestions",
+        shared: true,
       }),
     );
     expect(
@@ -123,11 +127,15 @@ describe("image Suggestions in Work", () => {
         })
       ).items,
     ).toHaveLength(2);
-    const own = await readRecordWorkQueue(ctx.db, null, first.shortcode, false);
-    expect(own.items.filter((row) => row.source === "suggestion")).toEqual([
+    const own = await readRecordWorkQueue(ctx.db, {
+      id: first.shortcode,
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(own.items.filter((row) => row.family === "suggestion")).toEqual([
       expect.objectContaining({
         id: first.shortcode,
-        reason: "2 pending image descriptions",
+        reason: "Pending suggestions",
       }),
     ]);
     expect({
@@ -139,9 +147,13 @@ describe("image Suggestions in Work", () => {
       .set({ deletedAt: new Date() })
       .where(eq(image.id, parseEntityId("image", second.id)));
     expect(
-      (await readWorkQueue(ctx.db, null, input(), false)).items.map(
-        (row) => row.id,
-      ),
+      (
+        await readWorkQueue(ctx.db, {
+          input: input(),
+          memberPartyId: null,
+          memberOnly: false,
+        })
+      ).items.map((row) => row.id),
     ).toEqual([first.shortcode]);
   });
 
@@ -172,35 +184,60 @@ describe("image Suggestions in Work", () => {
       imageId: source.id,
     });
     await propose(source.id, "private");
-    const household = await readWorkQueue(ctx.db, other.id, input(), false);
+    const household = await readWorkQueue(ctx.db, {
+      input: input(),
+      memberPartyId: other.id,
+      memberOnly: false,
+    });
     expect(household.items).toEqual([
       expect.objectContaining({
         id: source.shortcode,
-        waitingFor: {
-          kind: "members",
-          members: [{ id: member.shortcode, name: member.name }],
-        },
+        owners: [{ id: member.shortcode, name: member.name }],
       }),
     ]);
     expect(
-      (await readWorkQueue(ctx.db, other.id, input(), true)).items,
+      (
+        await readWorkQueue(ctx.db, {
+          input: input(),
+          memberPartyId: other.id,
+          memberOnly: true,
+        })
+      ).items,
     ).toEqual([]);
     expect(
-      (await readWorkQueue(ctx.db, member.id, input(), true)).items,
+      (
+        await readWorkQueue(ctx.db, {
+          input: input(),
+          memberPartyId: member.id,
+          memberOnly: true,
+        })
+      ).items,
     ).toHaveLength(1);
     await getDb(ctx.db)
       .update(vendorAccount)
       .set({ deletedAt: new Date() })
       .where(eq(vendorAccount.id, account.id));
     expect(
-      (await readWorkQueue(ctx.db, member.id, input(), false)).items,
+      (
+        await readWorkQueue(ctx.db, {
+          input: input(),
+          memberPartyId: member.id,
+          memberOnly: false,
+        })
+      ).items,
     ).toEqual([
       expect.objectContaining({
-        waitingFor: expect.objectContaining({ kind: "unresolved" }),
+        owners: [],
       }),
     ]);
     expect(
-      (await readWorkQueue(ctx.db, member.id, input(), true)).items,
+      (
+        await readWorkQueue(ctx.db, {
+          input: input(),
+          memberPartyId: member.id,
+          memberOnly: true,
+        })
+      ).items,
     ).toEqual([]);
   });
 });

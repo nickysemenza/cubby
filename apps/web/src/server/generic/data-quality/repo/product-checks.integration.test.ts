@@ -1,6 +1,6 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { productFiltersSchema } from "@cubby/schemas/product";
-import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { workQueueInput } from "@cubby/schemas/work-queue";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -22,7 +22,7 @@ import {
 import {
   readRecordWorkQueue,
   readWorkQueue,
-} from "~/server/generic/work-queue/service/work-queue-read";
+} from "~/server/domains/work/service/work-queue-read";
 import {
   derivedMarkTickets,
   drainStoredDerived,
@@ -107,7 +107,11 @@ describe("stored Product quality", () => {
         .filter((check) => check.state === "gap")
         .map((check) => check.check),
     ).toContain("product_price");
-    await readRecordWorkQueue(ctx.db, null, item.id, false);
+    await readRecordWorkQueue(ctx.db, {
+      id: item.id,
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(await storedQualityIds(ctx.db)).toEqual([]);
     await refresh();
     const published = await storedQuality(ctx.db, item.entityId);
@@ -205,12 +209,11 @@ describe("stored Product quality", () => {
   it("keeps durable waivers across input changes, Research saved views, and queue reads without price work", async () => {
     const { item, kit } = await seed();
     const queue = () =>
-      readWorkQueue(
-        ctx.db,
-        null,
-        workQueueHouseholdInput.parse({ entity: "product", pageSize: 100 }),
-        false,
-      );
+      readWorkQueue(ctx.db, {
+        input: workQueueInput.parse({ entity: "product", pageSize: 100 }),
+        memberPartyId: null,
+        memberOnly: false,
+      });
     const view = entitySummary.product.list.savedViews.find(
       (view) => view.id === "research-queue",
     )!;
@@ -222,17 +225,21 @@ describe("stored Product quality", () => {
     await refresh();
     expect((await saved()).data.map((row) => row.id)).toContain(item.id);
     const research = () =>
-      readWorkQueue(
-        ctx.db,
-        null,
-        workQueueHouseholdInput.parse({
+      readWorkQueue(ctx.db, {
+        input: workQueueInput.parse({
           entity: "product",
-          source: "research",
+          family: "research",
           pageSize: 100,
         }),
-        false,
-      );
-    const record = () => readRecordWorkQueue(ctx.db, null, item.id, false);
+        memberPartyId: null,
+        memberOnly: false,
+      });
+    const record = () =>
+      readRecordWorkQueue(ctx.db, {
+        id: item.id,
+        memberPartyId: null,
+        memberOnly: false,
+      });
     const compiled = vi.spyOn(PgDialect.prototype, "sqlToQuery");
     try {
       const researched = await research();
@@ -246,8 +253,8 @@ describe("stored Product quality", () => {
         /work_product_price|\bkpe\.|"knownCost"|"knownUnitCount"/,
       );
       expect(
-        researched.items.some(
-          (row) => row.source === "research" && row.id === item.id,
+        measured.result.items.some(
+          (row) => row.family === "research" && row.id === item.id,
         ),
       ).toBe(true);
       compiled.mockClear();

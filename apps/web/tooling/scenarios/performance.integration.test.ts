@@ -1,13 +1,13 @@
 import { dataQuality } from "@cubby/schemas/data-quality";
 import { auditLogEntryOut } from "@cubby/schemas/audit";
 import { runStatus } from "@cubby/schemas/run-fields";
-import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { workQueueInput } from "@cubby/schemas/work-queue";
 import { expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { sql } from "drizzle-orm";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
-import { withTestDb } from "../test-setup";
+import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
+import { countTestDbQueries, withTestDb } from "../test-setup";
 import { seedPerformanceCorpus } from "./performance";
 import { listShipmentsRead } from "~/server/domains/shipment/repo/entity-repository";
 import { drainStoredDerived } from "~/server/testing/background-queue";
@@ -109,13 +109,14 @@ it("seeds connected performance history readable by the real Work queue", async 
     { pageIndex: 0, pageSize: 25 },
     { kind: "selected", fields: ["dataQuality"] },
   );
-  expect(parcels.count).toBe(1);
-  expect(dataQuality.parse(parcels.data[0]?.dataQuality).score).toBe(25);
-  const queue = await readWorkQueue(
-    ctx.db,
-    null,
-    workQueueHouseholdInput.parse({ pageSize: 25 }),
-    false,
-  );
+  expect(parcels.result.count).toBe(1);
+  expect(dataQuality.parse(parcels.result.data[0]?.dataQuality).score).toBe(25);
+  // One bounded page hydrates stored checks; no source predicate is re-run per row.
+  expect(parcels.queryCount).toBeLessThan(12);
+  const queue = await readWorkQueue(ctx.db, {
+    input: workQueueInput.parse({ pageSize: 25 }),
+    memberPartyId: null,
+    memberOnly: false,
+  });
   expect(queue.items.length).toBeGreaterThan(0);
 }, 120_000);

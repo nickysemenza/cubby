@@ -1,5 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { workQueueInput } from "@cubby/schemas/work-queue";
 import { eq, sql } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -23,11 +23,11 @@ import {
   upsertOrderMail,
 } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import {
   derivedMarkTickets,
   drainStoredDerived,
@@ -217,15 +217,18 @@ describe("Email data quality", () => {
       { kind: "selected", fields: [] },
       "count",
     );
-    expect(facet.count).toBe(6);
-    const queue = await readWorkQueue(
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({
-        reason: ["email_not_imported"],
-        pageSize: 100,
+    expect(facet.result.count).toBe(6);
+    expect(facet.queryCount).toBe(1);
+    expect(facet.tables).toEqual(["DerivedValue", "Email"]);
+    const measuredQueue = await countTestDbQueries(() =>
+      readWorkQueue(ctx.db, {
+        input: workQueueInput.parse({
+          reason: ["email_not_imported"],
+          pageSize: 100,
+        }),
+        memberPartyId: null,
+        memberOnly: false,
       }),
-      false,
     );
     expect(queue.meta.totalCount).toBe(4);
     expect(queue.items).toHaveLength(4);

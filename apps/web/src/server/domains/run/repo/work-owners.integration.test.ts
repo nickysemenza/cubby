@@ -9,11 +9,11 @@ import { z } from "zod";
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
+import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { readRecordWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
-import { workRunReviewOwners, workRunReviewRead } from "./work-queue-routing";
+import { workRunReviewOwners, workRunReviewRead } from "./work-owners";
 
 // Failure mode: each historical Run's review authority rereads that same Run
 // through source-owner arrays, multiplying database work before queue paging.
@@ -130,30 +130,28 @@ describe("Run review authority query work", () => {
         expected[index],
       );
     }
-    const memberQueue = await readRecordWorkQueue(
-      ctx.db,
-      member.id,
-      first.shortcode,
-      true,
-    );
+    const memberQueue = await readRecordWorkQueue(ctx.db, {
+      id: first.shortcode,
+      memberPartyId: member.id,
+      memberOnly: true,
+    });
     expect(
-      memberQueue.items.filter((row) => row.source === "account"),
+      memberQueue.items.filter((row) => row.family === "account"),
     ).toMatchObject([
       {
         id: first.shortcode,
-        waitingFor: { kind: "members", members: [{ id: member.shortcode }] },
+        owners: [{ id: member.shortcode }],
       },
     ]);
     const unresolved = retained[1];
     expect(unresolved).toBeDefined();
     if (!unresolved) throw new Error("Missing synthetic deleted-account Run");
-    const fenced = await readRecordWorkQueue(
-      ctx.db,
-      member.id,
-      unresolved.shortcode,
-      true,
-    );
-    expect(fenced.items.filter((row) => row.source === "account")).toEqual([]);
+    const fenced = await readRecordWorkQueue(ctx.db, {
+      id: unresolved.shortcode,
+      memberPartyId: member.id,
+      memberOnly: true,
+    });
+    expect(fenced.items.filter((row) => row.family === "account")).toEqual([]);
   });
 
   it("reads each retained Run at most once while resolving review authority", async () => {
