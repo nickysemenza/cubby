@@ -51,18 +51,40 @@ const files = readdirSync(directory, { recursive: true, encoding: "utf8" })
       ) && statSync(join(directory, entry)).isFile(),
   );
 
+// Unbounded parallel PUTs of a media-heavy report make Cloudflare close the
+// HTTP/2 connection (NGHTTP2_ENHANCE_YOUR_CALM); bound them and retry
+// transient network failures. Any file that still fails fails the publish.
+async function put(file: string) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const response = await fetch(new URL(prefix + file, NX_CACHE_URL), {
+        method: "PUT",
+        headers: {
+          authorization: `Bearer ${NX_CACHE_TOKEN}`,
+          "content-type":
+            types.get(extname(file).toLowerCase()) ??
+            "application/octet-stream",
+        },
+        body: readFileSync(join(directory, file)),
+      });
+      if (response.ok) return;
+      if (response.status < 500 || attempt === 3)
+        throw new Error(`PUT ${file}: HTTP ${response.status}`);
+    } catch (error) {
+      if (
+        attempt === 3 ||
+        (error instanceof Error && error.message.startsWith("PUT "))
+      )
+        throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+  }
+}
+const queue = [...files];
 await Promise.all(
-  files.map(async (file) => {
-    const response = await fetch(new URL(prefix + file, NX_CACHE_URL), {
-      method: "PUT",
-      headers: {
-        authorization: `Bearer ${NX_CACHE_TOKEN}`,
-        "content-type":
-          types.get(extname(file).toLowerCase()) ?? "application/octet-stream",
-      },
-      body: readFileSync(join(directory, file)),
-    });
-    if (!response.ok) throw new Error(`PUT ${file}: HTTP ${response.status}`);
+  Array.from({ length: 8 }, async () => {
+    for (let file = queue.shift(); file !== undefined; file = queue.shift())
+      await put(file);
   }),
 );
 
