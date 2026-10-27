@@ -59,6 +59,81 @@ async function serve<T>(
 }
 
 describe("operation performance evidence", () => {
+  it("records list population and completeness without retaining records or labels", async () => {
+    const sample = await serve(
+      (response) =>
+        response.end(
+          JSON.stringify(
+            superjson.serialize({
+              ok: true,
+              data: {
+                items: [
+                  {
+                    id: "synthetic-private-id",
+                    name: "synthetic-private-label",
+                  },
+                ],
+                meta: {
+                  pageIndex: 0,
+                  pageSize: 25,
+                  totalCount: 9,
+                  unresolvedCount: 2,
+                  incompleteSums: ["synthetic-private-total"],
+                },
+              },
+            }),
+          ),
+        ),
+      (origin) =>
+        measureOperationRead(
+          {
+            operation: "entity.list",
+            input: { entity: "product", filters: {} },
+          },
+          origin,
+          new Headers(),
+        ),
+    );
+    const report = summarizeOperationReads([sample]);
+    expect(report.summary[0]?.observedListPages).toEqual([
+      { rows: 1, totalCount: 9, unresolvedCount: 2, incompleteTotals: 1 },
+    ]);
+    expect(JSON.stringify({ sample, report })).not.toContain(
+      "synthetic-private",
+    );
+  });
+
+  it("records empty pages without inventing optional completeness evidence", async () => {
+    const sample = await serve(
+      (response) =>
+        response.end(
+          JSON.stringify(
+            superjson.serialize({
+              ok: true,
+              data: {
+                items: [],
+                meta: { pageIndex: 0, pageSize: 25, totalCount: 0 },
+              },
+            }),
+          ),
+        ),
+      (origin) =>
+        measureOperationRead(
+          {
+            operation: "entity.list",
+            input: { entity: "product", filters: {} },
+          },
+          origin,
+          new Headers(),
+        ),
+    );
+    expect(sample.results[0]?.listPage).toEqual({
+      rows: 0,
+      totalCount: 0,
+      unresolvedCount: null,
+      incompleteTotals: null,
+    });
+  });
   it.each([false, true])(
     "declares the serialized request codec (batch=%s)",
     async (batch) => {
@@ -110,6 +185,9 @@ describe("operation performance evidence", () => {
         ),
     );
     const report = summarizeOperationReads([sample, sample]);
+    expect(sample.results.every((result) => result.listPage === null)).toBe(
+      true,
+    );
     expect(report.requestedReads).toHaveLength(2);
     expect(report.requestedReads?.map((read) => read.shape)).toEqual(
       sample.requestedReads.map((read) => read.shape),

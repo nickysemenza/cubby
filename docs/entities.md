@@ -2225,6 +2225,11 @@ not published; its fingerprint identifies equal inputs rather than anonymizing
 them. Database medians describe successful requests only; failed-attempt metrics
 remain available in the private samples. Unsettled results include operations
 unanswered because their request failed as well as missing stream lines.
+Successful `entity.list` results also record returned-row and total counts,
+plus unresolved membership and incomplete-total counts when supplied. Empty
+pages retain zero rows; unsupported or absent evidence stays null. These
+numeric witnesses retain no row contents or total labels and do not prove
+that every field computation has settled.
 Request IDs and operation error codes appear only in private raw
 output; inputs, result bodies and diagnostic text are never written. An observed
 failure, including the optional warm-up, produces an artifact and nonzero exit
