@@ -2773,7 +2773,7 @@ export function listScaffold<
             context,
           );
           const incompleteSums =
-            readIntent === "count"
+            readIntent === "count" || projection.kind === "base"
               ? undefined
               : await scaffold.incompleteSums(
                   db,

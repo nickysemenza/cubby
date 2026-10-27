@@ -49,7 +49,10 @@ import {
   currentMemberLedgerParty,
   setMemberLoginParty,
 } from "~/server/http/member-login";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import {
+  captureBackgroundQueue,
+  drainStoredDerived,
+} from "~/server/testing/background-queue";
 
 import { startImportRunFixture } from "../service/import-run.fixtures";
 import { resolveRunFinding } from "./findings";
@@ -576,6 +579,8 @@ async function createConvergenceHarness(ctx: TestDbContext) {
 
     if (!researchMail) throw new Error("Retained mail research missing");
     await researchMail(purchase.shortcode);
+    // The accepted-source relationship projection publishes after the import transaction.
+    await drainStoredDerived(db);
     // Exact-order mail links itself to the Purchase without a member click,
     // whichever of the mail and the Purchase arrived first.
     const emails = await listEmailsRead(

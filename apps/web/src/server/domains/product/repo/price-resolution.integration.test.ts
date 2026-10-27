@@ -8,6 +8,7 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
   makeExpenseInput,
@@ -57,6 +58,15 @@ describe("Product valuation price resolution on canonical reads", () => {
       await getProductByShortcode(ctx.db, product.id),
     );
     expect(only.pricing).toEqual({ effectivePrice: null, derivedPrice: null });
+    const pending = await productList(
+      ctx.db,
+      { ids: [product.id], pricePresenceFilter: "none" },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(pending.data).toEqual([]);
+    expect(pending.unresolvedCount).toBe(1);
+    await drainStoredDerived(ctx.db);
     const unpriced = await productList(
       ctx.db,
       { pricePresenceFilter: "none" },

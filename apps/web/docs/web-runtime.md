@@ -280,6 +280,8 @@ Saved-view counts forward count intent through the canonical repository reader.
 They retain the same filters, prepared membership facts and custom counts as the
 list, while skipping row selection, presentation bindings, ordering and group
 summaries. Filter-dependent preparation remains necessary for exact totals.
+Internal base projections bind no fields or totals and skip total-completeness
+queries; result-dependent filters still report membership completeness.
 Sibling saved-view counts may share explicitly filter-independent preparation
 through one database-bound operation scope. Each view still selects its own
 membership and applies its complete filters. Ordinary filter-dependent prepares

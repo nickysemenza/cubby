@@ -324,8 +324,10 @@ describe("list field compiler", () => {
       const context = await scaffold.context(db, { filters });
       return whereSql(and(...scaffold.filterPredicates(filters, context)));
     };
-    expect(await read(sharedListPrepare(async () => []))).toMatch(
-      /NOT COALESCE\(\(owner_code IN/,
+    // Exclusion negates possible membership: an unknown owner cannot become
+    // a certain match merely because the include predicate is NULL.
+    expect(await read(sharedListPrepare(async () => []))).toBe(
+      "NOT COALESCE(((owner_code IN ($1)) IS NOT FALSE), false)",
     );
     // A listPrepare load reads the request filters, so its data answers only
     // the include values.

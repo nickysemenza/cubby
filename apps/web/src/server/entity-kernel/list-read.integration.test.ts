@@ -23,6 +23,7 @@ import { selectedFieldEnvelopeSchema } from "~/server/generic/derived/repo/publi
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { systemPrincipal } from "~/server/http/authenticate";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createLocationFixture,
   createProductIdentityFixture,
@@ -227,8 +228,18 @@ describe("complete list composition", () => {
     ];
     const operation = ENTITY_LIST_READ_OPERATIONS.product;
     const context = buildKernelContext(ctx.db);
+    const pending = await operation.viewCounts(context, { views });
+    expect(pending.total).toBe(6);
+    expect(pending.views.find((view) => view.id === "first")).toMatchObject({
+      count: 0,
+      unresolvedCount: 6,
+    });
+    await drainStoredDerived(ctx.db);
     const counts = await operation.viewCounts(context, { views });
     expect(counts.total).toBe(6);
+    expect(
+      counts.views.every((view) => (view.unresolvedCount ?? 0) === 0),
+    ).toBe(true);
     expect(counts.views.map((view) => view.count)).toEqual([
       2, 1, 1, 1, 5, 1, 1,
     ]);
@@ -239,6 +250,7 @@ describe("complete list composition", () => {
       undefined,
       TEST_ACTOR,
     );
+    await drainStoredDerived(ctx.db);
     const refreshed = await operation.viewCounts(context, { views });
     expect(refreshed.views.map((view) => view.count)).toEqual([
       2, 2, 0, 1, 5, 1, 1,

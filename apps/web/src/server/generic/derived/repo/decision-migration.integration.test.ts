@@ -71,8 +71,10 @@ describe("field decision cache migration", () => {
       await tx.execute(
         sql`ALTER TABLE "DerivedValue" DROP CONSTRAINT "DerivedValue_no_retired_automatic_fields"`,
       );
+      // Isolate the migration's scheduling from fixture-write fanout. Pending
+      // family fanout truthfully marks every retained price snapshot stale.
       await tx.execute(
-        sql`DELETE FROM "DerivedDirty" WHERE target = 'product.price'`,
+        sql`DELETE FROM "DerivedDirty" WHERE target = 'product.price' OR starts_with(target, 'product.price@')`,
       );
       await tx.execute(sql`
       INSERT INTO "DerivedValue" ("entityId", kind, key, value, "sortNumber", "decidedBy", "inputHash", "computedAt") VALUES

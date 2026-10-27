@@ -1218,7 +1218,7 @@ export const listProductsRead = async (
       ? loadProductListSums(db, filtered.where)
       : undefined,
     membership,
-    readIntent === "count"
+    readIntent === "count" || projection.kind === "base"
       ? undefined
       : membership.then((count) =>
           productScaffold.incompleteSums(db, filters, filtered.context, count),
