@@ -10,6 +10,7 @@ import { type JSONType, z } from "zod";
 
 import { ENTITY_PREVIEW_RESOURCE } from "~/contracts/entity-preview";
 import { env } from "~/env";
+import { getSourceRelease } from "~/server/cf-env";
 import { purchaseAgentRunActions } from "~/server/domains/purchase-import/repo/capabilities";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import {
@@ -174,7 +175,7 @@ export function createMcpServer() {
   const server = new McpServer(
     {
       name: "cubby",
-      version: `dev-${__GIT_COMMIT__}`,
+      version: `dev-${getSourceRelease().commit}`,
     },
     {
       instructions: MCP_SERVER_INSTRUCTIONS,

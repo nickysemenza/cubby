@@ -5,7 +5,7 @@ import { formatBuildDate } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 
 export function AppFooter({ metadata }: { metadata: BuildMetadata }) {
-  const buildDate = formatBuildDate(metadata.date);
+  const buildDate = metadata.date && formatBuildDate(metadata.date);
   return (
     <footer className="safe-bottom border-t print:hidden">
       <Row
@@ -16,7 +16,8 @@ export function AppFooter({ metadata }: { metadata: BuildMetadata }) {
       >
         <Row align="center" gap="sm">
           <span data-testid="build-metadata">
-            {buildDate} · <span>{metadata.branch}</span>@
+            {buildDate && `${buildDate} · `}
+            <span>{metadata.branch}</span>@
             <a
               href={`https://github.com/nickysemenza/cubby/commit/${metadata.commit}`}
               target="_blank"

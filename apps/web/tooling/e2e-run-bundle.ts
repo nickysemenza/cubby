@@ -2,17 +2,17 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { release } from "node:os";
 import path from "node:path";
-import {
-  gitRevision,
-  readWebBuildProvenance,
-  webBuildSourceFingerprint,
-  type WebBuildProvenance,
-} from "./web-build-provenance";
+import { readSourceIdentity, worktreeDirty } from "./source-identity";
 import { walkFiles } from "cubby/tooling/tree-digest";
 
+/**
+ * The checkout a run tested. Nx builds the Worker from this content (its
+ * build-cf key), so a clean, unchanged checkout identifies the build too.
+ */
 export interface E2ERunIdentity {
-  source: { commit: string; dirty: boolean; fingerprint: string };
-  build: WebBuildProvenance;
+  commit: string;
+  branch: string;
+  dirty: boolean;
 }
 
 export interface E2ERunBundleInput {
@@ -36,8 +36,9 @@ export interface E2ERunBundleInput {
   fixtureVersion?: number;
   phase?: string;
   phases?: Array<{ name: string; durationMs: number }>;
-  /** Source and output observed before tests start, including watch/UI runs. */
+  /** Checkout observed before tests start, including watch/UI runs. */
   started?: E2ERunIdentity;
+  /** Lane-owned artifacts (native app binaries) beyond the Nx-built Worker. */
   build?: {
     fingerprint: string | null;
     matchesSource: boolean;
@@ -51,46 +52,28 @@ function sha256(data: Buffer | string): string {
 }
 
 export function captureE2ERunIdentity(repoRoot: string): E2ERunIdentity {
-  return {
-    source: {
-      ...gitRevision(repoRoot),
-      fingerprint: webBuildSourceFingerprint(repoRoot),
-    },
-    build: readWebBuildProvenance(repoRoot),
-  };
+  const { commit, branch } = readSourceIdentity(repoRoot);
+  return { commit, branch, dirty: worktreeDirty(repoRoot) };
 }
 
 function runProvenance(input: E2ERunBundleInput) {
+  const source = input.started ?? captureE2ERunIdentity(input.repoRoot);
   const ended = input.started
     ? captureE2ERunIdentity(input.repoRoot)
     : undefined;
+  // A commit or a first edit during the run means the final HEAD is not what
+  // was tested. Further edits to an already dirty checkout are invisible, but
+  // a dirty run is never replayable.
   const changedDuringRun = Boolean(
-    input.started &&
-    ended &&
-    (input.started.source.commit !== ended.source.commit ||
-      input.started.source.dirty !== ended.source.dirty ||
-      input.started.source.fingerprint !== ended.source.fingerprint ||
-      input.started.build.fingerprint !== ended.build.fingerprint ||
-      input.started.build.sourceFresh !== ended.build.sourceFresh),
+    ended && (ended.commit !== source.commit || ended.dirty !== source.dirty),
   );
-  const source = input.started?.source ?? gitRevision(input.repoRoot);
-  const testedBuild = input.started?.build ?? input.build ?? null;
-  const build =
-    changedDuringRun && testedBuild
-      ? {
-          ...testedBuild,
-          sourceFresh: false,
-          matchesSource: false,
-          details: { ...testedBuild.details, reason: "changed-during-run" },
-        }
-      : testedBuild;
-  return { source, build, changedDuringRun, ended };
+  return { source, changedDuringRun, ended };
 }
 
 /** Leave a replayable, content-checked summary without copying env or DB data. */
 export function writeE2ERunBundle(input: E2ERunBundleInput): string {
   mkdirSync(input.outputDir, { recursive: true });
-  const { source, build, changedDuringRun, ended } = runProvenance(input);
+  const { source, changedDuringRun, ended } = runProvenance(input);
   const files = [
     ...new Set(input.evidence.flatMap((target) => walkFiles(target))),
   ]
@@ -107,19 +90,21 @@ export function writeE2ERunBundle(input: E2ERunBundleInput): string {
       return { path: relativePath, sha256: sha256(readFileSync(file)) };
     });
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: input.kind,
     status: changedDuringRun ? "changed-during-run" : input.status,
     completedAt: new Date().toISOString(),
     source,
-    build,
+    build: input.build ?? null,
     ...(input.started && {
       testStatus: input.status,
       changedDuringRun,
-      endSource: ended?.source,
+      endSource: ended,
     }),
     replayableFromCommit:
-      !changedDuringRun && !source.dirty && build?.matchesSource === true,
+      !changedDuringRun &&
+      !source.dirty &&
+      (input.build === undefined || input.build.matchesSource),
     command: input.command.map((arg) =>
       /(?:password|secret|token|api[_-]?key)=/iu.test(arg) ? "[redacted]" : arg,
     ),

@@ -183,5 +183,28 @@ export const getAiGatewayEgress = (gatewayId: string) =>
 
 export const getAppOrigin = () => currentEnv()?.APP_ORIGIN;
 
+type SourceReleaseEnv = Partial<
+  Pick<Env, "CUBBY_SOURCE_COMMIT" | "CUBBY_SOURCE_BRANCH" | "CUBBY_SOURCE_DATE">
+>;
+
+/**
+ * The deployed source, read from Worker values set at deploy time
+ * (`.github/actions/deploy-worker`) or by local runtimes, never compiled into
+ * the bundle, so one build serves every commit with identical content. Unset
+ * outside a configured Worker: `unknown`, and no date.
+ */
+export const getSourceRelease = (
+  env: SourceReleaseEnv | undefined = currentEnv(),
+) => {
+  const commit = env?.CUBBY_SOURCE_COMMIT || "unknown";
+  return {
+    commit,
+    branch: env?.CUBBY_SOURCE_BRANCH || "unknown",
+    date: env?.CUBBY_SOURCE_DATE || null,
+    // Must equal the Sentry plugin's release name (vite.config.ts).
+    sentryRelease: `cubby@${commit}`,
+  };
+};
+
 /** Host-only access for constructing the narrowed purchase dispatch services. */
 export const getPurchaseDispatchHostEnv = () => currentEnv();

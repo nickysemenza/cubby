@@ -36,19 +36,13 @@ import { scrubErrorMessage } from "../src/lib/error-diagnostics";
 import { startOperation } from "../tests/e2e/support/start-operation";
 import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
 import { leaseNamedDatabase } from "./test-database-lease";
-import {
-  ensureWebBuild,
-  gitRevision,
-  readWebBuildProvenance,
-} from "./web-build-provenance";
+import { buildWebWorker } from "./build-cf";
 
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
 const repoRoot = path.resolve(webRoot, "../..");
-// In-process server calls need the release constant normally injected by Vite.
-Object.assign(globalThis, { __GIT_COMMIT__: gitRevision(repoRoot).commit });
 const kitRoot = path.join(repoRoot, "apps/apple/CubbyKit");
 const appleRoot = path.join(repoRoot, "apps/apple");
 // `pnpm test:e2e:sim -- <flags>` may forward the separator itself.
@@ -59,7 +53,8 @@ if (rawFlags.includes("--help") || rawFlags.includes("-h")) {
   console.log(`pnpm test:e2e:sim -- [mode] [modifiers]
 
 Each run creates a fresh cubby_sim_<hex> database on localhost:55432, builds
-the web Worker (reused when provenance matches), and drops the database after.
+the web Worker through Nx (a cache hit when current), and drops the database
+after.
 
 Modes (one per run; no mode = search/detail smoke in the iOS simulator):
   --headless                 Swift CubbyKit CLI against the Worker, no simulator
@@ -79,7 +74,6 @@ Environment:
   CUBBY_SIM_DEVICE           simulator name or UDID to prefer
   CUBBY_E2E_AGENT_DEVICE     JSON {command,targetArgs} returned by T3 device_open
   CUBBY_SIM_DB_EXTERNAL=1    skip starting PostgreSQL (already running)
-  CUBBY_E2E_PREBUILT_WEB=1   trust the existing web build
   R2_*, BETTER_AUTH_SECRET and DATABASE_URL are set to local simulation values.
 
 Artifacts: artifacts/<lane>/<cubby_sim_hex>/ (run-manifest.json, logs, video).
@@ -848,7 +842,6 @@ async function runHeadlessProductScenario(
 }
 
 function nativeBuildMetadata() {
-  const web = readWebBuildProvenance(repoRoot);
   const fingerprint =
     nativeBuildReady && nativeBuildBinary && existsSync(nativeBuildBinary)
       ? createHash("sha256")
@@ -871,13 +864,9 @@ function nativeBuildMetadata() {
   return {
     build: {
       fingerprint,
-      sourceFresh: nativeFresh && web.sourceFresh,
-      matchesSource: nativeFresh && web.matchesSource,
-      details: {
-        webFingerprint: web.fingerprint ?? "unavailable",
-        webSourceFresh: web.sourceFresh,
-        webSourceFingerprint: web.details.sourceFingerprint ?? "unavailable",
-      },
+      // The Worker is Nx-built from the recorded checkout.
+      sourceFresh: nativeFresh,
+      matchesSource: nativeFresh,
     },
     runtime,
   };
@@ -1405,32 +1394,11 @@ async function main(): Promise<void> {
   try {
     phase = "web-build";
     const buildStarted = performance.now();
-    const buildAction = await ensureWebBuild(
-      repoRoot,
-      async (skipCache) => {
-        const previous = process.env.NX_SKIP_NX_CACHE;
-        process.env.NX_DAEMON = "false";
-        if (skipCache) process.env.NX_SKIP_NX_CACHE = "true";
-        try {
-          await run("pnpm", [
-            "exec",
-            "nx",
-            "run",
-            "@cubby/web:build-cf",
-            "--outputStyle=stream",
-          ]);
-        } finally {
-          if (previous === undefined) delete process.env.NX_SKIP_NX_CACHE;
-          else process.env.NX_SKIP_NX_CACHE = previous;
-        }
-      },
-      process.env.CUBBY_E2E_PREBUILT_WEB === "1",
-    );
+    await buildWebWorker();
     phases.push({
       name: "web-build",
       durationMs: Math.round(performance.now() - buildStarted),
     });
-    console.log(`[${lane}] Web build ${buildAction}`);
     phase = "database";
     const databaseStarted = performance.now();
     let workerStarted = databaseStarted;

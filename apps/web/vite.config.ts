@@ -18,6 +18,7 @@ import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts
 import { resolveDevProfile } from "./tooling/dev-services/dev-profile.ts";
 import { devLifecycle } from "./tooling/dev/lifecycle.ts";
 import { readR2PublicUrl } from "./tooling/cloudflare-public-config.ts";
+import { readSourceIdentity } from "./tooling/source-identity.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Generated output is never committed; bring it current before any module
@@ -27,36 +28,11 @@ execFileSync(process.execPath, ["../../scripts/ensure.ts", "generate"], {
   stdio: "inherit",
 });
 
-// Full SHA for the Sentry release's commit association (setCommits below) —
-// the short `gitCommit` is what actually names the release, matching
-// the runtime `release` in router.tsx and cf-server.ts.
-const [fullSha, gitCommit, headDate] = execFileSync(
-  "git",
-  ["show", "-s", "--format=%H%n%h%n%cI", "HEAD", "--"],
-  { encoding: "utf-8", cwd: __dirname },
-)
-  .trim()
-  .split("\n");
-if (!fullSha || !gitCommit || !headDate)
-  throw new Error(
-    "Git HEAD metadata must include full SHA, short SHA and date",
-  );
 const repoRoot = path.resolve(__dirname, "../..");
-const sourceCommit = process.env.CUBBY_SOURCE_COMMIT?.slice(0, 7) || gitCommit;
-// Source time keeps identical checkouts byte-stable across repeated builds.
-const sourceDate = process.env.CUBBY_SOURCE_COMMIT
-  ? execFileSync(
-      "git",
-      ["show", "-s", "--format=%cI", process.env.CUBBY_SOURCE_COMMIT, "--"],
-      { encoding: "utf-8", cwd: __dirname },
-    ).trim()
-  : headDate;
-const sourceBranch =
-  process.env.CUBBY_SOURCE_BRANCH ||
-  execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
-    encoding: "utf-8",
-    cwd: __dirname,
-  }).trim();
+// Sentry release naming and commit association only: `inject: false` keeps
+// both out of the bundle. The runtime reads its release from Worker values
+// (`getSourceRelease`), so build output is identical across commits.
+const source = readSourceIdentity(repoRoot);
 const productionR2PublicUrl = readR2PublicUrl();
 /**
  * The client's transform gate must name the host the SERVER stamps on image
@@ -358,10 +334,6 @@ export default defineConfig(async ({ command }) => {
       "import.meta.env.CUBBY_LOCAL_TELEMETRY": JSON.stringify(
         process.env.CUBBY_DEV_TELEMETRY === "true",
       ),
-      __GIT_COMMIT__: JSON.stringify(gitCommit),
-      __SOURCE_COMMIT__: JSON.stringify(sourceCommit),
-      __SOURCE_BRANCH__: JSON.stringify(sourceBranch),
-      __BUILD_DATE__: JSON.stringify(sourceDate),
       __R2_PUBLIC_URL__: JSON.stringify(r2PublicUrl),
       __CF_WORKERS__: "true",
     },
@@ -466,14 +438,14 @@ export default defineConfig(async ({ command }) => {
                 excludeDebugStatements: true,
               },
               release: {
-                name: `cubby@${gitCommit}`, // must equal the runtime `release` in router.tsx and worker-sentry.ts
+                name: `cubby@${source.shortCommit}`, // must equal getSourceRelease().sentryRelease
                 // Both runtimes set `release` explicitly. Injecting it would
                 // stamp the commit into every chunk, so every client asset
                 // changes content (and re-uploads) on every deploy.
                 inject: false,
                 setCommits: {
                   repo: "nickysemenza/cubby",
-                  commit: process.env.CUBBY_SOURCE_COMMIT ?? fullSha,
+                  commit: source.commit,
                 },
                 deploy: { env: "production" },
               },

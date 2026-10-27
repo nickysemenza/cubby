@@ -42,6 +42,9 @@
       ],
       "~/server/http/guard-session.boundary": [
         "./artifacts/server-contracts/server/http/guard-session.boundary"
+      ],
+      "~/server/http/source-release.boundary": [
+        "./artifacts/server-contracts/server/http/source-release.boundary"
       ]
     }
   }

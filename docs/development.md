@@ -516,8 +516,11 @@ The Worker SSR build preserves source execution order across Rolldown chunks;
 otherwise schema/pool chunk cycles can initialize Drizzle subclasses before
 their base classes. Client chunking retains its separate configuration.
 Deployment reuses this output with
-`cf deploy --prebuilt --mode production`. The plugin writes directly into this
-output tree; there is no separate `dist` bundle.
+`cf deploy --prebuilt --mode production`, uploading the release identity as
+deploy-time Worker values ([error tracking](infrastructure.md#error-tracking-and-traces));
+the output contains no commit. Nx's `@cubby/web:build-cf` owns its staleness
+from content inputs alone. The plugin writes directly into this output tree;
+there is no separate `dist` bundle.
 
 Keep runtime modules out of the deployment config import graph: the Cloudflare
 Vite plugin denies config dependencies to the runtime loader. Read shared data

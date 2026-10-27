@@ -11,18 +11,16 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { captureE2ERunIdentity, writeE2ERunBundle } from "./e2e-run-bundle";
-import { writeWebBuildProvenance } from "./web-build-provenance";
 
-// Failure modes: a fresh dirty build claims commit replayability; optional
-// scenario/phase context is lost; checksum files no longer verify the summary.
+// Failure modes: a dirty run claims commit replayability; a commit or edit
+// during the run is reported as the tested checkout; optional scenario/phase
+// context is lost; checksum files no longer verify the summary.
 const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0))
     rmSync(root, { recursive: true, force: true, maxRetries: 5 });
 });
-// A watch rebuild or commit during tests must not label the final output/HEAD
-// as the Worker that was tested, even when the final output is independently fresh.
-it.each(["source-edit", "commit", "output-edit", "unchanged"])(
+it.each(["source-edit", "commit", "unchanged"])(
   "retains tested identity after %s during a run",
   (change) => {
     const root = mkdtempSync(path.join(tmpdir(), "cubby-run-identity-"));
@@ -48,39 +46,14 @@ it.each(["source-edit", "commit", "output-edit", "unchanged"])(
         { cwd: root },
       );
     };
-    put(".gitignore", "apps/web/.cloudflare/\npackages/wasm/\nbundle/\n");
+    put(".gitignore", "bundle/\n");
     put("apps/web/src/example.ts");
     execFileSync("git", ["init", "--quiet"], { cwd: root });
     commit();
-    put("apps/web/.cloudflare/output/v0/config.json", "{}");
-    put(
-      "apps/web/.cloudflare/output/v0/workers/default/worker.config.json",
-      JSON.stringify({
-        name: "synthetic-worker",
-        compatibilityDate: "2026-09-19",
-        manifest: {
-          type: "complete",
-          mainModule: "index.js",
-          modules: { "index.js": { type: "esm" } },
-        },
-      }),
-    );
-    put("apps/web/.cloudflare/output/v0/workers/default/assets/main.js");
-    put("apps/web/.cloudflare/output/v0/workers/default/bundle/index.js");
-    put("packages/wasm/worker/recipebridge_bg.wasm");
-    put("packages/wasm/browser/recipebridge_bg.wasm");
-    put("packages/wasm/cookbook/recipebridge_cookbook_bg.wasm");
-    writeWebBuildProvenance(root);
     const started = captureE2ERunIdentity(root);
-    if (change === "output-edit")
-      put(
-        "apps/web/.cloudflare/output/v0/workers/default/bundle/index.js",
-        "rebuilt output",
-      );
-    else if (change !== "unchanged")
+    if (change !== "unchanged")
       put("apps/web/src/example.ts", "new source during run");
     if (change === "commit") commit();
-    writeWebBuildProvenance(root);
     const manifestPath = writeE2ERunBundle({
       repoRoot: root,
       outputDir: path.join(root, "bundle"),
@@ -93,20 +66,10 @@ it.each(["source-edit", "commit", "output-edit", "unchanged"])(
     expect(JSON.parse(readFileSync(manifestPath, "utf8"))).toMatchObject({
       status: change === "unchanged" ? "passed" : "changed-during-run",
       testStatus: "passed",
-      source: started.source,
+      source: started,
       changedDuringRun: change !== "unchanged",
       replayableFromCommit: change === "unchanged",
-      build: {
-        fingerprint: started.build.fingerprint,
-        sourceFresh: change === "unchanged",
-        matchesSource: change === "unchanged",
-        details: {
-          reason:
-            change === "unchanged"
-              ? started.build.details.reason
-              : "changed-during-run",
-        },
-      },
+      build: null,
     });
   },
 );

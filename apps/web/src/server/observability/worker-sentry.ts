@@ -8,6 +8,7 @@ import {
 } from "~/lib/sentry-environment";
 import { SENTRY_IGNORED_ERRORS } from "~/lib/sentry-noise";
 import { scrubSentryEvent } from "~/lib/sentry-scrub";
+import { getSourceRelease } from "~/server/cf-env";
 
 /**
  * The one Sentry configuration of the Worker: its handlers (`cf-server.ts`)
@@ -20,7 +21,7 @@ export function workerSentryOptions(env: Env): Sentry.CloudflareOptions {
     // never ship envelopes to the real DSN.
     enabled: workerSentryEnabled(env),
     dataCollection: SENTRY_DATA_COLLECTION,
-    release: `cubby@${__GIT_COMMIT__}`,
+    release: getSourceRelease(env).sentryRelease,
     // Covers queue/cron events without request URLs. Deployed previews retain
     // production reporting (NODE_ENV stays "production" there)
     // because they access the production database.

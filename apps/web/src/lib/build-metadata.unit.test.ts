@@ -11,6 +11,7 @@ describe("build metadata snapshot", () => {
       date: "2026-01-02T00:30:00Z",
       branch: "document-source",
       commit: "abc1234",
+      sentryRelease: "cubby@abc1234",
     };
     try {
       server.setQueryData(buildMetadataQueryOptions.queryKey, snapshot);

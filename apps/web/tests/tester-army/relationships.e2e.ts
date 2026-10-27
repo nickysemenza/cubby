@@ -50,7 +50,9 @@ test("moving a task between board lanes persists its project without changing si
     `/tasks?view=board&groupBy=${encodeURIComponent(JSON.stringify([{ key: "projectId" }]))}`,
   );
   await agent.act(
-    'Move "Synthetic inbox card" from No project to "Synthetic Destination Project". You may use the card\'s Move picker.',
+    // Board drag-and-drop exposes no addressable drop target to the decision
+    // model; the card's own Move picker is the keyboard-accessible path.
+    'Move "Synthetic inbox card" from No project to "Synthetic Destination Project" by opening that card\'s "Move Synthetic inbox card" picker and choosing "Synthetic Destination Project". Do not drag the card.',
   );
   outcome(await data.fields("task", task.id, ["projectId"]), {
     projectId: project.id,

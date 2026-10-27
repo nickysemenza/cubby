@@ -4,7 +4,6 @@ import { spawnToExit } from "cubby/tooling/run";
 import { localSecret } from "../local-secret";
 import { writeJourneySummary } from "./report";
 import { writeStartupHtml } from "./html";
-import { holdLock, WORKTREE_HARNESS_LOCK } from "../dev-services/harness-lock";
 import { prepareE2EProcessEnvironment } from "../e2e-process-env";
 
 const webRoot = path.resolve(import.meta.dirname, "../..");
@@ -16,9 +15,8 @@ const interrupt = () => controller.abort();
 process.once("SIGINT", interrupt);
 process.once("SIGTERM", interrupt);
 prepareE2EProcessEnvironment();
-// Hold through output preparation and failure reporting as well as the SDK run.
-await using cleanup = new AsyncDisposableStack();
-cleanup.defer(await holdLock(WORKTREE_HARNESS_LOCK));
+// The built Worker comes from Nx (`test:e2e:agent:web`, or the tester-army
+// target's `dependsOn` build-cf).
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 try {
@@ -27,14 +25,6 @@ try {
     throw new Error(
       "Provider setup incomplete: Tester Army requires a gateway credential",
     );
-  phase = "Worker build";
-  const buildStatus = await spawnToExit(
-    "pnpm",
-    ["run", "build:cf", "--ensure"],
-    { cwd: webRoot, stdio: "inherit", signal: controller.signal },
-  );
-  if (buildStatus !== 0)
-    throw new Error(`Worker build failed with exit ${buildStatus}`);
   phase = "database template";
   const { prepareTemplate } = await import("../test-database-lease");
   await prepareTemplate("browser");

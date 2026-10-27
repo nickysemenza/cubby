@@ -30,7 +30,8 @@ inputs:
   deploy-command:
     description: >-
       Shell command that deploys the package, using its package-local cf CLI
-      devDependency.
+      devDependency. It may upload `$RUNNER_TEMP/source-release.json` as the
+      version's secrets file.
     required: true
   cloudflare-api-token:
     description: "Cloudflare API token"
@@ -69,8 +70,6 @@ runs:
       if: steps.current_main.outputs.current == 'true' && inputs.build-command != ''
       shell: bash
       env:
-        CUBBY_SOURCE_COMMIT: ${{ github.sha }}
-        CUBBY_SOURCE_BRANCH: main
         SENTRY_AUTH_TOKEN: ${{ inputs.sentry-auth-token }}
       run: ${{ inputs.build-command }}
 
@@ -97,6 +96,13 @@ runs:
         [[ -n "$current" ]] || { echo "::error::Could not resolve refs/heads/main"; exit 1; }
         echo "current=$([[ "$current" == "$GITHUB_SHA" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
         [[ "$current" == "$GITHUB_SHA" ]] || echo "::notice::Skipping stale deployment for $GITHUB_SHA; main is $current"
+
+    # Release identity is a deploy-time Worker value, never bundle content,
+    # so the build output is identical across commits with the same sources.
+    - name: Record source release
+      if: steps.deploy_current.outputs.current == 'true'
+      shell: bash
+      run: node apps/web/tooling/source-identity.ts --branch=main > "$RUNNER_TEMP/source-release.json"
 
     - name: Deploy ${{ inputs.package }}
       if: steps.deploy_current.outputs.current == 'true'

@@ -2,7 +2,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/cloudflare";
 
 import { TELEMETRY_SCHEMA_VERSION } from "~/lib/http-cache";
-import { withCfEnv } from "~/server/cf-env";
+import { getSourceRelease, withCfEnv } from "~/server/cf-env";
 import { db, withInvocationDb } from "~/server/db";
 import { isMaintenanceMode } from "~/server/http/maintenance";
 import { withInvocationTrace, withTrace } from "~/server/observability/tracing";
@@ -31,7 +31,7 @@ export async function handleScheduledInvocation(
             await publishAiRefreshActivation(
               db,
               env.CF_VERSION_METADATA.id,
-              __GIT_COMMIT__,
+              getSourceRelease(env).commit,
             );
             await recoverMissedWork(db);
           });

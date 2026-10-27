@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import path from "node:path";
 
@@ -8,11 +7,6 @@ import lockfile from "proper-lockfile";
 export const worktreeRoot = realpathSync(
   path.resolve(import.meta.dirname, "../../../.."),
 );
-
-const worktreeId = createHash("sha256")
-  .update(worktreeRoot)
-  .digest("hex")
-  .slice(0, 12);
 
 interface HarnessLock {
   /** `proper-lockfile` target; the held lock is the `<path>.lock` directory. */
@@ -26,17 +20,6 @@ interface HarnessLock {
   /** How long an unrefreshed lock survives its holder; default 10 minutes. */
   staleMs?: number;
 }
-
-/**
- * Serializes this checkout's workerd and browser suites, which share its
- * built Worker (a stale one is rebuilt in place) and its CPU budget. Other
- * worktrees hold their own and run concurrently.
- */
-export const WORKTREE_HARNESS_LOCK: HarnessLock = {
-  path: `/tmp/cubby-harness-${worktreeId}`,
-  label: "worktree harness",
-  ownerVariable: "CUBBY_HARNESS_LOCK_OWNER",
-};
 
 /** Machine-wide: every worktree drives the same simulators. */
 export const NATIVE_DEVICE_LOCK: HarnessLock = {
@@ -58,9 +41,6 @@ export async function holdLock(
   if (ownerIsAlive(Number(priorOwner))) return async () => {};
   const options = {
     realpath: false,
-    // An owner rebuilds the Worker synchronously while holding the worktree
-    // lock, which blocks the refresh timer; a shorter threshold lets a second
-    // suite reclaim a live owner's lock mid-build.
     stale: lock.staleMs ?? 10 * 60_000,
     update: Math.min(10_000, (lock.staleMs ?? 10 * 60_000) / 2),
   };

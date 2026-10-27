@@ -9,13 +9,9 @@ import type { SupportedChatModel } from "@cubby/shared/ai/models";
 import { usdaReleaseObjectName } from "@cubby/usda/release";
 
 import { SYNTHETIC_USDA_RELEASE } from "./dev-services/dev-profile.ts";
-import {
-  holdLock,
-  WORKTREE_HARNESS_LOCK,
-} from "./dev-services/harness-lock.ts";
 
 import { seedUsdaRelease } from "./dev/usda-synthetic-release";
-import { COUPLED_WORKER_BUILDS, ensureWorkerBuilds } from "./worker-builds";
+import { readSourceIdentity, sourceReleaseVars } from "./source-identity.ts";
 import {
   builtWorkerTestConfig,
   createTestHarness,
@@ -26,6 +22,7 @@ const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
+const repoRoot = path.resolve(webRoot, "../..");
 
 /**
  * Where one production queue's messages go in a test harness.
@@ -54,12 +51,6 @@ interface WorkerdProfileDefinition {
   purchaseAgentPeers: boolean;
   /** The Worker's deterministic AI Gateway service peer without agent peers. */
   testGatewayPeer: boolean;
-  /**
-   * Take this worktree's harness lock and rebuild a stale Worker before
-   * starting. A Playwright run already holds the lock from global setup, and
-   * its workers pass straight through.
-   */
-  harnessLock: boolean;
 }
 
 export const WORKERD_PROFILES = {
@@ -72,7 +63,6 @@ export const WORKERD_PROFILES = {
     googleProvider: false,
     purchaseAgentPeers: false,
     testGatewayPeer: true,
-    harnessLock: false,
   },
   /** Gmail import journeys: the real background consumer runs mail search. */
   gmail: {
@@ -83,7 +73,6 @@ export const WORKERD_PROFILES = {
     googleProvider: true,
     purchaseAgentPeers: false,
     testGatewayPeer: false,
-    harnessLock: false,
   },
   /** Provider acquisition and research use the deployed Job handoffs. */
   "gmail-research": {
@@ -94,7 +83,6 @@ export const WORKERD_PROFILES = {
     googleProvider: true,
     purchaseAgentPeers: true,
     testGatewayPeer: false,
-    harnessLock: true,
   },
   /** Actual Mac captures; the production coordinator uses scripted judgment. */
   "native-import": {
@@ -105,7 +93,6 @@ export const WORKERD_PROFILES = {
     googleProvider: false,
     purchaseAgentPeers: true,
     testGatewayPeer: false,
-    harnessLock: true,
   },
   /**
    * The purchase agent against scripted (or live-eval) model peers: the real
@@ -119,7 +106,6 @@ export const WORKERD_PROFILES = {
     googleProvider: false,
     purchaseAgentPeers: true,
     testGatewayPeer: false,
-    harnessLock: true,
   },
   /**
    * Coupled journeys: every consumer is real, including background image
@@ -133,7 +119,6 @@ export const WORKERD_PROFILES = {
     googleProvider: false,
     purchaseAgentPeers: true,
     testGatewayPeer: false,
-    harnessLock: true,
   },
 } as const satisfies Record<string, WorkerdProfileDefinition>;
 
@@ -189,7 +174,7 @@ async function compiledWebWorkerConfig(
 ) {
   const compiled = await builtWorkerTestConfig(webRoot).catch((error) => {
     throw new Error(
-      "Build the web Cloudflare bundle before starting workerd (pnpm --dir apps/web build:cf)",
+      "Build the web Cloudflare bundle before starting workerd (pnpm exec nx run @cubby/web:build-cf)",
       { cause: error },
     );
   });
@@ -352,6 +337,8 @@ export async function workerdHarnessOptions(
           AI_GATEWAY_API_KEY: "",
           // A scripted Run settles in a test's time, not production's 10s poll.
           CUBBY_TEST_SETTLEMENT_POLL_MS: "25",
+          // Release identity is a deploy-time Worker value, never bundle content.
+          ...sourceReleaseVars(readSourceIdentity(repoRoot)),
           ...(options.models?.agent?.fixedModel && {
             CUBBY_PURCHASE_AGENT_FIXED_MODEL: "openai-responses",
           }),
@@ -404,22 +391,6 @@ function installDatabaseEnvironment(databaseUrl: string) {
 }
 
 /**
- * Queue for this worktree's harness lock, then make every coupled Worker
- * build current (rebuilding a stale one locally). Callers hold it once per
- * run, so the wait and any rebuild never count against a test's timeout.
- */
-export async function holdWorkerdHarness(): Promise<() => Promise<void>> {
-  const release = await holdLock(WORKTREE_HARNESS_LOCK);
-  try {
-    ensureWorkerBuilds(COUPLED_WORKER_BUILDS);
-  } catch (error) {
-    await release();
-    throw error;
-  }
-  return release;
-}
-
-/**
  * An idempotent `close` for resources moved out of an `await using` stack:
  * releases run newest first, every one runs even when another fails (native
  * `SuppressedError` chaining), and concurrent callers share one release.
@@ -431,16 +402,14 @@ export function closeOnce(owned: AsyncDisposableStack) {
 
 /**
  * Start and listen on the built Cubby Worker under one profile, pointed at
- * `databaseUrl`. The returned harness's `close()` stops workerd, restores the
- * database environment, and releases the harness lock, in that order; a
- * failed start does the same before rethrowing. The caller owns the database
+ * `databaseUrl`. The returned harness's `close()` stops workerd and restores
+ * the database environment, in that order; a failed start does the same
+ * before rethrowing. The caller owns the database
  * and object storage.
  */
 export async function startWorkerdHarness(options: WorkerdHarnessOptions) {
   // Released on any throw below; `move()` hands ownership to the caller.
   await using cleanup = new AsyncDisposableStack();
-  if (WORKERD_PROFILES[options.profile].harnessLock)
-    cleanup.defer(await holdWorkerdHarness());
   const harnessOptions = await workerdHarnessOptions(options);
   cleanup.defer(installDatabaseEnvironment(options.databaseUrl));
   const harness = createTestHarness(harnessOptions);

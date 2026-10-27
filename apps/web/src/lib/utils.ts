@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// timeZone: "UTC" is load-bearing. __BUILD_DATE__ is a UTC ISO string; without
+// timeZone: "UTC" is load-bearing. The build date is an ISO string; without
 // pinning the zone, the CF edge (UTC) and the client (local tz) format it in
 // different zones and can land on different calendar days near a UTC midnight
 // boundary — server renders e.g. "Jun 12", client "Jun 11" → React #418

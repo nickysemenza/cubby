@@ -29,7 +29,6 @@
     "apps/apple/tooling/**/*.ts",
     "apps/apple/scripts/*.test.ts",
     "apps/web/tooling/dev-services/**/*.ts",
-    "apps/web/tooling/source-fingerprint.ts",
     "apps/web/tooling/dev/dev-runtime-retry.test.ts",
     "apps/web/tooling/dev/dev-session.test.ts",
     "apps/web/tooling/native-*.test.ts",

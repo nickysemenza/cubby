@@ -11,6 +11,7 @@
     "src/server/operation-runtime/middleware/private-server-functions.ts",
     "src/server/operation-runtime/middleware/tracing.ts",
     "src/server/http/guard-session.boundary.ts",
+    "src/server/http/source-release.boundary.ts",
     "src/server/db/repository-access.boundary.ts"
   ],
   "compilerOptions": {
