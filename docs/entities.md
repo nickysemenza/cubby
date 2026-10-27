@@ -1256,7 +1256,10 @@ label** for composed presentation text. A reference normally projects
 `<stem>Name` or a nested record's `name`. A custom display label must declare
 `display.labelPath`; both web and native reference renderers read that path
 before the conventional name and preserve the target's identity. Never put an
-identifier in a label projection. `defineEntity` checks simple declarations' label and detail-label paths at
+identifier in a label projection. Moving a projected result into a governed
+envelope retains its declared label path: path readers resolve the canonical
+result, and reference renderers use a projected name only for its matching id.
+`defineEntity` checks simple declarations' label and detail-label paths at
 TypeScript compile time. Shared compilation validates every displayed path
 against its actual decorated list/detail schema, including
 nested properties and array projections. Compile-only schema contracts use

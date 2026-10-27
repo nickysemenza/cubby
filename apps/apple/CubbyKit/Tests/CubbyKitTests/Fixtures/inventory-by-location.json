@@ -3,16 +3,6 @@
     "id": "INV-2345",
     "verifiedAt": null,
     "placement": "stock",
-    "effectiveOwnership": {
-      "mode": "inherit",
-      "explicitOwner": null,
-      "effectiveOwner": null,
-      "inheritedOwner": null,
-      "source": "unresolved",
-      "evidence": null,
-      "evidenceFingerprint": "fixture-unresolved",
-      "matchesInheritedOwner": false
-    },
     "createdAt": "2026-03-01T10:00:00.000Z",
     "updatedAt": "2026-03-02T10:00:00.000Z",
     "product": {
@@ -646,6 +636,41 @@
         "work": {
           "kind": "idle"
         }
+      },
+      "effectiveOwnership": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "cached",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": {
+                "mode": "inherit",
+                "explicitOwner": null,
+                "effectiveOwner": null,
+                "inheritedOwner": null,
+                "source": "unresolved",
+                "evidence": null,
+                "evidenceFingerprint": "fixture-unresolved",
+                "matchesInheritedOwner": false
+              }
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          },
+          "computedAt": "2026-03-02T10:00:00.000Z",
+          "freshness": "fresh"
+        },
+        "work": {
+          "kind": "idle"
+        }
       }
     }
   },
@@ -653,16 +678,6 @@
     "id": "INV-3456",
     "verifiedAt": "2026-03-03T10:00:00.000Z",
     "placement": "stock",
-    "effectiveOwnership": {
-      "mode": "inherit",
-      "explicitOwner": null,
-      "effectiveOwner": null,
-      "inheritedOwner": null,
-      "source": "unresolved",
-      "evidence": null,
-      "evidenceFingerprint": "fixture-unresolved",
-      "matchesInheritedOwner": false
-    },
     "createdAt": "2026-03-01T10:00:00.000Z",
     "updatedAt": "2026-03-03T10:00:00.000Z",
     "product": {
@@ -1013,6 +1028,41 @@
               }
             }
           }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "effectiveOwnership": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "cached",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": {
+                "mode": "inherit",
+                "explicitOwner": null,
+                "effectiveOwner": null,
+                "inheritedOwner": null,
+                "source": "unresolved",
+                "evidence": null,
+                "evidenceFingerprint": "fixture-unresolved",
+                "matchesInheritedOwner": false
+              }
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          },
+          "computedAt": "2026-03-02T10:00:00.000Z",
+          "freshness": "fresh"
         },
         "work": {
           "kind": "idle"

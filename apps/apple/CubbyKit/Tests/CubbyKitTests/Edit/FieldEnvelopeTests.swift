@@ -303,8 +303,11 @@ struct FieldEnvelopeTests {
                 == "Stored member")
         // The declared label names the effective owner only when its record id matches.
         let projected = F.row(
-            ["effectiveOwnership": ["effectiveOwner": ["id": "LPY-4K7M", "name": "Alex"]]],
             fields: [
+                "effectiveOwnership": F.envelope(
+                    result: F.cached(
+                        F.decision(["effectiveOwner": ["id": "LPY-4K7M", "name": "Alex"]]),
+                        freshness: "fresh")),
                 "ownerLedgerPartyId": F.envelope(
                     assignment: F.inherit, controls: F.editable(),
                     result: F.live(F.decision("LPY-4K7M", provenance: F.inherited("product", "PRD-4K7M"))))
