@@ -1,0 +1,47 @@
+apps/web/src/entity/feature-registry.ts
+  s_77bdb89dbc0fc6::t_b238cfb8d7c65f 14,39-40
+apps/web/src/entity/table/data-table-views.tsx
+  s_77bdb89dbc0fc6::t_93b49b2c0e2e1b 347
+apps/web/src/entity/work-queue/record-work-queue.tsx
+  s_77bdb89dbc0fc6::t_039a643c2dffcd 14-15,21,68-72,74,98-102,105
+apps/web/src/entity/work-queue/work-actions.tsx
+  s_77bdb89dbc0fc6::t_74860bea77269c 1-147
+apps/web/src/entity/work-queue/work-queue-display.tsx
+  s_77bdb89dbc0fc6::t_8b5e7489306dc4 2,16,18-21,24-54
+apps/web/src/features/finance/transfer-pair-accept.tsx
+  s_77bdb89dbc0fc6::t_00670cf23a0976 6,12,47-70
+apps/web/src/features/home/needs-you.tsx
+  s_77bdb89dbc0fc6::t_2116f0f5dd8af2 1,25-26,28-30,35-36,43
+apps/web/src/features/registry.tsx
+  s_77bdb89dbc0fc6::t_1ffa3c11cb4b26 41,445-456,593
+apps/web/src/features/work-queue/work-queue-page.tsx
+  s_77bdb89dbc0fc6::t_89786dd4ff000c 4-7,9,11-12,17,50-51,96-99,104,107-110,114-120,144-146,154,157,159,164,175-185,207-209,211,217,219-220,222,229-232,242,253,260-263,288-289,291,313,354-355,361-365,367-381,386-389,391-393,398-401,403-405,409,417,443-444,449-451,453-457,465-466,468-469,504,523,528,547-564,567,657,679-680,682-684
+apps/web/src/features/work-queue/work-row-link.tsx
+  s_77bdb89dbc0fc6::t_8eaf0e77cd7962 12,15,17-21,24-30,34-37,43,80-81,84-85,92
+apps/web/src/routes/_authenticated/work-queue.tsx
+  s_77bdb89dbc0fc6::t_f83d60f68e87f1 1,7,11
+apps/web/src/server/entity-kernel/current-member-filter.ts
+  s_77bdb89dbc0fc6::t_93c04accac95af 72
+apps/web/src/ui/data-table/relation-list-search.ts
+  s_77bdb89dbc0fc6::t_147780bfb3cbfe 1-42
+packages/schemas/src/relation-list.ts
+  s_77bdb89dbc0fc6::t_0a0e0221cc8f1d 1,11,13,18,186,201-209,211,217,225,233-236,291-309,361-384
+packages/schemas/src/work-queue.ts
+  s_77bdb89dbc0fc6::t_05aa3fee1fb9b1 10,85,262-266,277-279
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6b93c9276a03271bcbc0d6c7c4ef02175a8bcb2d",
+  "prompts": {},
+  "sessions": {
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
