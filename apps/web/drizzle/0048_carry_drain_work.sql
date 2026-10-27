@@ -82,6 +82,15 @@ SELECT id FROM "Job" WHERE kind IN ('embedding.refresh', 'embedding.cleanup');--
 DELETE FROM "Job" WHERE id IN (SELECT id FROM "retired_embedding_job_ids");--> statement-breakpoint
 DELETE FROM "Entity" WHERE kind = 'job' AND id IN (SELECT id FROM "retired_embedding_job_ids");--> statement-breakpoint
 DROP TABLE "retired_embedding_job_ids";--> statement-breakpoint
+-- The watchdog and retention merge into jobs.maintenance, which the minute
+-- cron creates; their old Jobs and identities go.
+DELETE FROM "JobInvalidationCapture" c USING "Job" j
+ WHERE c.key = j.key AND j.kind IN ('queue.watchdog', 'jobs.retention');--> statement-breakpoint
+CREATE TEMP TABLE "retired_maintenance_job_ids" ON COMMIT DROP AS
+SELECT id FROM "Job" WHERE kind IN ('queue.watchdog', 'jobs.retention');--> statement-breakpoint
+DELETE FROM "Job" WHERE id IN (SELECT id FROM "retired_maintenance_job_ids");--> statement-breakpoint
+DELETE FROM "Entity" WHERE kind = 'job' AND id IN (SELECT id FROM "retired_maintenance_job_ids");--> statement-breakpoint
+DROP TABLE "retired_maintenance_job_ids";--> statement-breakpoint
 -- One drain Job (with its identity) per drain that owes work, woken once.
 WITH drains AS (
   SELECT DISTINCT w.drain AS key,
