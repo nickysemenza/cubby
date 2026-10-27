@@ -1,0 +1,25 @@
+.agents/skills/product-enrichment/SKILL.md
+  s_77bdb89dbc0fc6::t_6331545a5d18ad 22-24
+.agents/skills/purchase-import/SKILL.md
+  s_77bdb89dbc0fc6::t_3b1ab1d0c2eec1 24-27
+apps/web/src/server/mcp/server.ts
+  s_77bdb89dbc0fc6::t_2e3fa4cefc71bb 66
+docs/guide/burn-down.md
+  s_77bdb89dbc0fc6::t_324403decc3939 17-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ee5ccc84c63f06ac14b5a9025d2656f83422beaf",
+  "prompts": {},
+  "sessions": {
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
