@@ -95,6 +95,7 @@ export async function photoProductSuggestions(
         fingerprint,
         photoEvidence,
         observedName: input.review.observedName,
+        decisionRevision: input.review.fieldDecisionRevisions?.[field] ?? null,
       }),
     );
     const currentValue = z.json().parse(currentFields[field] ?? null);
@@ -119,6 +120,8 @@ export async function photoProductSuggestions(
           observedName: input.review.observedName,
           photoEvidence: z.json().parse(photoEvidence),
           currentValue,
+          memberDecisionRevision:
+            input.review.fieldDecisionRevisions?.[field] ?? null,
         },
         served: true,
       },

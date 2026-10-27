@@ -22,6 +22,7 @@ import {
   photoRunReviewResponse,
   type PhotoRunDefaults,
 } from "@cubby/schemas/photo-import-run";
+import { brandNameKey } from "@cubby/schemas/vendor";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
@@ -82,6 +83,7 @@ import { DateDisplay } from "~/ui/common/date-display";
 import { Facts } from "~/ui/common/facts";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { showErrorToast } from "~/ui/feedback/error-details";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
@@ -1364,6 +1366,17 @@ const productCategoryField = entityFieldPresentation(
   "edit",
 );
 
+// A new Brand name and its empty reference describe one Product field change.
+function photoProductChangeCount(
+  changes: PhotoGroupDecision["productChanges"],
+) {
+  return new Set(
+    Object.keys(changes ?? {}).map((field) =>
+      field === "brandCreate" ? "brandId" : field,
+    ),
+  ).size;
+}
+
 function ExistingProductChanges({
   proposal,
   current,
@@ -1389,7 +1402,7 @@ function ExistingProductChanges({
     >
       <h4 className="mb-2 font-medium">
         Product changes ·{" "}
-        {countLabel(Object.keys(changes).length, "selected field")}
+        {countLabel(photoProductChangeCount(changes), "selected field")}
       </h4>
       <p className="mb-2 text-muted-foreground">
         Only selected fields change when you attach the photos. Added text is
@@ -1656,12 +1669,11 @@ function PhotoBrandEvidence({
   onShowEvidence?: () => void;
 }) {
   const proposals = useContext(PhotoProposalsContext);
-  const normalize = (name: string) => name.trim().toLocaleLowerCase();
   const rejected = new Set(
-    (proposal.review?.rejectedBrandNames ?? []).map(normalize),
+    (proposal.review?.rejectedBrandNames ?? []).map(brandNameKey),
   );
   const evidence = (proposal.brandEvidence ?? []).filter(
-    (item) => !rejected.has(normalize(item.name)),
+    (item) => !rejected.has(brandNameKey(item.name)),
   );
   const chosen =
     proposal.product.kind === "create"
@@ -1691,11 +1703,11 @@ function PhotoBrandEvidence({
             !other.product.create.brandId &&
             !other.product.create.brandCreate &&
             !(other.review?.rejectedBrandNames ?? []).some(
-              (name) => normalize(name) === normalize(item.name),
+              (name) => brandNameKey(name) === brandNameKey(item.name),
             ) &&
             other.brandEvidence?.some(
               (entry) =>
-                normalize(entry.name) === normalize(item.name) &&
+                brandNameKey(entry.name) === brandNameKey(item.name) &&
                 entry.matches.length < 2 &&
                 (choice?.brandId
                   ? entry.matches[0]?.id === choice.brandId
@@ -1794,11 +1806,14 @@ function PhotoBrandEvidence({
                   Only new Products with matching photo evidence and no selected
                   brand. Existing choices stay unchanged.
                 </p>
-                <ul className="mb-2 space-y-1">
+                <RecordList aria-label="Matching brand proposals">
                   {matching.map((other) => (
-                    <li key={other.groupKey}>{proposalName(other)}</li>
+                    <RecordRow
+                      key={other.groupKey}
+                      primary={proposalName(other)}
+                    />
                   ))}
-                </ul>
+                </RecordList>
                 <Button
                   size="sm"
                   variant="outline"
@@ -3077,8 +3092,8 @@ function ProposalCard({
             .
             {proposal.product.kind === "existing" ? (
               <span className="block font-medium text-foreground">
-                {Object.keys(proposal.review?.productChanges ?? {}).length ? (
-                  `${countLabel(Object.keys(proposal.review?.productChanges ?? {}).length, "product change")} selected`
+                {photoProductChangeCount(proposal.review?.productChanges) ? (
+                  `${countLabel(photoProductChangeCount(proposal.review?.productChanges), "product change")} selected`
                 ) : (
                   <span>No product details changed</span>
                 )}{" "}
@@ -3103,10 +3118,10 @@ function ProposalCard({
                 ? `Create product and add ${proposal.inventory.quantity}`
                 : "Create product and attach photos"
               : proposal.inventory
-                ? `Update product and add ${proposal.inventory.quantity}`
+                ? `${photoProductChangeCount(proposal.review?.productChanges) ? "Update product" : "Attach photos"} and add ${proposal.inventory.quantity}`
                 : `Apply and attach ${countLabel(proposal.images.length, "photo")}`}
             <kbd aria-hidden="true" className="text-xs opacity-70">
-              ⌘↵
+              Ctrl/⌘ Enter
             </kbd>
           </Button>
         </div>
@@ -3417,6 +3432,33 @@ function SettledGroup({
           )}
         </Stack>
       </Row>
+      {committed && proposal.review?.fieldSuggestions?.length ? (
+        <Disclosure
+          summary={`Applied field reviews · ${proposal.review.fieldSuggestions.length}`}
+        >
+          <RecordList aria-label="Applied field reviews">
+            {proposal.review.fieldSuggestions.map((suggestion) => (
+              <RecordRow
+                key={suggestion.id}
+                primary={
+                  productReviewFields.find(
+                    (field) => field.key === suggestion.field,
+                  )?.presentation.label ??
+                  (suggestion.field === "categoryId"
+                    ? productCategoryField.label
+                    : suggestion.field)
+                }
+                secondary="Applied with this item approval · saved changes are in Product activity"
+                trailing={
+                  <Disclosure summary="Review provenance">
+                    <code className="text-2xs break-all">{suggestion.id}</code>
+                  </Disclosure>
+                }
+              />
+            ))}
+          </RecordList>
+        </Disclosure>
+      ) : null}
       {committed ? (
         <Section
           headingAs="h4"
@@ -3705,6 +3747,21 @@ function PhotoRunDestination({
   );
 }
 
+function photoItemStatus(
+  item: PhotoGroupProposal,
+  imagesById: ImagesById,
+  runStatus: string,
+) {
+  if (item.state !== "proposed")
+    return item.state === "committed" ? "Applied" : "Discarded";
+  if (item.blockedReason) return item.blockedReason;
+  if (isStaleGroup(item, imagesById, runStatus))
+    return "Photos changed · review this group";
+  if (awaitingDescriptions(item, imagesById).length)
+    return "Waiting for photo descriptions";
+  return `${item.product.kind === "create" ? "New Product" : "Existing Product"} · Ready to approve`;
+}
+
 function PhotoItemList({
   items,
   activeGroupKey,
@@ -3713,6 +3770,7 @@ function PhotoItemList({
   selected,
   onSelectionChange,
   busy,
+  runStatus,
 }: {
   items: readonly PhotoGroupProposal[];
   activeGroupKey?: string;
@@ -3721,7 +3779,9 @@ function PhotoItemList({
   selected: ReadonlySet<string>;
   onSelectionChange: (keys: Iterable<string>) => void;
   busy: boolean;
+  runStatus: string;
 }) {
+  const isMobile = useIsMobile();
   return (
     <nav
       aria-label="Items to review"
@@ -3733,19 +3793,24 @@ function PhotoItemList({
           className="flex items-start gap-2 border-b border-border last:border-b-0"
         >
           {item.state === "proposed" ? (
-            <Checkbox
-              className="mt-3 ml-2"
-              aria-label={`Select ${proposalName(item)} for batch approval`}
-              checked={selected.has(item.groupKey)}
-              disabled={busy || Boolean(item.blockedReason)}
-              onCheckedChange={(checked) =>
-                onSelectionChange(
-                  checked
-                    ? [...selected, item.groupKey]
-                    : [...selected].filter((key) => key !== item.groupKey),
-                )
-              }
-            />
+            <label
+              htmlFor={`photo-select-${item.groupKey}`}
+              className="flex w-7 shrink-0 items-center justify-center self-stretch max-md:min-h-11 max-md:w-11"
+            >
+              <Checkbox
+                id={`photo-select-${item.groupKey}`}
+                aria-label={`Select ${proposalName(item)} for batch approval`}
+                checked={selected.has(item.groupKey)}
+                disabled={busy || Boolean(item.blockedReason)}
+                onCheckedChange={(checked) =>
+                  onSelectionChange(
+                    checked
+                      ? [...selected, item.groupKey]
+                      : [...selected].filter((key) => key !== item.groupKey),
+                  )
+                }
+              />
+            </label>
           ) : null}
           <button
             type="button"
@@ -3775,7 +3840,7 @@ function PhotoItemList({
             }}
             onClick={() => {
               setActiveGroupKey(item.groupKey);
-              if (window.matchMedia("(max-width: 1023px)").matches)
+              if (isMobile)
                 requestAnimationFrame(() =>
                   document
                     .getElementById(`photo-group-${item.groupKey}`)
@@ -3796,12 +3861,7 @@ function PhotoItemList({
                 {proposalName(item)}
               </span>
               <span className="block text-xs text-muted-foreground">
-                {item.state === "proposed"
-                  ? (item.blockedReason ??
-                    `${item.product.kind === "create" ? "New Product" : "Existing Product"} · Ready to approve`)
-                  : item.state === "committed"
-                    ? "Applied"
-                    : "Discarded"}
+                {photoItemStatus(item, imagesById, runStatus)}
               </span>
               {item.inventory ? (
                 <span className="block text-xs text-muted-foreground">
@@ -4216,6 +4276,7 @@ export function PhotoGroupReview({
               <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(14rem,20rem)_minmax(0,1fr)]">
                 <PhotoItemList
                   items={visibleProposals}
+                  runStatus={review.runStatus}
                   activeGroupKey={activeKey}
                   setActiveGroupKey={setActiveGroupKey}
                   imagesById={imagesById}

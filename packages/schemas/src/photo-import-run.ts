@@ -46,12 +46,17 @@ export const photoRunImageState = runTargetState;
 export type PhotoRunImageState = z.infer<typeof photoRunImageState>;
 export const photoRunImageOutcome = z.enum(["attached", "skipped"]);
 export type PhotoRunImageOutcome = z.infer<typeof photoRunImageOutcome>;
+const photoFieldSuggestionReferences = z.array(
+  z.object({ id: assessmentChildHandle, field: z.string(), value: z.json() }),
+);
+
 /** A committed group's receipt survives a failed operation-ledger completion. */
 export const photoRunImageCommitReceipt = z.object({
   groupKey: z.string().min(1),
   productId: productShortcode.optional(),
   purpose: productImagePurpose.optional(),
   inventoryId: inventoryShortcode.optional(),
+  fieldSuggestions: photoFieldSuggestionReferences.optional(),
 });
 export type PhotoRunImageCommitReceipt = z.infer<
   typeof photoRunImageCommitReceipt
@@ -101,16 +106,10 @@ export const photoGroupReview = z.object({
   productChanges: commitPhotoGroupProductCreate.partial().optional(),
   /** Exact evidence names the member declined; retained across regrouping. */
   rejectedBrandNames: z.array(z.string().trim().min(1)).optional(),
+  /** Server-owned revision of an explicit field selection; ordinary saves retain it. */
+  fieldDecisionRevisions: z.record(z.string(), z.string()).optional(),
   /** Shared field Assessments, published without applying Product changes. */
-  fieldSuggestions: z
-    .array(
-      z.object({
-        id: assessmentChildHandle,
-        field: z.string(),
-        value: z.json(),
-      }),
-    )
-    .optional(),
+  fieldSuggestions: photoFieldSuggestionReferences.optional(),
   /** Server-captured existing Brand and photo evidence before a proposed Vendor exists. */
   brandCreateInputFingerprint: z.string().optional(),
   /** Written by the server only after the Product transaction succeeds. */
@@ -253,6 +252,7 @@ export const commitPhotoGroupOutput = z.object({
   outcome: commitPhotoGroupOutcome,
   productId: productShortcode.optional(),
   inventoryId: inventoryShortcode.optional(),
+  fieldSuggestions: photoGroupReview.shape.fieldSuggestions,
   images: z.array(commitPhotoGroupOutputImage),
   conflict: z
     .object({ existingProductIds: z.array(productShortcode) })
@@ -393,6 +393,7 @@ export const photoGroupProposal = z.object({
       z.object({
         name: z.string(),
         imageIds: z.array(imageShortcode),
+        prefillImageIds: z.array(imageShortcode).optional(),
         matches: z.array(z.object({ id: vendorShortcode, name: z.string() })),
       }),
     )

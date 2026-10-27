@@ -117,7 +117,7 @@ test("applies selected notes to a resolved historical Product without changing i
   const group = page.locator("#photo-group-g1");
   await expect(
     group.getByRole("button", {
-      name: /^(Update product and |Apply and attach )/,
+      name: /^(Update product and |Attach photos and |Apply and attach )/,
     }),
   ).toBeDisabled();
   await group.getByRole("button", { name: "Resolved", exact: true }).click();
@@ -485,7 +485,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     .fill(correctedName);
   await g1Card
     .getByRole("button", {
-      name: /^(Create product and |Update product and |Apply and attach )/,
+      name: /^(Create product and |Update product and |Attach photos and |Apply and attach )/,
     })
     .click();
   await page.locator("#photo-item-g1").click();
@@ -607,7 +607,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   ).toBeVisible();
   await group
     .getByRole("button", {
-      name: /^(Create product and |Update product and |Apply and attach )/,
+      name: /^(Create product and |Update product and |Attach photos and |Apply and attach )/,
     })
     .click();
   await page.locator("#photo-item-g1").click();
@@ -786,7 +786,7 @@ test("reviews an occupied location and adds the photo count to its chosen stock 
   await page
     .locator("#photo-group-g1")
     .getByRole("button", {
-      name: /^(Create product and |Update product and |Apply and attach )/,
+      name: /^(Create product and |Update product and |Attach photos and |Apply and attach )/,
     })
     .click();
   await expect(

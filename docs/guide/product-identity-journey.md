@@ -34,8 +34,7 @@ and stock effects visible before approval. Autosave barriers, revision checks
 and independent batch failures remain in force.
 
 Photo Brand evidence names its supporting images and exact live Vendor name/alias
-matches. A single unambiguous match prefills a new Product draft; it never changes
-an existing Product. Unknown names require an explicit Brand claim or member
+matches. A single unambiguous marketed-label match prefills a new Product draft; it can stage an existing Product correction without applying it. Unknown names require an explicit Brand claim or member
 entry. Choosing a new Brand stores `brandCreate` in the proposal and creates or
 reuses the exact Vendor only inside the approved Product transaction. Multiple
 exact matches require the member to choose one. Rejections follow photo lineage;
@@ -51,7 +50,10 @@ through sibling draft edits. Approval locks and checks the retained Product inpu
 before any write; changed selected photo evidence or a later member correction
 requires clearing and reselecting the proposed field after review rather than an
 automatic rebase. Proposed new Brands retain the same before-input fence until a
-Vendor exists. Refreshing cannot revive a rejected correction. Brand creation, Product changes, photo attachments
+Vendor exists. Refreshing cannot revive a rejected correction. A member who clears
+and explicitly selects that Brand again creates a fresh decision revision, while
+the earlier rejection remains history. Weak retailer/provenance text and short
+alias matches stay available as choices without prefilling Brand. Brand creation, Product changes, photo attachments
 and optional stock remain one approval transaction; per-group failures preserve
 successful siblings and the existing operation replay receipts.
 

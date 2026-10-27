@@ -38,6 +38,7 @@ import {
   type ProposePhotoGroupsOutput,
 } from "@cubby/schemas/photo-import-run";
 import { runPurpose, runStatus } from "@cubby/schemas/purchase-import";
+import { brandNameKey } from "@cubby/schemas/vendor";
 import { getErrorMessage } from "@cubby/shared";
 import { PHOTO_RUN_IMAGE_LIMIT } from "@cubby/shared/client-constants";
 /**
@@ -489,7 +490,19 @@ async function toViews(
     entry: (typeof chosen)[number] | undefined,
   ): PhotoGroupProposalProductSummary | null =>
     entry ? { id: entry.id, name: entry.name, coverUrl: entry.coverUrl } : null;
-  const brands = await photoBrandEvidence(db, processing);
+  const brands = await photoBrandEvidence(
+    db,
+    processing,
+    new Set(
+      rows.flatMap((row) =>
+        row.images.flatMap((image) =>
+          image.purpose === "label"
+            ? [imagesById.get(image.imageId)?.shortcode ?? ""]
+            : [],
+        ),
+      ),
+    ),
+  );
   return rows.map((storedRow) => {
     const row = {
       ...storedRow,
@@ -891,6 +904,24 @@ async function upsertProposal(
             group.images.map((image) => image.id),
           )
       : undefined;
+    group.review.fieldDecisionRevisions = Object.fromEntries(
+      Object.entries(group.review.productChanges ?? {}).flatMap(
+        ([field, value]) => {
+          if (value === undefined || field === "brandCreate") return [];
+          const same = retained?.fieldSuggestions?.some(
+            (candidate) =>
+              candidate.field === field &&
+              canonicalJson(candidate.value) === canonicalJson(value),
+          );
+          const revision = same
+            ? retained?.fieldDecisionRevisions?.[field]
+            : origin === "member"
+              ? crypto.randomUUID()
+              : undefined;
+          return revision ? [[field, revision]] : [];
+        },
+      ),
+    );
     group.review.fieldSuggestions = await photoProductSuggestions(txDb, {
       runId,
       groupKey: group.groupKey,
@@ -965,19 +996,40 @@ async function recordPhotoBrandRejection(
   previous: ProposalRow | undefined,
   origin: PhotoGroupProposalOrigin | null,
   actor: ActorContext | undefined,
+  brandEvidence: NonNullable<PhotoGroupProposal["brandEvidence"]>,
 ) {
   if (
     origin === "member" &&
     actor &&
     entry.group.review?.rejectedBrandNames?.length
   ) {
-    const newlyRejected = entry.group.review.rejectedBrandNames.some(
-      (name) => !previous?.review?.rejectedBrandNames?.includes(name),
+    const newlyRejected = entry.group.review.rejectedBrandNames.filter(
+      (name) =>
+        !previous?.review?.rejectedBrandNames?.some(
+          (old) => brandNameKey(old) === brandNameKey(name),
+        ),
     );
-    if (newlyRejected) {
+    const imageIds = new Set(entry.group.images.map((image) => image.id));
+    const rejectedVendors = new Set(
+      brandEvidence
+        .filter(
+          (evidence) =>
+            evidence.imageIds.some((id) => imageIds.has(id)) &&
+            newlyRejected.some(
+              (name) => brandNameKey(name) === brandNameKey(evidence.name),
+            ),
+        )
+        .flatMap((evidence) => evidence.matches.map((match) => match.id)),
+    );
+    if (rejectedVendors.size) {
       const crud = buildCrudServices(txDb);
       for (const suggestion of previous?.review?.fieldSuggestions ?? []) {
-        if (suggestion.field !== "brandId") continue;
+        if (
+          suggestion.field !== "brandId" ||
+          typeof suggestion.value !== "string" ||
+          ![...rejectedVendors].some((id) => id === suggestion.value)
+        )
+          continue;
         await reviewAssessment(
           txDb,
           { ...crud, actorContext: actor },
@@ -1013,14 +1065,20 @@ function writablePhotoGroups(
     ),
   );
   const writable = input.groups.filter(
-    (group) =>
-      !frozen.includes(group.groupKey) &&
-      !protectedRows.some((row) => row.groupKey === group.groupKey) &&
-      ![...group.images, ...(group.skip ?? [])].some((entry) => {
+    (group) => !frozen.includes(group.groupKey),
+  );
+  for (const group of writable) {
+    if (
+      protectedRows.some((row) => row.groupKey === group.groupKey) ||
+      [...group.images, ...(group.skip ?? [])].some((entry) => {
         const id = runImages.byCode.get(entry.id)?.imageId;
         return id !== undefined && protectedImageIds.has(id);
-      }),
-  );
+      })
+    )
+      throw new Error(
+        `Photo group ${group.groupKey} conflicts with a member-reviewed group; reload and leave its images unchanged`,
+      );
+  }
   if (
     isAgent &&
     input.removeGroupKeys?.some((key) =>
@@ -1034,7 +1092,7 @@ function writablePhotoGroups(
 async function prefillPhotoGroupBrand(
   db: Database,
   group: PhotoGroupProposalGroup,
-  processing: PhotoRunImage[],
+  evidence: NonNullable<PhotoGroupProposal["brandEvidence"]>,
 ) {
   const selection =
     group.product.kind === "create"
@@ -1042,15 +1100,11 @@ async function prefillPhotoGroupBrand(
       : group.review?.productChanges;
   if (selection?.brandId !== undefined || selection?.brandCreate) return;
   const roster = new Set(group.images.map((image) => image.id));
-  const candidates = (
-    await photoBrandEvidence(
-      db,
-      processing.filter((image) => roster.has(image.id)),
-    )
-  ).filter(
+  const candidates = evidence.filter(
     (entry) =>
+      entry.prefillImageIds?.some((id) => roster.has(id)) &&
       !group.review?.rejectedBrandNames?.some(
-        (name) => name.toLowerCase() === entry.name.toLowerCase(),
+        (name) => brandNameKey(name) === brandNameKey(entry.name),
       ),
   );
   const ids = [
@@ -1189,8 +1243,20 @@ export async function proposePhotoGroups(
         throw new Error(`Group ${key} is ${row.state} and cannot be removed`);
     }
 
-    const processingForBrands =
-      origin !== "member" ? await listPhotoRunImages(txDb, run.shortcode) : [];
+    const processingForBrands = writable.length
+      ? await listPhotoRunImages(txDb, run.shortcode)
+      : [];
+    const brandEvidence = await photoBrandEvidence(
+      txDb,
+      processingForBrands,
+      new Set(
+        writable.flatMap((group) =>
+          group.images
+            .filter((image) => image.purpose === "label")
+            .map((image) => image.id),
+        ),
+      ),
+    );
     const resolved: ResolvedGroup[] = [];
     for (const group of writable) {
       const rosterCodes = new Set(
@@ -1272,7 +1338,7 @@ export async function proposePhotoGroups(
           mode: "create",
         };
       if (origin !== "member")
-        await prefillPhotoGroupBrand(txDb, group, processingForBrands);
+        await prefillPhotoGroupBrand(txDb, group, brandEvidence);
       resolved.push(await resolveGroup(txDb, run, group, runImages.byCode));
     }
 
@@ -1324,6 +1390,7 @@ export async function proposePhotoGroups(
         existingByKey.get(entry.group.groupKey),
         origin,
         actor,
+        brandEvidence,
       );
       await upsertProposal(txDb, run.id, entry, origin);
     }
@@ -1712,7 +1779,25 @@ async function reconcileCommittedProposal(
   const productId = productCode
     ? await resolveOrThrow(db, "product", productCode)
     : row.productId;
-  await persistSettled(db, run, row, roster, "committed", productId);
+  const fieldSuggestions = attached.find(
+    (receipt) => receipt?.fieldSuggestions,
+  )?.fieldSuggestions;
+  await persistSettled(
+    db,
+    run,
+    {
+      ...row,
+      review: row.review
+        ? {
+            ...row.review,
+            fieldSuggestions: fieldSuggestions ?? row.review.fieldSuggestions,
+          }
+        : row.review,
+    },
+    roster,
+    "committed",
+    productId,
+  );
   return { productId };
 }
 
@@ -1808,6 +1893,8 @@ async function approveRow(
             ...row,
             review: {
               ...row.review!,
+              fieldSuggestions:
+                committed.fieldSuggestions ?? row.review?.fieldSuggestions,
               confirmation: { by: actor.userId, at: new Date().toISOString() },
             },
           },

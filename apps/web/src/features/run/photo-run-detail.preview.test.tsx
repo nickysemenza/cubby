@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   photoProductCandidate,
+  photoProductEvidence,
   photoRunCandidatesResponse,
   reviewPhotoGroupsOutput,
 } from "@cubby/schemas/photo-import-run";
@@ -1235,4 +1236,211 @@ it("reviews evidence-matched brands in the workbench without replacing explicit 
   ).toHaveFocus();
   await page.viewport(402, 874);
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(402);
+});
+
+it.each(["create", "existing"] as const)(
+  "reviews, rejects and manually replaces a new brand on a %s Product draft",
+  async (kind) => {
+    const productId = productShortcode.parse("PRD-4K7M");
+    let proposal: PhotoGroupProposal = {
+      ...proposedSweater,
+      product:
+        kind === "create"
+          ? { kind: "create", create: { name: "Fixture shirt" } }
+          : {
+              kind: "existing",
+              existing: {
+                id: productId,
+                name: "Fixture shirt",
+                coverUrl: null,
+              },
+            },
+      review: {
+        observedName: "Fixture shirt",
+        stockIntent: "evidence",
+        unresolvedReason: null,
+      },
+      brandEvidence: [
+        {
+          name: "Fixture New Label",
+          imageIds: [imageShortcode.parse("IMG-4K7M")],
+          matches: [],
+        },
+      ],
+    };
+    const publish = () => presentProposal(proposal);
+    publish();
+    const current = mock(photoProductEvidence, {
+      overrides: {
+        id: productId,
+        name: "Fixture shirt",
+        brandId: null,
+        brandName: null,
+        model: null,
+        notes: null,
+        tags: [],
+        category: null,
+        identifiers: [],
+        externalIds: [],
+        ownPhotos: [],
+        purchaseLines: [],
+        purchaseLineCount: 0,
+        inventoryEntries: [],
+      },
+    });
+    if (kind === "existing")
+      harness.queryClient.setQueryData(
+        photoImport.productEvidence.queryKey({ runId: RUN_ID, productId }),
+        current,
+      );
+    restoreDispatch = overrideStartDispatch(async (operation, input) => {
+      if (operation === "photoImport.candidatesBatch")
+        return { ok: true, data: { groups: [] } };
+      if (operation === "photoImport.productEvidence")
+        return { ok: true, data: current };
+      if (operation !== "photoImport.saveGroups")
+        throw new Error(`Unexpected operation ${operation}`);
+      const body = photoImportContract.ops.saveGroups.input.parse(input);
+      const group = body.groups[0];
+      if (!group) throw new Error("Missing saved proposal");
+      proposal = {
+        ...proposal,
+        review: group.review,
+        product:
+          group.product.kind === "create" ? group.product : proposal.product,
+      };
+      return {
+        ok: true,
+        data: reviewPhotoGroupsOutput.parse({
+          ...review.review,
+          proposals: [proposal],
+          results: [],
+          frozenGroupKeys: [],
+        }),
+      };
+    });
+    render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Propose new brand" }),
+    );
+    await screen.findByText("On approval: create brand “Fixture New Label”");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Reject brand proposal" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Propose new brand" }),
+      ).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(proposal.review?.rejectedBrandNames).toEqual([
+        "Fixture New Label",
+      ]),
+    );
+    if (kind === "existing")
+      await userEvent.click(
+        screen.getByRole("checkbox", { name: "Change brand" }),
+      );
+    await userEvent.click(
+      await screen.findByText("Brand not listed?", { exact: true }),
+    );
+    const name = screen.getByRole("textbox", { name: "New brand name" });
+    await userEvent.type(name, "Fixture Corrected Label");
+    await userEvent.tab();
+    await waitFor(() => {
+      const selection =
+        proposal.product.kind === "create"
+          ? proposal.product.create
+          : proposal.review?.productChanges;
+      expect(selection?.brandCreate).toEqual({
+        name: "Fixture Corrected Label",
+      });
+    });
+    publish();
+    await waitFor(() => expect(name).toHaveValue("Fixture Corrected Label"));
+  },
+);
+
+it("retains failed batch selection and its diagnostic while successful items become applied", async () => {
+  const first: PhotoGroupProposal = {
+    ...proposedSweater,
+    groupKey: "ready-shirt",
+    product: { kind: "create", create: { name: "Ready fixture shirt" } },
+  };
+  const second: PhotoGroupProposal = {
+    ...proposedSweater,
+    groupKey: "retry-shirt",
+    product: { kind: "create", create: { name: "Retry fixture shirt" } },
+  };
+  harness.queryClient.setQueryData(
+    photoImport.review.queryKey({ runId: RUN_ID }),
+    {
+      ...review,
+      review: { ...review.review, proposals: [first, second] },
+      images: review.images.map((image) => ({
+        ...image,
+        targetState: "pending",
+        describe: "ready",
+      })),
+    } satisfies PhotoRunReview,
+  );
+  restoreDispatch = overrideStartDispatch(async (operation) => {
+    if (operation === "photoImport.candidatesBatch")
+      return { ok: true, data: { groups: [] } };
+    if (operation !== "photoImport.approveGroups")
+      throw new Error(`Unexpected operation ${operation}`);
+    return {
+      ok: true,
+      data: reviewPhotoGroupsOutput.parse({
+        ...review.review,
+        proposals: [
+          {
+            ...first,
+            state: "committed",
+            committedProduct: {
+              id: productShortcode.parse("PRD-4K7M"),
+              name: "Ready fixture shirt",
+              coverUrl: null,
+            },
+          },
+          { ...second, lastError: "Synthetic approval failure" },
+        ],
+        results: [
+          { groupKey: first.groupKey, outcome: "committed" },
+          {
+            groupKey: second.groupKey,
+            outcome: "failed",
+            error: "Synthetic approval failure",
+          },
+        ],
+        frozenGroupKeys: [],
+      }),
+    };
+  });
+  render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Select all ready items" }),
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Approve 2 selected items" }),
+  );
+  await screen.findByRole("button", { name: "Approve 1 selected item" });
+  const items = screen.getByRole("navigation", { name: "Items to review" });
+  expect(
+    within(items).queryByRole("checkbox", {
+      name: /Select Ready fixture shirt/,
+    }),
+  ).not.toBeInTheDocument();
+  expect(
+    within(items).getByRole("checkbox", { name: /Select Retry fixture shirt/ }),
+  ).toBeChecked();
+  await userEvent.click(
+    within(items).getByRole("button", { name: /Retry fixture shirt/ }),
+  );
+  expect(
+    await screen.findByText("Last approval failed: Synthetic approval failure"),
+  ).toBeVisible();
+  expect(
+    within(items).getByRole("button", { name: /Ready fixture shirt/ }),
+  ).toHaveTextContent("Applied");
 });

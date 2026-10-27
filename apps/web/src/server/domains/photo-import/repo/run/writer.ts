@@ -26,7 +26,6 @@ import {
   type CommitPhotoGroupOutput,
 } from "@cubby/schemas/photo-import-run";
 import { productCreateInput } from "@cubby/schemas/product";
-import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { and, count, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -43,7 +42,6 @@ import {
   inventoryEntry,
   photoGroupProposal,
   product,
-  vendor,
 } from "~/server/db/schema";
 import { attachExistingImageToEntity } from "~/server/domains/image/repo/image";
 import {
@@ -60,7 +58,7 @@ import { createProductWriteActions } from "~/server/domains/product/repo/write/p
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { loadRunScopeByShortcode } from "~/server/domains/purchase-import/repo/run-service";
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
-import { createVendor } from "~/server/domains/vendor/repo/vendor";
+import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -292,6 +290,7 @@ function buildReplayOutput(
 ): CommitPhotoGroupOutput {
   let productShortcodeStr: string | undefined;
   let inventoryShortcodeStr: string | undefined;
+  let fieldSuggestions: CommitPhotoGroupOutput["fieldSuggestions"];
   for (const entry of [...attaches, ...skips]) {
     const commitReceipt = photoRunImageCommitReceipt.safeParse(
       targetByImageId.get(entry.imageId)?.commitReceipt ?? {},
@@ -299,6 +298,7 @@ function buildReplayOutput(
     if (commitReceipt.success) {
       productShortcodeStr ??= commitReceipt.data.productId;
       inventoryShortcodeStr ??= commitReceipt.data.inventoryId;
+      fieldSuggestions ??= commitReceipt.data.fieldSuggestions;
     }
   }
   return commitPhotoGroupOutput.parse({
@@ -307,6 +307,7 @@ function buildReplayOutput(
     outcome: "replayed",
     productId: productShortcodeStr,
     inventoryId: inventoryShortcodeStr,
+    fieldSuggestions,
     images: [...attaches, ...skips].map((entry) => ({
       id: entry.code,
       state: targetByImageId.get(entry.imageId)!.state,
@@ -315,43 +316,18 @@ function buildReplayOutput(
   });
 }
 
-/** Brand creation shares the Product approval transaction and exact-name lock. */
+/** Brand claims use the shared resolver inside the Product approval transaction. */
 async function resolvePhotoBrand(
   db: Database,
   selection: {
     brandId?: VendorShortcode | null;
     brandCreate?: { name: string };
   },
-  actor: ActorContext,
 ) {
   if (!selection.brandCreate) return selection.brandId;
   if (selection.brandId)
     throw new Error("Choose an existing Brand or create one, not both");
-  const name = selection.brandCreate.name.trim();
-  const key = name.toLowerCase();
-  await getDb(db).execute(
-    sql`SELECT pg_advisory_xact_lock(hashtextextended(${"photo-brand:" + key}, 0))`,
-  );
-  const existing = await getDb(db)
-    .select({ id: vendor.shortcode })
-    .from(vendor)
-    .where(
-      and(
-        notDeleted(vendor),
-        sql`(lower(trim(${vendor.name})) = ${key} OR EXISTS (SELECT 1 FROM unnest(${vendor.aliases}) AS alias(value) WHERE lower(trim(alias.value)) = ${key}))`,
-      ),
-    )
-    .limit(2);
-  if (existing.length > 1)
-    throw new Error("Several Brands match this name; select one explicitly");
-  const match = existing[0];
-  if (match) return parseShortcodeFor("vendor", match.id);
-  const created = await createVendor(
-    db,
-    vendorCreateInput.parse({ name }),
-    actor,
-  );
-  return created.output.id;
+  return resolveProductBrandName(db, selection.brandCreate.name);
 }
 
 /** Resolve the group's target Product — an existing one by id, or a brand-new one. */
@@ -359,7 +335,10 @@ async function resolveProduct(
   txDb: Database,
   input: CommitPhotoGroupInput,
   actor: ActorContext,
-): Promise<string> {
+): Promise<{
+  id: string;
+  fieldSuggestions?: CommitPhotoGroupOutput["fieldSuggestions"];
+}> {
   if (input.product.kind === "existing") {
     const id = await resolveOrThrow(txDb, "product", input.product.existingId);
     if (
@@ -376,7 +355,6 @@ async function resolveProduct(
       const brandId = await resolvePhotoBrand(
         txDb,
         input.review.productChanges,
-        actor,
       );
       const { brandCreate: _brandCreate, ...changes } =
         input.review.productChanges;
@@ -421,8 +399,9 @@ async function resolveProduct(
           },
         );
       }
+      return { id: input.product.existingId, fieldSuggestions: suggestions };
     }
-    return input.product.existingId;
+    return { id: input.product.existingId };
   }
   const crud = buildCrudServices(txDb);
   const created = await createProductWithSideEffects(
@@ -435,14 +414,14 @@ async function resolveProduct(
     productCreateInput.parse({
       name: input.product.create.name,
       categoryId: input.product.create.categoryId ?? null,
-      brandId: await resolvePhotoBrand(txDb, input.product.create, actor),
+      brandId: await resolvePhotoBrand(txDb, input.product.create),
       model: input.product.create.model ?? null,
       notes: input.product.create.notes ?? null,
       tags: input.product.create.tags ?? [],
     }),
     actor,
   );
-  return created.output.id;
+  return { id: created.output.id };
 }
 
 /**
@@ -583,6 +562,7 @@ async function markTargets(
   productShortcodeStr: string | undefined,
   inventoryShortcodeStr: string | undefined,
   now: Date,
+  fieldSuggestions: CommitPhotoGroupOutput["fieldSuggestions"],
 ): Promise<{ id: string; state: string }[]> {
   // Built as plain strings; `commitPhotoGroupOutput.parse` in `doCommit`
   // re-validates and brands every id on the single return path.
@@ -597,6 +577,7 @@ async function markTargets(
       productId: productShortcodeStr,
       purpose: entry.purpose,
       inventoryId: inventoryShortcodeStr,
+      fieldSuggestions,
     });
     await getDb(txDb)
       .update(photoRunImage)
@@ -770,8 +751,11 @@ async function doCommit(
   // not mint a `create` Product nobody will ever see.
   let productShortcodeStr: string | undefined;
   let inventoryShortcodeStr: string | undefined;
+  let fieldSuggestions: CommitPhotoGroupOutput["fieldSuggestions"];
   if (groupTouchesProduct(input)) {
-    productShortcodeStr = await resolveProduct(txDb, input, actor);
+    const resolved = await resolveProduct(txDb, input, actor);
+    productShortcodeStr = resolved.id;
+    fieldSuggestions = resolved.fieldSuggestions;
     const productId = await resolveOrThrow(
       txDb,
       "product",
@@ -796,6 +780,7 @@ async function doCommit(
     productShortcodeStr,
     inventoryShortcodeStr,
     now,
+    fieldSuggestions,
   );
   const runCompletes = await completeRunIfDone(
     txDb,
@@ -811,6 +796,7 @@ async function doCommit(
     outcome: "committed",
     productId: productShortcodeStr,
     inventoryId: inventoryShortcodeStr,
+    fieldSuggestions,
     images,
     runStatus: runCompletes ? "completed" : runStatus,
   });

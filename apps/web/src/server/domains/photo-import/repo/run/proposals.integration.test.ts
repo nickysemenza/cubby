@@ -1012,10 +1012,21 @@ describe("photo group proposals", () => {
         model: "synthetic-local",
         promptVersion: "1",
         inputFingerprint: "synthetic-photo-brand",
-        result: { recognizedText: [{ text: brand.name, confidence: 0.95 }] },
+        result: {
+          recognizedText: [
+            {
+              text: `${brand.name}\nBrand: Synthetic Unknown Label`,
+              confidence: 0.95,
+            },
+          ],
+        },
       });
     const draft = {
       ...createGroup("shared-correction", codes),
+      images: codes.map((id) => ({
+        id: parseShortcodeFor("image", id),
+        purpose: "label" as const,
+      })),
       product: {
         kind: "existing" as const,
         existingId: parseShortcodeFor("product", original.id),
@@ -1050,6 +1061,33 @@ describe("photo group proposals", () => {
             ...draft,
             review: {
               ...draft.review,
+              productChanges: {
+                brandId: parseShortcodeFor("vendor", brand.id),
+              },
+              rejectedBrandNames: ["Synthetic Unknown Label"],
+            },
+          },
+        ],
+      },
+      "member",
+      undefined,
+      ctx.actor,
+    );
+    expect(
+      await getDb(ctx.db)
+        .select({ id: feedback.id })
+        .from(feedback)
+        .where(eq(feedback.assessmentId, suggestion!.id)),
+    ).toHaveLength(0);
+    await proposePhotoGroups(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groups: [
+          {
+            ...draft,
+            review: {
+              ...draft.review,
               productChanges: {},
               rejectedBrandNames: [brand.name],
             },
@@ -1065,22 +1103,213 @@ describe("photo group proposals", () => {
       .from(feedback)
       .where(eq(feedback.assessmentId, suggestion!.id));
     expect(rejected?.verdict).toBe("wrong");
-    const refreshed = await proposePhotoGroups(
-      ctx.db,
-      { runId: run.shortcode, groups: [draft] },
-      "external_agent",
-      run.dispatchEventId!,
-    );
+    await expect(
+      proposePhotoGroups(
+        ctx.db,
+        { runId: run.shortcode, groups: [draft] },
+        "external_agent",
+        run.dispatchEventId!,
+      ),
+    ).rejects.toThrow("conflicts with a member-reviewed group");
+    const refreshed = await listPhotoGroupProposals(ctx.db, run.shortcode);
     expect(refreshed.proposals[0]?.review?.productChanges).toBeUndefined();
-    expect(refreshed.proposals[0]?.review?.rejectedBrandNames).toEqual([
-      brand.name,
-    ]);
+    expect(refreshed.proposals[0]?.review?.rejectedBrandNames).toEqual(
+      expect.arrayContaining([brand.name, "Synthetic Unknown Label"]),
+    );
     const [unchanged] = await getDb(ctx.db)
       .select({ brandId: product.brandId })
       .from(product)
       .where(eq(product.id, original.entityId));
     expect(unchanged?.brandId).toBeNull();
+    const reselected = await proposePhotoGroups(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groups: [
+          {
+            ...draft,
+            review: {
+              ...draft.review,
+              productChanges: {
+                brandId: parseShortcodeFor("vendor", brand.id),
+              },
+              rejectedBrandNames: [brand.name, "Synthetic Unknown Label"],
+            },
+          },
+        ],
+      },
+      "member",
+      undefined,
+      ctx.actor,
+    );
+    const newSuggestion =
+      reselected.proposals[0]?.review?.fieldSuggestions?.find(
+        (candidate) => candidate.field === "brandId",
+      );
+    expect(newSuggestion?.id).not.toBe(suggestion?.id);
+    const approved = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode },
+      ctx.actor,
+    );
+    expect(approved.results[0]?.outcome).toBe("committed");
+    expect(approved.proposals[0]?.review?.fieldSuggestions).toContainEqual(
+      newSuggestion,
+    );
+    const [oldReview] = await getDb(ctx.db)
+      .select({ status: assessmentState.status })
+      .from(assessmentState)
+      .where(eq(assessmentState.id, suggestion!.id));
+    expect(oldReview?.status).toBe("rejected");
   });
+
+  it.each([
+    { text: "BUCK MASON\nMADE IN USA", role: "label" as const, prefill: true },
+    { text: "Purchased at Buck Mason", role: "label" as const, prefill: false },
+    { text: "BM", role: "label" as const, prefill: false },
+    { text: "Brand: Buck Mason", role: "item" as const, prefill: true },
+  ])(
+    "only prefills marketed Brand label evidence ($text)",
+    async ({ text, role, prefill }) => {
+      const { run, codes } = await seedRun(1);
+      const brand = await createRepoEntity(ctx, "vendor", {
+        name: "Buck Mason",
+        aliases: ["BM"],
+      });
+      const [photo] = await getDb(ctx.db)
+        .select({ id: image.id })
+        .from(image)
+        .where(eq(image.shortcode, codes[0]!));
+      await getDb(ctx.db)
+        .insert(aiAnalysis)
+        .values({
+          entityKind: "image",
+          entityId: photo!.id,
+          feature: "photo-local-analysis",
+          model: "synthetic-local",
+          promptVersion: "1",
+          inputFingerprint: "synthetic-marketed-label",
+          result: { recognizedText: [{ text, confidence: 0.95 }] },
+        });
+      const saved = await proposePhotoGroups(
+        ctx.db,
+        {
+          runId: run.shortcode,
+          groups: [
+            {
+              ...createGroup("marketed-label", codes),
+              images: [
+                { id: parseShortcodeFor("image", codes[0]!), purpose: role },
+              ],
+            },
+          ],
+        },
+        "external_agent",
+      );
+      const group = saved.proposals[0]!;
+      expect(
+        group.brandEvidence?.flatMap((evidence) =>
+          evidence.matches.map((match) => match.id),
+        ),
+      ).toContain(brand.output.id);
+      expect(group.product.kind).toBe("create");
+      if (group.product.kind !== "create")
+        throw new Error("fixture expected a new Product draft");
+      expect(group.product.create.brandId).toBe(
+        prefill ? brand.output.id : null,
+      );
+    },
+  );
+
+  it.each(["unbranded", "alias", "new"])(
+    "resolves approved Brand names through the shared owner and retains field receipts (%s)",
+    async (kind) => {
+      const { run, codes } = await seedRun(1);
+      const original = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic resolver item" }),
+        ctx.actor,
+      );
+      const known = await createRepoEntity(ctx, "vendor", {
+        name: "Synthetic Canonical Label",
+        aliases: ["Synthetic Alias Label"],
+      });
+      const name =
+        kind === "unbranded"
+          ? "unbranded"
+          : kind === "alias"
+            ? "Synthetic Alias Label"
+            : "Synthetic Created Label";
+      const draft: PhotoGroupProposalGroup = {
+        ...createGroup("brand-resolution", codes),
+        product: {
+          kind: "existing",
+          existingId: parseShortcodeFor("product", original.id),
+        },
+        review: {
+          observedName: "Synthetic resolver item",
+          unresolvedReason: null,
+          stockIntent: "evidence",
+          productChanges: { brandId: null, brandCreate: { name } },
+        },
+      };
+      await proposePhotoGroups(
+        ctx.db,
+        { runId: run.shortcode, groups: [draft] },
+        "member",
+      );
+      const approved = await approvePhotoGroupProposals(
+        ctx.db,
+        { runId: run.shortcode },
+        ctx.actor,
+      );
+      expect(approved.results[0]?.outcome).toBe("committed");
+      const refs = approved.proposals[0]?.review?.fieldSuggestions;
+      expect(refs?.map((ref) => ref.field)).toEqual(["brandId"]);
+      const [saved] = await getDb(ctx.db)
+        .select({
+          brandId: product.brandId,
+          name: vendor.name,
+          systemKey: vendor.systemKey,
+        })
+        .from(product)
+        .innerJoin(vendor, eq(vendor.id, product.brandId))
+        .where(eq(product.id, original.entityId));
+      expect(saved?.name).toBe(
+        kind === "unbranded"
+          ? "Generic / Unbranded"
+          : kind === "alias"
+            ? known.output.name
+            : name,
+      );
+      expect(saved?.systemKey).toBe(
+        kind === "unbranded" ? "generic-unbranded" : null,
+      );
+      expect(
+        await getDb(ctx.db)
+          .select({ id: vendor.id })
+          .from(vendor)
+          .where(eq(vendor.name, name)),
+      ).toHaveLength(kind === "new" ? 1 : 0);
+      const [receipt] = await getDb(ctx.db)
+        .select({ status: assessmentState.status })
+        .from(assessmentState)
+        .where(eq(assessmentState.id, refs![0]!.id));
+      expect(receipt?.status).toBe("applied");
+      const [photoReceipt] = await getDb(ctx.db)
+        .select({ receipt: photoRunImage.commitReceipt })
+        .from(photoRunImage)
+        .where(eq(photoRunImage.runId, run.id));
+      expect(photoReceipt?.receipt).toMatchObject({ fieldSuggestions: refs });
+      const replay = await approvePhotoGroupProposals(
+        ctx.db,
+        { runId: run.shortcode, groupKeys: [draft.groupKey] },
+        ctx.actor,
+      );
+      expect(replay.results[0]?.outcome).toBe("replayed");
+      expect(replay.proposals[0]?.review?.fieldSuggestions).toEqual(refs);
+    },
+  );
 
   it.each([
     { createBrand: false, changePhoto: false },
