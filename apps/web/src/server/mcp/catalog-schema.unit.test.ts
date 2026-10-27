@@ -691,6 +691,10 @@ describe("MCP catalog schemas", () => {
       "nutrition.save_food.id",
       "nutrition.save_preparation.mealRecipeId",
       "nutrition.update_recipe.id",
+      // Photo review carries shared Assessment child handles for provenance.
+      "photo_run.commit_group.review.fieldSuggestions[].id",
+      "photo_run.propose_groups.groups[].review.fieldSuggestions[].id",
+      "photo_run.save_groups.groups[].review.fieldSuggestions[].id",
       "photo_run.reject_candidate.operationId",
       "product_enrichment.merge_product_match.assessmentId",
       "purchase_import.commit.prepareOperationId",
