@@ -166,8 +166,6 @@ export async function workerdDiagnostic(
   });
 }
 
-export type ScenarioHarness = Awaited<ReturnType<typeof startScenarioHarness>>;
-
 /**
  * Start the built Worker with deterministic purchase-agent peers and load one
  * scenario: the scripted model's steps and the gateway's extraction, audit

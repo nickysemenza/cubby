@@ -14,7 +14,7 @@
     "test:unit": "vitest run --project unit",
     "test:ui": "NODE_OPTIONS=--no-experimental-webstorage vitest run --project ui",
     "test:preview": "vitest run --project preview",
-    "test:postgres": "node tooling/dev-services/test-services.ts -- vitest run --project integration --project integration-workerd",
+    "test:postgres": "node tooling/dev-services/test-services.ts -- vitest run --project integration",
     "test:file": "vitest run",
     "test:e2e": "NODE_ENV=test node tooling/dev-services/test-services.ts -- playwright test",
     "test:e2e:household": "pnpm build:cf --ensure && pnpm test:e2e --project=\"Household exploration\"",

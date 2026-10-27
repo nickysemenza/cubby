@@ -35,6 +35,8 @@ const types = new Map([
   [".webm", "video/webm"],
   [".mp4", "video/mp4"],
   [".json", "application/json"],
+  [".jsonl", "application/x-ndjson"],
+  [".xml", "application/xml"],
   [".md", "text/plain; charset=utf-8"],
   [".txt", "text/plain; charset=utf-8"],
 ]);

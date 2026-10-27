@@ -184,7 +184,7 @@ it live in the [validation policy](agents/validation.md) and
   — measured 2026-09-16, the web unit tier took 196s instead of 24s under
   `run-many`'s default parallelism and tripped a 5s test timeout.
 - Selected targets replay from the Nx cache when their content is unchanged.
-  The browser and workerd targets build the Worker inside their own command
+  The browser targets build the Worker inside their own command
   (`build-cf.ts --ensure`) rather than through `dependsOn`, because the
   `build-cf` key includes the Git commit for provenance and would rebuild before
   every replay.
@@ -422,13 +422,15 @@ Each entry uses one GitHub runner with PostgreSQL and IntegreSQL service
 containers.
 Each Vitest shard runs the `vitest-ci` target: one Vitest run of every merge-gate
 project (`unit`, `mcp-contract`, `ui`, `capability`, `scripts`,
-`packages`, `integration`, `integration-workerd` and `workers`), split by file
+`packages`, `integration` and `workers`), split by file
 with `CUBBY_VITEST_SHARD`. Vitest assigns files to shards by path hash, so the
 split does not follow duration. Project groups run in order within a shard,
-so PostgreSQL forks never start beside workerd. The target builds the Worker
-itself for `integration-workerd`. Shard 2 then runs the `db-check` migration
+so PostgreSQL forks never start beside workerd. No Vitest project uses the
+built Worker, so Vitest shards skip the web build; only browser shards build
+it. The test report job installs without postinstall generation, since merging
+blobs never loads generated contracts. Shard 2 then runs the `db-check` migration
 drift check against disposable scratch databases, which runs despite a test
-failure. Service-backed projects (`integration`, `integration-workerd`,
+failure. Service-backed projects (`integration`,
 `capability`, `workers`) retry a failed test once on CI; Node unit, tooling and
 package projects never retry.
 Desktop Chromium runs as Playwright shards through the
@@ -479,12 +481,9 @@ it is outside `CI passed` and `continue-on-error`, so its failure leaves the run
 successful. It uses the same `webGate` key as the
 other web lanes and uploads the same Playwright report.
 The `integration` Vitest project runs once through the `postgres` target
-with four fork workers; local explicit partitions remain supported and separately keyed. The
-`integration-workerd` project (the files that start the built Worker, listed in
-`workerdIntegrationTests` in `apps/web/vitest.config.ts`) runs in `Build
-Workers and runtime tests`. Keep every Worker-consuming integration test in
-that project explicitly. The harness's refusal to rebuild missing or
-stale Workers in CI does not enforce project membership. Jobs that need the databases
+with four fork workers; local explicit partitions remain supported and separately keyed.
+Integration tests do not start the built Worker; inject bindings with
+`setCfEnv` instead. Jobs that need the databases
 declare native GitHub Actions service containers; a YAML anchor reuses the
 pgvector PostgreSQL and pinned IntegreSQL definitions. The PostgreSQL service
 pulls its pinned digest directly from Docker Hub; the Google mirror has returned

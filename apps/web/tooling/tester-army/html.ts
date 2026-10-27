@@ -1,4 +1,4 @@
-import { readFile, readdir, writeFile } from "node:fs/promises";
+import { readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import {
@@ -16,6 +16,13 @@ const diagnostic = z.object({
   origin: z.string().optional(),
   phase: z.string().optional(),
   startedAt: z.string().optional(),
+});
+const providerDiagnostic = z.object({
+  timestamp: z.string(),
+  provider: z.string(),
+  status: z.number(),
+  requestId: z.string().nullable(),
+  body: z.string(),
 });
 
 /** Keep report rendering on the Nx dashboard's existing visual tokens. */
@@ -60,7 +67,72 @@ export async function readJourneyEvidence(directory: string, prefix = "") {
       ),
     })),
   );
-  return { report, metrics, diagnostics, prefix };
+  const issues: string[] = [];
+  const availableArtifacts = new Set<string>();
+  const artifactRoot = await realpath(
+    path.join(directory, "run/results"),
+  ).catch(() => undefined);
+  for (const result of report.run.results.filter((result) => result.selected)) {
+    const attempt = result.attempts.at(-1);
+    if (!attempt) continue;
+    const media = new Set<string>();
+    for (const artifact of attempt.artifacts) {
+      const relative = artifact.path;
+      if (!relative || !localPath(relative)) {
+        issues.push(
+          `${result.titlePath.join(" / ")}: rejected ${artifact.kind} artifact path.`,
+        );
+        continue;
+      }
+      const file = path.join(directory, "run/results", relative);
+      const resolved = await realpath(file).catch(() => undefined);
+      const metadata = resolved
+        ? await stat(resolved).catch(() => undefined)
+        : undefined;
+      if (
+        !artifactRoot ||
+        !resolved?.startsWith(`${artifactRoot}${path.sep}`) ||
+        !metadata?.isFile() ||
+        metadata.size === 0
+      ) {
+        issues.push(
+          `${result.titlePath.join(" / ")}: missing or empty artifact ${relative}.`,
+        );
+        continue;
+      }
+      availableArtifacts.add(relative);
+      media.add(artifact.kind);
+    }
+    // Startup failures can precede a browser; completed journey bodies require both.
+    if (result.status === "passed" || attempt.error?.phase === "body") {
+      for (const kind of ["screenshot", "video"])
+        if (!media.has(kind))
+          issues.push(
+            `${result.titlePath.join(" / ")}: required ${kind} evidence is missing.`,
+          );
+    }
+  }
+  const providerFile = await readFile(
+    path.join(directory, "provider-errors.jsonl"),
+    "utf8",
+  ).catch((error: unknown) => {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT")
+      return "";
+    throw error;
+  });
+  const providerDiagnostics = providerFile
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => providerDiagnostic.parse(JSON.parse(line)));
+  return {
+    report,
+    metrics,
+    diagnostics,
+    prefix,
+    issues,
+    availableArtifacts,
+    providerDiagnostics,
+  };
 }
 
 async function page(body: string) {
@@ -76,6 +148,9 @@ export async function writeJourneyHtml(
   missing: string[] = [],
   extraLinks: { href: string; label: string }[] = [],
 ) {
+  missing = [
+    ...new Set([...missing, ...sources.flatMap((source) => source.issues)]),
+  ];
   const all = sources.flatMap((source) =>
     source.report.run.results
       .filter((result) => result.selected)
@@ -143,7 +218,8 @@ export async function writeJourneyHtml(
       const media = (attempt?.artifacts ?? [])
         .flatMap((artifact) => {
           const safe = artifact.path && localPath(artifact.path);
-          if (!safe) return [];
+          if (!safe || !source.availableArtifacts.has(artifact.path ?? ""))
+            return [];
           const href = `${source.prefix}run/results/${safe}`;
           if (artifact.kind === "screenshot")
             return [
@@ -187,6 +263,13 @@ export async function writeJourneyHtml(
   const unknown = sources.some(
     ({ report }) => report.run.usage?.modelTokens === undefined,
   );
+  const providerFailures = sources
+    .filter((source) => source.providerDiagnostics.length > 0)
+    .map(
+      (source) =>
+        `<h2>Provider diagnostics</h2><p>${link(`${source.prefix}provider-errors.jsonl`, "Download upstream provider diagnostics")}</p>${source.providerDiagnostics.map((entry) => `<pre>${escape(`${entry.timestamp} · ${entry.provider} · HTTP ${entry.status}${entry.requestId ? ` · ${entry.requestId}` : ""}\n${entry.body}`)}</pre>`).join("")}`,
+    )
+    .join("");
   await writeFile(
     path.join(output, "index.html"),
     await page(
@@ -200,7 +283,7 @@ export async function writeJourneyHtml(
               ),
             )}</pre>`
           : ""
-      }`,
+      }${providerFailures}`,
     ),
   );
   return passed;

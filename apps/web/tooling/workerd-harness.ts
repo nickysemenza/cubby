@@ -405,9 +405,8 @@ function installDatabaseEnvironment(databaseUrl: string) {
 
 /**
  * Queue for this worktree's harness lock, then make every coupled Worker
- * build current (rebuilding a stale one locally). The `integration-workerd`
- * global setup calls this once per run, so the wait and any rebuild never
- * count against a test's timeout.
+ * build current (rebuilding a stale one locally). Callers hold it once per
+ * run, so the wait and any rebuild never count against a test's timeout.
  */
 export async function holdWorkerdHarness(): Promise<() => Promise<void>> {
   const release = await holdLock(WORKTREE_HARNESS_LOCK);

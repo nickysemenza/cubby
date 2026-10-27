@@ -45,6 +45,11 @@ if (target === "generate") {
     !existsSync(join(ROOT, "apps/web/node_modules"))
   ) {
     console.log("generate: skipped (filtered install without apps/web)");
+  } else if (
+    mode === "--postinstall" &&
+    process.env.CUBBY_SKIP_POSTINSTALL_GENERATE === "1"
+  ) {
+    console.log("generate: skipped (CUBBY_SKIP_POSTINSTALL_GENERATE)");
   } else {
     runNxTarget("generate", mode === "--force" ? ["--skip-nx-cache"] : []);
     // Cache restoration writes expected files but cannot remove retired outputs.

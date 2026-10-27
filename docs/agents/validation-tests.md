@@ -523,7 +523,7 @@ test title with `rg` before invoking the runner. A title inferred from the task
 description can select no cases; that setup failure supplies no regression evidence.
 
 CI retries a failed Playwright test, or a failed test in a service-backed
-Vitest project (`integration`, `integration-workerd`, `capability`, `preview`,
+Vitest project (`integration`, `capability`, `preview`,
 `workers`), once; Node unit, UI, tooling and package projects never retry, and
 locally nothing retries.
 A test that passes only on retry is reported as flaky, not failed. The second
@@ -590,8 +590,8 @@ concurrently on the shared test services. The library refreshes the lock
 while held and reclaims it after an interrupted process. Child processes inherit
 the owner marker and pass through. `test:e2e:watch` (`--ui`) skips the lock, since
 its idle session would otherwise hold it indefinitely. Only the profiles marked
-"yes" below take it; a Playwright run and the `integration-workerd` project hold
-it from global setup, and their workers pass through. The only machine-wide
+"yes" below take it; a Playwright run holds it from global setup, and its
+workers pass through. The only machine-wide
 lock, `/tmp/cubby-native-device.lock`, serializes simulator lanes
 (`sim-e2e.ts`); the Mac import lane keeps its own fixture lease.
 
@@ -664,11 +664,10 @@ repeat a relative move after it has applied or weaken the ordering assertion.
 
 ### Workerd test runtime and profiles
 
-A PostgreSQL test file that starts workerd belongs in
-`workerdIntegrationTests` (`apps/web/vitest.config.ts`), which forms the
-`integration-workerd` project; CI runs it in the Worker build job against
-that job's fresh bundle. An unlisted consumer fails in the ordinary integration
-job.
+Vitest projects never start the built Worker: CI builds it only for the
+browser shards. Agent and Worker journeys belong in Playwright (the optional
+purchase-import lane); a PostgreSQL rule behind them belongs in an ordinary
+integration test that injects the binding (`setCfEnv`).
 A runtime borrowing a `withTestDb` database must close in `afterEach` before
 the next reset. Reset diagnostics include backend state, wait type and backend/state ages, without
 SQL text or connection credentials, so recurring foreign-session failures can be
