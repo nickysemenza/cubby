@@ -10,7 +10,7 @@ import {
   orderMail,
   orderMailEvent,
 } from "~/server/db/schema";
-import { listEmailsRead } from "~/server/domains/email/repo/email";
+import { emailScaffold } from "~/server/domains/email/repo/email";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
@@ -89,12 +89,11 @@ describe("Gmail Email-owned metadata", () => {
       })
       .returning();
     // The Vendor's Emails section reads the sender-proof Email's own headers.
-    const review = await listEmailsRead(
-      ctx.db,
-      { vendorId: vendor.shortcode },
-      [],
-      { pageIndex: 0, pageSize: 50 },
-    );
+    const review = await emailScaffold.read(ctx.db, {
+      filters: { vendorId: vendor.shortcode },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
     expect(review.data).toMatchObject([
       {
         messageId: identity.messageId,
@@ -106,12 +105,11 @@ describe("Gmail Email-owned metadata", () => {
       },
     ]);
     await drainStoredDerived(ctx.db);
-    const settled = await listEmailsRead(
-      ctx.db,
-      { vendorId: vendor.shortcode },
-      [],
-      { pageIndex: 0, pageSize: 50 },
-    );
+    const settled = await emailScaffold.read(ctx.db, {
+      filters: { vendorId: vendor.shortcode },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
     expect(settled.data).toMatchObject([
       { messageId: identity.messageId, linkState: "none" },
     ]);

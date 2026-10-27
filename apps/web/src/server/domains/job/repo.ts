@@ -1,35 +1,22 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { describeJobWaitingOn } from "@cubby/schemas/job";
-import { type JobFilters } from "@cubby/schemas/job-entity";
-import { rawJobOut, type RawJobOut } from "@cubby/schemas/job-raw-read";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { rawJobOut } from "@cubby/schemas/job-raw-read";
 import { inArray } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   databaseForTransaction,
   isTransaction,
   unwrapDb,
 } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import { job } from "~/server/db/retained-tables";
-import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { resolveEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
-import {
-  createEntityReader,
-  createEntityRowFetcher,
-  defineRepository,
-} from "~/server/entity-kernel/repo/repository";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
-import { jobEntityScaffold } from "~/server/generic/jobs/repo/entity-list";
+import { jobScaffoldOptions } from "~/server/generic/jobs/repo/entity-list";
 import { loadJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listReadPlan,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+import { listScaffold } from "~/server/generic/list/repo/list";
+import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type JobRow = typeof job.$inferSelect;
@@ -126,54 +113,11 @@ const read = {
   },
 } satisfies ListReadOptions<JobRow>;
 
-const plan = () => listReadPlan<JobRow>("job", read);
-const listRead = (
-  db: Database,
-  filters: JobFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  jobEntityScaffold().read(
-    db,
-    {
-      filters,
-      sorts,
-      pagination,
-      projection,
-      readIntent,
-    },
-    { read },
-  );
-const list = completeListReader(rawJobOut, listRead);
-const reader = createEntityReader<
-  JobRow,
-  RawJobOut,
-  "job",
-  Database | DrizzleTransaction
->({
-  entity: "job",
-  fetchById: createEntityRowFetcher(job),
-  fromDB: async (db, row) =>
-    rawJobOut.parse((await plan().read(db, [row], { kind: "full" }))[0]),
+export const jobScaffold = listScaffold("job", job, {
+  ...jobScaffoldOptions,
+  read,
 });
 
 export const jobRepository = defineRepository("job", {
-  get: (ctx: EntityKernelContext, code: string) =>
-    reader.getByShortcode(ctx.db, code),
-  list: (
-    ctx: EntityKernelContext,
-    filters: JobFilters,
-    sorts: SortParams[],
-    pagination: PaginationParams,
-  ) => list(ctx.db, filters, sorts, pagination),
-  listRead: (
-    ctx: EntityKernelContext,
-    filters: JobFilters,
-    sorts: SortParams[],
-    pagination: PaginationParams,
-    projection: ListProjection,
-    readIntent: ListReadIntent = "page",
-  ) => listRead(ctx.db, filters, sorts, pagination, projection, readIntent),
+  scaffold: jobScaffold,
 });

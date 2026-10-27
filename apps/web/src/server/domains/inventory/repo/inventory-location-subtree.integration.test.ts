@@ -5,16 +5,16 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { location } from "~/server/db/schema";
-import { inventoryentryList } from "~/server/domains/inventory/repo/crud";
 import {
   createInventoryFixture,
   createLocationFixture,
   createProductIdentityFixture,
+  listInventoryFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-type Filters = Parameters<typeof inventoryentryList>[1];
+type Filters = Parameters<typeof listInventoryFixture>[1];
 
 /**
  * `locationIdFilter` selects a Location's whole subtree through the generated
@@ -57,7 +57,7 @@ describe("inventory list location filters", () => {
     );
   };
   const listIds = async (filters: Filters) => {
-    const { data } = await inventoryentryList(ctx.db, filters, [], {
+    const { data } = await listInventoryFixture(ctx.db, filters, [], {
       pageIndex: 0,
       pageSize: 50,
     });

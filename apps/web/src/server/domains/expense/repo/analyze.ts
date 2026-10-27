@@ -3,7 +3,7 @@
  *
  * This module deliberately groups in PostgreSQL only. The browser's ledger is
  * paginated/infinite and is therefore never an analytical population. Every
- * query starts from `buildExpenseWhereClause`, the exact filter compiler the
+ * query starts from the expense scaffold, the exact filter compiler the
  * ledger uses.
  */
 import type {
@@ -64,7 +64,8 @@ import {
 } from "~/server/domains/expense/repo/expense-project-allocation";
 
 import {
-  buildExpenseWhereClause,
+  analyticsFilters,
+  expenseScaffold,
   resolveExpenseProjectAllocationScope,
 } from "./lookup";
 import {
@@ -1237,9 +1238,10 @@ export async function loadExpenseFacetCounts(
     if (!prepared) {
       prepared = (async () => {
         const scope = await resolveExpenseProjectAllocationScope(db, filters);
-        const where = await buildExpenseWhereClause(db, filters, {
-          omitAllocationScope: true,
-        });
+        const where = await expenseScaffold.prepareWhere(
+          db,
+          analyticsFilters(filters),
+        );
         return {
           scope,
           where,

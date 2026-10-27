@@ -10,7 +10,7 @@ import { formatCurrency } from "~/lib/number-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 import type { Database } from "~/server/db";
 import { expenseChargeContextWorkflow } from "~/server/domains/expense/repo/charge-context";
-import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
+import { readExpense } from "~/server/domains/expense/repo/crud";
 import { createAppError } from "~/server/errors/app-error";
 import {
   sectionBlocks,
@@ -99,7 +99,7 @@ export const composeExpenseSettlementSection = (
 
 export const expenseSettlementReport = async (db: Database, id: string) => {
   const expenseId = parseShortcodeFor("expense", id);
-  const expense = await getExpenseByShortcode(db, expenseId);
+  const expense = await readExpense(db, expenseId);
   if (!expense) throw createAppError("EXPENSE_NOT_FOUND", "Expense not found");
   return sectionBlocks(
     composeExpenseSettlementSection(

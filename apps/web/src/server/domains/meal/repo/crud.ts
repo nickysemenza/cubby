@@ -1,39 +1,40 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
-  MealFilters,
   MealRecipeInput,
   MealUpdateInput,
 } from "@cubby/schemas/meal";
 import { mealTypeValues } from "@cubby/schemas/meal-classification";
 import {
   rawMealList,
+  rawMealOutput,
   type RawMealOutput,
   type RawUpcomingMealSummary,
 } from "@cubby/schemas/meal-raw-read";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   associatePendingImages,
   mapImages,
   getDb,
-  imageJoinBindings,
+  galleryBinding,
   insertAndReturn,
-  type ListReadIntent,
   notDeleted,
   relations,
   updateAndReturn,
+  unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
 import { meal, mealRecipe, mealRecipePortion } from "~/server/db/schema";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
+import { mealSearch } from "~/server/domains/meal/repo/search-read-meal";
 import {
   type MutationReceipt,
   defineMutationWriter,
@@ -41,12 +42,8 @@ import {
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { gapCondition } from "~/server/generic/data-quality/repo/sql";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
-import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
   resolveAllOrThrow,
@@ -56,7 +53,6 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
-  dbMealToAPI,
   rollupMealTotals,
   mealRecipeFields,
   mealTotalsFields,
@@ -107,33 +103,101 @@ export const MEAL_DELETE_EDGE_POLICY = {
   },
 } as const satisfies IncomingEdgePolicy<"meal", OperationDisposition>;
 
-const fetchMealById = async (db: Database, id: MealId) => {
-  const row = await getDb(db).query.meal.findFirst({
-    where: and(eq(meal.id, id), notDeleted(meal)),
-    ...relations.meal.full,
-  });
-  return row;
-};
+// `mealType` must sort by slot, not by slug: a plain text ordering puts
+// dessert before dinner, which reads as a broken table. `mealTypeValues`
+// declaration order IS clock order (the calendar sorts a day by it), so
+// `array_position` over that tuple is the same ranking `mealTypeRank`
+// applies client-side. Unslotted meals sort last in both directions.
+export const mealScaffold = listScaffold("meal", meal, {
+  derived: {
+    mealType: sql`array_position(${sql.raw(
+      `ARRAY[${mealTypeValues.map((v) => `'${v}'`).join(",")}]::text[]`,
+    )}, ${meal.mealType})`,
+    recipeCostCoverage: gapCondition(
+      "meal",
+      "meal_recipe_cost_incomplete",
+      meal,
+    ),
+  },
+  read: {
+    title: sql`COALESCE(NULLIF(${trimTextSql(meal.name)}, ''), ${meal.date}::text)`,
+    search: mealSearch,
+    // The derived `mealType` is the slot's sort rank; the read keeps the slot.
+    columns: { mealType: meal.mealType },
+    // An unnamed meal displays as its date, so a name sort would otherwise
+    // dump every one of them into an arbitrarily-ordered NULL block. This
+    // orders that block the way its visible label reads.
+    tieBreaker: sql`${meal.date} desc`,
+    media: true,
+    bindings: (bind) => {
+      const planned = bind.ids(async ({ db, ids }) => {
+        const rows = await unwrapDb(db).query.meal.findMany({
+          where: inArray(
+            meal.id,
+            ids.map((id) => parseEntityId("meal", id)),
+          ),
+          columns: { id: true, shortcode: true },
+          with: { recipes: relations.meal.full.with.recipes },
+        });
+        return new Map(rows.map((row) => [row.id, mealRecipeFields(row)]));
+      });
+      const attachments = bind.ids(async ({ db, ids }) => {
+        const rows = await unwrapDb(db).query.meal.findMany({
+          where: inArray(
+            meal.id,
+            ids.map((id) => parseEntityId("meal", id)),
+          ),
+          columns: { id: true },
+          with: { images: relations.meal.full.with.images },
+        });
+        return new Map(rows.map((row) => [row.id, mapImages(row.images)]));
+      });
+      return [
+        bind(rawMealList.pick({ displayName: true }), (row) => ({
+          displayName: row.name?.trim() || row.date,
+        })),
+        planned.fields(
+          rawMealList.pick({ recipes: true, recipeNames: true }),
+          (row, loaded) => {
+            const values = loaded.get(row.id);
+            if (!values) throw new Error("Meal recipes were not loaded");
+            return values;
+          },
+        ),
+        planned.fields(
+          rawMealList.pick({
+            totals: true,
+            cost: true,
+            calories: true,
+            costTotalLabel: true,
+          }),
+          (row, loaded) => {
+            const values = loaded.get(row.id);
+            if (!values) throw new Error("Meal totals require loaded recipes");
+            return mealTotalsFields(values.recipes);
+          },
+        ),
+        attachments.fields(
+          rawMealList.pick({ images: true }),
+          (row, loaded) => ({
+            images: loaded.get(row.id) ?? [],
+          }),
+        ),
+      ];
+    },
+  },
+});
 
 // Read path through the shared reader. The write path stays hand-rolled: meal
 // create/update/delete manage mealRecipe children inside a transaction.
 const mealReader = createEntityReader({
   entity: "meal",
-  fetchById: fetchMealById,
-  fromDB: async (db, row) => {
-    const qualities = await loadDataQualities(db, "meal", [row.id]);
-    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
-    return dbMealToAPI(row, qualities.get(row.id)!);
-  },
+  scaffold: mealScaffold,
+  output: rawMealOutput,
 });
 
-export const getMealByID = (
-  db: Database,
-  id: MealId,
-): Promise<RawMealOutput | null> => mealReader.getByIDOrNull(db, id);
-
-export const getMealByShortcode = (db: Database, shortcode: string) =>
-  mealReader.getByShortcode(db, shortcode);
+/** One live Meal by internal id, or null. */
+export const readMealById = mealReader.getByIDOrNull;
 
 /** Throws MEAL_NOT_FOUND if the meal is missing — for callers that need a value. */
 const requireMeal = (db: Database, id: MealId): Promise<RawMealOutput> =>
@@ -148,23 +212,23 @@ export const getMealsByDateRange = async (
   to: string,
   condition?: SQL,
 ): Promise<RawMealOutput[]> => {
-  const rows = await getDb(db).query.meal.findMany({
-    where: and(
-      gte(meal.date, from),
-      lte(meal.date, to),
-      notDeleted(meal),
-      condition,
-    ),
-    orderBy: (m, { asc }) => [asc(m.date), asc(m.sortOrder), asc(m.createdAt)],
-    ...relations.meal.full,
-  });
-  const qualities = await loadDataQualities(
+  const rows = await getDb(db)
+    .select({ id: meal.id })
+    .from(meal)
+    .where(
+      and(
+        gte(meal.date, from),
+        lte(meal.date, to),
+        notDeleted(meal),
+        condition,
+      ),
+    )
+    .orderBy(asc(meal.date), asc(meal.sortOrder), asc(meal.createdAt));
+  const read = await mealScaffold.getByIds(
     db,
-    "meal",
     rows.map((row) => row.id),
   );
-  // SAFETY: `row` came from `rows`, which `qualities` was loaded for.
-  return rows.map((row) => dbMealToAPI(row, qualities.get(row.id)!));
+  return read.data.map((row) => rawMealOutput.parse(row));
 };
 
 /** Compact, bounded Home projection over the same canonical date ordering. */
@@ -209,132 +273,6 @@ export const getUpcomingMealSummary = async (
     mealKind: row.mealKind,
     totals: rollupMealTotals(row.recipes),
   }));
-};
-
-// `mealType` must sort by slot, not by slug: a plain text ordering puts
-// dessert before dinner, which reads as a broken table. `mealTypeValues`
-// declaration order IS clock order (the calendar sorts a day by it), so
-// `array_position` over that tuple is the same ranking `mealTypeRank`
-// applies client-side. Unslotted meals sort last in both directions.
-export const mealScaffold = listScaffold("meal", meal, {
-  derived: {
-    mealType: sql`array_position(${sql.raw(
-      `ARRAY[${mealTypeValues.map((v) => `'${v}'`).join(",")}]::text[]`,
-    )}, ${meal.mealType})`,
-    recipeCostCoverage: gapCondition("meal", "meal_recipe_cost_incomplete"),
-  },
-});
-
-/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildMealWhere = (
-  _db: Database,
-  filters: MealFilters,
-): SQL | undefined => mealScaffold.where(filters);
-
-export const mealListRead = async (
-  db: Database,
-  filters: MealFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-  projection: ListProjection = { kind: "full" },
-) => {
-  return mealScaffold.read(
-    db,
-    { filters, sorts, pagination, readIntent, projection },
-    {
-      where: buildMealWhere(db, filters),
-      // An unnamed meal displays as its date, so a name sort would otherwise
-      // dump every one of them into an arbitrarily-ordered NULL block. This
-      // orders that block the way its visible label reads.
-      tieBreaker: sql`${meal.date} desc`,
-      load: (where, selected) =>
-        getDb(db).query.meal.findMany({
-          where,
-          with: {
-            recipes:
-              wantsListGroup(selected, "relations") ||
-              wantsListGroup(selected, "derived")
-                ? relations.meal.full.with.recipes
-                : undefined,
-            images: wantsListGroup(selected, "media")
-              ? relations.meal.full.with.images
-              : undefined,
-          },
-        }),
-      read: {
-        media: true,
-        bindings: (bind) => {
-          const recipes = bind.batch(
-            async ({ rows }) =>
-              new Map(
-                rows.map((row) => [
-                  row.id,
-                  mealRecipeFields({
-                    shortcode: row.shortcode,
-                    recipes: (row.recipes ?? []).flatMap((entry) =>
-                      "recipe" in entry ? [entry] : [],
-                    ),
-                  }),
-                ]),
-              ),
-          );
-          return [
-            bind(rawMealList.pick({ displayName: true }), (row) => ({
-              displayName: row.name?.trim() || row.date,
-            })),
-            recipes.fields(
-              rawMealList.pick({ recipes: true, recipeNames: true }),
-              (row, loaded) => {
-                const values = loaded.get(row.id);
-                if (!values) throw new Error("Meal recipes were not loaded");
-                return values;
-              },
-            ),
-            recipes.fields(
-              rawMealList.pick({
-                totals: true,
-                cost: true,
-                calories: true,
-                costTotalLabel: true,
-              }),
-              (row, loaded) => {
-                const values = loaded.get(row.id);
-                if (!values)
-                  throw new Error("Meal totals require loaded recipes");
-                return mealTotalsFields(values.recipes);
-              },
-            ),
-            bind(rawMealList.pick({ images: true }), (row) => ({
-              images: mapImages(
-                (row.images ?? []).flatMap((entry) =>
-                  "image" in entry ? [entry] : [],
-                ),
-              ),
-            })),
-          ];
-        },
-      },
-    },
-  );
-};
-
-export const mealList = async (
-  db: Database,
-  filters: MealFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-) => {
-  const result = await mealListRead(
-    db,
-    filters,
-    sorts,
-    pagination,
-    readIntent,
-    { kind: "full" },
-  );
-  return parseCompleteListRead(rawMealList, Promise.resolve(result));
 };
 
 export const createMealWithEntityId = defineMutationWriter({
@@ -392,7 +330,7 @@ export const createMealWithEntityId = defineMutationWriter({
         );
         await associatePendingImages(
           tx,
-          imageJoinBindings.meal,
+          galleryBinding("meal"),
           created.id,
           resolvedImageIds,
         );
@@ -443,7 +381,7 @@ export const updateMeal = defineMutationWriter({
       ({ detachedImageKeys } = await syncEntityImages(
         tx,
         "meal",
-        imageJoinBindings.meal,
+        galleryBinding("meal"),
         id,
         data,
       ));

@@ -23,7 +23,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { splitExpenseWithDeltaOut } from "~/contracts/purchase.contract";
-import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
+import { readExpense } from "~/server/domains/expense/repo/crud";
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import {
   type AuthenticatedRequestContext,
@@ -182,9 +182,7 @@ describe("expenses.split_with_delta MCP action — originalCost/partsSum/delta",
     expect(errorText(result)).toContain(
       "Split parts must conserve the original expense amount exactly.",
     );
-    await expect(
-      getExpenseByShortcode(ctx.db, original.id),
-    ).resolves.toMatchObject({
+    await expect(readExpense(ctx.db, original.id)).resolves.toMatchObject({
       id: original.id,
       name: "partially refunded combo",
       cost: 100,

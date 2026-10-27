@@ -40,7 +40,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { createLocation, deleteLocations, getLocationById } from "./crud";
+import { createLocation, deleteLocations, readLocationById } from "./crud";
 import { buildLocationTree } from "./tree";
 
 describe("inventory location suggestion roster", () => {
@@ -189,7 +189,7 @@ describe("bulkReparentLocations", () => {
     );
 
     await bulkReparentLocations(ctx.db, [childId], null, ctx.actor);
-    expect((await getLocationById(ctx.db, childId)).parent?.id).toBe(
+    expect((await readLocationById(ctx.db, childId)).parent?.id).toBe(
       TEST_HOME_SHORTCODE,
     );
 
@@ -221,7 +221,7 @@ describe("bulkReparentLocations", () => {
 
     const chain: (string | undefined)[] = [];
     for (
-      let node = (await getLocationById(ctx.db, binId)).parent;
+      let node = (await readLocationById(ctx.db, binId)).parent;
       node;
       node = node.parent
     )
@@ -522,7 +522,7 @@ describe("location detail — inventoryItems agree with directItemCount", () => 
       ctx.actor,
     );
 
-    const detail = await getLocationById(ctx.db, room.entityId);
+    const detail = await readLocationById(ctx.db, room.entityId);
     expect(detail.directItemCount).toBe(2);
     expect(detail.inventoryItems).toHaveLength(detail.directItemCount ?? -1);
     expect(detail.inventoryItems?.map((item) => item.productId)).toEqual([

@@ -12,11 +12,10 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { inventoryEntry } from "~/server/db/schema";
-import { ingredientList } from "~/server/domains/ingredient/repo/search";
-import { inventoryentryList } from "~/server/domains/inventory/repo/crud";
+import { ingredientScaffold } from "~/server/domains/ingredient/repo/search";
 import { locationSearch } from "~/server/domains/location/repo/crud";
 import { productSearch } from "~/server/domains/product/repo/crud";
-import { projectListRead } from "~/server/domains/project/repo/lookup";
+import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
@@ -25,11 +24,19 @@ import {
   createLocationFixture,
   createProductFixture,
   createProductIdentityFixture,
+  listInventoryFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
 const page = (pageIndex: number, pageSize = 2) => ({ pageIndex, pageSize });
+const ingredientPage = (
+  db: Parameters<typeof ingredientScaffold.read>[0],
+  filters: { nameFilter: string },
+  sorts: { orderBy: string; direction: "asc" | "desc" }[],
+  pagination: { pageIndex: number; pageSize: number },
+  readIntent?: "count",
+) => ingredientScaffold.read(db, { filters, sorts, pagination, readIntent });
 
 /**
  * Every two-row page of a read, concatenated. Fixtures that tie on every
@@ -76,7 +83,7 @@ describe("custom list readers", () => {
     const sorts = [{ orderBy: "product", direction: "desc" as const }];
     const pages = await Promise.all(
       [0, 1].map((index) =>
-        ingredientList(ctx.db, filters, sorts, page(index)),
+        ingredientPage(ctx.db, filters, sorts, page(index)),
       ),
     );
     expect(pages.map((result) => result.data.map((row) => row.id))).toEqual([
@@ -86,17 +93,8 @@ describe("custom list readers", () => {
     expect(pages.map((result) => result.count)).toEqual([3, 3]);
 
     expect(
-      await ingredientList(ctx.db, filters, sorts, page(0), "count"),
-    ).toEqual({ data: [], count: 3 });
-    const ids = await Promise.all(
-      [0, 1].map((index) =>
-        ingredientList(ctx.db, filters, sorts, page(index), "ids"),
-      ),
-    );
-    expect(ids).toEqual([
-      { data: [{ id: alpha!.id }, { id: gamma!.id }], hasMore: true },
-      { data: [{ id: beta!.id }], hasMore: false },
-    ]);
+      await ingredientPage(ctx.db, filters, sorts, page(0), "count"),
+    ).toMatchObject({ data: [], count: 3 });
 
     // Four rows tie on both requested sorts, so the shortcode decides.
     const [lead, ...tied] = await Promise.all(
@@ -125,17 +123,9 @@ describe("custom list readers", () => {
     expect(
       (
         await readPages((index) =>
-          ingredientList(ctx.db, tieFilters, tieSorts, page(index)),
+          ingredientPage(ctx.db, tieFilters, tieSorts, page(index)),
         )
       ).map((row) => row.id),
-    ).toEqual(expected);
-    const idPages = await Promise.all(
-      [0, 1, 2].map((index) =>
-        ingredientList(ctx.db, tieFilters, tieSorts, page(index), "ids"),
-      ),
-    );
-    expect(
-      idPages.flatMap((result) => result.data.map((row) => row.id)),
     ).toEqual(expected);
   });
 
@@ -308,7 +298,7 @@ describe("custom list readers", () => {
     }
 
     const read = (pageIndex: number, readIntent?: "count") =>
-      inventoryentryList(
+      listInventoryFixture(
         ctx.db,
         { productNameFilter: "Stockcase" },
         [{ orderBy: "product", direction: "asc" }],
@@ -387,7 +377,7 @@ describe("custom list readers", () => {
     expect(
       (
         await readPages((index) =>
-          inventoryentryList(
+          listInventoryFixture(
             ctx.db,
             { productNameFilter: "Tiestock" },
             [
@@ -411,24 +401,22 @@ describe("custom list readers", () => {
       await insertWithShortcode(ctx.db, "project", { name, costEstimate });
 
     const read = (pageIndex: number, readIntent?: "count") =>
-      projectListRead(
-        ctx.db,
-        { search: "Paging" },
-        [{ orderBy: "name", direction: "asc" }],
-        page(pageIndex),
-        { kind: "full" },
+      projectScaffold.read(ctx.db, {
+        filters: { search: "Paging" },
+        sorts: [{ orderBy: "name", direction: "asc" }],
+        pagination: page(pageIndex),
         readIntent,
-      );
+      });
     await drainStoredDerived(ctx.db);
     const pages = await Promise.all([read(0), read(1)]);
     expect(pages.map((result) => result.data.map((row) => row.name))).toEqual([
       ["Paging alpha", "Paging beta"],
       ["Paging gamma"],
     ]);
-    expect(pages).toMatchObject([
-      { count: 3, sums: { costEstimate: 60 } },
-      { count: 3, sums: { costEstimate: 60 } },
-    ]);
+    expect(pages).toMatchObject([{ count: 3 }, { count: 3 }]);
+    expect(await projectScaffold.totals(ctx.db, { search: "Paging" })).toEqual({
+      costEstimate: 60,
+    });
     expect(await read(0, "count")).toEqual({ data: [], count: 3 });
 
     // Four rows tie on cost and status, so the shortcode decides.
@@ -447,16 +435,14 @@ describe("custom list readers", () => {
     expect(
       (
         await readPages((index) =>
-          projectListRead(
-            ctx.db,
-            { search: "Tieproj" },
-            [
+          projectScaffold.read(ctx.db, {
+            filters: { search: "Tieproj" },
+            sorts: [
               { orderBy: "costEstimate", direction: "desc" },
               { orderBy: "status", direction: "asc" },
             ],
-            page(index),
-            { kind: "full" },
-          ),
+            pagination: page(index),
+          }),
         )
       ).map((row) => row.id),
     ).toEqual([

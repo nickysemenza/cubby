@@ -54,13 +54,13 @@ type FieldCountEvidenceSource = {
   value: FieldExplanationEvidenceValue;
 };
 
-type FieldCountEvidence = {
+export type FieldCountEvidence = {
   sources: FieldCountEvidenceSource[];
   truncated: boolean;
 };
 
 type EvidenceDatabase = Database | DrizzleTransaction;
-type EvidenceLoader = (
+export type EvidenceLoader = (
   db: EvidenceDatabase,
   shortcode: string,
 ) => Promise<FieldCountEvidence>;
@@ -85,7 +85,7 @@ function sourcesFromRows<Row>(
   };
 }
 
-async function loadProductComponentEvidence(
+export async function loadProductComponentEvidence(
   db: EvidenceDatabase,
   shortcode: string,
 ): Promise<FieldCountEvidence> {
@@ -149,7 +149,7 @@ const expenseSource = (row: {
   },
 });
 
-async function loadProductExpenseEvidence(
+export async function loadProductExpenseEvidence(
   db: EvidenceDatabase,
   shortcode: string,
 ): Promise<FieldCountEvidence> {
@@ -177,7 +177,7 @@ async function loadProductExpenseEvidence(
   return sourcesFromRows(rows, expenseSource);
 }
 
-async function loadRecipeMealEvidence(
+export async function loadRecipeMealEvidence(
   db: EvidenceDatabase,
   shortcode: string,
 ): Promise<FieldCountEvidence> {
@@ -217,7 +217,7 @@ async function loadRecipeMealEvidence(
   }));
 }
 
-async function loadIngredientRecipeEvidence(
+export async function loadIngredientRecipeEvidence(
   db: EvidenceDatabase,
   shortcode: string,
 ): Promise<FieldCountEvidence> {
@@ -254,7 +254,7 @@ async function loadIngredientRecipeEvidence(
   }));
 }
 
-async function loadCookbookRecipeEvidence(
+export async function loadCookbookRecipeEvidence(
   db: EvidenceDatabase,
   shortcode: string,
 ): Promise<FieldCountEvidence> {
@@ -314,7 +314,7 @@ function previewStoredJson(
   return { value: preview, truncated };
 }
 
-async function loadCookbookSourceRecipeEvidence(
+export async function loadCookbookSourceRecipeEvidence(
   db: EvidenceDatabase,
   shortcode: string,
 ): Promise<FieldCountEvidence> {
@@ -355,7 +355,7 @@ async function loadCookbookSourceRecipeEvidence(
   };
 }
 
-async function loadVendorPurchaseEvidence(
+export async function loadVendorPurchaseEvidence(
   db: EvidenceDatabase,
   shortcode: string,
 ): Promise<FieldCountEvidence> {
@@ -391,7 +391,7 @@ async function loadVendorPurchaseEvidence(
   }));
 }
 
-async function loadPurchaseExpenseEvidence(
+export async function loadPurchaseExpenseEvidence(
   db: EvidenceDatabase,
   shortcode: string,
 ): Promise<FieldCountEvidence> {
@@ -419,7 +419,7 @@ async function loadPurchaseExpenseEvidence(
   return sourcesFromRows(rows, expenseSource);
 }
 
-async function loadPurchaseDocumentEvidence(
+export async function loadPurchaseDocumentEvidence(
   db: EvidenceDatabase,
   shortcode: string,
 ): Promise<FieldCountEvidence> {
@@ -452,7 +452,7 @@ async function loadPurchaseDocumentEvidence(
   }));
 }
 
-async function loadFinancialAccountTransactionEvidence(
+export async function loadFinancialAccountTransactionEvidence(
   db: EvidenceDatabase,
   shortcode: string,
 ): Promise<FieldCountEvidence> {
@@ -496,32 +496,4 @@ async function loadFinancialAccountTransactionEvidence(
       merchant: row.merchant,
     },
   }));
-}
-
-const evidenceLoaders = new Map<string, EvidenceLoader>([
-  ["product:componentCount", loadProductComponentEvidence],
-  ["product:expenseCount", loadProductExpenseEvidence],
-  ["recipe:meals", loadRecipeMealEvidence],
-  ["ingredient:recipeCount", loadIngredientRecipeEvidence],
-  ["ingredient:appearsInRecipes", loadIngredientRecipeEvidence],
-  ["cookbook:recipeCount", loadCookbookRecipeEvidence],
-  ["cookbook:sourceRecipeCount", loadCookbookSourceRecipeEvidence],
-  ["vendor:purchaseCount", loadVendorPurchaseEvidence],
-  ["purchase:expenseCount", loadPurchaseExpenseEvidence],
-  ["purchase:documentCount", loadPurchaseDocumentEvidence],
-  [
-    "financialAccount:transactionCount",
-    loadFinancialAccountTransactionEvidence,
-  ],
-]);
-
-/** Concrete, linked inputs for count fields whose public projections only carry a scalar. */
-export async function loadFieldCountEvidence(
-  db: EvidenceDatabase,
-  entityKind: Entity,
-  shortcode: string,
-  field: string,
-): Promise<FieldCountEvidence | null> {
-  const loader = evidenceLoaders.get(`${entityKind}:${field}`);
-  return loader ? loader(db, shortcode) : null;
 }

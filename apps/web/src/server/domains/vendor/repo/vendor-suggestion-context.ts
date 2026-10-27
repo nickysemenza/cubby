@@ -122,9 +122,8 @@ export async function loadVendorSuggestionContext(
 /** Full coverage for the evidence breakdown; the AI's bounded sample never supplies these totals. */
 export async function loadVendorCategoryEvidence(
   db: Database | DrizzleTransaction,
-  code: string,
+  id: string,
 ) {
-  const id = await resolveOrThrow(db, "vendor", code);
   const rows = await unwrapDb(db)
     .execute(sql`SELECT pc.shortcode AS id,pc.emoji,
     CASE WHEN pc.id IS NULL THEN NULL ELSE ${categoryMappingSql(sql`pc.id`)}->>'path' END AS name,

@@ -3,7 +3,7 @@ import { and, getTableName, sql } from "drizzle-orm";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { vendor as table } from "~/server/db/schema";
-import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
+import { vendorScaffold } from "~/server/domains/vendor/repo/vendor";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import {
   entityProblemSources,
@@ -35,7 +35,10 @@ const gapSource: WorkSource = {
         .from(table)
         .where(
           and(
-            buildVendorWhereClause(vendorFiltersSchema.parse(filters)),
+            await vendorScaffold.prepareWhere(
+              db,
+              vendorFiltersSchema.parse(filters),
+            ),
             recordScope(scope, sql`${table.shortcode}`),
           ),
         ),
@@ -59,7 +62,10 @@ export const vendorWorkSources = (): WorkSource[] => [
         .from(table)
         .where(
           and(
-            buildVendorWhereClause(vendorFiltersSchema.parse(filters)),
+            await vendorScaffold.prepareWhere(
+              db,
+              vendorFiltersSchema.parse(filters),
+            ),
             recordScope(scope, sql`${table.shortcode}`),
           ),
         ),

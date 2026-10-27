@@ -16,7 +16,7 @@ import { vendorMailQueries } from "~/server/domains/purchase-import/repo/gmail/v
 import { vendorMailSearchReport } from "~/server/generic/entity-report/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { vendorList } from "./vendor";
+import { vendorScaffold } from "./vendor";
 
 // Failures: a search finished in one mailbox reading as done everywhere; a
 // stale completed search (the website moved) counting as current; a Vendor
@@ -161,12 +161,11 @@ describe("vendor Mail search status", () => {
     const states = async (mailSearch?: MailSearchState[]) =>
       Object.fromEntries(
         (
-          await vendorList(
-            ctx.db,
-            mailSearch ? { mailSearch } : {},
-            [{ orderBy: "name", direction: "asc" }],
-            { pageIndex: 0, pageSize: 50 },
-          )
+          await vendorScaffold.read(ctx.db, {
+            filters: mailSearch ? { mailSearch } : {},
+            sorts: [{ orderBy: "name", direction: "asc" }],
+            pagination: { pageIndex: 0, pageSize: 50 },
+          })
         ).data.map((row) => [row.name, row.mailSearch]),
       );
     expect(await states()).toEqual({
@@ -188,12 +187,11 @@ describe("vendor Mail search status", () => {
     expect(queries(privateSuffix).map((query) => query.key)).toContain(
       `vendor:${privateSuffix.id}:domain:tenant.github.io`,
     );
-    const sorted = await vendorList(
-      ctx.db,
-      { mailSearch: ["done", "in_progress"] },
-      [{ orderBy: "mailSearch", direction: "asc" }],
-      { pageIndex: 0, pageSize: 50 },
-    );
+    const sorted = await vendorScaffold.read(ctx.db, {
+      filters: { mailSearch: ["done", "in_progress"] },
+      sorts: [{ orderBy: "mailSearch", direction: "asc" }],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
     expect(sorted.data.map((row) => row.mailSearch)).toEqual([
       "done",
       "done",

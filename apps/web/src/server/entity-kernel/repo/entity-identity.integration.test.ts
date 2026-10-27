@@ -207,7 +207,7 @@ describe("durable entity identity", () => {
     });
   });
 
-  it("redirects reads of a merged-away code and refuses writes through it", async () => {
+  it("refuses reads and writes through a merged-away code", async () => {
     const keeper = await seedProduct("Redirect keeper");
     const loser = await seedProduct("Redirect loser");
     await mergeProducts(
@@ -216,17 +216,13 @@ describe("durable entity identity", () => {
       ctx.actor,
     );
 
-    const read = await getProduct(loser.id);
-    if (read.action !== "get") throw new Error("Expected product detail");
-    expect(read.item).toMatchObject({
-      id: keeper.id,
-      redirectedFrom: loser.id,
-      previousShortcodes: [loser.id],
-    });
+    await expect(getProduct(loser.id)).rejects.toThrow(
+      `was merged into ${keeper.id}`,
+    );
 
     const canonical = await getProduct(keeper.id);
     if (canonical.action !== "get") throw new Error("Expected product detail");
-    expect(canonical.item).toMatchObject({ redirectedFrom: null });
+    expect(canonical.item).toMatchObject({ id: keeper.id });
 
     await expect(
       executeEntity(context(), {

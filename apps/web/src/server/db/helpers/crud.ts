@@ -386,13 +386,12 @@ const defineImageJoinBinding = <
   binding: ImageJoinBinding<TTable, TParentColumn>,
 ) => binding;
 
-const galleryBinding = (
-  entityKind: GalleryEntity,
-  extraColumns: Pick<
-    InferInsertModel<typeof entityAttachment>,
-    "documentKind" | "purpose"
-  > = {},
-) =>
+/**
+ * The gallery binding of an entity whose declaration says `images: "gallery"`.
+ * Every binding targets the shared `EntityAttachment` table (ADR 0006); a null
+ * Product purpose reads as `item` and a null Purchase document kind as `other`.
+ */
+export const galleryBinding = (entityKind: GalleryEntity) =>
   defineImageJoinBinding({
     table: entityAttachment,
     parentIdColumn: entityAttachment.entityId,
@@ -402,28 +401,9 @@ const galleryBinding = (
       imageId,
       sortOrder,
       role: "attachment" as const,
-      ...extraColumns,
     }),
     sortOrderUpdate: (sortOrder) => ({ sortOrder }),
   });
-
-/**
- * One binding per entity whose declaration says `images: "gallery"`. Every
- * binding targets the shared `EntityAttachment` table (ADR 0006); the
- * `satisfies Record<GalleryEntity, …>` still fails to compile when a gallery
- * entity has no binding; Purchase keeps its default document kind and Product
- * its default `item` purpose.
- */
-export const imageJoinBindings = {
-  product: galleryBinding("product", { purpose: "item" }),
-  location: galleryBinding("location"),
-  recipe: galleryBinding("recipe"),
-  project: galleryBinding("project"),
-  purchase: galleryBinding("purchase", { documentKind: "other" }),
-  gardenEntry: galleryBinding("gardenEntry"),
-  meal: galleryBinding("meal"),
-  task: galleryBinding("task"),
-} as const satisfies Record<GalleryEntity, { table: ImageJoinTable }>;
 
 export async function associatePendingImages<
   TTable extends ImageJoinTable,

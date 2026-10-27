@@ -29,7 +29,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import * as schema from "~/server/db/schema";
-import { listEmailsRead } from "~/server/domains/email/repo/email";
+import { emailScaffold } from "~/server/domains/email/repo/email";
 import {
   commitFinancialBooking,
   previewFinancialBooking,
@@ -557,12 +557,13 @@ async function createConvergenceHarness(ctx: TestDbContext) {
     await drainStoredDerived(db);
     // Exact-order mail links itself to the Purchase without a member click,
     // whichever of the mail and the Purchase arrived first.
-    const emails = await listEmailsRead(
-      db,
-      { purchaseId: parseShortcodeFor("purchase", purchase.shortcode) },
-      [],
-      { pageIndex: 0, pageSize: 50 },
-    );
+    const emails = await emailScaffold.read(db, {
+      filters: {
+        purchaseId: parseShortcodeFor("purchase", purchase.shortcode),
+      },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
     expect(
       emails.data
         .flatMap((item) => emailPurchaseLink.array().parse(item.purchaseLinks))

@@ -4,7 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { updateExpense } from "~/server/domains/expense/repo/crud";
-import { expenseList } from "~/server/domains/expense/repo/lookup";
+import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import { updatePurchase } from "~/server/domains/purchase/repo/purchase";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -82,14 +82,13 @@ describe("stored Expense quality", () => {
       expect(
         (await storedQuality(ctx.db, line.entityId))?.checks,
       ).toMatchObject({ expense_product_resolution: "not_applicable" });
-    const filtered = await expenseList(
-      ctx.db,
-      {
+    const filtered = await expenseScaffold.read(ctx.db, {
+      filters: {
         dataGap: ["expense_product_resolution"],
       },
-      [],
-      { pageIndex: 0, pageSize: 10 },
-    );
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
     expect(filtered.data.map((line) => line.id)).toEqual([principal.output.id]);
     const queue = await readWorkQueue(ctx.db, {
       input: workQueueInput.parse({
@@ -212,9 +211,13 @@ describe("stored Expense quality", () => {
         memberOnly: false,
       });
     const list = () =>
-      expenseList(ctx.db, { dataGap: ["expense_product_resolution"] }, [], {
-        pageIndex: 0,
-        pageSize: 10,
+      expenseScaffold.read(ctx.db, {
+        filters: { dataGap: ["expense_product_resolution"] },
+        sorts: [],
+        pagination: {
+          pageIndex: 0,
+          pageSize: 10,
+        },
       });
     const quality = async () =>
       (

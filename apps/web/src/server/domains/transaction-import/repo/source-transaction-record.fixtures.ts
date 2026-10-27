@@ -13,48 +13,44 @@ import { TEST_ACTOR } from "tooling/test-setup";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { sourceTransactionRecord, transactionImport } from "~/server/db/schema";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 
 import {
-  listSourceTransactionRecordsRead,
-  listTransactionImportsRead,
+  sourceTransactionRecordScaffold,
+  transactionImportScaffold,
 } from "./entity-repositories";
 import { recordSourceTransactionRecords } from "./source-transaction-record";
 
-const listSources = completeListReader(
-  rawSourceTransactionRecordOut,
-  listSourceTransactionRecordsRead,
-);
-const listImports = completeListReader(
-  rawTransactionImportOut,
-  listTransactionImportsRead,
-);
-
-export function listSourceTransactionRecords(
+export async function listSourceTransactionRecords(
   db: Database,
   filters: SourceTransactionRecordLegacyFilters,
   pagination: PaginationParams = { pageIndex: 0, pageSize: 50 },
   sort?: SortParams,
 ) {
-  return listSources(
-    db,
-    sourceTransactionRecordFilters.parse({
+  const page = await sourceTransactionRecordScaffold.read(db, {
+    filters: sourceTransactionRecordFilters.parse({
       ...filters,
       statementDateFrom: filters.dateFrom,
       statementDateTo: filters.dateTo,
     }),
-    sort ? [sort] : [],
+    sorts: sort ? [sort] : [],
     pagination,
-  );
+  });
+  return {
+    ...page,
+    data: page.data.map((row) => rawSourceTransactionRecordOut.parse(row)),
+  };
 }
 
-export function listTransactionImports(db: Database, source?: string) {
-  return listImports(
-    db,
-    transactionImportFilters.parse({ source }),
-    [{ orderBy: "createdAt", direction: "desc" }],
-    { pageIndex: 0, pageSize: 50 },
-  );
+export async function listTransactionImports(db: Database, source?: string) {
+  const page = await transactionImportScaffold.read(db, {
+    filters: transactionImportFilters.parse({ source }),
+    sorts: [{ orderBy: "createdAt", direction: "desc" }],
+    pagination: { pageIndex: 0, pageSize: 50 },
+  });
+  return {
+    ...page,
+    data: page.data.map((row) => rawTransactionImportOut.parse(row)),
+  };
 }
 
 /** Shared valid evidence graph for liveness fixtures that subsequently seed invalid references. */

@@ -1,3 +1,6 @@
+import type { ProductCategoryFilters } from "@cubby/schemas/product-category";
+import type { ProjectFilters, TaskFilters } from "@cubby/schemas/project";
+import { rawTaskOut } from "@cubby/schemas/work-raw-read";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyId } from "tooling/product-category-fixtures";
@@ -7,11 +10,9 @@ import { z } from "zod";
 
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { project as projectTable, task as taskTable } from "~/server/db/schema";
-import { inventoryentryList } from "~/server/domains/inventory/repo/crud";
-import { listProductCategories } from "~/server/domains/product-category/repo/product-category";
-import { productList } from "~/server/domains/product/repo/crud";
-import { projectList } from "~/server/domains/project/repo/lookup";
-import { taskList } from "~/server/domains/task/repo/lookup";
+import { productCategoryScaffold } from "~/server/domains/product-category/repo/product-category";
+import { projectScaffold } from "~/server/domains/project/repo/lookup";
+import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { loadFieldResolutionEvidence } from "~/server/generic/suggestions/repo/field-resolution-evidence";
 import {
@@ -19,6 +20,8 @@ import {
   createLocationFixture,
   createProductFixture,
   createProductIdentityFixture,
+  listInventoryFixture,
+  listProductsFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -243,15 +246,21 @@ describe("inherited values", () => {
 
   it("filters projects by their inherited assignee and locations", async () => {
     const w = await projectWorld();
-    const ids = new Set(w.projects.map((row) => row.shortcode));
-    const listed = async (filters: Parameters<typeof projectList>[1]) =>
-      (await projectList(db(), filters, [], page)).data
+    const ids = new Set<string>(w.projects.map((row) => row.shortcode));
+    const listed = async (filters: ProjectFilters) =>
+      (
+        await projectScaffold.read(db(), {
+          filters,
+          sorts: [],
+          pagination: page,
+        })
+      ).data
         .map((row) => row.id)
         .filter((id) => ids.has(id))
         .sort();
     const codes = (...rows: { shortcode: string }[]) =>
       rows.map((row) => row.shortcode).sort();
-    const cases: Array<[Parameters<typeof projectList>[1], string[]]> = [
+    const cases: Array<[ProjectFilters, string[]]> = [
       [{ assigneeId: [w.a.shortcode] }, codes(w.p1, w.p2, w.p6)],
       [{ assigneeId: [w.b.shortcode] }, codes(w.p7)],
       [{ assigneeIdPresenceFilter: "none" }, codes(w.p3, w.p4, w.p5)],
@@ -345,12 +354,14 @@ describe("inherited values", () => {
       project: ["explicit", w.p6],
     });
     const tasks = [t1, t2, t3, t4, t5p, t5, t6, t7, t8, t9, t10, t11, t12];
-    const ids = new Set(tasks.map((row) => row.shortcode));
-    const listed = async (filters: Parameters<typeof taskList>[1]) =>
-      (await taskList(db(), filters, [], page)).data.filter((row) =>
-        ids.has(row.id),
-      );
-    const listedIds = async (filters: Parameters<typeof taskList>[1]) =>
+    const ids = new Set<string>(tasks.map((row) => row.shortcode));
+    const listed = async (filters: TaskFilters) =>
+      (
+        await taskScaffold.read(db(), { filters, sorts: [], pagination: page })
+      ).data
+        .filter((row) => ids.has(row.id))
+        .map((row) => rawTaskOut.parse(row));
+    const listedIds = async (filters: TaskFilters) =>
       (await listed(filters)).map((row) => row.id).sort();
     const codes = (...rows: { shortcode: string }[]) =>
       rows.map((row) => row.shortcode).sort();
@@ -414,7 +425,7 @@ describe("inherited values", () => {
       source: "Unassigned",
       sourceEntity: null,
     });
-    const cases: Array<[Parameters<typeof taskList>[1], string[]]> = [
+    const cases: Array<[TaskFilters, string[]]> = [
       [{ assigneeId: [a.shortcode] }, codes(t1, t2, t3, t5, t12)],
       [{ assigneeId: [b.shortcode] }, codes(t6, t8, t10)],
       [{ assigneeIdPresenceFilter: "none" }, codes(t4, t5p, t7, t9, t11)],
@@ -513,11 +524,13 @@ describe("inherited values", () => {
       .where(eq(taskTable.id, gone.id));
     const t9 = await insertTask("Trade T9", { parent: gone, project: pa });
     const tasks = [t1, t2, t3, t4, t5, t6, t7, t8, t9];
-    const ids = new Set(tasks.map((row) => row.shortcode));
-    const listed = async (filters: Parameters<typeof taskList>[1]) =>
-      (await taskList(db(), filters, [], page)).data.filter((row) =>
-        ids.has(row.id),
-      );
+    const ids = new Set<string>(tasks.map((row) => row.shortcode));
+    const listed = async (filters: TaskFilters) =>
+      (
+        await taskScaffold.read(db(), { filters, sorts: [], pagination: page })
+      ).data
+        .filter((row) => ids.has(row.id))
+        .map((row) => rawTaskOut.parse(row));
     const codes = (...rows: { shortcode: string }[]) =>
       rows.map((row) => row.shortcode).sort();
     const rows = await listed({});
@@ -584,7 +597,7 @@ describe("inherited values", () => {
       entityKind: "project",
       entityId: pb.shortcode,
     });
-    const cases: Array<[Parameters<typeof taskList>[1], string[]]> = [
+    const cases: Array<[TaskFilters, string[]]> = [
       [{ trade: ["electrical"] }, codes(t1, t2, t3)],
       [{ trade: ["building"] }, codes(t6, t8, t9)],
       [{ tradeExclude: ["building", "electrical"] }, codes(t4, t5, t7)],
@@ -641,19 +654,21 @@ describe("inherited values", () => {
     const c6 = await category("Inherit C6", { parent: c4 });
     const c7 = await category("Inherit C7", { parent: c1, spending: s1c });
     const categories = [c1, c2, c3, c4, c5, c6, c7];
-    const categoryIds = new Set(categories.map((row) => row.shortcode));
+    const categoryIds = new Set<string>(categories.map((row) => row.shortcode));
     const codes = (...rows: { shortcode: string }[]) =>
       rows.map((row) => row.shortcode).sort();
-    const listedCategories = async (
-      filters: Parameters<typeof listProductCategories>[1],
-    ) =>
-      (await listProductCategories(db(), filters, [], page)).data
+    const listedCategories = async (filters: ProductCategoryFilters) =>
+      (
+        await productCategoryScaffold.read(db(), {
+          filters,
+          sorts: [],
+          pagination: page,
+        })
+      ).data
         .map((row) => row.id)
         .filter((id) => categoryIds.has(id))
         .sort();
-    const categoryCases: Array<
-      [Parameters<typeof listProductCategories>[1], string[]]
-    > = [
+    const categoryCases: Array<[ProductCategoryFilters, string[]]> = [
       [{ effectiveSpendingCategoryId: [s1.shortcode] }, codes(c1, c2, c3, c7)],
       [
         {
@@ -712,8 +727,10 @@ describe("inherited values", () => {
     const all = Object.values(products);
     const productIds = new Set(all.map((row) => row.shortcode));
     const stockIds = new Set(all.map((row) => row.stock));
-    const listedProducts = async (filters: Parameters<typeof productList>[1]) =>
-      (await productList(db(), filters, [], page)).data
+    const listedProducts = async (
+      filters: Parameters<typeof listProductsFixture>[1],
+    ) =>
+      (await listProductsFixture(db(), filters, [], page)).data
         .map((row) => row.id)
         .filter((id) => productIds.has(id))
         .sort();
@@ -721,14 +738,16 @@ describe("inherited values", () => {
       all.map((row) => [row.shortcode, row.stock]),
     );
     const listedStock = async (
-      filters: Parameters<typeof inventoryentryList>[1],
+      filters: Parameters<typeof listInventoryFixture>[1],
     ) =>
-      (await inventoryentryList(db(), filters, [], page)).data
+      (await listInventoryFixture(db(), filters, [], page)).data
         .map((row) => row.id)
         .filter((id) => stockIds.has(id))
         .sort();
     const p = products;
-    const productCases: Array<[Parameters<typeof productList>[1], string[]]> = [
+    const productCases: Array<
+      [Parameters<typeof listProductsFixture>[1], string[]]
+    > = [
       [{ categoryFeatureFilter: ["food"] }, codes(p.c1, p.c2, p.c7)],
       [{ categoryFeatureFilter: ["tools"] }, codes(p.c4, p.c6)],
       [

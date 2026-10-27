@@ -18,7 +18,7 @@ describe("product create atomicity", () => {
 
     await expect(
       createProduct(ctx.db, makeProductInput({ name }), ctx.actor, {
-        loadProductDataQualities: async () => {
+        readWrittenProduct: async () => {
           throw new Error("simulated transient read failure");
         },
       }),

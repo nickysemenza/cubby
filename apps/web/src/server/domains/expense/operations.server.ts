@@ -35,9 +35,9 @@ import {
 import { loadVendorAttributionDefaults } from "~/server/domains/expense/repo/attribution-defaults";
 import { expenseChargeContextWorkflow } from "~/server/domains/expense/repo/charge-context";
 import { expenseFlowSankey } from "~/server/domains/expense/repo/flow-sankey";
-import { expenseList } from "~/server/domains/expense/repo/lookup";
 import {
-  buildExpenseWhereClause,
+  analyticsFilters,
+  expenseScaffold,
   resolveExpenseProjectAllocationScope,
 } from "~/server/domains/expense/repo/lookup";
 import { matchExpenses } from "~/server/domains/expense/repo/match";
@@ -66,12 +66,11 @@ export const expenseChartDataWorkflow = async (
 ) =>
   (
     await listAll((pagination) =>
-      expenseList(
-        db,
-        input,
-        [{ orderBy: "date", direction: "asc" }],
+      expenseScaffold.read(db, {
+        filters: input,
+        sorts: [{ orderBy: "date", direction: "asc" }],
         pagination,
-      ),
+      }),
     )
   ).data;
 
@@ -129,9 +128,7 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
   "expense.analyze",
 )
   .call("currentWhere", ({ context }, { input }) =>
-    buildExpenseWhereClause(context, input.filters, {
-      omitAllocationScope: true,
-    }),
+    expenseScaffold.prepareWhere(context, analyticsFilters(input.filters)),
   )
   .call("comparison", async (_, { input }) =>
     input.comparison === "previousPeriod"
@@ -140,9 +137,10 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
   )
   .call("previousWhere", ({ context }, { comparison }) =>
     comparison
-      ? buildExpenseWhereClause(context, comparison.filters, {
-          omitAllocationScope: true,
-        })
+      ? expenseScaffold.prepareWhere(
+          context,
+          analyticsFilters(comparison.filters),
+        )
       : Promise.resolve(undefined),
   )
   .call("projectScope", ({ context }, { input }) =>

@@ -8,7 +8,7 @@ import type { Database } from "~/server/db";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { listActionableTasks } from "~/server/domains/task/repo/actionable";
 import { reorderTasks } from "~/server/domains/task/repo/crud";
-import { taskList } from "~/server/domains/task/repo/lookup";
+import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { getTaskSummary } from "~/server/domains/task/repo/summary";
 import { getTaskTimeline } from "~/server/domains/task/repo/timeline";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -80,13 +80,11 @@ export const taskHandlers = implementOperationDomain(taskContract, {
   chartData: async (context, input) => {
     const result = (
       await listAll((pagination) =>
-        taskList(
-          context.db,
-          input,
-          [{ orderBy: "createdAt", direction: "desc" }],
+        taskScaffold.read(context.db, {
+          filters: input,
+          sorts: [{ orderBy: "createdAt", direction: "desc" }],
           pagination,
-          "page",
-        ),
+        }),
       )
     ).data;
     return readPublicEntityRows({

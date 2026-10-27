@@ -6,14 +6,12 @@ import {
   deviceShortcode,
   type DeviceShortcode,
 } from "@cubby/schemas/identifiers";
-import { type ImageJobFilters } from "@cubby/schemas/image-job";
 import {
   type RawImageJobOut,
   rawImageJobOut,
 } from "@cubby/schemas/image-job-raw-read";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import { describeJobWaitingOn, jobState } from "@cubby/schemas/job";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -23,25 +21,14 @@ import {
   notDeleted,
   unwrapDb,
 } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
 import { job } from "~/server/db/retained-tables";
 import { device, imageProcessingJob } from "~/server/db/schema";
-import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import {
-  createEntityReader,
-  createEntityRowFetcher,
-  defineRepository,
-} from "~/server/entity-kernel/repo/repository";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { loadJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
 import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listReadPlan,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { imageJobDisplayStateSql } from "../image-processing/repo/image-job-state";
@@ -52,11 +39,6 @@ import {
 } from "../image-processing/repo/image-processing";
 
 type ImageJobRow = typeof imageProcessingJob.$inferSelect;
-
-const scaffold = listScaffold("imageJob", imageProcessingJob, {
-  // Built per read: the derivation compares lease expiry with the read's time.
-  derived: { state: listReadValue(() => imageJobDisplayStateSql()) },
-});
 
 type Facts = {
   chargedCost: number;
@@ -212,7 +194,11 @@ const imageJobRead = {
       ),
     );
     const execution = bind.batch(async ({ db, rows }) => {
-      const open = rows.filter((row) => row.state === "pending");
+      // `state` arrives as the derived display state (`leased`, `failed`,
+      // ...), so only the stored terminal outcomes rule a row out.
+      const open = rows.filter(
+        (row) => row.state !== "ready" && row.state !== "skipped",
+      );
       if (!open.length) return new Map<string, Execution>();
       const keyOf = new Map(
         open.map((row) => [imageProcessingJobKey(row.id), row.id]),
@@ -308,70 +294,15 @@ const imageJobRead = {
     ];
   },
 } satisfies ListReadOptions<ImageJobRow>;
-const hydrateRead = (
-  db: Database | DrizzleTransaction,
-  rows: ImageJobRow[],
-  projection: ListProjection,
-) =>
-  listReadPlan<ImageJobRow>("imageJob", imageJobRead).read(
-    db,
-    rows,
-    projection,
-  );
-
-export const listImageJobsRead = (
-  db: Database,
-  filters: ImageJobFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  scaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    {
-      read: imageJobRead,
-    },
-  );
-
-const listImageJobs = completeListReader(rawImageJobOut, listImageJobsRead);
-
-const reader = createEntityReader<
-  ImageJobRow,
-  RawImageJobOut,
-  "imageJob",
-  Database | DrizzleTransaction
->({
-  entity: "imageJob",
-  fetchById: createEntityRowFetcher(imageProcessingJob),
-  fromDB: async (db, row) =>
-    rawImageJobOut.parse((await hydrateRead(db, [row], { kind: "full" }))[0]),
+const imageJobScaffold = listScaffold("imageJob", imageProcessingJob, {
+  // Built per read: the derivation compares lease expiry with the read's time.
+  derived: { state: listReadValue(() => imageJobDisplayStateSql()) },
+  read: {
+    ...imageJobRead,
+    title: sql`${imageProcessingJob.kind}`,
+  },
 });
 
 export const imageJobRepository = defineRepository("imageJob", {
-  get: (ctx: EntityKernelContext, code: string) =>
-    reader.getByShortcode(ctx.db, code),
-  list: (
-    ctx: EntityKernelContext,
-    filters: ImageJobFilters,
-    sorts: SortParams[],
-    pagination: PaginationParams,
-  ) => listImageJobs(ctx.db, filters, sorts, pagination),
-  listRead: (
-    ctx: EntityKernelContext,
-    filters: ImageJobFilters,
-    sorts: SortParams[],
-    pagination: PaginationParams,
-    projection: ListProjection,
-    readIntent: ListReadIntent = "page",
-  ) =>
-    listImageJobsRead(
-      ctx.db,
-      filters,
-      sorts,
-      pagination,
-      projection,
-      readIntent,
-    ),
+  scaffold: imageJobScaffold,
 });

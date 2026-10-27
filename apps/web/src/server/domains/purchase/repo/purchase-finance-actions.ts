@@ -15,6 +15,7 @@ import type {
   purchaseSplitCheckInput,
   purchaseSplitCheckOut,
 } from "@cubby/schemas/purchase";
+import { rawExpenseListItemOut } from "@cubby/schemas/work-raw-read";
 import { and, count, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
@@ -26,14 +27,14 @@ import {
   ledgerSourceClaim,
   purchase,
 } from "~/server/db/schema";
-import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
+import { readExpense } from "~/server/domains/expense/repo/crud";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
 import {
   requireLineRoleClassifier,
   type ExpenseLineRoleClassifier,
 } from "~/server/domains/expense/repo/line-role-classifier";
-import { expenseList } from "~/server/domains/expense/repo/lookup";
-import { getPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
+import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
+import { readPurchase } from "~/server/domains/purchase/repo/purchase";
 import {
   LINK_CANDIDATE_LIMIT,
   LINK_EXPENSE_SCOPES,
@@ -63,7 +64,7 @@ export async function loadSplitOriginal(
   db: Database,
   expenseId: ExpenseShortcode,
 ): Promise<SplitOriginal> {
-  const original = await getExpenseByShortcode(db, expenseId);
+  const original = await readExpense(db, expenseId);
   if (!original) throw createAppError("EXPENSE_NOT_FOUND", "Expense not found");
   const dbc = getDb(db);
   const [row] = await dbc
@@ -117,15 +118,17 @@ export async function listLinkExpenseCandidates(
   db: Database,
   input: CandidatesInput,
 ): Promise<CandidatesOut> {
-  const target = await getPurchaseByShortcode(db, input.purchaseId);
+  const target = await readPurchase(db, input.purchaseId);
   if (!target) throw createAppError("PURCHASE_NOT_FOUND", "Purchase not found");
-  const page = await expenseList(
-    db,
-    expenseFiltersForScope(input.scope, target.vendorId, input.search),
-    [{ orderBy: "date", direction: "desc" }],
-    { pageIndex: 0, pageSize: LINK_CANDIDATE_LIMIT },
+  const page = await expenseScaffold.read(db, {
+    filters: expenseFiltersForScope(input.scope, target.vendorId, input.search),
+    sorts: [{ orderBy: "date", direction: "desc" }],
+    pagination: { pageIndex: 0, pageSize: LINK_CANDIDATE_LIMIT },
+  });
+  const composed = composeLinkExpenseCandidates(
+    input.purchaseId,
+    page.data.map((row) => rawExpenseListItemOut.parse(row)),
   );
-  const composed = composeLinkExpenseCandidates(input.purchaseId, page.data);
   return {
     ...composed,
     scopes: LINK_EXPENSE_SCOPES,
@@ -146,7 +149,7 @@ export async function checkLinkExpensesFor(
   db: Database,
   input: CheckInput,
 ): Promise<CheckOut> {
-  const target = await getPurchaseByShortcode(db, input.purchaseId);
+  const target = await readPurchase(db, input.purchaseId);
   if (!target) throw createAppError("PURCHASE_NOT_FOUND", "Purchase not found");
   const requested = [...new Set(input.expenseIds)];
   const rows =

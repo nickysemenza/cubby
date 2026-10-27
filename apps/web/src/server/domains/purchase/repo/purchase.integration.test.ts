@@ -25,7 +25,7 @@ import {
   purchase,
   run,
 } from "~/server/db/schema";
-import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
+import { readExpense } from "~/server/domains/expense/repo/crud";
 import * as expenseLineRole from "~/server/domains/expense/service/expense-line-role";
 import {
   linkExpensesToPurchaseWorkflow,
@@ -33,7 +33,7 @@ import {
 } from "~/server/domains/purchase/operations/purchase.server";
 import {
   findOrCreateVendor,
-  getVendorByID,
+  readVendorById,
 } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
@@ -51,12 +51,11 @@ import {
   deletePurchases,
   findOrCreatePurchase,
   foldChargeInto,
-  getPurchaseByID,
-  getPurchaseByShortcode,
+  readPurchaseById,
+  readPurchase,
   getPurchaseExpenses,
   mergePurchases,
-  purchaseList,
-  purchaseListRead,
+  purchaseScaffold,
   splitExpense,
   updatePurchase,
 } from "./purchase";
@@ -76,14 +75,13 @@ describe("purchase list totals", () => {
       date: "2026-01-15",
       orderId: "BASE-001",
     });
-    const page = await purchaseListRead(
-      ctx.db,
-      { vendorId },
-      [],
-      { pageIndex: 0, pageSize: 10 },
-      "page",
-      selectedListProjection("purchase", ["spendingCategoryId"]),
-    );
+    const page = await purchaseScaffold.read(ctx.db, {
+      filters: { vendorId },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 10 },
+      projection: selectedListProjection("purchase", ["spendingCategoryId"]),
+      readIntent: "page",
+    });
     expect(page.data).toHaveLength(1);
     expect(page.data[0]).toMatchObject({
       id: created.id,
@@ -114,13 +112,20 @@ describe("purchase list totals", () => {
         }),
       );
     }
-    const page = await purchaseList(ctx.db, { vendorId }, [], {
-      pageIndex: 0,
-      pageSize: 1,
+    const page = await purchaseScaffold.read(ctx.db, {
+      filters: { vendorId },
+      sorts: [],
+      pagination: {
+        pageIndex: 0,
+        pageSize: 1,
+      },
     });
     expect(page.data).toHaveLength(1);
     expect(page.count).toBe(2);
-    expect(page).toHaveProperty("sums", { expenseTotal: 60, expenseCount: 2 });
+    expect(await purchaseScaffold.totals(ctx.db, { vendorId })).toEqual({
+      expenseTotal: 60,
+      expenseCount: 2,
+    });
   });
 });
 
@@ -276,7 +281,7 @@ describe("purchase application workflows", () => {
       }),
     );
     expect(parts.map((part) => part.cost).sort()).toEqual([5, 7]);
-    expect(await getExpenseByShortcode(ctx.db, original.id)).toBeNull();
+    expect(await readExpense(ctx.db, original.id)).toBeNull();
     const item = await createProductFixture(
       ctx.db,
       makeProductInput({ name: "Workflow durable item" }),
@@ -308,7 +313,7 @@ describe("purchase application workflows", () => {
       data: { keepId: keep.id, mergeIds: [source.id] },
     });
     expect(merged.action === "merge" && merged.item.id).toBe(keep.id);
-    expect(await getPurchaseByShortcode(ctx.db, source.id)).toBeNull();
+    expect(await readPurchase(ctx.db, source.id)).toBeNull();
     for (const part of parts) {
       const saved = await expenseByShortcode(ctx.db, part.id);
       expect(saved.purchaseId).toBe(keep.id);
@@ -357,14 +362,14 @@ const vendorShortcodeByName = async (
   name: string,
 ): Promise<VendorShortcode> => {
   const id = await findOrCreateVendor(db, name);
-  return (await getVendorByID(db, id)).id;
+  return (await readVendorById(db, id)).id;
 };
 
 const expenseByShortcode = async (
   db: Database,
   shortcode: ExpenseShortcode,
 ): Promise<RawExpenseOut> => {
-  const row = await getExpenseByShortcode(db, shortcode);
+  const row = await readExpense(db, shortcode);
   if (!row) throw new Error(`test setup: expense ${shortcode} not found`);
   return row;
 };
@@ -393,8 +398,16 @@ describe("purchase repository — findOrCreatePurchase", () => {
 
     expect(again).toBe(first);
     expect(padded).toBe(first);
-    expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(1);
-    expect((await getPurchaseByID(ctx.db, first)).date).toBe("2024-03-01");
+    expect(
+      (
+        await purchaseScaffold.read(ctx.db, {
+          filters: {},
+          sorts: [],
+          pagination: page,
+        })
+      ).count,
+    ).toBe(1);
+    expect((await readPurchaseById(ctx.db, first)).date).toBe("2024-03-01");
   });
 
   it("two concurrent calls for one order produce exactly one purchase", async () => {
@@ -452,7 +465,7 @@ describe("purchase repository — splitExpense", () => {
     const chargeId = combo.purchaseId!;
     const chargeUuid = await purchaseUuid(ctx.db, chargeId);
     const comboUuid = await expenseUuid(ctx.db, combo.id);
-    expect((await getPurchaseByID(ctx.db, chargeUuid)).statedTotal).toBeNull();
+    expect((await readPurchaseById(ctx.db, chargeUuid)).statedTotal).toBeNull();
 
     const { items: parts, priceAffectedProductIds } = await splitExpense(
       ctx.db,
@@ -512,7 +525,7 @@ describe("purchase repository — splitExpense", () => {
       parts.map((p) => p.id).sort(),
     );
 
-    const charge = await getPurchaseByID(ctx.db, chargeUuid);
+    const charge = await readPurchaseById(ctx.db, chargeUuid);
     expect(charge.statedTotal).toBeNull();
     expect(charge.expenseTotal).toBe(100);
     expect(reconcilePurchase(charge)).toBe("unknown");
@@ -559,7 +572,7 @@ describe("purchase repository — splitExpense", () => {
       ),
     ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
 
-    const charge = await getPurchaseByID(ctx.db, chargeUuid);
+    const charge = await readPurchaseById(ctx.db, chargeUuid);
     expect(charge.statedTotal).toBeNull();
     expect(
       (await getPurchaseExpenses(ctx.db, chargeUuid)).reduce(
@@ -568,7 +581,7 @@ describe("purchase repository — splitExpense", () => {
       ),
     ).toBe(100);
     expect(charge.expenseTotal).toBe(100);
-    expect(await getExpenseByShortcode(ctx.db, combo.id)).toMatchObject({
+    expect(await readExpense(ctx.db, combo.id)).toMatchObject({
       cost: 100,
     });
   });
@@ -754,7 +767,7 @@ describe("purchase repository — mergePurchases", () => {
 
     // The loser is gone even at the public boundary: a soft-deleted shortcode
     // resolves to nothing rather than throwing a uuid-keyed NOT_FOUND.
-    expect(await getPurchaseByShortcode(ctx.db, loser.id)).toBeNull();
+    expect(await readPurchase(ctx.db, loser.id)).toBeNull();
 
     // The keeper's rollup now covers both sides' money.
     expect(merged.purchase.expenseCount).toBe(2);
@@ -860,7 +873,7 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
       reason: "PURCHASE_MERGE_ORDER_COLLISION",
     });
     expect(
-      (await getPurchaseByID(ctx.db, await purchaseUuid(ctx.db, moving.id)))
+      (await readPurchaseById(ctx.db, await purchaseUuid(ctx.db, moving.id)))
         .vendorId,
     ).toBe(toolNirvana);
 
@@ -875,7 +888,7 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
       reason: "PURCHASE_MERGE_ORDER_COLLISION",
     });
     expect(
-      (await getPurchaseByID(ctx.db, await purchaseUuid(ctx.db, held.id)))
+      (await readPurchaseById(ctx.db, await purchaseUuid(ctx.db, held.id)))
         .orderId,
     ).toBe("#11325");
 
@@ -920,9 +933,7 @@ describe("purchase repository — deletion cascades", () => {
       // back the R2 key for the router to drop after the commit.
       detachedImageKeys: [document.key],
     });
-    await expect(
-      getPurchaseByShortcode(ctx.db, emptyPurchase.id),
-    ).resolves.toBeNull();
+    await expect(readPurchase(ctx.db, emptyPurchase.id)).resolves.toBeNull();
 
     // The cascade soft-deletes the join row, then the reap hard-deletes it with
     // the file — a tombstone pointing at a deleted `Image` would strand the FK.

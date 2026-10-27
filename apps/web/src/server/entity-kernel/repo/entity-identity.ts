@@ -10,11 +10,12 @@
 
 import {
   type ShortcodeEntity,
+  entityMembership,
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
 import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
-import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { householdLocalDate } from "~/lib/household-date";
@@ -43,7 +44,7 @@ export type EntityIdentityResolution =
     }
   | { state: "missing" };
 
-const shortcodeEntitySet: ReadonlySet<string> = new Set(shortcodeEntities);
+const shortcodeEntitySet = entityMembership(shortcodeEntities);
 
 export const isShortcodeEntity = (entity: string): entity is ShortcodeEntity =>
   shortcodeEntitySet.has(entity);
@@ -93,36 +94,6 @@ export async function resolveEntityIdentity(
     };
   }
   return { state: "live", kind, id: row.id, shortcode: row.shortcode };
-}
-
-/** Loser codes whose merge redirect points at each given live identity. */
-export async function previousShortcodesFor(
-  db: Database | DrizzleTransaction,
-  ids: readonly string[],
-): Promise<Map<string, string[]>> {
-  const result = new Map<string, string[]>();
-  if (ids.length === 0) return result;
-  const rows = await unwrapDb(db)
-    .select({
-      mergedIntoId: entityIdentity.mergedIntoId,
-      shortcode: entityIdentity.shortcode,
-    })
-    .from(entityIdentity)
-    .where(
-      and(
-        inArray(entityIdentity.mergedIntoId, [...ids]),
-        isNotNull(entityIdentity.shortcode),
-      ),
-    )
-    .orderBy(entityIdentity.deletedAt, entityIdentity.shortcode);
-  for (const row of rows) {
-    if (row.mergedIntoId === null || row.shortcode === null) continue;
-    result.set(row.mergedIntoId, [
-      ...(result.get(row.mergedIntoId) ?? []),
-      row.shortcode,
-    ]);
-  }
-  return result;
 }
 
 /**

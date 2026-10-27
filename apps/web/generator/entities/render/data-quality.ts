@@ -157,10 +157,36 @@ export const renderDataQualityArtifacts = (
           [entity.key, String(entity.dataQuality.exceptions)] as const,
       ),
     );
+  const checksModule = (key: string) =>
+    key.replace(/([a-z0-9])([A-Z])/gu, "$1-$2").toLowerCase();
+  // The stored-quality runtime is imported by domain repositories, so it
+  // resolves each entity's check bindings from their leaf modules rather than
+  // through the repository registry.
+  const entries =
+    generatedHeader +
+    'import type { ScoredEntity } from "@cubby/schemas/data-quality";\n\n' +
+    'import type { ScoredTable } from "~/server/generic/data-quality/repo/registry";\n' +
+    'import type { StoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";\n' +
+    scored
+      .map(
+        (entity) =>
+          `import { ${entity.key}Checks } from "~/server/generic/data-quality/repo/checks/${checksModule(entity.key)}";\n`,
+      )
+      .join("") +
+    "\n// oxfmt-ignore\n" +
+    `export const STORED_QUALITY_ENTRIES = {\n${scored
+      .map((entity) => `  ${entity.key}: ${entity.key}Checks,`)
+      .join(
+        "\n",
+      )}\n} as const satisfies { [E in ScoredEntity]: StoredEntityChecks<E, ScoredTable> };\n`;
   return [
     {
       relativePath: "packages/schemas/src/generated/data-quality-checks.gen.ts",
       source,
+    },
+    {
+      relativePath: "apps/web/src/server/generated/data-quality-entries.gen.ts",
+      source: entries,
     },
   ];
 };

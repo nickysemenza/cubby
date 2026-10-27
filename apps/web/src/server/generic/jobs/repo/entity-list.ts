@@ -14,7 +14,8 @@ import {
 import { jobWaitingOnReasonSql } from "~/server/generic/jobs/repo/waiting-on";
 import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
-const scaffold = listScaffold("job", job, {
+/** The Job list's population and derived SQL, shared with the Job repository. */
+export const jobScaffoldOptions = {
   populationFilters: ["includeInternal"],
   population: (filters) =>
     jobFilters.parse(filters).includeInternal
@@ -39,8 +40,7 @@ const scaffold = listScaffold("job", job, {
     // This option controls population above; it is not a property of a Job.
     includeInternal: listReadValue(() => sql`true`),
   },
-});
-
-export const jobEntityScaffold = () => scaffold;
+} satisfies Parameters<typeof listScaffold<"job", typeof job>>[2];
+const scaffold = listScaffold("job", job, jobScaffoldOptions);
 
 export const jobEntityWhere = (filters: JobFilters) => scaffold.where(filters);

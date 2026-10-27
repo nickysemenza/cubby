@@ -1,13 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type DeviceCreateInput,
-  type DeviceFilters,
   type DeviceUpdateData,
 } from "@cubby/schemas/device";
-import {
-  type RawDeviceOut,
-  rawDeviceOut,
-} from "@cubby/schemas/device-raw-read";
+import { rawDeviceOut } from "@cubby/schemas/device-raw-read";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -17,14 +13,12 @@ import type {
   ProductId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { buildPartialUpdateValues, withTransaction } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import { device, imageSighting, runPushRegistration } from "~/server/db/schema";
 import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
 import {
@@ -34,22 +28,10 @@ import {
 import {
   asActor,
   defineRepository,
-  listOn,
-  listReadOn,
-  onDb,
 } from "~/server/entity-kernel/repo/repository";
-import {
-  createEntityCrud,
-  createEntityRowFetcher,
-} from "~/server/entity-kernel/repo/repository";
+import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listReadPlan,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { appleAppVersionTooOld } from "~/server/http/apple-client-gate";
@@ -85,10 +67,6 @@ const DEVICE_DELETE_EDGE_POLICY = {
   },
 } as const satisfies IncomingEdgePolicy<"device", OperationDisposition>;
 
-type DeviceRow = typeof device.$inferSelect;
-
-const scaffold = listScaffold("device", device);
-
 /** An install not seen for this long is inactive and leaves Apple lane counts. */
 const DEVICE_INACTIVE_AFTER_MS = 7 * 24 * 60 * 60_000;
 
@@ -96,56 +74,29 @@ const deviceInactive = (lastSeenAt: Date | null, now = new Date()) =>
   !lastSeenAt ||
   now.getTime() - lastSeenAt.getTime() > DEVICE_INACTIVE_AFTER_MS;
 
-const deviceRead = {
-  bindings: (bind) => {
-    // Row-local derivations; per-device leases live on the Activity queue.
-    const clock = bind.batch(async () => ({ now: new Date() }));
-    return [
-      clock.fields(
-        rawDeviceOut.pick({ updateRequired: true, inactive: true }),
-        (row, { now }) => ({
-          updateRequired: appleAppVersionTooOld(row.appVersion),
-          inactive: deviceInactive(row.lastSeenAt, now),
-        }),
-      ),
-    ];
-  },
-} satisfies ListReadOptions<DeviceRow>;
-const devicePlan = listReadPlan<DeviceRow>("device", deviceRead);
-const hydrate = async (
-  db: Database | DrizzleTransaction,
-  rows: DeviceRow[],
-): Promise<RawDeviceOut[]> =>
-  (await devicePlan.read(db, rows, { kind: "full" })).map((row) =>
-    rawDeviceOut.parse(row),
-  );
-
-export const buildDeviceWhere = (filters: DeviceFilters) =>
-  scaffold.where(filters);
-
-export const listDevicesRead = (
-  db: Database,
-  filters: DeviceFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  scaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    {
-      read: deviceRead,
+export const deviceScaffold = listScaffold("device", device, {
+  read: {
+    bindings: (bind) => {
+      // Row-local derivations; per-device leases live on the Activity queue.
+      const clock = bind.batch(async () => ({ now: new Date() }));
+      return [
+        clock.fields(
+          rawDeviceOut.pick({ updateRequired: true, inactive: true }),
+          (row, { now }) => ({
+            updateRequired: appleAppVersionTooOld(row.appVersion),
+            inactive: deviceInactive(row.lastSeenAt, now),
+          }),
+        ),
+      ];
     },
-  );
-
-export const listDevices = completeListReader(rawDeviceOut, listDevicesRead);
+  },
+});
 
 const deviceCrud = createEntityCrud({
   table: device,
   entity: "device",
-  fetchById: createEntityRowFetcher(device),
-  fromDB: async (db, row: DeviceRow) => (await hydrate(db, [row]))[0]!,
+  scaffold: deviceScaffold,
+  output: rawDeviceOut,
   toUpdate: (data: {
     name?: string;
     appVersion?: string | null;
@@ -159,8 +110,7 @@ const deviceCrud = createEntityCrud({
   auditUpdateFields: [...entityFieldModels.device.audit],
 });
 
-export const getDeviceByID = deviceCrud.getByID;
-const getDeviceByShortcode = deviceCrud.getByShortcode;
+export const readDeviceById = deviceCrud.getByID;
 
 export const createDevice = defineMutationWriter({
   entity: "device",
@@ -301,9 +251,7 @@ const deleteDevicePushRegistrations = async (
 
 export const deviceRepository = defineRepository("device", {
   lifecycle: { delete: DEVICE_DELETE_EDGE_POLICY },
-  get: onDb(getDeviceByShortcode),
-  list: listOn(listDevices),
-  listRead: listReadOn(listDevicesRead),
+  scaffold: deviceScaffold,
   create: asActor(createDevice),
   update: asActor(updateDevice),
   deleteHooks: {

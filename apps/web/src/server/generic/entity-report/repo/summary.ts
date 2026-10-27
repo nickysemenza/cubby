@@ -17,9 +17,9 @@ import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
-import { listEmailsRead } from "~/server/domains/email/repo/email";
-import { listProductsRead } from "~/server/domains/product/repo/crud";
-import { listSourceTransactionRecordsRead } from "~/server/domains/transaction-import/repo/entity-repositories";
+import { emailScaffold } from "~/server/domains/email/repo/email";
+import { productScaffold } from "~/server/domains/product/repo/crud";
+import { sourceTransactionRecordScaffold } from "~/server/domains/transaction-import/repo/entity-repositories";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -108,20 +108,18 @@ export async function productStockSummary(
   resolvedId?: ProductId,
 ): Promise<ReportBlock[]> {
   if (!resolvedId) await resolveOrThrow(db, "product", code);
-  const products = await listProductsRead(
-    db,
-    { ids: [parseShortcodeFor("product", code)] },
-    [],
-    { pageIndex: 0, pageSize: 1 },
-    "page",
-    undefined,
-    selectedListProjection("product", [
+  const products = await productScaffold.read(db, {
+    filters: { ids: [parseShortcodeFor("product", code)] },
+    sorts: [],
+    pagination: { pageIndex: 0, pageSize: 1 },
+    readIntent: "page",
+    projection: selectedListProjection("product", [
       "id",
       "onHandUnits",
       "categoryFeature",
       "primaryPlacement",
     ]),
-  );
+  });
   const product = z
     .object({
       onHandUnits: z.number().nullable(),
@@ -222,15 +220,19 @@ export async function emailSummary(
   entity: "vendor" | "vendorAccount",
 ): Promise<ReportBlock[]> {
   await resolveOrThrow(db, entity, code);
-  const result = await listEmailsRead(
-    db,
-    entity === "vendor"
-      ? { vendorId: [parseShortcodeFor("vendor", code)] }
-      : { vendorAccountId: [parseShortcodeFor("vendorAccount", code)] },
-    [{ orderBy: "receivedAt", direction: "desc" }],
-    { pageIndex: 0, pageSize: 3 },
-    selectedListProjection("email", ["id", "subject", "receivedAt"]),
-  );
+  const result = await emailScaffold.read(db, {
+    filters:
+      entity === "vendor"
+        ? { vendorId: [parseShortcodeFor("vendor", code)] }
+        : { vendorAccountId: [parseShortcodeFor("vendorAccount", code)] },
+    sorts: [{ orderBy: "receivedAt", direction: "desc" }],
+    pagination: { pageIndex: 0, pageSize: 3 },
+    projection: selectedListProjection("email", [
+      "id",
+      "subject",
+      "receivedAt",
+    ]),
+  });
   const rows = z
     .array(emailOut.pick({ id: true, subject: true, receivedAt: true }))
     .parse(result.data);
@@ -261,18 +263,19 @@ export async function transactionSourcesSummary(
   code: string,
 ): Promise<ReportBlock[]> {
   await resolveOrThrow(db, "financialTransaction", code);
-  const result = await listSourceTransactionRecordsRead(
-    db,
-    { transactionId: [parseShortcodeFor("financialTransaction", code)] },
-    [],
-    { pageIndex: 0, pageSize: 3 },
-    selectedListProjection("sourceTransactionRecord", [
+  const result = await sourceTransactionRecordScaffold.read(db, {
+    filters: {
+      transactionId: [parseShortcodeFor("financialTransaction", code)],
+    },
+    sorts: [],
+    pagination: { pageIndex: 0, pageSize: 3 },
+    projection: selectedListProjection("sourceTransactionRecord", [
       "id",
       "displayName",
       "source",
       "statementDate",
     ]),
-  );
+  });
   const rows = z
     .array(
       z.object({
@@ -312,21 +315,19 @@ export async function productPricingSummary(
   const productId = resolvedId ?? (await resolveOrThrow(db, "product", code));
   // Exact ids are canonical shortcodes; Product declares no static list scope. Saved-view
   // defaults are UI filters and are not applied to this explicit repository request.
-  const result = await listProductsRead(
-    db,
-    { ids: [parseShortcodeFor("product", code)] },
-    [],
-    { pageIndex: 0, pageSize: 1 },
-    "page",
-    undefined,
-    selectedListProjection("product", [
+  const result = await productScaffold.read(db, {
+    filters: { ids: [parseShortcodeFor("product", code)] },
+    sorts: [],
+    pagination: { pageIndex: 0, pageSize: 1 },
+    readIntent: "page",
+    projection: selectedListProjection("product", [
       "id",
       "purchaseDate",
       "unitPriceLabel",
       "pricing",
       "categoryFeature",
     ]),
-  );
+  });
   const row = z
     .object({
       purchaseDate: z.string().nullable(),

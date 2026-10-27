@@ -37,7 +37,6 @@ import {
 } from "@cubby/schemas/image-capture-fields";
 import {
   rawImageDetail,
-  rawImageList,
   type RawImageDetail,
 } from "@cubby/schemas/image-raw-read";
 import type { ImageSightingOut } from "@cubby/schemas/image-sighting";
@@ -93,11 +92,10 @@ import {
   associatePendingImages,
   countWhere,
   getDb,
-  imageJoinBindings,
+  galleryBinding,
   type ImageJoinBinding,
   type ImageJoinTable,
   isNotDeleted,
-  type ListReadIntent,
   nextImageSortOrder,
   notDeleted,
   shortcodeSetCondition,
@@ -148,11 +146,13 @@ import type {
   DeriveImageCaptureSighting as SightingCaptureRow,
 } from "~/server/domains/image/repo/image-capture-derivation";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
+import { imageSearch } from "~/server/domains/image/repo/search-read-image";
 import { photoRunImageOrder } from "~/server/domains/photo-import/repo/photo-import";
 import { provenanceEvidenceLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import {
   type MutationReceipt,
+  createEntityReader,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
 import {
@@ -163,14 +163,10 @@ import { createAppError } from "~/server/errors/app-error";
 import { retireAssessmentTargetsTx } from "~/server/generic/assessment/repo/assessment-state";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
 import { shortcodeIdsSql } from "~/server/generic/list/repo/field-compiler";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
   lookupEntityReferences,
   resolveAllPresent,
@@ -328,7 +324,7 @@ export const attachExistingImageToEntity = async (
       .with({ entity: "product" }, ({ id }) =>
         attachExistingWithBinding(
           tx,
-          imageJoinBindings.product,
+          galleryBinding("product"),
           id,
           imageId,
           input.sortOrder,
@@ -337,7 +333,7 @@ export const attachExistingImageToEntity = async (
       .with({ entity: "location" }, ({ id }) =>
         attachExistingWithBinding(
           tx,
-          imageJoinBindings.location,
+          galleryBinding("location"),
           id,
           imageId,
           input.sortOrder,
@@ -346,7 +342,7 @@ export const attachExistingImageToEntity = async (
       .with({ entity: "recipe" }, ({ id }) =>
         attachExistingWithBinding(
           tx,
-          imageJoinBindings.recipe,
+          galleryBinding("recipe"),
           id,
           imageId,
           input.sortOrder,
@@ -355,7 +351,7 @@ export const attachExistingImageToEntity = async (
       .with({ entity: "project" }, ({ id }) =>
         attachExistingWithBinding(
           tx,
-          imageJoinBindings.project,
+          galleryBinding("project"),
           id,
           imageId,
           input.sortOrder,
@@ -364,7 +360,7 @@ export const attachExistingImageToEntity = async (
       .with({ entity: "purchase" }, ({ id }) =>
         attachExistingWithBinding(
           tx,
-          imageJoinBindings.purchase,
+          galleryBinding("purchase"),
           id,
           imageId,
           input.sortOrder,
@@ -373,7 +369,7 @@ export const attachExistingImageToEntity = async (
       .with({ entity: "gardenEntry" }, ({ id }) =>
         attachExistingWithBinding(
           tx,
-          imageJoinBindings.gardenEntry,
+          galleryBinding("gardenEntry"),
           id,
           imageId,
           input.sortOrder,
@@ -382,7 +378,7 @@ export const attachExistingImageToEntity = async (
       .with({ entity: "meal" }, ({ id }) =>
         attachExistingWithBinding(
           tx,
-          imageJoinBindings.meal,
+          galleryBinding("meal"),
           id,
           imageId,
           input.sortOrder,
@@ -391,7 +387,7 @@ export const attachExistingImageToEntity = async (
       .with({ entity: "task" }, ({ id }) =>
         attachExistingWithBinding(
           tx,
-          imageJoinBindings.task,
+          galleryBinding("task"),
           id,
           imageId,
           input.sortOrder,
@@ -573,7 +569,7 @@ export const getImageHashIndex = async (
       sourceFingerprint: row.sourceFingerprint,
       width: row.width,
       height: row.height,
-      directOwnerShortcodes: imageWithRelationsToAPI(row).associations.map(
+      directOwnerShortcodes: imageAssociations(row).map(
         ({ entityId }) => entityId,
       ),
     })),
@@ -665,17 +661,6 @@ export const setImagePerceptualHashes = async (
   });
 };
 
-const imageIntegrityFields = (imageData: typeof image.$inferSelect) => ({
-  useOriginal: imageData.useOriginal,
-  width: imageData.width,
-  height: imageData.height,
-  detectedContentType: imageData.detectedContentType,
-  sha256: imageData.sha256,
-  renderStatus: imageData.renderStatus,
-  storageStatus: imageData.storageStatus,
-  verifiedAt: imageData.verifiedAt,
-});
-
 type NamedSubject = { name: string; shortcode: string; deletedAt: Date | null };
 
 type ImageWithRelations = typeof image.$inferSelect & {
@@ -727,14 +712,14 @@ function isGardenEntryAssociationKindLabel(
  * shortcode/name, mirroring `loadImageRepresentations`'s shape — one query
  * for a whole page rather than one join per row. */
 async function loadCapturedByParties(
-  db: Database,
+  db: Database | DrizzleTransaction,
   partyIds: readonly (LedgerPartyId | null)[],
 ): Promise<Map<LedgerPartyId, { shortcode: string; name: string }>> {
   const ids = [
     ...new Set(partyIds.filter((id): id is LedgerPartyId => id !== null)),
   ];
   if (ids.length === 0) return new Map();
-  const rows = await getDb(db)
+  const rows = await unwrapDb(db)
     .select({
       id: ledgerParty.id,
       shortcode: ledgerParty.shortcode,
@@ -1169,48 +1154,6 @@ const imageAssociations = (
   );
 };
 
-const imageWithRelationsToAPI = (
-  imageData: ImageWithRelations,
-  capturedByParty: { shortcode: string; name: string } | null = null,
-): RawImageDetail => {
-  return {
-    id: parseShortcodeFor("image", imageData.shortcode),
-    url: getR2PublicUrl(imageData.key),
-    key: imageData.key,
-    filename: imageData.filename,
-    size: imageData.size,
-    contentType: imageData.contentType,
-    status: imageData.status,
-    ...imageIntegrityFields(imageData),
-    source: imageData.source,
-    sourcePageUrl: imageData.sourcePageUrl,
-    sourceAssetUrl: imageData.sourceAssetUrl,
-    sourceName: imageData.sourceName,
-    capturedAt: imageData.capturedAt,
-    capturedAtOffsetMinutes: imageData.capturedAtOffsetMinutes,
-    captureLocation: imageData.captureLocation,
-    capturePlaceName: imageData.capturePlaceName,
-    captureDeviceLabel: imageData.captureDeviceLabel,
-    capturedByPartyId: capturedByParty
-      ? parseShortcodeFor("ledgerParty", capturedByParty.shortcode)
-      : null,
-    capturedByName: capturedByParty?.name ?? null,
-    captureAttribution: imageData.captureAttribution,
-    provenanceEvidence: imageProvenanceEvidence
-      .nullable()
-      .parse(imageData.provenanceEvidence),
-    sourceEvidence: imageSourceEvidence
-      .nullable()
-      .parse(imageData.sourceEvidence),
-    provenanceEvidenceLabel: provenanceEvidenceLabel(
-      imageData.provenanceEvidence,
-    ),
-    createdAt: imageData.createdAt,
-    updatedAt: imageData.updatedAt,
-    associations: imageAssociations(imageData),
-  };
-};
-
 /** Shared relation config for loading entity associations with soft-delete filtering */
 const imageEntityRelations = {
   attachments: {
@@ -1361,37 +1304,20 @@ const requestedRunIds = (
     : selected;
 };
 
-const imageScaffold = listScaffold("image", image, {
-  derived: {
-    referenced: imageReferenceCondition(image, "active"),
-    processingIssue: imageProcessingIssueExpression(image),
-    uploadedAgeHours: sql`(extract(epoch from (now() - ${image.createdAt})) / 3600)`,
-  },
-});
-
-/** Shared live-image predicate for lists and dashboard counts. */
-export const buildImageWhere = async (
-  db: Database,
-  filters: ImageListFilters,
-): Promise<SQL | undefined> =>
-  imageScaffold.where(filters, {
-    context: await imageScaffold.context(db, { filters, readIntent: "count" }),
-  });
-
 /**
  * Each image's current import-run target row, batched by the public `IMG-`
- * shortcode (matching every other batched loader `imageList`/`getImageById`
- * call). `PhotoRunImage_run_image_work_key` keeps a live target unique per (run,
- * image), but a row's own history is never deleted, so this takes the newest
- * by `createdAt` when more than one run has ever targeted the same image.
+ * shortcode. `PhotoRunImage_run_image_work_key` keeps a live target unique per
+ * (run, image), but a row's own history is never deleted, so this takes the
+ * newest by `createdAt` when more than one run has ever targeted the same
+ * image.
  */
 const loadImportTargets = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   imageShortcodes: readonly string[],
 ): Promise<Map<string, ImportTargetSummary>> => {
   const shortcodes = [...new Set(imageShortcodes)];
   if (shortcodes.length === 0) return new Map();
-  const rows = await getDb(db)
+  const rows = await unwrapDb(db)
     .select({
       imageShortcode: image.shortcode,
       state: photoRunImage.state,
@@ -1416,200 +1342,181 @@ const loadImportTargets = async (
   return byImage;
 };
 
-const loadImageRows = (db: Database, where: SQL) =>
-  getDb(db).query.image.findMany({ where, with: imageEntityRelations });
-type ImageRelationRow = Awaited<ReturnType<typeof loadImageRows>>[number];
+/** Each image's live attachments with their subjects, by image id. */
+const loadImageAttachments = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) => {
+  const rows = await unwrapDb(db).query.image.findMany({
+    where: inArray(image.id, [...ids]),
+    columns: { id: true },
+    with: imageEntityRelations,
+  });
+  return new Map(rows.map((row) => [row.id, row]));
+};
 
-const imageRead = (db: Database): ListReadOptions<ImageRelationRow> => ({
-  media: true,
-  bindings: (bind) => {
-    const representations = bind.batch(({ rows }) =>
-      loadImageRepresentations(
-        db,
-        rows.map((row) => row.shortcode),
-      ),
-    );
-    const issues = bind.batch(({ rows }) =>
-      loadImageProcessingIssues(
-        db,
-        rows.map((row) => row.shortcode),
-      ),
-    );
-    const targets = bind.batch(({ rows }) =>
-      loadImportTargets(
-        db,
-        rows.map((row) => row.shortcode),
-      ),
-    );
-    const analyses = bind.batch(({ rows }) =>
-      loadImageAnalysisSummaries(
-        db,
-        rows.map((row) => row.shortcode),
-      ),
-    );
-    const parties = bind.batch(({ rows }) =>
-      loadCapturedByParties(
-        db,
-        rows.map((row) => row.capturedByPartyId),
-      ),
-    );
-    return [
-      bind(
-        rawImageDetail.pick({
-          url: true,
-          provenanceEvidenceLabel: true,
-        }),
-        (row) => ({
-          url: getR2PublicUrl(row.key),
-          provenanceEvidenceLabel: provenanceEvidenceLabel(
-            row.provenanceEvidence,
-          ),
-        }),
-      ),
-      bind(rawImageDetail.pick({ associations: true }), (row) => ({
-        associations: imageAssociations(row),
-      })),
-      parties.fields(
-        rawImageDetail.pick({
-          capturedByPartyId: true,
-          capturedByName: true,
-        }),
-        (row, loaded) => {
-          const party = row.capturedByPartyId
-            ? loaded.get(row.capturedByPartyId)
-            : null;
-          return {
-            capturedByPartyId: party
-              ? parseShortcodeFor("ledgerParty", party.shortcode)
-              : null,
-            capturedByName: party?.name ?? null,
-          };
-        },
-      ),
-      representations.fields(
-        rawImageDetail.pick({ representations: true }),
-        (row, loaded) => ({ representations: loaded.get(row.shortcode) }),
-      ),
-      issues.fields(
-        rawImageDetail.pick({ processingIssue: true }),
-        (row, loaded) => ({
-          processingIssue: loaded.get(row.shortcode) ?? null,
-        }),
-      ),
-      targets.fields(
-        rawImageDetail.pick({ importTarget: true }),
-        (row, loaded) => ({ importTarget: loaded.get(row.shortcode) ?? null }),
-      ),
-      analyses.fields(
-        rawImageDetail.pick({ analysisSummary: true }),
-        (row, loaded) => ({
-          analysisSummary: loaded.get(row.shortcode) ?? null,
-        }),
-      ),
-    ];
+/**
+ * The Image read, stated once: list pages, selected projections and the
+ * single-record read all select through it.
+ */
+export const imageScaffold = listScaffold("image", image, {
+  derived: {
+    referenced: imageReferenceCondition(image, "active"),
+    processingIssue: imageProcessingIssueExpression(image),
+    uploadedAgeHours: sql`(extract(epoch from (now() - ${image.createdAt})) / 3600)`,
+  },
+  read: {
+    search: imageSearch,
+    media: true,
+    // SAFETY: an image read's filters are image list filters.
+    orderBy: (filters) => imageRunOrder(filters as Partial<ImageListFilters>),
+    bindings: (bind) => {
+      const attachments = bind.ids(({ db, ids }) =>
+        loadImageAttachments(db, ids),
+      );
+      const representations = bind.batch(({ db, rows }) =>
+        loadImageRepresentations(
+          db,
+          rows.map((row) => row.shortcode),
+        ),
+      );
+      // The derived expression qualifies its subqueries by the bare image
+      // columns, which a single-table select would bind to the job alias.
+      const issues = bind.batch(({ db, rows }) =>
+        loadImageProcessingIssues(
+          db,
+          rows.map((row) => row.shortcode),
+        ),
+      );
+      const targets = bind.batch(({ db, rows }) =>
+        loadImportTargets(
+          db,
+          rows.map((row) => row.shortcode),
+        ),
+      );
+      const analyses = bind.batch(({ db, rows }) =>
+        loadImageAnalysisSummaries(
+          db,
+          rows.map((row) => row.shortcode),
+        ),
+      );
+      const parties = bind.batch(({ db, rows }) =>
+        loadCapturedByParties(
+          db,
+          rows.map((row) => row.capturedByPartyId),
+        ),
+      );
+      const sightings = bind.ids(({ db, ids }) => listImageSightings(db, ids));
+      return [
+        bind(
+          rawImageDetail.pick({
+            url: true,
+            provenanceEvidenceLabel: true,
+          }),
+          (row) => ({
+            url: getR2PublicUrl(row.key),
+            provenanceEvidenceLabel: provenanceEvidenceLabel(
+              row.provenanceEvidence,
+            ),
+          }),
+        ),
+        attachments.fields(
+          rawImageDetail.pick({ associations: true }),
+          (row, loaded) => ({
+            associations: imageAssociations(
+              loaded.get(row.id) ?? { attachments: [] },
+            ),
+          }),
+        ),
+        parties.fields(
+          rawImageDetail.pick({
+            capturedByPartyId: true,
+            capturedByName: true,
+          }),
+          (row, loaded) => {
+            const party = row.capturedByPartyId
+              ? loaded.get(row.capturedByPartyId)
+              : null;
+            return {
+              capturedByPartyId: party
+                ? parseShortcodeFor("ledgerParty", party.shortcode)
+                : null,
+              capturedByName: party?.name ?? null,
+            };
+          },
+        ),
+        representations.fields(
+          rawImageDetail.pick({ representations: true }),
+          (row, loaded) => ({ representations: loaded.get(row.shortcode) }),
+        ),
+        issues.fields(
+          rawImageDetail.pick({ processingIssue: true }),
+          (row, loaded) => ({
+            processingIssue: loaded.get(row.shortcode) ?? null,
+          }),
+        ),
+        targets.fields(
+          rawImageDetail.pick({ importTarget: true }),
+          (row, loaded) => ({
+            importTarget: loaded.get(row.shortcode) ?? null,
+          }),
+        ),
+        analyses.fields(
+          rawImageDetail.pick({ analysisSummary: true }),
+          (row, loaded) => ({
+            analysisSummary: loaded.get(row.shortcode) ?? null,
+          }),
+        ),
+        sightings.fields(
+          rawImageDetail.pick({ sightings: true }),
+          (row, loaded) => ({ sightings: loaded.get(row.id) ?? [] }),
+          { scope: "detail" },
+        ),
+      ];
+    },
   },
 });
 
-const imageListWith = async (
-  db: Database,
-  filters: ImageListFilters,
-  sorts: Array<{ orderBy: string; direction: "asc" | "desc" }>,
-  pagination: { pageIndex: number; pageSize: number },
-  request: { readIntent?: ListReadIntent; projection?: ListProjection },
-  read: ListReadOptions<ImageRelationRow>,
-) => {
+/**
+ * A photo-inventory run's capture order, which overrides the caller's own
+ * sort: an agent working `filters.runId` wants the order the photos were
+ * taken, not the generic image list's default or requested sort.
+ */
+const imageRunOrder = (filters: Partial<ImageListFilters>) => {
   const runCodes = oneOrManyValues(filters.runId);
-  // A photo-inventory run's capture order overrides the caller's own sort:
-  // an agent working `filters.runId` wants the order the photos were taken,
-  // not whatever default/requested sort the generic image list uses.
-  const runOrder =
-    runCodes === undefined
-      ? undefined
-      : photoRunImageOrder({
-          addedAt: sql`(
-            SELECT min("createdAt") FROM "PhotoRunImage"
-            WHERE "PhotoRunImage"."imageId" = ${image.id}
-              AND "PhotoRunImage"."runId" IN ${requestedRunIds(runCodes, filters.includeSubRuns !== false)}
-          )`,
-          position: sql`(
-            SELECT min("position") FROM "PhotoRunImage"
-            WHERE "PhotoRunImage"."imageId" = ${image.id}
-              AND "PhotoRunImage"."runId" IN ${requestedRunIds(runCodes, filters.includeSubRuns !== false)}
-          )`,
-        });
-
-  return imageScaffold.read(
-    db,
-    { filters, sorts, pagination, ...request },
-    {
-      orderBy: runOrder,
-      load: (where) => loadImageRows(db, where),
-      read,
-    },
-  );
-};
-
-/** Complete and progressive reads share the same admitted image bindings. */
-export const imageListRead = (
-  db: Database,
-  filters: ImageListFilters,
-  sorts: Array<{ orderBy: string; direction: "asc" | "desc" }>,
-  pagination: { pageIndex: number; pageSize: number },
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  imageListWith(
-    db,
-    filters,
-    sorts,
-    pagination,
-    { projection, readIntent },
-    imageRead(db),
-  );
-export const imageList = completeListReader(rawImageList, imageListRead);
-
-export const getImageById = async (
-  db: Database,
-  imageId: string,
-): Promise<RawImageDetail> => {
-  const imageRecord = await getDb(db).query.image.findFirst({
-    where: eq(image.id, imageId),
-    with: imageEntityRelations,
+  if (runCodes === undefined) return undefined;
+  const runIds = () =>
+    requestedRunIds(runCodes, filters.includeSubRuns !== false);
+  return photoRunImageOrder({
+    addedAt: sql`(
+      SELECT min("createdAt") FROM "PhotoRunImage"
+      WHERE "PhotoRunImage"."imageId" = ${outer(image.id)}
+        AND "PhotoRunImage"."runId" IN ${runIds()}
+    )`,
+    position: sql`(
+      SELECT min("position") FROM "PhotoRunImage"
+      WHERE "PhotoRunImage"."imageId" = ${outer(image.id)}
+        AND "PhotoRunImage"."runId" IN ${runIds()}
+    )`,
   });
-
-  if (!imageRecord) {
-    throw createAppError("IMAGE_NOT_FOUND", "Image not found");
-  }
-
-  const imageRecordId = parseEntityId("image", imageRecord.id);
-  const [
-    representations,
-    importTargets,
-    analysisSummaries,
-    capturedByParties,
-    dataQualities,
-    sightings,
-  ] = await Promise.all([
-    loadImageRepresentations(db, [imageRecord.shortcode]),
-    loadImportTargets(db, [imageRecord.shortcode]),
-    loadImageAnalysisSummaries(db, [imageRecord.shortcode]),
-    loadCapturedByParties(db, [imageRecord.capturedByPartyId]),
-    loadDataQualities(db, "image", [imageRecordId]),
-    listImageSightings(db, [imageRecordId]),
-  ]);
-  const capturedByParty = imageRecord.capturedByPartyId
-    ? (capturedByParties.get(imageRecord.capturedByPartyId) ?? null)
-    : null;
-
-  return {
-    ...imageWithRelationsToAPI(imageRecord, capturedByParty),
-    representations: representations.get(imageRecord.shortcode),
-    importTarget: importTargets.get(imageRecord.shortcode) ?? null,
-    analysisSummary: analysisSummaries.get(imageRecord.shortcode) ?? null,
-    dataQuality: dataQualities.get(imageRecordId),
-    sightings: sightings.get(imageRecordId) ?? [],
-  };
 };
+
+const imageReader = createEntityReader<
+  never,
+  RawImageDetail,
+  "image",
+  Database | DrizzleTransaction
+>({ entity: "image", scaffold: imageScaffold, output: rawImageDetail });
+
+/**
+ * One live image's record read by internal id; throws `IMAGE_NOT_FOUND`.
+ * Images are hard-deleted, so no caller reads a deleted row.
+ */
+export const readImageById = (
+  db: Database | DrizzleTransaction,
+  imageId: string,
+): Promise<RawImageDetail> =>
+  imageReader.getByID(db, parseEntityId("image", imageId));
 
 /**
  * Read several images with their direct associations from one database
@@ -1618,50 +1525,17 @@ export const getImageById = async (
  * through its pending-to-uploaded transition.
  */
 export const getImagesByShortcodes = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   shortcodes: readonly string[],
 ): Promise<RawImageDetail[]> => {
-  if (shortcodes.length === 0) return [];
-  const records = await getDb(db).query.image.findMany({
-    where: and(
-      inArray(image.shortcode, [...new Set(shortcodes)]),
-      notDeleted(image),
-    ),
-    with: imageEntityRelations,
-  });
-  const [representations, capturedByParties, dataQualities] = await Promise.all(
-    [
-      loadImageRepresentations(
-        db,
-        records.map((row) => row.shortcode),
-      ),
-      loadCapturedByParties(
-        db,
-        records.map((row) => row.capturedByPartyId),
-      ),
-      loadDataQualities(
-        db,
-        "image",
-        records.map((row) => parseEntityId("image", row.id)),
-      ),
-    ],
-  );
-  return records.map((row) => ({
-    ...imageWithRelationsToAPI(
-      row,
-      row.capturedByPartyId
-        ? (capturedByParties.get(row.capturedByPartyId) ?? null)
-        : null,
-    ),
-    representations: representations.get(row.shortcode),
-    dataQuality: dataQualities.get(parseEntityId("image", row.id)),
-  }));
+  const read = await imageScaffold.get(db, [...new Set(shortcodes)]);
+  return read.data.map((row) => rawImageDetail.parse(row));
 };
 
 /**
  * Update reviewed image metadata without replacing upload-derived bytes or
  * identity. Provenance fields follow the declared image update contract.
- * Re-reads via {@link getImageById} so the output matches `getByID`'s shape
+ * Re-reads via {@link readImageById} so the output matches `getByID`'s shape
  * (including the resolved entity association) rather than a bare row.
  */
 export const updateImage = defineMutationWriter({
@@ -1671,7 +1545,7 @@ export const updateImage = defineMutationWriter({
     db: Database,
     _imageId: string,
     _data: ImageUpdateInput,
-  ) => getImageById(db, receipt.entityId),
+  ) => readImageById(db, receipt.entityId),
   write: async (
     readOutput,
     db: Database,
@@ -1742,7 +1616,7 @@ export const markImageUploaded = async (
     { status: "UPLOADED", sha256 },
     and(eq(image.id, imageId), eq(image.status, "PENDING"), notDeleted(image)),
   );
-  return getImageById(db, imageId);
+  return readImageById(db, imageId);
 };
 
 export const getImageByKey = async (
@@ -2386,7 +2260,7 @@ export const associateImagesWithProduct = async (
   const resolvedImageIds = await resolveAllPresent(db, "image", imageIds);
   await associatePendingImages(
     getDb(db),
-    imageJoinBindings.product,
+    galleryBinding("product"),
     productId,
     resolvedImageIds,
   );
@@ -2406,7 +2280,7 @@ export const associateImagesWithRecipe = async (
   const resolvedImageIds = await resolveAllPresent(db, "image", imageIds);
   await associatePendingImages(
     getDb(db),
-    imageJoinBindings.recipe,
+    galleryBinding("recipe"),
     recipeId,
     resolvedImageIds,
   );
@@ -2971,7 +2845,7 @@ const associateImageWithEntity = async (
     .with({ entity: "product" }, async ({ id }) => {
       const sortOrder = await nextImageSortOrder(
         dbc,
-        imageJoinBindings.product,
+        galleryBinding("product"),
         id,
       );
       await dbc.insert(entityAttachment).values({
@@ -2984,18 +2858,18 @@ const associateImageWithEntity = async (
       });
     })
     .with({ entity: "recipe" }, ({ id }) =>
-      associatePendingImages(dbc, imageJoinBindings.recipe, id, [imageId]),
+      associatePendingImages(dbc, galleryBinding("recipe"), id, [imageId]),
     )
     .with({ entity: "location" }, ({ id }) =>
-      associatePendingImages(dbc, imageJoinBindings.location, id, [imageId]),
+      associatePendingImages(dbc, galleryBinding("location"), id, [imageId]),
     )
     .with({ entity: "project" }, ({ id }) =>
-      associatePendingImages(dbc, imageJoinBindings.project, id, [imageId]),
+      associatePendingImages(dbc, galleryBinding("project"), id, [imageId]),
     )
     .with({ entity: "purchase" }, async ({ id }) => {
       const sortOrder = await nextImageSortOrder(
         dbc,
-        imageJoinBindings.purchase,
+        galleryBinding("purchase"),
         id,
       );
       await dbc.insert(entityAttachment).values({
@@ -3012,13 +2886,13 @@ const associateImageWithEntity = async (
         .where(and(eq(purchase.id, id), notDeleted(purchase)));
     })
     .with({ entity: "gardenEntry" }, ({ id }) =>
-      associatePendingImages(dbc, imageJoinBindings.gardenEntry, id, [imageId]),
+      associatePendingImages(dbc, galleryBinding("gardenEntry"), id, [imageId]),
     )
     .with({ entity: "meal" }, ({ id }) =>
-      associatePendingImages(dbc, imageJoinBindings.meal, id, [imageId]),
+      associatePendingImages(dbc, galleryBinding("meal"), id, [imageId]),
     )
     .with({ entity: "task" }, ({ id }) =>
-      associatePendingImages(dbc, imageJoinBindings.task, id, [imageId]),
+      associatePendingImages(dbc, galleryBinding("task"), id, [imageId]),
     )
     .with({ entity: "vendor" }, { entity: "cookbook" }, () => undefined)
     .exhaustive();

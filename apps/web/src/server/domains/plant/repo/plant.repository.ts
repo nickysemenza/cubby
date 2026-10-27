@@ -4,20 +4,16 @@ import { z } from "zod";
 import {
   asActor,
   defineRepository,
-  listOn,
-  listReadOn,
-  onDb,
 } from "~/server/entity-kernel/repo/repository";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
 import {
   createPlant,
-  getPlantByShortcode,
-  listPlants,
-  listPlantsRead,
   mergePlants,
   PLANT_DELETE_EDGE_POLICY,
   PLANT_MERGE_EDGE_POLICY,
+  plantScaffold,
+  readPlant,
   updatePlant,
 } from "./plant";
 
@@ -39,9 +35,7 @@ export const plantRepository = defineRepository("plant", {
     delete: PLANT_DELETE_EDGE_POLICY,
     merge: PLANT_MERGE_EDGE_POLICY,
   },
-  get: onDb(getPlantByShortcode),
-  list: listOn(listPlants),
-  listRead: listReadOn(listPlantsRead),
+  scaffold: plantScaffold,
   create: asActor(createPlant),
   update: asActor(updatePlant),
   merge: {
@@ -55,7 +49,7 @@ export const plantRepository = defineRepository("plant", {
         input,
         ctx.actorContext,
       );
-      const plant = await getPlantByShortcode(ctx.db, input.keepId);
+      const plant = await readPlant(ctx.db, input.keepId);
       if (!plant) throw new Error("Merged Plant keeper disappeared");
       return {
         output: { plant, mergeSummary },

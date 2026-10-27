@@ -628,7 +628,6 @@ describe("shared entity Relations", () => {
       connections: entityGraph.connections.withTransport(async ({ input }) => ({
         id: input.id,
         kind: "cookbook",
-        redirectedFrom: null,
         groups: [
           {
             direction: "incoming",
@@ -667,7 +666,6 @@ describe("shared entity Relations", () => {
       connections: entityGraph.connections.withTransport(async ({ input }) => ({
         id: input.id,
         kind: "cookbook",
-        redirectedFrom: null,
         groups: [],
       })),
     };

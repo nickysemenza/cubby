@@ -4,7 +4,7 @@ import { and, sql } from "drizzle-orm";
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { outer } from "~/server/db/helpers/related";
 import { expense as table } from "~/server/db/schema";
-import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
+import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import { expenseWorkFacts } from "~/server/domains/expense/repo/work-facts";
 import {
   workExpenseOwners,
@@ -41,7 +41,7 @@ const gapSource: WorkSource = {
         .from(table)
         .where(
           and(
-            await buildExpenseWhereClause(
+            await expenseScaffold.prepareWhere(
               db,
               expenseFiltersSchema.parse(filters),
             ),
@@ -69,7 +69,7 @@ export const expenseWorkSources = (): WorkSource[] => [
         .from(table)
         .where(
           and(
-            await buildExpenseWhereClause(
+            await expenseScaffold.prepareWhere(
               db,
               expenseFiltersSchema.parse(filters),
             ),

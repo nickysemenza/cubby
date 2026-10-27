@@ -20,7 +20,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 
 import { expenseAnalytics, expenseMonthlySummary } from "./analytics";
-import { createExpense, getExpenseByShortcode, updateExpense } from "./crud";
+import { createExpense, readExpense, updateExpense } from "./crud";
 
 const updateExpensesInBulk = bulkUpdateFor("expense");
 
@@ -49,7 +49,7 @@ describe("unknown expense dates", () => {
           .set({ cost })
           .where(eq(expense.shortcode, undated.id)),
       ).rejects.toThrow(/Expense_date_cost_check|Failed query/);
-      expect(await getExpenseByShortcode(ctx.db, undated.id)).toMatchObject({
+      expect(await readExpense(ctx.db, undated.id)).toMatchObject({
         cost: 0,
         date: null,
       });
@@ -68,7 +68,7 @@ describe("unknown expense dates", () => {
     const input = makeExpenseInput({ cost: null, date: null });
     expect(expenseCreateInput.safeParse(input).success).toBe(true);
     const { output: unknown } = await createExpense(ctx.db, input, ctx.actor);
-    expect(await getExpenseByShortcode(ctx.db, unknown.id)).toMatchObject({
+    expect(await readExpense(ctx.db, unknown.id)).toMatchObject({
       cost: null,
       date: null,
     });
@@ -106,12 +106,12 @@ describe("unknown expense dates", () => {
         ctx.actor,
       ),
     ).rejects.toThrow("A date is required");
-    expect(await getExpenseByShortcode(ctx.db, free.id)).toMatchObject({
+    expect(await readExpense(ctx.db, free.id)).toMatchObject({
       date: "2024-01-15",
       costType: "materials",
     });
     await updateExpensesInBulk(ctx.db, [free.id], { date: null }, ctx.actor);
-    expect(await getExpenseByShortcode(ctx.db, free.id)).toMatchObject({
+    expect(await readExpense(ctx.db, free.id)).toMatchObject({
       date: null,
     });
     await updateExpensesInBulk(
@@ -120,7 +120,7 @@ describe("unknown expense dates", () => {
       { trade: "other" },
       ctx.actor,
     );
-    expect(await getExpenseByShortcode(ctx.db, free.id)).toMatchObject({
+    expect(await readExpense(ctx.db, free.id)).toMatchObject({
       date: null,
     });
   });

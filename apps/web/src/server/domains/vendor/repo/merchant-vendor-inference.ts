@@ -200,10 +200,3 @@ export async function enrichFinancialTransactionVendorRead<
     };
   });
 }
-
-export async function enrichFinancialTransactionsWithVendorInference(
-  db: Database | DrizzleTransaction,
-  transactions: readonly RawFinancialTransactionOut[],
-): Promise<RawFinancialTransactionOut[]> {
-  return enrichFinancialTransactionVendorRead(db, transactions);
-}

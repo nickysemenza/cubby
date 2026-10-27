@@ -37,7 +37,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 import {
   addRecipeToMeal,
   createMealWithEntityId,
-  getMealByID,
+  readMealById,
   getMealsByDateRange,
   getUpcomingMealSummary,
 } from "./crud";
@@ -100,7 +100,7 @@ describe("meal recipe preparations", () => {
     await expect(addRecipeToMealWorkflow(context, reviewed)).rejects.toThrow(
       "Recipe not found",
     );
-    const unchanged = await getMealByID(ctx.db, target.entityId);
+    const unchanged = await readMealById(ctx.db, target.entityId);
     expect(unchanged?.mealKind).toBe("takeout");
     expect(unchanged?.recipes).toEqual([]);
     await getDb(ctx.db)

@@ -1,26 +1,17 @@
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/repo/price-affected-recipes";
-import {
-  defineRepository,
-  listOn,
-  listReadOn,
-  onDb,
-} from "~/server/entity-kernel/repo/repository";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
 
 import {
   createExpense,
   deleteExpensesWithPurchaseEffects,
   EXPENSE_DELETE_EDGE_POLICY,
-  getExpenseByShortcode,
   updateExpense,
 } from "./crud";
-import { expenseList, expenseListRead, expenseListSummary } from "./lookup";
+import { expenseScaffold } from "./lookup";
 
 export const expenseRepository = defineRepository("expense", {
   lifecycle: { delete: EXPENSE_DELETE_EDGE_POLICY },
-  get: onDb(getExpenseByShortcode),
-  list: listOn(expenseList),
-  listRead: listReadOn(expenseListRead),
-  listSummary: (ctx, filters) => expenseListSummary(ctx.db, filters),
+  scaffold: expenseScaffold,
   create: async (ctx, data) => {
     const result = await createExpense(
       ctx.db,

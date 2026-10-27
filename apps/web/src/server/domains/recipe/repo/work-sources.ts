@@ -3,7 +3,7 @@ import { and, getTableName, sql } from "drizzle-orm";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { recipe as table } from "~/server/db/schema";
-import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
+import { recipeScaffold } from "~/server/domains/recipe/repo/crud";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import {
   entityProblemSources,
@@ -30,7 +30,10 @@ export const recipeWorkSources = (): WorkSource[] => [
         .from(table)
         .where(
           and(
-            buildRecipeWhere(recipeFiltersSchema.parse(filters)),
+            await recipeScaffold.prepareWhere(
+              db,
+              recipeFiltersSchema.parse(filters),
+            ),
             recordScope(scope, sql`${table.shortcode}`),
           ),
         ),

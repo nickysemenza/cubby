@@ -41,8 +41,14 @@ import { isServiceProductCategory } from "@cubby/schemas/product-category-fields
 import { type RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { productQuantityVarianceState } from "@cubby/schemas/product-fields";
 import type { RawProductPickerItem } from "@cubby/schemas/product-raw-read";
-import { rawProductList } from "@cubby/schemas/product-raw-read";
-import type { RawProductOutput } from "@cubby/schemas/product-raw-read";
+import {
+  rawProductDetail,
+  rawProductList,
+} from "@cubby/schemas/product-raw-read";
+import {
+  type RawProductOutput,
+  rawProductOutput,
+} from "@cubby/schemas/product-raw-read";
 import {
   and,
   asc,
@@ -51,14 +57,11 @@ import {
   isNotNull,
   or,
   sql,
-  sum,
   type SQL,
 } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
-import { groupBy, uniq } from "es-toolkit";
+import { uniq } from "es-toolkit";
 
-import { startOperationDefinition } from "~/lib/start-operation-observability";
-import type { USDAClient } from "~/server/clients/usda";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
@@ -72,21 +75,23 @@ import {
   productBrandCodeSql,
 } from "~/server/db/computed/product-brand-sql";
 import {
+  type CategoryStockTracking,
   categorySummarySql,
   categoryStockTrackingSql,
 } from "~/server/db/computed/product-category-sql";
-import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
+import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
 import {
   assertNoDependents,
   associatePendingImages,
+  databaseForTransaction,
   formatSearchTerm,
   getDb,
-  imageJoinBindings,
-  type ListReadIntent,
+  galleryBinding,
+  isTransaction,
   mapImages,
   notDeleted,
-  relations,
   textArrayMatches,
+  unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
@@ -99,12 +104,12 @@ import {
   entityLink,
   expense,
   image,
+  ingredient,
   inventoryEntry,
   importSourceProduct,
   location,
   mealFoodEntry,
   photoGroupProposal,
-  plant,
   planting,
   product,
   productCategory,
@@ -115,12 +120,10 @@ import {
 import { loadImageAnalysisSummaries } from "~/server/domains/image/repo/image-analysis-summary";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
+import { getRecipeUsagesForIngredient } from "~/server/domains/ingredient/repo/recipe-usages";
 import { productOwnerFilterSql } from "~/server/domains/inventory/repo/ownership";
-import { loadCategoryStockTracking } from "~/server/domains/inventory/repo/stock-tracking";
-import {
-  enrichProductRowsWithInventoryValuations,
-  loadStoredInventoryValuations,
-} from "~/server/domains/inventory/repo/valuation";
+import { loadStoredInventoryValuations } from "~/server/domains/inventory/repo/valuation";
+import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import { loadLocationAncestorsWithIds } from "~/server/domains/location/repo/tree";
 import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import {
@@ -138,10 +141,13 @@ import {
 } from "~/server/domains/product/repo/gtin";
 import {
   enrichProductListItems,
-  prefetchProductFoods,
+  productUnitPriceDetailFields,
 } from "~/server/domains/product/repo/list-enrichment";
+import { buildNutritionDisplay } from "~/server/domains/product/repo/nutrition-display";
+import { productSearch as productSearchRead } from "~/server/domains/product/repo/search-read-product";
 import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
 import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
+import { externalIdsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { insertPayloadWithIdentity } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
@@ -152,8 +158,7 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
+import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import {
   storedDerivedSql,
   storedFieldAvailableSql,
@@ -163,29 +168,19 @@ import {
   lockExternalIdentifierParents,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
 import {
-  type ListPreparationScope,
-  listReadValue,
-} from "~/server/generic/list/repo/field-compiler";
+  loadProductComponentEvidence,
+  loadProductExpenseEvidence,
+} from "~/server/generic/field-explanation/repo/field-explanation-evidence";
+import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
+import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type {
-  ListProjection,
-  ListReadPage,
-} from "~/server/generic/list/repo/list-contracts";
 import {
   expectedQuantityLabel,
   quantityVarianceLabel,
   unitPriceLabel,
 } from "~/server/generic/list/repo/list-display-labels";
-import {
-  loadListGroup,
-  listReadPlan,
-  wantsListGroup,
-} from "~/server/generic/list/repo/list-projection";
-import { projectListRows } from "~/server/generic/list/repo/list-read-schema";
-import { withPageFields } from "~/server/generic/list/repo/page-fields";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
   resolveAllOrThrow,
@@ -194,7 +189,6 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summary";
-import { observeOperationPhase } from "~/server/observability/observed-request";
 
 import { assertProductCategoryChange } from "./classification";
 import {
@@ -203,7 +197,6 @@ import {
   type ProductRetainingEdgeKey,
 } from "./edge-roles";
 import {
-  dbProductToAPI,
   splitProductImages,
   mapProductExternalIds,
   mapProductUnitMappings,
@@ -211,20 +204,18 @@ import {
   primaryGtinOf,
   mapDbProductIngredient,
   dbProductToPickerItemAPI,
-  dbProductToTopLevelAPI,
   productFieldResolutions,
   productImageShortcodesOf,
 } from "./mappers";
 import { ownershipExitExpensePredicate } from "./ownership";
+import { loadProductOwnershipEvidence } from "./ownership-evidence";
 import {
   productReadPriceSql,
   productReadCostSql,
   enrichProductRowsWithPricing,
   loadEffectiveProductPricesById,
-  loadProductPriceSum,
-  loadProductPricing,
-  resolveProductPricing,
 } from "./pricing";
+import { storedEffectivePrice } from "./pricing";
 import {
   enrichProductRowsWithQuantityLedger,
   expectedQuantityFilterSql,
@@ -236,7 +227,6 @@ import {
   onHandUnitsSql,
 } from "./quantity-ledger";
 import { productStockContext } from "./stock-context";
-import type { ProductDeepDB, ProductListDB } from "./types";
 import { unitMappingColumns } from "./unit-mappings";
 import {
   assertNoCanonicalPriceMapping,
@@ -319,7 +309,26 @@ const productHasUsdaKey = sql`(${product.fdc_id} IS NOT NULL OR ${product.labelN
       AND pei."source" = ${GTIN_SOURCE}
       AND pei."deletedAt" IS NULL))`;
 
-const productScaffold = listScaffold("product", product, {
+/** The declared read's row: stored columns plus the helper columns bindings read. */
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- matches listScaffold's default Row; bindings read declared keys by name.
+type ProductReadRow = typeof product.$inferSelect & {
+  readonly categorySummary: RawProductCategorySummary | null;
+  readonly categoryStockTrackingValue: CategoryStockTracking | null;
+  readonly [key: string]: unknown;
+};
+
+const readerDatabase = (db: Database | DrizzleTransaction): Database =>
+  isTransaction(db) ? databaseForTransaction(db) : db;
+
+/**
+ * The Product read, stated once: list pages, selected projections, totals and
+ * the single-record read all select through it.
+ */
+export const productScaffold = listScaffold<
+  "product",
+  typeof product,
+  ProductReadRow
+>("product", product, {
   derived: {
     location: sql.raw(
       `(SELECT min(l."name") FROM "InventoryEntry" ie ` +
@@ -441,12 +450,554 @@ const productScaffold = listScaffold("product", product, {
     effectiveOwner: (value) =>
       productOwnerFilterSql(value.values, value.presence),
   },
+  read: {
+    search: productSearchRead,
+    evidence: {
+      componentCount: loadProductComponentEvidence,
+      expenseCount: loadProductExpenseEvidence,
+    },
+    columns: {
+      // Derived `brandId`, `categoryId`, `price` and `cost` are sort values;
+      // the read keeps the stored reference and manual price, and `cost` is
+      // published from the stored derived value, never from this row.
+      brandId: product.brandId,
+      price: product.price,
+      cost: sql<null>`NULL`,
+      expenseCount: sql<number>`(${productExpenseCountFilterSql(product.id)})::int`,
+      // Same live-edge predicate as the kit filter and the detail hero.
+      componentCount: sql<number>`(SELECT count(*)::int FROM ${entityLink}
+        WHERE ${entityLink.fromEntityId} = ${product.id}
+          AND ${liveLinks("productComponent")})`,
+      classificationEvidence: productClassificationEvidenceSql(
+        sql`${product.id}`,
+      ),
+      // Helper columns the category and stock bindings read on every page.
+      categorySummary: categorySummarySql(sql`${product.categoryId}`),
+      categoryStockTrackingValue: categoryStockTrackingSql(
+        sql`${product.categoryId}`,
+      ),
+    },
+    media: true,
+    bindings: (bind) => {
+      const productIds = (ids: readonly string[]) =>
+        uniq(ids.map((id) => parseEntityId("product", id)));
+      const grouped = <Row extends object>(
+        ids: readonly string[],
+        rows: readonly Row[],
+        key: (row: Row) => string,
+      ) => {
+        const result = new Map<ProductId, Row[]>(
+          productIds(ids).map((id) => [id, []]),
+        );
+        for (const row of rows)
+          result.get(parseEntityId("product", key(row)))?.push(row);
+        return result;
+      };
+      const attachments = bind.ids(async ({ db, ids }) =>
+        grouped(
+          ids,
+          await unwrapDb(db).query.entityAttachment.findMany({
+            where: and(
+              inArray(entityAttachment.entityId, productIds(ids)),
+              notDeleted(entityAttachment),
+            ),
+            orderBy: [
+              asc(entityAttachment.sortOrder),
+              asc(entityAttachment.createdAt),
+            ],
+            with: { image: true },
+          }),
+          (row) => row.entityId,
+        ),
+      );
+      const externalIds = bind.ids(async ({ db, ids }) =>
+        grouped(
+          ids,
+          await unwrapDb(db).query.entityExternalId.findMany({
+            where: and(
+              inArray(entityExternalId.entityId, productIds(ids)),
+              notDeleted(entityExternalId),
+            ),
+          }),
+          (row) => row.entityId,
+        ),
+      );
+      const unitMappings = bind.ids(async ({ db, ids }) =>
+        grouped(
+          ids,
+          await unwrapDb(db).query.productUnitMappings.findMany({
+            where: and(
+              inArray(productUnitMappings.productId, productIds(ids)),
+              notDeleted(productUnitMappings),
+            ),
+          }),
+          (row) => row.productId,
+        ),
+      );
+      const inventory = bind.ids(async ({ db, ids }) => {
+        const entries = await unwrapDb(db).query.inventoryEntry.findMany({
+          where: and(
+            inArray(inventoryEntry.productId, productIds(ids)),
+            notDeleted(inventoryEntry),
+          ),
+          orderBy: inventoryEntry.createdAt,
+          with: { location: true },
+        });
+        const valuations = await loadStoredInventoryValuations(
+          db,
+          entries.map((row) => row.id),
+        );
+        const byProduct = grouped(
+          ids,
+          entries.map((row) => ({
+            ...row,
+            valuation: valuations.get(row.id) ?? null,
+          })),
+          (row) => row.productId,
+        );
+        return new Map(
+          [...byProduct].map(([id, rows]) => [
+            id,
+            mapProductListInventoryEntries(rows),
+          ]),
+        );
+      });
+      const pricing = bind.batch(
+        async ({ db, rows }) =>
+          new Map(
+            (await enrichProductRowsWithPricing(db, rows)).map((row) => [
+              row.id,
+              row.pricing,
+            ]),
+          ),
+      );
+      const ledgers = bind.ids(({ db, ids }) =>
+        enrichProductRowsWithQuantityLedger(
+          readerDatabase(db),
+          productIds(ids).map((id) => ({ id })),
+        ).then((rows) => new Map(rows.map((row) => [row.id, row]))),
+      );
+      const stock = bind.batch(async (page) => {
+        const [inventories, prices, ledgered] = await Promise.all([
+          inventory.load(page.idPage),
+          pricing.load(page),
+          ledgers.load(page.idPage),
+        ]);
+        return { inventories, prices, ledgered };
+      });
+      const ingredients = bind.batch(async ({ db, rows }) => {
+        const ids = uniq(
+          rows.flatMap((row) => (row.ingredientId ? [row.ingredientId] : [])),
+        );
+        const loaded =
+          ids.length === 0
+            ? []
+            : await unwrapDb(db).query.ingredient.findMany({
+                where: and(inArray(ingredient.id, ids), notDeleted(ingredient)),
+              });
+        return new Map(loaded.map((row) => [row.id, row]));
+      });
+      // A read without the kernel's USDA client (a script) resolves no food.
+      const food = bind.batch(async (page) => {
+        const [identities, mappings, prices, stored] = await Promise.all([
+          externalIds.load(page.idPage),
+          unitMappings.load(page.idPage),
+          pricing.load(page),
+          page.idPage.stored ??
+            loadStoredDerived(
+              page.db,
+              "product",
+              page.rows.map((row) => row.id),
+              ["price"],
+            ),
+        ]);
+        const seeds = page.rows.map((row) => {
+          const id = parseShortcodeFor("product", row.shortcode);
+          const price = prices.get(row.id);
+          if (!price) throw new Error("Product food binding requires pricing");
+          return {
+            id,
+            primaryGtin: primaryGtinOf(identities.get(row.id)),
+            fdc_id: row.fdc_id,
+            price: row.price,
+            pricing: {
+              ...price,
+              effectivePrice: storedEffectivePrice(stored, {
+                ...row,
+                category: row.categorySummary,
+              }),
+            },
+            labelNutrition: row.labelNutrition,
+            unitMappings: mapProductUnitMappings(
+              id,
+              mappings.get(row.id) ?? [],
+            ),
+          };
+        });
+        const enriched = await enrichProductListItems(
+          seeds,
+          page.context.reader.usdaClient,
+        );
+        return new Map(
+          page.rows.map((row, index) => {
+            const value = enriched[index];
+            if (!value)
+              throw new Error("Product food batch omitted a selected row");
+            return [row.id, { seed: seeds[index]!, value }];
+          }),
+        );
+      });
+      const analyses = bind.ids(async (page) => {
+        const loaded = await attachments.load(page);
+        return {
+          attachments: loaded,
+          summaries: await loadImageAnalysisSummaries(
+            page.db,
+            [...loaded.values()].flatMap((rows) =>
+              productImageShortcodesOf(rows),
+            ),
+          ),
+        };
+      });
+      const foodOf = (
+        loaded: Awaited<ReturnType<typeof food.load>>,
+        id: ProductId,
+      ) => {
+        const value = loaded.get(id);
+        if (!value)
+          throw new Error("Product food binding omitted a selected row");
+        return value;
+      };
+      const covers = bind.ids(({ db, ids }) =>
+        getProductCoverImageUrlsByProductIds(db, productIds(ids)),
+      );
+      const servingAsLocations = bind.ids(async ({ db, ids }) => {
+        const rows = await unwrapDb(db).query.location.findMany({
+          where: and(
+            inArray(location.productId, productIds(ids)),
+            notDeleted(location),
+          ),
+        });
+        const database = readerDatabase(db);
+        const ancestorsById = await loadLocationAncestorsWithIds(
+          database,
+          rows.map((row) => row.id),
+        );
+        const displayImages = await resolveEntityDisplayImages(
+          db,
+          uniq([
+            ...rows.map((row) => row.id),
+            ...[...ancestorsById.values()].flatMap((chain) =>
+              chain.map((rung) => rung.locationId),
+            ),
+          ]).map((entityId) => ({ entityKind: "location" as const, entityId })),
+        );
+        const displayImageOf = (id: LocationId) =>
+          displayImages.get(entityRefKey("location", id)) ?? null;
+        return grouped(
+          ids,
+          rows.map((row) => ({
+            id: parseShortcodeFor("location", row.shortcode),
+            name: row.name,
+            type: parseLocationType(row.type),
+            displayImage: displayImageOf(row.id),
+            ancestors: (ancestorsById.get(row.id) ?? []).map(
+              ({ locationId, ...rung }) => ({
+                ...rung,
+                displayImage: displayImageOf(locationId),
+              }),
+            ),
+            productId: row.productId ?? "",
+          })),
+          (row) => row.productId,
+        );
+      });
+      const cookbooks = bind.ids(async ({ db, ids }) =>
+        grouped(
+          ids,
+          await unwrapDb(db).query.cookbook.findMany({
+            where: and(
+              inArray(cookbook.productId, productIds(ids)),
+              notDeleted(cookbook),
+            ),
+            orderBy: asc(cookbook.name),
+          }),
+          (row) => row.productId ?? "",
+        ),
+      );
+      const ownershipEvidence = bind.batch(async ({ db, rows }) => {
+        const database = readerDatabase(db);
+        return new Map(
+          await Promise.all(
+            rows.map(
+              async (row) =>
+                [
+                  row.id,
+                  await loadProductOwnershipEvidence(
+                    database,
+                    row.id,
+                    row.categorySummary,
+                  ),
+                ] as const,
+            ),
+          ),
+        );
+      });
+      const recipeUsages = bind.batch(async (page) => {
+        const linked = await ingredients.load(page);
+        const database = readerDatabase(page.db);
+        return new Map(
+          await Promise.all(
+            page.rows.map(async (row) => {
+              const live = row.ingredientId
+                ? linked.get(row.ingredientId)
+                : undefined;
+              return [
+                row.id,
+                live
+                  ? (await getRecipeUsagesForIngredient(database, live.id))
+                      .recipeUsages
+                  : [],
+              ] as const;
+            }),
+          ),
+        );
+      });
+      return [
+        bind(
+          rawProductList.pick({ modelPresence: true, notesPresence: true }),
+          (row) => ({
+            modelPresence: Boolean(row.model),
+            notesPresence: Boolean(row.notes),
+          }),
+        ),
+        bind(rawProductList.pick({ dataGaps: true }), (_row, { quality }) => {
+          if (!quality)
+            throw new Error("Product data gaps require loaded quality");
+          return {
+            dataGaps: rawProductList.shape.dataGaps.parse(
+              quality.gaps.map((gap) => gap.check),
+            ),
+          };
+        }),
+        bind(
+          rawProductList.pick({
+            category: true,
+            categoryId: true,
+            categoryFeature: true,
+          }),
+          (row) => ({
+            category: row.categorySummary,
+            categoryId: row.categorySummary?.id ?? null,
+            // The category SQL resolves inheritance before the compact projection.
+            categoryFeature: row.categorySummary?.feature ?? null,
+          }),
+        ),
+        ingredients.fields(
+          rawProductList.pick({ ingredient: true }),
+          (row, loaded) => {
+            const linked = row.ingredientId
+              ? loaded.get(row.ingredientId)
+              : undefined;
+            return {
+              ingredient: linked ? mapDbProductIngredient(linked) : null,
+            };
+          },
+        ),
+        inventory.fields(
+          rawProductList.pick({ inventoryEntry: true }),
+          (row, loaded) => ({ inventoryEntry: loaded.get(row.id) ?? [] }),
+        ),
+        externalIds.fields(
+          rawProductList.pick({ externalIds: true }),
+          (row, loaded) => ({
+            externalIds: mapProductExternalIds(loaded.get(row.id)),
+          }),
+        ),
+        externalIds.fields(
+          rawProductDetail.pick({ externalIdsLabel: true }),
+          (row, loaded) => ({
+            externalIdsLabel: externalIdsLabel(
+              mapProductExternalIds(loaded.get(row.id)),
+            ),
+          }),
+          { scope: "detail" },
+        ),
+        unitMappings.fields(
+          rawProductList.pick({ unitMappings: true }),
+          (row, loaded) => ({
+            unitMappings: mapProductUnitMappings(
+              parseShortcodeFor("product", row.shortcode),
+              loaded.get(row.id) ?? [],
+            ),
+          }),
+        ),
+        attachments.fields(
+          rawProductList.pick({
+            images: true,
+            labelImages: true,
+            itemImageCount: true,
+            labelImageCount: true,
+          }),
+          (row, loaded) => {
+            const { itemImages, ...groups } = splitProductImages(
+              loaded.get(row.id),
+            );
+            return { ...groups, images: itemImages };
+          },
+        ),
+        // A record read carries each image's analysis summary; a page stays a
+        // single attachment query regardless of image count.
+        analyses.fields(
+          rawProductDetail.pick({ images: true, labelImages: true }),
+          (row, loaded) => {
+            const { itemImages, labelImages } = splitProductImages(
+              loaded.attachments.get(row.id),
+              loaded.summaries,
+            );
+            return { images: itemImages, labelImages };
+          },
+          { scope: "detail" },
+        ),
+        stock.fields(
+          rawProductList.pick({
+            pricing: true,
+            fieldResolutions: true,
+            primaryPlacement: true,
+            quantityLedger: true,
+            onHandUnits: true,
+            quantityVariance: true,
+            stockStatus: true,
+            stockStatusItems: true,
+            ledgerExpectedQuantityLabel: true,
+            quantityVarianceLabel: true,
+          }),
+          (row, loaded) => {
+            const inventoryEntry = loaded.inventories.get(row.id) ?? [];
+            const pricing = loaded.prices.get(row.id);
+            const ledgered = loaded.ledgered.get(row.id);
+            if (!pricing || !ledgered)
+              throw new Error(
+                "Product stock binding requires loaded pricing and ledger",
+              );
+            const service = isServiceProductCategory(row.categorySummary);
+            const quantity = deriveProductQuantitySummary(
+              inventoryEntry,
+              ledgered.quantityLedger,
+              service,
+            );
+            const fieldResolutions = productFieldResolutions(
+              {
+                price: row.price,
+                stockTracked: row.stockTracked,
+                category: row.categorySummary,
+                categoryStockTracking: row.categoryStockTrackingValue,
+              },
+              pricing,
+            );
+            const tracking = fieldResolutions.stockTracked?.value;
+            return {
+              pricing,
+              fieldResolutions,
+              primaryPlacement: ledgered.primaryPlacement,
+              ...quantity,
+              ...productStockContext({
+                category: row.categorySummary,
+                quantityLedger: ledgered.quantityLedger,
+                inventoryEntry,
+                stockTracked:
+                  tracking === true ? true : tracking === false ? false : null,
+              }),
+              ledgerExpectedQuantityLabel: service
+                ? null
+                : expectedQuantityLabel(quantity.quantityLedger),
+              quantityVarianceLabel: quantityVarianceLabel(
+                quantity.quantityVariance,
+              ),
+            };
+          },
+        ),
+        food.fields(
+          rawProductList.pick({
+            food: true,
+            unitPrice: true,
+            unitPriceMappings: true,
+            unitPriceLabel: true,
+          }),
+          (row, loaded) => {
+            const value = foodOf(loaded, row.id).value;
+            return {
+              food: value.food,
+              unitPrice: value.unitPrice,
+              unitPriceMappings: value.unitPriceMappings,
+              unitPriceLabel: unitPriceLabel(value.unitPrice),
+            };
+          },
+        ),
+        food.fields(
+          rawProductDetail.pick({
+            unitPriceDetailLabel: true,
+            nutritionDisplay: true,
+          }),
+          (row, loaded) => {
+            const { seed, value } = foodOf(loaded, row.id);
+            return {
+              unitPriceDetailLabel: productUnitPriceDetailFields({
+                ...seed,
+                category: row.categorySummary,
+                food: value.food,
+              }).unitPriceDetailLabel,
+              nutritionDisplay: buildNutritionDisplay({
+                labelNutrition: row.labelNutrition,
+                food: value.food,
+              }),
+            };
+          },
+          { scope: "detail" },
+        ),
+        ownershipEvidence.fields(
+          rawProductDetail.pick({ ownershipEvidence: true }),
+          (row, loaded) => {
+            const evidence = loaded.get(row.id);
+            if (!evidence)
+              throw new Error("Product ownership evidence was not loaded");
+            return { ownershipEvidence: evidence };
+          },
+          { scope: "detail" },
+        ),
+        covers.fields(
+          rawProductDetail.pick({ coverImageUrl: true }),
+          (row, loaded) => ({ coverImageUrl: loaded.get(row.id) ?? null }),
+          { scope: "detail" },
+        ),
+        servingAsLocations.fields(
+          rawProductDetail.pick({ servingAsLocations: true }),
+          (row, loaded) => ({
+            servingAsLocations: (loaded.get(row.id) ?? []).map(
+              ({ productId: _productId, ...ref }) => ref,
+            ),
+          }),
+          { scope: "detail" },
+        ),
+        cookbooks.fields(
+          rawProductDetail.pick({ cookbooks: true }),
+          (row, loaded) => ({
+            cookbooks: (loaded.get(row.id) ?? []).map((book) => ({
+              id: parseShortcodeFor("cookbook", book.shortcode),
+              name: book.name,
+            })),
+          }),
+          { scope: "detail" },
+        ),
+        recipeUsages.fields(
+          rawProductDetail.pick({ recipeUsages: true }),
+          (row, loaded) => ({ recipeUsages: loaded.get(row.id) ?? [] }),
+          { scope: "detail" },
+        ),
+      ];
+    },
+  },
 });
-
-const loadProductDataQualities = (
-  db: Database | DrizzleTransaction,
-  ids: ProductId[],
-) => loadDataQualities(db, "product", ids);
 
 const productListOrderBy = (sorts: SortParams[], filters?: ProductFilters) =>
   productScaffold.orderBy(
@@ -455,117 +1006,37 @@ const productListOrderBy = (sorts: SortParams[], filters?: ProductFilters) =>
     filters,
   );
 
-const PRODUCT_DETAIL_OPERATION = startOperationDefinition("entity.detail");
-
-const fetchProductById = async (
-  db: Database,
-  id: ProductId,
-): Promise<ProductDeepDB | undefined> => {
-  const row = await observeOperationPhase(
-    PRODUCT_DETAIL_OPERATION,
-    "base",
-    () =>
-      getDb(db).query.product.findFirst({
-        where: and(eq(product.id, id), notDeleted(product)),
-        ...relations.product.full,
-      }),
-  );
-  if (!row) return undefined;
-  const priced = await observeOperationPhase(
-    PRODUCT_DETAIL_OPERATION,
-    "pricing",
-    async () =>
-      enrichProductRowsWithPricing(
-        db,
-        await enrichProductRowsWithInventoryValuations(db, [row]),
-      ),
-  );
-  const ledgered = await observeOperationPhase(
-    PRODUCT_DETAIL_OPERATION,
-    "quantity",
-    () => enrichProductRowsWithQuantityLedger(db, priced),
-  );
-  return (
-    await observeOperationPhase(PRODUCT_DETAIL_OPERATION, "breadcrumbs", () =>
-      hydrateProductLocationBreadcrumbs(db, ledgered),
-    )
-  )[0];
-};
-
-/** Resolve location breadcrumbs and identity-product covers in batch; preserve both relationship directions. */
-export const hydrateProductLocationBreadcrumbs = async (
-  db: Database,
-  rows: ProductDeepDB[],
-): Promise<ProductDeepDB[]> => {
-  const locationIds = uniq(
-    rows.flatMap((row) => [
-      ...row.inventoryEntry.map((entry) => entry.location.id),
-      ...(row.locations ?? []).map((loc) => loc.id),
-    ]),
-  );
-  const ancestorsById = await loadLocationAncestorsWithIds(db, locationIds);
-  const displayImages = await resolveEntityDisplayImages(
-    db,
-    uniq([
-      ...locationIds,
-      ...[...ancestorsById.values()].flatMap((chain) =>
-        chain.map((rung) => rung.locationId),
-      ),
-    ]).map((entityId) => ({ entityKind: "location" as const, entityId })),
-  );
-  const displayImageOf = (id: LocationId) =>
-    displayImages.get(entityRefKey("location", id)) ?? null;
-  const breadcrumbOf = (id: LocationId) =>
-    (ancestorsById.get(id) ?? []).map(({ locationId, ...rung }) => ({
-      ...rung,
-      displayImage: displayImageOf(locationId),
-    }));
-
-  return rows.map((row) => ({
-    ...row,
-    inventoryEntry: row.inventoryEntry.map((entry) => ({
-      ...entry,
-      location: {
-        ...entry.location,
-        ancestors: breadcrumbOf(entry.location.id),
-        displayImage: displayImageOf(entry.location.id),
-      },
-    })),
-    locations: row.locations?.map((loc) => ({
-      ...loc,
-      ancestors: breadcrumbOf(loc.id),
-      displayImage: displayImageOf(loc.id),
-    })),
-  }));
-};
-
-// Read path through the shared reader (fetch-with-relations → 404 → map). The
-// write path stays hand-rolled below: product create/update/delete carry
-// shortcode, image, unit-mapping, and valuation side-effects.
 const productReader = createEntityReader({
   entity: "product",
-  fetchById: fetchProductById,
-  fromDB: async (db, row: ProductDeepDB) => {
-    const [qualities, coverImageUrls, analysisSummaries] = await Promise.all([
-      observeOperationPhase(PRODUCT_DETAIL_OPERATION, "quality", () =>
-        loadProductDataQualities(db, [row.id]),
-      ),
-      getProductCoverImageUrlsByProductIds(db, [row.id]),
-      loadImageAnalysisSummaries(db, productImageShortcodesOf(row.images)),
-    ]);
-    return dbProductToAPI(
-      {
-        ...row,
-        coverImageUrl: coverImageUrls.get(row.id) ?? null,
-      },
-      qualities.get(row.id)!,
-      analysisSummaries,
-    );
-  },
+  scaffold: productScaffold,
+  output: rawProductDetail,
 });
+/** One live Product by internal id; throws `PRODUCT_NOT_FOUND`. */
+export const readProductById = productReader.getByID;
+/** One live Product by public code, or null. */
+export const readProduct = productReader.getByShortcode;
+/** Live Products by public code through the declared read. */
+export const readProducts = async (
+  db: Database | DrizzleTransaction,
+  shortcodes: readonly string[],
+) => {
+  if (shortcodes.length === 0) return [];
+  // Callers pass member-typed shortcodes; stored shortcodes are uppercase.
+  const { data } = await productScaffold.get(
+    db,
+    shortcodes.map((code) => code.toUpperCase()),
+  );
+  return data.map((row) => rawProductDetail.parse(row));
+};
 
-export const getProductByID = (db: Database, id: ProductId) =>
-  productReader.getByID(db, id);
+/** The record a writer returns, read back through the declared read. */
+const readWrittenProduct = async (
+  db: Database | DrizzleTransaction,
+  id: ProductId,
+): Promise<RawProductOutput> => {
+  const [row] = (await productScaffold.getByIds(db, [id])).data;
+  return rawProductOutput.parse(row);
+};
 
 export const getProductsForFoodLookup = async (
   db: Database,
@@ -621,211 +1092,6 @@ export const getProductImagesByProductIds = async (
   return hydrateImageReadProjection(db, result);
 };
 
-/**
- * Fetch multiple products by shortcodes in a single query.
- * Returns basic product data (suitable for labels).
- */
-/** Public-id read: `null` for an unknown code or a soft-deleted row. */
-export const getProductByShortcode = (db: Database, shortcode: string) =>
-  productReader.getByShortcode(db, shortcode);
-
-export const getProductsByShortcodes = async (
-  db: Database,
-  shortcodes: string[],
-) => {
-  if (shortcodes.length === 0) return [];
-  const uppercased = shortcodes.map((s) => s.toUpperCase());
-  const results = await getDb(db).query.product.findMany({
-    where: and(inArray(product.shortcode, uppercased), notDeleted(product)),
-    ...relations.product.full,
-  });
-  const [qualities, coverImageUrls, analysisSummaries] = await Promise.all([
-    loadProductDataQualities(
-      db,
-      results.map((row) => row.id),
-    ),
-    getProductCoverImageUrlsByProductIds(
-      db,
-      results.map((row) => row.id),
-    ),
-    loadImageAnalysisSummaries(
-      db,
-      results.flatMap((row) => productImageShortcodesOf(row.images)),
-    ),
-  ]);
-  const priced = await enrichProductRowsWithPricing(
-    db,
-    await enrichProductRowsWithInventoryValuations(db, results),
-  );
-  const ledgered = await hydrateProductLocationBreadcrumbs(
-    db,
-    await enrichProductRowsWithQuantityLedger(db, priced),
-  );
-  return ledgered.map((row) =>
-    dbProductToAPI(
-      {
-        ...row,
-        coverImageUrl: coverImageUrls.get(row.id) ?? null,
-      },
-      qualities.get(row.id)!,
-      analysisSummaries,
-    ),
-  );
-};
-
-/**
- * The complete WHERE for a product list. `getEntityCounts` calls it with `{}`
- * — see repo/dashboard.ts.
- */
-type ProductListFilters = ProductFilters & { ids?: readonly string[] };
-
-/** The list WHERE and the context it prepared, which the page read reuses. */
-const productWhere = async (
-  db: Database,
-  filters: ProductListFilters,
-  readContext?: QualityReadContext,
-  preparation?: ListPreparationScope,
-) => {
-  // Owner membership uses the published collection before pagination.
-  const context = await productScaffold.context(db, {
-    filters,
-    readIntent: "count",
-    preparation,
-  });
-  return {
-    // This predicate also feeds standalone sums and callers with their own FROM.
-    // Only an explicit caller context may supply statement-local stock evidence.
-    where: productScaffold.where(filters, {
-      context,
-      readContext: readContext ?? {},
-    }),
-    context,
-  };
-};
-
-export const buildProductWhere = async (
-  db: Database,
-  filters: ProductListFilters,
-  readContext?: QualityReadContext,
-) => (await productWhere(db, filters, readContext)).where;
-
-const loadProductListSums = async (
-  db: Database,
-  whereClause: SQL | undefined,
-) => {
-  const [price, expenseRows] = await Promise.all([
-    loadProductPriceSum(db, whereClause),
-    // Money is the signed Expense sum over the complete filtered product set.
-    getDb(db)
-      .select({ expenseTotalSum: sum(expense.cost) })
-      .from(expense)
-      .where(
-        and(
-          notDeleted(expense),
-          inArray(
-            expense.productId,
-            getDb(db)
-              .select({ id: product.id })
-              .from(product)
-              .where(whereClause),
-          ),
-        ),
-      ),
-  ]);
-  const expenseTotal = Number(expenseRows[0]?.expenseTotalSum ?? 0);
-  return {
-    price: Number.isNaN(price) ? 0 : price,
-    expenseTotal: Number.isNaN(expenseTotal) ? 0 : expenseTotal,
-  };
-};
-
-export const productListSummary = async (
-  db: Database,
-  filters: ProductListFilters,
-) => loadProductListSums(db, await buildProductWhere(db, filters));
-
-type ProductSelectedPageRow = typeof product.$inferSelect &
-  Partial<
-    Pick<
-      ProductListDB,
-      | "category"
-      | "categoryStockTracking"
-      | "classificationEvidence"
-      | "ingredient"
-      | "growsPlant"
-      | "expenseCount"
-      | "componentCount"
-      | "expenseTotal"
-      | "purchaseDate"
-    >
-  >;
-
-/** The authoritative filtered, sorted page is shared by every projection. */
-const readProductListPage = async (
-  db: Database,
-  { where: whereClause, context }: Awaited<ReturnType<typeof productWhere>>,
-  filters: ProductListFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent,
-  projection: ListProjection,
-) => {
-  const relationFields = wantsListGroup(projection, "relations");
-  const derivedFields = wantsListGroup(projection, "derived");
-  const extras = relations.product.listBase.extras;
-  type ProductListExtras = {
-    -readonly [K in keyof typeof extras]?: (typeof extras)[K];
-  };
-  const selectedExtras: ProductListExtras = {};
-  if (relationFields || derivedFields)
-    selectedExtras.category = extras.category;
-  if (
-    wantsListGroup(projection, "quality") ||
-    (projection.kind === "selected" &&
-      projection.fields.includes("classificationEvidence"))
-  )
-    selectedExtras.classificationEvidence = extras.classificationEvidence;
-  if (derivedFields)
-    Object.assign(selectedExtras, {
-      categoryStockTracking: extras.categoryStockTracking,
-      expenseCount: extras.expenseCount,
-      componentCount: extras.componentCount,
-      expenseTotal: extras.expenseTotal,
-      purchaseDate: extras.purchaseDate,
-    });
-  const page = await productScaffold.raw(
-    db,
-    { filters, sorts, pagination, readIntent, projection },
-    {
-      where: whereClause,
-      context,
-      orderBy: productListOrderBy(sorts, filters),
-      load:
-        projection.kind === "base"
-          ? undefined
-          : (where: SQL) =>
-              getDb(db).query.product.findMany({
-                where,
-                with: relationFields
-                  ? relations.product.listBase.with
-                  : undefined,
-                extras: selectedExtras,
-              }),
-    },
-  );
-  // SAFETY: SQL extras use the same contracts as ProductListDB. The projection
-  // gates select optional extras and joins, which Drizzle loses when `with`
-  // is conditional; stored Product columns are always selected.
-  const results = page.data as ProductSelectedPageRow[];
-  return {
-    results,
-    totalCount: page.count,
-    groups: page.groups,
-    memberships: page.memberships,
-    membershipCount: page.membershipCount,
-  };
-};
-
 /** Narrow root-table projection for relation paging; the scaffold owns the count. */
 export function pageProductRelationTargets(
   db: Database,
@@ -839,7 +1105,7 @@ export function pageProductRelationTargets(
       filters: {},
       sorts: [],
       pagination: { pageIndex: 0, pageSize: input.limit },
-      projection: { kind: "base" },
+      projection: [],
     },
     {
       where,
@@ -856,509 +1122,6 @@ export function pageProductRelationTargets(
   );
 }
 
-export const productList = async (
-  db: Database,
-  filters: ProductListFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-  usdaClient?: Pick<USDAClient, "findFoodsBatch">,
-) => {
-  const { data, ...metadata } = await listProductsRead(
-    db,
-    filters,
-    sorts,
-    pagination,
-    readIntent,
-    usdaClient,
-  );
-  return {
-    ...metadata,
-    data: data.map((row) => rawProductList.parse(row)),
-  };
-};
-
-type ProductListReadResult = ListReadPage<
-  ReturnType<typeof projectListRows>[number]
-> & {
-  sums?: Awaited<ReturnType<typeof loadProductListSums>>;
-};
-
-/** Deferred reads emit canonical patches, never placeholder full records. */
-export const listProductsRead = async (
-  db: Database,
-  filters: ProductListFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-  usdaClient?: Pick<USDAClient, "findFoodsBatch">,
-  projection: ListProjection = { kind: "full" },
-  preparation?: ListPreparationScope,
-): Promise<ProductListReadResult> => {
-  // Unit-price envelopes recompute from selected valuation and current conversion
-  // facts. Retain those inputs until the public selected schema strips them.
-  if (
-    projection.kind === "selected" &&
-    projection.fields.some((field) =>
-      ["unitPrice", "unitPriceLabel", "unitPriceDetailLabel"].includes(field),
-    )
-  )
-    projection = {
-      ...projection,
-      fields: [
-        ...new Set([
-          ...projection.fields,
-          "category",
-          "unitMappings",
-          "food",
-          "labelNutrition",
-        ]),
-      ],
-    };
-  const foodFields = rawProductList.pick({
-    food: true,
-    unitPrice: true,
-    unitPriceMappings: true,
-    unitPriceLabel: true,
-  });
-  const wantsFood =
-    wantsListGroup(projection, "derived") &&
-    (projection.kind !== "selected" ||
-      Object.keys(foodFields.shape).some((key) =>
-        projection.fields.includes(key),
-      ));
-  const plan = listReadPlan<ProductSelectedPageRow>("product", {
-    media: true,
-    bindings: (bind) => {
-      const relations = bind.batch(({ rows }) =>
-        loadProductListRelations(
-          db,
-          rows.map((row) => row.id),
-          projection,
-          wantsFood ? prefetchFoodsOnExternalIds(rows, usdaClient) : undefined,
-        ),
-      );
-      const inventory = bind.batch(async (page) => {
-        const loaded = await relations.load(page);
-        return new Map(
-          page.rows.map((row) => {
-            const related = loaded.get(row.id);
-            if (!related)
-              throw new Error("Product list relations were not loaded");
-            return [
-              row.id,
-              mapProductListInventoryEntries(related.inventoryEntry),
-            ];
-          }),
-        );
-      });
-      const pricing = bind.batch(
-        async ({ rows }) =>
-          new Map(
-            (await enrichProductRowsWithPricing(db, rows)).map((row) => [
-              row.id,
-              row.pricing,
-            ]),
-          ),
-      );
-      const stock = bind.batch(async (page) => {
-        const [inventories, prices, ledgered] = await Promise.all([
-          inventory.load(page),
-          pricing.load(page),
-          enrichProductRowsWithQuantityLedger(db, page.rows),
-        ]);
-        return {
-          inventories,
-          prices,
-          ledgers: new Map(ledgered.map((row) => [row.id, row.quantityLedger])),
-          placements: new Map(
-            ledgered.map((row) => [row.id, row.primaryPlacement]),
-          ),
-        };
-      });
-      const food = bind.batch(async (page) => {
-        const [related, prices] = await Promise.all([
-          relations.load(page),
-          pricing.load(page),
-        ]);
-        const seeds = page.rows.map((row) => {
-          const loaded = related.get(row.id);
-          const price = prices.get(row.id);
-          if (!loaded || !price)
-            throw new Error(
-              "Product food binding requires loaded relations and pricing",
-            );
-          return {
-            id: parseShortcodeFor("product", row.shortcode),
-            primaryGtin: primaryGtinOf(loaded.externalIds),
-            fdc_id: row.fdc_id,
-            price: row.price,
-            pricing: price,
-            labelNutrition: row.labelNutrition,
-            unitMappings: mapProductUnitMappings(
-              parseShortcodeFor("product", row.shortcode),
-              loaded.unitMappings,
-            ),
-          };
-        });
-        const enriched = await enrichProductListItems(seeds, usdaClient);
-        return new Map(
-          page.rows.map((row, index) => {
-            const value = enriched[index];
-            if (!value)
-              throw new Error("Product food batch omitted a selected row");
-            return [row.id, value];
-          }),
-        );
-      });
-      return [
-        bind(
-          rawProductList.pick({ modelPresence: true, notesPresence: true }),
-          (row) => ({
-            modelPresence: Boolean(row.model),
-            notesPresence: Boolean(row.notes),
-          }),
-        ),
-        bind(rawProductList.pick({ dataGaps: true }), (_row, { quality }) => {
-          if (!quality)
-            throw new Error("Product data gaps require loaded quality");
-          return {
-            dataGaps: rawProductList.shape.dataGaps.parse(
-              quality.gaps.map((gap) => gap.check),
-            ),
-          };
-        }),
-        bind(
-          rawProductList.pick({
-            category: true,
-            categoryId: true,
-            categoryFeature: true,
-            growsPlantId: true,
-            ingredient: true,
-          }),
-          (row) => ({
-            category: row.category ?? null,
-            categoryId: row.category?.id ?? null,
-            // The existing category SQL resolves inheritance before the compact public projection.
-            categoryFeature: row.category?.feature ?? null,
-            growsPlantId: row.growsPlant
-              ? parseShortcodeFor("plant", row.growsPlant.shortcode)
-              : null,
-            ingredient:
-              row.ingredient && row.ingredient.deletedAt === null
-                ? mapDbProductIngredient(row.ingredient)
-                : null,
-          }),
-        ),
-        inventory.fields(
-          rawProductList.pick({ inventoryEntry: true }),
-          (row, loaded) => {
-            const value = loaded.get(row.id);
-            if (!value) throw new Error("Product inventory was not loaded");
-            return { inventoryEntry: value };
-          },
-        ),
-        relations.fields(
-          rawProductList.pick({
-            externalIds: true,
-            unitMappings: true,
-            primaryGtin: true,
-            upcPresence: true,
-          }),
-          (row, loaded) => {
-            const related = loaded.get(row.id);
-            if (!related)
-              throw new Error("Product external identities were not loaded");
-            const primaryGtin = primaryGtinOf(related.externalIds);
-            return {
-              externalIds: mapProductExternalIds(related.externalIds),
-              unitMappings: mapProductUnitMappings(
-                parseShortcodeFor("product", row.shortcode),
-                related.unitMappings,
-              ),
-              primaryGtin,
-              upcPresence: Boolean(primaryGtin),
-            };
-          },
-        ),
-        relations.fields(
-          rawProductList.pick({
-            images: true,
-            labelImages: true,
-            itemImageCount: true,
-            labelImageCount: true,
-          }),
-          (row, loaded) => {
-            const related = loaded.get(row.id);
-            if (!related)
-              throw new Error("Product image fields were not loaded");
-            const { itemImages, ...groups } = splitProductImages(
-              related.images,
-            );
-            return { ...groups, images: itemImages };
-          },
-        ),
-        stock.fields(
-          rawProductList.pick({
-            pricing: true,
-            fieldResolutions: true,
-            primaryPlacement: true,
-            quantityLedger: true,
-            onHandUnits: true,
-            quantityVariance: true,
-            stockStatus: true,
-            stockStatusItems: true,
-            ledgerExpectedQuantityLabel: true,
-            quantityVarianceLabel: true,
-          }),
-          (row, loaded) => {
-            const inventoryEntry = loaded.inventories.get(row.id);
-            const pricing = loaded.prices.get(row.id);
-            const ledger = loaded.ledgers.get(row.id);
-            if (!inventoryEntry || !pricing || !ledger)
-              throw new Error(
-                "Product stock binding requires loaded inventory, pricing and ledger",
-              );
-            const quantity = deriveProductQuantitySummary(
-              inventoryEntry,
-              ledger,
-              isServiceProductCategory(row.category),
-            );
-            const fieldResolutions = productFieldResolutions(
-              {
-                ...row,
-                categoryStockTracking: row.categoryStockTracking ?? null,
-                category: row.category ?? null,
-              },
-              pricing,
-            );
-            const tracking = fieldResolutions.stockTracked?.value;
-            return {
-              pricing,
-              fieldResolutions,
-              primaryPlacement: loaded.placements.get(row.id) ?? null,
-              ...quantity,
-              ...productStockContext({
-                category: row.category,
-                quantityLedger: ledger,
-                inventoryEntry,
-                stockTracked:
-                  tracking === true ? true : tracking === false ? false : null,
-              }),
-              ledgerExpectedQuantityLabel: isServiceProductCategory(
-                row.category,
-              )
-                ? null
-                : expectedQuantityLabel(quantity.quantityLedger),
-              quantityVarianceLabel: quantityVarianceLabel(
-                quantity.quantityVariance,
-              ),
-            };
-          },
-        ),
-        bind(
-          rawProductList.pick({
-            expenseCount: true,
-            expenseTotal: true,
-            componentCount: true,
-            purchaseDate: true,
-          }),
-          (row) => {
-            if (
-              row.expenseCount === undefined ||
-              row.expenseTotal === undefined ||
-              row.componentCount === undefined ||
-              row.purchaseDate === undefined
-            )
-              throw new Error("Product list aggregates were not selected");
-            return {
-              expenseCount: Number(row.expenseCount),
-              expenseTotal: Number(row.expenseTotal),
-              componentCount: Number(row.componentCount),
-              purchaseDate: row.purchaseDate,
-            };
-          },
-        ),
-        food.fields(foodFields, (row, loaded) => {
-          const value = loaded.get(row.id);
-          if (!value)
-            throw new Error("Product food binding omitted a selected row");
-          return {
-            food: value.food,
-            unitPrice: value.unitPrice,
-            unitPriceMappings: value.unitPriceMappings,
-            unitPriceLabel: unitPriceLabel(value.unitPrice),
-          };
-        }),
-      ];
-    },
-  });
-  const filtered = await productWhere(db, filters, undefined, preparation);
-  const membership = productScaffold.unresolvedCount(
-    db,
-    filters,
-    filtered.context,
-  );
-  const [
-    { results, totalCount, groups, memberships, membershipCount },
-    sums,
-    unresolvedCount,
-    incompleteSums,
-  ] = await Promise.all([
-    readProductListPage(
-      db,
-      filtered,
-      filters,
-      sorts,
-      pagination,
-      readIntent,
-      projection,
-    ),
-    projection.kind === "full" && readIntent === "page"
-      ? loadProductListSums(db, filtered.where)
-      : undefined,
-    membership,
-    readIntent === "count" || projection.kind === "base"
-      ? undefined
-      : membership.then((count) =>
-          productScaffold.incompleteSums(db, filters, filtered.context, count),
-        ),
-  ]);
-
-  return {
-    count: totalCount,
-    unresolvedCount,
-    incompleteSums,
-    ...(sums ? { sums } : {}),
-    ...(groups ? { groups, memberships, membershipCount } : {}),
-    // The id/count projection binds no fields, so it carries no envelope.
-    ...(projection.kind === "base"
-      ? {
-          data: await plan.read(db, results, projection, filtered.context),
-          fieldReads: undefined,
-        }
-      : await withPageFields(db, "product", results, () =>
-          plan.read(db, results, projection, filtered.context),
-        )),
-  };
-};
-
-type ProductListRelations = Pick<
-  ProductListDB,
-  "images" | "externalIds" | "unitMappings" | "inventoryEntry"
->;
-
-const emptyProductListRelations = (): ProductListRelations => ({
-  images: [],
-  externalIds: [],
-  unitMappings: [],
-  inventoryEntry: [],
-});
-
-/** Starts a page's USDA lookups from its barcode rows, before its other relations finish. */
-const prefetchFoodsOnExternalIds =
-  (
-    rows: ReadonlyArray<{ id: ProductId; fdc_id: number | null }>,
-    usdaClient: Pick<USDAClient, "findFoodsBatch"> | undefined,
-  ) =>
-  (externalIds: ProductListRelations["externalIds"]) => {
-    const byProduct = groupBy(externalIds, (row) => row.entityId);
-    prefetchProductFoods(
-      rows.map((row) => ({
-        primaryGtin: primaryGtinOf(byProduct[row.id]),
-        fdc_id: row.fdc_id,
-      })),
-      usdaClient,
-    );
-  };
-
-/**
- * Hydrate Product-list to-many fields in independent batch reads. Drizzle's
- * relational list query is excellent for a single detail graph, but combining
- * four fan-outs with scalar aggregates for 100 products creates a large nested
- * JSON plan that can exceed the small production compute's memory before the
- * rows reach TypeScript.
- */
-const loadProductListRelations = async (
-  db: Database,
-  ids: readonly ProductId[],
-  projection: ListProjection = { kind: "full" },
-  onExternalIds?: (rows: ProductListRelations["externalIds"]) => void,
-): Promise<Map<ProductId, ProductListRelations>> => {
-  const uniqueIds = uniq([...ids]);
-  const result = new Map<ProductId, ProductListRelations>(
-    uniqueIds.map((id) => [id, emptyProductListRelations()]),
-  );
-  if (uniqueIds.length === 0) return result;
-
-  const [images, externalIds, unitMappings, inventoryEntries] =
-    await Promise.all([
-      loadListGroup(projection, "media", () =>
-        getDb(db).query.entityAttachment.findMany({
-          where: and(
-            inArray(entityAttachment.entityId, uniqueIds),
-            notDeleted(entityAttachment),
-          ),
-          orderBy: [
-            asc(entityAttachment.sortOrder),
-            asc(entityAttachment.createdAt),
-          ],
-          with: { image: true },
-        }),
-      ),
-      loadListGroup(projection, ["relations", "derived"], async () => {
-        const rows = await getDb(db).query.entityExternalId.findMany({
-          where: and(
-            inArray(entityExternalId.entityId, uniqueIds),
-            notDeleted(entityExternalId),
-          ),
-        });
-        onExternalIds?.(rows);
-        return rows;
-      }),
-      loadListGroup(projection, ["relations", "derived"], () =>
-        getDb(db).query.productUnitMappings.findMany({
-          where: and(
-            inArray(productUnitMappings.productId, uniqueIds),
-            notDeleted(productUnitMappings),
-          ),
-        }),
-      ),
-      loadListGroup(projection, ["relations", "derived"], () =>
-        getDb(db).query.inventoryEntry.findMany({
-          where: and(
-            inArray(inventoryEntry.productId, uniqueIds),
-            notDeleted(inventoryEntry),
-          ),
-          orderBy: inventoryEntry.createdAt,
-          with: { location: true },
-        }),
-      ),
-    ]);
-
-  for (const row of images ?? []) {
-    result.get(parseEntityId("product", row.entityId))?.images.push(row);
-  }
-  for (const row of externalIds ?? []) {
-    result.get(parseEntityId("product", row.entityId))?.externalIds.push(row);
-  }
-  for (const row of unitMappings ?? []) {
-    result.get(row.productId)?.unitMappings.push(row);
-  }
-  const valuations = await loadStoredInventoryValuations(
-    db,
-    (inventoryEntries ?? []).map((row) => row.id),
-  );
-  for (const row of inventoryEntries ?? []) {
-    result.get(row.productId)?.inventoryEntry.push({
-      ...row,
-      valuation: valuations.get(row.id) ?? null,
-    });
-  }
-
-  return result;
-};
-
 /**
  * A product's cover URL for a batch of picker or relationship rows: `[0]` of
  * the shared display-image policy (`resolveEntityDisplayImages`), so a picker
@@ -1366,7 +1129,7 @@ const loadProductListRelations = async (
  * is the cover. Full image projections still use `getProductImagesByProductIds`.
  */
 export const getProductCoverImageUrlsByProductIds = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: ProductId[],
 ): Promise<Map<ProductId, string>> => {
   const covers = await resolveEntityDisplayImages(
@@ -1385,8 +1148,8 @@ export const getProductCoverImageUrlsByProductIds = async (
  * Lightweight product search for typeahead/picker comboboxes.
  *
  * Returns the product picker shape only — it deliberately skips the inventory /
- * ingredient / unit-mapping / external-id relation graph that `productList`
- * pulls. Pickers get identity, compact quantity evidence, and one batched cover
+ * ingredient / unit-mapping / external-id relation graph that `productScaffold`
+ * reads. Pickers get identity, compact quantity evidence, and one batched cover
  * URL without pretending to carry full product rows.
  */
 export const productSearch = async (
@@ -1642,10 +1405,10 @@ const assertExternalIdsAvailable = async (
  * and prove the insert rolls back with it.
  */
 export type ProductCreateReads = {
-  loadProductDataQualities: typeof loadProductDataQualities;
+  readWrittenProduct: typeof readWrittenProduct;
 };
 const defaultProductCreateReads: ProductCreateReads = {
-  loadProductDataQualities,
+  readWrittenProduct,
 };
 
 export const createProduct = async (
@@ -1746,29 +1509,24 @@ export async function createProductRecord<TOutput>(
         );
       }
 
-      let createdExternalIds: Array<typeof entityExternalId.$inferSelect> = [];
       if (desiredExternalIds.length > 0) {
         await ensureExternalSources(
           tx,
           desiredExternalIds.map((eid) => eid.source.trim().toLowerCase()),
         );
-        createdExternalIds = await tx
-          .insert(entityExternalId)
-          .values(
-            desiredExternalIds.map((eid) => ({
-              entityId: newProduct.id,
-              entityKind: "product" as const,
-              source: eid.source.trim().toLowerCase(),
-              kind: eid.kind,
-              externalId: eid.externalId,
-              url: storedExternalIdUrl(eid),
-              isPrimary: eid.isPrimary ?? true,
-            })),
-          )
-          .returning();
+        await tx.insert(entityExternalId).values(
+          desiredExternalIds.map((eid) => ({
+            entityId: newProduct.id,
+            entityKind: "product" as const,
+            source: eid.source.trim().toLowerCase(),
+            kind: eid.kind,
+            externalId: eid.externalId,
+            url: storedExternalIdUrl(eid),
+            isPrimary: eid.isPrimary ?? true,
+          })),
+        );
       }
 
-      let images: Array<typeof image.$inferSelect> = [];
       if (pendingImageIds && pendingImageIds.length > 0) {
         // `pendingImageIds` are public `IMG-` codes; both the join-table write
         // and the read-back below key on `Image.id`, so resolve once and use
@@ -1781,7 +1539,7 @@ export async function createProductRecord<TOutput>(
 
         await associatePendingImages(
           tx,
-          imageJoinBindings.product,
+          galleryBinding("product"),
           newProduct.id,
           resolvedImageIds,
         );
@@ -1808,11 +1566,6 @@ export async function createProductRecord<TOutput>(
               );
           }
         }
-
-        images = await tx
-          .select()
-          .from(image)
-          .where(inArray(image.id, resolvedImageIds));
       }
 
       await logAuditEntry(tx, actor, {
@@ -1826,53 +1579,10 @@ export async function createProductRecord<TOutput>(
           output: await readOutput(tx, newProduct),
           entityId: newProduct.id,
         };
-      const growsPlant = productData.growsPlantId
-        ? await tx.query.plant.findFirst({
-            where: and(
-              eq(plant.id, productData.growsPlantId),
-              notDeleted(plant),
-            ),
-            columns: { shortcode: true },
-          })
-        : null;
-
-      const created = {
-        ...newProduct,
-        growsPlant,
-        images,
-        externalIds: createdExternalIds,
+      return {
+        output: await reads.readWrittenProduct(tx, newProduct.id),
+        entityId: newProduct.id,
       };
-      const qualities = await reads.loadProductDataQualities(tx, [created.id]);
-      const categoryDetails = await tx.execute<{
-        category: RawProductCategorySummary | null;
-        categoryStockTracking: Awaited<
-          ReturnType<typeof loadCategoryStockTracking>
-        >;
-      }>(sql`SELECT ${categorySummarySql(sql`${newProduct.categoryId}::uuid`)} AS category,
-        ${categoryStockTrackingSql(sql`${newProduct.categoryId}::uuid`)} AS "categoryStockTracking"`);
-      const brandProjection = (
-        await tx
-          .select({
-            brandName: productBrandNameSql(product.brandId),
-            brandCode: productBrandCodeSql(product.brandId),
-          })
-          .from(product)
-          .where(eq(product.id, newProduct.id))
-      )[0]!;
-      const output = dbProductToTopLevelAPI({
-        ...brandProjection,
-        classificationEvidence: await getProductClassificationEvidence(
-          tx,
-          newProduct.id,
-        ),
-        category: categoryDetails.rows[0]?.category ?? null,
-        categoryStockTracking:
-          categoryDetails.rows[0]?.categoryStockTracking ?? null,
-        ...created,
-        pricing: resolveProductPricing(created.price),
-        dataQuality: qualities.get(created.id)!,
-      });
-      return { output, entityId: newProduct.id };
     });
   } catch (error) {
     await throwIfDuplicateProduct(db, data, error);
@@ -2206,36 +1916,7 @@ export async function updateProduct<TOutput>(
       await recordChange(tx, { kind: "source", categories: ["product"] });
 
       if (readOutput) return readOutput(tx, updated);
-      const pricing = await loadProductPricing(tx, [updated]);
-      const qualities = await loadProductDataQualities(tx, [updated.id]);
-      const brandProjection = (
-        await tx
-          .select({
-            brandName: productBrandNameSql(product.brandId),
-            brandCode: productBrandCodeSql(product.brandId),
-          })
-          .from(product)
-          .where(eq(product.id, updated.id))
-      )[0]!;
-      return dbProductToTopLevelAPI({
-        ...brandProjection,
-        classificationEvidence: await getProductClassificationEvidence(
-          tx,
-          updated.id,
-        ),
-        category:
-          (await loadCategorySummaries(tx)).get(updated.categoryId!) ?? null,
-        categoryStockTracking: await loadCategoryStockTracking(
-          tx,
-          updated.categoryId,
-        ),
-        ...updated,
-        pricing:
-          pricing.get(updated.id) ?? resolveProductPricing(updated.price),
-        dataQuality: qualities.get(updated.id)!,
-        images: productImages,
-        externalIds: currentExternalIdRows,
-      });
+      return readWrittenProduct(tx, updated.id);
     });
     return { product: updatedProduct, detachedImageKeys };
   } catch (error) {
@@ -2561,7 +2242,7 @@ export const quickCreateProductRecord = async (
   // INSERT, and `findOrCreateByGtin`'s cross-request race recovery leaned on
   // that: a losing racer must commit nothing, or it leaves a barcode-less
   // Product behind for the recovery to find instead of the winner.
-  const { newProduct, externalIds } = await withTransaction(db, async (tx) => {
+  const { newProduct } = await withTransaction(db, async (tx) => {
     const brandId = await resolveProductBrand(tx, data.brandId);
     const productValues = { ...values, brandId };
     // An explicit `shortcode` only comes from the import/restore path, which is
@@ -2584,43 +2265,10 @@ export const quickCreateProductRecord = async (
       action: "create",
     });
 
-    const rows =
-      incomingGtin == null
-        ? []
-        : await tx.query.entityExternalId.findMany({
-            where: eq(entityExternalId.entityId, inserted.id),
-          });
-    return { newProduct: inserted, externalIds: rows };
+    return { newProduct: inserted };
   });
 
-  // Independent reads of the committed row, so they run concurrently.
-  const [qualities, classificationEvidence, categories, categoryStockTracking] =
-    await Promise.all([
-      loadProductDataQualities(db, [newProduct.id]),
-      getProductClassificationEvidence(db, newProduct.id),
-      loadCategorySummaries(db),
-      loadCategoryStockTracking(db, newProduct.categoryId),
-    ]);
-  const brandProjection = (
-    await getDb(db)
-      .select({
-        brandName: productBrandNameSql(product.brandId),
-        brandCode: productBrandCodeSql(product.brandId),
-      })
-      .from(product)
-      .where(eq(product.id, newProduct.id))
-  )[0]!;
-  const output = dbProductToTopLevelAPI({
-    ...brandProjection,
-    classificationEvidence,
-    category: categories.get(newProduct.categoryId!) ?? null,
-    categoryStockTracking,
-    ...newProduct,
-    pricing: resolveProductPricing(newProduct.price),
-    dataQuality: qualities.get(newProduct.id)!,
-    images: [],
-    externalIds,
-  });
+  const output = await readWrittenProduct(db, newProduct.id);
   return { output, entityId: newProduct.id };
 };
 

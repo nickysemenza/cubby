@@ -32,6 +32,7 @@ import {
   type CookbookId,
   type CookbookShortcode,
   type ProductId,
+  parseEntityId,
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
@@ -40,12 +41,8 @@ import {
   cookbookBundleManifestSchema,
   upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import {
-  type CookbookFilters,
-  type CookbookUpdateInput,
-} from "@cubby/schemas/recipe";
-import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
+import { type CookbookUpdateInput } from "@cubby/schemas/recipe";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -55,12 +52,14 @@ import {
   databaseForTransaction,
   getDb,
   notDeleted,
+  unwrapDb,
   updateAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
+import { outer, related } from "~/server/db/helpers/related";
 import { cookbook, image, product, recipe } from "~/server/db/schema";
 import { cookbookSourceRecipeCountSql } from "~/server/domains/cookbook/repo/cookbook-source-count";
+import { cookbookSearch } from "~/server/domains/cookbook/repo/search-read-cookbook";
 import {
   deleteRecipesByCookbookTx,
   getCookbookRecipeIdsByTitle,
@@ -75,10 +74,7 @@ import {
   type MutationReceipt,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
-import {
-  createEntityCrud,
-  createEntityRowFetcher,
-} from "~/server/entity-kernel/repo/repository";
+import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import {
   replaceSingularAttachment,
   singularAttachmentImageIds,
@@ -89,14 +85,12 @@ import {
   runWithConflictRecovery,
 } from "~/server/errors/db-errors";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-import { type ListPage, listScaffold } from "~/server/generic/list/repo/list";
-import { listAll } from "~/server/generic/list/repo/list-all";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
-  listReadPlan,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+  loadCookbookRecipeEvidence,
+  loadCookbookSourceRecipeEvidence,
+} from "~/server/generic/field-explanation/repo/field-explanation-evidence";
+import { listScaffold } from "~/server/generic/list/repo/list";
+import { listAll } from "~/server/generic/list/repo/list-all";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -294,141 +288,89 @@ const getCookbookById = async (db: Database, id: CookbookId) => {
 };
 
 /**
- * The unfiltered browse-index predicate, so `getEntityCounts` counts the
- * list's REAL population rather than a hand-restated copy that can drift.
+ * The browse index's read: live recipe counts as a correlated count (a
+ * cookbook with zero current recipes still lists), the extraction facts, and
+ * the cover of the book and of its live shelf copy.
  */
-export const cookbookListWhere = () => cookbookScaffold.where({});
-
-const recipeCountSql = sql<number>`count(${recipe.id})::int`;
-
-/**
- * Cookbooks with their non-deleted recipe counts, one page of the browse
- * index. A left join keeps cookbooks with zero current recipes visible.
- */
-const selectCookbookSummaryRows = (db: Database, page: ListPage) =>
-  getDb(db)
-    .select({
-      id: cookbook.id,
-      shortcode: cookbook.shortcode,
-      name: cookbook.name,
-      createdAt: cookbook.createdAt,
-      updatedAt: cookbook.updatedAt,
-      author: cookbook.author,
-      subjects: cookbook.subjects,
-      recipeCount: recipeCountSql,
+export const cookbookScaffold = listScaffold("cookbook", cookbook, {
+  derived: {
+    recipeCount: related(
+      recipe,
+      (r) => sql`${r.cookbookId} = ${outer(cookbook.id)}`,
+    ).count(),
+  },
+  read: {
+    search: cookbookSearch,
+    evidence: {
+      recipeCount: loadCookbookRecipeEvidence,
+      sourceRecipeCount: loadCookbookSourceRecipeEvidence,
+    },
+    columns: {
       sourceRecipeCount: cookbookSourceRecipeCountSql(cookbook.rawJson),
       // Rows from before the book-tree format hold a flat array.
       needsReextract: sql<boolean>`jsonb_typeof(${cookbook.rawJson}) = 'array'`,
-      productId: cookbook.productId,
-      productShortcode: product.shortcode,
-      productName: product.name,
-    })
-    .from(cookbook)
-    .leftJoin(
-      recipe,
-      and(eq(recipe.cookbookId, cookbook.id), notDeleted(recipe)),
-    )
-    .leftJoin(
-      product,
-      and(eq(product.id, cookbook.productId), notDeleted(product)),
-    )
-    .where(page.where)
-    .groupBy(cookbook.id, product.id)
-    .orderBy(...page.orderBy)
-    .limit(page.limit)
-    .offset(page.offset);
-
-type CookbookSummaryRow = Awaited<
-  ReturnType<typeof selectCookbookSummaryRows>
->[number];
-
-const cookbookRead = (db: Database): ListReadOptions<CookbookSummaryRow> => ({
-  media: true,
-  bindings: (bind) => {
-    const covers = bind.batch(({ rows }) =>
-      resolveEntityDisplayImages(
-        db,
-        rows.flatMap((row) => [
-          { entityKind: "cookbook" as const, entityId: row.id },
-          ...(row.productId
-            ? [{ entityKind: "product" as const, entityId: row.productId }]
-            : []),
-        ]),
-      ),
-    );
-    return [
-      covers.fields(
-        rawCookbookOutput.pick({ coverUrl: true, product: true }),
-        (row, loaded) => ({
-          coverUrl: loaded.get(entityRefKey("cookbook", row.id))?.url ?? null,
-          product:
-            row.productId && row.productShortcode && row.productName
-              ? {
-                  id: parseShortcodeFor("product", row.productShortcode),
-                  name: row.productName,
-                  coverUrl:
-                    loaded.get(entityRefKey("product", row.productId))?.url ??
-                    null,
-                }
-              : null,
-        }),
-      ),
-    ];
+    },
+    media: true,
+    bindings: (bind) => {
+      const covers = bind.ids(async ({ db, ids }) => {
+        const copies = await unwrapDb(db)
+          .select({
+            cookbookId: cookbook.id,
+            id: product.id,
+            shortcode: product.shortcode,
+            name: product.name,
+          })
+          .from(cookbook)
+          .innerJoin(
+            product,
+            and(eq(product.id, cookbook.productId), notDeleted(product)),
+          )
+          .where(
+            inArray(
+              cookbook.id,
+              ids.map((id) => parseEntityId("cookbook", id)),
+            ),
+          );
+        const images = await resolveEntityDisplayImages(db, [
+          ...ids.map((id) => ({
+            entityKind: "cookbook" as const,
+            entityId: id,
+          })),
+          ...copies.map((copy) => ({
+            entityKind: "product" as const,
+            entityId: copy.id,
+          })),
+        ]);
+        return {
+          images,
+          copies: new Map(copies.map((copy) => [copy.cookbookId, copy])),
+        };
+      });
+      return [
+        covers.fields(
+          rawCookbookOutput.pick({ coverUrl: true, product: true }),
+          (row, loaded) => {
+            const copy = loaded.copies.get(row.id);
+            return {
+              coverUrl:
+                loaded.images.get(entityRefKey("cookbook", row.id))?.url ??
+                null,
+              product: copy
+                ? {
+                    id: parseShortcodeFor("product", copy.shortcode),
+                    name: copy.name,
+                    coverUrl:
+                      loaded.images.get(entityRefKey("product", copy.id))
+                        ?.url ?? null,
+                  }
+                : null,
+            };
+          },
+        ),
+      ];
+    },
   },
 });
-const hydrateCookbookSummaries = async (
-  db: Database,
-  rows: CookbookSummaryRow[],
-): Promise<RawCookbookOutput[]> =>
-  (
-    await listReadPlan<CookbookSummaryRow>("cookbook", cookbookRead(db)).read(
-      db,
-      rows,
-      { kind: "full" },
-    )
-  ).map((row) => rawCookbookOutput.parse(row));
-
-// `recipeCount` is the grouped count, not a column.
-const cookbookScaffold = listScaffold("cookbook", cookbook, {
-  derived: { recipeCount: recipeCountSql },
-});
-
-/** The kernel list: declared filters, the generated sort roster, paging. */
-export const cookbookListRead = (
-  db: Database,
-  filters: CookbookFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection,
-  readIntent: ListReadIntent = "page",
-) =>
-  cookbookScaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    {
-      select: (page) => selectCookbookSummaryRows(db, page),
-      read: cookbookRead(db),
-    },
-  );
-
-export const cookbookList = completeListReader(
-  rawCookbookOutput,
-  cookbookListRead,
-);
-
-export const getCookbookSummary = async (
-  db: Database,
-  shortcode: string,
-): Promise<RawCookbookOutput | null> => {
-  const where = cookbookScaffold.where({ ids: [shortcode] });
-  const rows = await selectCookbookSummaryRows(db, {
-    where,
-    orderBy: [asc(cookbook.shortcode)],
-    limit: 1,
-    offset: 0,
-  });
-  return (await hydrateCookbookSummaries(db, rows))[0] ?? null;
-};
 
 /** Every cookbook, by title: the `cookbook.list` roster the recipe pickers read. */
 export const listCookbooks = async (
@@ -436,9 +378,13 @@ export const listCookbooks = async (
 ): Promise<RawCookbookOutput[]> =>
   (
     await listAll((pagination) =>
-      cookbookList(db, {}, [{ orderBy: "name", direction: "asc" }], pagination),
+      cookbookScaffold.read(db, {
+        filters: {},
+        sorts: [{ orderBy: "name", direction: "asc" }],
+        pagination,
+      }),
     )
-  ).data;
+  ).data.map((row) => rawCookbookOutput.parse(row));
 
 /** The audited cookbook edits: title/author/subjects plus the shelf-copy link. */
 type CookbookEdit = CookbookUpdateInput & { productId?: ProductId | null };
@@ -446,8 +392,8 @@ type CookbookEdit = CookbookUpdateInput & { productId?: ProductId | null };
 const cookbookCrud = createEntityCrud({
   table: cookbook,
   entity: "cookbook",
-  fetchById: createEntityRowFetcher(cookbook),
-  fromDB: (_db, row: typeof cookbook.$inferSelect) => row,
+  scaffold: cookbookScaffold,
+  output: rawCookbookOutput,
   toUpdate: (data: CookbookEdit) => buildPartialUpdateValues(data),
   auditUpdateFields: ["name", "author", "subjects", "productId"],
   // The live title is unique, so a taken title is refused up front naming the
@@ -474,8 +420,11 @@ const cookbookCrud = createEntityCrud({
   },
 });
 
+/** One live cookbook by public code, or null. */
+export const readCookbook = cookbookCrud.getByShortcode;
+
 const cookbookSummaryOrThrow = async (db: Database, shortcode: string) => {
-  const summary = await getCookbookSummary(db, shortcode);
+  const summary = await readCookbook(db, shortcode);
   if (!summary) {
     throw createAppError(
       "COOKBOOK_NOT_FOUND",
@@ -501,7 +450,13 @@ export const setCookbookProduct = async (
   id: CookbookId,
   productId: ProductId | null,
 ): Promise<RawCookbookOutput> => {
-  const { shortcode } = await cookbookCrud.update(db, id, { productId }, actor);
+  const shortcode = await cookbookCrud.update(
+    db,
+    id,
+    { productId },
+    actor,
+    async (_tx, receipt) => receipt.shortcode,
+  );
   // Re-read through the shared projection outside the transaction so the
   // caller gets the same hydrated shape as the browse index without loading
   // every cookbook for a one-row mutation result.

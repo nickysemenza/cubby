@@ -1,20 +1,25 @@
 import {
   type IngredientId,
   type IngredientShortcode,
+  parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { type IngredientFilters } from "@cubby/schemas/ingredient";
-import { rawIngredientList as ingredientListItemOut } from "@cubby/schemas/ingredient-raw-read";
-import type { RawIngredientList as IngredientListItem } from "@cubby/schemas/ingredient-raw-read";
+import {
+  rawIngredientDetail,
+  rawIngredientList,
+  rawIngredientOutput,
+} from "@cubby/schemas/ingredient-raw-read";
+import { rawProductWithMappings } from "@cubby/schemas/product-raw-read";
 /**
- * Ingredient search, lookup, and list reads.
+ * Ingredient search, lookup, and the declared read.
  *
  * Name/alias matching for the merge suggester and cookbook importer, the
- * paginated list with its computed sort keys, the lean by-id batch fetch for the
- * costing path, and the enrichment-workbench worklist. None of these mutate.
+ * entity's list scaffold (its repository read port), the lean by-id batch
+ * fetch for the costing path, and the enrichment-workbench worklist. None of
+ * these mutate.
  */
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { type RecipeRef } from "@cubby/schemas/recipe";
+import type { RawRecipeTopLevel as RecipeTopLevel } from "@cubby/schemas/recipe-shared";
 import {
   and,
   eq,
@@ -26,25 +31,14 @@ import {
   sql,
 } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
+import { groupBy } from "es-toolkit";
 
-import { listReadRowSchema } from "~/entity/model/list-read-fields";
-import type { Database } from "~/server/db";
-import {
-  productBrandCodeSql,
-  productBrandNameSql,
-} from "~/server/db/computed/product-brand-sql";
-import {
-  categoryStockTrackingSql,
-  categorySummarySql,
-} from "~/server/db/computed/product-category-sql";
-import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   buildSearchConditions,
   getDb,
-  imageOrder,
-  type ListReadIntent,
   notDeleted,
-  relations,
+  unwrapDb,
 } from "~/server/db/helpers";
 import { recipeSourceRelations } from "~/server/db/helpers/relations";
 import {
@@ -55,33 +49,23 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
+import { buildIngredientNutritionProduct } from "~/server/domains/ingredient/repo/nutrition-product";
+import { ingredientSearch } from "~/server/domains/ingredient/repo/search-read-ingredient";
 import { currentProductConversionCoverageCondition } from "~/server/domains/product/repo/conversion-coverage";
-import {
-  enrichProductRowsWithPricing,
-  loadProductPricingForIngredientIds,
-} from "~/server/domains/product/repo/pricing";
+import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import {
   appearsInRecipesRefsForIngredientSql,
   computeRecipeUsages,
   cookbookOnlyForIngredientSql,
+  dbRecipeToTopLevel,
   liveRecipeCountForIngredientSql,
   ownRecipeCountForIngredientSql,
 } from "~/server/domains/recipe/repo/helpers";
-import {
-  attachDataQuality,
-  loadDataQualities,
-} from "~/server/generic/data-quality/repo/hydrate";
+import { batchEnrichWithFood } from "~/server/domains/usda-food/repo/usda-helpers";
+import { loadIngredientRecipeEvidence } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
 
 import { buildIngredientWhere } from "./internal-types";
-import {
-  dbIngredientToAPI,
-  dbIngredientToTopLevel,
-  mapIngredientProducts,
-  mapIngredientProductsLean,
-} from "./mappers";
 
 /**
  * Name-search standalone ingredients for the AI merge suggester's `search`
@@ -176,101 +160,17 @@ export const getIngredientMergeCandidatesByIds = async (
   return rows.map((r) => ({ ...r, productCount: Number(r.productCount) }));
 };
 
-/**
- * Lean fetch of an ingredient's recipe usages — just the RecipeSectionIngredient
- * rows joined to their section + recipe, shaped by {@link computeRecipeUsages}.
- * Used by the product detail view (via the linked ingredient) to render "Appears
- * In Recipes" without loading the full ingredient graph (its other products and
- * their unit mappings).
- */
-export const getRecipeUsagesForIngredient = async (
-  db: Database,
-  ingredientId: IngredientId,
-) => {
-  const rows = await getDb(db).query.recipeSectionIngredient.findMany({
-    where: and(
-      eq(recipeSectionIngredient.ingredientId, ingredientId),
-      notDeleted(recipeSectionIngredient),
-    ),
-    with: {
-      recipeSection: {
-        with: { recipe: { with: recipeSourceRelations } },
-      },
-    },
-  });
-  return computeRecipeUsages(rows);
-};
-
-/**
- * Lean batched fetch by id for the costing path: ingredients + their products
- * (mappings / images / external ids), in ONE query via `inArray`. Deliberately
- * drops the recipe-usage relation that the full ingredient graph carries (the
- * per-usage Recipe + RecipeSection jsonb bodies) — costing, getManyByIDs, and the
- * unit-mapping analysis only read products/food, so that's a needless over-fetch
- * (~1s on a recipe's ingredient set). Missing/deleted ids are silently omitted.
- */
+/** Load costing ingredients through the declared read without recipe bodies. */
 export const getIngredientsByIDsLean = async (
   db: Database,
   ids: IngredientId[],
 ) => {
-  if (ids.length === 0) return [];
-  const [rows, pricingById] = await Promise.all([
-    getDb(db).query.ingredient.findMany({
-      where: and(inArray(ingredient.id, ids), notDeleted(ingredient)),
-      // Unit mappings only — NOT images/externalIds. Costing + getManyByIDs never
-      // read them, and pulling full Image records here was ~4MB + ~11s of drizzle
-      // object-building per call (worker CPU that starved the recompute isolate).
-      with: {
-        product: {
-          where: notDeleted(product),
-          extras: {
-            brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
-            brandName: productBrandNameSql(product.brandId).as("brandName"),
-            category: categorySummarySql(sql`${product.categoryId}`).as(
-              "category",
-            ),
-            categoryStockTracking: categoryStockTrackingSql(
-              sql`${product.categoryId}`,
-            ).as("categoryStockTracking"),
-            classificationEvidence: productClassificationEvidenceSql(
-              sql`${product.id}`,
-            ).as("classificationEvidence"),
-          },
-          with: { unitMappings: true },
-        },
-      },
-    }),
-    // This is still one batched GROUP BY, but it no longer serializes behind
-    // drizzle's Product relation object-building. Product_ingredientId_idx and
-    // Expense_productId_idx cover the two join keys.
-    loadProductPricingForIngredientIds(db, ids),
-  ]);
-  const [qualityById, ingredientQualityById] = await Promise.all([
-    loadDataQualities(
-      db,
-      "product",
-      rows.flatMap((row) => row.product.map((product) => product.id)),
-    ),
-    loadDataQualities(
-      db,
-      "ingredient",
-      rows.map((row) => row.id),
-    ),
-  ]);
-  return rows.map((row) => {
-    const { product: productRel } = row;
-    return {
-      // SAFETY: `row` came from `rows`, which `ingredientQualityById` was loaded for.
-      ...dbIngredientToTopLevel(row, ingredientQualityById.get(row.id)!),
-      product: mapIngredientProductsLean(
-        productRel.map((product) => ({
-          ...product,
-          pricing: pricingById.get(product.id),
-          dataQuality: qualityById.get(product.id)!,
-        })),
-      ),
-    };
-  });
+  const projection = [...Object.keys(rawIngredientOutput.shape), "product"];
+  const { data } = await ingredientScaffold.getByIds(db, ids, projection);
+  return data.map((row) => ({
+    ...rawIngredientOutput.parse(row),
+    product: rawIngredientList.shape.product.parse(row.product),
+  }));
 };
 
 /**
@@ -282,7 +182,7 @@ export const getIngredientsByIDsLean = async (
  * `instructions`/`totals`/`notes`) once per RSI usage — a ~24 MB payload for
  * ~1.4k ingredients that made this query ~40s (transfer + JS marshalling, not
  * Postgres). Recipe usages for the expanded-row footer load on demand via
- * {@link getRecipeUsagesForIngredient}.
+ * the recipe-usages reader.
  */
 export const enrichmentWorkbenchIngredients = async (
   db: Database,
@@ -297,102 +197,58 @@ export const enrichmentWorkbenchIngredients = async (
   const ref = '"ingredient"."id"';
   const recipeCountSql = liveRecipeCountForIngredientSql(ref);
   const rows = await getDb(db).query.ingredient.findMany({
+    columns: { id: true, shortcode: true },
     where: and(
       isNull(ingredient.recipeId),
       notDeleted(ingredient),
-      // Skip the long tail of never-used ingredients up front — the workbench is
-      // a worklist of recipe-used gaps.
       sql.raw(`${recipeCountSql} > 0`),
-      // Optional recipe scope: restrict to the leaf ingredients of one recipe's
-      // sub-recipe tree (recipeTreeLeafIngredientIds).
       opts?.restrictToIds
         ? inArray(ingredient.id, opts.restrictToIds)
         : undefined,
     ),
-    with: {
-      product: {
-        extras: {
-          brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
-          brandName: productBrandNameSql(product.brandId).as("brandName"),
-          category: categorySummarySql(sql`${product.categoryId}`).as(
-            "category",
-          ),
-          categoryStockTracking: categoryStockTrackingSql(
-            sql`${product.categoryId}`,
-          ).as("categoryStockTracking"),
-          classificationEvidence: productClassificationEvidenceSql(
-            sql`${product.id}`,
-          ).as("classificationEvidence"),
-        },
-        where: notDeleted(product),
-        with: {
-          unitMappings: true,
-          externalIds: true,
-          images: { orderBy: imageOrder, with: { image: true } },
-        },
-      },
-    },
     extras: {
       recipeCount: sql<number>`${sql.raw(recipeCountSql)}`.as("recipeCount"),
-      cookbookOnly: sql<boolean>`${sql.raw(
-        cookbookOnlyForIngredientSql(ref),
-      )}`.as("cookbookOnly"),
+      cookbookOnly:
+        sql<boolean>`${sql.raw(cookbookOnlyForIngredientSql(ref))}`.as(
+          "cookbookOnly",
+        ),
     },
     orderBy: [sql.raw(`${recipeCountSql} desc nulls last`)],
   });
-  const pricedProducts = await enrichProductRowsWithPricing(
+  const records = await getIngredientsByIDsLean(
     db,
-    rows.flatMap((row) => row.product),
+    rows.map((row) => row.id),
   );
-  const pricingById = new Map(
-    pricedProducts.map((product) => [product.id, product.pricing]),
-  );
-  const [qualifiedProducts, ingredientQualityById] = await Promise.all([
-    attachDataQuality(
-      db,
-      "product",
-      rows.flatMap((row) => row.product),
-    ),
-    loadDataQualities(
-      db,
-      "ingredient",
-      rows.map((row) => row.id),
-    ),
-  ]);
-  const qualityById = new Map(
-    qualifiedProducts.map((product) => [product.id, product.dataQuality]),
-  );
-  return rows.map((row) => {
-    const { product: productRel, recipeCount, cookbookOnly } = row;
-    return {
-      // SAFETY: `row` came from `rows`, which `ingredientQualityById` was loaded for.
-      ...dbIngredientToTopLevel(row, ingredientQualityById.get(row.id)!),
-      product: mapIngredientProducts(
-        productRel.map((product) => ({
-          ...product,
-          pricing: pricingById.get(product.id),
-          dataQuality: qualityById.get(product.id)!,
-        })),
-      ),
-      // count() returns bigint (string over the wire), so coerce; the boolean comes
-      // back native — `=== true` avoids the Boolean("false") === true trap if a
-      // future driver ever stringifies it.
-      recipeCount: Number(recipeCount),
-      cookbookOnly: cookbookOnly === true,
-    };
+  const byCode = new Map(records.map((record) => [record.id, record]));
+  return rows.flatMap((row) => {
+    const record = byCode.get(parseShortcodeFor("ingredient", row.shortcode));
+    return record
+      ? [
+          {
+            ...record,
+            recipeCount: Number(row.recipeCount),
+            cookbookOnly: row.cookbookOnly === true,
+          },
+        ]
+      : [];
   });
 };
 
-export const getIngredientByName = async (db: Database, name: string) => {
-  const res = await getDb(db).query.ingredient.findFirst({
-    where: buildIngredientWhere(true, name),
-    ...relations.ingredient.full,
-  });
-  return res ? await dbIngredientToAPI(db, res) : null;
+/** The standalone ingredient named exactly (name or alias, any case), or null. */
+export const findIngredientIdByName = async (
+  db: Database,
+  name: string,
+): Promise<IngredientId | null> => {
+  const [row] = await getDb(db)
+    .select({ id: ingredient.id })
+    .from(ingredient)
+    .where(buildIngredientWhere(true, name))
+    .limit(1);
+  return row?.id ?? null;
 };
 
 /**
- * Batch counterpart to {@link getIngredientByName}: match many names in ONE
+ * Batch counterpart to {@link findIngredientIdByName}: match many names in ONE
  * query (exact, case-insensitive, on name or alias). Returns a map from each
  * requested name to its match (or null). Used by the cookbook importer to show
  * the matched/new status for a whole book's ingredients without firing one
@@ -495,7 +351,113 @@ const ingredientIdsWithCompleteProducts = qb
     ),
   );
 
-const ingredientScaffold = listScaffold("ingredient", ingredient, {
+/** Each ingredient's live products, read through the Product scaffold. */
+const loadIngredientProducts = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) => {
+  const { kernelScaffold } = await import("~/server/entity-kernel/scaffolds");
+  const productScaffold = kernelScaffold("product");
+  if (!productScaffold) throw new Error("Product scaffold was not found");
+  const links = await unwrapDb(db)
+    .select({
+      id: product.id,
+      shortcode: product.shortcode,
+      ingredientId: product.ingredientId,
+    })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        inArray(
+          product.ingredientId,
+          ids.map((id) => parseEntityId("ingredient", id)),
+        ),
+      ),
+    );
+  const { data } = await productScaffold.getByIds(
+    db,
+    links.map((link) => link.id),
+    Object.keys(rawProductWithMappings.shape),
+  );
+  const byCode = new Map(
+    data.map((row) => {
+      const record = rawProductWithMappings.parse(row);
+      return [record.id, record] as const;
+    }),
+  );
+  const byIngredient = groupBy(
+    links,
+    (link): string => link.ingredientId ?? "",
+  );
+  return new Map(
+    ids.map((id) => [
+      id,
+      (byIngredient[id] ?? []).flatMap((link) => {
+        const record = byCode.get(parseShortcodeFor("product", link.shortcode));
+        return record ? [record] : [];
+      }),
+    ]),
+  );
+};
+
+/** Each ingredient's live recipe-line usages, by ingredient id. */
+const loadIngredientRecipeUsages = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) => {
+  const rows = await unwrapDb(db).query.recipeSectionIngredient.findMany({
+    where: and(
+      inArray(
+        recipeSectionIngredient.ingredientId,
+        ids.map((id) => parseEntityId("ingredient", id)),
+      ),
+      notDeleted(recipeSectionIngredient),
+    ),
+    with: {
+      recipeSection: {
+        with: { recipe: { with: recipeSourceRelations } },
+      },
+    },
+  });
+  const byIngredient = groupBy(rows, (row): string => row.ingredientId ?? "");
+  return new Map(
+    ids.map((id) => [
+      id,
+      computeRecipeUsages(byIngredient[id] ?? []).recipeUsages,
+    ]),
+  );
+};
+
+/** The recipe a recipe-as-ingredient row stands for, while it is live. */
+const loadIngredientRecipes = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) => {
+  const rows = await unwrapDb(db).query.ingredient.findMany({
+    where: inArray(
+      ingredient.id,
+      ids.map((id) => parseEntityId("ingredient", id)),
+    ),
+    columns: { id: true },
+    with: { recipe: { with: recipeSourceRelations } },
+  });
+  return new Map<string, RecipeTopLevel | null>(
+    rows.map((row) => [
+      row.id,
+      row.recipe && row.recipe.deletedAt === null
+        ? dbRecipeToTopLevel(row.recipe)
+        : null,
+    ]),
+  );
+};
+
+/**
+ * The Ingredient read, stated once: list pages, selected projections and the
+ * single-record read all select through it. The declared list scope keeps a
+ * recipe's own ingredient rows out of pages.
+ */
+export const ingredientScaffold = listScaffold("ingredient", ingredient, {
   derived: {
     // Shared with global search so the sort key matches the displayed
     // `appearsInRecipes.length` exactly (live recipes/sections/usages only).
@@ -514,200 +476,84 @@ const ingredientScaffold = listScaffold("ingredient", ingredient, {
       notInArray(ingredient.id, ingredientIdsWithCompleteProducts),
     )!,
   },
-});
-
-/**
- * The complete WHERE for an ingredient list. `getEntityCounts` calls it with
- * `{}` — see repo/dashboard.ts. The declared list scope keeps a recipe's own
- * ingredient rows out.
- *
- * Named `...ListWhere` rather than `buildIngredientWhere`: that name is already
- * taken by the name-matching helper in ingredient/internal-types.ts.
- */
-export const buildIngredientListWhere = (filters: IngredientFilters) =>
-  ingredientScaffold.where(filters);
-
-const ingredientListImpl = async (
-  db: Database,
-  filters: IngredientFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-  projection: ListProjection = { kind: "full" },
-) => {
-  const dbClient = getDb(db);
-  const whereClause = buildIngredientListWhere(filters);
-
-  if (readIntent === "ids") {
-    const { take, skip } = ingredientScaffold.page(pagination);
-    const rows = await dbClient
-      .select({ shortcode: ingredient.shortcode })
-      .from(ingredient)
-      .where(whereClause)
-      .orderBy(...ingredientScaffold.orderBy(sorts, {}, filters))
-      // One look-ahead row avoids a count query for the bulk scan.
-      .limit(take + 1)
-      .offset(skip);
-    const data = rows.map((row) => ({ id: row.shortcode }));
-    return { data: data.slice(0, take), hasMore: data.length > take };
-  }
-
-  // Lean list shape: products (mapped) + a jsonb {id,name}[] of the recipes the
-  // ingredient appears in (the list reads count = length, and the first ref for
-  // the pill). Drops the per-usage Recipe + Section jsonb bodies the full graph
-  // shipped — the list never reads them (that was the over-fetch).
-  const leanRelations = {
-    ...relations.ingredient.list,
-    extras: {
+  read: {
+    search: ingredientSearch,
+    evidence: {
+      recipeCount: loadIngredientRecipeEvidence,
+      appearsInRecipes: loadIngredientRecipeEvidence,
+    },
+    columns: {
+      // The derived `appearsInRecipes` is the count sorts and filters read;
+      // the read key is the recipe refs themselves.
       appearsInRecipes: sql<RecipeRef[]>`${sql.raw(
-        appearsInRecipesRefsForIngredientSql('"ingredient"."id"'),
-      )}`.as("appearsInRecipes"),
+        appearsInRecipesRefsForIngredientSql('"Ingredient"."id"'),
+      )}`,
       // Distinct live NON-cookbook recipes — the number the
       // `ownRecipePresenceFilter` worklist selects on, so the card and the
       // filter can't report different populations.
-      ownRecipeCount: sql<number>`${sql.raw(
-        ownRecipeCountForIngredientSql('"ingredient"."id"'),
-      )}`.as("ownRecipeCount"),
+      ownRecipeCount: sql<number>`(${sql.raw(
+        ownRecipeCountForIngredientSql('"Ingredient"."id"'),
+      )})::int`,
     },
-  } as const;
-
-  return ingredientScaffold.read(
-    db,
-    { filters, sorts, pagination, readIntent, projection },
-    {
-      where: whereClause,
-      load: (where) =>
-        dbClient.query.ingredient.findMany({
-          where,
-          with: {
-            product: wantsListGroup(projection, "relations")
-              ? leanRelations.with.product
-              : undefined,
+    media: true,
+    bindings: (bind) => {
+      const products = bind.ids(({ db, ids }) =>
+        loadIngredientProducts(db, ids),
+      );
+      const foods = bind.ids(async (page) => {
+        const loaded = await products.load(page);
+        // A read without the kernel's USDA client (a script) reads no foods.
+        const port = page.context.reader.usdaClient ?? null;
+        const linked = [...loaded.values()].flat();
+        const enriched = port
+          ? await batchEnrichWithFood(linked, foodLookupParamFromProduct, port)
+          : linked.map((row) => ({ ...row, food: null }));
+        const byId = new Map(enriched.map((row) => [row.id, row]));
+        return new Map(
+          [...loaded].map(([id, rows]) => [
+            id,
+            rows.map((row) => {
+              const withFood = byId.get(row.id);
+              if (!withFood)
+                throw new Error("Ingredient product food was not loaded");
+              return withFood;
+            }),
+          ]),
+        );
+      });
+      const usages = bind.ids(({ db, ids }) =>
+        loadIngredientRecipeUsages(db, ids),
+      );
+      const recipes = bind.ids(({ db, ids }) => loadIngredientRecipes(db, ids));
+      return [
+        products.fields(
+          rawIngredientList.pick({ product: true }),
+          (row, loaded) => ({ product: loaded.get(row.id) ?? [] }),
+        ),
+        // A record read carries each product's USDA food and the nutrition
+        // basis chosen from them.
+        foods.fields(
+          rawIngredientDetail.pick({ product: true, nutritionProduct: true }),
+          (row, loaded) => {
+            const withFood = loaded.get(row.id) ?? [];
+            return {
+              product: withFood,
+              nutritionProduct: buildIngredientNutritionProduct(withFood),
+            };
           },
-          extras: {
-            appearsInRecipes: wantsListGroup(projection, "relations")
-              ? leanRelations.extras.appearsInRecipes
-              : sql<RecipeRef[] | null>`NULL::jsonb`.as("appearsInRecipes"),
-            ownRecipeCount: wantsListGroup(projection, "derived")
-              ? leanRelations.extras.ownRecipeCount
-              : sql<number | null>`NULL::int`.as("ownRecipeCount"),
-          },
-        }),
-      read: {
-        media: true,
-        bindings: (bind) => {
-          const products = bind.batch(async ({ rows }) => {
-            const linked = rows.flatMap((row) =>
-              (row.product ?? []).flatMap((product) =>
-                "unitMappings" in product ? [product] : [],
-              ),
-            );
-            const [priced, qualified] = await Promise.all([
-              enrichProductRowsWithPricing(db, linked),
-              attachDataQuality(db, "product", linked),
-            ]);
-            const pricing = new Map(priced.map((row) => [row.id, row.pricing]));
-            const quality = new Map(
-              qualified.map((row) => [row.id, row.dataQuality]),
-            );
-            return new Map(
-              rows.map((row) => [
-                row.id,
-                mapIngredientProducts(
-                  (row.product ?? []).flatMap((product) => {
-                    if (!("unitMappings" in product)) return [];
-                    const dataQuality = quality.get(product.id);
-                    if (!dataQuality)
-                      throw new Error(
-                        "Ingredient product quality was not loaded",
-                      );
-                    return [
-                      {
-                        ...product,
-                        pricing: pricing.get(product.id),
-                        dataQuality,
-                      },
-                    ];
-                  }),
-                ),
-              ]),
-            );
-          });
-          return [
-            products.fields(
-              ingredientListItemOut.pick({ product: true }),
-              (row, loaded) => ({ product: loaded.get(row.id) ?? [] }),
-            ),
-            bind(
-              ingredientListItemOut.pick({ appearsInRecipes: true }),
-              (row) => ({ appearsInRecipes: row.appearsInRecipes ?? [] }),
-            ),
-            bind(
-              ingredientListItemOut.pick({ ownRecipeCount: true }),
-              (row) => {
-                if (row.ownRecipeCount === null)
-                  throw new Error("Ingredient recipe count was not loaded");
-                return { ownRecipeCount: Number(row.ownRecipeCount) };
-              },
-            ),
-          ];
-        },
-      },
+          { scope: "detail" },
+        ),
+        usages.fields(
+          rawIngredientDetail.pick({ recipeUsages: true }),
+          (row, loaded) => ({ recipeUsages: loaded.get(row.id) ?? [] }),
+          { scope: "detail" },
+        ),
+        recipes.fields(
+          rawIngredientDetail.pick({ recipe: true }),
+          (row, loaded) => ({ recipe: loaded.get(row.id) ?? null }),
+          { scope: "detail" },
+        ),
+      ];
     },
-  );
-};
-
-export const ingredientListRead = async (
-  db: Database,
-  filters: IngredientFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection,
-  readIntent: ListReadIntent = "page",
-) => {
-  const page = await ingredientListImpl(
-    db,
-    filters,
-    sorts,
-    pagination,
-    readIntent,
-    projection,
-  );
-  if (!("count" in page)) throw new Error("Wrong ingredient list read intent");
-  return {
-    ...page,
-    data: page.data.map((row) => listReadRowSchema.parse(row)),
-  };
-};
-
-export function ingredientList(
-  db: Database,
-  filters: IngredientFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: "ids",
-): Promise<{ data: { id: IngredientShortcode }[]; hasMore: boolean }>;
-export function ingredientList(
-  db: Database,
-  filters: IngredientFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent?: Exclude<ListReadIntent, "ids">,
-): Promise<{ data: IngredientListItem[]; count: number }>;
-export function ingredientList(
-  db: Database,
-  filters: IngredientFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-) {
-  return ingredientListImpl(db, filters, sorts, pagination, readIntent).then(
-    (page) =>
-      "count" in page
-        ? {
-            ...page,
-            data: page.data.map((row) => ingredientListItemOut.parse(row)),
-          }
-        : page,
-  );
-}
+  },
+});

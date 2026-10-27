@@ -4,7 +4,7 @@ import {
   getEntityListOutputSchema,
 } from "~/entity/generated/entity-lists.gen";
 import { executeEntitySelectionIds } from "~/server/entity-kernel";
-import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
+import { listOperations } from "~/server/entity-kernel/list-operations";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 /**
@@ -15,9 +15,9 @@ import { implementOperationDomain } from "~/server/operation-runtime/operation-d
 export const entityListHandlers = implementOperationDomain(entityListContract, {
   selectionIds: (context, input) => executeEntitySelectionIds(context, input),
   facetCounts: (context, input) =>
-    ENTITY_LIST_READ_OPERATIONS[input.entity].facets(context, input),
+    listOperations(input.entity).facets(context, input),
   viewCounts: (context, input) =>
-    ENTITY_LIST_READ_OPERATIONS[input.entity].viewCounts(context, input),
+    listOperations(input.entity).viewCounts(context, input),
   list: {
     input: entityListInputSchema,
     output: (input) => getEntityListOutputSchema(input.entity),

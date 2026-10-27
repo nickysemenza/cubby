@@ -1,4 +1,3 @@
-import { hasGenericListOperation } from "../list-capabilities.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import { EntityDeclarationError } from "../declarations.ts";
 import type {
@@ -168,26 +167,6 @@ export const renderKernelBindingsArtifacts = (
         `export const ENTITY_KERNEL_OPERATIONS = {\n${runtimeOperations}\n} as const;\n` +
         "// Custom timeline implementations, keyed by entity; default-timeline entities are absent.\n// oxfmt-ignore\n" +
         `export const ENTITY_TIMELINE_BINDINGS = {\n${timelineBindings}\n} as const satisfies { [E in TimelineEntity]?: EntityTimelineImplementation<E> };\n`,
-    },
-    {
-      relativePath:
-        "apps/web/src/server/generated/entity-list-read-bindings.gen.ts",
-      source:
-        generatedHeader +
-        'import { deferredService } from "~/server/http/deferred-service";\n' +
-        'import { defineListOperations } from "~/server/entity-kernel/list-read";\n\n' +
-        "// Only the selected entity loads its authoritative repository. No context is retained.\n" +
-        `export const ENTITY_LIST_READ_OPERATIONS = {\n${kernelEntities
-          .filter((entity) => hasGenericListOperation(entity))
-          .map((entity) => {
-            const port = entity.ports.repository;
-            if (port === null)
-              throw new EntityDeclarationError(
-                `${entity.key}.ports.repository is required for a list reader.`,
-              );
-            return `  ${JSON.stringify(entity.key)}: deferredService(async () => defineListOperations((await import(${JSON.stringify(port.module)})).${port.export}), () => ({})),`;
-          })
-          .join("\n")}\n} as const;\n`,
     },
   ];
 };

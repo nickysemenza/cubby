@@ -17,13 +17,13 @@ import {
   task,
   wish,
 } from "~/server/db/schema";
-import { buildIngredientListWhere } from "~/server/domains/ingredient/repo/search";
-import { buildLocationWhere } from "~/server/domains/location/repo/crud";
-import { buildProjectWhere } from "~/server/domains/project/repo/lookup";
-import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
-import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
+import { ingredientScaffold } from "~/server/domains/ingredient/repo/search";
+import { locationScaffold } from "~/server/domains/location/repo/crud";
+import { projectScaffold } from "~/server/domains/project/repo/lookup";
+import { recipeScaffold } from "~/server/domains/recipe/repo/crud";
+import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { buildWishWhere } from "~/server/domains/wish/repo";
+import { wishScaffold } from "~/server/domains/wish/repo";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -139,7 +139,7 @@ describe("anyOf text filters", () => {
         ["zqshed porch", [], old("zqshed porch")],
         ["zq", codes(named, noted, shed, child, grandchild), old("zq")],
       ],
-      (term) => buildProjectWhere(db(), { search: term }),
+      (term) => projectScaffold.prepareWhere(db(), { search: term }),
       project,
       rows,
     );
@@ -211,7 +211,7 @@ describe("anyOf text filters", () => {
         ["zqgone", [], old("zqgone")],
         ["zq", codes(own, child, grandchild, named), old("zq")],
       ],
-      (term) => buildTaskWhere(db(), { search: term }),
+      (term) => taskScaffold.prepareWhere(db(), { search: term }),
       task,
       rows,
     );
@@ -291,7 +291,7 @@ describe("anyOf text filters", () => {
         ["zqdeleted", [], old("zqdeleted")],
         ["zq", codes(named, noted, several, modelled), old("zq")],
       ],
-      (term) => buildWishWhere({ search: term }),
+      (term) => wishScaffold.where({ search: term }),
       wish,
       rows,
     );
@@ -327,7 +327,7 @@ describe("anyOf text filters", () => {
         ["rye zqrye", [], oldIngredient("rye zqrye")],
         ["zq", codes(flour, aliased), oldIngredient("zq")],
       ],
-      (term) => buildIngredientListWhere({ nameFilter: term }),
+      (term) => ingredientScaffold.where({ nameFilter: term }),
       ingredient,
       ingredients,
     );
@@ -355,7 +355,7 @@ describe("anyOf text filters", () => {
           own("zq", sql`${recipe.name}`, sql`${recipe.notes}`),
         ],
       ],
-      (term) => buildRecipeWhere({ nameFilter: term }),
+      (term) => recipeScaffold.where({ nameFilter: term }),
       recipe,
       [named, noted, other],
     );
@@ -387,7 +387,16 @@ describe("anyOf text filters", () => {
         ["zqnook", codes(nook), oldLocation("zqnook")],
         ["zq", codes(shelf, nook), oldLocation("zq")],
       ],
-      (term) => buildLocationWhere(db(), { nameFilter: term }),
+      async (term) =>
+        locationScaffold.where(
+          { nameFilter: term },
+          {
+            context: await locationScaffold.context(db(), {
+              filters: { nameFilter: term },
+              readIntent: "count",
+            }),
+          },
+        ),
       location,
       [shelf, nook, hall],
     );

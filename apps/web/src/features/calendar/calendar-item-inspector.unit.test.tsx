@@ -51,8 +51,6 @@ const savedExpense: ExpenseOut = buildFieldEnvelopeRow({
   row: {
     attachments: [],
     displayImages: [],
-    redirectedFrom: null,
-    previousShortcodes: [],
     ...rawExpenseOut.parse({
       id: expense.id,
       name: "Large freezer tray",

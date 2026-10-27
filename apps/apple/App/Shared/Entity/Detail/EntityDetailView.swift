@@ -520,14 +520,6 @@ struct EntityDetailContent: View {
         private var macBody: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                    if let redirectedFrom = row.redirectedFrom {
-                        Label(
-                            "\(redirectedFrom) was merged into \(row.id)",
-                            systemImage: "arrow.triangle.branch"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
                     EntityHeroView(descriptor: descriptor, row: row) {
                         if let supplement = DetailSlotRegistry.supplement(for: descriptor.key, row: row) {
                             supplement
@@ -685,12 +677,6 @@ struct EntityDetailContent: View {
 
     private var phoneBody: some View {
         List {
-            if let redirectedFrom = row.redirectedFrom {
-                Section {
-                    Label("\(redirectedFrom) was merged into \(row.id)", systemImage: "arrow.triangle.branch")
-                    Text("You are viewing the surviving record.").foregroundStyle(.secondary)
-                }
-            }
             Section {
                 EntityHeroView(descriptor: descriptor, row: row) {
                     if let supplement = DetailSlotRegistry.supplement(for: descriptor.key, row: row) {
@@ -702,10 +688,6 @@ struct EntityDetailContent: View {
                 quickActionButtons
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-                if !row.previousShortcodes.isEmpty {
-                    LabeledContent(
-                        "Previous shortcodes", value: row.previousShortcodes.joined(separator: ", "))
-                }
             }
             if descriptor.key == .location {
                 Section("Fieldwork") {

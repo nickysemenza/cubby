@@ -11,10 +11,10 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
-import { getRunByID } from "~/server/domains/run/repo/run";
+import { readRunById } from "~/server/domains/run/repo/run";
 import {
-  getVendorAccountByShortcode,
-  listVendorAccountsRead,
+  readVendorAccount,
+  vendorAccountScaffold,
   foldVendorAccountsInto,
 } from "~/server/domains/vendor-account/repo/vendor-account";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
@@ -146,7 +146,7 @@ describe("vendor account run activity", () => {
       ledgerPartyId: party.id,
     });
 
-    const before = await getVendorAccountByShortcode(ctx.db, account.shortcode);
+    const before = await readVendorAccount(ctx.db, account.shortcode);
     expect(before?.lastRunAt).toBeNull();
     expect(before?.lastSuccessAt).toBeNull();
 
@@ -158,10 +158,7 @@ describe("vendor account run activity", () => {
       .select({ startedAt: run.startedAt })
       .from(run)
       .where(eq(run.id, started.id));
-    const running = await getVendorAccountByShortcode(
-      ctx.db,
-      account.shortcode,
-    );
+    const running = await readVendorAccount(ctx.db, account.shortcode);
     expect(running?.lastRunAt).toEqual(row?.startedAt);
     expect(running?.lastSuccessAt).toBeNull();
 
@@ -170,7 +167,7 @@ describe("vendor account run activity", () => {
       .update(run)
       .set({ status: "completed", endedAt })
       .where(eq(run.id, started.id));
-    const done = await getVendorAccountByShortcode(ctx.db, account.shortcode);
+    const done = await readVendorAccount(ctx.db, account.shortcode);
     expect(done?.lastSuccessAt).toEqual(endedAt);
   });
 });
@@ -238,7 +235,7 @@ describe("vendor account creation persistence", () => {
       .from(vendorAccount)
       .where(eq(vendorAccount.id, createdRow.id));
     expect(
-      (await getVendorAccountByShortcode(ctx.db, created.item.id))?.displayName,
+      (await readVendorAccount(ctx.db, created.item.id))?.displayName,
     ).toBe("Import owner vendor · Import owner member");
     expect(persistedAccount).toEqual({
       vendorId: vendor.id,
@@ -315,33 +312,29 @@ describe("derived vendor account label", () => {
     const expected = "Renamed Store · Avery";
 
     expect(
-      (await getVendorAccountByShortcode(ctx.db, account.shortcode))
-        ?.displayName,
+      (await readVendorAccount(ctx.db, account.shortcode))?.displayName,
     ).toBe(expected);
     const page = { pageIndex: 0, pageSize: 10 };
-    const sorted = await listVendorAccountsRead(
-      ctx.db,
-      {},
-      [{ orderBy: "displayName", direction: "desc" }],
-      page,
-    );
+    const sorted = await vendorAccountScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [{ orderBy: "displayName", direction: "desc" }],
+      pagination: page,
+    });
     expect(sorted.data.map((row) => row.displayName)).toEqual([
       "Zephyr Supply · Avery",
       expected,
     ]);
-    const found = await listVendorAccountsRead(
-      ctx.db,
-      { search: "renamed store · av" },
-      [],
-      page,
-    );
+    const found = await vendorAccountScaffold.read(ctx.db, {
+      filters: { search: "renamed store · av" },
+      sorts: [],
+      pagination: page,
+    });
     expect(found.data.map((row) => row.id)).toEqual([account.shortcode]);
-    const stale = await listVendorAccountsRead(
-      ctx.db,
-      { search: "Example Store" },
-      [],
-      page,
-    );
+    const stale = await vendorAccountScaffold.read(ctx.db, {
+      filters: { search: "Example Store" },
+      sorts: [],
+      pagination: page,
+    });
     expect(stale.count).toBe(0);
 
     expect(
@@ -356,7 +349,7 @@ describe("derived vendor account label", () => {
         ])
       ).values(),
     ]).toEqual(["Zephyr Supply · Avery"]);
-    expect((await getRunByID(ctx.db, accountRun.id)).vendorAccountLabel).toBe(
+    expect((await readRunById(ctx.db, accountRun.id)).vendorAccountLabel).toBe(
       expected,
     );
     const graph = await getEntityGraph(ctx.db, {

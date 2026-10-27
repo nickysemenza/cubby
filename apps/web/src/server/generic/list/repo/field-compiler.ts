@@ -6,6 +6,7 @@
  * a declared predicate) and the request-scoped `prepare` step their SQL may
  * read.
  */
+import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
@@ -26,6 +27,7 @@ import { and, type AnyColumn, getTableName, SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import type { USDAClient } from "~/server/clients/usda";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   effectiveFieldSql,
@@ -251,19 +253,41 @@ export class ListPreparationScope {
  * the quality read context its caller passed to `where`. `excluded` marks the
  * include predicates an Exclude key negates.
  */
+/** The caller a read serves: its actor and the clients its loaders may use. */
+export type ListReader = {
+  actor?: ActorContext;
+  usdaClient?: USDAClient;
+};
+
 export class ListContext {
   constructor(
     private readonly prepared: ReadonlyMap<ListPrepare<unknown>, unknown>,
     readonly read?: QualityReadContext,
     readonly excluded = false,
+    /** Who reads and the clients a read may call, from the kernel context. */
+    readonly reader: ListReader = {},
   ) {}
 
   static readonly empty = new ListContext(new Map());
 
+  /** Who reads, for viewer-relative values (an Email's `ownedByViewer`). */
+  get actor(): ActorContext | undefined {
+    return this.reader.actor;
+  }
+
   withRead(read: QualityReadContext | undefined): ListContext {
     return read === this.read
       ? this
-      : new ListContext(this.prepared, read, this.excluded);
+      : new ListContext(this.prepared, read, this.excluded, this.reader);
+  }
+
+  withReader(reader: ListReader | undefined): ListContext {
+    return reader === undefined
+      ? this
+      : new ListContext(this.prepared, this.read, this.excluded, {
+          ...this.reader,
+          ...reader,
+        });
   }
 
   /** This context plus a related scope's nested one (distinct handles). */
@@ -274,11 +298,12 @@ export class ListContext {
           new Map([...this.prepared, ...nested.prepared]),
           this.read,
           this.excluded,
+          this.reader,
         );
   }
 
   excluding(): ListContext {
-    return new ListContext(this.prepared, this.read, true);
+    return new ListContext(this.prepared, this.read, true, this.reader);
   }
 
   /** The loaded prepares, to seed a fuller context without reloading them. */
@@ -412,6 +437,31 @@ export const derivedValueSql = (
     throw new Error(
       `${entity}.model.derived.${key} is a compound sort key and cannot filter`,
     );
+  return value instanceof SQL ? value : value.sql;
+};
+
+/**
+ * The column a read selects for a derived value key: its one expression in
+ * `context`, or null when it has no single readable value (a compound sort
+ * key, a predicate, or a key the repository reads through a binding).
+ */
+export const derivedSelectSql = (
+  entity: Entity,
+  derived: AnyDerivedSql,
+  key: string,
+  context: ListContext,
+): SQL | null => {
+  const field = derivedFieldsOf(entity)[key];
+  const entry = derived[key];
+  if (
+    field?.shape !== "value" ||
+    entry === undefined ||
+    typeof entry === "function"
+  )
+    return null;
+  const parts = derivedValueParts(entity, derived, key, context);
+  const [value] = parts;
+  if (value === undefined || parts.length > 1) return null;
   return value instanceof SQL ? value : value.sql;
 };
 

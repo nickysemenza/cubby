@@ -550,9 +550,8 @@ export function imageReadSchemas<
   const output = z.object(outputFields);
   const related = base.extend({
     // Optional like `processingIssue`/`importTarget`/`analysisSummary` below:
-    // `imageWithRelationsToAPI` builds the base shape and every real producer
-    // (`imageList`, `getImageById`, `getImagesByShortcodes`) merges in the
-    // batch-loaded score.
+    // the generic read attaches the batch-loaded score after the row's own
+    // fields, so a stored-shape parse may see it absent.
     dataQuality: field("dataQuality").optional(),
     associations: z.array(imageAssociationSchema),
     processingIssue: imageProcessingIssue.nullable().optional(),

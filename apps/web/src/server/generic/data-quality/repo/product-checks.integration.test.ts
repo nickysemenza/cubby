@@ -14,7 +14,7 @@ import {
   attachExistingImageToEntity,
   updateImageIntegrity,
 } from "~/server/domains/image/repo/image";
-import { productList, updateProduct } from "~/server/domains/product/repo/crud";
+import { updateProduct } from "~/server/domains/product/repo/crud";
 import {
   attachProductComponents,
   detachProductComponents,
@@ -36,6 +36,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductIdentityFixture,
+  listProductsFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -221,7 +222,7 @@ describe("stored Product quality", () => {
       compileProblemFilters("product", view.filters),
     );
     const saved = () =>
-      productList(ctx.db, filters, [], { pageIndex: 0, pageSize: 100 });
+      listProductsFixture(ctx.db, filters, [], { pageIndex: 0, pageSize: 100 });
     await refresh();
     expect((await saved()).data.map((row) => row.id)).toContain(item.id);
     const research = () =>

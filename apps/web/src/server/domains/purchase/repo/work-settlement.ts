@@ -8,7 +8,7 @@ import { compileProblemFilters } from "~/entity/problems/problem-filter-semantic
 import { householdLocalDate } from "~/lib/household-date";
 import { related, quotedTable } from "~/server/db/helpers/related";
 import { expense, purchase } from "~/server/db/schema";
-import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
+import { purchaseScaffold } from "~/server/domains/purchase/repo/purchase";
 import {
   awaitingPostingSql,
   purchasePostingStartSql,
@@ -60,7 +60,8 @@ const source: WorkSource = {
         .from(purchase)
         .where(
           and(
-            buildPurchaseWhereClause(
+            await purchaseScaffold.prepareWhere(
+              db,
               purchaseFiltersSchema.parse(
                 compileProblemFilters("purchase", view.filters),
               ),

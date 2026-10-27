@@ -23,12 +23,8 @@ import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode
 import {
   createGardenEntry,
   createPlanting,
-  gardenEntryList,
-  gardenEntryListRead,
-  getGardenEntry,
-  getPlanting,
-  plantingList,
-  plantingListRead,
+  gardenEntryScaffold,
+  plantingScaffold,
   updateGardenEntry,
   updatePlanting,
 } from "./garden";
@@ -125,26 +121,7 @@ const auditEntryPlantingSets = async (
 
 export const plantingRepository = defineRepository("planting", {
   lifecycle: { delete: PLANTING_DELETE_EDGE_POLICY },
-  get: async (ctx, shortcode) =>
-    getPlanting(ctx.db, await plantings.one(ctx.db, shortcode)),
-  list: (ctx, filters, sorts, pagination) =>
-    plantingList(ctx.db, filters, pagination, sorts),
-  listRead: (
-    ctx,
-    filters,
-    sorts,
-    pagination,
-    projection,
-    readIntent = "page",
-  ) =>
-    plantingListRead(
-      ctx.db,
-      filters,
-      pagination,
-      sorts,
-      projection,
-      readIntent,
-    ),
+  scaffold: plantingScaffold,
   create: asActor(createPlanting),
   update: async (ctx, shortcode, data) => {
     const id = await plantings.one(ctx.db, shortcode);
@@ -181,26 +158,7 @@ export const plantingRepository = defineRepository("planting", {
 
 export const gardenEntryRepository = defineRepository("gardenEntry", {
   lifecycle: { delete: GARDEN_ENTRY_DELETE_EDGE_POLICY },
-  get: async (ctx, shortcode) =>
-    getGardenEntry(ctx.db, await entries.one(ctx.db, shortcode)),
-  list: (ctx, filters, sorts, pagination) =>
-    gardenEntryList(ctx.db, filters, pagination, sorts),
-  listRead: (
-    ctx,
-    filters,
-    sorts,
-    pagination,
-    projection,
-    readIntent = "page",
-  ) =>
-    gardenEntryListRead(
-      ctx.db,
-      filters,
-      pagination,
-      sorts,
-      projection,
-      readIntent,
-    ),
+  scaffold: gardenEntryScaffold,
   create: asActor(createGardenEntry),
   update: async (ctx, shortcode, data) => {
     const id = await entries.one(ctx.db, shortcode);

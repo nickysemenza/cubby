@@ -17,7 +17,7 @@ import {
   makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
 
-import { type CookbookRef, getRecipeByID, upsertCookbookRecipe } from "./crud";
+import { type CookbookRef, readRecipeById, upsertCookbookRecipe } from "./crud";
 import {
   type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
@@ -153,7 +153,7 @@ describe("upsertCookbookRecipe", () => {
       actor,
       makeCookbookImportContext(tree),
     );
-    const flat = await getRecipeByID(db, first.id);
+    const flat = await readRecipeById(db, first.id);
     expect(
       flat!.sections
         .flatMap((s) => s.ingredients)
@@ -181,7 +181,7 @@ describe("upsertCookbookRecipe", () => {
       ctx,
     );
 
-    const full = await getRecipeByID(db, linked.id);
+    const full = await readRecipeById(db, linked.id);
     const ingredients = full!.sections.flatMap((s) => s.ingredients);
     const link = ingredients.find((ing) => ing.type === "recipe");
     expect(link).toBeDefined();
@@ -212,7 +212,7 @@ describe("upsertCookbookRecipe", () => {
       ctx,
     );
 
-    const full = await getRecipeByID(db, linked.id);
+    const full = await readRecipeById(db, linked.id);
     const ingredients = full!.sections.flatMap((s) => s.ingredients);
     const link = ingredients.find((ing) => ing.type === "recipe");
     expect(link?.recipe?.id).toBe(crust.shortcode);

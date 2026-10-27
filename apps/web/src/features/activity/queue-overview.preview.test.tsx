@@ -143,8 +143,6 @@ beforeEach(async () => {
               ),
             },
             attachments: [],
-            redirectedFrom: null,
-            previousShortcodes: [],
           },
         }),
       };

@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
@@ -9,36 +8,23 @@ import {
   type WishId,
   type WishShortcode,
 } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type {
-  WishCreateInput,
-  WishFilters,
-  WishUpdateData,
-} from "@cubby/schemas/wish";
+import type { WishCreateInput, WishUpdateData } from "@cubby/schemas/wish";
 import {
   wishPriceRangeOut,
   type WishPriceRange,
 } from "@cubby/schemas/wish-fields";
-import {
-  type RawWishOut,
-  rawWishListItemOut,
-} from "@cubby/schemas/wish-raw-read";
+import { rawWishListItemOut, rawWishOut } from "@cubby/schemas/wish-raw-read";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import {
-  getDb,
-  notDeleted,
-  unwrapDb,
-  withTransaction,
-} from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
+import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
 import { entityLink, product, wish } from "~/server/db/schema";
 import { effectiveProductPriceSql } from "~/server/domains/product/repo/pricing";
+import { wishSearch } from "~/server/domains/wish/search-read-wish";
 import { wishCandidateItems } from "~/server/entity-kernel/repo/detail-display-labels";
 import {
   type MutationReceipt,
@@ -47,24 +33,17 @@ import {
 import {
   asActor,
   createEntityCrud,
-  createEntityRowFetcher,
   defineRepository,
-  listOn,
-  listReadOn,
-  onDb,
 } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   attachLinks,
   liveLinks,
   replaceLinkSet,
 } from "~/server/generic/entity-links/repo/entity-links";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
   resolveLiveShortcodes,
   resolveOrThrow,
@@ -176,52 +155,6 @@ const publicWishCandidates = (candidates: CandidateRow[]) =>
     updatedAt: candidate.updatedAt,
   }));
 
-const toWishOut = (
-  row: WishRow,
-  candidates: CandidateRow[],
-  dataQuality: DataQuality,
-): RawWishOut => {
-  const publicCandidates = publicWishCandidates(candidates);
-  return {
-    id: parseShortcodeFor("wish", row.shortcode),
-    name: row.name,
-    notes: row.notes,
-    acquiredAt: row.acquiredAt,
-    candidates: publicCandidates,
-    candidateItems: wishCandidateItems(publicCandidates),
-    candidateCount: publicCandidates.length,
-    priceRange: candidates[0]?.priceRange ?? null,
-    dataQuality,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
-};
-
-const hydrateWishes = async (
-  db: Database | DrizzleTransaction,
-  rows: WishRow[],
-): Promise<RawWishOut[]> => {
-  const [candidates, dataQualities] = await Promise.all([
-    candidateRowsForWishes(
-      db,
-      rows.map((row) => row.id),
-    ),
-    loadDataQualities(
-      db,
-      "wish",
-      rows.map((row) => row.id),
-    ),
-  ]);
-  return rows.map((row) =>
-    toWishOut(
-      row,
-      candidates.get(row.id) ?? [],
-      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-      dataQualities.get(row.id)!,
-    ),
-  );
-};
-
 const wishRead = {
   media: true,
   bindings: (bind) => {
@@ -267,52 +200,14 @@ const wishPriceMid = sql`((${wishPriceLow} + ${wishPriceHigh}) / 2)`;
 
 // A price range is an aggregate over candidates, not a column on `Wish`; a
 // wish whose alternatives are all unpriced has no range at all.
-const wishScaffold = listScaffold("wish", wish, {
+export const wishScaffold = listScaffold("wish", wish, {
   derived: {
     priceRange: wishPriceMid,
+    priceLow: wishPriceLow,
+    priceHigh: wishPriceHigh,
   },
+  read: { ...wishRead, search: wishSearch },
 });
-
-/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildWishWhere = (filters: WishFilters) =>
-  wishScaffold.where(filters);
-
-export const wishListRead = async (
-  db: Database,
-  filters: WishFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) => {
-  return wishScaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    {
-      read: wishRead,
-    },
-  );
-};
-
-export const wishListSummary = async (db: Database, filters: WishFilters) => {
-  const [totals] = await getDb(db)
-    .select({
-      priceLow: sql<number>`COALESCE(sum(${wishPriceLow}), 0)::double precision`,
-      priceHigh: sql<number>`COALESCE(sum(${wishPriceHigh}), 0)::double precision`,
-    })
-    .from(wish)
-    .where(buildWishWhere(filters));
-  return {
-    priceLow: Number(totals?.priceLow ?? 0),
-    priceHigh: Number(totals?.priceHigh ?? 0),
-  };
-};
-
-export const wishList = completeListReader(
-  rawWishListItemOut,
-  wishListRead,
-  wishListSummary,
-);
 
 const candidateShortcodes = async (
   tx: Database | DrizzleTransaction,
@@ -336,8 +231,8 @@ const candidateShortcodes = async (
 const wishCrud = createEntityCrud({
   entity: "wish",
   table: wish,
-  fetchById: createEntityRowFetcher(wish),
-  fromDB: async (db, row: WishRow) => (await hydrateWishes(db, [row]))[0]!,
+  scaffold: wishScaffold,
+  output: rawWishOut,
   toUpdate: (data: WishUpdateData, before) => {
     const acquiredAt =
       data.acquired === undefined
@@ -380,7 +275,6 @@ const wishCrud = createEntityCrud({
   },
 });
 const getWishByID = wishCrud.getByID;
-const getWishByShortcode = wishCrud.getByShortcode;
 
 /** Any live Product can be a wish candidate — the only requirement is that it
  * exists and is live. */
@@ -472,10 +366,7 @@ export const updateWish = defineMutationWriter({
 
 export const wishRepository = defineRepository("wish", {
   lifecycle: { delete: WISH_DELETE_EDGE_POLICY },
-  get: onDb(getWishByShortcode),
-  list: listOn(wishList),
-  listRead: listReadOn(wishListRead),
-  listSummary: (ctx, filters) => wishListSummary(ctx.db, filters),
+  scaffold: wishScaffold,
   create: asActor(createWish),
   update: asActor(updateWish),
 });

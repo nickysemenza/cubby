@@ -19,7 +19,9 @@ import {
   type EntitySchemaBindingEntity,
   type EntitySchemaBindingMap,
 } from "~/server/generated/entity-bindings.gen";
+import type { PageFieldReadContexts } from "~/server/generic/derived/repo/read-context";
 import type { ListPreparationScope } from "~/server/generic/list/repo/field-compiler";
+import type { EntityListScaffold } from "~/server/generic/list/repo/list";
 import type {
   ListProjection,
   ListReadPage,
@@ -164,30 +166,33 @@ export type EntityRepository<
   E extends EntitySchemaBindingEntity,
   S extends EntityBindingSchemas = SchemasFor<E>,
 > = {
-  listRead?(
+  /**
+   * The entity's list scaffold: facets, selection ids, counts, totals and
+   * connection rows reach the entity's filtered population only through it.
+   */
+  scaffold: EntityListScaffold;
+  /** A page; the projection defaults to the scaffold's list fields. */
+  listRead(
     ctx: EntityKernelContext,
     filters: ZodOutput<S["filters"]>,
     sorts: SortParams[],
     pagination: PaginationParams,
-    projection: ListProjection,
+    projection?: ListProjection,
     readIntent?: Extract<ListReadIntent, "page" | "count">,
     preparation?: ListPreparationScope,
   ): Promise<ListReadPage<ListReadRow>>;
-  listSummary?(
+  /** Live records by public id; the projection defaults to the detail fields. */
+  read(
     ctx: EntityKernelContext,
-    filters: ZodOutput<S["filters"]>,
-  ): Promise<Record<string, number>>;
+    ids: readonly ZodOutput<S["id"]>[],
+    projection?: ListProjection,
+  ): Promise<{ data: ListReadRow[]; fieldReads?: PageFieldReadContexts }>;
   updatePolicy?: { recordFields: readonly string[] };
+  /** One live record by public id, parsed as the detail output. */
   get(
     ctx: EntityKernelContext,
     id: ZodOutput<S["id"]>,
   ): Promise<ZodOutput<S["repositoryDetail"]> | null>;
-  list(
-    ctx: EntityKernelContext,
-    filters: ZodOutput<S["filters"]>,
-    sorts: SortParams[],
-    pagination: PaginationParams,
-  ): Promise<ListReadPage<ZodOutput<S["repositoryList"]>>>;
   create?(
     ctx: EntityKernelContext,
     data: PresentSchemaOutput<S["createInput"]>,

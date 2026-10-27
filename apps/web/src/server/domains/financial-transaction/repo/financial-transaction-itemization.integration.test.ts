@@ -3,10 +3,11 @@ import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   findOrCreateVendor,
-  getVendorByID,
+  readVendorById,
 } from "~/server/domains/vendor/repo/vendor";
 import {
   createProductIdentityFixture,
@@ -14,7 +15,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { listFinancialTransactions } from "./financial-transaction";
+import { financialTransactionScaffold } from "./financial-transaction";
 
 // Failure modes this guards:
 //  - a charge that is one of several on a purchase (installments, combined
@@ -38,7 +39,7 @@ describe("financial transaction itemization verdict", () => {
         sourceAliases: [],
       })
     ).output.id;
-    const vendor = await getVendorByID(
+    const vendor = await readVendorById(
       ctx.db,
       await findOrCreateVendor(ctx.db, "Itemization Vendor"),
     );
@@ -96,8 +97,17 @@ describe("financial transaction itemization verdict", () => {
   };
 
   const verdicts = async (filters: FinancialTransactionFilters = {}) => {
-    const listed = await listFinancialTransactions(ctx.db, filters, [], page);
-    return new Map(listed.data.map((row) => [row.merchant, row.itemization]));
+    const listed = await financialTransactionScaffold.read(ctx.db, {
+      filters,
+      sorts: [],
+      pagination: page,
+    });
+    return new Map(
+      listed.data.map((row) => [
+        z.string().nullish().parse(row.merchant),
+        row.itemization,
+      ]),
+    );
   };
 
   // Seeds ~a dozen purchases, lines, and charges serially; ~9s on CI already.

@@ -424,25 +424,3 @@ export async function loadExpenseJointAllocations(
   >(expenseDerivedReadSql("shares", { expenseIds, draft }));
   return parseExpenseJointAllocationRows(result.rows);
 }
-
-export async function hydrateExpenseProjectAllocations<
-  T extends { id: ExpenseId },
->(
-  db: Database | DrizzleTransaction,
-  rows: readonly T[],
-): Promise<Array<T & { projectAllocations: ExpenseProjectAllocationRow[] }>> {
-  const allocations = await loadExpenseProjectAllocations(
-    db,
-    rows.map((row) => row.id),
-  );
-  const byExpense = new Map<ExpenseId, ExpenseProjectAllocationRow[]>();
-  for (const allocation of allocations) {
-    const existing = byExpense.get(allocation.expenseId) ?? [];
-    existing.push(allocation);
-    byExpense.set(allocation.expenseId, existing);
-  }
-  return rows.map((row) => ({
-    ...row,
-    projectAllocations: byExpense.get(row.id) ?? [],
-  }));
-}

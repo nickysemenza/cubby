@@ -8,13 +8,6 @@ import type { PageFieldReadContexts } from "~/server/generic/derived/repo/read-c
 
 export type { ListProjection } from "~/entity/model/list-read-fields";
 
-/**
- * Repository batch bindings, never deferred reads. Repository tracing must not
- * import the hydration implementation: its Worker Env consumers require
- * globals deliberately absent from repository programs.
- */
-export type ListBindingGroup = "media" | "quality" | "relations" | "derived";
-
 export interface ListReadPage<T = ListReadRow> {
   data: T[];
   count: number;

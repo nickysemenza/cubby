@@ -1,15 +1,10 @@
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import {
   type MealId,
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
 import type { MealKind, MealType } from "@cubby/schemas/meal";
-import {
-  rawMealOutput,
-  type RawMealOutput,
-  type RawMealRecipeOut,
-} from "@cubby/schemas/meal-raw-read";
+import { type RawMealRecipeOut } from "@cubby/schemas/meal-raw-read";
 import {
   type NutritionTotals,
   totalsPreview,
@@ -22,7 +17,7 @@ import {
   pendingTotals,
   scaleTotals,
 } from "~/lib/nutrition-estimates";
-import { mapImages, type MappableImageRecord } from "~/server/db/helpers";
+import { type MappableImageRecord } from "~/server/db/helpers";
 import { mealCostLabel } from "~/server/generic/list/repo/list-display-labels";
 
 const scaledRecipeTotals = (
@@ -146,26 +141,4 @@ export const mealTotalsFields = (recipes: readonly RawMealRecipeOut[]) => {
     calories: preview.calories,
     costTotalLabel: mealCostLabel(totals.cost),
   };
-};
-
-export const dbMealToAPI = (
-  row: MealRow,
-  dataQuality: DataQuality,
-): RawMealOutput => {
-  const recipes = mealRecipeFields(row);
-  return rawMealOutput.parse({
-    id: parseShortcodeFor("meal", row.shortcode),
-    date: row.date,
-    name: row.name,
-    sortOrder: row.sortOrder,
-    mealType: row.mealType,
-    mealKind: row.mealKind,
-    displayName: row.name?.trim() || row.date,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    ...recipes,
-    ...mealTotalsFields(recipes.recipes),
-    images: mapImages(row.images),
-    dataQuality,
-  });
 };

@@ -27,7 +27,7 @@ export {
   applyImageOrder,
   associatePendingImages,
   batchUpdateWithCaseWhen,
-  imageJoinBindings,
+  galleryBinding,
   insertAndReturn,
   nextImageSortOrder,
   updateAndReturn,
@@ -64,7 +64,7 @@ export {
   uuidArrayParam,
 } from "~/server/db/helpers/query";
 // Relation loaders
-export { imageOrder, relations, singularAttachment } from "./relations";
+export { relations } from "./relations";
 export type { MappableImageRecord } from "~/server/db/helpers/transform";
 // Transform helpers
 export {

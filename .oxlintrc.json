@@ -214,6 +214,13 @@
       }
     },
     {
+      "files": ["apps/web/src/server/generic/**/*.ts"],
+      "excludeFiles": ["**/*.test.ts"],
+      "rules": {
+        "cubby/no-entity-roster": "error"
+      }
+    },
+    {
       "files": ["apps/web/src/server/**/*.ts", "packages/*/src/**/*.ts"],
       "excludeFiles": ["**/*.test.ts"],
       "rules": {

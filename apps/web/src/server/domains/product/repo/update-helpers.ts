@@ -14,7 +14,7 @@ import type { DrizzleTransaction } from "~/server/db";
 import {
   applyImageOrder,
   associatePendingImages,
-  imageJoinBindings,
+  galleryBinding,
   nextImageSortOrder,
   notDeleted,
 } from "~/server/db/helpers";
@@ -430,7 +430,7 @@ export async function syncProductImages(
 
   if (imageOrder && imageOrder.length > 0) {
     const orderedIds = await resolveAllPresent(tx, "image", imageOrder);
-    await applyImageOrder(tx, imageJoinBindings.product, productId, orderedIds);
+    await applyImageOrder(tx, galleryBinding("product"), productId, orderedIds);
   }
 
   if (removeImageIds && removeImageIds.length > 0) {
@@ -450,7 +450,7 @@ export async function syncProductImages(
     );
     const startSortOrder = await nextImageSortOrder(
       tx,
-      imageJoinBindings.product,
+      galleryBinding("product"),
       productId,
     );
     // Generic association creates a new live join. Preserve the most recent
@@ -490,7 +490,7 @@ export async function syncProductImages(
     );
     await associatePendingImages(
       tx,
-      imageJoinBindings.product,
+      galleryBinding("product"),
       productId,
       resolvedPendingImageIds,
       startSortOrder,

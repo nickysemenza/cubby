@@ -30,7 +30,7 @@ import {
 import {
   createUploadedImageRecord,
   deleteImages,
-  imageList,
+  imageScaffold,
 } from "~/server/domains/image/repo/image";
 import {
   loadImageAnalysisEvidence,
@@ -955,9 +955,13 @@ describe("durable image representations", () => {
     // One failure only backs off; repeated failures ask for attention.
     expect(
       (
-        await imageList(ctx.db, { processingIssue: "failed" }, [], {
-          pageIndex: 0,
-          pageSize: 100,
+        await imageScaffold.read(ctx.db, {
+          filters: { processingIssue: "failed" },
+          sorts: [],
+          pagination: {
+            pageIndex: 0,
+            pageSize: 100,
+          },
         })
       ).data,
     ).toEqual([]);
@@ -965,12 +969,11 @@ describe("durable image representations", () => {
       .update(durableJob)
       .set({ attempts: JOB_NEEDS_ATTENTION_ATTEMPTS })
       .where(eq(durableJob.key, `image-processing:${failed.jobId}`));
-    const problems = await imageList(
-      ctx.db,
-      { processingIssue: "failed" },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
+    const problems = await imageScaffold.read(ctx.db, {
+      filters: { processingIssue: "failed" },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 100 },
+    });
     expect(problems.data.map((item) => item.id)).toEqual([failed.shortcode]);
     expect(problems.data[0]?.processingIssue).toBe("failed");
     await expect(

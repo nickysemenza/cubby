@@ -1,11 +1,6 @@
-/** Central, batched boundary between public shortcodes and private UUIDs. */
-
 import { entityRefKey } from "@cubby/schemas/entity";
-import {
-  shortcodeEntities,
-  type ShortcodeEntity,
-} from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+/** Central, batched boundary between public shortcodes and private UUIDs. */
+import { type ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
@@ -19,22 +14,17 @@ import {
   parseShortcodeFor,
   type ShortcodeFor,
 } from "@cubby/shared";
-import { type SQL, and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
-import type { PgColumn } from "drizzle-orm/pg-core";
+import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
-import { inventoryEntry, location, product } from "~/server/db/retained-tables";
 import { describeUnresolvableCode } from "~/server/entity-kernel/repo/entity-identity";
+import { repositoryReadPorts } from "~/server/entity-kernel/repo/read-ports";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  SHORTCODE_TABLE,
-  TITLE_FIELD_COLUMN,
-} from "~/server/generated/shortcode-tables.gen";
-import { LABEL_COLUMN_OVERRIDES } from "~/server/generic/entity-graph/repo/record-label";
+import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import type { ShortcodeTable } from "~/server/generic/shortcode/repo/shortcode-tables";
 
 export type { EntityRef } from "@cubby/schemas/identifiers";
@@ -251,74 +241,6 @@ export async function lookupShortcodes(
   return codes;
 }
 
-/**
- * The drizzle column backing `presentation.titleField`, independent of
- * `LABEL_COLUMN_OVERRIDES`: `titleField` names a field's external `readKey`,
- * which the generator maps through the field's internal key and storage
- * column to the actual `PgColumn`. The resolver loads only this small lookup,
- * without initializing the complete field model on every API dispatch.
- * `null` means the
- * titleField has no physical storage column at all (a computed/relational
- * value) — every such entity must appear in `LABEL_COLUMN_OVERRIDES`, checked
- * by `DISPLAY_NAME_COLUMN`'s construction below.
- *
- * Exported only for `shortcode-resolver-labels.unit.test.ts`'s dead-override
- * check, which needs this override-independent value to tell "the override
- * restates what titleField would already give" apart from "the override
- * documents a value titleField cannot express at all".
- */
-export const resolveTitleFieldColumn = (
-  entity: ShortcodeEntity,
-): PgColumn | null => TITLE_FIELD_COLUMN[entity];
-
-/**
- * `null` means the label is relational or the entity has no display column.
- * An SQL expression is a relational label over the unaliased table.
- *
- * Not a third copy of the entity *type* label (`ENTITY_LABEL` above,
- * `entityLabel()` in `apps/web/src/entity/entities.tsx`): those map an
- * entity to what to call its *kind* ("Financial transaction"); this maps an
- * entity to the DB column holding one *row's* own name (e.g.
- * `financialTransaction.merchant`). Label lookups may omit a missing name;
- * reference and filter-option rosters fall back to the shortcode when this
- * column is absent. Don't fold it into the type-label consolidation.
- *
- * `LABEL_COLUMN_OVERRIDES` wins for its declared entities; every other entity is
- * derived from `titleField`, and a non-override entity whose titleField has
- * no physical storage column is a bug — declare it as an override instead of
- * letting the map silently go null.
- */
-type DisplayNameColumns = Record<ShortcodeEntity, PgColumn | SQL | null>;
-
-export const DISPLAY_NAME_COLUMN = shortcodeEntities.reduce(
-  (columns, entity) => {
-    // SAFETY: `entity` ranges over every `ShortcodeEntity`, a subset of which
-    // are keys of `LABEL_COLUMN_OVERRIDES`; the `hasOwn` guard is what makes
-    // this cast sound — everywhere it's false, `override` is never read.
-    const override = Object.hasOwn(LABEL_COLUMN_OVERRIDES, entity)
-      ? LABEL_COLUMN_OVERRIDES[entity as keyof typeof LABEL_COLUMN_OVERRIDES]
-      : undefined;
-    if (override) {
-      columns[entity] = override.column;
-      return columns;
-    }
-
-    const column = resolveTitleFieldColumn(entity);
-    if (!column) {
-      const titleField = entitySummary[entity].titleField;
-      throw new Error(
-        `DISPLAY_NAME_COLUMN: ${entity}'s titleField (${titleField}) has no derivable storage column and no LABEL_COLUMN_OVERRIDES entry to fall back on`,
-      );
-    }
-    columns[entity] = column;
-    return columns;
-  },
-  // SAFETY: `shortcodeEntities` enumerates the whole `ShortcodeEntity` union,
-  // and the reducer above assigns every one of them before returning, so the
-  // accumulator ends up fully populated despite starting empty.
-  {} as DisplayNameColumns,
-);
-
 /** Batched UUID-to-label lookup; rows without a label are omitted. */
 export async function lookupEntityLabels(
   db: RepositoryQueryInput,
@@ -334,13 +256,7 @@ export async function lookupEntityLabels(
   const names = new Map<string, string>();
   await Promise.all(
     [...byEntity].map(async ([entity, ids]) => {
-      if (entity === "inventory") {
-        for (const [id, label] of await inventoryEntryLabels(db, ids)) {
-          names.set(entityRefKey(entity, id), label);
-        }
-        return;
-      }
-      const nameColumn: PgColumn | SQL | null = DISPLAY_NAME_COLUMN[entity];
+      const nameColumn = repositoryReadPorts(entity)?.title();
       if (!nameColumn) return;
       const table: ShortcodeTable = SHORTCODE_TABLE[entity];
       // includes-deleted: same reasoning as `lookupShortcodes` — an audit row
@@ -388,7 +304,7 @@ export async function lookupEntityReferences<E extends ShortcodeEntity>(
   >();
   if (wanted.length === 0) return result;
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
-  const nameColumn: PgColumn | SQL | null = DISPLAY_NAME_COLUMN[entity];
+  const nameColumn = repositoryReadPorts(entity)?.title();
   const rows = await unwrapDb(db)
     .select({
       id: table.id,
@@ -412,40 +328,6 @@ export async function lookupEntityReferences<E extends ShortcodeEntity>(
     });
   }
   return result;
-}
-
-/** Inventory labels are relational: `product · location`. */
-async function inventoryEntryLabels(
-  db: RepositoryQueryInput,
-  ids: ReadonlySet<string>,
-): Promise<Map<string, string>> {
-  const rows = await unwrapDb(db)
-    .select({
-      id: inventoryEntry.id,
-      productName: product.name,
-      locationName: location.name,
-    })
-    .from(inventoryEntry)
-    .innerJoin(product, eq(inventoryEntry.productId, product.id))
-    .innerJoin(location, eq(inventoryEntry.locationId, location.id))
-    .where(
-      inArray(
-        inventoryEntry.id,
-        [...ids].map((id) => parseEntityId("inventory", id)),
-      ),
-    );
-
-  const labels = new Map<string, string>();
-  for (const row of rows) {
-    if (!row.productName) continue;
-    labels.set(
-      row.id,
-      row.locationName
-        ? `${row.productName} · ${row.locationName}`
-        : row.productName,
-    );
-  }
-  return labels;
 }
 
 interface ResolvedRow<E extends ShortcodeEntity> {

@@ -22,18 +22,10 @@ export const renderEntityDatabaseArtifacts = (
         dbTable === undefined
       )
         return [];
-      const title = entity.fieldModel.fields.find(
-        (field) => field.readKey === entity.inspector.titleField,
-      );
-      const titleColumn = title
-        ? (entity.fieldModel.storage.find((entry) => entry.key === title.key)
-            ?.column ?? null)
-        : null;
       return [
         {
           key: entity.key,
           dbTable: stringValue(dbTable, `${entity.key}.descriptor.dbTable`),
-          titleColumn,
         },
       ];
     })
@@ -47,12 +39,6 @@ export const renderEntityDatabaseArtifacts = (
     .map(
       ({ key, dbTable }) =>
         `  ${JSON.stringify(key)}: ${lowerCamelCase(dbTable)},`,
-    )
-    .join("\n");
-  const titleColumnBindings = shortcodeTableEntities
-    .map(
-      ({ key, dbTable, titleColumn }) =>
-        `  ${JSON.stringify(key)}: ${titleColumn === null ? "null" : `${lowerCamelCase(dbTable)}[${JSON.stringify(titleColumn)}]`},`,
     )
     .join("\n");
   return [
@@ -77,9 +63,7 @@ export const renderEntityDatabaseArtifacts = (
         "// Generated table imports stay one entity per line.\n// oxfmt-ignore\n" +
         `import {\n${shortcodeTableImportNames.map((name) => `  ${name},`).join("\n")}\n} from "~/server/db/generated/entity-table-definitions.gen";\n\n` +
         "// Generated table bindings stay one entity per line.\n// oxfmt-ignore\n" +
-        `export const SHORTCODE_TABLE = {\n${shortcodeTableBindings}\n} as const;\n\n` +
-        "// Physical title columns only; computed titles remain null for the resolver's explicit overrides.\n// oxfmt-ignore\n" +
-        `export const TITLE_FIELD_COLUMN = {\n${titleColumnBindings}\n} as const;\n`,
+        `export const SHORTCODE_TABLE = {\n${shortcodeTableBindings}\n} as const;\n`,
     },
   ];
 };

@@ -55,6 +55,7 @@ import type {
   AuditableEntity,
   ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
+import { entityMembership } from "@cubby/schemas/entity-manifest";
 import type { EntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
@@ -93,7 +94,7 @@ export type RemovalAuditEntry = {
   readonly [removalWitness]: true;
 };
 
-const SEARCHABLE = new Set<string>(searchableEntities);
+const SEARCHABLE = entityMembership(searchableEntities);
 
 /** Whether removing a row of this entity must cascade derived search state. */
 const isSearchable = (entity: Entity): entity is SearchableEntity =>

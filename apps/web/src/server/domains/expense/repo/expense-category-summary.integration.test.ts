@@ -6,10 +6,10 @@ import { describe, expect, it } from "vitest";
 
 import { withTransactionDatabase } from "~/server/db/helpers";
 import {
-  listFinancialTransactions,
+  financialTransactionScaffold,
   updateFinancialTransaction,
 } from "~/server/domains/financial-transaction/repo/financial-transaction";
-import { getPurchaseByID } from "~/server/domains/purchase/repo/purchase";
+import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Public reads must retain line classification and never turn settlement amounts into item spend.
@@ -71,7 +71,7 @@ describe("live Expense category summaries", () => {
       trade: "other",
       lineKind: "tax",
     });
-    const purchaseRead = await getPurchaseByID(ctx.db, purchase.id);
+    const purchaseRead = await readPurchaseById(ctx.db, purchase.id);
     const summary = spendingCategorySummarySchema.parse(
       purchaseRead.spendingCategorySummary,
     );
@@ -116,12 +116,11 @@ describe("live Expense category summaries", () => {
         { id: food.shortcode, name: food.name, amount: null },
       ]),
     );
-    const listed = await listFinancialTransactions(
-      ctx.db,
-      financialTransactionFiltersSchema.parse({}),
-      [],
-      { pageIndex: 0, pageSize: 20 },
-    );
+    const listed = await financialTransactionScaffold.read(ctx.db, {
+      filters: financialTransactionFiltersSchema.parse({}),
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 20 },
+    });
     expect(
       listed.data.find((row) => row.id === source.output.id)
         ?.spendingCategorySummary,
@@ -200,7 +199,7 @@ describe("live Expense category summaries", () => {
       });
     }
     const summary = async () =>
-      (await getPurchaseByID(ctx.db, purchase.id)).spendingCategorySummary;
+      (await readPurchaseById(ctx.db, purchase.id)).spendingCategorySummary;
     expect(await summary()).toMatchObject({
       state: "partial",
       categorizedLineCount: 1,
@@ -255,7 +254,7 @@ describe("live Expense category summaries", () => {
       trade: "other",
     });
     const summary = spendingCategorySummarySchema.parse(
-      (await getPurchaseByID(ctx.db, purchase.id)).spendingCategorySummary,
+      (await readPurchaseById(ctx.db, purchase.id)).spendingCategorySummary,
     );
     expect(summary).toEqual({
       state: "partial",

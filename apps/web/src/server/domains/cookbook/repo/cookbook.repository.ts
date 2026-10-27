@@ -1,14 +1,8 @@
-import {
-  defineRepository,
-  listOn,
-  listReadOn,
-} from "~/server/entity-kernel/repo/repository";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
 
 import {
   COOKBOOK_DELETE_EDGE_POLICY,
-  cookbookList,
-  cookbookListRead,
-  getCookbookSummary,
+  cookbookScaffold,
   updateCookbook,
 } from "./cookbook";
 
@@ -19,9 +13,7 @@ import {
  */
 export const cookbookRepository = defineRepository("cookbook", {
   lifecycle: { delete: COOKBOOK_DELETE_EDGE_POLICY },
-  get: (ctx, shortcode) => getCookbookSummary(ctx.db, shortcode),
-  list: listOn(cookbookList),
-  listRead: listReadOn(cookbookListRead),
+  scaffold: cookbookScaffold,
   update: (ctx, shortcode, data) =>
     updateCookbook(ctx.db, ctx.actorContext, shortcode, data),
   updateRead: (ctx, shortcode, data, fields) =>

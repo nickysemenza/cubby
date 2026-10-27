@@ -5,7 +5,6 @@ import {
   entitySelectionIdsOutputSchema,
 } from "~/contracts/entity-list.contract";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
-import { listFacetCounter } from "~/server/generic/list/repo/list";
 
 import type { EntityKernelContext } from "./adapter";
 import { resolveFilterTokens } from "./filter-tokens";
@@ -28,8 +27,8 @@ export async function executeEntitySelectionIds(
     binding.schemas.filters,
     binding.schemas.filters.parse(rest),
   );
-  const scaffold = listFacetCounter(input.entity);
-  if (scaffold === null)
+  const { scaffold } = binding.repository;
+  if (scaffold === undefined)
     throw new Error(
       `${input.entity} has no canonical selection identity reader`,
     );

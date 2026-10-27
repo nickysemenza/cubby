@@ -15,10 +15,7 @@ import {
   projectCreateFromTasksWorkflow,
   projectHandlers,
 } from "~/server/domains/project/operations.server";
-import {
-  getTaskByShortcode,
-  updateTask,
-} from "~/server/domains/task/repo/crud";
+import { readTask, updateTask } from "~/server/domains/task/repo/crud";
 import { executeEntity } from "~/server/entity-kernel";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { systemPrincipal } from "~/server/http/authenticate";
@@ -26,9 +23,9 @@ import { requireActor } from "~/server/http/request-context";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { deleteProjects, getProjectByID, updateProject } from "./crud";
+import { deleteProjects, readProjectById, updateProject } from "./crud";
 import { getProjectDependencyGraph } from "./dependency-graph";
-import { projectList } from "./lookup";
+import { projectScaffold } from "./lookup";
 import { projectTreePage } from "./tree";
 
 describe("project repository", () => {
@@ -64,7 +61,7 @@ describe("project repository", () => {
     );
     expect(promoted).not.toHaveProperty("projectId");
     expect(promoted).not.toHaveProperty("fieldResolutions");
-    expect((await getTaskByShortcode(ctx.db, task.output.id))?.projectId).toBe(
+    expect((await readTask(ctx.db, task.output.id))?.projectId).toBe(
       result.data.project.id,
     );
   });
@@ -85,7 +82,7 @@ describe("project repository", () => {
     expect(result.project.name).toBe("Workflow promotion project");
     expect(result.project.emoji).toBe("👩🏽‍🍳");
     expect(result.tasks.map(({ id }) => id)).toEqual([task.output.id]);
-    const saved = await getTaskByShortcode(ctx.db, task.output.id);
+    const saved = await readTask(ctx.db, task.output.id);
     expect(saved?.projectId).toBe(result.project.id);
   });
 
@@ -106,7 +103,7 @@ describe("project repository", () => {
       id: project.output.id,
       data: { name: "Synthetic updated project", emoji: "Legacy mark" },
     });
-    const saved = await getProjectByID(ctx.db, project.entityId);
+    const saved = await readProjectById(ctx.db, project.entityId);
     expect(saved).toMatchObject({
       name: "Synthetic updated project",
       emoji: "Legacy mark",
@@ -155,13 +152,13 @@ describe("project repository", () => {
     });
 
     // Missing background work must not masquerade as an empty Project.
-    const missing = await getProjectByID(ctx.db, projectEntityId);
+    const missing = await readProjectById(ctx.db, projectEntityId);
     expect(missing.rollup).toBeNull();
     expect(missing.spent).toBeNull();
     expect(missing.taskProgress).toBeNull();
     expect(missing.dateWindow).toBeNull();
     await drainStoredDerived(ctx.db);
-    const result = await getProjectByID(ctx.db, projectEntityId);
+    const result = await readProjectById(ctx.db, projectEntityId);
     expect(result.rollup).toEqual({
       spent: 150,
       actualSpent: 100,
@@ -182,9 +179,10 @@ describe("project repository", () => {
         costEstimate: null,
       },
     });
-    const listed = await projectList(ctx.db, {}, [], {
-      pageIndex: 0,
-      pageSize: 500,
+    const listed = await projectScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 500 },
     });
     expect(listed.data.find((row) => row.id === project.id)?.rollup).toEqual(
       result.rollup,
@@ -213,7 +211,7 @@ describe("project repository", () => {
       costType: "materials",
     });
     await drainStoredDerived(ctx.db);
-    const before = await getProjectByID(ctx.db, first.entityId);
+    const before = await readProjectById(ctx.db, first.entityId);
     expect(before.rollup?.subtree.spent).toBe(25);
     expect(before.dateWindow?.effectiveStart).toBe("2025-01-01");
     expect(before.dateWindow?.effectiveEnd).toBe("2025-12-31");
@@ -224,12 +222,12 @@ describe("project repository", () => {
       ctx.actor,
     );
     // Reads retain the last published result until the marked work drains.
-    expect((await getProjectByID(ctx.db, first.entityId)).rollup).toEqual(
+    expect((await readProjectById(ctx.db, first.entityId)).rollup).toEqual(
       before.rollup,
     );
     await drainStoredDerived(ctx.db);
-    const oldParent = await getProjectByID(ctx.db, first.entityId);
-    const newParent = await getProjectByID(ctx.db, second.entityId);
+    const oldParent = await readProjectById(ctx.db, first.entityId);
+    const newParent = await readProjectById(ctx.db, second.entityId);
     expect(oldParent.rollup?.subtree.spent).toBe(0);
     expect(oldParent.dateWindow?.effectiveStart).toBeNull();
     expect(newParent.rollup?.spent).toBe(0);
@@ -266,7 +264,7 @@ describe("project repository", () => {
         .get(project.entityId)
         ?.get("rollups");
     await drainStoredDerived(ctx.db);
-    const before = await getProjectByID(ctx.db, project.entityId);
+    const before = await readProjectById(ctx.db, project.entityId);
     expect(before.rollup).toMatchObject({ taskCount: 2, doneTaskCount: 1 });
     expect(before.dateWindow?.effectiveEnd).toBe("2027-01-15");
     expect((await stored())?.stale).toBe(false);
@@ -281,7 +279,7 @@ describe("project repository", () => {
     );
     expect((await stored())?.stale).toBe(true);
     await drainStoredDerived(ctx.db);
-    const excluded = await getProjectByID(ctx.db, project.entityId);
+    const excluded = await readProjectById(ctx.db, project.entityId);
     expect(excluded.rollup).toMatchObject({ taskCount: 1, doneTaskCount: 0 });
     expect(excluded.dateWindow?.effectiveEnd).toBeNull();
     await updateTask(
@@ -295,7 +293,7 @@ describe("project repository", () => {
     );
     expect((await stored())?.stale).toBe(true);
     await drainStoredDerived(ctx.db);
-    const restored = await getProjectByID(ctx.db, project.entityId);
+    const restored = await readProjectById(ctx.db, project.entityId);
     expect(restored.rollup).toEqual(before.rollup);
     expect(restored.dateWindow).toEqual(before.dateWindow);
   });
@@ -468,7 +466,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       updateProject(ctx.db, a.id, { parentProjectId: c.id }, ctx.actor),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
-    const aAfter = await getProjectByID(ctx.db, aEntityId);
+    const aAfter = await readProjectById(ctx.db, aEntityId);
     expect(aAfter.parentProjectId).toBeNull();
   });
 
@@ -591,7 +589,7 @@ describe("project repository — date windows (derivation)", () => {
     });
 
     await drainStoredDerived(ctx.db);
-    const after = await getProjectByID(ctx.db, projectEntityId);
+    const after = await readProjectById(ctx.db, projectEntityId);
     expect(after.dateWindow).toEqual({
       derivedStart: "2024-01-15",
       derivedEnd: "2024-02-03",

@@ -1,18 +1,11 @@
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
-import type {
-  ProductCategoryId,
-  ProductId,
-  PurchaseId,
-} from "@cubby/schemas/identifiers";
+import type { ProductId, PurchaseId } from "@cubby/schemas/identifiers";
 import { vendorSpendingProfile } from "@cubby/schemas/spending-classification";
 import { and, inArray, sql, type SQL } from "drizzle-orm";
 
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
-import {
-  type CategoryStockTracking,
-  categoryStockTrackingSql,
-} from "~/server/db/computed/product-category-sql";
+import { type CategoryStockTracking } from "~/server/db/computed/product-category-sql";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/helpers/query";
@@ -58,21 +51,6 @@ export const resolveStockTrackingField = (
     matchesFallback: stored !== null && stored === fallbackValue,
     canReset: stored !== null,
   };
-};
-
-/** The decision a Product in `categoryId` inherits, for single-row writes
- * that build their response without the relational read projection. */
-export const loadCategoryStockTracking = async (
-  db: Database | DrizzleTransaction,
-  categoryId: ProductCategoryId | null,
-): Promise<CategoryStockTracking | null> => {
-  if (!categoryId) return null;
-  const rows = await unwrapDb(db).execute<{
-    tracking: CategoryStockTracking | null;
-  }>(
-    sql`SELECT ${categoryStockTrackingSql(sql`${categoryId}::uuid`)} AS tracking`,
-  );
-  return rows.rows[0]?.tracking ?? null;
 };
 
 /**

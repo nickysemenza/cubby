@@ -15,7 +15,7 @@ import {
   externalIdKey,
   findProductsByExternalIds,
 } from "~/server/domains/product/repo/find-by-external-ids";
-import { getPurchaseByID } from "~/server/domains/purchase/repo/purchase";
+import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import {
   getNotionRecipePageIds,
   upsertNotionRecipe,
@@ -23,7 +23,7 @@ import {
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   findOrCreateVendor,
-  getVendorByID,
+  readVendorById,
 } from "~/server/domains/vendor/repo/vendor";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -205,7 +205,7 @@ describe("EntityExternalId", () => {
     const purchase = (
       await createRepoEntity(ctx, "purchase", {
         date: "2026-03-02",
-        vendorId: (await getVendorByID(ctx.db, vendorId)).id,
+        vendorId: (await readVendorById(ctx.db, vendorId)).id,
         orderId: "settle-by-ref-1",
       })
     ).output;
@@ -234,7 +234,7 @@ describe("EntityExternalId", () => {
         .get(purchaseId)
         ?.gaps.map((gap) => gap.check) ?? [];
 
-    const settled = await getPurchaseByID(ctx.db, purchaseId);
+    const settled = await readPurchaseById(ctx.db, purchaseId);
     expect(settled.financialReconciliation?.status).toBe("match");
     expect(await gaps()).not.toContain("settlement_reference");
 
@@ -244,7 +244,7 @@ describe("EntityExternalId", () => {
       { sourceRefs: [] },
       ctx.actor,
     );
-    const unreferenced = await getPurchaseByID(ctx.db, purchaseId);
+    const unreferenced = await readPurchaseById(ctx.db, purchaseId);
     expect(unreferenced.financialReconciliation?.status).toBe("match");
     expect(await gaps()).toContain("settlement_reference");
   });

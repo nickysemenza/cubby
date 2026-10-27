@@ -4,7 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
-import { getRecipeByShortcode } from "~/server/domains/recipe/repo/crud";
+import { readRecipe } from "~/server/domains/recipe/repo/crud";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -55,7 +55,7 @@ describe("reparseRecipeLine", () => {
         ],
       }),
     });
-    const recipe = await getRecipeByShortcode(ctx.db, created.item.id);
+    const recipe = await readRecipe(ctx.db, created.item.id);
     if (!recipe) throw new Error("Synthetic recipe missing");
     return { entityKernel, flour: flour!, recipe };
   };

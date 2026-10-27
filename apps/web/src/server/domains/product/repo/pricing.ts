@@ -337,32 +337,6 @@ export const loadExactEffectivePrices = async (
   );
 };
 
-/**
- * Load pricing for every live Product attached to a set of Ingredients.
- *
- * The costing path knows Ingredient ids before it has materialized their
- * Product relations, so this loader can run concurrently with that relational
- * fetch. It was a fourth hand-written copy of the pricing aggregate — a join
- * shape that had to be kept predicate-for-predicate identical to
- * {@link loadProductPricing} by reading. Resolving the ids first and delegating
- * makes that structural: there is nothing left here to diverge.
- */
-export const loadProductPricingForIngredientIds = async (
-  db: Database | DrizzleTransaction,
-  ingredientIds: readonly IngredientId[],
-): Promise<Map<ProductId, ProductPricing>> => {
-  if (ingredientIds.length === 0) return new Map();
-
-  const products = await unwrapDb(db).query.product.findMany({
-    where: and(
-      notDeleted(product),
-      inArray(product.ingredientId, [...ingredientIds]),
-    ),
-    columns: { id: true, price: true },
-  });
-  return loadProductPricing(db, products);
-};
-
 export const enrichProductRowsWithPricing = async <
   T extends { id: ProductId; price: number | null },
 >(

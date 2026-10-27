@@ -6,7 +6,7 @@ import type {
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getInventoryEntryByShortcode } from "~/server/domains/inventory/repo/crud";
+import { readInventory } from "~/server/domains/inventory/repo/crud";
 import { getProductStockRows } from "~/server/domains/inventory/repo/scan";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
@@ -14,13 +14,13 @@ import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 type PlacementRecommendation = z.infer<typeof placementRecommendationOut>;
 
 export interface PlacementRecommendationPorts {
-  readonly getInventoryEntryByShortcode: typeof getInventoryEntryByShortcode;
+  readonly readInventory: typeof readInventory;
   readonly getProductStockRows: typeof getProductStockRows;
   readonly resolveOrThrow: typeof resolveOrThrow;
 }
 
 const productionPlacementRecommendationPorts: PlacementRecommendationPorts = {
-  getInventoryEntryByShortcode,
+  readInventory,
   getProductStockRows,
   resolveOrThrow,
 };
@@ -41,7 +41,7 @@ const placementRecommendationWorkflowDefinition = workflow<
   PlacementInput
 >("recommendations.placement")
   .call("source", async ({ context }, { input }) =>
-    context.ports.getInventoryEntryByShortcode(context.db, input.inventoryId),
+    context.ports.readInventory(context.db, input.inventoryId),
   )
   .branch("eligible", {
     when: async (_, { source }) =>

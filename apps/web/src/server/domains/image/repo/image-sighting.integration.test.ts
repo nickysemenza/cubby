@@ -10,7 +10,7 @@ import { getDb } from "~/server/db/helpers";
 import { auditLog, imageSighting } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
 import {
-  getImageById,
+  readImageById,
   selectImagesForProvenanceClassification,
   publishImageSourceClassifications,
   listImageSightings,
@@ -108,7 +108,7 @@ describe("image-sighting", () => {
       ],
       ctx.actor,
     );
-    expect(await getImageById(ctx.db, image.id)).toMatchObject({
+    expect(await readImageById(ctx.db, image.id)).toMatchObject({
       source: "unknown",
     });
     const devices = await getConnectedRecords(ctx.db, {
@@ -150,7 +150,7 @@ describe("image-sighting", () => {
         },
       ]),
     ).toEqual({ classified: 0, capturedAtSeeded: 0 });
-    expect(await getImageById(ctx.db, image.id)).toMatchObject({
+    expect(await readImageById(ctx.db, image.id)).toMatchObject({
       source: "own",
       sourceEvidence: null,
     });
@@ -183,7 +183,7 @@ describe("image-sighting", () => {
         ],
         ctx.actor,
       );
-      expect(await getImageById(ctx.db, image.id)).toMatchObject({
+      expect(await readImageById(ctx.db, image.id)).toMatchObject({
         source: "catalog",
         sourceAssetUrl: "https://supplier.example.test/item.jpg",
         captureAttribution: "none",
@@ -352,7 +352,7 @@ describe("image-sighting", () => {
     expect(listed).toHaveLength(1);
     expect(listed?.[0]?.deviceName).toBe("Ana's Mac");
 
-    const updatedImage = await getImageById(ctx.db, image.id);
+    const updatedImage = await readImageById(ctx.db, image.id);
     expect(updatedImage.captureAttribution).toBe("derived");
     expect(updatedImage.capturedByPartyId).toBe(ana);
   });
@@ -379,7 +379,7 @@ describe("image-sighting", () => {
       ctx.actor,
     );
 
-    const scored = await getImageById(ctx.db, scoredImage.id);
+    const scored = await readImageById(ctx.db, scoredImage.id);
     expect(scored.captureAttribution).toBe("derived");
     expect(scored.capturedByPartyId).toBe(ben);
 
@@ -399,7 +399,7 @@ describe("image-sighting", () => {
       ctx.actor,
     );
 
-    const tied = await getImageById(ctx.db, tiedImage.id);
+    const tied = await readImageById(ctx.db, tiedImage.id);
     expect(tied.captureAttribution).toBe("ambiguous");
     expect(tied.capturedByPartyId).toBeNull();
   });
@@ -414,14 +414,14 @@ describe("image-sighting", () => {
       [report(image, ana, anaPhone, "ASSET-SOLO-1")],
       ctx.actor,
     );
-    const derived = await getImageById(ctx.db, image.id);
+    const derived = await readImageById(ctx.db, image.id);
     expect(derived.captureAttribution).toBe("derived");
     expect(derived.capturedByPartyId).toBe(ana);
 
     await deleteThroughKernel(ctx.db, ctx.actor, "device", [anaPhone]);
 
     expect(await sightingRows(image.id)).toHaveLength(0);
-    const reverted = await getImageById(ctx.db, image.id);
+    const reverted = await readImageById(ctx.db, image.id);
     expect(reverted.captureAttribution).toBe("none");
     expect(reverted.capturedByPartyId).toBeNull();
     expect(reverted.source).toBe("own");

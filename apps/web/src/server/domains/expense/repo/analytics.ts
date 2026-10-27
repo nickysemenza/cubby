@@ -5,8 +5,8 @@ import type { CostType } from "@cubby/schemas/expense-fields";
  * `expenseAnalyticsOut` doc comment). Replaces the client-side grouping that
  * used to run over `expense.chartData`'s fetch-all.
  *
- * Every breakdown shares ONE where-clause builder (`buildExpenseWhereClause`,
- * exported from `./lookup` — the same one `expenseList` uses) so ledger
+ * Every breakdown shares the expense scaffold's filter compiler from
+ * `./lookup`, the same one the expense list uses, so ledger
  * totals (expense.list) and analytics totals (expense.analytics) can never
  * drift under the same filter set. Each breakdown is a single grouped SQL
  * aggregate — Postgres does the summing — run in parallel; never a
@@ -67,7 +67,7 @@ const summaryFields = (cost: SQL<number | null>) => ({
 /**
  * The charge table under its own alias, for `byVendor`'s join.
  *
- * See the ⚠️ note at the join itself: `buildExpenseWhereClause` already
+ * See the ⚠️ note at the join itself: the expense scaffold already
  * sub-selects the unaliased `purchase` for the vendor/order filters, so the
  * join must not reuse that name.
  */

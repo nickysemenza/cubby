@@ -17,7 +17,7 @@ import {
  * construction mechanism. (The recipe-usage relations below do this.) Note `where`
  * is only available on to-many relations; a to-one relation — e.g. a section's
  * `recipe` — can't carry one, so when liveness depends on a to-one parent the
- * transform must still filter (see `dbIngredientToAPI`). The transform-layer helpers
+ * transform must still filter (see `computeRecipeUsages`). The transform-layer helpers
  * (`mapRelation`, `mapImages`,
  * `Array.filter(deletedAt === null)`) remain as backstops and still cover the
  * relations not yet annotated here.
@@ -76,7 +76,7 @@ const productComponentCount = sql<number>`(SELECT count(*) FROM "EntityLink" pc 
  * Also walks `purchase → vendor`, which is what keeps `expenseOut` exposing
  * `vendor` and `orderId` after those stopped being columns on `Expense`: the
  * charge owns them now, so every read resolves them through this join (see
- * `dbExpenseToAPI`). Two extra `{name, deletedAt}`-shaped hops, both on indexed
+ * the expense read). Two extra `{name, deletedAt}`-shaped hops, both on indexed
  * FKs. `purchase.deletedAt` comes along so a soft-deleted Purchase reads as no
  * vendor rather than a live one, matching how `resolveLiveJoinName` treats every
  * other join here.
@@ -161,17 +161,8 @@ const sectionOrder = (t: {
 }) => [asc(t.sortOrder), asc(t.createdAt), asc(t.id)];
 
 /**
- * Display order for entity attachments:
- * same shape as sections — explicit sortOrder (first = cover), createdAt/id
- * breaking ties such as a promoted cover at 0. Exported for the
- * few image loads that don't go through these relation presets.
- */
-export const imageOrder = sectionOrder;
-
-/**
  * A cookbook cover or vendor logo: the subject's one live attachment in that
- * role, with the Image columns the caller needs. Read it back with
- * {@link singularAttachment}.
+ * role, with the Image columns the caller needs.
  */
 function singularAttachmentImage<
   const Columns extends Partial<Record<keyof typeof image.$inferSelect, true>>,
@@ -185,11 +176,6 @@ function singularAttachmentImage<
     },
   } as const;
 }
-
-/** The Image loaded by {@link singularAttachmentImage}, or null. */
-export const singularAttachment = <T>(
-  row: { attachments: readonly { image: T }[] } | null | undefined,
-): T | null => row?.attachments[0]?.image ?? null;
 
 /**
  * Insertion order for relations hanging off a plain FK, which have no
@@ -220,7 +206,7 @@ const withProjectAndParentTaskNameOnly = {
     },
     images: {
       where: notDeleted(entityAttachment),
-      orderBy: imageOrder,
+      orderBy: sectionOrder,
       with: {
         image: true,
       },
@@ -274,7 +260,7 @@ export const relations = {
             externalIds: { where: notDeleted(entityExternalId) },
             images: {
               where: notDeleted(entityAttachment),
-              orderBy: imageOrder,
+              orderBy: sectionOrder,
               with: {
                 image: true,
               },
@@ -313,7 +299,7 @@ export const relations = {
             },
             images: {
               where: notDeleted(entityAttachment),
-              orderBy: imageOrder,
+              orderBy: sectionOrder,
               with: {
                 image: true,
               },
@@ -346,7 +332,7 @@ export const relations = {
               with: {
                 images: {
                   where: notDeleted(entityAttachment),
-                  orderBy: imageOrder,
+                  orderBy: sectionOrder,
                   with: {
                     image: true,
                   },
@@ -357,7 +343,7 @@ export const relations = {
         },
         images: {
           where: notDeleted(entityAttachment),
-          orderBy: imageOrder,
+          orderBy: sectionOrder,
           with: {
             image: true,
           },
@@ -380,7 +366,7 @@ export const relations = {
         growsPlant: { columns: { shortcode: true } },
         images: {
           where: notDeleted(entityAttachment),
-          orderBy: imageOrder,
+          orderBy: sectionOrder,
           with: {
             image: true,
           },
@@ -461,7 +447,7 @@ export const relations = {
         },
         images: {
           where: notDeleted(entityAttachment),
-          orderBy: imageOrder,
+          orderBy: sectionOrder,
           with: {
             image: true,
           },
@@ -549,7 +535,7 @@ export const relations = {
           // without this a detached image still renders a thumbnail — and would
           // disagree with `imagePresenceFilter`, which excludes it.
           where: notDeleted(entityAttachment),
-          orderBy: imageOrder,
+          orderBy: sectionOrder,
           with: {
             image: true,
           },
@@ -571,7 +557,7 @@ export const relations = {
             product: locationIdentityProduct,
             images: {
               where: notDeleted(entityAttachment),
-              orderBy: imageOrder,
+              orderBy: sectionOrder,
               with: {
                 image: true,
               },
@@ -584,7 +570,7 @@ export const relations = {
         // inventory list (which includes installed fixtures) on its own.
         images: {
           where: notDeleted(entityAttachment),
-          orderBy: imageOrder,
+          orderBy: sectionOrder,
           with: {
             image: true,
           },
@@ -597,7 +583,7 @@ export const relations = {
         product: locationIdentityProduct,
         images: {
           where: notDeleted(entityAttachment),
-          orderBy: imageOrder,
+          orderBy: sectionOrder,
           with: {
             image: true,
           },
@@ -627,7 +613,7 @@ export const relations = {
             externalIds: { where: notDeleted(entityExternalId) },
             images: {
               where: notDeleted(entityAttachment),
-              orderBy: imageOrder,
+              orderBy: sectionOrder,
               with: {
                 image: true,
               },
@@ -639,7 +625,7 @@ export const relations = {
             product: locationIdentityProduct,
             images: {
               where: notDeleted(entityAttachment),
-              orderBy: imageOrder,
+              orderBy: sectionOrder,
               with: {
                 image: true,
               },
@@ -667,14 +653,14 @@ export const relations = {
     // A meal with its planned recipes (each joined to its recipe summary, incl.
     // the persisted `totals` used for the cost rollup). `where: notDeleted(mealRecipe)`
     // below filters soft-deleted occurrences; the to-one `recipe` join can't be
-    // filtered here, so `dbMealToAPI` keeps `recipe.deletedAt` as a backstop.
+    // filtered here, so `mealRecipeFields` keeps `recipe.deletedAt` as a backstop.
     full: {
       with: {
         recipes: {
           where: notDeleted(mealRecipe),
           orderBy: sectionOrder,
           with: {
-            // Only the fields dbMealToAPI reads — the full recipe body per planned recipe was pure over-fetch (the list shows name + scaled totals).
+            // Only the fields mealRecipeFields reads — the full recipe body per planned recipe was pure over-fetch (the list shows name + scaled totals).
             recipe: {
               columns: {
                 id: true,
@@ -684,7 +670,7 @@ export const relations = {
                 yield: true,
                 totals: true,
                 totalsComputedAt: true,
-                // Read by dbMealToAPI: the LINK's deletedAt says the recipe was
+                // Read by mealRecipeFields: the LINK's deletedAt says the recipe was
                 // unplanned, the RECIPE's says it no longer exists. Filtering
                 // only the former kept a deleted recipe in the meal and summed
                 // its stale totals into the rollup with pending:false.
@@ -695,7 +681,7 @@ export const relations = {
         },
         images: {
           where: notDeleted(entityAttachment),
-          orderBy: imageOrder,
+          orderBy: sectionOrder,
           with: {
             image: true,
           },

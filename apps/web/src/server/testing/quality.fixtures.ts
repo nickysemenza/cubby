@@ -1,13 +1,10 @@
-import type { ScoredEntity } from "@cubby/schemas/data-quality";
+import { scoredEntities, type ScoredEntity } from "@cubby/schemas/data-quality";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
-import {
-  dataQualityEntries,
-  storedEntryFor,
-} from "~/server/generic/data-quality/repo/entries";
+import { storedEntryFor } from "~/server/generic/data-quality/repo/entry";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 /**
@@ -16,7 +13,7 @@ import { drainStoredDerived } from "~/server/testing/background-queue";
  * and drain stored derived values (ADR 0021).
  */
 export async function publishQualityFixtures(db: Database, kind: ScoredEntity) {
-  const table = dataQualityEntries[kind].table;
+  const table = storedEntryFor(kind).table;
   await unwrapDb(db).execute(sql`
     INSERT INTO "WorkItem" (target, ref, priority)
     SELECT ${`${kind}.dataQuality`}, t.id, 0 FROM ${table} t
@@ -26,8 +23,7 @@ export async function publishQualityFixtures(db: Database, kind: ScoredEntity) {
 
 /** Publishes every stored-mode entity, for reads that filter on published rows. */
 export async function publishAllQualityFixtures(db: Database) {
-  for (const kind of Object.keys(dataQualityEntries) as ScoredEntity[])
-    if (storedEntryFor(kind)) await publishQualityFixtures(db, kind);
+  for (const kind of scoredEntities) await publishQualityFixtures(db, kind);
 }
 
 /** A record's stored quality value (ADR 0021), or undefined before publication. */

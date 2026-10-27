@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { LEDGER_PARTY_KIND_LABELS } from "@cubby/schemas/ledger-party-fields";
 import { type ExpenseAnalyticsOut, projectOut } from "@cubby/schemas/project";
+import { rawTaskListItemOut } from "@cubby/schemas/work-raw-read";
 import { countLabel } from "@cubby/shared/pluralize";
 import { sum } from "es-toolkit";
 
@@ -15,13 +16,13 @@ import { formatCurrency } from "~/lib/number-format";
 import { buildDetailScheduleRows } from "~/lib/project-schedule";
 import type { Database } from "~/server/db";
 import { projectContribution } from "~/server/domains/household-contribution/repo/reports";
-import { getProjectByID } from "~/server/domains/project/repo/crud";
-import { projectList } from "~/server/domains/project/repo/lookup";
+import { readProjectById } from "~/server/domains/project/repo/crud";
+import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import {
   collectDescendantIds,
   type ProjectTree,
 } from "~/server/domains/project/repo/subtree";
-import { taskList } from "~/server/domains/task/repo/lookup";
+import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { listAll } from "~/server/generic/list/repo/list-all";
 import { budgetRemaining } from "~/server/lib/spend";
@@ -294,28 +295,23 @@ export async function projectContributionReport(
 /** Every live sub-project and task under the project, with dates and dependency ids. */
 export async function projectScheduleReport(
   db: Database,
-  { code: projectCode, id, tree }: ProjectReportContext,
+  { code: projectCode, id }: ProjectReportContext,
 ): Promise<ReportBlock[]> {
-  const root = await getProjectByID(db, id, tree);
+  const root = await readProjectById(db, id);
   const [descendants, tasks] = await Promise.all([
     listAll((pagination) =>
-      projectList(
-        db,
-        { parentProjectId: projectCode, includeSubProjects: true },
-        [{ orderBy: "name", direction: "asc" }],
+      projectScaffold.read(db, {
+        filters: { parentProjectId: projectCode, includeSubProjects: true },
+        sorts: [{ orderBy: "name", direction: "asc" }],
         pagination,
-        "page",
-        { tree },
-      ),
+      }),
     ),
     listAll((pagination) =>
-      taskList(
-        db,
-        { projectId: projectCode, includeSubProjects: true },
-        [{ orderBy: "createdAt", direction: "desc" }],
+      taskScaffold.read(db, {
+        filters: { projectId: projectCode, includeSubProjects: true },
+        sorts: [{ orderBy: "createdAt", direction: "desc" }],
         pagination,
-        "page",
-      ),
+      }),
     ),
   ]);
   const scheduleSchema = projectOut
@@ -343,7 +339,7 @@ export async function projectScheduleReport(
       rows: buildDetailScheduleRows(
         canonicalRoot,
         canonicalDescendants,
-        tasks.data,
+        tasks.data.map((row) => rawTaskListItemOut.parse(row)),
       ),
     },
   ];

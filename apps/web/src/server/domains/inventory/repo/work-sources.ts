@@ -3,7 +3,7 @@ import { and, eq, getTableName, sql } from "drizzle-orm";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { inventoryEntry as table, product, location } from "~/server/db/schema";
-import { buildInventoryWhere } from "~/server/domains/inventory/repo/crud";
+import { inventoryScaffold } from "~/server/domains/inventory/repo/crud";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import {
   entityProblemSources,
@@ -32,7 +32,7 @@ export const inventoryWorkSources = (): WorkSource[] => [
         .innerJoin(location, eq(location.id, table.locationId))
         .where(
           and(
-            await buildInventoryWhere(
+            await inventoryScaffold.prepareWhere(
               db,
               inventoryFiltersSchema.parse(filters),
             ),

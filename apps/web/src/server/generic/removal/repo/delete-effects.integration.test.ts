@@ -6,16 +6,11 @@ import { getDb, runAfterCommit } from "~/server/db/helpers";
 import { recipe } from "~/server/db/schema";
 import {
   deleteRecipes,
-  getRecipeByShortcode,
   RECIPE_DELETE_EDGE_POLICY,
-  recipeList,
+  recipeScaffold,
 } from "~/server/domains/recipe/repo/crud";
 import { defineEntityOperations } from "~/server/entity-kernel/entity-operations";
-import {
-  defineRepository,
-  listOn,
-  onDb,
-} from "~/server/entity-kernel/repo/repository";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { requireActor } from "~/server/http/request-context";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -51,8 +46,7 @@ describe("delete effect snapshot contention", () => {
     let attempts = 0;
     const binding = defineRepository("recipe", {
       lifecycle: { delete: RECIPE_DELETE_EDGE_POLICY },
-      get: onDb(getRecipeByShortcode),
-      list: listOn(recipeList),
+      scaffold: recipeScaffold,
       delete: async (context) => {
         if (++attempts === 1) {
           await getDb(ctx.db)

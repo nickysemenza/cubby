@@ -10,7 +10,7 @@ import {
   createUploadedImageRecord,
 } from "~/server/domains/image/repo/image";
 import {
-  getProductByID,
+  readProductById,
   updateProduct,
 } from "~/server/domains/product/repo/crud";
 import {
@@ -97,7 +97,7 @@ describe("pending Product image roles", () => {
       columns: { purpose: true },
     });
     expect(row?.purpose).toBe("label");
-    const projected = await getProductByID(ctx.db, product.entityId);
+    const projected = await readProductById(ctx.db, product.entityId);
     expect(projected.labelImages.map((image) => image.id)).toEqual([labelCode]);
     // Summary and project galleries use this lighter read instead of the
     // Product detail mapper; confirmed labels must be excluded here too.

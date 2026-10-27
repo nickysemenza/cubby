@@ -6,7 +6,7 @@ import { getDb, insertAndReturn } from "~/server/db/helpers";
 import { mealRecipe, meal as mealTable } from "~/server/db/schema";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import {
-  buildMealWhere,
+  mealScaffold,
   createMealWithEntityId,
 } from "~/server/domains/meal/repo/crud";
 import { saveMealFood } from "~/server/domains/meal/repo/food";
@@ -207,7 +207,7 @@ describe("entity graph meal/food-entry relationships", () => {
     const filtered = await getDb(ctx.db)
       .select({ id: mealTable.shortcode })
       .from(mealTable)
-      .where(buildMealWhere(ctx.db, { eaterId: [party.output.id] }));
+      .where(mealScaffold.where({ eaterId: [party.output.id] }));
     expect(filtered.map((row) => row.id).sort()).toEqual(
       [meal.output.id, leftoversMeal.output.id].sort(),
     );

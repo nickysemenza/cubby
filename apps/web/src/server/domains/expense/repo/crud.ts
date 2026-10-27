@@ -23,6 +23,7 @@ import type {
   ExpenseCreateInput,
   ExpenseUpdateInput,
 } from "@cubby/schemas/project";
+import { rawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -31,7 +32,6 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
   notDeleted,
-  relations,
   unwrapDb,
   withTransaction,
   touchUpdatedAt,
@@ -71,7 +71,6 @@ import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
@@ -84,14 +83,8 @@ import {
   expenseInheritanceReadExtras,
   validateExpenseInheritance,
 } from "./expense-inheritance";
-import { loadExpenseProjectAllocations } from "./expense-project-allocation";
-import { loadExpenseSpendingAllocations } from "./expense-spending-allocation";
-import {
-  assertQuantitySignMatchesCost,
-  dbExpenseToAPI,
-  expenseAuditChildren,
-  type ExpenseRow,
-} from "./helpers";
+import { assertQuantitySignMatchesCost, expenseAuditChildren } from "./helpers";
+import { expenseScaffold } from "./lookup";
 
 export const EXPENSE_DELETE_EDGE_POLICY = {
   "ImportSourceProduct.expenseId": {
@@ -161,35 +154,11 @@ const resolveLivePurchaseId = (
   shortcode: PurchaseShortcode,
 ): Promise<PurchaseId> => resolveOrThrow(tx, "purchase", shortcode);
 
-const fetchExpenseById = (
-  db: Database | DrizzleTransaction,
-  id: ExpenseId,
-): Promise<ExpenseRow | undefined> =>
-  (async () => {
-    const row = await unwrapDb(db).query.expense.findFirst({
-      where: and(eq(expense.id, id), notDeleted(expense)),
-      extras: expenseInheritanceReadExtras(),
-      ...relations.expense.withProject,
-    });
-    if (!row) return undefined;
-    return {
-      ...row,
-      projectAllocations: await loadExpenseProjectAllocations(db, [id]),
-      spendingCategoryAllocations: (
-        await loadExpenseSpendingAllocations(db, [id])
-      ).get(id),
-    };
-  })();
-
 const expenseCrud = createEntityCrud({
   table: expense,
   entity: "expense",
-  fetchById: fetchExpenseById,
-  fromDB: async (db, row) => {
-    const dataQualities = await loadDataQualities(db, "expense", [row.id]);
-    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
-    return dbExpenseToAPI(row, dataQualities.get(row.id)!);
-  },
+  scaffold: expenseScaffold,
+  output: rawExpenseOut,
   toUpdate: (data: ResolvedExpenseUpdate) =>
     buildPartialUpdateValues({
       spendingCategoryId: data.spendingCategoryId,
@@ -212,8 +181,10 @@ const expenseCrud = createEntityCrud({
   auditUpdateFields: [...entityFieldModels.expense.audit],
 });
 
-export const getExpenseByID = expenseCrud.getByID;
-export const getExpenseByShortcode = expenseCrud.getByShortcode;
+/** One live Expense by internal id; throws when absent. */
+export const readExpenseById = expenseCrud.getByID;
+/** One live Expense by public code, or null. */
+export const readExpense = expenseCrud.getByShortcode;
 
 type ChargeResolutionCurrent = {
   purchaseId: PurchaseId | null;
@@ -451,7 +422,7 @@ export const updateExpense = defineMutationWriter({
     _data: ExpenseUpdateData,
     _actor: ActorContext,
   ) => ({
-    output: await getExpenseByID(db, receipt.entityId),
+    output: await readExpenseById(db, receipt.entityId),
     entityId: receipt.entityId,
     priceAffectedProductIds: receipt.priceAffectedProductIds,
   }),
@@ -828,7 +799,7 @@ export const updateExpense = defineMutationWriter({
         return readOutput(
           { ...receipt, priceAffectedProductIds },
           async () => ({
-            output: await getExpenseByID(tx, state.id),
+            output: await readExpenseById(tx, state.id),
             entityId: state.id,
             priceAffectedProductIds,
           }),
@@ -899,7 +870,7 @@ export const updateExpense = defineMutationWriter({
         pricesBefore,
       );
       return readOutput({ ...receipt, priceAffectedProductIds }, async () => ({
-        output: await getExpenseByID(tx, state.id),
+        output: await readExpenseById(tx, state.id),
         entityId: state.id,
         priceAffectedProductIds,
       }));
@@ -918,7 +889,7 @@ export const createExpense = defineMutationWriter({
     _actor: ActorContext,
     _classifyLineRole?: ExpenseLineRoleClassifier,
   ) => ({
-    output: await getExpenseByID(db, receipt.entityId),
+    output: await readExpenseById(db, receipt.entityId),
     entityId: receipt.entityId,
     priceAffectedProductIds: receipt.priceAffectedProductIds,
   }),

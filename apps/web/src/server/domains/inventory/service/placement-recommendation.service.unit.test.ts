@@ -15,7 +15,7 @@ const db = createDatabase(() => {
 describe("getPlacementRecommendation", () => {
   it("does not invent a destination when the requested stock row no longer exists", async () => {
     const ports = {
-      getInventoryEntryByShortcode: async () => null,
+      readInventory: async () => null,
       getProductStockRows: async () => [],
       resolveOrThrow: async () => {
         throw new Error("A missing row cannot resolve a product");

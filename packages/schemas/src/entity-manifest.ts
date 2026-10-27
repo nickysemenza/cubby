@@ -261,6 +261,11 @@ export const searchableEntities = entitiesWithTrait("searchable");
 export const embeddableEntities = entitiesWithTrait("embeddable");
 export const countableEntities = entitiesWithTrait("countable");
 
+export const entityMembership = <E extends string>(entities: readonly E[]) => {
+  const members: readonly string[] = entities;
+  return { has: (entity: string): entity is E => members.includes(entity) };
+};
+
 type EntityWithBrowserRoute = {
   [E in Entity]: EntityManifest[E] extends { browserRoutes: false } ? never : E;
 }[Entity];

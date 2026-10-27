@@ -61,10 +61,10 @@ import {
 import { readLocationAiDescription } from "~/server/domains/location/repo/ai-description";
 import {
   findLocationsNeedingAiDescription,
-  getLocationById,
+  readLocationById,
 } from "~/server/domains/location/repo/crud";
 import {
-  getProductByID,
+  readProductById,
   quickCreateProductRecord,
 } from "~/server/domains/product/repo/crud";
 import { findProductByNameWithBrandClaim } from "~/server/domains/product/repo/lookup";
@@ -337,7 +337,7 @@ export async function describeLocation(
   runId: RunId,
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
 ): Promise<LocationDescriptionResult> {
-  const location = await getLocationById(db, locationId);
+  const location = await readLocationById(db, locationId);
 
   const images = (location.images ?? []).slice(0, MAX_ANALYSIS_IMAGES);
   if (images.length === 0) {
@@ -399,7 +399,7 @@ export async function describeLocation(
     locationId,
     images.map((image) => image.id),
     async (tx) => {
-      const current = await getLocationById(tx, locationId);
+      const current = await readLocationById(tx, locationId);
       return buildLocationAnalysisFingerprint(LOCATION_DESCRIPTION_FEATURE, {
         locationName: current.name,
         images: (current.images ?? []).slice(0, MAX_ANALYSIS_IMAGES),
@@ -586,7 +586,7 @@ export async function detectInventoryItems(
   imageIds?: readonly string[],
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
 ): Promise<DetectedInventoryResult> {
-  const location = await getLocationById(db, locationId);
+  const location = await readLocationById(db, locationId);
 
   const images = selectDetectionImages(location.images ?? [], imageIds);
   if (images.length === 0) {
@@ -636,7 +636,7 @@ export async function detectInventoryItems(
       locationId,
       images.map((image) => image.id),
       async (tx) => {
-        const current = await getLocationById(tx, locationId);
+        const current = await readLocationById(tx, locationId);
         return buildLocationAnalysisFingerprint(
           LOCATION_INVENTORY_DETECTION_FEATURE,
           {
@@ -685,7 +685,7 @@ export async function approveDetectedInventoryItem(
   let createdProduct = false;
 
   if (productId) {
-    const product = await getProductByID(db, productId);
+    const product = await readProductById(db, productId);
     productNameForToast = product.name;
   } else {
     const matched = await findProductByNameWithBrandClaim(

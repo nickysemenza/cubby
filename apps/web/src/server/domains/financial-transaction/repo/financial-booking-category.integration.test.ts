@@ -14,7 +14,7 @@ import {
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { createLedgerTransfer } from "~/server/domains/ledger-transfer/repo";
-import { getPurchaseByID } from "~/server/domains/purchase/repo/purchase";
+import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
@@ -327,7 +327,7 @@ describe("reviewed booking category and refund capacity", () => {
     });
     expect(storedLine?.purchaseId).toBe(purchase.id);
     expect(storedLine?.spendingCategoryId).toBe(category.id);
-    expect(await getPurchaseByID(ctx.db, purchase.id)).toMatchObject({
+    expect(await readPurchaseById(ctx.db, purchase.id)).toMatchObject({
       expenseTotal: 80,
     });
 
@@ -439,7 +439,7 @@ describe("reviewed booking category and refund capacity", () => {
     const { preview, result } = await book(-40);
     expect(preview.action).toBe("create_aggregate");
     expect(result.expenseId).not.toBeNull();
-    expect(await getPurchaseByID(ctx.db, purchase.id)).toMatchObject({
+    expect(await readPurchaseById(ctx.db, purchase.id)).toMatchObject({
       expenseTotal: 80,
     });
   });
@@ -452,7 +452,7 @@ describe("reviewed booking category and refund capacity", () => {
     expect(first.result.expenseId).toBeNull();
     const second = await book(-40);
     expect(second.preview.action).toBe("create_aggregate");
-    expect(await getPurchaseByID(ctx.db, purchase.id)).toMatchObject({
+    expect(await readPurchaseById(ctx.db, purchase.id)).toMatchObject({
       expenseTotal: 70,
     });
   });
@@ -463,7 +463,7 @@ describe("reviewed booking category and refund capacity", () => {
     await book(115);
     const { preview } = await book(-5);
     expect(preview.action).toBe("create_aggregate");
-    expect(await getPurchaseByID(ctx.db, purchase.id)).toMatchObject({
+    expect(await readPurchaseById(ctx.db, purchase.id)).toMatchObject({
       expenseTotal: 110,
     });
   });
@@ -573,7 +573,7 @@ describe("finance.book_transaction", () => {
       )
       .where(eq(financialTransaction.shortcode, transactionId));
     expect(linked).toEqual([{ purchaseId: purchase.id }]);
-    expect(await getPurchaseByID(ctx.db, purchase.id)).toMatchObject({
+    expect(await readPurchaseById(ctx.db, purchase.id)).toMatchObject({
       expenseTotal: 60,
       statedTotal: null,
       financialReconciliation: { status: "match", delta: 0 },

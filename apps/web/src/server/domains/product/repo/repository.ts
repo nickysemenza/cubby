@@ -3,7 +3,10 @@ import {
   mergeProductsInput,
   productMergeSummaryOut,
 } from "@cubby/schemas/product";
-import { rawProductOutput } from "@cubby/schemas/product-raw-read";
+import {
+  rawProductDetail,
+  rawProductOutput,
+} from "@cubby/schemas/product-raw-read";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -24,25 +27,22 @@ import {
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import {
-  deleteProducts,
-  getProductByShortcode,
-  getProductsByShortcodes,
-  productList,
-  listProductsRead,
-  productListSummary,
-} from "./crud";
-import { readProductDetail } from "./detail";
+import { deleteProducts, productScaffold, readProduct } from "./crud";
 import { PRODUCT_DELETE_EDGE_POLICY } from "./edge-roles";
 import { mergeProducts, PRODUCT_MERGE_EDGE_POLICY } from "./merge";
 
 const productShortcodes = bindShortcodeResolver("product");
 
+const linkedIngredient = rawProductDetail.pick({ ingredient: true });
+
 async function linkedProductIngredientIds(db: Database, shortcodes: string[]) {
-  const products = await getProductsByShortcodes(db, shortcodes);
+  const { data } = await productScaffold.get(db, shortcodes, ["ingredient"]);
   const resolved = await resolveLiveShortcodes(
     db,
-    products.flatMap((row) => (row.ingredient ? [row.ingredient.id] : [])),
+    data.flatMap((row) => {
+      const { ingredient } = linkedIngredient.parse(row);
+      return ingredient ? [ingredient.id] : [];
+    }),
     "ingredient",
   );
   return [...resolved.values()].map((id) => parseEntityId("ingredient", id));
@@ -58,30 +58,7 @@ export const productRepository = defineRepository("product", {
     delete: PRODUCT_DELETE_EDGE_POLICY,
     merge: PRODUCT_MERGE_EDGE_POLICY,
   },
-  get: (ctx, shortcode) =>
-    readProductDetail({ db: ctx.db, usdaClient: ctx.usdaClient }, shortcode),
-  list: (ctx, filters, sorts, pagination) =>
-    productList(ctx.db, filters, sorts, pagination, "page", ctx.usdaClient),
-  listRead: (
-    ctx,
-    filters,
-    sorts,
-    pagination,
-    projection,
-    readIntent = "page",
-    preparation,
-  ) =>
-    listProductsRead(
-      ctx.db,
-      filters,
-      sorts,
-      pagination,
-      readIntent,
-      ctx.usdaClient,
-      projection,
-      preparation,
-    ),
-  listSummary: (ctx, filters) => productListSummary(ctx.db, filters),
+  scaffold: productScaffold,
   create: async (ctx, data) => {
     const { output: result, entityId } = await createProductWithSideEffects(
       {
@@ -173,7 +150,7 @@ export const productRepository = defineRepository("product", {
           entity: { entityKind: "product", entityId: summary.keepEntityId },
         }),
       ]);
-      const product = await getProductByShortcode(ctx.db, input.keepId);
+      const product = await readProduct(ctx.db, input.keepId);
       if (!product) throw new Error("Merged Product keeper disappeared");
       return {
         output: {

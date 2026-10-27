@@ -16,13 +16,13 @@ export async function recipeWalkthroughReport(
   code: string,
   id: RecipeId,
 ): Promise<ReportBlock[]> {
-  const [{ getRecipeFlowState }, { getRecipeByID }] = await Promise.all([
+  const [{ getRecipeFlowState }, { readRecipeById }] = await Promise.all([
     import("~/server/domains/recipe/repo/recipe-flow-state"),
     import("~/server/domains/recipe/repo/crud"),
   ]);
   const [state, recipe] = await Promise.all([
     getRecipeFlowState(db, id),
-    getRecipeByID(db, id),
+    readRecipeById(db, id),
   ]);
   const recipeId = recipeShortcode.parse(code);
   const generate = (force: boolean, label: string): ReportCommand => ({

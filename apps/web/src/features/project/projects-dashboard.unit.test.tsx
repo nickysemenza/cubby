@@ -26,8 +26,6 @@ function projectFixture(): ProjectOut {
     row: {
       attachments: [],
       displayImages: [],
-      redirectedFrom: null,
-      previousShortcodes: [],
       assigneeId: null,
       assigneeName: null,
       id: testShortcode("project", "card"),

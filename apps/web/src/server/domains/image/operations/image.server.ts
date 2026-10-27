@@ -21,7 +21,7 @@ import type { Database } from "~/server/db";
 import { scheduleImageProcessingJobs } from "~/server/domains/image-processing/service/image-processing.service";
 import {
   attachExistingImageToEntity,
-  getImageById,
+  readImageById,
   getImageHashIndex,
   getImagesByProjectIds,
   markImageUploaded,
@@ -69,7 +69,7 @@ export async function markImageUploadedWorkflow(
   readStored: (key: string) => Promise<Response> = getS3Object,
 ) {
   const imageId = await resolveOrThrow(db, "image", input.id);
-  const pending = await getImageById(db, imageId);
+  const pending = await readImageById(db, imageId);
   // Record the stored bytes' hash before marking the upload: processing reads
   // only hashed images, and a standalone upload had none, so scheduling
   // refused it and every Mac screenshot upload failed with a 500. A failed

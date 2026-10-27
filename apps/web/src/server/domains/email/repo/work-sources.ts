@@ -3,7 +3,7 @@ import { and, sql } from "drizzle-orm";
 
 import { householdDaySql } from "~/server/db/helpers/query";
 import { email } from "~/server/db/schema";
-import { buildEmailWhere } from "~/server/domains/email/repo/email";
+import { emailScaffold } from "~/server/domains/email/repo/email";
 import {
   gapDeclaration,
   gapFilters,
@@ -33,7 +33,7 @@ export const emailWorkSources: WorkSource[] = [
           .from(email)
           .where(
             and(
-              buildEmailWhere(emailFilters.parse(filters)),
+              await emailScaffold.prepareWhere(db, emailFilters.parse(filters)),
               recordScope(scope, sql`${email.shortcode}`),
             ),
           ),

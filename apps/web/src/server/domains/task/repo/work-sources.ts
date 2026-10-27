@@ -3,7 +3,7 @@ import { and, getTableName, sql } from "drizzle-orm";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { task as table } from "~/server/db/schema";
-import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
+import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import {
   entityProblemSources,
@@ -30,7 +30,10 @@ export const taskWorkSources = (): WorkSource[] => [
         .from(table)
         .where(
           and(
-            await buildTaskWhere(db, taskFiltersSchema.parse(filters)),
+            await taskScaffold.prepareWhere(
+              db,
+              taskFiltersSchema.parse(filters),
+            ),
             recordScope(scope, sql`${table.shortcode}`),
           ),
         ),

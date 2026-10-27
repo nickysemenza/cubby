@@ -630,7 +630,7 @@ export default defineEntity({
       aliases: { label: "Source aliases", json: "sourceAliases" },
     },
     derived: {
-      transactionCount: { type: "number" },
+      transactionCount: { rollup: "count", via: "transactions" },
       identityKind: {
         type: "enum",
         options: [

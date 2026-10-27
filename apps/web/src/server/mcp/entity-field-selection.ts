@@ -12,7 +12,6 @@ import {
 } from "~/entity/generated/entity-lists.gen";
 import {
   listReadRowSchema,
-  isListMediaField,
   type ListReadRow,
 } from "~/entity/model/list-read-fields";
 import { createAppError } from "~/server/errors/app-error";
@@ -22,6 +21,17 @@ import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
 export type ReadSelection =
   | { kind: "fields"; paths: string[][] }
   | { kind: "compact"; keys: readonly string[] };
+
+/** Image payloads and counters stay out of compact MCP field selections. */
+const imagePayloadFields = new Set([
+  "displayImages",
+  "images",
+  "labelImages",
+  "itemImageCount",
+  "labelImageCount",
+  "logo",
+  "vendorLogo",
+]);
 
 const selectedItem = z.object({ id: z.string() }).passthrough();
 /** A get/list result narrowed by `fields` or the compact preset. */
@@ -232,7 +242,7 @@ function compactKeys(entity: string): string[] {
     ? Object.keys(listReadSchema(listEntity).shape)
     : schemaKeys(list);
   return declared.flatMap((key) => {
-    if (isListMediaField(key) || longText(entity, key)) return [];
+    if (imagePayloadFields.has(key) || longText(entity, key)) return [];
     const path = publishedPath(list, key);
     if (!path || path.join(".") !== publishedPath(detail, key)?.join("."))
       return [];

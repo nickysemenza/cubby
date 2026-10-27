@@ -20,7 +20,7 @@ import {
   photoRunImage,
 } from "~/server/db/schema";
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
-import { getRunByShortcode } from "~/server/domains/run/repo/run";
+import { readRun } from "~/server/domains/run/repo/run";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
@@ -278,9 +278,7 @@ describe("photo import finalize", () => {
         endedAt: new Date("2026-09-20T14:38:55.500Z"),
       })
       .where(eq(runTable.id, original.id));
-    expect((await getRunByShortcode(ctx.db, original.publicId))?.wallTime).toBe(
-      "6h 39m",
-    );
+    expect((await readRun(ctx.db, original.publicId))?.wallTime).toBe("6h 39m");
     await getDb(ctx.db).insert(aiUsage).values({
       runId: original.id,
       feature: "purchase_import_agent",

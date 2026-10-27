@@ -7,7 +7,7 @@ import { getDb } from "~/server/db/helpers";
 import { image as imageTable } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
 import {
-  getImageById,
+  readImageById,
   getImageMetadataExtractionRow,
 } from "~/server/domains/image/repo/image";
 import { applyImageMetadataExtraction } from "~/server/domains/image/repo/image-metadata";
@@ -223,7 +223,7 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
       expect(
         await getImageMetadataExtractionRow(ctx.db, imageId),
       ).toBeDefined();
-      expect((await getImageById(ctx.db, source.id)).capturedAt).toBeNull();
+      expect((await readImageById(ctx.db, source.id)).capturedAt).toBeNull();
     },
   );
 
@@ -241,7 +241,7 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
     );
     expect(outcome).toBe("succeeded");
 
-    const row = await getImageById(ctx.db, image.id);
+    const row = await readImageById(ctx.db, image.id);
     expect(row.capturedAt?.toISOString()).toBe("2025-07-04T09:15:00.000Z");
     expect(row.captureLocation).toEqual({ lat: 40, lng: -74 });
     expect(row.capturedByPartyId).toBeNull();
@@ -309,7 +309,7 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
       stubbedPorts(jpeg),
     );
 
-    const row = await getImageById(ctx.db, image.id);
+    const row = await readImageById(ctx.db, image.id);
     // The sighting's own capture facts, not the EXIF blob's, win.
     expect(row.capturedAt?.toISOString()).toBe("2025-06-01T08:00:00.000Z");
     expect(row.captureLocation).toEqual({ lat: 51.5, lng: -0.12 });

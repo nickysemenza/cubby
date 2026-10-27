@@ -13,7 +13,11 @@ import type {
   ProjectTaskStatusBreakdown,
   TaskStatus,
 } from "@cubby/schemas/project";
-import type { RawProjectDashboardSummaryOut } from "@cubby/schemas/work-raw-read";
+import {
+  type RawProjectDashboardSummaryOut,
+  rawProjectOut,
+  rawTaskOut,
+} from "@cubby/schemas/work-raw-read";
 import type { SQL } from "drizzle-orm";
 import {
   and,
@@ -33,33 +37,23 @@ import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { plannedExpense } from "~/server/db/computed/expense-aggregate-sql";
-import { countWhere, getDb, notDeleted, relations } from "~/server/db/helpers";
+import { countWhere, getDb, notDeleted } from "~/server/db/helpers";
 import { expense, project, task } from "~/server/db/schema";
 import { expenseDerivedCostRead } from "~/server/domains/expense/repo/expense-derived-read";
-import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
-import {
-  taskDependencyIds,
-  taskSubtaskCounts,
-} from "~/server/domains/task/repo/crud";
-import {
-  dbTaskToAPI,
-  effectiveTaskDueDateSql,
-} from "~/server/domains/task/repo/helpers";
-import { hydrateTaskInheritanceRows } from "~/server/domains/task/repo/task-project-inheritance";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { projectScaffold } from "~/server/domains/project/repo/lookup";
+import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
+import { taskScaffold } from "~/server/domains/task/repo/lookup";
 
-import { projectDependencyIds } from "./analytics";
 import { computeAttentionItems } from "./attention";
 import {
   buildDashboardProjectWhere,
   buildUndatedProjectWhere,
   dashboardKindLocationConditions,
 } from "./dashboard-shared";
-import { EMPTY_PROJECT_SUBTREE_ROLLUP, hydrateProjectRow } from "./helpers";
+import { EMPTY_PROJECT_SUBTREE_ROLLUP } from "./helpers";
 import {
   collectDescendantIds,
   loadProjectSubtreeRollups,
-  loadStoredProjectRollups,
   projectCompletionYear,
 } from "./subtree";
 
@@ -98,7 +92,6 @@ export async function projectDashboardSummary(
   // Portfolio money and matched subtree scope remain authoritative live reads.
   // Attention loads its published expensive inputs independently.
   const subtreeLoad = await loadProjectSubtreeRollups(db);
-  const cardLoad = await loadStoredProjectRollups(db, subtreeLoad);
   const { subtreeRollups, dateWindows, allRows } = subtreeLoad;
   const completionIds = filters.completionYear
     ? allRows
@@ -230,16 +223,17 @@ export async function projectDashboardSummary(
     projectIds: expandedProjectIds,
   });
   const [
-    deps,
+    projects,
     taskStatusRows,
     nextTaskRows,
     undatedTaskCount,
     undatedExpenseCount,
     attention,
     forwardCommittedRows,
-    dataQualities,
   ] = await Promise.all([
-    projectDependencyIds(db, ids),
+    projectScaffold
+      .getByIds(db, ids)
+      .then((read) => read.data.map((row) => rawProjectOut.parse(row))),
     ids.length > 0
       ? getDb(db)
           .select({
@@ -264,28 +258,34 @@ export async function projectDashboardSummary(
           )
       : Promise.resolve([]),
     ids.length > 0
-      ? getDb(db).query.task.findMany({
-          where: and(
-            inArray(
-              effectiveFieldSql<ProjectId | null>("task", "projectId", "task"),
-              ids,
+      ? getDb(db)
+          .select({ id: task.id })
+          .from(task)
+          .where(
+            and(
+              inArray(
+                effectiveFieldSql<ProjectId | null>(
+                  "task",
+                  "projectId",
+                  "task",
+                ),
+                ids,
+              ),
+              notDeleted(task),
+              isNull(task.parentTaskId),
+              inArray(task.status, ["not_started", "in_progress"]),
             ),
-            notDeleted(task),
-            isNull(task.parentTaskId),
-            inArray(task.status, ["not_started", "in_progress"]),
-          ),
+          )
           // Overdue-first, then effective due date ascending (nulls last),
           // then name — a cheap approximation of listActionableTasks'
           // `next` ordering (it also excludes dependency-blocked tasks,
           // which this skips to stay a single query for a 10-row preview).
-          orderBy: [
+          .orderBy(
             sql`(${effectiveTaskDueDateSql()} < ${today}) desc`,
             sql`${effectiveTaskDueDateSql()} asc nulls last`,
             asc(task.name),
-          ],
-          limit: NEXT_TASKS_CAP,
-          ...relations.task.withProject,
-        })
+          )
+          .limit(NEXT_TASKS_CAP)
       : Promise.resolve([]),
     // Rows the date window drops purely for having NO date — never rows that
     // simply fall outside it (those are excluded on their own merits, which
@@ -321,14 +321,7 @@ export async function projectDashboardSummary(
             and(notDeleted(expense), plannedExpense(), gt(expense.cost, 0)),
           )
       : Promise.resolve([{ in30Days: 0, in60Days: 0, in90Days: 0 }]),
-    loadDataQualities(db, "project", ids),
   ]);
-
-  const projects = (await withProjectExternalUrls(db, projectRows)).map((row) =>
-    // SAFETY: `row` came from `projectRows`, whose ids (`ids`) `dataQualities`
-    // was loaded for.
-    hydrateProjectRow(row, cardLoad, deps, dataQualities.get(row.id)!),
-  );
 
   // Every non-done top-level task on a scoped project — exactly
   // `taskStatusRows`' own predicates plus `status != 'done'`, so it's summed
@@ -425,29 +418,12 @@ export async function projectDashboardSummary(
     entry[TASK_STATUS_FIELD[row.status]] = row.count;
   }
 
-  const nextTaskIds = nextTaskRows.map((r) => r.id);
-  const [nextDeps, nextSubtaskCounts, nextDataQualities] = await Promise.all([
-    taskDependencyIds(db, nextTaskIds),
-    taskSubtaskCounts(db, nextTaskIds),
-    loadDataQualities(db, "task", nextTaskIds),
-  ]);
-  const hydratedNextTaskRows = await hydrateTaskInheritanceRows(
-    db,
-    nextTaskRows,
-  );
-  const nextTasks = hydratedNextTaskRows.map((row) => {
-    const counts = nextSubtaskCounts.get(row.id);
-    return dbTaskToAPI(
-      row,
-      nextDeps.blockedBy.get(row.id) ?? [],
-      nextDeps.blocking.get(row.id) ?? [],
-      counts?.count ?? 0,
-      counts?.doneCount ?? 0,
-      // SAFETY: `row` came from `hydratedNextTaskRows`, whose ids
-      // (`nextTaskIds`) `nextDataQualities` was loaded for.
-      nextDataQualities.get(row.id)!,
-    );
-  });
+  const nextTasks = (
+    await taskScaffold.getByIds(
+      db,
+      nextTaskRows.map((row) => row.id),
+    )
+  ).data.map((row) => rawTaskOut.parse(row));
 
   const kinds = uniq(
     kindRows

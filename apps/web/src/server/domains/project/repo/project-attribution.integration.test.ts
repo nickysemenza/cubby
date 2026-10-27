@@ -1,3 +1,4 @@
+import { rawProjectOut } from "@cubby/schemas/work-raw-read";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -7,7 +8,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 import { projectDashboardSummary } from "./dashboard-summary";
-import { projectList } from "./lookup";
+import { projectScaffold } from "./lookup";
 import { projectPortfolioAnalytics } from "./portfolio-analytics";
 
 describe("project dashboard attribution", () => {
@@ -60,22 +61,23 @@ describe("project dashboard attribution", () => {
       });
     }
     await drainStoredDerived(ctx.db);
-    const rows = await projectList(
-      ctx.db,
-      { search: "Sort " },
-      [{ orderBy: "startDate", direction: "asc" }],
-      { pageIndex: 0, pageSize: 20 },
-    );
+    const rows = await projectScaffold.read(ctx.db, {
+      filters: { search: "Sort " },
+      sorts: [{ orderBy: "startDate", direction: "asc" }],
+      pagination: { pageIndex: 0, pageSize: 20 },
+    });
     expect(rows.data.map((row) => row.id)).toEqual([
       early.shortcode,
       middle.shortcode,
       late.shortcode,
     ]);
-    expect(rows.data.map((row) => row.dateWindow?.effectiveStart)).toEqual([
-      "2026-01-01",
-      "2026-01-02",
-      "2026-01-03",
-    ]);
+    expect(
+      rows.data.map(
+        (row) =>
+          rawProjectOut.pick({ dateWindow: true }).parse(row).dateWindow
+            ?.effectiveStart,
+      ),
+    ).toEqual(["2026-01-01", "2026-01-02", "2026-01-03"]);
   });
 
   it("does not count a scoped grandchild twice when its intermediate parent is filtered out", async () => {
@@ -198,9 +200,10 @@ describe("project dashboard attribution", () => {
       dateFrom: date,
       dateTo: date,
     });
-    const canonical = await projectList(ctx.db, {}, [], {
-      pageIndex: 0,
-      pageSize: 500,
+    const canonical = await projectScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 500 },
     });
     expect(published.projects[0]?.rollup).not.toBeNull();
     expect(published.projects[0]?.rollup).toEqual(

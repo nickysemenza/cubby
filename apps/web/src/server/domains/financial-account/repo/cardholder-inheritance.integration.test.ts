@@ -3,7 +3,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { listFinancialAccounts } from "~/server/domains/financial-account/repo";
+import { financialAccountScaffold } from "~/server/domains/financial-account/repo";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 
@@ -105,19 +105,17 @@ describe("account cardholder inheritance", () => {
         },
       },
     });
-    const filtered = await listFinancialAccounts(
-      ctx.db,
-      { primaryCardholderId: [second.output.id] },
-      [],
-      { pageIndex: 0, pageSize: 10 },
-    );
+    const filtered = await financialAccountScaffold.read(ctx.db, {
+      filters: { primaryCardholderId: [second.output.id] },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
     expect(filtered.data.map((row) => row.id)).toContain(card.output.id);
-    const excluded = await listFinancialAccounts(
-      ctx.db,
-      { primaryCardholderId: [first.output.id] },
-      [],
-      { pageIndex: 0, pageSize: 10 },
-    );
+    const excluded = await financialAccountScaffold.read(ctx.db, {
+      filters: { primaryCardholderId: [first.output.id] },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
     expect(excluded.data.map((row) => row.id)).not.toContain(card.output.id);
   });
   it.each(["household"] as const)(

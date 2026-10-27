@@ -24,11 +24,8 @@ import {
   listActionableTasks,
   readTaskActionability,
 } from "~/server/domains/task/repo/actionable";
-import {
-  getTaskByShortcode,
-  updateTask,
-} from "~/server/domains/task/repo/crud";
-import { taskList } from "~/server/domains/task/repo/lookup";
+import { readTask, updateTask } from "~/server/domains/task/repo/crud";
+import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import {
@@ -76,9 +73,7 @@ describe("task reorder workflow", () => {
     expect(
       await getSearchDocumentEmbeddingText(ctx.db, "task", first.entityId),
     ).not.toBeNull();
-    expect((await getTaskByShortcode(ctx.db, first.output.id))?.sortOrder).toBe(
-      20,
-    );
+    expect((await readTask(ctx.db, first.output.id))?.sortOrder).toBe(20);
     await expect(
       taskBulkReorderWorkflow(
         ctx.db,
@@ -91,9 +86,7 @@ describe("task reorder workflow", () => {
         ctx.actor,
       ),
     ).rejects.toThrow(testShortcode("task", "missing-ranked-task"));
-    expect((await getTaskByShortcode(ctx.db, first.output.id))?.sortOrder).toBe(
-      20,
-    );
+    expect((await readTask(ctx.db, first.output.id))?.sortOrder).toBe(20);
   });
 });
 
@@ -143,9 +136,13 @@ describe("task repository — scoped list search", () => {
       search: "scope",
       status: "done" as const,
     };
-    const relevance = await taskList(ctx.db, exactFilters, [], {
-      pageIndex: 0,
-      pageSize: 10,
+    const relevance = await taskScaffold.read(ctx.db, {
+      filters: exactFilters,
+      sorts: [],
+      pagination: {
+        pageIndex: 0,
+        pageSize: 10,
+      },
     });
     expect(relevance.count).toBe(2);
     expect(relevance.data.map((row) => row.id)).toEqual([
@@ -153,12 +150,11 @@ describe("task repository — scoped list search", () => {
       prefixCompetitor.output.id,
     ]);
 
-    const explicitSort = await taskList(
-      ctx.db,
-      exactFilters,
-      [{ orderBy: "name", direction: "asc" }],
-      { pageIndex: 0, pageSize: 10 },
-    );
+    const explicitSort = await taskScaffold.read(ctx.db, {
+      filters: exactFilters,
+      sorts: [{ orderBy: "name", direction: "asc" }],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
     expect(explicitSort.data.map((row) => row.id)).toEqual([
       prefixCompetitor.output.id,
       exact.output.id,
@@ -169,9 +165,13 @@ describe("task repository — scoped list search", () => {
       search: "scope page",
       status: "done" as const,
     };
-    const pageTwo = await taskList(ctx.db, pageFilters, [], {
-      pageIndex: 2,
-      pageSize: 1,
+    const pageTwo = await taskScaffold.read(ctx.db, {
+      filters: pageFilters,
+      sorts: [],
+      pagination: {
+        pageIndex: 2,
+        pageSize: 1,
+      },
     });
     expect(pageTwo.count).toBe(3);
     expect(pageTwo.data).toHaveLength(1);
@@ -429,9 +429,7 @@ describe("task kernel — bulkUpdate", () => {
         status: "done",
       }),
     ).rejects.toMatchObject({ reason: "TASK_NOT_FOUND" });
-    expect((await getTaskByShortcode(ctx.db, task.id))?.status).toBe(
-      "not_started",
-    );
+    expect((await readTask(ctx.db, task.id))?.status).toBe("not_started");
   });
 
   it("reports a cascaded subtask as an exact deleted reference", async () => {
@@ -486,7 +484,7 @@ describe("task kernel — bulkUpdate", () => {
     });
 
     await bulkUpdate([t.id], { status: "in_progress" });
-    expect((await getTaskByShortcode(ctx.db, t.id))?.due).toEqual({
+    expect((await readTask(ctx.db, t.id))?.due).toEqual({
       start: "2024-03-01",
       end: "2024-03-05",
     });
@@ -494,7 +492,7 @@ describe("task kernel — bulkUpdate", () => {
       (await bulkUpdate([t.id], { due: { start: null, end: "2024-04-03" } }))
         .updatedReferences,
     ).toEqual([{ entity: "task", id: t.id }]);
-    expect((await getTaskByShortcode(ctx.db, t.id))?.due).toEqual({
+    expect((await readTask(ctx.db, t.id))?.due).toEqual({
       start: null,
       end: "2024-04-03",
     });
@@ -511,7 +509,7 @@ describe("task kernel — bulkUpdate", () => {
       },
     });
     await bulkUpdate([t.id], { due: null });
-    expect((await getTaskByShortcode(ctx.db, t.id))?.due).toBeNull();
+    expect((await readTask(ctx.db, t.id))?.due).toBeNull();
   });
 });
 

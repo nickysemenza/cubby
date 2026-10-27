@@ -5,7 +5,11 @@
  * entity, `to` the blocker. Removal soft-deletes the link.
  */
 
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { ENTITY_LINK_KINDS } from "@cubby/schemas/entity-links";
+import {
+  localRelationshipByKey,
+  type ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
@@ -25,15 +29,34 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   assertLinkSetAcyclic,
   liveLinks,
+  parseLinkEdgeKey,
   replaceLinkSet,
 } from "~/server/generic/entity-links/repo/entity-links";
 
 type DependencyEntity = Extract<ShortcodeEntity, "project" | "task">;
 
-const DEPENDENCY_KIND = {
-  project: "projectDependency",
-  task: "taskDependency",
-} as const satisfies Record<DependencyEntity, string>;
+function dependencyKind(entity: DependencyEntity) {
+  const relation = localRelationshipByKey(entity, "blocked-by");
+  const [fromStep, toStep] = relation.provenance.steps;
+  const from = fromStep && parseLinkEdgeKey(fromStep.edge);
+  const to = toStep && parseLinkEdgeKey(toStep.edge);
+  if (
+    relation.target !== entity ||
+    relation.provenance.steps.length !== 2 ||
+    fromStep?.direction !== "incoming" ||
+    toStep?.direction !== "outgoing" ||
+    !from ||
+    !to ||
+    from.end !== "from" ||
+    to.end !== "to" ||
+    from.kind !== to.kind ||
+    ENTITY_LINK_KINDS[from.kind].from !== entity ||
+    ENTITY_LINK_KINDS[from.kind].to !== entity ||
+    !ENTITY_LINK_KINDS[from.kind].acyclic
+  )
+    throw new Error(`Invalid blocked-by dependency relationship for ${entity}`);
+  return from.kind;
+}
 
 /**
  * Replace the full `blockedByIds` set for one entity, inside the caller's
@@ -56,9 +79,8 @@ export async function replaceDependencyEdges<E extends DependencyEntity>(
       deletedAt: AnyPgColumn;
     };
     /**
-     * Drives the link kind, the error label (`ENTITY_LABEL[entity]`) and the
-     * AppErrorReason (`ENTITY_NOT_FOUND_REASON[entity]`) thrown when an
-     * incoming id doesn't exist, so they can't drift out of sync.
+     * Drives the declared link kind and the error label and reason when an
+     * incoming id doesn't exist.
      */
     entity: E;
   },
@@ -102,7 +124,7 @@ export async function replaceDependencyEdges<E extends DependencyEntity>(
     }
   }
 
-  const kind = DEPENDENCY_KIND[opts.entity];
+  const kind = dependencyKind(opts.entity);
   // The per-kind advisory lock inside serializes every writer of the family:
   // row locks cannot, because two new opposite links both start absent.
   if (!(await assertLinkSetAcyclic(tx, kind, id, deduped))) {
@@ -131,7 +153,7 @@ export async function dependencyIdsFor<E extends DependencyEntity>(
   const blocking = new Map<EntityId<E>, EntityId<E>[]>();
   if (ids.length === 0) return { blockedBy, blocking };
 
-  const kind = DEPENDENCY_KIND[entity];
+  const kind = dependencyKind(entity);
   const selectCols = {
     own: entityLink.fromEntityId,
     blockedBy: entityLink.toEntityId,

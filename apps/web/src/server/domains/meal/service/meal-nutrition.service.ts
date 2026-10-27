@@ -17,7 +17,7 @@ import {
   batchTotalsFor,
   yieldBasisFor,
 } from "~/server/domains/meal/repo/portions";
-import { getProductsByShortcodes } from "~/server/domains/product/repo/crud";
+import { readProducts } from "~/server/domains/product/repo/crud";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import {
   batchEnrichWithFood,
@@ -55,7 +55,7 @@ export async function getMealNutrition(
     ),
   ];
   const products = await batchEnrichWithFood(
-    await getProductsByShortcodes(db, codes),
+    await readProducts(db, codes),
     foodLookupParamFromProduct,
     usdaClient,
   );

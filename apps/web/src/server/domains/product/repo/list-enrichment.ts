@@ -95,27 +95,6 @@ type ProductListEnrichmentInput = Pick<
 >;
 
 /**
- * Starts the USDA batch for these products without awaiting it, as soon as
- * their lookup keys (barcode, `fdc_id`) are read. `USDAClient.findFoodsBatch`
- * memoizes each key's in-flight lookup for the request, so the later
- * `enrichProductListItems` call joins this one and the external hop overlaps
- * the local enrichment reads. A failure surfaces from that later call.
- */
-export function prefetchProductFoods(
-  products: Parameters<typeof foodLookupParamFromProduct>[0][],
-  usdaClient?: UsdaFoodBatchPort,
-): void {
-  const lookups = products.flatMap(
-    (product) => foodLookupParamFromProduct(product) ?? [],
-  );
-  if (usdaClient && lookups.length > 0)
-    usdaClient.findFoodsBatch(lookups).catch(() => {
-      // SILENT: the memoized batch rejects again for enrichProductListItems,
-      // which surfaces it; this handle only prevents an unhandled rejection.
-    });
-}
-
-/**
  * Adds the USDA projection and every derived unit price to one product-list
  * snapshot. Both top-level rows and nested kit rows use this projection so
  * their displayed values and explanation sources cannot diverge.
@@ -142,4 +121,19 @@ export async function enrichProductListItems<
       unitPrice: computePerUnitPrices(unitPriceMappings),
     };
   });
+}
+
+/**
+ * Re-applies USDA food and the unit prices that depend on it to rows read
+ * through `productScaffold` without a reader client (kit component rows).
+ */
+export async function overlayProductFood<
+  T extends ProductListEnrichmentInput & { unitPriceLabel?: string | null },
+>(rows: T[], usdaClient?: UsdaFoodBatchPort): Promise<T[]> {
+  if (!usdaClient || rows.length === 0) return rows;
+  const enriched = await enrichProductListItems(rows, usdaClient);
+  return enriched.map((row) => ({
+    ...row,
+    unitPriceLabel: unitPriceLabel(row.unitPrice),
+  }));
 }

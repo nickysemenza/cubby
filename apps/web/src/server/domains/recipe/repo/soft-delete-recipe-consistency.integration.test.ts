@@ -11,9 +11,9 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { getIngredientByID } from "~/server/domains/ingredient/repo/crud";
+import { readIngredientById } from "~/server/domains/ingredient/repo/crud";
 import { deleteIngredients } from "~/server/domains/ingredient/repo/deletion";
-import { ingredientList } from "~/server/domains/ingredient/repo/search";
+import { ingredientScaffold } from "~/server/domains/ingredient/repo/search";
 import {
   createIngredientFixture as createIngredient,
   createRecipeFixture as createRecipe,
@@ -36,12 +36,11 @@ const appearsInRecipesFromList = async (
   db: Database,
   ingredientId: IngredientShortcode,
 ) => {
-  const { data } = await ingredientList(
-    db,
-    {},
-    [{ orderBy: "appearsInRecipes", direction: "desc" }],
-    { pageIndex: 0, pageSize: 50 },
-  );
+  const { data } = await ingredientScaffold.read(db, {
+    filters: {},
+    sorts: [{ orderBy: "appearsInRecipes", direction: "desc" }],
+    pagination: { pageIndex: 0, pageSize: 50 },
+  });
   return data.find((i) => i.id === ingredientId)?.appearsInRecipes ?? [];
 };
 
@@ -78,7 +77,7 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
 
     // Baseline: the ingredient appears in exactly one recipe everywhere.
     expect(
-      (await getIngredientByID(ctx.db, ingredientId)).appearsInRecipes,
+      (await readIngredientById(ctx.db, ingredientId)).appearsInRecipes,
     ).toHaveLength(1);
     expect(await appearsInRecipesFromList(ctx.db, ingredientCode)).toHaveLength(
       1,
@@ -88,10 +87,10 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
 
     // After soft-deleting the only recipe, every surface reads zero.
     expect(
-      (await getIngredientByID(ctx.db, ingredientId)).appearsInRecipes,
+      (await readIngredientById(ctx.db, ingredientId)).appearsInRecipes,
     ).toHaveLength(0);
     expect(
-      (await getIngredientByID(ctx.db, ingredientId)).recipeUsages,
+      (await readIngredientById(ctx.db, ingredientId)).recipeUsages,
     ).toHaveLength(0);
     expect(await appearsInRecipesFromList(ctx.db, ingredientCode)).toHaveLength(
       0,

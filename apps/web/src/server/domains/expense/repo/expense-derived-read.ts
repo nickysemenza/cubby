@@ -193,14 +193,18 @@ export async function prepareExpenseDerivedRead(
   filters: ExpenseFilters,
   prepared?: { scope: ExpenseAllocationProjectScope | undefined },
 ) {
-  const { buildExpenseWhereClause, resolveExpenseProjectAllocationScope } =
-    await import("./lookup");
+  const {
+    analyticsFilters,
+    expenseScaffold,
+    resolveExpenseProjectAllocationScope,
+  } = await import("./lookup");
   const scope = prepared
     ? prepared.scope
     : await resolveExpenseProjectAllocationScope(db, filters);
-  const where = await buildExpenseWhereClause(db, filters, {
-    omitAllocationScope: true,
-  });
+  const where = await expenseScaffold.prepareWhere(
+    db,
+    analyticsFilters(filters),
+  );
   const selectedIds = expenseSelectionForWhere(where);
   return {
     scope,

@@ -724,7 +724,6 @@ export default defineEntity(
             },
           },
         ],
-        metrics: ["expenseTotal"],
         totals: [
           {
             id: "price",
@@ -738,6 +737,7 @@ export default defineEntity(
             label: "Expenses",
             keys: ["expenseTotal"],
             format: "currency",
+            group: true,
           },
         ],
         shelfSubtitleOverride: ["price", "categoryId"],

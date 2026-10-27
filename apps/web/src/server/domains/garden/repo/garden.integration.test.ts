@@ -21,8 +21,8 @@ import { entityLink, gardenEntry, planting } from "~/server/db/schema";
 import {
   createGardenEntry,
   createPlanting,
-  gardenEntryList,
-  plantingList,
+  gardenEntryScaffold,
+  plantingScaffold,
   updateGardenEntry,
   updatePlanting,
 } from "~/server/domains/garden/repo/garden";
@@ -104,15 +104,14 @@ describe("garden workflows", () => {
       })
       .where(eq(planting.id, secondId!));
 
-    const { data } = await plantingList(
-      ctx.db,
-      {},
-      { pageIndex: 0, pageSize: 200 },
-      [
+    const { data } = await plantingScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [
         { orderBy: "createdAt", direction: "asc" },
         { orderBy: "updatedAt", direction: "desc" },
       ],
-    );
+      pagination: { pageIndex: 0, pageSize: 200 },
+    });
     const ids = data.map((row) => row.id);
     expect(ids.indexOf(first.id)).toBeGreaterThanOrEqual(0);
     expect(ids.indexOf(second.id)).toBeGreaterThanOrEqual(0);
@@ -159,15 +158,14 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
 
-    const { data } = await gardenEntryList(
-      ctx.db,
-      {},
-      { pageIndex: 0, pageSize: 200 },
-      [
+    const { data } = await gardenEntryScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [
         { orderBy: "observedOn", direction: "asc" },
         { orderBy: "createdAt", direction: "asc" },
       ],
-    );
+      pagination: { pageIndex: 0, pageSize: 200 },
+    });
     const ids = data.map((row) => row.id);
     expect(ids.indexOf(firstEntry.id)).toBeGreaterThanOrEqual(0);
     expect(ids.indexOf(secondEntry.id)).toBeGreaterThanOrEqual(0);
@@ -217,12 +215,11 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
 
-    const result = await gardenEntryList(
-      ctx.db,
-      {},
-      { pageIndex: 0, pageSize: 50 },
-      [],
-    );
+    const result = await gardenEntryScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
     const matching = result.data.filter((row) => row.id === entry.id);
     expect(matching).toHaveLength(1);
     expect(matching[0]?.plantingIds).toEqual([first.id, second.id].sort());
@@ -309,12 +306,11 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
 
-    const { data } = await gardenEntryList(
-      ctx.db,
-      { journalPlantingId: target.id },
-      { pageIndex: 0, pageSize: 50 },
-      [],
-    );
+    const { data } = await gardenEntryScaffold.read(ctx.db, {
+      filters: { journalPlantingId: target.id },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
     const ids = new Set(data.map((row) => row.id));
     expect(ids.has(direct.id)).toBe(true);
     expect(ids.has(inWindowWholeArea.id)).toBe(true);
@@ -327,12 +323,11 @@ describe("garden workflows", () => {
     const listedIds = async (filters: GardenEntryFilters) =>
       new Set(
         (
-          await gardenEntryList(
-            ctx.db,
-            filters,
-            { pageIndex: 0, pageSize: 50 },
-            [],
-          )
+          await gardenEntryScaffold.read(ctx.db, {
+            filters: filters,
+            sorts: [],
+            pagination: { pageIndex: 0, pageSize: 50 },
+          })
         ).data.map((row) => row.id),
       );
     const excluded = await listedIds({ journalPlantingIdExclude: [target.id] });
@@ -608,7 +603,7 @@ describe("garden workflows", () => {
     });
   });
 
-  it("plantingList taskId filter narrows to plantings linked to that task", async () => {
+  it("planting list taskId filter narrows to plantings linked to that task", async () => {
     const crop = await createPlantFixture(
       ctx.db,
       { name: "Task filter crop" },
@@ -630,18 +625,17 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
 
-    const { data } = await plantingList(
-      ctx.db,
-      { taskId: task.output.id },
-      { pageIndex: 0, pageSize: 50 },
-      [],
-    );
+    const { data } = await plantingScaffold.read(ctx.db, {
+      filters: { taskId: task.output.id },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
     const ids = new Set(data.map((row) => row.id));
     expect(ids.has(linked.id)).toBe(true);
     expect(ids.has(unlinked.id)).toBe(false);
   });
 
-  it("plantingList sourceProductId filter narrows to plantings sourced from that product", async () => {
+  it("planting list sourceProductId filter narrows to plantings sourced from that product", async () => {
     const crop = await createPlantFixture(
       ctx.db,
       { name: "Source product filter crop" },
@@ -667,12 +661,11 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
 
-    const { data } = await plantingList(
-      ctx.db,
-      { sourceProductId: seedPacket.id },
-      { pageIndex: 0, pageSize: 50 },
-      [],
-    );
+    const { data } = await plantingScaffold.read(ctx.db, {
+      filters: { sourceProductId: seedPacket.id },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
     const ids = new Set(data.map((row) => row.id));
     expect(ids.has(fromSeed.id)).toBe(true);
     expect(ids.has(fromElsewhere.id)).toBe(false);
@@ -706,7 +699,7 @@ describe("garden workflows", () => {
     ).rejects.toThrow(/planting source Product must be a garden product/);
   });
 
-  it("plantingList activeOn scopes to a planting's live date window", async () => {
+  it("planting list activeOn scopes to a planting's live date window", async () => {
     const crop = await createPlantFixture(
       ctx.db,
       { name: "Active-on filter crop" },
@@ -731,12 +724,11 @@ describe("garden workflows", () => {
       TEST_ACTOR,
     );
 
-    const { data } = await plantingList(
-      ctx.db,
-      { activeOn: "2026-05-15" },
-      { pageIndex: 0, pageSize: 50 },
-      [],
-    );
+    const { data } = await plantingScaffold.read(ctx.db, {
+      filters: { activeOn: "2026-05-15" },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
     const ids = new Set(data.map((row) => row.id));
     expect(ids.has(active.id)).toBe(true);
     expect(ids.has(inactive.id)).toBe(false);

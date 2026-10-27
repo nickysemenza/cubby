@@ -1,6 +1,5 @@
 import {
   type LocationShortcode,
-  parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 /**
@@ -11,9 +10,9 @@ import type {
   LocationAncestorOut,
   LocationType,
 } from "@cubby/schemas/location";
-import type {
-  RawLocationDetail,
-  RawLocationOutput,
+import {
+  rawLocationOutput,
+  type RawLocationOutput,
 } from "@cubby/schemas/location-raw-read";
 import { parseShortcode, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
@@ -26,33 +25,18 @@ import {
   ne,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
-import { getDb, notDeleted, relations } from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { getLocationById } from "./crud";
-import { dbLocationToAPI } from "./helpers";
+import { locationScaffold } from "./crud";
 import { loadLocationAncestors } from "./tree";
-import { loadStoredLocationValuations } from "./valuation";
-
-/**
- * Get full location details by shortcode. Returns null if the code doesn't
- * resolve to a live location.
- */
-export const getLocationByShortcode = async (
-  db: Database,
-  shortcode: string,
-): Promise<RawLocationDetail | null> => {
-  const id = await resolveLiveShortcode(db, shortcode, "location");
-  return id ? getLocationById(db, parseEntityId("location", id)) : null;
-};
 
 /**
  * Fetch multiple locations by shortcodes in a single query.
@@ -64,30 +48,31 @@ export const getLocationsByShortcodes = async (
 ): Promise<(RawLocationOutput & { parentName: string | null })[]> => {
   if (shortcodes.length === 0) return [];
   const uppercased = shortcodes.map((s) => s.toUpperCase());
-  const results = await getDb(db).query.location.findMany({
-    where: and(inArray(location.shortcode, uppercased), notDeleted(location)),
-    extras: relations.location.withImages.extras,
-    with: {
-      ...relations.location.withImages.with,
-      parent: true,
-    },
-  });
-  const [valuations, dataQualities] = await Promise.all([
-    loadStoredLocationValuations(
-      db,
-      results.map((row) => row.id),
-    ),
-    loadDataQualities(
-      db,
-      "location",
-      results.map((r) => r.id),
-    ),
+  const parentLocation = alias(location, "parent_location");
+  const [read, parents] = await Promise.all([
+    locationScaffold.get(db, uppercased, [
+      ...Object.keys(rawLocationOutput.shape),
+      "displayImages",
+    ]),
+    // The parent's name only; the record read's parent is its full tree.
+    getDb(db)
+      .select({ shortcode: location.shortcode, name: parentLocation.name })
+      .from(location)
+      .innerJoin(parentLocation, eq(parentLocation.id, location.parentId))
+      .where(
+        and(inArray(location.shortcode, uppercased), notDeleted(location)),
+      ),
   ]);
-  return results.map((r) => ({
-    // SAFETY: `r` came from `results`, which `dataQualities` was loaded for.
-    ...dbLocationToAPI(r, valuations, dataQualities.get(r.id)!),
-    parentName: r.parent?.name ?? null,
-  }));
+  const parentNames = new Map(
+    parents.map((row) => [
+      parseShortcodeFor("location", row.shortcode),
+      row.name,
+    ]),
+  );
+  return read.data.map((row) => {
+    const output = rawLocationOutput.parse(row);
+    return { ...output, parentName: parentNames.get(output.id) ?? null };
+  });
 };
 
 /**

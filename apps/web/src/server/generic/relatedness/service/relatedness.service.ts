@@ -10,7 +10,7 @@ import type { SimilarEntitiesOut } from "@cubby/schemas/search";
 
 import type { Database } from "~/server/db";
 import { getProductsSharingTags } from "~/server/domains/product/repo/analytics";
-import { getProductsByShortcodes } from "~/server/domains/product/repo/crud";
+import { readProducts } from "~/server/domains/product/repo/crud";
 import {
   getActiveAssessmentSuppressionKeys,
   assessmentCandidateKey,
@@ -35,7 +35,7 @@ export interface RelatednessDependencies {
     db: Database,
     entityId: ProductId,
   ) => Promise<Array<{ shortcode: string; name: string; tags: string[] }>>;
-  getProductsByShortcodes: (
+  readProducts: (
     db: Database,
     shortcodes: string[],
   ) => Promise<Array<{ id: string; tags: string[] }>>;
@@ -50,7 +50,7 @@ const productionRelatednessDependencies: RelatednessDependencies = {
   resolveSourceId: resolveOrThrow,
   findSimilarEntities: findSimilarEntitiesWorkflow,
   getProductsSharingTags,
-  getProductsByShortcodes,
+  readProducts,
   getActiveDismissalKeys: getActiveAssessmentSuppressionKeys,
   makeCandidateKey: assessmentCandidateKey,
 };
@@ -172,7 +172,7 @@ const productTagPropagationWorkflowDefinition = workflow<
   })
   .parallel("evidence", 2, {
     rows: ({ context }, { input, source }) =>
-      context.dependencies.getProductsByShortcodes(context.db, [
+      context.dependencies.readProducts(context.db, [
         input,
         ...source.semantic.results.map((result) => result.entity.id),
       ]),

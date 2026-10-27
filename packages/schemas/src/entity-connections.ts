@@ -57,7 +57,6 @@ export type EntityConnectionGroup = z.infer<typeof entityConnectionGroup>;
 export const entityConnectionsOut = z.object({
   id: z.string(),
   kind: entitySchema,
-  redirectedFrom: z.string().nullable(),
   groups: z.array(entityConnectionGroup),
 });
 export type EntityConnectionsOut = z.infer<typeof entityConnectionsOut>;

@@ -3,7 +3,7 @@ import { and, getTableName, sql } from "drizzle-orm";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { location as table } from "~/server/db/schema";
-import { buildLocationWhere } from "~/server/domains/location/repo/crud";
+import { locationScaffold } from "~/server/domains/location/repo/crud";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import {
   entityProblemSources,
@@ -30,7 +30,10 @@ export const locationWorkSources = (): WorkSource[] => [
         .from(table)
         .where(
           and(
-            await buildLocationWhere(db, locationFiltersSchema.parse(filters)),
+            await locationScaffold.prepareWhere(
+              db,
+              locationFiltersSchema.parse(filters),
+            ),
             recordScope(scope, sql`${table.shortcode}`),
           ),
         ),

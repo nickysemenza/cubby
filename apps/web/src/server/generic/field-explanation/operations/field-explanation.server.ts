@@ -4,9 +4,15 @@ import {
   scoredEntities,
 } from "@cubby/schemas/data-quality";
 import { type Entity, entityRefSchema } from "@cubby/schemas/entity";
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import {
+  fieldEnvelopeReadSchema,
+  hasFieldEnvelopeRead,
+} from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import {
+  entityMembership,
+  shortcodeEntities,
+} from "@cubby/schemas/entity-manifest";
 import {
   fieldEnvelope,
   fieldEnvelopeFor,
@@ -30,7 +36,7 @@ import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
 import { fieldExplanationContract } from "~/contracts/field-explanation.contract";
-import { getCookbookSummary } from "~/server/domains/cookbook/repo/cookbook";
+import { readCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import {
   executeEntityAs,
@@ -51,10 +57,8 @@ import { loadQualityBreakdown } from "~/server/generic/data-quality/repo/hydrate
 import { explainLiveDerived } from "~/server/generic/derived/repo/explain";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { explanationReferenceValues } from "~/server/generic/field-explanation/repo/explanation-reference-values";
-import {
-  loadFieldCountEvidence,
-  withFieldExplanationSnapshot,
-} from "~/server/generic/field-explanation/repo/field-explanation-evidence";
+import { loadFieldCountEvidence } from "~/server/generic/field-explanation/repo/field-count-evidence";
+import { withFieldExplanationSnapshot } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import { inheritedResetPreview } from "~/server/generic/field-explanation/repo/inherited-reset-preview";
 import { specialistResetPreview } from "~/server/generic/field-explanation/service/specialist-reset-preview";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -68,7 +72,7 @@ const jsonValue = z.json();
 const jsonRecord = z.record(z.string(), jsonValue);
 const jsonArray = z.array(jsonValue);
 const jsonString = z.string();
-const kernelEntities = new Set<string>(ENTITY_KERNEL_ENTITIES);
+const kernelEntities = entityMembership(ENTITY_KERNEL_ENTITIES);
 type Json = z.infer<typeof jsonValue>;
 type JsonRecord = z.infer<typeof jsonRecord>;
 const explanationMetadata = z.object({
@@ -522,7 +526,7 @@ async function loadProjection(
   scopeFilter?: string,
 ): Promise<JsonRecord> {
   if (entity === "cookbook") {
-    const item = await getCookbookSummary(
+    const item = await readCookbook(
       context.db,
       cookbookShortcode.parse(entityId),
     );
@@ -968,9 +972,13 @@ export async function explainField(
     envelope.current.controls.kind === "editable" &&
     envelope.current.controls.reset.kind === "available"
   ) {
-    const schemas: Partial<Record<Entity, { detail: z.ZodObject }>> =
-      entityFieldEnvelopeSchemas;
-    const fieldsSchema = schemas[entity]?.detail.shape.fields;
+    const detailSchema = hasFieldEnvelopeRead(entity)
+      ? fieldEnvelopeReadSchema(entity, "detail")
+      : undefined;
+    const fieldsSchema =
+      detailSchema instanceof z.ZodObject
+        ? detailSchema.shape.fields
+        : undefined;
     const schema =
       fieldsSchema instanceof z.ZodObject
         ? fieldsSchema.shape[field.readKey ?? field.key]

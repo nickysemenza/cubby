@@ -14,6 +14,7 @@ import { createOrReuseAttachedImage } from "~/server/domains/image/repo/image";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
+import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
@@ -67,8 +68,12 @@ describe("entity edge source", () => {
   it("groups one-hop connections both ways, across join rows and attachments", async () => {
     const { item, shelf } = await seedStockedProduct("Edge lamp");
 
-    const connections = await getEntityConnections(ctx.db, { id: item.id });
-    expect(connections).toMatchObject({ id: item.id, redirectedFrom: null });
+    const connections = await getEntityConnections(
+      ctx.db,
+      { id: item.id },
+      kernelScaffold,
+    );
+    expect(connections).toMatchObject({ id: item.id });
     expect(connections.groups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -88,7 +93,11 @@ describe("entity edge source", () => {
       ]),
     );
 
-    const fromShelf = await getEntityConnections(ctx.db, { id: shelf.id });
+    const fromShelf = await getEntityConnections(
+      ctx.db,
+      { id: shelf.id },
+      kernelScaffold,
+    );
     expect(fromShelf.groups).toContainEqual(
       expect.objectContaining({
         direction: "incoming",
@@ -100,10 +109,14 @@ describe("entity edge source", () => {
 
   it("attaches the operation's declared disposition for an impact preview", async () => {
     const { item } = await seedStockedProduct("Edge chair");
-    const preview = await getEntityConnections(ctx.db, {
-      id: item.id,
-      operation: "delete",
-    });
+    const preview = await getEntityConnections(
+      ctx.db,
+      {
+        id: item.id,
+        operation: "delete",
+      },
+      kernelScaffold,
+    );
     const stock = preview.groups.find(
       (group) => group.edgeKey === "InventoryEntry.productId",
     );
@@ -188,11 +201,15 @@ describe("entity edge source", () => {
 
     const edgeKey =
       "rows:sourceTransactionRecord.acceptedTransactions.transaction";
-    const outgoing = await getEntityConnections(ctx.db, {
-      id: revised.id,
-      operation: "delete",
-      limitPerGroup: 1,
-    });
+    const outgoing = await getEntityConnections(
+      ctx.db,
+      {
+        id: revised.id,
+        operation: "delete",
+        limitPerGroup: 1,
+      },
+      kernelScaffold,
+    );
     const outgoingGroup = outgoing.groups.find(
       (group) => group.edgeKey === edgeKey,
     );
@@ -206,20 +223,28 @@ describe("entity edge source", () => {
         { id: [first.id, second.id].sort()[0], kind: "financialTransaction" },
       ],
     });
-    const fullOutgoing = await getEntityConnections(ctx.db, {
-      id: original.id,
-    });
+    const fullOutgoing = await getEntityConnections(
+      ctx.db,
+      {
+        id: original.id,
+      },
+      kernelScaffold,
+    );
     expect(
       fullOutgoing.groups
         .find((group) => group.edgeKey === edgeKey)
         ?.items.map((item) => item.id)
         .sort(),
     ).toEqual([first.id, second.id].sort());
-    const incoming = await getEntityConnections(ctx.db, {
-      id: first.id,
-      operation: "delete",
-      limitPerGroup: 1,
-    });
+    const incoming = await getEntityConnections(
+      ctx.db,
+      {
+        id: first.id,
+        operation: "delete",
+        limitPerGroup: 1,
+      },
+      kernelScaffold,
+    );
     const incomingGroup = incoming.groups.find(
       (group) => group.edgeKey === edgeKey,
     );
@@ -238,7 +263,11 @@ describe("entity edge source", () => {
     });
     expect(
       (
-        await getEntityConnections(ctx.db, { id: first.id, limitPerGroup: 1 })
+        await getEntityConnections(
+          ctx.db,
+          { id: first.id, limitPerGroup: 1 },
+          kernelScaffold,
+        )
       ).groups.find((group) => group.edgeKey === edgeKey)?.items,
     ).toEqual(incomingGroup?.items);
     await getDb(ctx.db)
@@ -246,16 +275,16 @@ describe("entity edge source", () => {
       .set({ deletedAt: new Date() })
       .where(eq(sourceTransactionRecord.shortcode, original.id));
     expect(
-      (await getEntityConnections(ctx.db, { id: second.id })).groups.find(
-        (group) => group.edgeKey === edgeKey,
-      ),
+      (
+        await getEntityConnections(ctx.db, { id: second.id }, kernelScaffold)
+      ).groups.find((group) => group.edgeKey === edgeKey),
     ).toMatchObject({
       count: 1,
       items: [{ id: revised.id }],
     });
   });
 
-  it("reads a merged-away code as its survivor", async () => {
+  it("refuses a merged-away code", async () => {
     const { item } = await seedStockedProduct("Edge keeper");
     const loser = await createProductIdentityFixture(
       ctx.db,
@@ -267,10 +296,9 @@ describe("entity edge source", () => {
       { keepId: item.id, mergeIds: [loser.id] },
       TEST_ACTOR,
     );
-    expect(await getEntityConnections(ctx.db, { id: loser.id })).toMatchObject({
-      id: item.id,
-      redirectedFrom: loser.id,
-    });
+    await expect(
+      getEntityConnections(ctx.db, { id: loser.id }, kernelScaffold),
+    ).rejects.toThrow(`was merged into ${item.id}`);
   });
 
   it("finds live entities of a checked kind with no connection", async () => {

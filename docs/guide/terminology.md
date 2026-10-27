@@ -64,6 +64,8 @@ Declarations own field and storage names. The UI aliases that need explaining
 here are **Inventory** for `InventoryEntry`, **Account** for `FinancialAccount`,
 **Transaction** for `FinancialTransaction`, and **USDA food** for an external
 FoodData Central record. **Merchant** is provider evidence text, never a Vendor.
+After a merge, the survivor keeps its shortcode. A merged-away shortcode refuses
+reads and writes with the survivor's code; it does not redirect ([ADR 0023](../adr/0023-repository-read-declaration.md)).
 
 ---
 
@@ -491,6 +493,10 @@ it; `sourceLabel` holds the title only for a book with no Cookbook row.
 ## Domain language
 
 Each term names one concept; the _Avoid_ line lists names that blur it.
+
+**Read declaration**:
+The `read` option a repository passes to `listScaffold`: the SQL for read-schema keys the entity declaration cannot compile, the bindings that load the rest, and the repository's ports. Every page, record and writer read-back goes through it ([ADR 0023](../adr/0023-repository-read-declaration.md)).
+_Avoid_: reader, mapper, `dbXToAPI`
 
 **AI standard cost**:
 The equivalent published API price for AI work before plan coverage or billing discounts, respecting published rates for its token classes, including prompt caching. A comparison may be unavailable when no equivalent price can be established.

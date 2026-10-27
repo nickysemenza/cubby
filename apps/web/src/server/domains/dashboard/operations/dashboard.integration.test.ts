@@ -7,9 +7,9 @@ import { setCfEnv } from "~/server/cf-env";
 import { getEntityCounts } from "~/server/domains/dashboard/repo/dashboard";
 import {
   createLedgerParty,
-  listLedgerParties,
+  ledgerPartyScaffold,
 } from "~/server/domains/ledger-party/repo/ledger-party";
-import { listSpendingCategories } from "~/server/domains/spending-category/repo/spending-category";
+import { spendingCategoryScaffold } from "~/server/domains/spending-category/repo/spending-category";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
@@ -64,9 +64,13 @@ describe("dashboard count workflow", () => {
       { name: "Sample household member", kind: "member", notes: null },
       ctx.actor,
     );
-    const list = await listLedgerParties(ctx.db, {}, [], {
-      pageIndex: 0,
-      pageSize: 1,
+    const list = await ledgerPartyScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: {
+        pageIndex: 0,
+        pageSize: 1,
+      },
     });
     const result = await getEntityCounts(ctx.db);
     expect(result.ledgerParty).toBe(list.count);
@@ -76,9 +80,13 @@ describe("dashboard count workflow", () => {
     await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Sample category",
     });
-    const list = await listSpendingCategories(ctx.db, {}, [], {
-      pageIndex: 0,
-      pageSize: 1,
+    const list = await spendingCategoryScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: {
+        pageIndex: 0,
+        pageSize: 1,
+      },
     });
     const result = await getDashboardCounts({
       db: ctx.db,

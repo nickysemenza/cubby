@@ -1,9 +1,5 @@
 import { rawInventoryDetail } from "@cubby/schemas/inventory-raw-read";
-import {
-  testCompleteDataQuality,
-  testEntityId,
-  testShortcode,
-} from "@cubby/schemas/testing";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import {
   categorySummaryFixture,
   productRowFixture,
@@ -12,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { resolveProductPricing } from "~/server/domains/product/repo/pricing";
 
-import { dbInventoryEntryToAPI } from "./mappers";
+import { inventoryDetailProduct } from "./mappers";
 import type { InventoryEntryDeepDB } from "./types";
 
 const INVENTORY_ID = testEntityId(
@@ -95,24 +91,23 @@ describe("inventory mappers", () => {
       location: { ...baseLocation, images: [] },
     } satisfies InventoryEntryDeepDB;
 
-    const result = dbInventoryEntryToAPI(
-      row,
-      8.87,
+    const result = inventoryDetailProduct(
+      row.product,
       resolveProductPricing(null, {
         knownCost: 6.83,
         knownExpenseCount: 1,
         unknownExpenseCount: 0,
         knownUnitCount: 1,
       }),
-      testCompleteDataQuality(),
+      [],
     );
 
-    // 8.87 / 1.3 rounds to 6.82; the product's authoritative effective
-    // price is $6.83 and must survive the inventory valuation's cent rounding.
-    expect(result.product.price).toEqual(6.83);
+    // A stored valuation of 8.87 / 1.3 rounds to 6.82; the product's
+    // authoritative effective price is $6.83 and must survive that rounding.
+    expect(result.price).toEqual(6.83);
   });
 
-  it("maps detail rows to exact response objects and filters soft-deleted relations", () => {
+  it("maps the detail product exactly and filters soft-deleted relations", () => {
     const row = {
       ...baseInventoryEntry,
       product: {
@@ -191,99 +186,58 @@ describe("inventory mappers", () => {
       },
     } satisfies InventoryEntryDeepDB;
 
-    const result = dbInventoryEntryToAPI(
-      row,
-      9,
+    const result = inventoryDetailProduct(
+      row.product,
       resolveProductPricing(4.5),
-      testCompleteDataQuality(),
+      [],
     );
 
     expect(result).toEqual({
-      id: testShortcode("inventory", "INV-TEST"),
-      locationId: testShortcode("location", "LOC-TEST"),
-      amount: { value: 2, unit: "each" },
-      valuation: 9,
-      verifiedAt: null,
-      placement: "stock" as const,
-      ownerLedgerPartyId: null,
-      effectiveOwnership: {
-        mode: "inherit",
-        explicitOwner: null,
-        effectiveOwner: null,
-        inheritedOwner: null,
-        source: "unresolved",
-        evidence: null,
-        evidenceFingerprint: "unresolved",
-        matchesInheritedOwner: false,
-      },
-      fieldResolutions: {
-        ownerLedgerPartyId: {
-          mode: "inherit",
-          storedValue: null,
-          value: null,
-          fallbackValue: null,
-          source: "No unambiguous acquisition evidence",
-          sourceEntity: null,
-          matchesFallback: false,
-          canReset: false,
+      displayImages: [],
+      id: testShortcode("product", "PRD-TEST"),
+      images: [],
+      externalIds: [
+        {
+          id: EXTERNAL_ID,
+          source: "amazon",
+          kind: "retailer_sku",
+          externalId: "B000000001",
+          url: "https://example.com/product",
+          // Rows written before the column existed default to primary — back
+          // then a slot held exactly one row.
+          isPrimary: true,
+          createdAt: CREATED_AT,
+          updatedAt: UPDATED_AT,
         },
-      },
+      ],
+      price: 4.5,
+      usdaUnavailable: null,
+      name: "Flour",
+      primaryGtin: null,
+      fdc_id: null,
+      brandName: null,
+      model: "5lb",
+      notes: "Keep dry",
+      expectedQuantity: null,
+      category: categorySummaryFixture("food"),
+      categoryFeature: "food",
       createdAt: CREATED_AT,
       updatedAt: UPDATED_AT,
-      dataQuality: testCompleteDataQuality(),
-      location: {
-        id: testShortcode("location", "LOC-TEST"),
-        name: "Pantry",
-        type: "room",
-      },
-      product: {
-        displayImages: [],
-        id: testShortcode("product", "PRD-TEST"),
-        images: [],
-        externalIds: [
-          {
-            id: EXTERNAL_ID,
-            source: "amazon",
-            kind: "retailer_sku",
-            externalId: "B000000001",
-            url: "https://example.com/product",
-            // Rows written before the column existed default to primary — back
-            // then a slot held exactly one row.
-            isPrimary: true,
-            createdAt: CREATED_AT,
-            updatedAt: UPDATED_AT,
+      unitMappings: [
+        {
+          id: UNIT_MAPPING_ID,
+          a: { value: 5, unit: "lb" },
+          b: { value: 4.5, unit: "dollar" },
+          source: "label",
+          createdAt: CREATED_AT,
+          updatedAt: UPDATED_AT,
+          sourceMetadata: {
+            type: "product",
+            productId: testShortcode("product", "PRD-TEST"),
           },
-        ],
-        price: 4.5,
-        usdaUnavailable: null,
-        name: "Flour",
-        primaryGtin: null,
-        fdc_id: null,
-        brandName: null,
-        model: "5lb",
-        notes: "Keep dry",
-        expectedQuantity: null,
-        category: categorySummaryFixture("food"),
-        categoryFeature: "food",
-        createdAt: CREATED_AT,
-        updatedAt: UPDATED_AT,
-        unitMappings: [
-          {
-            id: UNIT_MAPPING_ID,
-            a: { value: 5, unit: "lb" },
-            b: { value: 4.5, unit: "dollar" },
-            source: "label",
-            createdAt: CREATED_AT,
-            updatedAt: UPDATED_AT,
-            sourceMetadata: {
-              type: "product",
-              productId: testShortcode("product", "PRD-TEST"),
-            },
-          },
-        ],
-      },
-      displayName: "Flour · Pantry",
+        },
+      ],
     });
-    expect(rawInventoryDetail.parse(result)).toEqual(result);
+    expect(rawInventoryDetail.shape.product.parse(result)).toEqual(result);
   });
 });

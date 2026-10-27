@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
-import { purchaseList } from "~/server/domains/purchase/repo/purchase";
+import { purchaseScaffold } from "~/server/domains/purchase/repo/purchase";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import {
   derivedMarkTickets,
@@ -124,9 +124,13 @@ describe("stored Purchase quality", () => {
         await loadDataQualities(ctx.db, "purchase", [order.entityId], "stored")
       ).get(order.entityId)!;
     const list = () =>
-      purchaseList(ctx.db, { dataGap: ["paperwork_mismatch"] }, [], {
-        pageIndex: 0,
-        pageSize: 20,
+      purchaseScaffold.read(ctx.db, {
+        filters: { dataGap: ["paperwork_mismatch"] },
+        sorts: [],
+        pagination: {
+          pageIndex: 0,
+          pageSize: 20,
+        },
       });
     const queue = async () => {
       const result = await readRecordWorkQueue(ctx.db, {

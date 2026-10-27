@@ -5,7 +5,7 @@ import { and, sql } from "drizzle-orm";
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { outer, quotedTable } from "~/server/db/helpers/related";
 import { purchase as table } from "~/server/db/schema";
-import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
+import { purchaseScaffold } from "~/server/domains/purchase/repo/purchase";
 import {
   awaitingPostingSql,
   purchasePostingStartSql,
@@ -46,7 +46,10 @@ const gapSource: WorkSource = {
         .from(table)
         .where(
           and(
-            buildPurchaseWhereClause(purchaseFiltersSchema.parse(filters)),
+            await purchaseScaffold.prepareWhere(
+              db,
+              purchaseFiltersSchema.parse(filters),
+            ),
             recordScope(scope, sql`${table.shortcode}`),
           ),
         ),
@@ -83,7 +86,10 @@ export const purchaseWorkSources = (): WorkSource[] =>
           .from(table)
           .where(
             and(
-              buildPurchaseWhereClause(purchaseFiltersSchema.parse(filters)),
+              await purchaseScaffold.prepareWhere(
+                db,
+                purchaseFiltersSchema.parse(filters),
+              ),
               recordScope(scope, sql`${table.shortcode}`),
             ),
           ),

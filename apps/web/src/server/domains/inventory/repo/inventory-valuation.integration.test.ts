@@ -5,14 +5,15 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
 import {
-  getInventoryEntryByShortcode,
-  inventoryentryList,
+  inventoryScaffold,
+  readInventory,
 } from "~/server/domains/inventory/repo/crud";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  listInventoryFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -56,9 +57,7 @@ describe("inventory valuation — stored and recomputed on change", () => {
     const { sku, entry } = await seed("Valuation Widget", 10, 2);
     await drainStoredDerived(ctx.db);
 
-    expect(
-      (await getInventoryEntryByShortcode(ctx.db, entry.id))?.valuation,
-    ).toBe(20);
+    expect((await readInventory(ctx.db, entry.id))?.valuation).toBe(20);
 
     // Bypass every repo write path: only the product row changes.
     await getDb(ctx.db)
@@ -66,17 +65,15 @@ describe("inventory valuation — stored and recomputed on change", () => {
       .set({ price: 30 })
       .where(eq(product.id, sku.entityId));
 
-    expect(
-      (await getInventoryEntryByShortcode(ctx.db, entry.id))?.valuation,
-    ).toBe(20);
+    expect((await readInventory(ctx.db, entry.id))?.valuation).toBe(20);
     // The price edit marked the entry; the drain republishes the record and list figure.
     await drainStoredDerived(ctx.db);
-    expect(
-      (await getInventoryEntryByShortcode(ctx.db, entry.id))?.valuation,
-    ).toBe(60);
-    const list = await inventoryentryList(ctx.db, {}, [], page);
+    expect((await readInventory(ctx.db, entry.id))?.valuation).toBe(60);
+    const list = await listInventoryFixture(ctx.db, {}, [], page);
     expect(list.data.find((row) => row.id === entry.id)?.valuation).toBe(60);
-    expect(list.sums!.valuation).toBeGreaterThanOrEqual(60);
+    expect(
+      (await inventoryScaffold.totals(ctx.db, {}))?.valuation,
+    ).toBeGreaterThanOrEqual(60);
   });
 
   it("sorts, filters and totals on the computed figure", async () => {
@@ -92,7 +89,7 @@ describe("inventory valuation — stored and recomputed on change", () => {
     const only = (rows: Array<{ id: string }>) =>
       rows.map((row) => row.id).filter((id) => ids.includes(id));
 
-    const byValue = await inventoryentryList(
+    const byValue = await listInventoryFixture(
       ctx.db,
       {},
       [{ orderBy: "valuation", direction: "desc" }],
@@ -104,7 +101,7 @@ describe("inventory valuation — stored and recomputed on change", () => {
       unpriced.entry.id,
     ]);
 
-    const valued = await inventoryentryList(
+    const valued = await listInventoryFixture(
       ctx.db,
       { valuationStatus: "valued" },
       [],
@@ -113,13 +110,16 @@ describe("inventory valuation — stored and recomputed on change", () => {
     expect(only(valued.data).sort()).toEqual(
       [cheap.entry.id, pricey.entry.id].sort(),
     );
-    const missing = await inventoryentryList(
+    const missing = await listInventoryFixture(
       ctx.db,
       { valuationStatus: ["priceable", "unpriceable"] },
       [],
       page,
     );
     expect(only(missing.data)).toEqual([unpriced.entry.id]);
-    expect(valued.sums!.valuation).toBeGreaterThanOrEqual(55);
+    expect(
+      (await inventoryScaffold.totals(ctx.db, { valuationStatus: "valued" }))
+        ?.valuation,
+    ).toBeGreaterThanOrEqual(55);
   });
 });

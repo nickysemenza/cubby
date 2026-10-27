@@ -22,16 +22,17 @@ import {
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
-  createProductIdentityFixture,
   createInventoryFixture,
   createLocationFixture,
-  makeLocationInput,
+  createProductIdentityFixture,
+  listProductsFixture,
   makeExpenseInput,
+  makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { listProductsRead, productList, updateProduct } from "./crud";
+import { productScaffold, updateProduct } from "./crud";
 import { loadProductOwnershipTimelines } from "./ownership";
 import {
   loadExactEffectivePrices,
@@ -117,20 +118,17 @@ describe("category-based service Products", () => {
         confidenceLostAt: null,
       });
 
-      const selected = await listProductsRead(
-        ctx.db,
-        { ids: [service.id] },
-        [],
-        { pageIndex: 0, pageSize: 1 },
-        "page",
-        undefined,
-        selectedListProjection("product", [
+      const selected = await productScaffold.read(ctx.db, {
+        filters: { ids: [service.id] },
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 1 },
+        projection: selectedListProjection("product", [
           "pricing",
           "onHandUnits",
           "stockStatusItems",
           "ledgerExpectedQuantityLabel",
         ]),
-      );
+      });
       expect(selected.data[0]).toMatchObject({
         pricing: {
           effectivePrice: null,
@@ -180,7 +178,7 @@ describe("category-based service Products", () => {
       expect(
         await loadProductPriceSum(ctx.db, eq(product.id, service.entityId)),
       ).toBe(0);
-      const priced = await productList(
+      const priced = await listProductsFixture(
         ctx.db,
         { ids: [service.id], pricePresenceFilter: "has" },
         [],
@@ -188,7 +186,7 @@ describe("category-based service Products", () => {
       );
       expect(priced.data).toEqual([]);
       // Scalar sorts have no GROUP BY; their service guard must aggregate too.
-      const sorted = await productList(
+      const sorted = await listProductsFixture(
         ctx.db,
         { ids: [service.id] },
         [
@@ -249,7 +247,7 @@ describe("category-based service Products", () => {
         kind: "live",
         decision: { outcome: { kind: "empty", reason: "not_applicable" } },
       });
-      const mixed = await productList(
+      const mixed = await listProductsFixture(
         ctx.db,
         { ids: [service.id, physical.id] },
         [{ orderBy: "cost", direction: "asc" }],
@@ -336,7 +334,7 @@ describe("category-based service Products", () => {
         kind: "failed",
         error: "Synthetic Cost refresh failure",
       });
-      const staleSort = await productList(
+      const staleSort = await listProductsFixture(
         ctx.db,
         { ids: [service.id, physical.id] },
         [{ orderBy: "cost", direction: "asc" }],
@@ -360,7 +358,7 @@ describe("category-based service Products", () => {
           },
         },
       });
-      const refreshedSort = await productList(
+      const refreshedSort = await listProductsFixture(
         ctx.db,
         { ids: [service.id, physical.id] },
         [{ orderBy: "cost", direction: "asc" }],
@@ -488,7 +486,7 @@ describe("category-based service Products", () => {
     });
     expect(restored.fields.cost.result).toEqual({ kind: "missing" });
     expect(restored.fields.cost.work).toEqual({ kind: "pending" });
-    const valued = await productList(
+    const valued = await listProductsFixture(
       ctx.db,
       { ids: [service.id], pricePresenceFilter: "has" },
       [],

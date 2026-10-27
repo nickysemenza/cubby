@@ -1,9 +1,7 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-// Registers the location scaffold with the facet registry.
-import "~/server/domains/location/repo/crud";
-import { listFacetCounter } from "~/server/generic/list/repo/list";
+import { locationScaffold } from "~/server/domains/location/repo/crud";
 import {
   createLocationFixture,
   makeLocationInput,
@@ -44,8 +42,7 @@ describe("list facet counts", () => {
 
   it("counts an enum facet under the other filters but not its own", async () => {
     const { kitchen } = await seed();
-    const counter = listFacetCounter("location");
-    const facet = await counter?.countBy(
+    const facet = await locationScaffold.countBy(
       ctx.db,
       { itemTypeFilter: ["shelf"], parentId: [kitchen.id] },
       "type",
@@ -65,7 +62,7 @@ describe("list facet counts", () => {
   // a room whose rows sit on its shelves as 0; the facet is omitted instead.
   it("omits a hierarchical reference facet rather than count direct children", async () => {
     const { kitchen } = await seed();
-    const facet = await listFacetCounter("location")?.countBy(
+    const facet = await locationScaffold.countBy(
       ctx.db,
       { itemTypeFilter: ["shelf"], parentId: [kitchen.id] },
       "parent",

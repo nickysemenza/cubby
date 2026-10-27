@@ -8,15 +8,10 @@ import type {
 import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import type {
   LedgerPartyCreateInput,
-  LedgerPartyFilters,
   LedgerPartyUpdateData,
 } from "@cubby/schemas/ledger-party";
-import {
-  type RawLedgerPartyOut,
-  rawLedgerPartyOut,
-} from "@cubby/schemas/ledger-party-raw-read";
+import { rawLedgerPartyOut } from "@cubby/schemas/ledger-party-raw-read";
 import { type MealFoodAmount } from "@cubby/schemas/meal";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -31,7 +26,6 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import {
   expenseAttribution,
   financialAccount,
@@ -49,16 +43,10 @@ import {
   type MutationReceipt,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
-import {
-  createEntityCrud,
-  createEntityRowFetcher,
-} from "~/server/entity-kernel/repo/repository";
+import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { listReadPlan } from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
   finalizeMerge,
   mergeNotes,
@@ -320,19 +308,9 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
   },
 } as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
-type LedgerPartyRow = typeof ledgerParty.$inferSelect;
-
-const ledgerPartyRead = listReadPlan<LedgerPartyRow>("ledgerParty");
-
-const hydrate = async (
-  db: Database | DrizzleTransaction,
-  rows: LedgerPartyRow[],
-): Promise<RawLedgerPartyOut[]> =>
-  (await ledgerPartyRead.read(db, rows, { kind: "full" })).map((row) =>
-    rawLedgerPartyOut.parse(row),
-  );
-
-const scaffold = listScaffold("ledgerParty", ledgerParty);
+export const ledgerPartyScaffold = listScaffold("ledgerParty", ledgerParty, {
+  read: { optionKind: ledgerParty.kind },
+});
 
 /**
  * Locks the row, then refuses the kind transitions the stored state forbids.
@@ -455,45 +433,15 @@ const assertKindTransition = async (
 const reader = createEntityCrud({
   entity: "ledgerParty",
   table: ledgerParty,
-  fetchById: createEntityRowFetcher(ledgerParty),
-  fromDB: async (db, row: LedgerPartyRow) => (await hydrate(db, [row]))[0]!,
+  scaffold: ledgerPartyScaffold,
+  output: rawLedgerPartyOut,
   prepare: assertKindTransition,
   toUpdate: (data: LedgerPartyUpdateData) => buildPartialUpdateValues(data),
   auditUpdateFields: [...entityFieldModels.ledgerParty.audit],
 });
 
-export const getLedgerPartyByShortcode = reader.getByShortcode;
-
-/** The complete WHERE for this entity's list; `search` and `kind` are declared. */
-export const buildLedgerPartyWhere = (filters: LedgerPartyFilters) =>
-  scaffold.where(filters);
-
-export const listLedgerPartiesRead = (
-  db: Database,
-  filters: LedgerPartyFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  scaffold.read(
-    db,
-    {
-      filters,
-      sorts: sorts.length ? sorts : [{ orderBy: "name", direction: "asc" }],
-      pagination,
-      projection,
-      readIntent,
-    },
-    {
-      where: buildLedgerPartyWhere(filters),
-    },
-  );
-
-export const listLedgerParties = completeListReader(
-  rawLedgerPartyOut,
-  listLedgerPartiesRead,
-);
+/** One live Ledger Party by public code, or null. */
+export const readLedgerParty = reader.getByShortcode;
 
 export const createLedgerParty = defineMutationWriter({
   entity: "ledgerParty",

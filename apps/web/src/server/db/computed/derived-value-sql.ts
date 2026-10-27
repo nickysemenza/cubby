@@ -11,10 +11,6 @@ export const storedSortNumberSql = (id: AnyColumn, key: string) =>
     number | null
   >`(SELECT "sortNumber" FROM "DerivedValue" WHERE "entityId" = ${id} AND key = ${key})`;
 
-/** A stored value's JSON; SQL NULL until its first publication. */
-export const storedValueSql = (id: AnyColumn, key: string) =>
-  sql<unknown>`(SELECT value FROM "DerivedValue" WHERE "entityId" = ${id} AND key = ${key})`;
-
 /**
  * A stored value's JSON, or `fallback` until its first publication: a stored
  * JSON null stays null, while a missing row reads the fallback.

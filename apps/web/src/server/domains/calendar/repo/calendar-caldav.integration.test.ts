@@ -10,7 +10,7 @@ import type {
   CalDavResource,
   CalendarProjection,
 } from "~/server/domains/calendar/repo/caldav-types";
-import { getMealByID } from "~/server/domains/meal/repo/crud";
+import { readMealById } from "~/server/domains/meal/repo/crud";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { updateTask } from "~/server/domains/task/repo/crud";
 
@@ -113,7 +113,7 @@ describe("CalDAV canonical mutation seam", () => {
       where: (row, { eq }) => eq(row.shortcode, meal.id),
     });
     if (!mealRow) throw new Error("meal row missing");
-    expect((await getMealByID(ctx.db, mealRow.id))?.name).toBeNull();
+    expect((await readMealById(ctx.db, mealRow.id))?.name).toBeNull();
 
     const echoed = (await loadCalDavProjection(ctx.db)).projections.find(
       (value) => value.entity === "meal" && value.id === meal.id,

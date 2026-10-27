@@ -6,13 +6,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   updateProject,
-  getProjectByID,
+  readProjectById,
 } from "~/server/domains/project/repo/crud";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { getTaskByShortcode, updateTask } from "./crud";
+import { readTask, updateTask } from "./crud";
 import { resolveDraftTaskFields } from "./task-project-inheritance";
 
 describe("task inheritance", () => {
@@ -57,7 +57,7 @@ describe("task inheritance", () => {
       { projectId: null, projectMode: "explicit", trade: "electrical" },
       ctx.actor,
     );
-    expect(await getTaskByShortcode(ctx.db, child.output.id)).toMatchObject({
+    expect(await readTask(ctx.db, child.output.id)).toMatchObject({
       projectId: null,
       fieldResolutions: { projectId: { mode: "none" } },
     });
@@ -74,7 +74,7 @@ describe("task inheritance", () => {
       { projectId: second.output.id },
       ctx.actor,
     );
-    expect(await getTaskByShortcode(ctx.db, child.output.id)).toMatchObject({
+    expect(await readTask(ctx.db, child.output.id)).toMatchObject({
       projectId: second.output.id,
       trade: "electrical",
     });
@@ -85,7 +85,7 @@ describe("task inheritance", () => {
       { parentTaskId: null },
       ctx.actor,
     );
-    expect(await getTaskByShortcode(ctx.db, child.output.id)).toMatchObject({
+    expect(await readTask(ctx.db, child.output.id)).toMatchObject({
       parentTaskId: null,
       projectId: second.output.id,
       trade: "electrical",
@@ -130,7 +130,7 @@ describe("task inheritance", () => {
       { projectId: first.output.id },
       ctx.actor,
     );
-    expect(await getTaskByShortcode(ctx.db, child.output.id)).toMatchObject({
+    expect(await readTask(ctx.db, child.output.id)).toMatchObject({
       trade: "electrical",
       fieldResolutions: { projectId: { matchesFallback: true } },
     });
@@ -142,7 +142,7 @@ describe("task inheritance", () => {
         ctx.actor,
       ),
     ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
-    expect(await getTaskByShortcode(ctx.db, child.output.id)).toMatchObject({
+    expect(await readTask(ctx.db, child.output.id)).toMatchObject({
       projectId: first.output.id,
     });
     const none = await resolveDraftTaskFields(
@@ -164,7 +164,7 @@ describe("task inheritance", () => {
       { subjectProductId: null, subjectProductMode: "explicit" },
       ctx.actor,
     );
-    expect(await getTaskByShortcode(ctx.db, child.output.id)).toMatchObject({
+    expect(await readTask(ctx.db, child.output.id)).toMatchObject({
       subjectProductId: null,
       fieldResolutions: {
         subjectProductId: { mode: "none", matchesFallback: false },
@@ -187,7 +187,7 @@ describe("task inheritance", () => {
       { parentTaskId: secondParent.output.id, projectMode: "inherit" },
       ctx.actor,
     );
-    expect(await getTaskByShortcode(ctx.db, child.output.id)).toMatchObject({
+    expect(await readTask(ctx.db, child.output.id)).toMatchObject({
       projectId: second.output.id,
       subjectProductId: null,
       trade: "landscaping",
@@ -262,7 +262,7 @@ describe("task inheritance", () => {
       { defaultTrade: "plumbing", locations: ["Different site"] },
       ctx.actor,
     );
-    expect(await getProjectByID(ctx.db, child.entityId)).toMatchObject({
+    expect(await readProjectById(ctx.db, child.entityId)).toMatchObject({
       locations: ["Test site"],
       defaultTrade: "building",
       fieldResolutions: {
@@ -270,10 +270,7 @@ describe("task inheritance", () => {
       },
     });
     expect(
-      await getTaskByShortcode(
-        ctx.db,
-        parseShortcodeFor("task", task.output.id),
-      ),
+      await readTask(ctx.db, parseShortcodeFor("task", task.output.id)),
     ).toMatchObject({ trade: "building" });
   });
 });

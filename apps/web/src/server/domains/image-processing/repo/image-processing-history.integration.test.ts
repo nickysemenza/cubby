@@ -20,7 +20,7 @@ import {
 } from "~/server/db/schema";
 import {
   createDevice,
-  getDeviceByID,
+  readDeviceById,
   updateDevice,
 } from "~/server/domains/device/repo/device";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
@@ -151,7 +151,7 @@ describe("image execution history conservation", () => {
       osVersion: "26",
       automaticWork: true,
     });
-    expect((await getDeviceByID(ctx.db, created.entityId)).name).toBe(
+    expect((await readDeviceById(ctx.db, created.entityId)).name).toBe(
       "Kitchen phone",
     );
 
@@ -350,7 +350,7 @@ describe("image execution history conservation", () => {
     // attempt are otherwise perfectly leasable — the authoritative re-check
     // `dispatch()`'s cached socket attachment cannot substitute for.
     expect(await assignImageProcessingExecutor(ctx.db, assignment)).toBe(false);
-    const created = await getDeviceByID(ctx.db, deviceEntityId);
+    const created = await readDeviceById(ctx.db, deviceEntityId);
     await updateDevice(ctx.db, created.id, { automaticWork: true }, TEST_ACTOR);
     expect(await assignImageProcessingExecutor(ctx.db, assignment)).toBe(true);
   });

@@ -8,11 +8,7 @@ import {
   validateListReadRows,
 } from "~/server/generic/list/repo/list-read-schema";
 
-import {
-  loadListGroup,
-  listReadPlan,
-  selectedListProjection,
-} from "./list-projection";
+import { listReadPlan, selectedListProjection } from "./list-projection";
 
 describe("list projection group execution", () => {
   it("starts admitted ID batches before rows arrive and reuses transitive loads only within that page", async () => {
@@ -192,94 +188,33 @@ describe("list projection group execution", () => {
         ],
       }),
     ).toThrow("Multiple list binding writers");
-    await expect(
-      plan.read(db, [], {
-        kind: "selected",
-        fields: ["unknownField"],
-      }),
-    ).rejects.toThrow("Unknown list field");
+    await expect(plan.read(db, [], ["unknownField"])).rejects.toThrow(
+      "Unknown list field",
+    );
   });
-  // Selected reads must load their owning group, reject misspelled demand
-  // even for empty pages, and never let schema defaults hide unloaded fields.
-  it("loads selected field dependencies without media and rejects absent defaulted fields", async () => {
+  // Selected reads must reject misspelled demand even for empty pages, and
+  // never let schema defaults hide unloaded fields.
+  it("rejects absent defaulted fields", () => {
     const projection = selectedListProjection("product", ["unitPrice"]);
-    const executed: string[] = [];
-    await loadListGroup(projection, "derived", async () => {
-      executed.push("derived");
-    });
-    await loadListGroup(projection, "media", async () => {
-      throw new Error("Unrequested media must not load");
-    });
-    expect(executed).toEqual(["derived"]);
     expect(() =>
-      selectListReadRows("product", [{ id: "PRD-4K7M" }], projection.fields),
+      selectListReadRows("product", [{ id: "PRD-4K7M" }], projection),
     ).toThrow("Requested record field was not loaded: unitPrice");
     expect(
       selectListReadRows(
         "product",
         [{ id: "PRD-4K7M", unitPrice: null }],
-        projection.fields,
+        projection,
       ),
     ).toEqual([{ id: "PRD-4K7M", unitPrice: null }]);
     const loaded = { id: "PRD-4K7M", unitPrice: null, unitMappings: [] };
-    expect(
-      validateListReadRows("product", [loaded], projection.fields),
-    ).toEqual([loaded]);
-    expect(selectListReadRows("product", [loaded], projection.fields)).toEqual([
+    expect(validateListReadRows("product", [loaded], projection)).toEqual([
+      loaded,
+    ]);
+    expect(selectListReadRows("product", [loaded], projection)).toEqual([
       { id: "PRD-4K7M", unitPrice: null },
     ]);
     expect(() => selectedListProjection("product", ["unknownField"])).toThrow(
       "Unknown list field",
     );
-  });
-
-  // A selected consumer must include transitive dependencies once, before its
-  // own group. A cycle must fail rather than recurse indefinitely.
-  // Shared dependencies must execute once, and omitted groups must perform no
-  // work: either failure adds database reads to selected list requests.
-  it("loads a shared relation dependency once without running omitted quality work", async () => {
-    const projection = {
-      kind: "selected" as const,
-      fields: ["consumerField"],
-    };
-    const executed: string[] = [];
-    const [relations, quality] = await Promise.all([
-      loadListGroup(
-        projection,
-        ["relations", "derived"],
-        async () => {
-          executed.push("relations");
-          return new Map([
-            ["synthetic", { name: "Synthetic relation", count: 2 }],
-          ]);
-        },
-        ["consumerField"],
-      ),
-      loadListGroup(projection, "quality", async () => {
-        executed.push("quality");
-        throw new Error("Unrequested quality must not execute");
-      }),
-    ]);
-
-    expect(relations?.get("synthetic")).toEqual({
-      name: "Synthetic relation",
-      count: 2,
-    });
-    expect(quality).toBeUndefined();
-    expect(executed).toEqual(["relations"]);
-  });
-
-  it("executes no enrichment for base and all registered loaders for full", async () => {
-    let executions = 0;
-    const load = async () => ++executions;
-    expect(
-      await loadListGroup({ kind: "base" }, "relations", load),
-    ).toBeUndefined();
-    expect(
-      await loadListGroup({ kind: "full" }, ["relations", "derived"], load, [
-        "consumerField",
-      ]),
-    ).toBe(1);
-    expect(executions).toBe(1);
   });
 });

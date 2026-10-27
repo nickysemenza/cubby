@@ -37,7 +37,7 @@ import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import {
   getInventoryByLocationIds,
-  getInventoryEntryByShortcode,
+  readInventory,
 } from "~/server/domains/inventory/repo/crud";
 import {
   getLocationCoverImageUrlsByLocationIds,
@@ -46,7 +46,11 @@ import {
 import { buildLocationTree } from "~/server/domains/location/repo/tree";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { createVendor } from "~/server/domains/vendor/repo/vendor";
-import { createWish, updateWish, wishList } from "~/server/domains/wish/repo";
+import {
+  createWish,
+  updateWish,
+  wishScaffold,
+} from "~/server/domains/wish/repo";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -563,10 +567,7 @@ describe("entity display image resolver", () => {
         inventoryRead.find((row) => row.id === entry.id)?.product
           .displayImages[0]?.id,
       ).toBe(logo.shortcode);
-      const inventoryDetail = await getInventoryEntryByShortcode(
-        ctx.db,
-        entry.id,
-      );
+      const inventoryDetail = await readInventory(ctx.db, entry.id);
       expect(inventoryDetail?.product.displayImages[0]?.id).toBe(
         logo.shortcode,
       );
@@ -1248,12 +1249,16 @@ describe("entity display image resolver", () => {
         expectedDisplayImage(imgB),
       ]);
 
-      // Regression: `wishList` handed hydrated rows (shortcode `id`) to the
+      // Regression: the wish list handed hydrated rows (shortcode `id`) to the
       // uuid-keyed resolver, so /wishes failed with "invalid input syntax for
       // type uuid" whenever any wish existed.
-      const listed = await wishList(ctx.db, {}, [], {
-        pageIndex: 0,
-        pageSize: 10,
+      const listed = await wishScaffold.read(ctx.db, {
+        filters: {},
+        sorts: [],
+        pagination: {
+          pageIndex: 0,
+          pageSize: 10,
+        },
       });
       expect(
         listed.data.find((row) => row.id === wish.output.id)?.displayImages,

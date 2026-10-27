@@ -3,7 +3,7 @@ import { and, getTableName, sql } from "drizzle-orm";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { product as table } from "~/server/db/schema";
-import { buildProductWhere } from "~/server/domains/product/repo/crud";
+import { productScaffold } from "~/server/domains/product/repo/crud";
 import { productWorkReadContext } from "~/server/domains/product/repo/work-read-context";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import {
@@ -37,10 +37,9 @@ const gapSource: WorkSource = {
         .from(table)
         .where(
           and(
-            await buildProductWhere(
+            await productScaffold.prepareWhere(
               db,
               productFiltersSchema.parse(filters),
-              read.context,
             ),
             recordScope(scope, sql`${table.shortcode}`),
           ),
@@ -67,10 +66,9 @@ export const productWorkSources = (): WorkSource[] => [
         .from(table)
         .where(
           and(
-            await buildProductWhere(
+            await productScaffold.prepareWhere(
               db,
               productFiltersSchema.parse(filters),
-              read.context,
             ),
             recordScope(scope, sql`${table.shortcode}`),
           ),

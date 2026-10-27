@@ -1,10 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   FinancialTransactionCreateInput,
-  FinancialTransactionFilters,
   FinancialTransactionSourceOptionsOut,
   FinancialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
@@ -14,22 +12,14 @@ import {
   financialTransactionSettlementViolation,
 } from "@cubby/schemas/financial-transaction";
 import { descriptorProcessors } from "@cubby/schemas/financial-transaction-fields";
-import {
-  rawFinancialTransactionOut,
-  type RawFinancialTransactionOut,
-} from "@cubby/schemas/financial-transaction-raw-read";
+import { rawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
 import {
   type FinancialTransactionId,
   type FinancialTransactionShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import {
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
-import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 import { cents } from "@cubby/shared";
-import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { capitalize, sortBy, uniq } from "es-toolkit";
 import { z } from "zod";
 
@@ -39,10 +29,8 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
   getDb,
-  type ListReadIntent,
   notDeleted,
   touchUpdatedAt,
-  unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
@@ -68,6 +56,7 @@ import {
   resolveAllocationInputs,
   writeAllocationSet,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
+import { financialTransactionSearch } from "~/server/domains/financial-transaction/repo/search-read-financial-transaction";
 import {
   findSettlementConflicts,
   refuseSettlementConflicts,
@@ -77,44 +66,30 @@ import {
   financialTransactionEvidenceFieldResolutionsSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
-import {
-  enrichFinancialTransactionsWithVendorInference,
-  enrichFinancialTransactionVendorRead,
-} from "~/server/domains/vendor/repo/merchant-vendor-inference";
+import { enrichFinancialTransactionVendorRead } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import {
   financialAllocationItems,
+  possibleVendorLabel,
   sourceRefsLabel,
 } from "~/server/entity-kernel/repo/detail-display-labels";
 import {
-  type MutationReceipt,
-  defineMutationWriter,
-} from "~/server/entity-kernel/repo/repository";
-import {
   asActor,
+  createEntityReader,
+  defineMutationWriter,
   defineRepository,
-  listOn,
-  onDb,
+  type MutationReceipt,
 } from "~/server/entity-kernel/repo/repository";
-import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   assertSettlementRefsAvailable,
   replaceSettlementRefs,
-  type SettlementRef,
   settlementRefsFor,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listGroupFields,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -126,300 +101,6 @@ const accountName = sql<string | null>`(
   WHERE fa.id = "FinancialTransaction"."accountId" AND fa."deletedAt" IS NULL
 )`;
 
-const columns = {
-  id: financialTransaction.id,
-  shortcode: financialTransaction.shortcode,
-  accountId: financialTransaction.accountId,
-  ledgerTransferShortcode: sql<
-    string | null
-  >`(SELECT shortcode FROM "LedgerTransfer" WHERE id = "FinancialTransaction"."ledgerTransferId")`,
-  kind: financialTransaction.kind,
-  status: financialTransaction.status,
-  amount: financialTransaction.amount,
-  transactionDate: financialTransaction.transactionDate,
-  postedDate: financialTransaction.postedDate,
-  merchant: financialTransaction.merchant,
-  rawDescription: financialTransaction.rawDescription,
-  spendingCategoryShortcode: sql<
-    string | null
-  >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND "deletedAt" IS NULL)`,
-  spendingCategoryName: sql<
-    string | null
-  >`(SELECT name FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND "deletedAt" IS NULL)`,
-  itemizationExpectation: financialTransaction.itemizationExpectation,
-  coverage: financialTransactionCoverageSql("FinancialTransaction"),
-  fieldResolutions: financialTransactionEvidenceFieldResolutionsSql(
-    "FinancialTransaction",
-  ),
-  sourceCategory: financialTransaction.sourceCategory,
-  notes: financialTransaction.notes,
-  createdAt: financialTransaction.createdAt,
-  updatedAt: financialTransaction.updatedAt,
-  accountShortcode: sql<string>`(SELECT fa.shortcode FROM "FinancialAccount" fa WHERE fa.id = "FinancialTransaction"."accountId")`,
-  // Ordered by shortcode so the field is stable across reads rather than
-  // following whatever order the planner happens to produce.
-  allocations: sql<{ purchaseId: string; amount: number }[]>`COALESCE((
-    SELECT jsonb_agg(jsonb_build_object('purchaseId', ap.shortcode, 'amount', aa."amount") ORDER BY ap.shortcode)
-    FROM "FinancialTransactionAllocation" aa
-    JOIN "Purchase" ap ON ap."id" = aa."purchaseId"
-    WHERE aa."transactionId" = "FinancialTransaction"."id" AND aa."deletedAt" IS NULL
-  ), '[]'::jsonb)`,
-  accountName,
-  // A raw id reference: Drizzle would strip a column object's prefix.
-  itemization: financialTransactionItemizationSql(
-    '"FinancialTransaction"."id"',
-  ),
-} as const;
-
-const selectTransactions = (db: Database | DrizzleTransaction) =>
-  unwrapDb(db).select(columns).from(financialTransaction);
-type FinancialTransactionRow = Awaited<
-  ReturnType<typeof selectTransactions>
->[number];
-
-const hydrate = async (
-  db: Database | DrizzleTransaction,
-  rows: FinancialTransactionRow[],
-): Promise<RawFinancialTransactionOut[]> => {
-  const ids = rows.map((row) => row.id);
-  const [dataQualities, sourceRefs, categorySummaries] = await Promise.all([
-    loadDataQualities(db, "financialTransaction", ids),
-    settlementRefsFor(db, ids),
-    loadTransactionSpendingCategorySummaries(db, ids),
-  ]);
-  return enrichFinancialTransactionsWithVendorInference(
-    db,
-    rows.map((row) =>
-      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-      toOut(
-        row,
-        dataQualities.get(row.id)!,
-        sourceRefs.get(row.id) ?? [],
-        categorySummaries.get(row.id) ?? emptySpendingCategorySummary(),
-      ),
-    ),
-  );
-};
-
-const toOut = (
-  row: FinancialTransactionRow,
-  dataQuality: DataQuality,
-  sourceRefs: SettlementRef[],
-  spendingCategorySummary: SpendingCategorySummary,
-): RawFinancialTransactionOut => {
-  const allocations = (row.allocations ?? []).map((allocation) => ({
-    purchaseId: parseShortcodeFor("purchase", allocation.purchaseId),
-    amount: Number(allocation.amount),
-  }));
-  return rawFinancialTransactionOut.parse({
-    id: parseShortcodeFor("financialTransaction", row.shortcode),
-    accountId: parseShortcodeFor("financialAccount", row.accountShortcode),
-    // DERIVED, not stored: the sole Purchase this transaction settled, or null
-    // when it settled none or several. Kept in the output because 3,445 of
-    // 3,447 transactions have exactly one allocation and every consumer of that
-    // shape reads better for it.
-    purchaseId:
-      allocations.length === 1 && allocations[0]
-        ? allocations[0].purchaseId
-        : null,
-    kind: row.kind,
-    status: row.status,
-    amount: Number(row.amount),
-    transactionDate: row.transactionDate,
-    postedDate: row.postedDate,
-    merchant: row.merchant,
-    rawDescription: row.rawDescription,
-    spendingCategoryId: row.spendingCategoryShortcode
-      ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
-      : null,
-    spendingCategoryName: row.spendingCategoryName,
-    fieldResolutions: row.fieldResolutions,
-    spendingCategorySummary,
-    itemizationExpectation: row.itemizationExpectation,
-    bookingCoverage: row.coverage.booking,
-    documentCoverage: row.coverage.document,
-    itemizationCoverage: row.coverage.itemization,
-    productsCoverage: row.coverage.products,
-    coverage: row.coverage,
-    sourceCategory: row.sourceCategory,
-    sourceRefs,
-    sourceRefsLabel: sourceRefsLabel(sourceRefs),
-    notes: row.notes,
-    allocations,
-    allocationItems: financialAllocationItems(allocations),
-    ledgerTransferId: row.ledgerTransferShortcode
-      ? parseShortcodeFor("ledgerTransfer", row.ledgerTransferShortcode)
-      : null,
-    accountName: row.accountName,
-    itemization: row.itemization,
-    // `merchant`/`rawDescription` are both nullable statement fields; `kind`
-    // is the last resort so an imported row with neither still gets a
-    // non-blank identity.
-    displayName:
-      row.merchant?.trim() ||
-      row.rawDescription?.trim() ||
-      capitalize(row.kind.replaceAll("_", " ")),
-    dataQuality,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  });
-};
-
-const selectTransactionsRead = (
-  db: Database | DrizzleTransaction,
-  projection: ListProjection,
-) => {
-  const {
-    ledgerTransferShortcode,
-    accountShortcode,
-    allocations,
-    accountName,
-    spendingCategoryName,
-    fieldResolutions,
-    itemization,
-    ...core
-  } = columns;
-  return unwrapDb(db)
-    .select({
-      ...core,
-      ...listGroupFields(projection, "relations", () => ({
-        accountShortcode,
-        accountName,
-        spendingCategoryName,
-      })),
-      ...listGroupFields(projection, "derived", () => ({ fieldResolutions })),
-      ...listGroupFields(projection, ["relations", "derived"], () => ({
-        ledgerTransferShortcode,
-        allocations,
-      })),
-      ...listGroupFields(projection, "derived", () => ({ itemization })),
-    })
-    .from(financialTransaction);
-};
-// Partial bindings retain field validators; full reads retain settlement refinements.
-const transactionFields = z.object(rawFinancialTransactionOut.shape);
-const transactionRead = (
-  db: Database,
-): ListReadOptions<
-  Awaited<ReturnType<typeof selectTransactionsRead>>[number]
-> => ({
-  bindings: (bind) => {
-    const refs = bind.batch(({ rows }) =>
-      settlementRefsFor(
-        db,
-        rows.map((row) => row.id),
-      ),
-    );
-    const categories = bind.batch(({ rows }) =>
-      loadTransactionSpendingCategorySummaries(
-        db,
-        rows.map((row) => row.id),
-      ),
-    );
-    const inferences = bind.batch(async ({ rows }) => {
-      const enriched = await enrichFinancialTransactionVendorRead(
-        db,
-        rows.map((row) => ({
-          id: parseShortcodeFor("financialTransaction", row.shortcode),
-          kind: financialTransactionKind.parse(row.kind),
-          status: rawFinancialTransactionOut.shape.status.parse(row.status),
-          amount: row.amount,
-          merchant: row.merchant,
-          allocations: row.allocations ?? [],
-          ledgerTransferId: row.ledgerTransferShortcode ?? null,
-        })),
-      );
-      return new Map(
-        rows.map((row, index) => [row.id, enriched[index]?.vendorInference]),
-      );
-    });
-    return [
-      bind(transactionFields.pick({ displayName: true }), (row) => ({
-        displayName:
-          row.merchant?.trim() ||
-          row.rawDescription?.trim() ||
-          capitalize(row.kind.replaceAll("_", " ")),
-      })),
-      bind(
-        transactionFields.pick({
-          bookingCoverage: true,
-          documentCoverage: true,
-          itemizationCoverage: true,
-          productsCoverage: true,
-        }),
-        (row) => ({
-          bookingCoverage: row.coverage.booking,
-          documentCoverage: row.coverage.document,
-          itemizationCoverage: row.coverage.itemization,
-          productsCoverage: row.coverage.products,
-        }),
-      ),
-      bind(transactionFields.pick({ spendingCategoryId: true }), (row) => ({
-        spendingCategoryId: row.spendingCategoryShortcode
-          ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
-          : null,
-      })),
-      bind(transactionFields.pick({ accountId: true }), (row) => {
-        if (!row.accountShortcode)
-          throw new Error("Financial transaction account was not loaded");
-        return {
-          accountId: parseShortcodeFor(
-            "financialAccount",
-            row.accountShortcode,
-          ),
-        };
-      }),
-      refs.fields(
-        transactionFields.pick({ sourceRefs: true }),
-        (row, loaded) => ({ sourceRefs: loaded.get(row.id) ?? [] }),
-      ),
-      bind(
-        transactionFields.pick({
-          allocations: true,
-          purchaseId: true,
-          ledgerTransferId: true,
-        }),
-        (row) => {
-          if (!row.allocations)
-            throw new Error(
-              "Financial transaction allocations were not loaded",
-            );
-          const allocations = row.allocations.map((value) => ({
-            purchaseId: parseShortcodeFor("purchase", value.purchaseId),
-            amount: Number(value.amount),
-          }));
-          return {
-            allocations,
-            purchaseId:
-              allocations.length === 1 ? allocations[0]!.purchaseId : null,
-            ledgerTransferId: row.ledgerTransferShortcode
-              ? parseShortcodeFor("ledgerTransfer", row.ledgerTransferShortcode)
-              : null,
-          };
-        },
-      ),
-      categories.fields(
-        transactionFields.pick({ spendingCategorySummary: true }),
-        (row, loaded) => ({
-          spendingCategorySummary:
-            loaded.get(row.id) ?? emptySpendingCategorySummary(),
-        }),
-      ),
-      inferences.fields(
-        transactionFields.pick({ vendorInference: true }),
-        (row, loaded) => {
-          const vendorInference = loaded.get(row.id);
-          if (vendorInference === undefined)
-            throw new Error(
-              "Financial transaction vendor inference was not loaded",
-            );
-          return { vendorInference };
-        },
-      ),
-    ];
-  },
-});
-
 // Mirrors `parseBankDescriptor`: the same POSIX patterns, first match wins.
 const descriptorProcessorSql = sql`CASE ${sql.join(
   descriptorProcessors.map(
@@ -429,7 +110,10 @@ const descriptorProcessorSql = sql`CASE ${sql.join(
   sql` `,
 )} END`;
 
-const financialTransactionScaffold = listScaffold(
+// Partial bindings retain field validators; full reads retain settlement refinements.
+const transactionFields = z.object(rawFinancialTransactionOut.shape);
+
+export const financialTransactionScaffold = listScaffold(
   "financialTransaction",
   financialTransaction,
   {
@@ -445,85 +129,203 @@ const financialTransactionScaffold = listScaffold(
       allocationIntegrity: sql`CASE WHEN ${allocationIntegrityDefectSql(quotedTable(financialTransaction))} THEN ${financialTransactionAllocationIntegrity.enum.defect}::text END`,
       descriptorProcessor: descriptorProcessorSql,
     },
+    read: {
+      title: sql`COALESCE(${financialTransaction.merchant}::text, ${financialTransaction.rawDescription}::text, initcap(${financialTransaction.kind}::text))`,
+      search: financialTransactionSearch,
+      // Keys outside the read schema are helper columns the bindings read.
+      columns: {
+        spendingCategoryName: sql<
+          string | null
+        >`(SELECT name FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND "deletedAt" IS NULL)`,
+        fieldResolutions: financialTransactionEvidenceFieldResolutionsSql(
+          "FinancialTransaction",
+        ),
+        accountName,
+        coverageSummary: financialTransactionCoverageSql(
+          "FinancialTransaction",
+        ),
+        ledgerTransferShortcode: sql<
+          string | null
+        >`(SELECT shortcode FROM "LedgerTransfer" WHERE id = "FinancialTransaction"."ledgerTransferId")`,
+        spendingCategoryShortcode: sql<
+          string | null
+        >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND "deletedAt" IS NULL)`,
+        accountShortcode: sql<string>`(SELECT fa.shortcode FROM "FinancialAccount" fa WHERE fa.id = "FinancialTransaction"."accountId")`,
+        // Ordered by shortcode so the field is stable across reads rather than
+        // following whatever order the planner happens to produce.
+        allocationRows: sql<{ purchaseId: string; amount: number }[]>`COALESCE((
+          SELECT jsonb_agg(jsonb_build_object('purchaseId', ap.shortcode, 'amount', aa."amount") ORDER BY ap.shortcode)
+          FROM "FinancialTransactionAllocation" aa
+          JOIN "Purchase" ap ON ap."id" = aa."purchaseId"
+          WHERE aa."transactionId" = "FinancialTransaction"."id" AND aa."deletedAt" IS NULL
+        ), '[]'::jsonb)`,
+      },
+      bindings: (bind) => {
+        const helper = z.object({
+          coverageSummary: rawFinancialTransactionOut.shape.coverage,
+          ledgerTransferShortcode: z.string().nullable(),
+          spendingCategoryShortcode: z.string().nullable(),
+          accountShortcode: z.string(),
+          allocationRows: z.array(
+            z.object({ purchaseId: z.string(), amount: z.coerce.number() }),
+          ),
+        });
+        const refs = bind.batch(({ db, rows }) =>
+          settlementRefsFor(
+            db,
+            rows.map((row) => row.id),
+          ),
+        );
+        const categories = bind.batch(({ db, rows }) =>
+          loadTransactionSpendingCategorySummaries(
+            db,
+            rows.map((row) => row.id),
+          ),
+        );
+        const inferences = bind.batch(async ({ db, rows }) => {
+          const enriched = await enrichFinancialTransactionVendorRead(
+            db,
+            rows.map((row) => {
+              const values = helper.parse(row);
+              return {
+                id: parseShortcodeFor("financialTransaction", row.shortcode),
+                kind: financialTransactionKind.parse(row.kind),
+                status: rawFinancialTransactionOut.shape.status.parse(
+                  row.status,
+                ),
+                amount: row.amount,
+                merchant: row.merchant,
+                allocations: values.allocationRows,
+                ledgerTransferId: values.ledgerTransferShortcode,
+              };
+            }),
+          );
+          return new Map(
+            rows.map((row, index) => [
+              row.id,
+              enriched[index]?.vendorInference,
+            ]),
+          );
+        });
+        return [
+          bind(transactionFields.pick({ displayName: true }), (row) => ({
+            // `merchant`/`rawDescription` are both nullable statement fields;
+            // `kind` is the last resort so an imported row with neither still
+            // gets a non-blank identity.
+            displayName:
+              row.merchant?.trim() ||
+              row.rawDescription?.trim() ||
+              capitalize(row.kind.replaceAll("_", " ")),
+          })),
+          bind(
+            transactionFields.pick({
+              coverage: true,
+              bookingCoverage: true,
+              documentCoverage: true,
+              itemizationCoverage: true,
+              productsCoverage: true,
+            }),
+            (row) => {
+              const coverage = helper.parse(row).coverageSummary;
+              return {
+                coverage,
+                bookingCoverage: coverage.booking,
+                documentCoverage: coverage.document,
+                itemizationCoverage: coverage.itemization,
+                productsCoverage: coverage.products,
+              };
+            },
+          ),
+          bind(transactionFields.pick({ spendingCategoryId: true }), (row) => {
+            const code = helper.parse(row).spendingCategoryShortcode;
+            return {
+              spendingCategoryId: code
+                ? parseShortcodeFor("spendingCategory", code)
+                : null,
+            };
+          }),
+          bind(transactionFields.pick({ accountId: true }), (row) => ({
+            accountId: parseShortcodeFor(
+              "financialAccount",
+              helper.parse(row).accountShortcode,
+            ),
+          })),
+          refs.fields(
+            transactionFields.pick({ sourceRefs: true, sourceRefsLabel: true }),
+            (row, loaded) => {
+              const sourceRefs = loaded.get(row.id) ?? [];
+              return {
+                sourceRefs,
+                sourceRefsLabel: sourceRefsLabel(sourceRefs),
+              };
+            },
+          ),
+          bind(
+            transactionFields.pick({
+              allocations: true,
+              allocationItems: true,
+              purchaseId: true,
+              ledgerTransferId: true,
+            }),
+            (row) => {
+              const values = helper.parse(row);
+              const allocations = values.allocationRows.map((value) => ({
+                purchaseId: parseShortcodeFor("purchase", value.purchaseId),
+                amount: value.amount,
+              }));
+              return {
+                allocations,
+                allocationItems: financialAllocationItems(allocations),
+                // DERIVED, not stored: the sole Purchase this transaction
+                // settled, or null when it settled none or several.
+                purchaseId:
+                  allocations.length === 1 ? allocations[0]!.purchaseId : null,
+                ledgerTransferId: values.ledgerTransferShortcode
+                  ? parseShortcodeFor(
+                      "ledgerTransfer",
+                      values.ledgerTransferShortcode,
+                    )
+                  : null,
+              };
+            },
+          ),
+          categories.fields(
+            transactionFields.pick({ spendingCategorySummary: true }),
+            (row, loaded) => ({
+              spendingCategorySummary:
+                loaded.get(row.id) ?? emptySpendingCategorySummary(),
+            }),
+          ),
+          inferences.fields(
+            transactionFields.pick({
+              vendorInference: true,
+              possibleVendorLabel: true,
+            }),
+            (row, loaded) => {
+              const vendorInference = loaded.get(row.id);
+              if (vendorInference === undefined)
+                throw new Error(
+                  "Financial transaction vendor inference was not loaded",
+                );
+              return {
+                vendorInference,
+                possibleVendorLabel: possibleVendorLabel(vendorInference),
+              };
+            },
+          ),
+        ];
+      },
+    },
   },
 );
 
-/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildFinancialTransactionWhere = async (
-  db: Database,
-  filters: FinancialTransactionFilters,
-): Promise<SQL | undefined> =>
-  financialTransactionScaffold.where(filters, {
-    context: await financialTransactionScaffold.context(db, {
-      filters,
-      readIntent: "count",
-    }),
-  });
-
-export const listFinancialTransactionsRead = async (
-  db: Database,
-  filters: FinancialTransactionFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-  projection: ListProjection = { kind: "full" },
-) =>
-  financialTransactionScaffold.read(
-    db,
-    { filters, sorts, pagination, readIntent, projection },
-    {
-      select: (page) =>
-        selectTransactionsRead(db, projection)
-          .where(page.where)
-          .orderBy(...page.orderBy)
-          .limit(page.limit)
-          .offset(page.offset),
-      read: transactionRead(db),
-    },
-  );
-
-export const listFinancialTransactions = async (
-  db: Database,
-  filters: FinancialTransactionFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-) => {
-  const result = await listFinancialTransactionsRead(
-    db,
-    filters,
-    sorts,
-    pagination,
-    readIntent,
-  );
-  return parseCompleteListRead(
-    rawFinancialTransactionOut,
-    Promise.resolve(result),
-  );
-};
-
-const financialTransactionReader = createEntityReader<
-  FinancialTransactionRow,
-  RawFinancialTransactionOut,
-  "financialTransaction",
-  Database | DrizzleTransaction
->({
+const financialTransactionReader = createEntityReader({
   entity: "financialTransaction",
-  fetchById: async (db, id) => {
-    const [row] = await selectTransactions(db)
-      .where(
-        and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
-      )
-      .limit(1);
-    return row;
-  },
-  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  scaffold: financialTransactionScaffold,
+  output: rawFinancialTransactionOut,
 });
 
 const getFinancialTransactionByID = financialTransactionReader.getByID;
-const getFinancialTransactionByShortcode =
-  financialTransactionReader.getByShortcode;
-
 async function resolveForeignKeys(
   db: Database | DrizzleTransaction,
   data: Pick<FinancialTransactionCreateInput, "accountId" | "purchaseId">,
@@ -1088,24 +890,7 @@ export const financialTransactionRepository = defineRepository(
   "financialTransaction",
   {
     lifecycle: { delete: FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY },
-    get: onDb(getFinancialTransactionByShortcode),
-    list: listOn(listFinancialTransactions),
-    listRead: (
-      ctx,
-      filters,
-      sorts,
-      pagination,
-      projection,
-      readIntent = "page",
-    ) =>
-      listFinancialTransactionsRead(
-        ctx.db,
-        filters,
-        sorts,
-        pagination,
-        readIntent,
-        projection,
-      ),
+    scaffold: financialTransactionScaffold,
     create: asActor(createFinancialTransaction),
     update: asActor(
       (

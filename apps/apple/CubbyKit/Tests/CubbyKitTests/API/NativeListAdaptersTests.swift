@@ -242,8 +242,6 @@ struct NativeListAdaptersTests {
         let summary = try! JSONEncoder.cubby().encode(cookbooks[0])
         var object = try! JSONSerialization.jsonObject(with: summary) as! [String: Any]
         object["attachments"] = [Any]()
-        object["redirectedFrom"] = NSNull()
-        object["previousShortcodes"] = [Any]()
         object["sources"] = [Any]()
         return try! JSONSerialization.data(withJSONObject: object)
     }()

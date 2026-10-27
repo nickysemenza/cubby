@@ -11,7 +11,7 @@ import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import {
   createRecipe,
-  getRecipeByID,
+  readRecipeById,
   upsertCookbookRecipe,
 } from "~/server/domains/recipe/repo/crud";
 import { getRecipeTotalsState } from "~/server/domains/recipe/repo/totals";
@@ -190,7 +190,7 @@ describe("recipe deletion cost-staleness workflows", () => {
         (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
       ).not.toEqual(computedBefore);
       expect(
-        (await getRecipeByID(ctx.db, parent))?.forkedFromRecipeId,
+        (await readRecipeById(ctx.db, parent))?.forkedFromRecipeId,
       ).toBeNull();
       expect(published).toContain("background");
     },

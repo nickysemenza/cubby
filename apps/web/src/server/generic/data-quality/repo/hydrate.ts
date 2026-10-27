@@ -35,7 +35,7 @@ import {
 } from "~/server/generic/data-quality/repo/presentation";
 import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
 
-import { storedEntryFor } from "./entries";
+import { storedEntryFor } from "./entry";
 import { checksOf } from "./sql";
 import {
   evaluateLiveQuality,
@@ -313,31 +313,4 @@ export const loadDataQualities = async <E extends ScoredEntity>(
     });
   }
   return result;
-};
-
-/**
- * Attach each row's real, computed DataQuality — never a hardcoded-complete
- * placeholder. Rows here were just fetched live, so a missing evaluation is
- * a bug, not a soft-deleted row.
- */
-export const attachDataQuality = async <
-  E extends ScoredEntity,
-  T extends { id: EntityId<E> },
->(
-  db: Database | DrizzleTransaction,
-  entity: E,
-  rows: readonly T[],
-): Promise<Array<T & { dataQuality: DataQuality }>> => {
-  const qualities = await loadDataQualities(
-    db,
-    entity,
-    rows.map((row) => row.id),
-  );
-  return rows.map((row) => {
-    const dataQuality = qualities.get(row.id);
-    if (!dataQuality) {
-      throw new Error(`Data quality was not loaded for ${entity} ${row.id}`);
-    }
-    return { ...row, dataQuality };
-  });
 };

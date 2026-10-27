@@ -139,7 +139,7 @@ subrecipes terminate at scalar snapshots. Generation
 uses those declarations for both concrete child schemas and serializer traversal.
 Direct self edges may declare `recursive: true` on detail projections. Generation
 emits a typed lazy node rather than expanding its descendants; Location detail and
-tree reads share that node. Root-only attachment and redirect metadata stays on
+tree reads share that node. Root-only attachment metadata stays on
 the root. Traversal follows only supplied, bounded topology and batches current
 facts across all its levels. Explicit embedded paths can name a governed container
 such as Location's installed Product; its effective result retains the nested
@@ -1093,9 +1093,8 @@ collision. Location reparenting retains Home and cycle checks; the arrange
 workflow's larger envelope delegates to the same runtime. Native has no bulk
 update route or multi-select delete UI.
 
-`capabilities.images` is `false`, `"gallery"` (an ordered `<Entity>Image` join
-table, bound in `apps/web/src/server/db/helpers/crud.ts`
-`imageJoinBindings`, whose keys are checked against `GalleryEntity`),
+`capabilities.images` is `false`, `"gallery"` (ordered `EntityAttachment` rows,
+bound by `galleryBinding(entity)` in `apps/web/src/server/db/helpers/crud.ts`),
 `"cover"` (a single `coverImageId` column, cookbook), or `"logo"` (a single
 direct logo FK, vendor). The source-only `entity-definitions/image-associations.ts`
 facet owns association targets and their storage modes; entity declarations and
@@ -1750,8 +1749,8 @@ A record contributes once per prefix even when several leaves share it.
 Overlapping sibling counts can exceed their parent's count. Use
 `path[depth - 1]` to address a dimension's filter value.
 
-`presentation.list.metrics` explicitly declares summable field keys. The
-compiler emits labels and display formats and rejects unsupported or mixed-unit
+A `presentation.list.totals` entry with `group: true` also sums its key
+per group; there is no separate metrics list. The compiler emits labels and display formats and rejects unsupported or mixed-unit
 sources. Monetary values retain authoritative `SUM(Expense.cost)` provenance;
 field names never imply currency. Per-prefix metrics distinguish unknown sums
 from zero and include present/total counts and coverage. Date grouping with a
@@ -1831,12 +1830,15 @@ its storage mapping. Computed titles remain null and use the shortcode
 resolver's explicit label overrides: a stored column, or a relational SQL
 expression over the unaliased table. Resolving identities and labels therefore
 does not load the complete entity field model.
+Repository read declarations can also publish computed SQL titles through
+`read.title`; `scaffold.title()` otherwise resolves the stored title column.
+The Inventory declaration's title combines its Product and Location names.
 Two rosters follow from the declaration. The **list roster** is every routed
 entity with a contract: its index — generated, or hand-written like Image's —
 and every client (native browse, HTTP `entity.list`, MCP) read the
 kernel's complete list, whether or not the browser writes the entity
 (Cookbook, Image and Run are read-only). Specialist `listColumns` never change
-where rows come from. Its repository then implements `listRead`. Only a
+where rows come from. Its repository declares a read scaffold. Only a
 generated index feeds inline relation tables. The **CRUD roster**
 (`generatedBrowserCrudEntities`) is the list-roster entities with create and
 update contracts; mutation results key on it. Bulk edit
@@ -2095,14 +2097,42 @@ its outer mutation supplies loading state and presentation only.
 
 ## List reads
 
+Each repository supplies `listScaffold` as its read port to
+`defineRepository`. Its `read` declaration supplies columns and bindings;
+`{ scope: "detail" }` bindings load only for record reads. `scaffold.get`
+and `getByIds` use the same read plan as pages, including for get-by-id.
+See [ADR 0023](adr/0023-repository-read-declaration.md).
+
+Ingredient costing and nutrition graphs retain their graph readers, but source
+Ingredient records and embedded Products from their respective scaffolds. The
+enrichment workbench adds its recipe count and cookbook-only flag to those reads.
+Expense analytics removes share-scoped filters before preparing its scaffold
+WHERE because allocation shares apply those filters themselves.
+
+Repository `read.title` owns computed SQL labels; otherwise the scaffold
+resolves the declared stored title field. Shortcode lookups, reference pickers
+and record graphs share that title, including Inventory's product and location.
+Repository initialization publishes title and field-context ports separately from
+the complete registry, so SQL compilers and public envelope readers use declared
+reads without importing repositories during their initialization.
+Picker count and kind projections are declared by their repository, with counts
+compiled from the entity's declared rollup. The shortcode table registry stays
+independent of repositories so identity writers can use it without a cycle.
+
 Each page is one `entity.list` request returning complete canonical rows and
 `meta.totalCount`, full-filter `meta.sums` / `meta.totalLabels`, grouping and
 membership metadata. Governed values live only in each row's typed `fields`
 envelopes, with assignment/control facts, result provenance and background work.
 Stored metadata loads alongside
 page hydration using internal IDs, without resolving public IDs back to storage.
+Public serialization reuses the scaffold's field-read contexts when available;
+otherwise, it batches missing root and nested codes through each entity's scaffold
+get and uses those reads' contexts.
 Inheritance resolutions produced during hydration contribute their provenance.
 
+Complete scaffold pages include full-population totals. Kernel-selected pages,
+including MCP summaries, also request those totals through the scaffold; raw
+selected projections and count-only reads skip them.
 Filtering, sorting, grouping, pagination and exact counts stay server-owned.
 Independent row bindings, totals and metadata loads run concurrently. Repository
 batch bindings may remain inside the request; they do not expose partial rows,
@@ -2702,6 +2732,13 @@ entity's `search` setting. Non-list `model.stored` entries default to
 `publishes: "ownTable"`; `publishes: "derivedValue"` stores their output in `DerivedValue`
 without exposing a list column. Declarations are generated into
 `entity-stored-derived.gen.ts`; `server/db/derived-declarations.ts` parses them.
+The repository scaffold supplies each searchable entity's document SQL and
+text loader through `read.search`; generic refresh resolves it through the
+kernel binding with a lazy import. Each scored entity's evaluator lives in
+`generic/data-quality/repo/checks/<entity>.ts`, and generation wires it into
+`server/generated/data-quality-entries.gen.ts`. The quality runtime is
+imported by domain repositories and reads quality synchronously, so it cannot
+depend on the repository registry, which imports every repository.
 
 A stored result may declare `resultSchema` and supply several scalar fields through
 `model.derived.<field>.fromResult: { key, path }`. Generation checks each path and
@@ -3047,7 +3084,7 @@ typecheck. The compiler moves `terms` off the client descriptor.
 to NULL, the shape ingredient's `resolve.scope` uses (ingredient
 `["recipeId"]`: a recipe's own ingredient rows are never listed, searched, or
 counted). `scaffold.where` ANDs it into every list, count, and Problems read,
-so `getEntityCounts` reads it through the same `buildXWhere`. It shows no
+so `getEntityCounts` reads it through the same `scaffold.where`. It shows no
 chip, and no request lifts it, `filters.ids` included.
 
 `presentation.list.scopes` declares related scopes: a request key whose value
@@ -3160,8 +3197,8 @@ Timeline readback exposes revision successors and each supporting capture's sour
 identity without copying retained message bodies. An unchanged observation keeps
 its original attribution when a refreshed Email capture adds supporting membership.
 
-Every scored entity registers one `defineStoredEntityChecks` entry
-(`generic/data-quality/repo/stored-registry.ts`): a versioned TypeScript
+Every scored repository declares one `defineStoredEntityChecks` entry in
+`read.quality` (`generic/data-quality/repo/stored-registry.ts`): a versioned TypeScript
 evaluator whose single batch loader produces the records consumed by pure
 shared `qualityCheck` builders (`required`, `observed`, `hasRelated`,
 `hasImage`, `when`). Its type requires a function for every declared check.
@@ -3852,17 +3889,17 @@ relationship browser check.
 Every shortcode entity has one durable `Entity` row (ADR 0006): payloads bind
 to it with a composite `(id, shortcode)` FK. Shared transactional writers create
 identity before payload insertion and retain tombstones on soft and hard deletes. `finalizeMerge` records one-hop,
-path-compressed `mergedIntoId` redirects. A read through a merged-away code
-returns the survivor with `redirectedFrom`, and detail reads list
-`previousShortcodes`; a write through one refuses with the survivor's code, and
+path-compressed `mergedIntoId` links. Reads and writes through a merged-away
+code refuse with the survivor's code ([ADR 0023](adr/0023-repository-read-declaration.md));
 a deleted code refuses with the deletion date. Except for [pruned Job identities](jobs.md#job-entity-and-identity-retention),
 codes are never reused, even a
 hard-deleted payload's.
 
 Direct files are `EntityAttachment` rows: gallery photos and purchase documents
-(`attachment`), a cookbook `cover`, a vendor `logo`. `imageJoinBindings` and
+(`attachment`), a cookbook `cover`, a vendor `logo`. `galleryBinding` and
 `imageCascadeChild` all target that one table; `purpose` is Product-only and
-`documentKind` Purchase-only. Detach soft-deletes, a removed subject's
+`documentKind` Purchase-only. Gallery writes leave both null; readers treat a
+null purpose as `item` and a null document kind as `other`. Detach soft-deletes, a removed subject's
 attachments are detached and reaped, and an upload's idempotency key belongs to
 the attachment rather than the file.
 
@@ -3928,7 +3965,8 @@ table each (ADR 0007):
   cycle rules, per-end role, label, liveness, and merge collision rule). The
   table's CHECKs and the edge-source branch per kind derive from that
   declaration; the write helpers are in `generic/entity-links/repo/entity-links.ts`. Every query
-  names its `kind` and filters `deletedAt`.
+  names its `kind` and filters `deletedAt`. Dependency reads and writes resolve
+  that kind from the entity's `blocked-by` relationship path.
 - `EntityExternalId(entityId/entityKind, source, kind, externalId, url,
   isPrimary)` holds every identifier an outside system gave an entity, and
   `ExternalSource` registers the source slugs. Kinds and the entity kinds they
@@ -4717,7 +4755,7 @@ precedence rule.
    the generated factories. Keep domain refinements and relationship
    projections explicit. A physical change still requires a migration that
    carries existing rows; generation does not apply production DDL.
-3. Declare its repository with `defineRepository(entity, { get, list, … })`
+3. Declare its repository with `defineRepository(entity, { scaffold, … })`
    (`apps/web/src/server/entity-kernel/repo/repository.ts`) and point
    `extensions.ports.repository` at the export; the generator binds it to
    the kernel. Methods take the kernel context (`(ctx, …)`); the declared

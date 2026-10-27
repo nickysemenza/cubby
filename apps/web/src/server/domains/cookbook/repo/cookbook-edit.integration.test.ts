@@ -1,7 +1,10 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getRecipeByID, updateRecipe } from "~/server/domains/recipe/repo/crud";
+import {
+  readRecipeById,
+  updateRecipe,
+} from "~/server/domains/recipe/repo/crud";
 import {
   createRecipeFixture,
   makeCookbookExtraction,
@@ -59,7 +62,7 @@ describe("cookbook edits and recipe re-pointing", () => {
       { cookbookId: book.output.id },
       ctx.actor,
     );
-    const inBook = await getRecipeByID(ctx.db, plain.entityId);
+    const inBook = await readRecipeById(ctx.db, plain.entityId);
     expect(inBook?.source).toMatchObject({
       type: "book",
       book: "Move book",
@@ -67,7 +70,7 @@ describe("cookbook edits and recipe re-pointing", () => {
     });
 
     await updateRecipe(ctx.db, plain.entityId, { cookbookId: null }, ctx.actor);
-    const out = await getRecipeByID(ctx.db, plain.entityId);
+    const out = await readRecipeById(ctx.db, plain.entityId);
     expect(out?.source).toEqual({ type: "other" });
   });
 

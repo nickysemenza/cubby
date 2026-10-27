@@ -5,7 +5,6 @@ import { z } from "zod";
 
 import { entityCardsOutput } from "~/contracts/entity-preview";
 import { listEntities } from "~/entity/generated/entity-lists.gen";
-import { isListMediaField } from "~/entity/model/list-read-fields";
 import { unwrapDb } from "~/server/db/helpers";
 import { entityExternalId } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
@@ -42,6 +41,16 @@ const REPRESENTATIVE_KINDS = [
   "financialTransaction",
   "location",
 ] as const satisfies readonly (typeof listEntities)[number][];
+
+const mediaFields = new Set([
+  "displayImages",
+  "images",
+  "labelImages",
+  "itemImageCount",
+  "labelImageCount",
+  "logo",
+  "vendorLogo",
+]);
 
 type JsonSchemaNode =
   | boolean
@@ -581,7 +590,7 @@ describe("entity_read field selection", () => {
           const fields = [
             ...new Set([
               ...keys.filter((field) => field !== "id").slice(0, 5),
-              ...keys.filter(isListMediaField),
+              ...keys.filter((key) => mediaFields.has(key)),
             ]),
           ].map((field) =>
             governed instanceof z.ZodObject &&

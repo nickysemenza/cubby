@@ -22,23 +22,23 @@ import type { VendorFilters } from "@cubby/schemas/vendor";
 import type { WishFilters } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
 
-import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
-import { buildFinancialAccountWhere } from "~/server/domains/financial-account/repo";
-import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
-import { buildImageWhere } from "~/server/domains/image/repo/image";
-import { buildIngredientListWhere } from "~/server/domains/ingredient/repo/search";
-import { buildLedgerPartyWhere } from "~/server/domains/ledger-party/repo/ledger-party";
-import { buildLocationWhere } from "~/server/domains/location/repo/crud";
+import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
+import { financialAccountScaffold } from "~/server/domains/financial-account/repo";
+import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { imageScaffold } from "~/server/domains/image/repo/image";
+import { ingredientScaffold } from "~/server/domains/ingredient/repo/search";
+import { ledgerPartyScaffold } from "~/server/domains/ledger-party/repo/ledger-party";
+import { locationScaffold } from "~/server/domains/location/repo/crud";
 import type { LocationFilters } from "~/server/domains/location/repo/internal-types";
-import { buildMealWhere } from "~/server/domains/meal/repo/crud";
-import { buildProductWhere } from "~/server/domains/product/repo/crud";
-import { buildProjectWhere } from "~/server/domains/project/repo/lookup";
-import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
-import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
+import { mealScaffold } from "~/server/domains/meal/repo/crud";
+import { productScaffold } from "~/server/domains/product/repo/crud";
+import { projectScaffold } from "~/server/domains/project/repo/lookup";
+import { purchaseScaffold } from "~/server/domains/purchase/repo/purchase";
+import { recipeScaffold } from "~/server/domains/recipe/repo/crud";
 import type { RecipeFilters } from "~/server/domains/recipe/repo/internal-types";
-import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
-import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
-import { buildWishWhere } from "~/server/domains/wish/repo";
+import { taskScaffold } from "~/server/domains/task/repo/lookup";
+import { vendorScaffold } from "~/server/domains/vendor/repo/vendor";
+import { wishScaffold } from "~/server/domains/wish/repo";
 import { mockWhereDatabase, renderWhereSql } from "~/server/testing/mock-db";
 
 /**
@@ -49,9 +49,9 @@ import { mockWhereDatabase, renderWhereSql } from "~/server/testing/mock-db";
  * `undefined`, which is exactly what that case guarded.
  */
 
-describe("buildWishWhere", () => {
+describe("wishScaffold.where", () => {
   const where = (filters: WishFilters) =>
-    Promise.resolve(renderWhereSql(buildWishWhere(filters)));
+    Promise.resolve(renderWhereSql(wishScaffold.where(filters)));
 
   it("filters candidates through the related view's productId", async () => {
     expect(
@@ -78,11 +78,9 @@ describe("buildWishWhere", () => {
   );
 });
 
-describe("buildFinancialAccountWhere", () => {
+describe("financialAccountScaffold.where", () => {
   const where = (filters: FinancialAccountFilters) =>
-    buildFinancialAccountWhere(mockWhereDatabase(), filters).then(
-      renderWhereSql,
-    );
+    Promise.resolve(renderWhereSql(financialAccountScaffold.where(filters)));
 
   it.each([
     {
@@ -110,10 +108,10 @@ describe("buildFinancialAccountWhere", () => {
   );
 });
 
-describe("buildFinancialTransactionWhere", () => {
+describe("financialTransactionScaffold.where", () => {
   const where = (filters: FinancialTransactionFilters) =>
-    buildFinancialTransactionWhere(mockWhereDatabase(), filters).then(
-      renderWhereSql,
+    Promise.resolve(
+      renderWhereSql(financialTransactionScaffold.where(filters)),
     );
 
   it("filters purchases through live allocations, not the mirror column", async () => {
@@ -172,9 +170,16 @@ describe("buildFinancialTransactionWhere", () => {
   );
 });
 
-describe("buildImageWhere", () => {
-  const where = (filters: ImageListFilters) =>
-    buildImageWhere(mockWhereDatabase(), filters).then(renderWhereSql);
+describe("imageScaffold.where", () => {
+  const where = async (filters: ImageListFilters) =>
+    renderWhereSql(
+      imageScaffold.where(filters, {
+        context: await imageScaffold.context(mockWhereDatabase(), {
+          filters,
+          readIntent: "count",
+        }),
+      }),
+    );
 
   it.each([
     {
@@ -201,14 +206,14 @@ describe("buildImageWhere", () => {
   });
 });
 
-describe("buildLedgerPartyWhere", () => {
+describe("ledgerPartyScaffold.where", () => {
   // Parsed rather than asserted: the related-view filter trios carry branded
   // shortcodes, and every filter field is optional, so the schema accepts
   // the partial set under test.
   const where = (filters: Partial<LedgerPartyFilters>) =>
     Promise.resolve(
       renderWhereSql(
-        buildLedgerPartyWhere(ledgerPartyFiltersSchema.parse(filters)),
+        ledgerPartyScaffold.where(ledgerPartyFiltersSchema.parse(filters)),
       ),
     );
 
@@ -227,9 +232,9 @@ describe("buildLedgerPartyWhere", () => {
   });
 });
 
-describe("buildPurchaseWhereClause", () => {
+describe("purchaseScaffold.where", () => {
   const where = (filters: PurchaseFilters) =>
-    Promise.resolve(renderWhereSql(buildPurchaseWhereClause(filters)));
+    Promise.resolve(renderWhereSql(purchaseScaffold.where(filters)));
 
   it("resolves vendor codes against live vendors inside the query", async () => {
     expect(
@@ -298,9 +303,9 @@ describe("buildPurchaseWhereClause", () => {
   );
 });
 
-describe("buildVendorWhereClause", () => {
+describe("vendorScaffold.where", () => {
   const where = (filters: VendorFilters) =>
-    Promise.resolve(renderWhereSql(buildVendorWhereClause(filters)));
+    Promise.resolve(renderWhereSql(vendorScaffold.where(filters)));
 
   it("matches name, notes, or website (declared stored text filter)", async () => {
     const rendered = await where({ search: "hardware" });
@@ -310,10 +315,15 @@ describe("buildVendorWhereClause", () => {
   });
 });
 
-describe("buildLocationWhere", () => {
-  const where = (filters: Partial<LocationFilters>) =>
-    buildLocationWhere(mockWhereDatabase(), filters as LocationFilters).then(
-      renderWhereSql,
+describe("locationScaffold.where", () => {
+  const where = async (filters: Partial<LocationFilters>) =>
+    renderWhereSql(
+      locationScaffold.where(filters, {
+        context: await locationScaffold.context(mockWhereDatabase(), {
+          filters,
+          readIntent: "count",
+        }),
+      }),
     );
 
   it.each([
@@ -375,9 +385,9 @@ describe("buildLocationWhere", () => {
   });
 });
 
-describe("buildRecipeWhere", () => {
+describe("recipeScaffold.where", () => {
   const where = (filters: RecipeFilters) =>
-    Promise.resolve(renderWhereSql(buildRecipeWhere(filters)));
+    Promise.resolve(renderWhereSql(recipeScaffold.where(filters)));
 
   it("resolves cookbook codes against live cookbooks inside the query", async () => {
     const rendered = await where({
@@ -433,9 +443,9 @@ describe("buildRecipeWhere", () => {
   );
 });
 
-describe("buildProductWhere", () => {
+describe("productScaffold.where", () => {
   const where = (filters: ProductFilters) =>
-    buildProductWhere(mockWhereDatabase(), filters).then(renderWhereSql);
+    Promise.resolve(renderWhereSql(productScaffold.where(filters)));
 
   it.each([
     { name: "name", filters: { nameFilter: "flour" }, contains: '"name"' },
@@ -478,11 +488,9 @@ describe("buildProductWhere", () => {
   });
 });
 
-describe("buildMealWhere", () => {
+describe("mealScaffold.where", () => {
   const where = (filters: MealFilters) =>
-    Promise.resolve(
-      renderWhereSql(buildMealWhere(mockWhereDatabase(), filters)),
-    );
+    Promise.resolve(renderWhereSql(mealScaffold.where(filters)));
 
   it.each([
     {
@@ -516,9 +524,11 @@ describe("buildMealWhere", () => {
   });
 });
 
-describe("buildProjectWhere", () => {
+describe("project prepareWhere", () => {
   const where = (filters: ProjectFilters) =>
-    buildProjectWhere(mockWhereDatabase(), filters).then(renderWhereSql);
+    projectScaffold
+      .prepareWhere(mockWhereDatabase(), filters)
+      .then(renderWhereSql);
 
   it.each([
     {
@@ -551,14 +561,14 @@ describe("buildProjectWhere", () => {
   });
 });
 
-describe("buildIngredientListWhere", () => {
+describe("ingredientScaffold.where", () => {
   // Parsed rather than asserted: the related-view filter trios carry branded
   // shortcodes, and every filter field is optional, so the schema accepts
   // the partial set under test.
   const where = (filters: Partial<IngredientFilters>) =>
     Promise.resolve(
       renderWhereSql(
-        buildIngredientListWhere(ingredientFiltersSchema.parse(filters)),
+        ingredientScaffold.where(ingredientFiltersSchema.parse(filters)),
       ),
     );
 
@@ -611,9 +621,11 @@ describe("buildIngredientListWhere", () => {
   );
 });
 
-describe("buildExpenseWhereClause", () => {
+describe("expenseScaffold.prepareWhere", () => {
   const where = (filters: ExpenseFilters) =>
-    buildExpenseWhereClause(mockWhereDatabase(), filters).then(renderWhereSql);
+    expenseScaffold
+      .prepareWhere(mockWhereDatabase(), filters)
+      .then(renderWhereSql);
 
   it("ORs several name terms", async () => {
     expect(await where({ search: ["vacuum", "dust extractor"] })).toMatch(
@@ -709,9 +721,11 @@ describe("buildExpenseWhereClause", () => {
   );
 });
 
-describe("buildTaskWhere", () => {
+describe("task prepareWhere", () => {
   const where = (filters: TaskFilters) =>
-    buildTaskWhere(mockWhereDatabase(), filters).then(renderWhereSql);
+    taskScaffold
+      .prepareWhere(mockWhereDatabase(), filters)
+      .then(renderWhereSql);
   const project = parseShortcodeFor("project", "PRJ-2345");
 
   it("matches the inherited project, with sub-projects unless the toggle is off", async () => {

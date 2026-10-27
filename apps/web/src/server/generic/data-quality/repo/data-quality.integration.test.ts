@@ -1,5 +1,7 @@
 import { scoredEntities } from "@cubby/schemas/data-quality";
+import { dataQuality } from "@cubby/schemas/data-quality-shape";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { ProductFilters } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { eq, type SQL, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
@@ -9,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { TEXT_WHITESPACE, hasText, trimText } from "~/lib/text-whitespace";
+import type { Database } from "~/server/db";
 import { hasTextSql, trimTextSql } from "~/server/db/computed/text-whitespace";
 import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { unwrapDb } from "~/server/db/helpers";
@@ -21,31 +24,29 @@ import {
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
-import {
-  buildProductWhere,
-  productList,
-} from "~/server/domains/product/repo/crud";
+import { productScaffold } from "~/server/domains/product/repo/crud";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
-import { purchaseList } from "~/server/domains/purchase/repo/purchase";
+import { purchaseScaffold } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
-  insertEntityAttachments,
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
   createProductIdentityFixture,
+  insertEntityAttachments,
   insertEntityFixtures,
+  listProductsFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
 import { qualityCheck } from "./builders";
-import { storedEntryFor } from "./entries";
+import { storedEntryFor } from "./entry";
 import { clearDataException, setDataException } from "./exceptions";
 import { loadDataQualities } from "./hydrate";
 import type { ScoredTable } from "./registry";
@@ -95,13 +96,21 @@ describe("data quality: list filters, sort and hydration agree", () => {
     await publishQualityFixtures(ctx.db, "product");
     return loadDataQualities(...args);
   };
-  const publishedProductList: typeof productList = async (...args) => {
+  const publishedProductList: typeof listProductsFixture = async (...args) => {
     await publishQualityFixtures(ctx.db, "product");
-    return productList(...args);
+    return listProductsFixture(...args);
   };
-  const publishedProductWhere: typeof buildProductWhere = async (...args) => {
+  const publishedProductWhere = async (
+    db: Database,
+    filters: ProductFilters,
+  ) => {
     await publishQualityFixtures(ctx.db, "product");
-    return buildProductWhere(...args);
+    return productScaffold.where(filters, {
+      context: await productScaffold.context(db, {
+        filters,
+        readIntent: "count",
+      }),
+    });
   };
   const publishedRecordWorkQueue: typeof readRecordWorkQueue = async (
     ...args
@@ -361,7 +370,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       hydrated.get(middling.entityId)?.gaps.map((gap) => gap.check),
     ).not.toContain("product_brand");
 
-    const listed = async (filters: Parameters<typeof productList>[1]) =>
+    const listed = async (filters: Parameters<typeof listProductsFixture>[1]) =>
       new Set(
         (await publishedProductList(ctx.db, filters, [], page)).data.map(
           (row) => row.id,
@@ -1050,10 +1059,16 @@ describe("data quality: list filters, sort and hydration agree", () => {
 
     await publishQualityFixtures(ctx.db, "product");
     const rolledUp = (
-      await purchaseList(ctx.db, { dataGap: ["product_image"] }, [], page)
+      await purchaseScaffold.read(ctx.db, {
+        filters: { dataGap: ["product_image"] },
+        sorts: [],
+        pagination: page,
+      })
     ).data;
     expect(rolledUp.map((row) => row.id)).toContain(purchaseId);
-    const quality = rolledUp.find((row) => row.id === purchaseId)?.dataQuality;
+    const quality = dataQuality
+      .optional()
+      .parse(rolledUp.find((row) => row.id === purchaseId)?.dataQuality);
     expect(quality?.relatedGaps).toContainEqual(
       expect.objectContaining({
         check: "product_image",

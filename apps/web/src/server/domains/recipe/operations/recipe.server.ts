@@ -3,7 +3,7 @@ import type {
   CandidateEquivalence,
   EquivalenceReport,
 } from "@cubby/schemas/equivalences";
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor, type RecipeId } from "@cubby/schemas/identifiers";
 import type { recipeCostingExplainDetail } from "@cubby/schemas/mcp";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import {
@@ -35,7 +35,7 @@ import { getMultiMeasureRecipeIngredients } from "~/server/domains/product/repo/
 import {
   duplicateRecipe,
   getRecipesByIDs,
-  recipeList,
+  recipeScaffold,
 } from "~/server/domains/recipe/repo/crud";
 import {
   getAllTags,
@@ -297,18 +297,20 @@ const makeableWorkflow = bindWorkflow(
     typeof makeableRecipesInput._output
   >("recipeAvailability.getMakeable")
     .call("candidates", async ({ context }) =>
-      recipeList(
-        context.db,
-        { subRecipe: false },
-        [{ orderBy: "name", direction: "asc" }],
-        { pageIndex: 0, pageSize: CANDIDATE_CAP },
-      ),
+      recipeScaffold.read(context.db, {
+        filters: { subRecipe: false },
+        sorts: [{ orderBy: "name", direction: "asc" }],
+        pagination: { pageIndex: 0, pageSize: CANDIDATE_CAP },
+        projection: ["id"],
+      }),
     )
     .map("availabilities", {
       items: ({ candidates }) => candidates.data,
       concurrency: 8,
       run: async ({ context }, { item }) =>
-        context.availability.getRecipeAvailability(item.id),
+        context.availability.getRecipeAvailability(
+          parseShortcodeFor("recipe", item.id),
+        ),
     })
     .output(({ input, candidates, availabilities }) => ({
       recipes: availabilities

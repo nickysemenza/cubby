@@ -7,7 +7,7 @@ import { type SQL, sql } from "drizzle-orm";
  * includes-deleted: both FKs are required, so a tombstoned parent still
  * names the account rather than blanking it.
  */
-export const vendorAccountLabelFor = (account: {
+const vendorAccountLabelFor = (account: {
   vendorId: SQL;
   ledgerPartyId: SQL;
 }) =>

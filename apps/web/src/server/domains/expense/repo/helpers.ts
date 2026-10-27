@@ -1,4 +1,3 @@
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import { isPurchaseAdjustmentExpense } from "@cubby/schemas/expense-line-kind";
 import type {
   ExpenseId,
@@ -11,17 +10,14 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   type ImageRenderStatus,
   type ImageStorageStatus,
-  isDisplayableImageFile,
 } from "@cubby/schemas/image";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
 import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
 
-import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import {
   resolveLiveJoinName,
   resolveLiveJoinShortcode,
   brandJoinShortcode,
-  singularAttachment,
 } from "~/server/db/helpers";
 import type { purchase } from "~/server/db/schema";
 import { parseExpenseCategoryResolution } from "~/server/domains/expense/repo/expense-category-resolution";
@@ -95,7 +91,7 @@ export const assertQuantitySignMatchesCost = (
  * charge's `vendor` in turn.
  */
 
-export type ExpenseRow = {
+type ExpenseRow = {
   id: ExpenseId;
   shortcode: string;
   name: string;
@@ -182,16 +178,6 @@ export type ExpenseRow = {
     updatedAt: Date;
     deletedAt: Date | null;
   }>;
-};
-
-const purchaseVendorLogo = (
-  purchaseRow: ExpenseRow["purchase"],
-): RawExpenseOut["vendorLogo"] => {
-  const vendor = purchaseRow?.vendor;
-  const logo = singularAttachment(vendor);
-  if (vendor?.deletedAt !== null || logo?.deletedAt !== null) return null;
-  if (!logo || !isDisplayableImageFile(logo)) return null;
-  return { url: getR2PublicUrl(logo.key) };
 };
 
 const expenseAttributions = (
@@ -651,35 +637,3 @@ export const expenseResolutionFields = (row: ExpenseComputationRow) => {
           },
   };
 };
-
-export const expenseMediaFields = (row: Pick<ExpenseRow, "purchase">) => ({
-  vendorLogo: purchaseVendorLogo(
-    row.purchase?.deletedAt === null ? row.purchase : null,
-  ),
-});
-
-export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
-  row: ExpenseRow,
-  dataQuality: Q,
-): Omit<RawExpenseOut, "dataQuality"> & { dataQuality: Q } => ({
-  id: parseShortcodeFor("expense", row.shortcode),
-  name: row.name,
-  effectiveBeneficiaries: null,
-  cost: row.cost,
-  date: row.date,
-  ...expenseEvidenceFields(row),
-  lineKind: row.lineKind,
-  lineBasis: row.lineBasis,
-  costType: row.costType,
-  url: row.url,
-  notes: row.notes,
-  future: row.future,
-  productQuantity: row.productQuantity,
-  ...expenseRelationFields(row),
-  ...expenseDerivedFields(row),
-  ...expenseResolutionFields(row),
-  ...expenseMediaFields(row),
-  dataQuality,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-});

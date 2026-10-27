@@ -2,111 +2,45 @@ import {
   dashboardLocalCounts,
   type DashboardLocalCounts,
 } from "@cubby/schemas/dashboard";
-import { type SQL, and, ne, sql } from "drizzle-orm";
+import { entitySummary } from "@cubby/schemas/entity-summary";
+import { type SQL, sql } from "drizzle-orm";
 
+import {
+  listEntities,
+  parseEntityListInput,
+} from "~/entity/generated/entity-lists.gen";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { notDeleted } from "~/server/db/helpers/predicates";
-import {
-  run as runTable,
-  plant,
-  email as emailTable,
-  imageProcessingJob as imageJobTable,
-} from "~/server/db/schema";
-import { cookbookListWhere } from "~/server/domains/cookbook/repo/cookbook";
-import { buildDeviceWhere } from "~/server/domains/device/repo/device";
-import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
-import { buildFinancialAccountWhere } from "~/server/domains/financial-account/repo";
-import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
-import {
-  buildPlantingWhere,
-  buildGardenEntryWhere,
-} from "~/server/domains/garden/repo/garden";
-import { buildImageWhere } from "~/server/domains/image/repo/image";
-import { buildIngredientListWhere } from "~/server/domains/ingredient/repo/search";
-import { buildInventoryWhere } from "~/server/domains/inventory/repo/crud";
-import { buildLedgerPartyWhere } from "~/server/domains/ledger-party/repo/ledger-party";
-import { buildLedgerTransferWhere } from "~/server/domains/ledger-transfer/repo";
-import { buildLocationWhere } from "~/server/domains/location/repo/crud";
-import { buildMealWhere } from "~/server/domains/meal/repo/crud";
-import { buildProductCategoryWhere } from "~/server/domains/product-category/repo/product-category";
-import { buildProductWhere } from "~/server/domains/product/repo/crud";
-import { buildProjectWhere } from "~/server/domains/project/repo/lookup";
-import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
-import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
-import { buildShipmentWhere } from "~/server/domains/shipment/repo/entity-repository";
-import { buildSpendingCategoryWhere } from "~/server/domains/spending-category/repo/spending-category";
-import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
-import {
-  buildSourceTransactionRecordWhere,
-  buildTransactionImportWhere,
-} from "~/server/domains/transaction-import/repo/entity-repositories";
-import { buildVendorAccountWhere } from "~/server/domains/vendor-account/repo/vendor-account";
-import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
-import { buildWishWhere } from "~/server/domains/wish/repo";
+import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
 import { jobEntityWhere } from "~/server/generic/jobs/repo/entity-list";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-/**
- * The WHERE behind each entity's homepage/footer/`/entities` total.
- *
- * Every entry calls that entity's OWN list where-builder with an empty filter
- * set, and that is stronger than it looks. A `productCountWhere()`
- * returning `notDeleted(product)` would still be the CLAIM "with no filters the
- * list's population is exactly this" — restated in a second place, checkable
- * only by a test. `buildProductWhere(db, {})` makes no claim; it IS the list's
- * population, computed by the list's own code, so nothing is left to drift.
- *
- * Arity is deliberately NOT normalized. Some builders are sync, some async,
- * some need `db` for id-set subqueries. `await` on a non-promise is free, and a
- * ceremonial unused `db` would be dead weight (Oxlint's `no-unused-vars` is
- * an error). The contract that IS uniform: exported, returns the complete
- * clause for the filters given, takes no caller-supplied predicate fragment,
- * and `{}` means unfiltered. TypeScript checks each thunk against the real
- * signature, so a drifted one is a compile error rather than a wrong number.
- *
- * `build-where.unit.test.ts` renders each `buildXWhere` to SQL and guards
- * against a thunk drifting from its list's own filter clause.
- */
-type CountWhere = (db: Database) => SQL | undefined | Promise<SQL | undefined>;
-
 type LocalCountEntity = keyof DashboardLocalCounts;
 
-const COUNT_WHERE = {
-  job: () => jobEntityWhere({}),
-  sourceTransactionRecord: (db) => buildSourceTransactionRecordWhere(db),
-  transactionImport: () => buildTransactionImportWhere(),
-  shipment: () => buildShipmentWhere(),
-  product: (db) => buildProductWhere(db, {}),
-  recipe: () => buildRecipeWhere({}),
-  ingredient: () => buildIngredientListWhere({}),
-  cookbook: () => cookbookListWhere(),
-  location: (db) => buildLocationWhere(db, {}),
-  // Movable stock: a fixture is not something to count.
-  inventory: (db) => buildInventoryWhere(db, { placementFilter: ["stock"] }),
-  meal: (db) => buildMealWhere(db, {}),
-  project: (db) => buildProjectWhere(db, {}),
-  task: (db) => buildTaskWhere(db, {}),
-  vendor: () => buildVendorWhereClause({}),
-  purchase: () => buildPurchaseWhereClause({}),
-  expense: (db) => buildExpenseWhereClause(db, {}),
-  financialAccount: (db) => buildFinancialAccountWhere(db, {}),
-  financialTransaction: (db) => buildFinancialTransactionWhere(db, {}),
-  image: (db) => buildImageWhere(db, {}),
-  wish: () => buildWishWhere({}),
-  plant: () => notDeleted(plant),
-  planting: () => buildPlantingWhere(),
-  gardenEntry: () => buildGardenEntryWhere(),
-  email: () => notDeleted(emailTable),
-  imageJob: () => notDeleted(imageJobTable),
-  run: () => and(notDeleted(runTable), ne(runTable.trigger, "ephemeral")),
-  ledgerParty: () => buildLedgerPartyWhere({}),
-  ledgerTransfer: () => buildLedgerTransferWhere({}),
-  vendorAccount: () => buildVendorAccountWhere({}),
-  productCategory: () => buildProductCategoryWhere({}),
-  device: () => buildDeviceWhere({}),
-  spendingCategory: () => buildSpendingCategoryWhere({}),
-} satisfies Record<LocalCountEntity, CountWhere>;
+/**
+ * The WHERE behind each entity's homepage/footer/`/entities` total: the
+ * entity's own list scaffold over its declared opening filter
+ * (`presentation.list.initialFilter`), so a total counts exactly what the
+ * list opens on. Each declared opening filter is keyed by its list filter
+ * key, so it parses as the request's filter record. Job keeps its own read.
+ */
+const countWhere = (entity: LocalCountEntity): SQL | undefined => {
+  if (entity === "job") return jobEntityWhere({});
+  const listEntity = listEntities.find((candidate) => candidate === entity);
+  const scaffold = kernelScaffold(entity);
+  if (!listEntity || !scaffold)
+    throw new Error(`No list scaffold counts ${entity}`);
+  const { filters } = parseEntityListInput(listEntity, {
+    entity: listEntity,
+    filters: Object.fromEntries(
+      entitySummary[listEntity].list.initialFilter.map((filter) => [
+        filter.id,
+        filter.value,
+      ]),
+    ),
+  });
+  return scaffold.where(filters);
+};
 
 type EntityCounts = Record<LocalCountEntity, number>;
 
@@ -122,15 +56,9 @@ const entityCountsSchema = dashboardLocalCounts;
  * Filtered counts stay on the `*.list` procedures.
  */
 export const getEntityCounts = async (db: Database): Promise<EntityCounts> => {
-  // Resolved SEQUENTIALLY, not `Promise.all`. None of these builders queries
-  // for an empty filter set — every id resolver short-circuits on empty input —
-  // but if one ever starts, 16 concurrent awaits would re-create the pool
-  // exhaustion this function exists to avoid. Serial degrades to slow; parallel
-  // degrades to 500s.
-  const whereByEntity = new Map<LocalCountEntity, SQL | undefined>();
-  for (const entity of localCountEntities) {
-    whereByEntity.set(entity, await COUNT_WHERE[entity](db));
-  }
+  const whereByEntity = new Map(
+    localCountEntities.map((entity) => [entity, countWhere(entity)] as const),
+  );
 
   const countCol = (entity: LocalCountEntity): SQL => {
     const where = whereByEntity.get(entity);

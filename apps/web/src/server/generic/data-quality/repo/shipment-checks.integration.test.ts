@@ -16,7 +16,7 @@ import {
   shipment,
   shipmentObservation,
 } from "~/server/db/schema";
-import { listShipmentsRead } from "~/server/domains/shipment/repo/entity-repository";
+import { shipmentScaffold } from "~/server/domains/shipment/repo/entity-repository";
 import {
   associateShipment,
   canonicalShipment,
@@ -218,12 +218,11 @@ describe("Shipment evidence quality", () => {
       .where(eq(shipment.id, parcel.row.id));
     expect((await quality()).score).toBeLessThan(100);
     await refresh();
-    const filtered = await listShipmentsRead(
-      ctx.db,
-      { dataGap: ["shipment_purchase_association"] },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
+    const filtered = await shipmentScaffold.read(ctx.db, {
+      filters: { dataGap: ["shipment_purchase_association"] },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 100 },
+    });
     expect(filtered.data.map((row) => row.id)).toContain(parcel.code);
   });
 
@@ -385,35 +384,32 @@ describe("Shipment evidence quality", () => {
       expect(
         Number(scalar.find((row) => row.id === parcel.row.id)?.score),
       ).toBe(parcel.sample.score);
-    const filtered = await listShipmentsRead(
-      ctx.db,
-      { dataGap: ["shipment_span"] },
-      [{ orderBy: "dataQuality", direction: "asc" }],
-      { pageIndex: 0, pageSize: 100 },
-      { kind: "selected", fields: ["dataQuality"] },
-    );
+    const filtered = await shipmentScaffold.read(ctx.db, {
+      filters: { dataGap: ["shipment_span"] },
+      sorts: [{ orderBy: "dataQuality", direction: "asc" }],
+      pagination: { pageIndex: 0, pageSize: 100 },
+      projection: ["dataQuality"],
+    });
     expect(filtered.data.map((row) => row.id).sort()).toEqual(
       parcels
         .filter((p) => p.sample.gaps.includes("shipment_span"))
         .map((p) => p.code)
         .sort(),
     );
-    const sorted = await listShipmentsRead(
-      ctx.db,
-      {},
-      [{ orderBy: "dataQuality", direction: "asc" }],
-      { pageIndex: 0, pageSize: 100 },
-      { kind: "selected", fields: ["dataQuality"] },
-    );
+    const sorted = await shipmentScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [{ orderBy: "dataQuality", direction: "asc" }],
+      pagination: { pageIndex: 0, pageSize: 100 },
+      projection: ["dataQuality"],
+    });
     expect(
       sorted.data.map((row) => dataQuality.parse(row.dataQuality).score),
     ).toEqual(parcels.map((p) => p.sample.score).sort((a, b) => a - b));
-    const defects = await listShipmentsRead(
-      ctx.db,
-      { dataStatus: ["defect"] },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
+    const defects = await shipmentScaffold.read(ctx.db, {
+      filters: { dataStatus: ["defect"] },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 100 },
+    });
     expect(defects.data.map((row) => row.id).sort()).toEqual(
       parcels
         .filter((p) => p.sample.gaps.includes("shipment_chronology"))

@@ -31,7 +31,7 @@ import { inventoryEntry } from "~/server/db/schema";
  *
  * ## Why a per-query predicate rather than one default
  *
- * Same reason as `notDeleted()`: `inventoryentryList` is 2 of ~24 read paths and
+ * Same reason as `notDeleted()`: the inventory list is 2 of ~24 read paths and
  * none of the 3 that can destroy data, ~9 surfaces must genuinely include
  * installed rows, and a single default would make the change merely *look*
  * done. Every site is greppable for `placement`, and each query that
@@ -46,7 +46,7 @@ export const stockOnly = (): SQL => eq(inventoryEntry.placement, "stock");
  * Apply a tri-state filter value. `"all"` returns undefined (unrestricted),
  * following the repo rule that an absent constraint never narrows.
  *
- * Callers own the DEFAULT — `inventoryentryList` substitutes `"stock"` for an
+ * Callers own the DEFAULT — the inventory list substitutes `"stock"` for an
  * omitted filter server-side, so the UI, MCP `list_inventory`, and direct workflow
  * callers cannot disagree about what an empty filter means.
  */
@@ -58,14 +58,13 @@ export const placementCondition = (
 };
 
 /**
- * The JOIN-implied half of `inventoryentryList`'s population, as a
+ * The JOIN-implied half of the inventory list's population, as a
  * self-contained predicate: an entry is browsable only when BOTH its Product
  * and its Location are live.
  *
- * The list says this with `INNER JOIN`s because it needs those tables' columns
- * for search, category, and sorting. A caller with no joins to hang it on — the
- * dashboard's scalar `count(*)` subquery — cannot express it that way, and the
- * count's hand-mirrored predicate used to simply omit it. That was latent
+ * The inventory list declares it as its population, and a caller with no joins
+ * to hang it on — the dashboard's scalar `count(*)` subquery — reads it too.
+ * That count's hand-mirrored predicate used to simply omit it. That was latent
  * rather than live (production: 863 either way, and zero live entries point at
  * a soft-deleted product or location), but it was correct only by luck of the
  * data.

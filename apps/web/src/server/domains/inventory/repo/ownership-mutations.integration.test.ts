@@ -24,14 +24,13 @@ import {
 } from "~/server/db/schema";
 import {
   createExpense,
-  getExpenseByID,
+  readExpenseById,
 } from "~/server/domains/expense/repo/crud";
 import { moveInventoryEntries } from "~/server/domains/inventory/repo/bulk";
 import {
   createInventoryEntry,
   deleteInventoryEntries,
-  inventoryentryList,
-  inventoryentryListRead,
+  inventoryScaffold,
 } from "~/server/domains/inventory/repo/crud";
 import * as ownershipReads from "~/server/domains/inventory/repo/ownership";
 import {
@@ -49,7 +48,7 @@ import {
   updateLedgerParty,
 } from "~/server/domains/ledger-party/repo/ledger-party";
 import { createLocation } from "~/server/domains/location/repo/crud";
-import { createProduct, productList } from "~/server/domains/product/repo/crud";
+import { createProduct } from "~/server/domains/product/repo/crud";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
@@ -66,6 +65,8 @@ import {
   createLocationFixture,
   createProductFixture,
   createProductIdentityFixture,
+  listInventoryFixture,
+  listProductsFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -126,7 +127,7 @@ describe("inventory ownership mutations", () => {
     const filters = { productIdFilter: [subject.product.id] };
     const page = { pageIndex: 0, pageSize: 12 };
     const productPage = () =>
-      productList(ctx.db, { ids: [subject.product.id] }, [], page);
+      listProductsFixture(ctx.db, { ids: [subject.product.id] }, [], page);
     const membership = async () =>
       (
         await getDb(ctx.db)
@@ -141,7 +142,7 @@ describe("inventory ownership mutations", () => {
     // NULL membership is unresolved, rather than a known false match.
     expect(await membership()).toEqual({ unknown: null, household: null });
     const excludingHousehold = () =>
-      productList(
+      listProductsFixture(
         ctx.db,
         {
           ids: [subject.product.id],
@@ -180,7 +181,7 @@ describe("inventory ownership mutations", () => {
       }),
     ).toMatchObject({ ids: [subject.product.id], totalCount: 1 });
     const filtered = (owner: string) =>
-      inventoryentryList(
+      listInventoryFixture(
         ctx.db,
         { ...filters, ownerLedgerPartyId: [owner] },
         [],
@@ -383,17 +384,16 @@ describe("inventory ownership mutations", () => {
     const filters = { productIdFilter: [subject.product.id] };
     const page = { pageIndex: 0, pageSize: 12 };
     await drainStoredDerived(ctx.db);
-    const full = await inventoryentryList(ctx.db, filters, [], page);
+    const full = await listInventoryFixture(ctx.db, filters, [], page);
     expect(full.data[0]?.ownerLedgerPartyId).toBe(owner.output.id);
     const read = async (fields: readonly string[]) => {
       const projection = selectedListProjection("inventory", fields);
-      const result = await inventoryentryListRead(
-        ctx.db,
+      const result = await inventoryScaffold.read(ctx.db, {
         filters,
-        [],
-        page,
+        sorts: [],
+        pagination: page,
         projection,
-      );
+      });
       return {
         count: result.count,
         data: selectListReadRows("inventory", result.data, fields),
@@ -487,7 +487,7 @@ describe("inventory ownership mutations", () => {
         amount: 200,
       });
       const before = await Promise.all(
-        acquired.expenses.map((row) => getExpenseByID(ctx.db, row.entityId)),
+        acquired.expenses.map((row) => readExpenseById(ctx.db, row.entityId)),
       );
       expect(before.map((row) => row.beneficiaries)).toEqual([
         [{ partyId: null, weight: 1 }],
@@ -537,7 +537,7 @@ describe("inventory ownership mutations", () => {
       expect(await productIdsByOwner(ctx.db, [owner.output.id])).toEqual(
         expect.arrayContaining(productIds),
       );
-      const inventory = await inventoryentryList(
+      const inventory = await listInventoryFixture(
         ctx.db,
         { ownerLedgerPartyId: [owner.output.id] },
         [],
@@ -548,7 +548,7 @@ describe("inventory ownership mutations", () => {
       ]);
       expect(
         await Promise.all(
-          acquired.expenses.map((row) => getExpenseByID(ctx.db, row.entityId)),
+          acquired.expenses.map((row) => readExpenseById(ctx.db, row.entityId)),
         ),
       ).toEqual(before);
     },
@@ -1030,7 +1030,7 @@ describe("inventory ownership mutations", () => {
     await deleteInventoryEntries(ctx.db, [subject.entryId], TEST_ACTOR);
 
     expect(
-      (await getExpenseByID(ctx.db, createdExpense.entityId)).beneficiaries,
+      (await readExpenseById(ctx.db, createdExpense.entityId)).beneficiaries,
     ).toEqual([{ partyId: owner.output.id, weight: 1 }]);
   });
 
@@ -1117,8 +1117,8 @@ describe("inventory ownership mutations", () => {
       TEST_ACTOR,
     );
     const page = { pageIndex: 0, pageSize: 50 };
-    const names = async (filters: Parameters<typeof inventoryentryList>[1]) =>
-      (await inventoryentryList(ctx.db, filters, [], page)).data.map(
+    const names = async (filters: Parameters<typeof listInventoryFixture>[1]) =>
+      (await listInventoryFixture(ctx.db, filters, [], page)).data.map(
         (row) => row.displayName,
       );
     await drainStoredDerived(ctx.db);

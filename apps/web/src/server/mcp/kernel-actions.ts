@@ -22,6 +22,10 @@ import {
   mcpResultsEnvelope,
   projectEntityResult,
 } from "~/contracts/mcp-projections";
+import {
+  type ListEntity,
+  listEntities,
+} from "~/entity/generated/entity-lists.gen";
 import { resolveWithProductCandidatesWorkflow } from "~/server/domains/ingredient/operations.server";
 import { resolveOrCreatePlants } from "~/server/domains/plant/repo/plant";
 import { resolveProductNames } from "~/server/domains/product/repo/resolve-names";
@@ -47,6 +51,7 @@ import {
   entitySearchResultSchema,
 } from "~/server/entity-kernel/contracts";
 import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
+import { listOperations } from "~/server/entity-kernel/list-operations";
 import {
   entityPreviewInputSchema,
   entityPreviewOutputSchema,
@@ -61,7 +66,6 @@ import {
   generatedMcpEntityMutationUpdateResultSchema,
   generatedMcpEntityUpdateCommandSchema,
 } from "~/server/generated/entity-bindings.gen";
-import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import {
   generatedMcpEntityRelationCommandSchema,
   generatedMcpEntityRelationPreviewInputSchema,
@@ -144,10 +148,8 @@ type ResultDetail = NonNullable<
   z.output<typeof commandWithDetail>["resultDetail"]
 >;
 
-const hasListReader = (
-  entity: string,
-): entity is keyof typeof ENTITY_LIST_READ_OPERATIONS =>
-  Object.hasOwn(ENTITY_LIST_READ_OPERATIONS, entity);
+const hasListReader = (entity: string): entity is ListEntity =>
+  listEntities.some((key) => key === entity);
 
 /**
  * Production executor. A summary list publishes only `entitySummaryFields`, so
@@ -166,7 +168,7 @@ const executeMcpEntity: McpEntityExecutor = async (
   if (command.action === "list" && hasListReader(command.entity)) {
     const fields = selectionListFields(command.entity, selection);
     if (fields)
-      return ENTITY_LIST_READ_OPERATIONS[command.entity].listFields(
+      return listOperations(command.entity).listFields(
         context,
         { ...command, filters: command.filters ?? {} },
         fields,
@@ -184,7 +186,7 @@ const executeDetail: McpEntityExecutor = async (context, command, detail) => {
   return detail === "summary" &&
     command.action === "list" &&
     hasListReader(command.entity)
-    ? ENTITY_LIST_READ_OPERATIONS[command.entity].listFields(
+    ? listOperations(command.entity).listFields(
         context,
         { ...command, filters: command.filters ?? {} },
         entitySummaryFields(command.entity),

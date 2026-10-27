@@ -6,10 +6,11 @@ import { getDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
 import {
   createProductFixture as createProduct,
+  listProductsFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { productList, updateProduct } from "./crud";
+import { updateProduct } from "./crud";
 import { mergeProducts } from "./merge";
 
 const page = { pageIndex: 0, pageSize: 50 };
@@ -94,9 +95,11 @@ describe("Product.kind", () => {
       makeProductInput({ name: "Kind filter mystery" }),
       ctx.actor,
     );
-    const idsFor = async (filters: Parameters<typeof productList>[1]) =>
+    const idsFor = async (filters: Parameters<typeof listProductsFixture>[1]) =>
       new Set(
-        (await productList(ctx.db, filters, [], page)).data.map((r) => r.id),
+        (await listProductsFixture(ctx.db, filters, [], page)).data.map(
+          (r) => r.id,
+        ),
       );
 
     const consumables = await idsFor({ kind: ["consumable"] });

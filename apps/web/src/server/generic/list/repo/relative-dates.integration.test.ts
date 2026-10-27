@@ -11,6 +11,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { ListReadRow } from "~/entity/model/list-read-fields";
 import {
   householdDateTime,
   householdLocalDate,
@@ -19,14 +20,14 @@ import {
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { getDb, householdDaySql } from "~/server/db/helpers";
 import { expense, location, planting, task } from "~/server/db/schema";
-import { expenseList } from "~/server/domains/expense/repo/lookup";
+import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import {
   createPlanting,
-  plantingList,
+  plantingScaffold,
 } from "~/server/domains/garden/repo/garden";
-import { locationList } from "~/server/domains/location/repo/crud";
+import { locationScaffold } from "~/server/domains/location/repo/crud";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
-import { taskList } from "~/server/domains/task/repo/lookup";
+import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { resolveRelativeDateFilters } from "~/server/entity-kernel/filter-tokens";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -80,11 +81,12 @@ describe("relative date tokens and date intervals", () => {
           .where(and(inArray(table.name, [...names]), condition))
       ).map((row) => String(row.name)),
     );
-  const within = (
-    rows: readonly { name: string }[],
-    names: readonly string[],
-  ) =>
-    sorted(rows.map((row) => row.name).filter((name) => names.includes(name)));
+  const within = (rows: readonly ListReadRow[], names: readonly string[]) =>
+    sorted(
+      rows
+        .map((row) => String(row.name))
+        .filter((name) => names.includes(name)),
+    );
 
   it("task dueTo @today-1d matches the retired dueRelative and moves with the day", async () => {
     const seed = (name: string, dueDate: string | null, dueEndDate?: string) =>
@@ -110,16 +112,15 @@ describe("relative date tokens and date intervals", () => {
     const overdue = async (on: string) =>
       within(
         (
-          await taskList(
-            ctx.db,
-            resolveRelativeDateFilters(
+          await taskScaffold.read(ctx.db, {
+            filters: resolveRelativeDateFilters(
               taskFiltersSchema,
               { dueTo: "@today-1d" },
               on,
             ),
-            [],
-            page,
-          )
+            sorts: [],
+            pagination: page,
+          })
         ).data,
         names,
       );
@@ -150,12 +151,15 @@ describe("relative date tokens and date intervals", () => {
     const read = async (filters: Record<string, string>) =>
       within(
         (
-          await taskList(
-            ctx.db,
-            resolveRelativeDateFilters(taskFiltersSchema, filters, today),
-            [],
-            page,
-          )
+          await taskScaffold.read(ctx.db, {
+            filters: resolveRelativeDateFilters(
+              taskFiltersSchema,
+              filters,
+              today,
+            ),
+            sorts: [],
+            pagination: page,
+          })
         ).data,
         names,
       );
@@ -177,16 +181,15 @@ describe("relative date tokens and date intervals", () => {
       ["Planned tomorrow", day(1)],
     ] as const)
       await createRepoEntity(ctx, "expense", makeExpenseInput({ name, date }));
-    const { data } = await expenseList(
-      ctx.db,
-      resolveRelativeDateFilters(
+    const { data } = await expenseScaffold.read(ctx.db, {
+      filters: resolveRelativeDateFilters(
         expenseFiltersSchema,
         { dateTo: "@today-1d" },
         today,
       ),
-      [],
-      page,
-    );
+      sorts: [],
+      pagination: page,
+    });
     expect(within(data, names)).toEqual(
       await retired(expense, names, sql`${expense.date} < ${today}`),
     );
@@ -215,9 +218,8 @@ describe("relative date tokens and date intervals", () => {
       "Recounted 5 days ago",
       "Recounted on the cutoff day",
     ];
-    const { data } = await locationList(
-      ctx.db,
-      resolveRelativeDateFilters(
+    const { data } = await locationScaffold.read(ctx.db, {
+      filters: resolveRelativeDateFilters(
         locationFiltersSchema,
         {
           lastBulkInventoryTo: "@today-30d",
@@ -225,9 +227,9 @@ describe("relative date tokens and date intervals", () => {
         },
         today,
       ),
-      [],
-      page,
-    );
+      sorts: [],
+      pagination: page,
+    });
     // The expected diff (plan §8): whole household days now decide the
     // cutoff day, where the retired predicate measured elapsed time.
     const elapsedCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -279,7 +281,7 @@ describe("relative date tokens and date intervals", () => {
       );
       return [row.id, name] as const;
     };
-    const fixture = new Map([
+    const fixture = new Map<string, string>([
       await seed("May run", {
         sowedOn: "2026-05-01",
         finishedOn: "2026-05-31",
@@ -294,11 +296,15 @@ describe("relative date tokens and date intervals", () => {
     const read = async (filters: Record<string, string>) =>
       sorted(
         (
-          await plantingList(
-            ctx.db,
-            resolveRelativeDateFilters(plantingFiltersSchema, filters, today),
-            page,
-          )
+          await plantingScaffold.read(ctx.db, {
+            filters: resolveRelativeDateFilters(
+              plantingFiltersSchema,
+              filters,
+              today,
+            ),
+            sorts: [],
+            pagination: page,
+          })
         ).data.flatMap((row) => {
           const name = fixture.get(row.id);
           return name === undefined ? [] : [name];

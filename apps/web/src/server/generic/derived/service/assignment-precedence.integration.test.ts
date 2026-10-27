@@ -16,7 +16,7 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
+import { listOperations } from "~/server/entity-kernel/list-operations";
 import {
   claimDerivedMarks,
   prepareDerivedPage,
@@ -178,7 +178,7 @@ describe("assignment and stored projection precedence", () => {
     });
     expect(unpriced.items).toEqual([]);
     expect(unpriced.meta.unresolvedCount).toBe(1);
-    const facets = await ENTITY_LIST_READ_OPERATIONS.product.facets(context(), {
+    const facets = await listOperations("product").facets(context(), {
       filters: { ids: [first.id, second.id] },
       facetIds: ["priced"],
     });
@@ -190,20 +190,17 @@ describe("assignment and stored projection precedence", () => {
         unresolvedCount: 1,
       }),
     );
-    const viewCounts = await ENTITY_LIST_READ_OPERATIONS.product.viewCounts(
-      context(),
-      {
-        views: [
-          {
-            id: "unpriced",
-            filters: {
-              ids: [first.id, second.id],
-              pricePresenceFilter: "none",
-            },
+    const viewCounts = await listOperations("product").viewCounts(context(), {
+      views: [
+        {
+          id: "unpriced",
+          filters: {
+            ids: [first.id, second.id],
+            pricePresenceFilter: "none",
           },
-        ],
-      },
-    );
+        },
+      ],
+    });
     expect(viewCounts.views).toEqual([
       { id: "unpriced", count: 0, unresolvedCount: 1 },
     ]);
@@ -371,7 +368,7 @@ describe("assignment and stored projection precedence", () => {
       kind: "live",
       decision: { provenance: { kind: "computed" } },
     });
-    const selected = await ENTITY_LIST_READ_OPERATIONS.product.listFields(
+    const selected = await listOperations("product").listFields(
       context(),
       {
         filters: { ids: [product.id] },

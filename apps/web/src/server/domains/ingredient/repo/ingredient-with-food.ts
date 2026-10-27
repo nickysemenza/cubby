@@ -7,7 +7,6 @@ import type {
   RawIngredientEnrichment as EnrichmentRow,
   RawIngredientWithFoodLean as IngredientWithFoodLeanOut,
 } from "@cubby/schemas/ingredient-raw-read";
-import type { RawIngredientDetail as IngredientWithFoodOut } from "@cubby/schemas/ingredient-raw-read";
 import type {
   RawProductWithMappings as ProductWithMappings,
   RawProductWithMappingsAndFood,
@@ -18,7 +17,6 @@ import { classifyIngredientFix } from "~/lib/recipe-totals-gaps";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 // Extended schemas that include food data
 import type { Database } from "~/server/db";
-import { buildIngredientNutritionProduct } from "~/server/domains/ingredient/repo/nutrition-product";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import { recipeTreeLeafIngredientIds } from "~/server/domains/recipe/repo/totals";
 import {
@@ -28,11 +26,9 @@ import {
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
-import { getIngredientByID as getIngredientByIDRepo } from "./crud";
 import { findFuzzyMergeCandidates } from "./merge";
 import {
   enrichmentWorkbenchIngredients as enrichmentWorkbenchIngredientsRepo,
-  getIngredientByName as getIngredientByNameRepo,
   getIngredientsByIDsLean as getIngredientsByIDsLeanRepo,
 } from "./search";
 
@@ -43,31 +39,9 @@ const enrichProductsWithFood = async (
   return batchEnrichWithFood(products, foodLookupParamFromProduct, usdaClient);
 };
 
-export const getIngredientByID = async (
-  db: Database,
-  usdaClient: UsdaFoodBatchPort,
-  id: IngredientId,
-): Promise<IngredientWithFoodOut> => {
-  const ingredient = await getIngredientByIDRepo(db, id);
-  const enrichedProducts = await enrichProductsWithFood(
-    usdaClient,
-    ingredient.product,
-  );
-
-  return {
-    ...ingredient,
-    product: enrichedProducts,
-    nutritionProduct: buildIngredientNutritionProduct(enrichedProducts),
-  };
-};
-
 /**
- * Batched `getIngredientByID`: one DB query for all ids + one cross-ingredient
- * USDA enrichment pass (via batchEnrichNestedItems), instead of N×(query+enrich).
- * Used by the recipe-costing path (recompute / getManyByIDs) + the unit-mapping
- * analysis — all of which only read products/food, so this is the LEAN fetch: no
- * recipe-usage relation (the per-usage Recipe + Section jsonb bodies that the
- * full ingredient graph carries — a needless over-fetch for costing).
+ * Batched scaffold records with one cross-ingredient USDA enrichment pass.
+ * Costing and unit-mapping analysis need products and food, not recipe usages.
  */
 export const getIngredientsByIDs = async (
   db: Database,
@@ -95,26 +69,6 @@ export const enrichPreparedIngredients = (
     (products) => enrichProductsWithFood(usdaClient, products),
     (ingredient, product) => ({ ...ingredient, product }),
   );
-
-export const getIngredientByName = async (
-  db: Database,
-  usdaClient: UsdaFoodBatchPort,
-  name: string,
-): Promise<IngredientWithFoodOut | null> => {
-  const ingredient = await getIngredientByNameRepo(db, name);
-  if (!ingredient) return null;
-
-  const enrichedProducts = await enrichProductsWithFood(
-    usdaClient,
-    ingredient.product,
-  );
-
-  return {
-    ...ingredient,
-    product: enrichedProducts,
-    nutritionProduct: buildIngredientNutritionProduct(enrichedProducts),
-  };
-};
 
 /**
  * The enrichment workbench worklist: every recipe-used ingredient that isn't

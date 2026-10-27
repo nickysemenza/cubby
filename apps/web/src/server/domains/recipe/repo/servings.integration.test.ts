@@ -1,3 +1,4 @@
+import { rawRecipeList } from "@cubby/schemas/recipe-raw-read";
 import { countLabel } from "@cubby/shared/pluralize";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
@@ -8,7 +9,7 @@ import {
   makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
 
-import { getRecipeByShortcode, recipeList, updateRecipe } from "./crud";
+import { readRecipe, recipeScaffold, updateRecipe } from "./crud";
 
 const ctx = withTestDb();
 
@@ -20,7 +21,7 @@ it("words a recipe's composition and totals for the detail read", async () => {
     makeRecipeInput({ name: "Synthetic composition label" }),
     ctx.actor,
   );
-  const read = await getRecipeByShortcode(ctx.db, created.id);
+  const read = await readRecipe(ctx.db, created.id);
   const sections = read?.sections ?? [];
   const ingredients = sections.flatMap((section) => section.ingredients);
   const steps = sections.flatMap((section) => section.instructions);
@@ -46,7 +47,7 @@ it("reports live recipe serving fallback without materializing it during reads o
     },
     ctx.actor,
   );
-  const read = () => getRecipeByShortcode(ctx.db, created.id);
+  const read = () => readRecipe(ctx.db, created.id);
   expect((await read())?.servings).toBeNull();
   expect((await read())?.fieldResolutions?.servings).toMatchObject({
     mode: "inherit",
@@ -55,15 +56,15 @@ it("reports live recipe serving fallback without materializing it during reads o
     fallbackValue: 4,
     canReset: false,
   });
-  const listed = await recipeList(
-    ctx.db,
-    { nameFilter: "Synthetic serving resolution" },
-    [],
-    { pageIndex: 0, pageSize: 10 },
-  );
+  const listed = await recipeScaffold.read(ctx.db, {
+    filters: { nameFilter: "Synthetic serving resolution" },
+    sorts: [],
+    pagination: { pageIndex: 0, pageSize: 10 },
+  });
   expect(
-    listed.data.find((row) => row.id === created.id)?.fieldResolutions
-      ?.servings,
+    listed.data
+      .map((row) => rawRecipeList.parse(row))
+      .find((row) => row.id === created.id)?.fieldResolutions?.servings,
   ).toMatchObject({ mode: "inherit", value: 4 });
   await updateRecipe(ctx.db, created.entityId, { servings: 2 }, ctx.actor);
   expect((await read())?.fieldResolutions?.servings).toMatchObject({

@@ -4,7 +4,7 @@ import { and, getTableName, sql } from "drizzle-orm";
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { outer } from "~/server/db/helpers/related";
 import { image as table } from "~/server/db/schema";
-import { buildImageWhere } from "~/server/domains/image/repo/image";
+import { imageScaffold } from "~/server/domains/image/repo/image";
 import {
   workImageOwners,
   workImageIsShared,
@@ -35,7 +35,10 @@ export const imageWorkSources = (): WorkSource[] => [
         .from(table)
         .where(
           and(
-            await buildImageWhere(db, imageListFiltersSchema.parse(filters)),
+            await imageScaffold.prepareWhere(
+              db,
+              imageListFiltersSchema.parse(filters),
+            ),
             recordScope(scope, sql`${table.shortcode}`),
           ),
         ),

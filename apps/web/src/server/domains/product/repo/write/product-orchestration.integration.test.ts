@@ -20,7 +20,7 @@ import {
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import {
-  getVendorByID,
+  readVendorById,
   findOrCreateVendor,
 } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
@@ -345,7 +345,7 @@ describe("findOrCreateByCode", () => {
         {
           name: "Hammer Guide",
           brandId: (
-            await getVendorByID(
+            await readVendorById(
               ctx.db,
               await findOrCreateVendor(ctx.db, "Other Press"),
             )

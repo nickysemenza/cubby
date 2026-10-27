@@ -15,7 +15,7 @@ import { createLedgerTransfer } from "~/server/domains/ledger-transfer/repo";
 import { createLocation } from "~/server/domains/location/repo/crud";
 import {
   findOrCreateVendor,
-  getVendorByID,
+  readVendorById,
   updateVendor,
 } from "~/server/domains/vendor/repo/vendor";
 import { createWish } from "~/server/domains/wish/repo";
@@ -367,7 +367,7 @@ describe("data quality: finance and project entities", () => {
       amount: 25,
     });
     const vendorId = await findOrCreateVendor(ctx.db, "DQ settlement vendor");
-    const settlementVendor = await getVendorByID(ctx.db, vendorId);
+    const settlementVendor = await readVendorById(ctx.db, vendorId);
     const purchase = await createRepoEntity(ctx, "purchase", {
       date: "2026-08-01",
       vendorId: settlementVendor.id,

@@ -46,7 +46,7 @@ import {
   updateMeal,
   updateMealRecipeWithEntityId,
 } from "~/server/domains/meal/repo/crud";
-import { getMealByID } from "~/server/domains/meal/repo/crud";
+import { readMealById } from "~/server/domains/meal/repo/crud";
 import { saveMealFood, removeMealFood } from "~/server/domains/meal/repo/food";
 import {
   getMealPreparations,
@@ -392,7 +392,7 @@ export const mealHandlers = implementOperationDomain(mealContract, {
     )[0]!,
   duplicate: async (context, input) => {
     const copied = await duplicateMealWorkflow(context, input);
-    const created = await getMealByID(context.db, copied.mealIds[0]!);
+    const created = await readMealById(context.db, copied.mealIds[0]!);
     if (!created) throw new Error("Duplicated meal could not be reloaded");
     return (await readMeals(context.db, [created]))[0]!;
   },

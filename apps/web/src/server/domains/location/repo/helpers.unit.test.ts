@@ -1,22 +1,12 @@
 import { locationListRefOut } from "@cubby/schemas/location";
-import {
-  testCompleteDataQuality,
-  testEntityId,
-  testShortcode,
-} from "@cubby/schemas/testing";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import {
   categorySummaryFixture,
   taxonomyId,
 } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
-import { getR2PublicUrl } from "~/server/clients/r2-public-url";
-
-import {
-  dbLocationToAPI,
-  locationReferenceFields,
-  locationInventoryFields,
-} from "./helpers";
+import { locationReferenceFields, locationInventoryFields } from "./helpers";
 import type { LocationListDB } from "./internal-types";
 
 const LOCATION_ID = testEntityId(
@@ -52,8 +42,6 @@ const DELETED_PRODUCT_INVENTORY_ID = testEntityId(
   "823e4567-e89b-12d3-a456-426614174000",
 );
 const IMAGE_SHORTCODE = "IMG-2345";
-const IMAGE_ID = testShortcode("image", IMAGE_SHORTCODE);
-const DELETED_IMAGE_SHORTCODE = "IMG-6789";
 const CREATED_AT = new Date("2024-01-01T00:00:00.000Z");
 const UPDATED_AT = new Date("2024-01-02T00:00:00.000Z");
 const DELETED_AT = new Date("2024-01-03T00:00:00.000Z");
@@ -112,12 +100,6 @@ const image = {
   deletedAt: null,
 };
 
-const deletedImage = {
-  ...image,
-  shortcode: DELETED_IMAGE_SHORTCODE,
-  deletedAt: DELETED_AT,
-};
-
 const product = {
   id: PRODUCT_ID,
   shortcode: "PRD-TEST",
@@ -157,30 +139,6 @@ const deletedProduct = {
 };
 
 describe("location mappers", () => {
-  it("maps scalar location rows and filters deleted image rows", () => {
-    const result = dbLocationToAPI(
-      {
-        ...baseLocation,
-        deletedAt: null,
-        images: [
-          { image, deletedAt: null },
-          { image: deletedImage, deletedAt: null },
-          { image, deletedAt: DELETED_AT },
-        ],
-      },
-      undefined,
-      testCompleteDataQuality(),
-    );
-
-    expect(result).toMatchObject({
-      id: testShortcode("location", "LOC-TEST"),
-      name: "Pantry",
-      images: [{ id: IMAGE_ID, url: getR2PublicUrl(image.key) }],
-    });
-    expect(result.images).toHaveLength(1);
-    expect(result).not.toHaveProperty("deletedAt");
-  });
-
   it("maps list rows to shallow parent, child, and inventory contracts", () => {
     const row = {
       ...baseLocation,

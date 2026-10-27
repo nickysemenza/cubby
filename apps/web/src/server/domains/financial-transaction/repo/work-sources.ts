@@ -4,7 +4,7 @@ import { and, sql } from "drizzle-orm";
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { outer } from "~/server/db/helpers/related";
 import { financialTransaction as table } from "~/server/db/schema";
-import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import {
   financialTransactionWorkOwners,
   financialTransactionWorkFacts,
@@ -37,7 +37,7 @@ export const financialTransactionWorkSources = (): WorkSource[] => [
           .from(table)
           .where(
             and(
-              await buildFinancialTransactionWhere(
+              await financialTransactionScaffold.prepareWhere(
                 db,
                 financialTransactionFiltersSchema.parse(filters),
               ),

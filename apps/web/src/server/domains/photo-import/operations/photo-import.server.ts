@@ -57,7 +57,7 @@ import {
   finalizePhotoRun,
   startPhotoInventoryRun,
 } from "~/server/domains/purchase-import/repo/run-service";
-import { getRunByShortcode } from "~/server/domains/run/repo/run";
+import { readRun } from "~/server/domains/run/repo/run";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
@@ -365,7 +365,7 @@ export const photoImportHandlers = implementOperationDomain(
       finalizePhotoRun(context.db, input, context.actorContext),
     reconcile: (context, input) => reconcilePhotoImport(context.db, input),
     runContext: async (context, input) => {
-      const run = await getRunByShortcode(context.db, input.runId);
+      const run = await readRun(context.db, input.runId);
       if (!run || run.purpose !== "photo_inventory" || !run.ledgerPartyId)
         throw new Error("Photo-inventory run and owner were not found");
       const all = await listPhotoRunImages(context.db, input.runId);

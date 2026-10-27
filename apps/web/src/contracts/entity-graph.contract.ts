@@ -94,7 +94,7 @@ export const entityGraphContract = defineContract(
     connections: query({
       exposure: "capability",
       description:
-        'One-hop physical connections of any entity: what points at it (`incoming`) and what it points at (`outgoing`), grouped by edge with a count and the first linked records. A merged-away code reads its survivor and reports `redirectedFrom`. Pass `operation: "delete"` or `"merge"` to see each incoming group\'s declared disposition (block, detach, repoint, ...) before running it; advisory, since the mutation re-validates.',
+        'One-hop physical connections of any entity: what points at it (`incoming`) and what it points at (`outgoing`), grouped by edge with a count and the first linked records. A merged-away code is refused with the survivor\'s code. Pass `operation: "delete"` or `"merge"` to see each incoming group\'s declared disposition (block, detach, repoint, ...) before running it; advisory, since the mutation re-validates.',
       input: entityConnectionsInput,
       output: entityConnectionsOut,
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },

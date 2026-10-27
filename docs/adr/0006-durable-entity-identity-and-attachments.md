@@ -1,6 +1,6 @@
 # ADR 0006: Durable entity identity and one attachment table
 
-Status: Accepted. Superseded in part by ADR 0007 (generic `EntityLink` table; `RunMutation` and `ImageSighting` amendments below).
+Status: Accepted. Superseded in part by ADR 0007 (generic `EntityLink` table; `RunMutation` and `ImageSighting` amendments below) and ADR 0023 (reads no longer follow merge redirects).
 
 ## Context
 
@@ -115,3 +115,15 @@ path's destination.
   `changes.sightings[<sighting id>]`) and then its `Entity` rows were deleted;
   the `IMS-` prefix left the shortcode registry. ADR 0005's amendment records
   the same change from the sighting side.
+
+## Amendment (ADR 0023: reads no longer follow merge redirects)
+
+Reads no longer follow a merge redirect. Detail, connection and graph reads
+treat a merged-away code like any other code with no live row: it is not
+found, and the not-found message names the survivor through
+`describeUnresolvableCode`. `redirectedFrom` and `previousShortcodes` are gone
+from every read contract and client. Identity rows, tombstones and
+`mergedIntoId` stay as decided above, so writes still refuse with the
+survivor's code and the explanation stays exact. A merged code in an old link
+or bookmark is a dead end, not a silent redirect. The trusted household
+re-opens the survivor.

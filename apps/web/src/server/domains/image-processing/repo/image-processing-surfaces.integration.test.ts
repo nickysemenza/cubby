@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { job as durableJob } from "~/server/db/retained-tables";
 import { device, image, imageProcessingJob } from "~/server/db/schema";
-import { getDeviceByID } from "~/server/domains/device/repo/device";
+import { readDeviceById } from "~/server/domains/device/repo/device";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
 import { imageJobRepository } from "~/server/domains/image-job/repo";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
@@ -100,7 +100,7 @@ describe("image work on every surface", () => {
       .from(device)
       .where(eq(device.installationId, installationId));
 
-    expect(await getDeviceByID(ctx.db, saved!.id)).toMatchObject({
+    expect(await readDeviceById(ctx.db, saved!.id)).toMatchObject({
       updateRequired: false,
       inactive: false,
       appleIntelligenceAvailable: true,
@@ -159,7 +159,7 @@ describe("image work on every surface", () => {
       .from(device)
       .where(eq(device.installationId, outdated));
 
-    expect(await getDeviceByID(ctx.db, saved!.id)).toMatchObject({
+    expect(await readDeviceById(ctx.db, saved!.id)).toMatchObject({
       updateRequired: true,
       inactive: true,
       // A hello that never reported capabilities leaves it unknown.

@@ -18,7 +18,7 @@ import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { selectStaleRecipeIds } from "~/server/domains/recipe/repo/totals";
 import {
   findOrCreateVendor,
-  getVendorByID,
+  readVendorById,
 } from "~/server/domains/vendor/repo/vendor";
 import {
   entityKernelContextSchema,
@@ -277,7 +277,7 @@ describe("generic bulk updates", () => {
         id: product.id,
         data: {
           brandId: (
-            await getVendorByID(
+            await readVendorById(
               ctx.db,
               await findOrCreateVendor(ctx.db, "Synthetic Cited Maker"),
             )
@@ -473,7 +473,7 @@ describe("generic bulk updates", () => {
     await expect(
       bulk("product", [first.id, second.id, bystander.id], {
         brandId: (
-          await getVendorByID(
+          await readVendorById(
             ctx.db,
             await findOrCreateVendor(ctx.db, "Synthetic Shared"),
           )

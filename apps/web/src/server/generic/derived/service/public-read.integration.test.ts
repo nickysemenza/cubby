@@ -3,10 +3,15 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
-import { getIngredientByID } from "~/server/domains/ingredient/repo/ingredient-with-food";
+import {
+  findOrCreateIngredient,
+  readIngredientDetail,
+} from "~/server/domains/ingredient/repo/crud";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
-import { getRecipeByID, updateRecipe } from "~/server/domains/recipe/repo/crud";
+import {
+  readRecipeById,
+  updateRecipe,
+} from "~/server/domains/recipe/repo/crud";
 import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import {
   createRecipeFixture,
@@ -91,11 +96,12 @@ describe("nested field envelope reads", () => {
       }),
       ctx.actor,
     );
-    const raw = await getIngredientByID(
+    // Outside Workers the record read resolves no USDA foods.
+    const raw = await readIngredientDetail(
       ctx.db,
-      { findFoodsBatch: async (lookups) => lookups.map(() => null) },
       parseEntityId("ingredient", ingredient.id),
     );
+    if (!raw) throw new Error("Synthetic ingredient missing");
     const repeated = await readPublicEntityRows({
       db: ctx.db,
       entity: "ingredient",
@@ -166,7 +172,7 @@ describe("nested field envelope reads", () => {
       }),
       ctx.actor,
     );
-    const raw = await getRecipeByID(ctx.db, parent.entityId);
+    const raw = await readRecipeById(ctx.db, parent.entityId);
     if (!raw) throw new Error("Synthetic parent recipe is missing");
     await updateRecipe(ctx.db, child.entityId, { servings: 6 }, ctx.actor);
     const repeated = await readPublicEntityRows({

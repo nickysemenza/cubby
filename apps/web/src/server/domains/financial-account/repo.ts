@@ -1,31 +1,25 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import {
   type FinancialAccountCreateInput,
-  type FinancialAccountFilters,
   type FinancialAccountUpdateData,
-  financialAccountCardNumbers,
   financialAccountIdentity,
   financialAccountIdentityKind,
-  financialAccountSourceAliases,
 } from "@cubby/schemas/financial-account";
 import {
-  type RawFinancialAccountOut,
-  rawFinancialAccountOut,
-} from "@cubby/schemas/financial-account-raw-read";
+  financialAccountCardNumbers,
+  financialAccountSourceAliases,
+} from "@cubby/schemas/financial-account-fields";
+import { rawFinancialAccountOut } from "@cubby/schemas/financial-account-raw-read";
 import {
   type FinancialAccountId,
   type FinancialAccountShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import {
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
 import { and, eq, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -39,13 +33,13 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import {
   financialAccount,
   financialTransaction,
   ledgerParty,
   vendor,
 } from "~/server/db/schema";
+import { financialAccountSearch } from "~/server/domains/financial-account/search-read-financial-account";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   resolveMemberAssignee,
@@ -62,21 +56,12 @@ import {
 import {
   asActor,
   defineRepository,
-  listOn,
-  listReadOn,
-  onDb,
 } from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { loadFinancialAccountTransactionEvidence } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listGroupFields,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -112,31 +97,17 @@ export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
   OperationDisposition
 >;
 
-export const financialAccountTransactionCount = sql<number>`(
-  SELECT count(*)::int FROM "FinancialTransaction" ft
-  WHERE ft."accountId" = "FinancialAccount"."id" AND ft."deletedAt" IS NULL
-)`;
-
 const cardholderCode = (expression: ReturnType<typeof effectiveFieldSql>) =>
   sql<
     string | null
   >`(SELECT shortcode FROM "LedgerParty" WHERE id = ${expression} AND "deletedAt" IS NULL)`;
-const cardholderExtras = {
-  primaryCardholderMode: financialAccount.primaryCardholderMode,
-  storedCardholder: cardholderCode(
-    sql`${financialAccount.primaryCardholderId}`,
-  ),
-  fallbackCardholder: cardholderCode(
-    inheritedFieldSql("financialAccount", "primaryCardholderId"),
-  ),
-};
 const cardholderResolution = (row: {
   primaryCardholderMode: string;
   storedCardholder: string | null;
   fallbackCardholder: string | null;
   primaryCardholderShortcode: string | null;
   ledgerPartyShortcode: string | null;
-  ledgerPartyName: string | null;
+  ledgerPartyLabel: string | null;
 }): FieldResolutions => {
   const explicit =
     row.primaryCardholderMode === "explicit" || row.storedCardholder !== null;
@@ -160,7 +131,7 @@ const cardholderResolution = (row: {
           ? {
               entityKind: "ledgerParty",
               entityId: row.ledgerPartyShortcode,
-              name: row.ledgerPartyName,
+              name: row.ledgerPartyLabel,
             }
           : null,
       matchesFallback:
@@ -171,231 +142,132 @@ const cardholderResolution = (row: {
     },
   };
 };
-const columns = {
-  ...cardholderExtras,
-  authorizedUserItems: accountPartyPeriodItemsSql(
-    sql`"FinancialAccount"."authorizedUsers"`,
-  ),
-  fundingPeriodItems: accountPartyPeriodItemsSql(
-    sql`"FinancialAccount"."fundingPeriods"`,
-  ),
-  authorizedUsers: financialAccount.authorizedUsers,
-  fundingPeriods: financialAccount.fundingPeriods,
-  primaryCardholderShortcode: cardholderCode(
-    effectiveFieldSql("financialAccount", "primaryCardholderId"),
-  ),
-  id: financialAccount.id,
-  shortcode: financialAccount.shortcode,
-  name: financialAccount.name,
-  network: sql<
-    string | null
-  >`CASE WHEN "FinancialAccount"."identity"->>${"kind"} = ${financialAccountIdentityKind.enum.credit_card} THEN "FinancialAccount"."identity"->>'network' END`,
-  identity: financialAccount.identity,
-  sourceAliases: financialAccount.sourceAliases,
-  cardNumbers: financialAccount.cardNumbers,
-  inventoryOwnerDefaultEnabled: financialAccount.inventoryOwnerDefaultEnabled,
-  ledgerPartyShortcode: sql<
-    string | null
-  >`(SELECT shortcode FROM "LedgerParty" WHERE id = "FinancialAccount"."ledgerPartyId")`,
-  ledgerPartyName: sql<
-    string | null
-  >`(SELECT name FROM "LedgerParty" WHERE id = "FinancialAccount"."ledgerPartyId")`,
-  providerVendorShortcode: sql<
-    string | null
-  >`(SELECT shortcode FROM "Vendor" WHERE id = "FinancialAccount"."providerVendorId")`,
-  providerVendorName: sql<
-    string | null
-  >`(SELECT name FROM "Vendor" WHERE id = "FinancialAccount"."providerVendorId")`,
-  notes: financialAccount.notes,
-  createdAt: financialAccount.createdAt,
-  updatedAt: financialAccount.updatedAt,
-  transactionCount: financialAccountTransactionCount,
-} as const;
 
-const selectAccounts = (db: Database | DrizzleTransaction) =>
-  unwrapDb(db).select(columns).from(financialAccount);
-type FinancialAccountRow = Awaited<ReturnType<typeof selectAccounts>>[number];
+const helperText = z.string().nullable();
 
-const hydrate = async (
-  db: Database | DrizzleTransaction,
-  rows: FinancialAccountRow[],
-): Promise<RawFinancialAccountOut[]> => {
-  const dataQualities = await loadDataQualities(
-    db,
-    "financialAccount",
-    rows.map((row) => row.id),
-  );
-  // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-  return rows.map((row) => toOut(row, dataQualities.get(row.id)!));
-};
-
-const toOut = (
-  row: FinancialAccountRow,
-  dataQuality: DataQuality,
-): RawFinancialAccountOut => {
-  const sourceAliases = financialAccountSourceAliases.parse(row.sourceAliases);
-  const cardNumbers = financialAccountCardNumbers.parse(row.cardNumbers);
-  return rawFinancialAccountOut.parse({
-    id: parseShortcodeFor("financialAccount", row.shortcode),
-    name: row.name,
-    authorizedUserItems: row.authorizedUserItems,
-    fundingPeriodItems: row.fundingPeriodItems,
-    authorizedUsers: row.authorizedUsers,
-    fundingPeriods: row.fundingPeriods,
-    primaryCardholderId: row.primaryCardholderShortcode,
-    fieldResolutions: cardholderResolution(row),
-    network: row.network,
-    identity: financialAccountIdentity.parse(row.identity),
-    sourceAliases,
-    sourceAliasesLabel: sourceAliasesLabel(sourceAliases),
-    cardNumbers,
-    cardNumbersLabel: cardNumbersLabel(cardNumbers),
-    inventoryOwnerDefaultEnabled: row.inventoryOwnerDefaultEnabled,
-    ledgerPartyId: row.ledgerPartyShortcode
-      ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
-      : null,
-    ledgerPartyName: row.ledgerPartyName,
-    providerVendorId: row.providerVendorShortcode
-      ? parseShortcodeFor("vendor", row.providerVendorShortcode)
-      : null,
-    providerVendorName: row.providerVendorName,
-    notes: row.notes,
-    transactionCount: Number(row.transactionCount),
-    dataQuality,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  });
-};
-
-const selectAccountsRead = (
-  db: Database | DrizzleTransaction,
-  projection: ListProjection,
-) => {
-  const {
-    ledgerPartyShortcode,
-    ledgerPartyName,
-    providerVendorShortcode,
-    providerVendorName,
-    transactionCount,
-    ...core
-  } = columns;
-  return unwrapDb(db)
-    .select({
-      ...core,
-      ledgerPartyShortcode,
-      ledgerPartyName,
-      providerVendorShortcode,
-      providerVendorName,
-      ...listGroupFields(projection, "derived", () => ({ transactionCount })),
-    })
-    .from(financialAccount);
-};
-const accountRead = {
-  bindings: (bind) => [
-    bind(rawFinancialAccountOut.pick({ fieldResolutions: true }), (row) => ({
-      fieldResolutions: cardholderResolution(row),
-    })),
-    bind(rawFinancialAccountOut.pick({ primaryCardholderId: true }), (row) => ({
-      primaryCardholderId: row.primaryCardholderShortcode
-        ? parseShortcodeFor("ledgerParty", row.primaryCardholderShortcode)
-        : null,
-    })),
-    bind(rawFinancialAccountOut.pick({ ledgerPartyId: true }), (row) => ({
-      ledgerPartyId: row.ledgerPartyShortcode
-        ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
-        : null,
-    })),
-    bind(rawFinancialAccountOut.pick({ providerVendorId: true }), (row) => ({
-      providerVendorId: row.providerVendorShortcode
-        ? parseShortcodeFor("vendor", row.providerVendorShortcode)
-        : null,
-    })),
-  ],
-} satisfies ListReadOptions<
-  Awaited<ReturnType<typeof selectAccountsRead>>[number]
->;
-
-const financialAccountScaffold = listScaffold(
+export const financialAccountScaffold = listScaffold(
   "financialAccount",
   financialAccount,
   {
     derived: {
-      transactionCount: financialAccountTransactionCount,
       identityKind: sql`"FinancialAccount"."identity"->>${"kind"}`,
       hasSourceAlias: sql`jsonb_array_length("FinancialAccount"."sourceAliases") > 0`,
     },
+    read: {
+      optionCount: "transactionCount",
+      search: financialAccountSearch,
+      evidence: { transactionCount: loadFinancialAccountTransactionEvidence },
+      // Keys outside the read schema are helper columns the bindings read.
+      columns: {
+        authorizedUserItems: accountPartyPeriodItemsSql(
+          sql`"FinancialAccount"."authorizedUsers"`,
+        ),
+        fundingPeriodItems: accountPartyPeriodItemsSql(
+          sql`"FinancialAccount"."fundingPeriods"`,
+        ),
+        network: sql<
+          string | null
+        >`CASE WHEN "FinancialAccount"."identity"->>${"kind"} = ${financialAccountIdentityKind.enum.credit_card} THEN "FinancialAccount"."identity"->>'network' END`,
+        providerVendorName: sql<
+          string | null
+        >`(SELECT name FROM "Vendor" WHERE id = "FinancialAccount"."providerVendorId")`,
+        storedCardholder: cardholderCode(
+          sql`${financialAccount.primaryCardholderId}`,
+        ),
+        fallbackCardholder: cardholderCode(
+          inheritedFieldSql("financialAccount", "primaryCardholderId"),
+        ),
+        primaryCardholderShortcode: cardholderCode(
+          effectiveFieldSql("financialAccount", "primaryCardholderId"),
+        ),
+        ledgerPartyShortcode: sql<
+          string | null
+        >`(SELECT shortcode FROM "LedgerParty" WHERE id = "FinancialAccount"."ledgerPartyId")`,
+        ledgerPartyLabel: sql<
+          string | null
+        >`(SELECT name FROM "LedgerParty" WHERE id = "FinancialAccount"."ledgerPartyId")`,
+        providerVendorShortcode: sql<
+          string | null
+        >`(SELECT shortcode FROM "Vendor" WHERE id = "FinancialAccount"."providerVendorId")`,
+      },
+      bindings: (bind) => [
+        bind(
+          rawFinancialAccountOut.pick({
+            sourceAliasesLabel: true,
+            cardNumbersLabel: true,
+          }),
+          (row) => ({
+            sourceAliasesLabel: sourceAliasesLabel(
+              financialAccountSourceAliases.parse(row.sourceAliases),
+            ),
+            cardNumbersLabel: cardNumbersLabel(
+              financialAccountCardNumbers.parse(row.cardNumbers),
+            ),
+          }),
+        ),
+        bind(
+          rawFinancialAccountOut.pick({ fieldResolutions: true }),
+          (row) => ({
+            fieldResolutions: cardholderResolution({
+              primaryCardholderMode: row.primaryCardholderMode,
+              storedCardholder: helperText.parse(row.storedCardholder),
+              fallbackCardholder: helperText.parse(row.fallbackCardholder),
+              primaryCardholderShortcode: helperText.parse(
+                row.primaryCardholderShortcode,
+              ),
+              ledgerPartyShortcode: helperText.parse(row.ledgerPartyShortcode),
+              ledgerPartyLabel: helperText.parse(row.ledgerPartyLabel),
+            }),
+          }),
+        ),
+        bind(
+          rawFinancialAccountOut.pick({ primaryCardholderId: true }),
+          (row) => {
+            const code = helperText.parse(row.primaryCardholderShortcode);
+            return {
+              primaryCardholderId: code
+                ? parseShortcodeFor("ledgerParty", code)
+                : null,
+            };
+          },
+        ),
+        bind(
+          rawFinancialAccountOut.pick({
+            ledgerPartyId: true,
+            ledgerPartyName: true,
+          }),
+          (row) => {
+            const code = helperText.parse(row.ledgerPartyShortcode);
+            return {
+              ledgerPartyId: code
+                ? parseShortcodeFor("ledgerParty", code)
+                : null,
+              ledgerPartyName: helperText.parse(row.ledgerPartyLabel),
+            };
+          },
+        ),
+        bind(rawFinancialAccountOut.pick({ providerVendorId: true }), (row) => {
+          const code = helperText.parse(row.providerVendorShortcode);
+          return {
+            providerVendorId: code ? parseShortcodeFor("vendor", code) : null,
+          };
+        }),
+      ],
+    },
   },
 );
 
-/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildFinancialAccountWhere = async (
-  db: Database | DrizzleTransaction,
-  filters: FinancialAccountFilters,
-) =>
-  financialAccountScaffold.where(filters, {
-    context: await financialAccountScaffold.context(db, {
-      filters,
-      readIntent: "count",
-    }),
-  });
-
-export const listFinancialAccountsRead = (
-  db: Database,
-  filters: FinancialAccountFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  financialAccountScaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    {
-      select: (page) =>
-        selectAccountsRead(db, projection)
-          .where(page.where)
-          .orderBy(...page.orderBy)
-          .limit(page.limit)
-          .offset(page.offset),
-      read: accountRead,
-    },
-  );
-
-export const listFinancialAccounts = completeListReader(
-  rawFinancialAccountOut,
-  listFinancialAccountsRead,
-);
-
-/**
- * The audited-update unit: `update` runs the before-state read, column UPDATE,
- * diff audit and re-read in one transaction. Its row carries the raw
- * `ledgerPartyId` / `providerVendorId` beside the list columns so the audit
- * diffs the reference columns, not only their display shortcodes.
- */
 const financialAccountCrud = createEntityCrud({
   table: financialAccount,
   entity: "financialAccount",
-  fetchById: async (db, id) => {
-    const [row] = await unwrapDb(db)
-      .select({
-        ...columns,
-        ledgerPartyId: financialAccount.ledgerPartyId,
-        primaryCardholderId: financialAccount.primaryCardholderId,
-        providerVendorId: financialAccount.providerVendorId,
-      })
-      .from(financialAccount)
-      .where(and(eq(financialAccount.id, id), notDeleted(financialAccount)))
-      .limit(1);
-    return row;
-  },
-  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  scaffold: financialAccountScaffold,
+  output: rawFinancialAccountOut,
   toUpdate: (data: Partial<typeof financialAccount.$inferInsert>) =>
     buildPartialUpdateValues(data),
   auditUpdateFields: [...entityFieldModels.financialAccount.audit],
 });
 
 const getFinancialAccountByID = financialAccountCrud.getByID;
-const getFinancialAccountByShortcode = financialAccountCrud.getByShortcode;
 
 async function assertAliasesAvailable(
   db: Database | DrizzleTransaction,
@@ -841,9 +713,7 @@ export const updateFinancialAccount = defineMutationWriter({
 
 export const financialAccountRepository = defineRepository("financialAccount", {
   lifecycle: { delete: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY },
-  get: onDb(getFinancialAccountByShortcode),
-  list: listOn(listFinancialAccounts),
-  listRead: listReadOn(listFinancialAccountsRead),
+  scaffold: financialAccountScaffold,
   create: asActor(createFinancialAccount),
   update: asActor(updateFinancialAccount),
 });

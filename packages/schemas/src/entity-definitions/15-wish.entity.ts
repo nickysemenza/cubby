@@ -331,6 +331,9 @@ export default defineEntity({
     derived: {
       // The midpoint of the candidates' price range.
       priceRange: { type: "number" },
+      // The range's bounds, summed by the declared `priceRange` total.
+      priceLow: { type: "number" },
+      priceHigh: { type: "number" },
       candidateName: { via: "candidates.name" },
       candidateManufacturer: { via: "candidates.brand.name" },
       candidateModel: { via: "candidates.model" },

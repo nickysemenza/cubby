@@ -85,8 +85,7 @@ struct ImageDiagnosticsCancellationTests {
             capturedAt: nil, capturedAtOffsetMinutes: nil, captureLocation: nil, capturePlaceName: nil,
             captureDeviceLabel: nil, capturedByPartyId: nil, captureAttribution: .none,
             provenanceEvidence: nil, sourceEvidence: nil,
-            createdAt: date, updatedAt: date, associations: [], attachments: [], redirectedFrom: nil,
-            previousShortcodes: [], fields: fields)
+            createdAt: date, updatedAt: date, associations: [], attachments: [], fields: fields)
         let client = CubbyClient(
             baseURL: URL(string: "https://example.invalid")!,
             credentials: CredentialProvider(host: "example.invalid", store: InMemorySessionTokenStore()))

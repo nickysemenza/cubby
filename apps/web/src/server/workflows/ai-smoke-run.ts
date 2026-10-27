@@ -65,8 +65,8 @@ import { getUploadedImageProcessingSource } from "~/server/domains/image-process
 import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
 import { imageAnalysisRenditionUrl } from "~/server/domains/image/service/image-description.service";
 import { readImageIdentificationRendition } from "~/server/domains/image/service/image-identification.service";
-import { getLocationById } from "~/server/domains/location/repo/crud";
-import { getProductByID } from "~/server/domains/product/repo/crud";
+import { readLocationById } from "~/server/domains/location/repo/crud";
+import { readProductById } from "~/server/domains/product/repo/crud";
 import {
   auditPurchaseImportBatch,
   extractPurchaseEvidence,
@@ -81,7 +81,7 @@ import {
   judgeSameMailPurchase,
   mailJudgmentEvidence,
 } from "~/server/domains/purchase-import/service/mail-source-judgment";
-import { getRecipeByID } from "~/server/domains/recipe/repo/crud";
+import { readRecipeById } from "~/server/domains/recipe/repo/crud";
 import { flowPromptInput } from "~/server/domains/recipe/repo/recipe-flow-state";
 import { assessRecipeFlowCandidate } from "~/server/domains/recipe/service/recipe-flow/recipe-flow.service";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -340,7 +340,7 @@ async function runCase(
     case "inventoryDetection": {
       const { locationId } = aiSmokeInputs[scenario].parse(raw);
       const id = await resolveOrThrow(db, "location", locationId);
-      const location = await getLocationById(db, id);
+      const location = await readLocationById(db, id);
       const urls = (location.images ?? []).slice(0, 5).map((item) => item.url);
       if (!urls.length) throw new Error("Select a location with images.");
       const usage = {
@@ -418,7 +418,7 @@ async function runCase(
     case "recipeFlow": {
       const { recipeId } = aiSmokeInputs.recipeFlow.parse(raw);
       const id = await resolveOrThrow(db, "recipe", recipeId);
-      const recipe = await getRecipeByID(db, id);
+      const recipe = await readRecipeById(db, id);
       if (!recipe) throw new Error("Recipe was not found.");
       return {
         result: await getAiClient().generateRecipeFlow(
@@ -806,7 +806,7 @@ async function runCase(
       const { fixture, productId } =
         aiSmokeInputs.purchaseProductIdentity.parse(raw);
       const chosen = productId
-        ? await getProductByID(
+        ? await readProductById(
             db,
             await resolveOrThrow(db, "product", productId),
           )
@@ -966,7 +966,7 @@ async function runCase(
     case "entityEmbedding": {
       const { productId } = aiSmokeInputs.entityEmbedding.parse(raw);
       const id = await resolveOrThrow(db, "product", productId);
-      const product = await getProductByID(db, id);
+      const product = await readProductById(db, id);
       if (!product) throw new Error("Product was not found.");
       const [vector] = await embedTexts(
         [`${product.name} ${product.brandName ?? ""}`.trim()],
