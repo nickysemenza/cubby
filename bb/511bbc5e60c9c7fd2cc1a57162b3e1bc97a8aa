@@ -1,0 +1,23 @@
+apps/web/src/server/generic/entity-links/repo/dependency-edges.ts
+  s_592d57d2039298::t_792800ef90b680 8-12,32,38-59,82-83,127,156
+apps/web/src/server/generic/field-explanation/operations/field-explanation.server.ts
+  s_592d57d2039298::t_1109a764775fc5 7-10,975-981
+docs/entities.md
+  s_592d57d2039298::t_03f5ed43ec68b5 3927-3928
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bb511bbc5e60c9c7fd2cc1a57162b3e1bc97a8aa",
+  "prompts": {},
+  "sessions": {
+    "s_592d57d2039298": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17f48-f66a-7350-825a-e89095a28190",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
