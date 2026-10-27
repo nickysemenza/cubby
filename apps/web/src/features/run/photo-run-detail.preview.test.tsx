@@ -524,6 +524,9 @@ describe("PhotoImportRunView", () => {
   // detail's hero and overview; this slot owns only the worklist.
   it("shows the progress tally and every run photo with its cutout and description", async () => {
     render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+    await userEvent.click(
+      await screen.findByRole("button", { name: /^Photos$/ }),
+    );
 
     expect(await screen.findByText("Progress")).toBeInTheDocument();
 
@@ -574,6 +577,9 @@ describe("PhotoImportRunView", () => {
       } satisfies PhotoRunReview,
     );
     render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+    await userEvent.click(
+      await screen.findByRole("button", { name: /^Photos$/ }),
+    );
 
     expect(
       await screen.findByTestId("without-cloud-description"),
@@ -604,6 +610,9 @@ describe("PhotoImportRunView", () => {
       } satisfies PhotoRunReview,
     );
     render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+    await userEvent.click(
+      await screen.findByRole("button", { name: /^Photos$/ }),
+    );
 
     const labelRow = screen
       .getByRole("link", { name: "Open photo IMG-4K7N" })

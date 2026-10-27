@@ -3231,6 +3231,7 @@ function PhotoTable({
       headingAs="h2"
       aria-label="Run photos"
       title="Photos"
+      disclosure={{}}
       count={images.length}
     >
       {/* Bounded region: a 1,000-photo run scrolls here, not the page. */}

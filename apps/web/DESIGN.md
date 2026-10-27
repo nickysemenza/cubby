@@ -483,6 +483,8 @@ The editor exposes Product details and the inventory decision directly, without
 completed-step disclosures. Whole-item photos lead a compact gallery; label
 photos stay adjacent and open the shared full-scene viewer. Raw label text,
 descriptions and Claims live in the evidence disclosure beside those photos.
+The run-wide Photos processing table is also disclosed, keeping repeated raw
+analysis out of the review workspace.
 Brand evidence names the source-photo count, distinguishes existing-brand
 selection from proposed brand creation, and records rejection in the proposal.
 Evidence-matched bulk brand edits preview their exact new, unbranded Products;
