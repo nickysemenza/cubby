@@ -1,0 +1,135 @@
+apps/web/src/server/ai/enrichment/location-vision.ts
+  s_9fb58b1f0c0012::t_d996bf269331d7 67,688
+apps/web/src/server/db/computed/effective-field.integration.test.ts
+  s_9fb58b1f0c0012::t_4fd141e1a1f621 22-23,725-728,736,738,743-745
+apps/web/src/server/db/computed/inventory-placement.ts
+  s_9fb58b1f0c0012::t_3ae8f9ab867fd1 34,49,61,65-67
+apps/web/src/server/db/helpers/build-where.unit.test.ts
+  s_9fb58b1f0c0012::t_0ef533165f7af6 34,442,444
+apps/web/src/server/domains/financial-transaction/repo/financial.integration.test.ts
+  s_9fb58b1f0c0012::t_ad550aeae327f8 214
+apps/web/src/server/domains/inventory/repo/bulk.ts
+  s_9fb58b1f0c0012::t_7154efd2c287b7 45,47-48,105-107,371,382,726,730,1065,1071
+apps/web/src/server/domains/inventory/repo/crud.ts
+  s_9fb58b1f0c0012::t_acfe248849b9e2 6,13,16-21,23-26,36,40-49,63,71,85-89,97-102,143,153-171,190-193,195-212,214-221,223-226,228-233,235-314,316-317,319-331,333-334,434,624,637-638,654-661,663-666
+apps/web/src/server/domains/inventory/repo/inventory-list-filters.integration.test.ts
+  s_9fb58b1f0c0012::t_d861aac7126565 14,19,127
+apps/web/src/server/domains/inventory/repo/inventory-location-subtree.integration.test.ts
+  s_9fb58b1f0c0012::t_2ebd591689e630 12,17,60
+apps/web/src/server/domains/inventory/repo/inventory-valuation.integration.test.ts
+  s_9fb58b1f0c0012::t_74ad3de9361b10 8-9,16,60,68,71-72,74-76,92,104,113,120-123
+apps/web/src/server/domains/inventory/repo/mappers.ts
+  s_9fb58b1f0c0012::t_4a7238b86faaac 6-7,51-53,55-69
+apps/web/src/server/domains/inventory/repo/mappers.unit.test.ts
+  s_9fb58b1f0c0012::t_fe92d143ef152e 2,11,94-95,102,105-107,110,189-190,192,196-210,212-223,226-236,238-239,241
+apps/web/src/server/domains/inventory/repo/ownership-mutations.integration.test.ts
+  s_9fb58b1f0c0012::t_9d9b19dfee56b6 31,37,68,180,184,186-187,189,292,351,362,861,948-949
+apps/web/src/server/domains/inventory/repo/ownership-mutations.ts
+  s_9fb58b1f0c0012::t_5cc90c88ff80c1 15,383,393
+apps/web/src/server/domains/inventory/repo/repository.ts
+  s_9fb58b1f0c0012::t_c939cebffc8741 8,18,74
+apps/web/src/server/domains/inventory/service/placement-recommendation.service.ts
+  s_9fb58b1f0c0012::t_f5490e1f8793bb 9,17,23,44
+apps/web/src/server/domains/inventory/service/placement-recommendation.service.unit.test.ts
+  s_9fb58b1f0c0012::t_508396dbe100ba 18
+apps/web/src/server/domains/meal/service/meal-nutrition.service.ts
+  s_9fb58b1f0c0012::t_d39839afa10fcd 20,58
+apps/web/src/server/domains/photo-import/repo/run/writer.integration.test.ts
+  s_9fb58b1f0c0012::t_8476bb82336054 17,262,319,341
+apps/web/src/server/domains/product/operations/product.server.ts
+  s_9fb58b1f0c0012::t_5d8104e8ba7905 50,599
+apps/web/src/server/domains/product/repo/crud.ts
+  s_9fb58b1f0c0012::t_e5eb6504d5c537 44-47,60,75,79-82,86,90,94,107,124,131-132,150,152,155,214,319-338,463-477,479-482,487-515,518-525,527-567,570-572,574,582-587,590,592,594,596-610,612-614,618,620,622-623,629-630,634,640-717,719-757,784-787,790-791,793-795,797,801-829,838,843-855,870,872-873,875,877,880-881,885-888,896,899-900,905,917,919-922,924-925,927-930,934-993,996-997,999-1002,1004-1009,1011-1014,1016-1032,1034-1051,1053,1055-1059,1063-1075,1077-1078,1080-1082,1085,1088-1117,1125,1144-1145
+apps/web/src/server/domains/product/repo/identity.integration.test.ts
+  s_9fb58b1f0c0012::t_7a5ebba7a5c24e 6,109
+apps/web/src/server/domains/product/repo/image-purpose.integration.test.ts
+  s_9fb58b1f0c0012::t_c2f58b8f70f689 13,100
+apps/web/src/server/domains/product/repo/kind.integration.test.ts
+  s_9fb58b1f0c0012::t_207cc3c8536a13 9,13,98,100-102
+apps/web/src/server/domains/product/repo/list-enrichment.ts
+  s_9fb58b1f0c0012::t_111cd36479df5b 146-162
+apps/web/src/server/domains/product/repo/list.integration.test.ts
+  s_9fb58b1f0c0012::t_85665679fd149e 25,27,31,38,41,69,105,183,188-191,343-347,352,397,399-403,413-414,416-418,472-473,475,477-485,525,538,574,577-585,705-713
+apps/web/src/server/domains/product/repo/mappers.ts
+  s_9fb58b1f0c0012::t_9cd10410a7394b 22,67,94-95,402
+apps/web/src/server/domains/product/repo/mappers.unit.test.ts
+  s_9fb58b1f0c0012::t_7a6c4a41f3ba16 1,11,15,18,261-265
+apps/web/src/server/domains/product/repo/movement-timeline.ts
+  s_9fb58b1f0c0012::t_4edfb551ccdba9 19,60-68,240-246,286-296
+apps/web/src/server/domains/product/repo/price-resolution.integration.test.ts
+  s_9fb58b1f0c0012::t_a0f40b05c45fe8 13,19,56,58,76,98,103,135-136,143-148,205-206,225-226,242-243
+apps/web/src/server/domains/product/repo/product-components.ts
+  s_9fb58b1f0c0012::t_d08ea47248c048 33-36,55,57,149-152,154-159
+apps/web/src/server/domains/product/repo/product-linked-refs.integration.test.ts
+  s_9fb58b1f0c0012::t_11f6f2c972e8ec 21,84
+apps/web/src/server/domains/product/repo/product-list-filters.integration.test.ts
+  s_9fb58b1f0c0012::t_5dcf36f165b6bd 14,21,170,293,309-313,326
+apps/web/src/server/domains/product/repo/quantity-ledger.integration.test.ts
+  s_9fb58b1f0c0012::t_d4b8d0e0696141 2,11,27,52-61,115,132,258
+apps/web/src/server/domains/product/repo/repository.ts
+  s_9fb58b1f0c0012::t_7243f165facff6 6-9,30,36-37,39,42-45,61,153
+apps/web/src/server/domains/product/repo/service-products.integration.test.ts
+  s_9fb58b1f0c0012::t_cb55a089003d42 27-28,30,35,121-125,131,181,189,250,337,362,490
+apps/web/src/server/domains/product/repo/stock-tracked.integration.test.ts
+  s_9fb58b1f0c0012::t_e539b26cd80101 19-20,27,196-197,202-207,279-287
+apps/web/src/server/domains/product/repo/write/product-orchestration.ts
+  s_9fb58b1f0c0012::t_35b042af0e9a1b 47,622
+apps/web/src/server/domains/product/repo/write/product-writes.ts
+  s_9fb58b1f0c0012::t_cbfc2b568c907f 55,140,142-143,145-148,150
+apps/web/src/server/domains/recommendation/service/entity-recommendations.service.ts
+  s_9fb58b1f0c0012::t_e01379dccca612 15,149
+apps/web/src/server/domains/usda-food/service/usda-link-advance.integration.test.ts
+  s_9fb58b1f0c0012::t_3c3cc58379abc4 8,73,76,79,108
+apps/web/src/server/domains/usda-food/service/usda-link-advance.service.ts
+  s_9fb58b1f0c0012::t_78ab6818ee2c78 5,61
+apps/web/src/server/entity-kernel/repo/entity-display-image.integration.test.ts
+  s_9fb58b1f0c0012::t_23584ffc7d2666 40,586
+apps/web/src/server/generic/data-quality/repo/data-quality.integration.test.ts
+  s_9fb58b1f0c0012::t_062d2b73aa424c 3,13,26,39,41,98,100,102-105,107-112,368
+apps/web/src/server/generic/data-quality/repo/product-checks.integration.test.ts
+  s_9fb58b1f0c0012::t_9b5d674acedad6 17,39,228
+apps/web/src/server/generic/entity-report/repo/summary-extensions.ts
+  s_9fb58b1f0c0012::t_745e0deae10e4d 17,324-329
+apps/web/src/server/generic/entity-report/repo/summary.ts
+  s_9fb58b1f0c0012::t_2fc345d9971fde 21,111-116,122,223-235,318-323,330
+apps/web/src/server/generic/field-explanation/service/specialist-reset-preview.integration.test.ts
+  s_9fb58b1f0c0012::t_c1fe7126677895 17,293,367
+apps/web/src/server/generic/list/repo/list-field-compiler.integration.test.ts
+  s_9fb58b1f0c0012::t_821d90f8dd7757 14,29-30,96-97,115,125-130,206-207,332-333,482,499,596-601,690,810-815
+apps/web/src/server/generic/list/repo/list-grouping.integration.test.ts
+  s_9fb58b1f0c0012::t_6fb0942a9c4a93 32-33,54,58-66
+apps/web/src/server/generic/list/repo/list-readers.integration.test.ts
+  s_9fb58b1f0c0012::t_7012104b14d183 27,311,390
+apps/web/src/server/generic/list/repo/state-values.integration.test.ts
+  s_9fb58b1f0c0012::t_03e10db7dbac09 54-55,127-129,132,163,247-252
+apps/web/src/server/generic/relatedness/service/relatedness.service.ts
+  s_9fb58b1f0c0012::t_d982663ebd9e89 13,38,53,175
+apps/web/src/server/generic/relatedness/service/relatedness.service.unit.test.ts
+  s_9fb58b1f0c0012::t_e3da3b6cf2c614 49,105
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_9fb58b1f0c0012::t_48bcb05ff77070 79,402
+apps/web/src/server/generic/work-queue/service/work-queue-problems.ts
+  s_9fb58b1f0c0012::t_884157156ca979 40,43,80-81,83,95-96
+apps/web/src/server/testing/repo.fixtures.ts
+  s_9fb58b1f0c0012::t_8d4a27c8c0fefd 21-25,28-32,69-72,77,783-823
+apps/web/src/server/workflows/ai-smoke-run.ts
+  s_9fb58b1f0c0012::t_5f44cd3c09266c 69,809,969
+docs/agents/generic-paths.md
+  s_9fb58b1f0c0012::t_27444cf58c14e5 109-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "728037da053d98ee8f823d062c725d3bdee2939e",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
