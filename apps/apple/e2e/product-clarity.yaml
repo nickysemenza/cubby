@@ -23,8 +23,9 @@ appId: com.nickysemenza.cubby
       id: "field.explanation.product.${PRODUCT_ID}.price"
     direction: DOWN
     timeout: 30000
-- tapOn:
+- longPressOn:
     id: "field.explanation.product.${PRODUCT_ID}.price"
+- tapOn: "Explain"
 - extendedWaitUntil:
     visible:
       id: "field.explanation.popover"
