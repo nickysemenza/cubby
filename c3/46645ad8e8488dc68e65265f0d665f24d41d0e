@@ -1,0 +1,25 @@
+docs/agents/domain-rules.md
+  s_9fb58b1f0c0012::t_277fc64cf9e59e 149-157
+docs/agents/generic-paths.md
+  s_9fb58b1f0c0012::t_3eea5ddec15d28 114-120
+docs/entities.md
+  s_9fb58b1f0c0012::t_079df52a4c9021 1096-1097,3036,3848,3850-3851
+docs/guide/terminology.md
+  s_9fb58b1f0c0012::t_0a62a311a34d03 497-500
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c346645ad8e8488dc68e65265f0d665f24d41d0e",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
