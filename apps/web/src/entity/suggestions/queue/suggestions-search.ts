@@ -1,8 +1,14 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { suggestionListFamily } from "@cubby/schemas/suggestion-list";
+import {
+  suggestionFilterDeclaration,
+  type SuggestionFilterSearchKey,
+} from "@cubby/schemas/suggestion-list-declarations";
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
+
+import { compileFilterCodec } from "~/entity/filters";
 
 // Kept apart from the page: the route's `validateSearch` loads eagerly with
 // the router, so this module must not import the table.
@@ -18,7 +24,7 @@ export function parseRecordParam(value: string | undefined) {
 }
 
 /** The route's search params; table filters ride beside them as their column ids. */
-export const suggestionsSearchSchema = z.object({
+const scopeSearchSchema = z.object({
   family: suggestionListFamily.optional().catch(undefined),
   auditFamily: assessmentFamily.optional().catch(undefined),
   /**
@@ -41,37 +47,18 @@ export const suggestionsSearchSchema = z.object({
   sweep: z.string().max(40).optional().catch(undefined),
   group: z.literal("account_month").optional().catch(undefined),
   sort: z.string().max(500).optional().catch(undefined),
-  strength: filterParam,
-  strengthExclude: filterParam,
-  clean: filterParam,
-  cleanExclude: filterParam,
-  entity: filterParam,
-  entityExclude: filterParam,
-  field: filterParam,
-  fieldExclude: filterParam,
-  kind: filterParam,
-  kindExclude: filterParam,
-  confidence: filterParam,
-  date: filterParam,
-  account: filterParam,
-  accountExclude: filterParam,
-  owner: filterParam,
-  ownerExclude: filterParam,
-  merchant: filterParam,
-  amount: filterParam,
-  action: filterParam,
-  actionExclude: filterParam,
-  kindSource: filterParam,
-  kindSourceExclude: filterParam,
-  providerCategory: filterParam,
-  providerStatus: filterParam,
-  providerStatusExclude: filterParam,
-  candidate: filterParam,
-  candidateExclude: filterParam,
-  modelLabel: filterParam,
-  relation: filterParam,
-  relationExclude: filterParam,
-  entityKind: filterParam,
-  entityKindExclude: filterParam,
+});
+// SAFETY: the codec walks the same declared columns and generated Exclude
+// fields as SuggestionFilterSearchKey; every URL value is optional text.
+const filterSearchFields = Object.fromEntries(
+  compileFilterCodec(suggestionFilterDeclaration.specs).keys.map((key) => [
+    key,
+    filterParam,
+  ]),
+) as Record<SuggestionFilterSearchKey, typeof filterParam>;
+
+export const suggestionsSearchSchema = z.object({
+  ...filterSearchFields,
+  ...scopeSearchSchema.shape,
 });
 export type SuggestionsSearch = z.output<typeof suggestionsSearchSchema>;

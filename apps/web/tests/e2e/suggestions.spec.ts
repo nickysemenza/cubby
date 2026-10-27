@@ -1,3 +1,4 @@
+import { suggestionListOut } from "@cubby/schemas/suggestion-list";
 import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { seedProductPrerequisite } from "./fixtures/catalog";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
@@ -33,6 +34,7 @@ import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
+  operationResult,
   dispatchesOperation,
   dispatchOperations,
   unbatchFor,
@@ -392,10 +394,28 @@ test("Suggestions lists every family with named records and category pills, and 
 
   // Exclusion survives route validation and a reload, and the shared editor
   // can clear it without losing the scoped proposal.
+  const excludedRead = page.waitForResponse((response) =>
+    dispatchesOperation(
+      response.request(),
+      "suggestions.list",
+      ({ input }) =>
+        z
+          .object({ entityExclude: z.array(z.string()) })
+          .safeParse(input)
+          .data?.entityExclude.includes("product") === true,
+    ),
+  );
   await gotoAuthenticatedPage(
     page,
     `/suggestions?family=field&record=product:${item.id}&entityExclude=product`,
   );
+  const excludedPage = await operationResult(
+    await excludedRead,
+    "suggestions.list",
+    suggestionListOut,
+  );
+  expect(excludedPage.items).toEqual([]);
+  expect(excludedPage.meta.totalCount).toBe(0);
   await expect(
     suggestionsTable(page).getByRole("link", { name: productName }),
   ).toHaveCount(0);

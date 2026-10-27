@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { sortDirection } from "./pagination";
+import {
+  suggestionDeclaredFilters,
+  suggestionFilterDeclaration,
+} from "./suggestion-list-declarations";
 import { transferPairJudgment } from "./transfer-pair-suggestion";
 
 import { suggestionReviewRowSchema, suggestionStatus } from "./ai";
@@ -10,20 +13,15 @@ import {
   assessmentSuppression,
 } from "./assessment";
 import { dataCheck } from "./data-quality";
-import { connectionProposal, connectionRelation } from "./entity-connections";
+import { connectionProposal } from "./entity-connections";
 import { shortcodeEntities } from "./entity-manifest";
-import { generatedFinancialTransactionKindValues } from "./generated/entity-field-schemas.financialTransaction.gen";
 import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
 import {
   financialAccountShortcode,
   ledgerPartyShortcode,
   runShortcode,
 } from "./identifiers";
-import {
-  statementSuggestionOut,
-  statementTransactionAction,
-  statementTransactionKindSource,
-} from "./statement-suggestion";
+import { statementSuggestionOut } from "./statement-suggestion";
 
 /** Assessment families the Suggestions page lists. */
 export const suggestionListFamily = z.enum([
@@ -101,100 +99,6 @@ export const suggestionColumnValue = z.union([
 ]);
 export type SuggestionColumnValue = z.infer<typeof suggestionColumnValue>;
 
-type ColumnType =
-  | { type: "text" }
-  | { type: "number" }
-  | { type: "date" }
-  | { type: "boolean" }
-  | { type: "enum"; values: readonly string[] }
-  | { type: "ref"; entity: (typeof shortcodeEntities)[number] };
-
-/**
- * Every server-filterable, sortable column, by family; `common` columns are
- * on every row. `facet` columns return value counts beside the page.
- */
-export const suggestionColumns = {
-  common: {
-    family: {
-      type: "enum",
-      values: suggestionListFamily.options,
-      facet: true,
-    },
-    strength: {
-      type: "enum",
-      values: suggestionStrength.options,
-      facet: true,
-    },
-    clean: { type: "boolean", facet: true },
-    createdAt: { type: "date" },
-    /** Data-quality checks acceptance restores. */
-    impact: { type: "number" },
-  },
-  field: {
-    entity: { type: "enum", values: shortcodeEntities, facet: true },
-    field: { type: "text", facet: true },
-    kind: { type: "enum", values: ["correction", "addition"], facet: true },
-    confidence: { type: "number" },
-  },
-  statement_transaction: {
-    date: { type: "date" },
-    /** `YYYY-MM` of the statement date; the grouping month. */
-    month: { type: "text" },
-    account: { type: "ref", entity: "financialAccount", facet: true },
-    owner: { type: "ref", entity: "ledgerParty", facet: true },
-    /** Merchant and raw description, searched together. */
-    merchant: { type: "text" },
-    amount: { type: "number" },
-    action: {
-      type: "enum",
-      values: statementTransactionAction.options,
-      facet: true,
-    },
-    kind: {
-      type: "enum",
-      values: generatedFinancialTransactionKindValues,
-      facet: true,
-    },
-    kindSource: {
-      type: "enum",
-      values: statementTransactionKindSource.options,
-    },
-    providerCategory: { type: "text" },
-    providerStatus: { type: "enum", values: ["posted", "pending"] },
-    candidate: { type: "ref", entity: "financialTransaction" },
-    /** The first candidate's advisory label, `<same>:<confidence>`. */
-    modelLabel: { type: "text" },
-  },
-  recommendation: {
-    relation: {
-      type: "enum",
-      values: connectionRelation.options,
-      facet: true,
-    },
-    /** Either endpoint's kind. */
-    entityKind: { type: "enum", values: shortcodeEntities, facet: true },
-    source: { type: "text" },
-    target: { type: "text" },
-  },
-  transfer_pair: {
-    date: { type: "date" },
-    amount: { type: "number" },
-    dateGapDays: { type: "number" },
-    account: { type: "ref", entity: "financialAccount", facet: true },
-    owner: { type: "ref", entity: "ledgerParty", facet: true },
-    merchant: { type: "text" },
-  },
-  product_pair: {
-    entityKind: { type: "enum", values: shortcodeEntities, facet: true },
-  },
-  image_description: {
-    entityKind: { type: "enum", values: shortcodeEntities, facet: true },
-  },
-} as const satisfies Record<
-  "common" | SuggestionListFamily,
-  Record<string, ColumnType & { facet?: true }>
->;
-
 const rowBase = {
   /** The Assessment id: stable for a row until its evidence republishes. */
   id: assessmentChildHandle,
@@ -227,7 +131,7 @@ const rowBase = {
   automaticRule: z.string().nullable(),
   createdAt: z.iso.datetime(),
   actions: z.array(suggestionAction),
-  /** The row's `suggestionColumns` values, as filtered and sorted. */
+  /** The row's declared relation values, as filtered and sorted. */
   columns: z.record(
     z.string(),
     z.union([suggestionColumnValue, z.array(suggestionColumnValue)]),
@@ -285,22 +189,11 @@ export const suggestionListRow = z.discriminatedUnion("family", [
 ]);
 export type SuggestionListRow = z.infer<typeof suggestionListRow>;
 
-/** One column's condition; every given part must hold. */
-export const suggestionColumnFilter = z.object({
-  in: z.array(suggestionColumnValue).max(200).optional(),
-  /** Exclude any matching non-null value; null and absent values pass. */
-  notIn: z.array(suggestionColumnValue).max(200).optional(),
-  min: z.union([z.number(), z.string()]).optional(),
-  max: z.union([z.number(), z.string()]).optional(),
-  /** Case-insensitive substring of a text column. */
-  search: z.string().min(1).optional(),
-});
-
 export const SUGGESTION_RECORD_IDS_MAX = 250;
-export const suggestionListFilters = z.object({
+const suggestionScope = z.object({
   family: suggestionListFamily.optional(),
   /** The record's kind (either endpoint for a connection). */
-  entity: shortcodeEntity.optional(),
+  recordEntity: shortcodeEntity.optional(),
   /** Records of any kind by shortcode; a connection lists under both endpoints. */
   recordIds: z
     .array(z.string().min(1))
@@ -309,32 +202,24 @@ export const suggestionListFilters = z.object({
   /** Reviewed history: field rows in every status (the decision-eval label set), statement rows applied. */
   status: suggestionStatus.default("pending"),
   runId: runShortcode.optional(),
-  /** Conditions on `suggestionColumns`, by column key. */
-  where: z.record(z.string(), suggestionColumnFilter).default({}),
 });
+export const suggestionListFilters = suggestionDeclaredFilters
+  .extend(suggestionScope.shape)
+  .and(suggestionScope);
 export type SuggestionListFilters = z.output<typeof suggestionListFilters>;
 
-/** `ready`: clean, then Strength, then newest. `impact`: checks restored, then `ready`. */
-export const suggestionOrder = z.object({
-  by: z.string().min(1),
-  direction: sortDirection.default("desc"),
-});
-export type SuggestionOrder = z.output<typeof suggestionOrder>;
-
 export const SUGGESTION_LIST_PAGE_MAX = 200;
-export const suggestionListInput = suggestionListFilters.extend({
-  /** Sort stack, primary first; ties end on the Assessment id. */
-  order: z
-    .array(suggestionOrder)
-    .max(4)
-    .default([{ by: "ready", direction: "desc" }]),
-  /** The previous page's `next` (keyset); takes precedence over `offset`. */
+const suggestionPaging = z.object({
+  ...suggestionScope.shape,
+  sort: suggestionFilterDeclaration.input.shape.sort,
   cursor: z.string().min(1).optional(),
   offset: z.number().int().min(0).default(0),
   limit: z.number().int().min(1).max(SUGGESTION_LIST_PAGE_MAX).default(50),
-  /** Groups statement suggestions by account and month, groups first in order. */
-  groups: z.enum(["account_month"]).optional(),
+  group: suggestionFilterDeclaration.groupInput,
 });
+export const suggestionListInput = suggestionDeclaredFilters
+  .extend(suggestionPaging.shape)
+  .and(suggestionPaging);
 export type SuggestionListInput = z.input<typeof suggestionListInput>;
 
 /** One account × month section of the grouped statement list. */
@@ -357,20 +242,15 @@ export const suggestionGroup = z.object({
 
 export type SuggestionGroup = z.infer<typeof suggestionGroup>;
 
-export const suggestionFacet = z.array(
-  z.object({ value: suggestionColumnValue, count: z.number().int() }),
-);
-
 export const suggestionListOut = z.object({
   items: z.array(suggestionListRow),
   meta: z.object({
     pageIndex: z.number().int(),
     pageSize: z.number().int(),
     totalCount: z.number().int(),
+    cleanCount: z.number().int().nonnegative(),
     groups: z.array(suggestionGroup).optional(),
   }),
-  /** Value counts per facet column over the filtered set, ignoring that column's own filter. */
-  facets: z.record(z.string(), suggestionFacet),
   /** Keyset cursor for the next page; null on the last. */
   next: z.string().nullable(),
 });
@@ -387,9 +267,10 @@ export const suggestionFieldCount = z.object({
 });
 export type SuggestionFieldCount = z.infer<typeof suggestionFieldCount>;
 
-export const suggestionCountsInput = suggestionListFilters.omit({
-  status: true,
-});
+const suggestionCountScope = suggestionScope.omit({ status: true });
+export const suggestionCountsInput = suggestionDeclaredFilters
+  .extend(suggestionCountScope.shape)
+  .and(suggestionCountScope);
 const count = z.number().int().nonnegative();
 /**
  * Pending, clean and per-Strength counts follow every filter. Reviewed
@@ -419,7 +300,7 @@ export const SUGGESTION_ACCEPT_CLEAN_MAX = 100;
 /** Failed ids one bulk accept may carry forward as `skip`. */
 export const SUGGESTION_ACCEPT_SKIP_MAX = 5000;
 export const acceptCleanSuggestionsInput = z.object({
-  filters: suggestionListFilters.omit({ status: true }).default({ where: {} }),
+  filters: suggestionCountsInput.default({}),
   limit: z.number().int().min(1).max(SUGGESTION_ACCEPT_CLEAN_MAX).default(100),
   /** Already attempted ids; a failed accept stays pending and clean. */
   skip: z

@@ -5,8 +5,6 @@ import { useMemo } from "react";
 
 import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
-import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import { ExpenseSummaryStrip } from "~/features/expense/expense-summary-strip";
 import {
@@ -107,15 +105,6 @@ export const expenseListOverride = defineListOverride<
   ExpenseFilters
 >({
   use() {
-    const projectOptions = useDeferredFilterOptions("project");
-    // The option's VALUE is the vendor id — the manifest's spec is `idMulti`
-    // on `vendorId`; the count rides in `hint`, never the label.
-    const vendorOptions = useDeferredFilterOptions("vendor");
-    const filterOptions = useFilterOptions({
-      project: projectOptions,
-      vendor: vendorOptions,
-    });
-
     const updateExpenseMutation = useUpdateMutation({
       mutationFn: entityMutationOptionsFactory("expense", "update"),
       entity: "expense",
@@ -161,9 +150,8 @@ export const expenseListOverride = defineListOverride<
     const list = useMemo(
       () => ({
         deletable: true as const,
-        filterOptions,
       }),
-      [filterOptions],
+      [],
     );
 
     return {

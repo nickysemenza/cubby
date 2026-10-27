@@ -1275,6 +1275,13 @@ does not accidentally widen the candidate set. Scope constrains discovery,
 not stored values: existing selections remain visible and can be removed even
 when another field changes and they no longer match the candidate query.
 
+Reference filter declarations (`brandRef`) also own deferred option feeds.
+The generic list hook supplies ordinary reference rosters. The optional
+`brandRef.optionsKind` preserves an existing scoped roster for Locations with
+inventory, Ingredients with Products, or Products serving as Locations; feature
+column overrides do not wire those feeds. Counted and tree rosters remain
+explicit runtime overrides.
+
 Generic entity filter-option rosters use the shortcode when the stored display
 name is null or the computed title has no stored display column. Page ordering,
 search, and selected-value hydration use that same label, without loading full
@@ -4305,11 +4312,21 @@ eligible, Off after a confirm). Its `family`, `record` (`<kind>:<CODE>`) and `ru
 Every multiselect filter, including Clean, offers **is / is not** through the
 shared filter editor. Excluded column values use the shared `__not__:` state
 prefix and `<column>Exclude` URL parameter. Quick pickers edit included values
-while preserving exclusions in the shared editor. The list API and MCP accept
-`where[column]` conditions with `in`, `notIn`, `min`, `max` and `search`;
-all supplied parts must hold. `in` and `notIn` each accept up to 200 column
-values. `notIn` rejects a row if any non-null value matches, including any
-member of a multi-valued column; null and absent values pass exclusion.
+while preserving exclusions in the shared editor. Each family declares its
+filters, sorts and account × month grouping with `defineRelationList` in
+`packages/schemas/src/suggestion-list-declarations.ts`. The web codec, route
+search keys and operation filter input derive from those declarations; SQL
+predicates use the same `compileDeclaredFilters` as entity lists. The single
+agent queue read is `suggestions_read.list`. Filters use their column names,
+`<column>Exclude`, `<column>Presence`, and numeric/date `<column>From` and
+`<column>To` bounds. Confidence bounds are percentages. `recordEntity` scopes
+record kinds independently of the field family's `entity` multiselect.
+Exclusions retain rows with no matching value, including null or absent values.
+Only `meta.cleanCount` remains, because it controls bulk acceptance;
+other option-count hints are omitted. Current family facts are checked before
+filtering and pagination so stale evidence cannot inflate totals. Family
+freshness and derived facts still run through their existing eligibility reads;
+PostgreSQL selects from their projected fact relation.
 Every entity list batches the same queue's pending counts and opens its shared
 inline review; detail pages show a scoped Suggestions section. Family declarations
 expand every affected record: both endpoints of connections and pairs, reference

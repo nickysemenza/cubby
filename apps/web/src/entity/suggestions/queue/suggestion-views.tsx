@@ -1,22 +1,23 @@
 import { formatConfidence } from "@cubby/schemas/ai";
-import { connectionRelation } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { splitExcluded } from "@cubby/schemas/filter-sentinel-fields";
-import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import {
-  suggestionStrength,
-  type SuggestionColumnValue,
   type SuggestionListFamily,
-  type SuggestionListFilters,
   type SuggestionListRow,
 } from "@cubby/schemas/suggestion-list";
+import {
+  suggestionFilterDeclaration,
+  suggestionRelationLists,
+} from "@cubby/schemas/suggestion-list-declarations";
 import { humanize } from "@cubby/shared";
 import type { ReactNode } from "react";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { EntityIcon } from "~/entity/entities";
-import type { FilterSpecCore } from "~/entity/filters";
+import {
+  buildFiltersFromManifest,
+  type FilterSpecCore,
+} from "~/entity/filters";
 import {
   createImageColumn,
   renderOptionCell,
@@ -66,78 +67,14 @@ export type SuggestionView = "all" | SuggestionListFamily;
 type Row = SuggestionListRow;
 const helper = createCubbyColumnHelper<Row>();
 
-/** How a column's table filter becomes the server's `where` condition. */
-type ColumnFilterSpec = FilterSpecCore & {
-  value: "string" | "boolean" | "range";
-};
-
-const multiselect = (
-  columnId: string,
-  value: "string" | "boolean" = "string",
-): ColumnFilterSpec => ({
-  columnId,
-  kind: "multiselect",
-  value,
-  exclude: { field: `${columnId}Exclude` },
-});
-const text = (columnId: string): ColumnFilterSpec => ({
-  columnId,
-  kind: "text",
-  value: "string",
-});
-const range = (columnId: string): ColumnFilterSpec => ({
-  columnId,
-  kind: "text",
-  value: "range",
-});
-
-/** Every view's filters; `entity`/`record`/`runId` scopes ride the route. */
-const VIEW_FILTERS = {
-  // The family chips own the family scope (the route's `family`).
-  all: [multiselect("strength"), multiselect("clean", "boolean")],
-  field: [
-    multiselect("entity"),
-    multiselect("field"),
-    multiselect("kind"),
-    range("confidence"),
-    multiselect("strength"),
-  ],
-  statement_transaction: [
-    range("date"),
-    multiselect("account"),
-    multiselect("owner"),
-    text("merchant"),
-    range("amount"),
-    multiselect("action"),
-    multiselect("kind"),
-    multiselect("kindSource"),
-    multiselect("clean", "boolean"),
-    text("providerCategory"),
-    multiselect("providerStatus"),
-    multiselect("candidate"),
-    text("modelLabel"),
-  ],
-  recommendation: [
-    multiselect("relation"),
-    multiselect("entityKind"),
-    multiselect("strength"),
-  ],
-  transfer_pair: [
-    range("date"),
-    multiselect("account"),
-    multiselect("owner"),
-    text("merchant"),
-    range("amount"),
-    range("dateGapDays"),
-    multiselect("strength"),
-    multiselect("clean", "boolean"),
-  ],
-} satisfies Partial<Record<SuggestionView, readonly ColumnFilterSpec[]>>;
-
-/** The filter codec's specs for a view (URL keys are the column ids). */
+/** Codec specs are generated from each family's relation declaration. */
 export const viewFilterSpecs = (
   view: SuggestionView,
-): readonly FilterSpecCore[] => viewSetting(VIEW_FILTERS, view) ?? [];
+): readonly FilterSpecCore[] =>
+  (view === "product_pair" || view === "image_description"
+    ? suggestionRelationLists.all
+    : suggestionRelationLists[view]
+  ).specs;
 
 /** Specialized views override the generic defaults only where their columns differ. */
 export function viewSetting<Value>(
@@ -147,94 +84,51 @@ export function viewSetting<Value>(
   return registry[view];
 }
 
-/** `a..b`, `a..` or `..b`; a bare value is the lower bound. */
-function parseRange(raw: string, numeric: boolean) {
-  const [from = "", to] = raw.includes("..") ? raw.split("..") : [raw];
-  const bound = (value: string | undefined) => {
-    const trimmed = value?.trim();
-    if (!trimmed) return undefined;
-    if (!numeric) return trimmed;
-    const number = Number(trimmed);
-    return Number.isFinite(number) ? number : undefined;
-  };
-  return { min: bound(from), max: bound(to) };
-}
-
-const NUMERIC_RANGES = new Set(["amount", "confidence"]);
-
-/** The table's column filters as the server's `where`, one condition per column. */
-export function buildWhere(
+/** The shared list codec owns include/exclude, presence and range inputs. */
+export function buildSuggestionFilters(
   view: SuggestionView,
   state: Pick<TableStateReturn, "getColumnFilter" | "getColumnFilterValues">,
-): SuggestionListFilters["where"] {
-  const where: SuggestionListFilters["where"] = {};
-  for (const spec of viewSetting(VIEW_FILTERS, view) ?? []) {
-    if (spec.value === "range") {
-      const raw = state.getColumnFilter(spec.columnId);
-      if (!raw) continue;
-      const bounds = parseRange(raw, NUMERIC_RANGES.has(spec.columnId));
-      // Confidence reads as a percentage in the filter, a fraction on the server.
-      const scale = (value: number | string | undefined) =>
-        spec.columnId === "confidence" && typeof value === "number"
-          ? value / 100
-          : value;
-      const min = scale(bounds.min);
-      const max = scale(bounds.max);
-      if (min === undefined && max === undefined) continue;
-      where[spec.columnId] = {
-        ...(min === undefined ? {} : { min }),
-        ...(max === undefined ? {} : { max }),
-      };
-      continue;
-    }
-    if (spec.kind === "text") {
-      const search = state.getColumnFilter(spec.columnId);
-      if (search) where[spec.columnId] = { search };
-      continue;
-    }
-    const values = state.getColumnFilterValues(spec.columnId);
-    if (!values?.length) continue;
-    const { included, excluded } = splitExcluded(values);
-    const parseValue = (value: string): SuggestionColumnValue =>
-      spec.value === "boolean" ? value === "true" : value;
-    where[spec.columnId] = {
-      ...(included.length ? { in: included.map(parseValue) } : {}),
-      ...(excluded.length ? { notIn: excluded.map(parseValue) } : {}),
-    };
-  }
-  return where;
+) {
+  return buildFiltersFromManifest(
+    viewFilterSpecs(view),
+    (column) =>
+      state.getColumnFilterValues(column) ?? state.getColumnFilter(column),
+  );
 }
 
-const options = (values: readonly string[], label = humanize): PickerOption[] =>
-  values.map((value) => ({ value, label: label(value) }));
+const declaredOptions = (
+  view: keyof typeof suggestionRelationLists,
+  column: string,
+): PickerOption[] => [
+  ...(suggestionRelationLists[view].filters.find(
+    (filter) => filter.columnId === column,
+  )?.options ?? []),
+];
 
-const STRENGTH_OPTIONS = options(suggestionStrength.options);
-const CLEAN_OPTIONS: PickerOption[] = [
-  { value: "true", label: "Clean" },
-  { value: "false", label: "Needs review" },
-];
-const ACTION_OPTIONS = statementTransactionAction.options.map((action) => ({
-  value: action,
-  label: {
-    create: "Create",
-    book: "Book spending",
-    attach: "Attach",
-    supersede: "Settle hold",
-    void: "Void hold",
-  }[action],
-}));
-const KIND_OPTIONS = fieldEnumOptions("financialTransaction", "kind");
-const KIND_SOURCE_OPTIONS: PickerOption[] = [
-  { value: "rule", label: "Rule" },
-  { value: "model", label: "Model" },
-  { value: "sign", label: "Amount sign" },
-];
-const PROVIDER_STATUS_OPTIONS = options(["posted", "pending"]);
-const FIELD_KIND_OPTIONS = options(["correction", "addition"]);
-const RELATION_OPTIONS = options(connectionRelation.options);
-const ENTITY_OPTIONS: PickerOption[] = shortcodeEntities.map((entity) => ({
+const STRENGTH_OPTIONS = declaredOptions("all", "strength");
+const CLEAN_OPTIONS = declaredOptions("all", "clean");
+const ACTION_OPTIONS = declaredOptions("statement_transaction", "action");
+const KIND_OPTIONS = declaredOptions("statement_transaction", "kind").map(
+  (option) =>
+    fieldEnumOptions("financialTransaction", "kind").find(
+      (presented) => presented.value === option.value,
+    ) ?? option,
+);
+const KIND_SOURCE_OPTIONS = declaredOptions(
+  "statement_transaction",
+  "kindSource",
+);
+const PROVIDER_STATUS_OPTIONS = declaredOptions(
+  "statement_transaction",
+  "providerStatus",
+);
+const FIELD_KIND_OPTIONS = declaredOptions("field", "kind");
+const RELATION_OPTIONS = declaredOptions("recommendation", "relation");
+const ENTITY_OPTIONS = shortcodeEntities.map((entity) => ({
   value: entity,
-  label: entitySummary[entity].singular,
+  label:
+    declaredOptions("field", "entity").find((option) => option.value === entity)
+      ?.label ?? entitySummary[entity].singular,
   icon: <EntityIcon entity={entity} />,
 }));
 
@@ -1049,11 +943,12 @@ function recommendationColumns() {
 }
 
 /** Rosters for the statement and transfer-pair reference filters, read only when opened. */
-export const REFERENCE_ROSTERS = [
-  { key: "account", target: "financialAccount" },
-  { key: "owner", target: "ledgerParty" },
-  { key: "candidate", target: "financialTransaction" },
-] as const;
+export const REFERENCE_ROSTERS = suggestionFilterDeclaration.filters.flatMap(
+  (filter) =>
+    filter.reference
+      ? [{ key: filter.columnId, target: filter.reference }]
+      : [],
+);
 
 export function viewColumns(
   view: SuggestionView,

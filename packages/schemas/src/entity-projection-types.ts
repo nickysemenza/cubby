@@ -449,7 +449,13 @@ type EntityFilterDescriptorMetadata = {
   schemaDescription: string | null;
   deriveSchema: boolean;
   schemaFromRead: boolean;
-  brandRef: { entity: string } | null;
+  brandRef: {
+    entity: string;
+    optionsKind?:
+      | "locationWithInventory"
+      | "ingredientWithProduct"
+      | "locationIdentityProduct";
+  } | null;
   expandRef: EntityPortSourceRef | null;
   schemaRef: EntityPortSourceRef | null;
   stored: { columns: readonly string[]; array: boolean } | null;

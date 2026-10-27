@@ -5,7 +5,6 @@ import {
 import {
   acceptCleanSuggestionsInput,
   type acceptCleanSuggestionsOut,
-  suggestionColumns,
   suggestionCountsInput,
   suggestionCountsOut,
   suggestionGroup,
@@ -18,11 +17,27 @@ import {
   type SuggestionListFamily,
   type SuggestionListFilters,
   type SuggestionListRow,
-  type SuggestionOrder,
 } from "@cubby/schemas/suggestion-list";
+import {
+  suggestionDeclaredFilters,
+  suggestionFilterDeclaration,
+} from "@cubby/schemas/suggestion-list-declarations";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  isNull,
+  lt,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { reviewAssessmentBatch } from "~/server/generic/assessment/repo/assessment-review";
 import {
@@ -31,6 +46,7 @@ import {
   emptyPendingCounts,
   suggestionFamilies,
 } from "~/server/generic/assessment/repo/suggestion-families";
+import { compileDeclaredFilters } from "~/server/generic/list/repo/declared-filters";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -38,151 +54,202 @@ import {
   touchingAssessmentIds,
 } from "./review-families";
 
-type Value = SuggestionColumnValue | SuggestionColumnValue[];
-type Filter = SuggestionListFilters["where"][string];
-
 const STRENGTH_RANK = { strong: 2, medium: 1, weak: 0 } as const;
-
-/** A key's value for a column: common facts first, then the family's own. */
-function columnValue(key: SuggestionKey, column: string): Value | undefined {
-  switch (column) {
-    case "family":
-      return key.family;
-    case "strength":
-      return key.strength;
-    case "clean":
-      return key.clean;
-    case "createdAt":
-      return key.createdAt.toISOString();
-    case "impact":
-      return key.impact.filter((impact) => impact.qualityCheck).length;
-    default:
-      return key.columns[column];
-  }
-}
-
-const knownColumns = (families: readonly SuggestionListFamily[]) =>
-  new Set([
-    ...Object.keys(suggestionColumns.common),
-    ...families.flatMap((family) => Object.keys(suggestionColumns[family])),
-  ]);
-
-const facetsOf = (
-  columns: (typeof suggestionColumns)[keyof typeof suggestionColumns],
-) =>
-  Object.entries(columns).flatMap(([column, spec]) =>
-    "facet" in spec ? [column] : [],
-  );
-/** Common facets (the clean banner reads `clean`), plus one family's chips. */
-const facetColumns = (families: readonly SuggestionListFamily[]) => [
-  ...facetsOf(suggestionColumns.common),
-  ...(families.length === 1 && families[0]
-    ? facetsOf(suggestionColumns[families[0]])
-    : []),
-];
-
-const values = (value: Value | undefined) =>
-  value === undefined ? [] : Array.isArray(value) ? value : [value];
-
-function compareScalars(a: SuggestionColumnValue, b: SuggestionColumnValue) {
-  if (a === b) return 0;
-  if (a === null) return 1;
-  if (b === null) return -1;
-  if (typeof a === "number" && typeof b === "number") return a - b;
-  if (typeof a === "boolean" && typeof b === "boolean")
-    return Number(a) - Number(b);
-  return String(a).localeCompare(String(b));
-}
-
-function matches(value: Value | undefined, filter: Filter) {
-  const list = values(value);
-  if (filter.in && !list.some((item) => filter.in?.includes(item)))
-    return false;
-  if (list.some((item) => item !== null && filter.notIn?.includes(item)))
-    return false;
-  const needle = filter.search?.toLowerCase();
-  if (
-    needle &&
-    !list.some(
-      (item) => typeof item === "string" && item.toLowerCase().includes(needle),
-    )
-  )
-    return false;
-  const within = (bound: number | string, keep: (order: number) => boolean) =>
-    list.some(
-      (item) =>
-        item !== null &&
-        typeof item !== "boolean" &&
-        keep(compareScalars(item, bound)),
-    );
-  if (filter.min !== undefined && !within(filter.min, (order) => order >= 0))
-    return false;
-  if (filter.max !== undefined && !within(filter.max, (order) => order <= 0))
-    return false;
-  return true;
-}
-
-type Vectored = {
-  key: SuggestionKey;
-  vector: SuggestionColumnValue[];
-  id: string;
-};
-
-/** The values a key orders by under `order`, with each value's direction. */
-function sortVector(key: SuggestionKey, order: readonly SuggestionOrder[]) {
-  return order.flatMap((spec) => {
-    const ready = [
-      Number(key.clean),
-      STRENGTH_RANK[key.strength],
-      key.createdAt.getTime(),
-    ];
-    const parts: SuggestionColumnValue[] =
-      spec.by === "ready"
-        ? ready
-        : spec.by === "impact"
-          ? [Number(columnValue(key, "impact")), ...ready]
-          : [values(columnValue(key, spec.by))[0] ?? null];
-    return parts.map((value) => ({ value, direction: spec.direction }));
-  });
-}
-
-function vectored(
-  keys: readonly SuggestionKey[],
-  order: readonly SuggestionOrder[],
-) {
-  const directions = keys[0]
-    ? sortVector(keys[0], order).map((part) => part.direction)
-    : [];
-  const entries: Vectored[] = keys.map((key) => ({
-    key,
-    vector: sortVector(key, order).map((part) => part.value),
-    id: key.assessmentId,
-  }));
-  const compare = (
-    a: Pick<Vectored, "vector" | "id">,
-    b: Pick<Vectored, "vector" | "id">,
-  ) => {
-    for (const [index, direction] of directions.entries()) {
-      const left = a.vector[index] ?? null;
-      const right = b.vector[index] ?? null;
-      // A missing value sorts last in either direction.
-      if (left === null || right === null) {
-        if (left !== right) return left === null ? 1 : -1;
-        continue;
-      }
-      const result = compareScalars(left, right);
-      if (result) return direction === "desc" ? -result : result;
-    }
-    return a.id.localeCompare(b.id);
-  };
-  return { entries: entries.sort(compare), compare };
-}
+const ARRAY_COLUMNS = new Set(["account", "owner", "entityKind", "merchant"]);
+const NUMBER_COLUMNS = new Set([
+  "amount",
+  "confidence",
+  "dateGapDays",
+  "impact",
+]);
 
 const cursorSchema = z.object({
   order: z.string(),
   vector: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])),
   id: z.string(),
 });
+
+type SortTerm = { by: string; direction: "asc" | "desc" };
+
+/**
+ * Family eligibility owns current evidence and its derived facts. Project that
+ * validated fact stream as a relation; the shared compiler is the only owner
+ * of filter operators, and PostgreSQL owns ordering and paging.
+ */
+function keyRelation(db: Database, keys: readonly SuggestionKey[]) {
+  const facts = keys.map((key) => ({
+    id: key.assessmentId,
+    family: key.family,
+    strength: key.strength,
+    strengthRank: STRENGTH_RANK[key.strength],
+    clean: String(key.clean),
+    createdAt: key.createdAt.toISOString(),
+    impact: key.impact.filter((impact) => impact.qualityCheck).length,
+    ...Object.fromEntries(
+      Object.entries(key.columns).map(([name, value]) => [
+        name,
+        ARRAY_COLUMNS.has(name)
+          ? [value].flat().filter((item) => item !== null)
+          : Array.isArray(value)
+            ? value.filter((item) => item !== null).join(" ")
+            : value,
+      ]),
+    ),
+    // The UI's confidence bounds are percentages, as its cells are.
+    confidence:
+      typeof key.columns.confidence === "number"
+        ? key.columns.confidence * 100
+        : null,
+  }));
+  const names = new Set([
+    "id",
+    "family",
+    "strength",
+    "strengthRank",
+    "clean",
+    "createdAt",
+    "impact",
+    "month",
+    "source",
+    "target",
+    ...suggestionFilterDeclaration.filters.map((filter) => filter.columnId),
+  ]);
+  const fields = Object.fromEntries(
+    [...names].map((name) => {
+      const text = sql`fact.value->>${name}`;
+      const value = ARRAY_COLUMNS.has(name)
+        ? sql`ARRAY(SELECT jsonb_array_elements_text(fact.value->${name}))`
+        : NUMBER_COLUMNS.has(name) || name === "strengthRank"
+          ? sql`(${text})::numeric`
+          : text;
+      return [name, value.as(name)];
+    }),
+  );
+  return getDb(db)
+    .select(fields)
+    .from(
+      sql`jsonb_array_elements(${JSON.stringify(facts)}::jsonb) AS fact(value)`,
+    )
+    .as("suggestion_facts");
+}
+
+const relationColumn = (name: string) =>
+  sql`${sql.identifier("suggestion_facts")}.${sql.identifier(name)}`;
+
+function predicates(filters: SuggestionListFilters) {
+  return compileDeclaredFilters(
+    {
+      label: "Suggestions",
+      descriptors: suggestionFilterDeclaration.descriptors.map(
+        (descriptor) => ({
+          ...descriptor,
+          stored: {
+            ...descriptor.stored,
+            array: ARRAY_COLUMNS.has(descriptor.columnId),
+          },
+        }),
+      ),
+      column: (_descriptor, name) => ({
+        column: relationColumn(name),
+        value: relationColumn(name),
+        kind: ARRAY_COLUMNS.has(name)
+          ? "text-array"
+          : NUMBER_COLUMNS.has(name)
+            ? "number"
+            : name === "date"
+              ? "date"
+              : "text",
+        nullable: true,
+        reference: null,
+      }),
+    },
+    filters,
+  );
+}
+
+async function selectKeys(
+  db: Database,
+  keys: readonly SuggestionKey[],
+  filters: SuggestionListFilters,
+  order: readonly SortTerm[] = [],
+  paging?: {
+    limit: number;
+    offset: number;
+    cursor?: z.infer<typeof cursorSchema>;
+  },
+) {
+  const relation = keyRelation(db, keys);
+  const terms = order.flatMap((term) => {
+    const ready = ["clean", "strengthRank", "createdAt"];
+    const names =
+      term.by === "ready"
+        ? ready
+        : term.by === "impact"
+          ? ["impact", ...ready]
+          : [term.by === "strength" ? "strengthRank" : term.by];
+    return names.map((name) => ({
+      ...term,
+      name,
+      value: ARRAY_COLUMNS.has(name)
+        ? sql`(${relationColumn(name)})[1]`
+        : relationColumn(name),
+    }));
+  });
+  terms.push({
+    by: "id",
+    name: "id",
+    value: relationColumn("id"),
+    direction: "asc",
+  });
+  const cursor = paging?.cursor;
+  const equal: SQL[] = [];
+  const after = cursor
+    ? or(
+        ...terms.map((term, index) => {
+          const value =
+            index === terms.length - 1
+              ? cursor.id
+              : (cursor.vector[index] ?? null);
+          const next =
+            value === null
+              ? undefined
+              : or(
+                  isNull(term.value),
+                  (term.direction === "asc" ? gt : lt)(term.value, value),
+                );
+          const branch = next ? and(...equal, next) : undefined;
+          equal.push(
+            value === null ? isNull(term.value) : eq(term.value, value),
+          );
+          return branch;
+        }),
+      )
+    : undefined;
+  const query = getDb(db)
+    .select({
+      id: sql<string>`${relationColumn("id")}`,
+      vector: sql<SuggestionColumnValue[]>`jsonb_build_array(${sql.join(
+        terms.slice(0, -1).map((term) => term.value),
+        sql`, `,
+      )})`,
+    })
+    .from(relation)
+    .where(and(...predicates(filters), after))
+    .orderBy(
+      ...terms.map(
+        (term) =>
+          sql`${term.direction === "asc" ? asc(term.value) : desc(term.value)} NULLS LAST`,
+      ),
+    );
+  const selected = paging
+    ? await query.limit(paging.limit).offset(cursor ? 0 : paging.offset)
+    : await query;
+  const byId = new Map(keys.map((key) => [key.assessmentId, key]));
+  return selected.flatMap((row) => {
+    const key = byId.get(row.id);
+    return key ? [{ key, id: row.id, vector: row.vector }] : [];
+  });
+}
 
 async function familyQuery(
   db: Database,
@@ -203,36 +270,11 @@ async function familyQuery(
 const familiesOf = (filters: SuggestionListFilters) =>
   filters.family ? [filters.family] : suggestionListFamily.options;
 
-/** Keys passing every column filter except `skip`'s (a facet's own). */
-function filterKeys(
-  keys: readonly SuggestionKey[],
-  where: SuggestionListFilters["where"],
-  skip?: string,
-) {
-  const conditions = Object.entries(where).filter(
-    ([column]) => column !== skip,
-  );
-  return keys.filter((key) =>
-    conditions.every(([column, filter]) =>
-      matches(columnValue(key, column), filter),
-    ),
-  );
-}
-
 async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
   const families = familiesOf(filters);
-  const known = knownColumns(families);
-  const unknown = Object.keys(filters.where).filter(
-    (column) => !known.has(column),
-  );
-  if (unknown.length)
-    throw new Error(
-      `Unknown Suggestion column ${unknown.join(", ")}; columns here: ${[...known].join(", ")}`,
-    );
-  const scoped = filters;
-  const query = await familyQuery(db, scoped);
+  const query = await familyQuery(db, filters);
   const touching = await touchingAssessmentIds(db, {
-    entity: filters.entity,
+    entity: filters.recordEntity,
     records: query.records,
     eligibility: {
       kind: "suggestions",
@@ -242,7 +284,11 @@ async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
     },
   });
   const familyScope = {
-    filters: { ...query.filters, entity: undefined, recordIds: undefined },
+    filters: {
+      ...query.filters,
+      recordEntity: undefined,
+      recordIds: undefined,
+    },
     assessmentIds: touching ? [...touching] : undefined,
   };
   return { families, touching, familyScope };
@@ -267,7 +313,16 @@ async function scopedKeys(db: Database, filters: SuggestionListFilters) {
         (filters.status !== "pending" || key.automaticRule === null) &&
         (!touching || touching.has(key.assessmentId)),
     );
-  return { families, keys: filterKeys(keys, filters.where), all: keys };
+  // Admission must precede both counting and paging. Family hydration owns
+  // freshness checks that cannot be inferred from a stored pending status.
+  const rows = await hydrate(db, keys);
+  const current = keys.filter((key) => rows.has(key.assessmentId));
+  return {
+    families,
+    keys: (await selectKeys(db, current, filters)).map((entry) => entry.key),
+    all: current,
+    rows,
+  };
 }
 
 /** Counts use the queue's eligibility and declared subjects, including either endpoint. */
@@ -311,30 +366,6 @@ async function hydrate(
   return new Map(maps.flatMap((map) => [...map]));
 }
 
-/** Up to `limit` current rows in order; a key whose evidence went stale is skipped. */
-async function page(
-  db: Database,
-  ordered: readonly SuggestionKey[],
-  limit: number,
-) {
-  const items: SuggestionListRow[] = [];
-  let last = -1;
-  let offset = 0;
-  while (items.length < limit && offset < ordered.length) {
-    const chunk = ordered.slice(offset, offset + limit - items.length);
-    const rows = await hydrate(db, chunk);
-    for (const [index, key] of chunk.entries()) {
-      const row = rows.get(key.assessmentId);
-      if (!row) continue;
-      items.push(row);
-      last = offset + index;
-      if (items.length === limit) break;
-    }
-    offset += chunk.length;
-  }
-  return { items, last };
-}
-
 const GROUP_ACTIONS = ["create", "attach", "supersede", "void"] as const;
 
 /** Account × month sections of the ordered statement keys, in page order. */
@@ -372,84 +403,80 @@ function statementGroups(keys: readonly SuggestionKey[]): SuggestionGroup[] {
   return suggestionGroup.array().parse([...groups.values()]);
 }
 
-/**
- * One page of the cross-family Suggestion list. Every row in scope is keyed
- * first from cheap projections, so column filters, sorts, facets and groups
- * cover the whole set; only the page is hydrated with its evidence. Paging is
- * by `offset` (the table's infinite scroll) or by keyset `cursor`.
- */
+/** One SQL-filtered, ordered page of currently reviewable family facts. */
 export async function listSuggestionPage(
   db: Database,
   raw: z.input<typeof suggestionListInput>,
 ) {
   const input = suggestionListInput.parse(raw);
-  const grouped = input.groups === "account_month";
+  const grouped = input.group === "account_month";
   const filters = grouped
     ? { ...input, family: "statement_transaction" as const }
     : input;
-  const { families, keys, all } = await scopedKeys(db, filters);
-  const facets = Object.fromEntries(
-    facetColumns(families).map((column) => {
-      const counts = new Map<SuggestionColumnValue, number>();
-      for (const key of filterKeys(all, input.where, column))
-        for (const value of values(columnValue(key, column)))
-          counts.set(value, (counts.get(value) ?? 0) + 1);
-      return [
-        column,
-        [...counts]
-          .map(([value, count]) => ({ value, count }))
-          .sort((a, b) => b.count - a.count),
-      ];
-    }),
-  );
-  // Grouped pages lead with the section (newest month, then account), so
-  // each section's rows are contiguous in page order.
-  const order: SuggestionOrder[] = grouped
-    ? [
-        { by: "month", direction: "desc" },
-        { by: "account", direction: "asc" },
-        ...input.order,
-      ]
-    : input.order;
+  const {
+    keys,
+    all,
+    rows = new Map<string, SuggestionListRow>(),
+  } = await scopedKeys(db, filters);
+  const requested = suggestionFilterDeclaration.sortsOf(input.sort);
+  const order: SortTerm[] = [
+    ...(grouped
+      ? [
+          { by: "month", direction: "desc" as const },
+          { by: "account", direction: "asc" as const },
+        ]
+      : []),
+    ...requested.map((sort) => ({
+      by: sort.orderBy,
+      direction: sort.direction,
+    })),
+  ];
   const orderKey = JSON.stringify(order);
-  const { entries, compare } = vectored(keys, order);
-  let start = input.offset;
-  if (input.cursor) {
-    const cursor = cursorSchema.parse(
-      JSON.parse(Buffer.from(input.cursor, "base64url").toString("utf8")),
+  const cursor = input.cursor
+    ? cursorSchema.parse(
+        JSON.parse(Buffer.from(input.cursor, "base64url").toString("utf8")),
+      )
+    : undefined;
+  if (cursor && cursor.order !== orderKey)
+    throw new Error(
+      "Cursor was issued for another order; restart without a cursor",
     );
-    if (cursor.order !== orderKey)
-      throw new Error(
-        "Cursor was issued for another order; restart without a cursor",
-      );
-    const after = entries.findIndex((entry) => compare(entry, cursor) > 0);
-    start = after === -1 ? entries.length : after;
-  }
-  const { items, last } = await page(
-    db,
-    entries.slice(start).map((entry) => entry.key),
-    input.limit,
-  );
-  const lastEntry = last >= 0 ? entries[start + last] : undefined;
-  const more = lastEntry !== undefined && start + last < entries.length - 1;
+  const entries = await selectKeys(db, all, filters, order, {
+    ...input,
+    cursor,
+    limit: input.limit + 1,
+  });
+  const more = entries.length > input.limit;
+  const page = entries.slice(0, input.limit);
+  const last = page.at(-1);
+  const clean = keys.filter((key) => key.clean).length;
   return suggestionListOut.parse({
-    items,
+    items: page.flatMap((entry) => {
+      const row = rows.get(entry.id);
+      return row ? [row] : [];
+    }),
     meta: {
-      pageIndex: Math.floor(start / input.limit),
+      pageIndex: Math.floor(input.offset / input.limit),
       pageSize: input.limit,
       totalCount: keys.length,
+      cleanCount: clean,
       ...(grouped
-        ? { groups: statementGroups(entries.map((entry) => entry.key)) }
+        ? {
+            groups: statementGroups(
+              (await selectKeys(db, all, filters, order)).map(
+                (entry) => entry.key,
+              ),
+            ),
+          }
         : {}),
     },
-    facets,
     next:
-      more && items.length === input.limit
+      more && last
         ? Buffer.from(
             JSON.stringify({
               order: orderKey,
-              vector: lastEntry.vector,
-              id: lastEntry.id,
+              vector: last.vector,
+              id: last.id,
             }),
           ).toString("base64url")
         : null,
@@ -461,7 +488,7 @@ export async function suggestionCountsByFamily(
   db: Database,
   raw: z.input<typeof suggestionCountsInput> = {},
 ) {
-  const filters = {
+  const filters: SuggestionListFilters = {
     ...suggestionCountsInput.parse(raw),
     status: "pending" as const,
   };
@@ -477,18 +504,13 @@ export async function suggestionCountsByFamily(
         if (
           "pendingCounts" in presentation &&
           presentation.pendingCounts &&
-          Object.keys(filters.where).length === 0
+          !Object.keys(suggestionDeclaredFilters.shape).some(
+            (name) => filters[name] !== undefined,
+          )
         ) {
           pending = await presentation.pendingCounts(db, familyScope);
         } else {
-          const own = filterKeys(
-            (await presentation.keys(db, familyScope)).filter(
-              (key) =>
-                key.automaticRule === null &&
-                (!touching || touching.has(key.assessmentId)),
-            ),
-            filters.where,
-          );
+          const { keys: own } = await scopedKeys(db, { ...filters, family });
           for (const key of own) {
             pending.pending++;
             if (key.clean) pending.clean++;
@@ -540,15 +562,21 @@ export async function acceptCleanSuggestions(
     ...input.filters,
     status: "pending",
   });
-  const { entries } = vectored(
+  const entries = await selectKeys(
+    db,
     keys.filter((key) => key.clean && !skip.has(key.assessmentId)),
+    { ...input.filters, status: "pending" },
     [{ by: "ready", direction: "desc" }],
+    { limit: input.limit, offset: 0 },
   );
-  const { items: rows } = await page(
+  const hydrated = await hydrate(
     db,
     entries.map((entry) => entry.key),
-    input.limit,
   );
+  const rows = entries.flatMap((entry) => {
+    const row = hydrated.get(entry.id);
+    return row ? [row] : [];
+  });
   const results: z.infer<typeof acceptCleanSuggestionsOut> = [];
   const settledPairs = new Set<string>();
   for (const row of rows) {

@@ -134,7 +134,7 @@
   "apps/web/src/server/generic/inheritance/repo/inheritance-validation.ts": 5,
   "apps/web/src/server/generic/list/repo/field-compiler.ts": 6,
   "apps/web/src/server/generic/list/repo/hierarchy.ts": 2,
-  "apps/web/src/server/generic/list/repo/list.ts": 3,
+  "apps/web/src/server/generic/list/repo/list.ts": 2,
   "apps/web/src/server/generic/problems/repo/detectors-financial.ts": 8,
   "apps/web/src/server/generic/problems/repo/detectors-integrity.ts": 2,
   "apps/web/src/server/generic/problems/repo/detectors-label-variants.ts": 1,

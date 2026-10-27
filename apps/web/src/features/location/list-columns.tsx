@@ -5,8 +5,6 @@ import { entityListHiddenColumns } from "~/entity/display/entity-display";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
 import type { EntityListParamsByEntity } from "~/entity/generated/entity-lists.gen";
-import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
-import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import {
   createEntityInlineLinkColumn,
@@ -39,14 +37,6 @@ export const locationListOverride = defineListOverride<
   LocationFilters
 >({
   use() {
-    // Runtime picklists for the manifest's `parent` and `product` specs — the
-    // latter scoped to products some location IS, not the whole catalog.
-    const locationProductOptions = useDeferredFilterOptions(
-      "locationIdentityProduct",
-    );
-    const filterOptions = useFilterOptions({
-      locationProducts: locationProductOptions,
-    });
     const updateLocationMutation = useUpdateMutation({
       mutationFn: entityMutationOptionsFactory("location", "update"),
       entity: "location",
@@ -119,10 +109,9 @@ export const locationListOverride = defineListOverride<
     const list = useMemo(
       () => ({
         deletable: true as const,
-        filterOptions,
         initialColumnVisibility: locationInitialColumnVisibility(),
       }),
-      [filterOptions],
+      [],
     );
     return { compose, list };
   },

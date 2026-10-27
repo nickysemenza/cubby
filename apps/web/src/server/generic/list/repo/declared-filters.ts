@@ -1,3 +1,4 @@
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 /**
  * Declared filters compiled to SQL over any set of columns: an entity table
  * (`declaredFilterPredicates`) or a relation list's projected columns. One
@@ -6,16 +7,9 @@
  */
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
-import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import { presenceFilter, type PresenceFilter } from "@cubby/schemas/pagination";
-import {
-  type AnyColumn,
-  and,
-  arrayContains,
-  or,
-  SQL,
-  sql,
-} from "drizzle-orm";
+import { type AnyColumn, and, arrayContains, or, SQL, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import {
@@ -26,6 +20,7 @@ import {
   formatSearchTerm,
   householdDayRangeConditions,
   matchesStringValues,
+  notDeleted,
   presenceCondition,
   rangeConditions,
   shortcodeSetCondition,
@@ -92,7 +87,6 @@ export interface FilterColumn {
   /** The entity a foreign-key column points at, for `id`/`idMulti` filters. */
   readonly reference: string | null;
 }
-
 
 /** `formatSearchTerm` over a stored column, a `text[]` column by element. */
 export const textPredicate = (
@@ -172,7 +166,7 @@ export const referencePredicate = (
   // A reference to a soft-deleted record is no value, as the group key and
   // the related-path filters read it.
   const live = entityManifest[target].softDelete
-    ? sql`${column} IN ${shortcodeIdsSql(target, () => sql`ref."deletedAt" IS NULL`)}`
+    ? sql`${column} IN ${shortcodeIdsSql(target, () => notDeleted(alias(SHORTCODE_TABLE[target], "ref")))}`
     : sql`${column} IS NOT NULL`;
   return or(
     codes === undefined || codes.length === 0
@@ -208,13 +202,14 @@ export const arrayPredicate = (
       )
     : arrayOverlapOrPresence(column, values, presence, nullable);
 
-
 /**
  * The request keys a descriptor's predicate reads: its value (a range its
  * bounds and presence) and its Any value / No value, Match all and Exclude
  * keys.
  */
-export const descriptorValueKeys = (descriptor: DeclaredFilterDescriptor): string[] => [
+export const descriptorValueKeys = (
+  descriptor: DeclaredFilterDescriptor,
+): string[] => [
   ...(descriptor.wire.kind === "range"
     ? [
         descriptor.wire.from,
@@ -227,7 +222,6 @@ export const descriptorValueKeys = (descriptor: DeclaredFilterDescriptor): strin
   ...(descriptor.exclude ? [descriptor.exclude.field] : []),
 ];
 
-
 /**
  * "Is not": the rows the include predicate does not match. NULL counts as
  * not matching, so a row with no value stays (`IS NULL OR NOT IN`); pair it
@@ -236,7 +230,6 @@ export const descriptorValueKeys = (descriptor: DeclaredFilterDescriptor): strin
 export const excludedPredicate = (
   include: ReadonlyArray<SQL | undefined>,
 ): SQL | undefined => flagCondition(false, () => and(...include));
-
 
 export const nonEmpty = <T>(list: readonly T[] | undefined) =>
   list === undefined || list.length === 0 ? undefined : list;

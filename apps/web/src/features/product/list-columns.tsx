@@ -13,7 +13,6 @@ import { ProductGtin } from "~/entity/components/product-gtin";
 import { entityListHiddenColumns } from "~/entity/display/entity-display";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
-import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { useNameEditable } from "~/entity/hooks/use-name-editable";
 import { useProductCategories } from "~/entity/hooks/use-product-categories";
@@ -83,9 +82,6 @@ function useProductFilterOptions() {
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
   const { options: tagOptions } = useTagOptions("product");
   const { categories } = useProductCategories();
-  const projectOptions = useDeferredFilterOptions("project");
-  const locationOptions = useDeferredFilterOptions("locationWithInventory");
-  const ingredientOptions = useDeferredFilterOptions("ingredientWithProduct");
   const externalIdSourceOptionsQuery = useQuery(
     productOperations.externalIdSourceOptions.queryOptions(),
   );
@@ -159,10 +155,6 @@ function useProductFilterOptions() {
         : [];
     }),
     productVendors: vendorOptions,
-    project: projectOptions,
-    productLocations: locationOptions,
-    productIngredients: ingredientOptions,
-    vendor: useDeferredFilterOptions("vendor"),
     productPurchases: purchaseOptions,
     externalIdSources: externalIdSourceOptions,
   });

@@ -131,7 +131,11 @@ export interface RelationFilterSpec {
   readonly currentMember?: boolean;
   readonly nullable?: { readonly field: string; readonly label: string };
   readonly exclude?: { readonly field: string };
-  readonly range?: { readonly from: string; readonly to: string };
+  readonly range?: {
+    readonly from: string;
+    readonly to: string;
+    readonly number?: {};
+  };
 }
 
 /** The server compiler's descriptor (`DeclaredFilterDescriptor`). */
@@ -173,7 +177,14 @@ const specOf = (filter: RelationFilter): RelationFilterSpec => ({
   ...(excludableFilterKind(filter.kind)
     ? { exclude: { field: filterExcludeField(filter.columnId) } }
     : {}),
-  ...(filter.kind === "range" ? { range: rangeKeys(filter.columnId) } : {}),
+  ...(filter.kind === "range"
+    ? {
+        range: {
+          ...rangeKeys(filter.columnId),
+          ...(filter.range === "number" ? { number: {} } : {}),
+        },
+      }
+    : {}),
 });
 
 const descriptorOf = (filter: RelationFilter): RelationFilterDescriptor => ({
@@ -200,14 +211,6 @@ const descriptorOf = (filter: RelationFilter): RelationFilterDescriptor => ({
 
 const textList = z.string().min(1).max(200);
 
-/** A reference filter's shortcodes; `@me` is resolved by the entity kernel
- * before the read (ADR 0018). */
-const referenceValue = (entity: ShortcodeEntity, currentMember = false) => {
-  const shortcode = anyShortcodeSchema(nonEmptyTuple([entity]));
-  return currentMember
-    ? tokenFilter(shortcode, [CURRENT_MEMBER_FILTER])
-    : entityFilter(shortcode);
-};
 
 /** The input keys one filter accepts, by its kind. */
 const inputFieldsOf = (filter: RelationFilter) => {
@@ -359,6 +362,7 @@ export function defineRelationList<
     {},
     ...list.filters.map(inputFieldsOf),
   ) as FiltersInputFields<Fs>;
+  const groupInput = groupKeys.length ? z.enum(nonEmptyTuple(groupKeys)).optional() : z.never().optional();
   const input = z.strictObject(
     Object.assign(
       {
@@ -392,6 +396,9 @@ export function defineRelationList<
   );
   return {
     ...list,
+    /** Filter-only schema for surfaces with their own scope and paging. */
+    filterInput: z.strictObject(filterFields),
+    groupInput,
     specs: list.filters.map(specOf),
     descriptors: list.filters.map(descriptorOf),
     input,

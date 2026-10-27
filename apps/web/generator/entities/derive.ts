@@ -65,7 +65,19 @@ const declarationView = z.object({
         .array(
           z.object({
             columnId: z.string(),
-            brandRef: z.object({ entity: z.string() }).nullable().optional(),
+            brandRef: z
+              .object({
+                entity: z.string(),
+                optionsKind: z
+                  .enum([
+                    "locationWithInventory",
+                    "ingredientWithProduct",
+                    "locationIdentityProduct",
+                  ])
+                  .optional(),
+              })
+              .nullable()
+              .optional(),
           }),
         )
         .optional()

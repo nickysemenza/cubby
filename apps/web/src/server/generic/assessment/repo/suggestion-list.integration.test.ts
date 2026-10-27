@@ -241,7 +241,7 @@ describe("cross-family Suggestion list", () => {
     for (const record of [current.output.id, proposed.output.id]) {
       const page = await listSuggestionPage(ctx.db, {
         family: "field",
-        entity: "productCategory",
+        recordEntity: "productCategory",
         recordIds: [record],
       });
       expect(page.items.map((row) => row.assessmentId)).toEqual([id]);
@@ -314,14 +314,14 @@ describe("cross-family Suggestion list", () => {
     expect(
       (
         await listSuggestionPage(ctx.db, {
-          where: { owner: { notIn: [null, "LPR-2A2A"] } },
+          ownerExclude: ["LPR-2A2A"],
         })
       ).items.map((row) => row.id),
     ).toEqual(page.items.map((row) => row.id));
     expect(
       (
         await listSuggestionPage(ctx.db, {
-          where: { account: { notIn: [account.id] } },
+          accountExclude: [account.id],
         })
       ).items.map((row) => row.family),
     ).toEqual(["field"]);
@@ -329,7 +329,8 @@ describe("cross-family Suggestion list", () => {
       (
         await listSuggestionPage(ctx.db, {
           family: "statement_transaction",
-          where: { account: { in: [account.id], notIn: [account.id] } },
+          account: [account.id],
+          accountExclude: [account.id],
         })
       ).items,
     ).toEqual([]);
@@ -403,16 +404,10 @@ describe("cross-family Suggestion list", () => {
     );
     expect(offset.items.map((row) => row.id)).toEqual(ids.slice(2, 4));
     expect(first.meta).toMatchObject({ pageSize: 2, totalCount: ids.length });
-    expect(first.facets.family).toEqual(
-      expect.arrayContaining([
-        { value: "field", count: 2 },
-        { value: "recommendation", count: 1 },
-      ]),
-    );
-    // Failure mode: a one-family view drops the common facets, so the page
-    // hides its "Accept N clean" banner.
+    // The clean banner retains its count; decorative facet rosters are removed.
     const fieldsOnly = await listSuggestionPage(ctx.db, { family: "field" });
-    expect(fieldsOnly.facets.clean).toEqual([{ value: false, count: 2 }]);
+    expect(fieldsOnly.meta.totalCount).toBe(2);
+    expect(fieldsOnly.meta.cleanCount).toBe(0);
   });
 
   // Failure mode: a connection lists only under the endpoint that requested
@@ -444,7 +439,7 @@ describe("cross-family Suggestion list", () => {
         (
           await listSuggestionPage(ctx.db, {
             family: "recommendation",
-            where: { entityKind: { notIn: [entityKind] } },
+            entityKindExclude: [entityKind],
           })
         ).items,
       ).toEqual([]);
@@ -453,7 +448,7 @@ describe("cross-family Suggestion list", () => {
       (
         await listSuggestionPage(ctx.db, {
           family: "recommendation",
-          where: { entityKind: { notIn: ["task"] } },
+          entityKindExclude: ["task"],
         })
       ).items.map((row) => row.id),
     ).toEqual([proposal.review.assessmentId]);
@@ -487,12 +482,12 @@ describe("cross-family Suggestion list", () => {
       (
         await listSuggestionPage(ctx.db, {
           family: "statement_transaction",
-          where: { clean: { in: [true] } },
+          clean: ["true"],
         })
       ).items,
     ).toEqual([]);
     const grouped = await listSuggestionPage(ctx.db, {
-      groups: "account_month",
+      group: "account_month",
     });
     expect(grouped.meta.groups).toEqual([
       expect.objectContaining({ month: "2026-05", count: 2, clean: 0 }),
@@ -619,7 +614,7 @@ describe("cross-family Suggestion list", () => {
     ]) {
       const filters = {
         family: "statement_transaction" as const,
-        entity: ref.entity,
+        recordEntity: ref.entity,
         recordIds: [ref.code],
       };
       const page = await listSuggestionPage(ctx.db, filters);
@@ -683,15 +678,15 @@ describe("cross-family Suggestion list", () => {
       ).families[0]?.pending;
     expect(await pending({ recordIds: [account.output.id] })).toBe(1);
     expect(await pending({ recordIds: [] })).toBe(0);
-    expect(await pending({ entity: "product" })).toBe(0);
-    expect(await pending({ where: { action: { in: ["attach"] } } })).toBe(0);
+    expect(await pending({ recordEntity: "product" })).toBe(0);
+    expect(await pending({ action: ["attach"] })).toBe(0);
     // A narrow count must retain the list's malformed-action diagnostic.
     await getDb(ctx.db).execute(sql`
       UPDATE "AssessmentState" SET data = jsonb_set(data, '{recommended}', '"unexpected"'::jsonb)
       WHERE family = ${assessmentFamily.enum.statement_transaction}
     `);
     await expect(pending({})).rejects.toThrow(/Invalid option/);
-    await expect(pending({ where: { clean: { in: [true] } } })).rejects.toThrow(
+    await expect(pending({ clean: ["true"] })).rejects.toThrow(
       /Invalid option/,
     );
   });

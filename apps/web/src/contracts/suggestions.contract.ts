@@ -39,7 +39,7 @@ export const suggestionsContract = defineContract(
     }),
     recordCounts: query({
       exposure: "view",
-      note: "Per-row counts; agents read scoped suggestion_queue rows",
+      note: "Per-row counts; agents read scoped suggestions_read.list rows",
       input: suggestionRecordCountsInput,
       output: suggestionRecordCountsOut,
       readPolicy: "strong",
@@ -50,7 +50,7 @@ export const suggestionsContract = defineContract(
     }),
     list: query({
       description:
-        "The shared proposal queue: fields, statement transactions, connections and tag additions, Product pairs, image descriptions, and transfer pairs. Non-actionable candidates and already-applied automatic decisions are excluded. Scope by family, entity, recordIds (every touched endpoint), runId and column filters. where[column] supports in, notIn, min, max and search; every given part must hold. notIn excludes a row when any non-null column value matches, keeping null or absent values. Rows declare evidence, Strength, clean, actions, merge confirmation data and suppression. Review through suggestions.review or suggestions.review_batch, preserving expectedFingerprint and the declared application. Product merges require survivor choice and impact review; only clean rows qualify for bulk acceptance. Confidence never authorizes apply.",
+        "The shared proposal queue: fields, statement transactions, connections and tag additions, Product pairs, image descriptions, and transfer pairs. Non-actionable candidates and already-applied automatic decisions are excluded. Scope by family, recordEntity, recordIds (every touched endpoint), runId and column filters. Declared filters accept include values, <column>Exclude values, <column>Presence and range <column>From/<column>To bounds; every supplied predicate must hold. Exclude keeps rows with no matching value, including null or absent values. Rows declare evidence, Strength, clean, actions, merge confirmation data and suppression. Review through suggestions.review or suggestions.review_batch, preserving expectedFingerprint and the declared application. Product merges require survivor choice and impact review; only clean rows qualify for bulk acceptance. Confidence never authorizes apply.",
       input: suggestionListInput,
       output: suggestionListOut,
       readPolicy: "strong",
@@ -61,7 +61,7 @@ export const suggestionsContract = defineContract(
     }),
     counts: query({
       exposure: "view",
-      note: "Suggestions page and Run counts; agents read rows through suggestion_queue",
+      note: "Suggestions page and Run counts; agents read rows through suggestions_read.list",
       input: suggestionCountsInput,
       output: suggestionCountsOut,
       readPolicy: "strong",
