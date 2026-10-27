@@ -3,8 +3,9 @@ import {
   type transferPairLeg,
   transferPairJudgment,
 } from "@cubby/schemas/transfer-pair-suggestion";
-import { render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { onlineManager } from "@tanstack/react-query";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import type { z } from "zod";
 
@@ -13,6 +14,7 @@ import type {
   RunDecisionsOut,
   RunDetailStepsOut,
 } from "~/contracts/run-detail.contract";
+import { runDetailContract } from "~/contracts/run-detail.contract";
 import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -423,3 +425,56 @@ it.each(["paused", "failed"] as const)(
     expect(progress).not.toHaveTextContent("left for what is queued");
   },
 );
+
+it("ages a successful evaluation read while offline and removes live pace and ETA", async () => {
+  const clock = vi.spyOn(Date, "now").mockReturnValue(NOW);
+  try {
+    render(<RunEvaluations record={run} />, { wrapper: harness.wrapper });
+    const progress = await screen.findByTestId("run-evaluations");
+    expect(progress).toHaveTextContent("12/min");
+    onlineManager.setOnline(false);
+    await act(async () => {
+      clock.mockReturnValue(NOW + 120_000);
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(progress.textContent).toMatch(/Data.*2 min.*ago/);
+    expect(progress).not.toHaveTextContent("/min");
+    expect(progress).not.toHaveTextContent("left for what is queued");
+    expect(progress).not.toHaveTextContent("Not moving right now");
+  } finally {
+    clock.mockRestore();
+    onlineManager.setOnline(true);
+  }
+});
+
+it("retains cancelled evaluations in the stopped Run population", async () => {
+  const data = runDetailContract.ops.evaluations.output.parse(
+    answers.get("runDetail.evaluations"),
+  );
+  harness.queryClient.setQueryData(
+    runDetail.evaluations.queryKey({ runId: run.id, failedOnly: false }),
+    {
+      ...data,
+      byKind: data.byKind.map((kind) => ({
+        ...kind,
+        completed: 20,
+        waiting: 0,
+        running: 0,
+        failed: 0,
+        obsolete: 0,
+        cancelled: 80,
+      })),
+    },
+  );
+  render(<RunEvaluations record={{ ...run, status: "failed" }} />, {
+    wrapper: harness.wrapper,
+  });
+  const progress = await screen.findByTestId("run-evaluations");
+  expect(
+    within(progress).getByRole("progressbar", { name: "Evaluations settled" }),
+  ).toHaveTextContent("20 of 100");
+  expect(progress).toHaveTextContent("80 cancelled");
+  expect(
+    within(progress).getByRole("columnheader", { name: "Cancelled" }),
+  ).toBeVisible();
+});
