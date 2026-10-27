@@ -10,12 +10,10 @@ import {
 } from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
-import { findErrorCause } from "~/lib/error-diagnostics";
-import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
   aiEvaluationProgress,
-  claimAiEvaluation,
+  type ClaimedAiEvaluation,
 } from "~/server/ai/repo/ai-evaluation";
 import {
   requestedAiEvaluations,
@@ -30,25 +28,17 @@ import {
   aiEvaluationsForRun,
   readAiRefreshWorkSummary,
   guardAiEvaluationAttempt,
-  pauseRunForAiWork,
-  readAiEvaluation,
   readAiEvaluationReceipt,
   readRun,
-  readRunStatus,
-  recordAiEvaluationAttemptFailure,
   writeRunningAttemptProgress,
   type AiEvaluationRow,
   type RunRow,
 } from "~/server/domains/run/repo/ai-work-state";
-import { currentJobExecution } from "~/server/generic/jobs/context";
-import { JobDeferredError, JobPausedError } from "~/server/generic/jobs/errors";
 import { buildCrudServices } from "~/server/http/request-context";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 import { claimWorkflowRun } from "~/server/workflows/runs/lifecycle";
-import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
-import { executeAiRefreshTarget } from "./ai-refresh";
 import {
   executeSuggestionSweepTarget,
   type SuggestionSweepPorts,
@@ -177,97 +167,31 @@ export async function aiWorkItems(db: Database, owner: RunRow) {
   );
 }
 
+/** Reclassification and suggestion sweep evaluate one claimed item; the drain owns failures. */
 export async function executeAiWorkTarget(
   db: Database,
-  id: string,
-  requestingRunId: string,
+  item: ClaimedAiEvaluation,
   ports: AiWorkPorts = {},
 ) {
-  const read = await readAiEvaluation(db, id);
-  if (!read) return false;
-  if (read.executionKind === "ai_refresh")
-    return executeAiRefreshTarget(db, id);
-  const item = await claimAiEvaluation(db, id, requestingRunId);
-  if (!item?.attemptToken) return false;
-  try {
-    await guardAiEvaluationAttempt(db, id, item.attemptToken);
-    if (item.executionKind === "mail_reclassify")
-      await executeReclassificationTarget(db, item, ports.reclassification);
-    else {
-      const owner = await readRun(db, item.runId);
-      if (!owner) throw new Error("Suggestion sweep Run no longer exists");
-      const context = ports.sweep?.context ?? {
-        ...buildCrudServices(db),
-        actorContext: buildActorContext(owner.actorUserId, owner.channel, {
-          oauthClientId: owner.oauthClientId,
-          deviceId: owner.deviceId,
-          runId: owner.id,
-        }),
-      };
-      await executeSuggestionSweepTarget(db, item, { ...ports.sweep, context });
-    }
-  } catch (error) {
-    const deferred = findErrorCause(
-      error,
-      (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
-    );
-    if (deferred) throw deferred;
-    const message = runFailureText(
-      error instanceof Error ? error : String(error),
-    );
-    const budget = findErrorCause(
-      error,
-      (cause): cause is AiBudgetExhaustedError =>
-        cause instanceof AiBudgetExhaustedError,
-    );
-    const unauthorized = Boolean(budget) || /mailbox.*connected/i.test(message);
-    const paused = (await readRunStatus(db, item.runId)) === "paused";
-    const fenced = /attempt is obsolete|generation or Run is obsolete/.test(
-      message,
-    );
-    const waiting =
-      unauthorized ||
-      paused ||
-      fenced ||
-      message.includes("AI Gateway admission is waiting");
-    const obsolete =
-      !fenced && /changed during inference|no longer exists/.test(message);
-    await recordAiEvaluationAttemptFailure(
-      db,
-      { id, attemptToken: item.attemptToken },
-      {
-        state:
-          obsolete && !paused
-            ? "obsolete"
-            : !waiting &&
-                item.attempts >= (currentJobExecution()?.claim.maxAttempts ?? 3)
-              ? "failed"
-              : "retry_wait",
-        error: message,
-      },
-    );
-    if (paused) throw new JobPausedError("AI work paused by its requester");
-    if (budget)
-      throw new JobDeferredError(
-        message,
-        new Date(budget.resumeAt),
-        "ai_funding_window",
-      );
-    if (unauthorized) {
-      await pauseRunForAiWork(db, item.runId, message);
-      throw new JobPausedError(message);
-    }
-    if (message.includes("AI Gateway admission is waiting"))
-      throw new JobDeferredError(
-        message,
-        new Date(Date.now() + 30_000),
-        "rate_limit",
-      );
-    if (!obsolete) throw error;
+  await guardAiEvaluationAttempt(db, item.id, item.attemptToken);
+  if (item.executionKind === "mail_reclassify")
+    await executeReclassificationTarget(db, item, ports.reclassification);
+  else {
+    const owner = await readRun(db, item.runId);
+    if (!owner) throw new Error("Suggestion sweep Run no longer exists");
+    const context = ports.sweep?.context ?? {
+      ...buildCrudServices(db),
+      actorContext: buildActorContext(owner.actorUserId, owner.channel, {
+        oauthClientId: owner.oauthClientId,
+        deviceId: owner.deviceId,
+        runId: owner.id,
+      }),
+    };
+    await executeSuggestionSweepTarget(db, item, { ...ports.sweep, context });
   }
   const continuations = z
     .object({ continuationRunIds: z.array(z.uuid()) })
-    .safeParse(await readAiEvaluationReceipt(db, id));
+    .safeParse(await readAiEvaluationReceipt(db, item.id));
   if (continuations.success)
     for (const next of continuations.data.continuationRunIds)
       await launchWorkflowRun(db, {
@@ -275,7 +199,6 @@ export async function executeAiWorkTarget(
         purpose: "mail_reclassify",
         automatic: true,
       });
-  return true;
 }
 
 function aiWorkProgress(

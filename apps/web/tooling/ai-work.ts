@@ -2,20 +2,19 @@ import { job } from "~/server/db/retained-tables";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
 import { pauseJob } from "~/server/generic/jobs/repo/operator";
-import { aiEvaluationJobInput } from "~/server/generic/jobs/inputs";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { aiEvaluation, run } from "~/server/db/schema";
+import { run } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   advanceAiWorkRun,
   aiWorkItems,
-  executeAiWorkTarget,
   type AiWorkPorts,
 } from "~/server/domains/run/service/ai-work";
+import { aiEvaluationJobHandler } from "~/server/domains/run/service/ai-evaluation-drain";
 import { reclassifyEmails } from "~/server/domains/purchase-import/service/gmail/reclassify";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { emailReclassifyResults } from "@cubby/schemas/email-actions";
@@ -66,47 +65,7 @@ export async function driveAiWork(
         return { page: { done: !pending?.length } };
       },
     },
-    "ai.evaluation": {
-      prepare: async (database, claim) => {
-        const { evaluationId } = aiEvaluationJobInput.parse(claim.input);
-        const [item] = await getDb(database)
-          .select()
-          .from(aiEvaluation)
-          .where(eq(aiEvaluation.id, evaluationId));
-        if (!item) throw new Error("Synthetic AI evaluation is missing");
-        const [owner] = await getDb(database)
-          .select()
-          .from(run)
-          .where(eq(run.id, item.runId));
-        if (
-          owner?.status === "paused_auth" &&
-          owner.failureCode === "execution_limit"
-        )
-          await getDb(database)
-            .update(run)
-            .set({ status: "running" })
-            .where(eq(run.id, item.runId));
-        await executeAiWorkTarget(database, evaluationId, id, ports);
-        const [settled] = await getDb(database)
-          .select()
-          .from(aiEvaluation)
-          .where(eq(aiEvaluation.id, evaluationId));
-        if (settled?.state === "failed")
-          throw new Error(settled.error ?? "Synthetic AI target failed");
-        if (
-          settled &&
-          ["queued", "running", "retry_wait", "result_ready"].includes(
-            settled.state,
-          )
-        )
-          throw new JobDeferredError(
-            settled.error ?? "Synthetic evidence continuation",
-            new Date(Date.now() + 1),
-            "provider_capacity",
-          );
-        return { page: { done: true } };
-      },
-    },
+    "ai.evaluation": aiEvaluationJobHandler(ports),
   };
   for (let cycle = 0; cycle < 205; cycle++) {
     const [execution] = await getDb(db)
@@ -130,14 +89,19 @@ export async function driveAiWork(
     await advanceJob(db, execution.id, handlers);
     const [owner] = await getDb(db).select().from(run).where(eq(run.id, id));
     if (!owner) return;
-    const items = await aiWorkItems(db, owner);
-    for (const item of items.filter((item) =>
-      ["queued", "running", "retry_wait", "result_ready"].includes(item.state),
-    )) {
+    const pending = (await aiWorkItems(db, owner)).filter((item) =>
+      ["queued", "result_ready"].includes(item.state),
+    );
+    // Short waits only: due items and their drains run now.
+    const drains = await getDb(db).execute<{ drain: string }>(sql`
+      UPDATE "WorkItem" SET "readyAt" = now()
+       WHERE target = 'ai.evaluation' AND ref = ANY(${uuidArrayParam(pending.map((item) => item.id))})
+      RETURNING drain`);
+    for (const key of new Set(drains.rows.map((row) => row.drain))) {
       const [target] = await getDb(db)
         .select()
         .from(job)
-        .where(eq(job.key, `ai-evaluation:${item.id}`));
+        .where(eq(job.key, key));
       if (
         !target ||
         ["paused", "failed", "cancelled", "completed"].includes(target.state)
@@ -150,7 +114,7 @@ export async function driveAiWork(
         return;
       await getDb(db)
         .update(job)
-        .set({ availableAt: new Date(0) })
+        .set({ availableAt: new Date(0), waitUntil: null, waitReason: null })
         .where(
           and(
             eq(job.id, target.id),
@@ -161,10 +125,7 @@ export async function driveAiWork(
       if (["superseded", "paused", "deferred"].includes(outcome)) return;
       if (ports.sweep?.pauseAfter !== undefined) {
         const done = (await aiWorkItems(db, owner)).filter(
-          (item) =>
-            !["queued", "running", "result_ready", "retry_wait"].includes(
-              item.state,
-            ),
+          (item) => !["queued", "result_ready"].includes(item.state),
         ).length;
         if (done >= ports.sweep.pauseAfter) {
           await pauseJob(db, execution.id);

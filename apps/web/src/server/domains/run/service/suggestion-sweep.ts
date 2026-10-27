@@ -33,7 +33,12 @@ import {
   fieldDependencyKeys,
   fieldPolicyKey,
 } from "~/server/ai/policy/refresh-manifest";
-import { publishAiEvaluation } from "~/server/ai/repo/ai-evaluation";
+import {
+  AiEvaluationAttemptObsoleteError,
+  publishAiEvaluation,
+  storeAiEvaluationResult,
+  type ClaimedAiEvaluation,
+} from "~/server/ai/repo/ai-evaluation";
 import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
@@ -54,10 +59,6 @@ import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
-import {
-  storeAiEvaluationResult,
-  type AiEvaluationRow,
-} from "../repo/ai-work-state";
 import { ensureRun } from "../repo/ensure-run";
 import { withRunTransaction } from "../repo/run";
 import {
@@ -441,11 +442,9 @@ export async function rosterSuggestionTargets(
 
 export async function executeSuggestionSweepTarget(
   db: Database,
-  item: AiEvaluationRow,
+  item: ClaimedAiEvaluation,
   ports: SuggestionSweepPorts,
 ) {
-  if (!item.attemptToken)
-    throw new Error("Suggestion sweep has no attempt token");
   const snapshot = sweepSnapshot.parse(item.snapshot);
   const { input, target: queuedTarget, fieldDecisionId } = snapshot;
   const preparedFingerprint = await fieldInputFingerprint(
@@ -595,7 +594,7 @@ export async function executeSuggestionSweepTarget(
         JSON.parse(JSON.stringify(saved.data)),
       ))
     )
-      throw new Error("Suggestion evaluation attempt is obsolete");
+      throw new AiEvaluationAttemptObsoleteError();
   }
   const result = saved.data;
   if (

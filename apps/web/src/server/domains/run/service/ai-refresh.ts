@@ -27,10 +27,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
-import { findErrorCause } from "~/lib/error-diagnostics";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import { AiBudgetExhaustedError } from "~/server/ai/budget";
-import { aiWorkDeferral } from "~/server/ai/cooperative-work";
 import { decisionCatalogRows } from "~/server/ai/decision-catalog";
 import { settleDecisionWorkItems } from "~/server/ai/decision-model";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
@@ -47,20 +44,17 @@ import {
 } from "~/server/ai/policy/refresh-manifest";
 import {
   evaluateProductIdentity,
-  prepareProductIdentityCatalog,
-  evaluatePreparedProductIdentityPairs,
   evaluatePreparedProductIdentityPair,
   prepareProductIdentityPage,
   publishProductIdentityChunk,
   type PreparedProductIdentityPageOutcome,
 } from "~/server/ai/product-identity";
 import {
-  claimAiEvaluation,
+  AiEvaluationAttemptObsoleteError,
+  continueAiEvaluationPage,
   publishAiEvaluation,
-  publishAiEvaluationPage,
-  publishAiEvaluationContinuation,
-  failAiEvaluationPage,
-  type EvaluationPageFailure,
+  storeAiEvaluationResult,
+  type ClaimedAiEvaluation,
 } from "~/server/ai/repo/ai-evaluation";
 import { enqueueAiEvaluations } from "~/server/ai/repo/ai-evaluation-requests";
 import {
@@ -77,23 +71,14 @@ import type {
 } from "~/server/ai/repo/evaluation-page";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
-import { ConnectionEvidenceInvalidatedError } from "~/server/domains/connection/repo/entity-connections";
 import { productIdentityEvidenceFences } from "~/server/domains/product/repo/match/product-identity-fence";
-import { productIdentityEvidenceFence } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
-  productIdentitySnapshot,
   productIdentitySnapshots,
-  prepareProductIdentityPair,
-  prepareProductIdentityPairRequests,
   preparedProductIdentityPair,
   productIdentityPairKey,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import type { PreparedProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
-import {
-  prepareProductPairPublication,
-  prepareProductPairPublications,
-  publishProductPairPublications,
-} from "~/server/domains/product/repo/match/product-match-candidate";
+import { publishProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -110,34 +95,26 @@ import {
   fieldInputFingerprintIfLive,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import { withJobExecution } from "~/server/generic/jobs/context";
 import { currentJobExecution } from "~/server/generic/jobs/context";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import type { JobContext } from "~/server/generic/jobs/types";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
-import { TraceNames, withTrace } from "~/server/observability/tracing";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
-import { checkConnectionSourceBeforeCommit } from "../repo/ai-refresh-state";
 import {
   assessmentStatesById,
   emailClassificationObservations,
   fieldRefreshHistory,
   liveProductIdsAfter,
   pendingFieldRefreshes,
-  recordAiRefreshAttemptFailure,
   scheduleEvaluationRun,
   settleAppliedFieldRefresh,
   uncertainEmailRefreshCandidates,
   type FieldRefreshCursor,
 } from "../repo/ai-refresh-state";
+import { guardAiEvaluationAttempt } from "../repo/ai-work-state";
 import {
-  guardAiEvaluationAttempt,
-  storeAiEvaluationResult,
-} from "../repo/ai-work-state";
-import {
-  connectionSourceFingerprint,
   connectionSourceFingerprintsOrMissing,
   countConnectionSweepSources,
 } from "../repo/connection-refresh";
@@ -148,9 +125,6 @@ import {
 } from "./suggestion-sweep";
 
 const log = createLogger("ai-refresh");
-
-/** Connection units per publication transaction; see the publication loop. */
-const CONNECTION_UNITS_PER_TRANSACTION = 2;
 
 export type AiRefreshPorts = {
   context?: EntityKernelContext;
@@ -795,521 +769,215 @@ export async function discoverAiRefresh(
   };
 }
 
+/** Field and Email refresh evaluate one claimed item; the drain owns retries and failures. */
 export async function executeAiRefreshTarget(
   db: Database,
-  id: string,
+  claimed: ClaimedAiEvaluation,
   ports: AiRefreshPorts = {},
 ) {
-  const claimed = await claimAiEvaluation(db, id);
-  if (!claimed?.attemptToken) return false;
-  const token = claimed.attemptToken;
-  try {
-    await guardAiEvaluationAttempt(db, id, token);
-    const compiled = await compiledRefreshManifest();
-    if (
-      !dependenciesCurrent(
-        {
-          ...claimed.provenance,
-          dependencies: claimed.provenance.dependencies.map((stamp) => ({
-            ...stamp,
-            generation: 0,
-          })),
-        },
-        compiled,
-      )
+  const { id, attemptToken: token } = claimed;
+  await guardAiEvaluationAttempt(db, id, token);
+  const target = aiEvaluationTarget.parse(claimed.target);
+  if (target.kind === "email") {
+    const { refreshEmailEvaluation } =
+      await import("~/server/domains/purchase-import/service/gmail/refresh-evaluation");
+    await refreshEmailEvaluation(db, claimed, ports.emailPorts);
+    return;
+  }
+  if (target.kind !== "field")
+    throw new Error(`AI ${target.kind} evaluations run in drain pages`);
+  const snapshot = fieldSnapshot.parse(claimed.snapshot);
+  const fieldPorts = {
+    ...ports,
+    suggestPorts: {
+      ...ports.suggestPorts,
+      decisionModel: snapshot.decisionModelOverride,
+    },
+  };
+  const prepared = await prepareField(db, target, fieldPorts);
+  if (
+    !prepared ||
+    prepared.provenance.inputFingerprint !== claimed.provenance.inputFingerprint
+  )
+    throw new Error("AI evaluation target changed during inference");
+  const previous = await assessmentStatesById(db, target.assessmentIds);
+  if (
+    previous.length !== target.assessmentIds.length ||
+    previous.some(
+      (row) =>
+        row.acceptanceReceipt === null &&
+        !["pending", "superseded", "applied"].includes(row.status),
     )
-      throw new Error("AI evaluation Worker prompt manifest is obsolete");
-    const target = aiEvaluationTarget.parse(claimed.target);
-    if (target.kind === "connection") {
-      const { entityGraphRootSchema } =
-        await import("@cubby/schemas/entity-graph");
-      const source = entityGraphRootSchema.parse(claimed.snapshot);
-      if (
-        source.entityKind !== target.entity ||
-        (await connectionSourceFingerprint(db, source)) !==
-          claimed.provenance.inputFingerprint
-      )
-        throw new Error(
-          "Connection discovery source changed before evaluation",
-        );
-      const { prepareEntityConnections } =
-        await import("~/server/domains/connection/service/entity-connections");
-      const preparation = await prepareEntityConnections(
+  )
+    throw new Error("AI evaluation member decision is obsolete");
+  let result = fieldResult.safeParse(claimed.result);
+  if (!result.success) {
+    const evaluated = await withAiInputs(false, () =>
+      suggestFields(
         db,
-        kernel(db, ports, claimed.runId),
-        source,
-        {
-          suggestPorts: ports.suggestPorts,
-          productIdentityPorts: ports.productIdentityPorts,
-        },
-      );
-      const fenceSource = (transactionDb: Database) =>
-        checkConnectionSourceBeforeCommit(
-          transactionDb,
-          () => connectionSourceFingerprint(transactionDb, source),
-          claimed.provenance.inputFingerprint,
-        );
-      // Units publish a few per transaction: each transaction's guard and
-      // fences cost about ten statements, while one transaction over every
-      // unit held activation and a pooled connection for 100+ statements (#2819).
-      const { publishPreparedEntityConnections } =
-        await import("~/server/domains/connection/repo/entity-connections");
-      const units = [
-        ...Array.from(
-          { length: Math.ceil(preparation.connections.length / 16) },
-          (_, index) => async (tx: Database) => {
-            await publishPreparedEntityConnections(
-              tx,
-              preparation.connections.slice(index * 16, index * 16 + 16),
-            );
-          },
-        ),
-        ...Array.from(
-          { length: Math.ceil(preparation.productPairs.length / 16) },
-          (_, index) => async (tx: Database) => {
-            const results = await publishProductPairPublications(
-              tx,
-              preparation.productPairs.slice(index * 16, index * 16 + 16),
-            );
-            if (results.some((result) => !result.valid))
-              throw new Error("Product pair evidence changed during inference");
-          },
-        ),
-        ...preparation.publications,
-      ];
-      for (
-        let offset = 0;
-        offset < units.length;
-        offset += CONNECTION_UNITS_PER_TRANSACTION
-      ) {
-        const chunk = units.slice(
-          offset,
-          offset + CONNECTION_UNITS_PER_TRANSACTION,
-        );
-        await withTrace(
-          TraceNames.service("connections", "publish"),
-          () =>
-            publishAiEvaluation(
-              db,
-              id,
-              token,
-              async (transactionDb) => {
-                // A single unit owns its ordered locks. Combined legacy units
-                // must acquire their union before any later callback runs.
-                if (chunk.length > 1) {
-                  const { connectionRecords } =
-                    await import("~/server/domains/connection/repo/connection-evidence");
-                  await connectionRecords(
-                    transactionDb,
-                    preparation.lockRefs.filter(
-                      (ref) => ref.entityKind !== "email",
-                    ),
-                    true,
-                  );
-                }
-                for (const publish of chunk) await publish(transactionDb);
-                await fenceSource(transactionDb);
-                return null;
-              },
-              "continue",
-            ),
-          {
-            "connection.publication": offset,
-            "connection.units": chunk.length,
-          },
-        );
-      }
-      await publishAiEvaluation(db, id, token, async (transactionDb) => {
-        if (!preparation.complete)
-          throw new Error(
-            `Connection candidate coverage is unconfirmed. ${preparation.coverageErrors.join("\n")}`,
-          );
-        await fenceSource(transactionDb);
-        return { source, discovered: true };
-      });
-      return true;
-    }
-    if (target.kind === "email") {
-      const { refreshEmailEvaluation } =
-        await import("~/server/domains/purchase-import/service/gmail/refresh-evaluation");
-      await refreshEmailEvaluation(db, claimed, ports.emailPorts);
-      return true;
-    }
-    if (target.kind === "product_pair") {
-      const prepared = preparedProductIdentityPair.parse(claimed.snapshot);
-      const current = await prepareProductIdentityPair(db, [
-        parseEntityId("product", target.recordId),
-        parseEntityId("product", target.otherId),
-      ]);
-      if (
-        !current ||
-        current.fingerprint !== claimed.provenance.inputFingerprint
-      )
-        throw new Error("Product pair evidence changed during inference");
-      const result = await evaluatePreparedProductIdentityPair(
-        db,
-        prepared,
         claimed.runId,
         {
-          ...ports.productIdentityPorts,
-          evaluationId: id,
-          provenance: claimed.provenance,
+          entity: snapshot.entity,
+          entityId: snapshot.publicId,
+          targets: [snapshot.field],
+          basisMode: "provided",
+          basis: snapshot.basis,
         },
-      );
-      const publish = await prepareProductPairPublication(db, result);
-      await publishAiEvaluation(db, id, token, async (transactionDb) => {
-        await publish(transactionDb);
-        return {
-          pair: prepared.productIds,
-          fingerprint: prepared.fingerprint,
-          model: result.producer.model,
-          actionable: result.actionable,
-          conflict: result.conflict,
-        };
-      });
-      return true;
-    }
-    if (target.kind === "product") {
-      const productId = parseEntityId("product", target.recordId);
-      const source = await productIdentitySnapshot(db, productId);
-      if (!source || source.fingerprint !== claimed.provenance.inputFingerprint)
-        throw new Error("AI evaluation target changed during inference");
-      const prepared = await prepareProductIdentityCatalog(db, productId);
-      const exactResults = new Map<
-        string,
-        Awaited<ReturnType<typeof evaluatePreparedProductIdentityPair>>
-      >();
-      const exactPairs = prepared.pairs.filter((pair) => pair.exact);
-      const settled = await evaluatePreparedProductIdentityPairs(
-        db,
-        exactPairs,
-        claimed.runId,
-        {
-          ...ports.productIdentityPorts,
-          evaluationId: id,
-          provenance: claimed.provenance,
-        },
-      );
-      for (const [index, result] of settled.entries()) {
-        if (result.status === "rejected") throw result.reason;
-        exactResults.set(exactPairs[index]!.fingerprint, result.value);
-      }
-      let rulePairs = 0,
-        requestedPairs = 0;
-      // Bound evidence preparation while retaining each pair's short, fenced commit.
-      const batchSize = 16;
-      for (
-        let offset = 0;
-        offset < prepared.pairs.length;
-        offset += batchSize
-      ) {
-        const batch = prepared.pairs.slice(offset, offset + batchSize);
-        const rules = batch.flatMap((pair) => {
-          const result = exactResults.get(pair.fingerprint);
-          if (pair.exact && !result)
-            throw new Error(
-              "Prepared exact Product identity result is missing",
-            );
-          return result ? [result] : [];
-        });
-        const preparedRules = await prepareProductPairPublications(
-          db,
-          rules.map((input, index) => ({ key: String(index), input })),
-        );
-        if (preparedRules.length !== rules.length)
-          throw new Error("Product pair evidence changed during inference");
-        const rulePublications = preparedRules.map(
-          (prepared) => async (transactionDb: Database) => {
-            const [result] = await publishProductPairPublications(
-              transactionDb,
-              [prepared],
-            );
-            if (!result?.valid)
-              throw new Error("Product pair evidence changed during inference");
-            return result.row;
-          },
-        );
-        const requests = await prepareProductIdentityPairRequests(
-          db,
-          batch.filter((pair) => !pair.exact),
-          claimed.runId,
-          claimed.provenance,
-        );
-        let ruleIndex = 0,
-          requestIndex = 0;
-        for (const pair of batch) {
-          const publish = pair.exact
-            ? rulePublications[ruleIndex++]!
-            : requests[requestIndex++]!;
-          await publishAiEvaluation(
-            db,
-            id,
-            token,
-            async (transactionDb) => {
-              await publish(transactionDb);
-              return null;
-            },
-            "continue",
-          );
-          if (pair.exact) rulePairs++;
-          else requestedPairs++;
-        }
-      }
-      const sourceFence = await productIdentityEvidenceFence(db, [productId]);
-      const latest = await productIdentitySnapshot(db, productId);
-      if (
-        !latest ||
-        latest.fingerprint !== source.fingerprint ||
-        (await productIdentityEvidenceFence(db, [productId])) !== sourceFence
-      )
-        throw new Error("Product identity evidence changed during inference");
-      await publishAiEvaluation(db, id, token, async (transactionDb) => {
-        if (
-          (await productIdentityEvidenceFence(transactionDb, [productId])) !==
-          sourceFence
-        )
-          throw new Error("Product identity evidence changed during inference");
-        return {
-          eligible: prepared.eligible,
-          excluded: !prepared.eligible ? "misc_or_deleted" : null,
-          rulePairs,
-          requestedPairs,
-          catalogEnumeration: true,
-          coverage: prepared.coverage,
-        };
-      });
-      return true;
-    }
-    const snapshot = fieldSnapshot.parse(claimed.snapshot);
-    const fieldPorts = {
-      ...ports,
-      suggestPorts: {
-        ...ports.suggestPorts,
-        decisionModel: snapshot.decisionModelOverride,
-      },
+        { ...fieldPorts.suggestPorts, recordId: target.recordId },
+      ),
+    );
+    const provenance = {
+      ...prepared.provenance,
+      model:
+        evaluated.result.outcomes?.[snapshot.field]?.kind === "correction"
+          ? null
+          : ([...evaluated.inputs]
+              .reverse()
+              .find(
+                (call) =>
+                  call.operation ===
+                  `suggestFields.${snapshot.entity}.${snapshot.field}`,
+              )?.model ??
+            snapshot.decisionModelOverride ??
+            null),
     };
-    const prepared = await prepareField(db, target, fieldPorts);
+    const reviewKey = await fieldReviewIdentity({
+      entity: snapshot.entity,
+      recordId: target.recordId,
+      field: snapshot.field,
+      currentValue: snapshot.currentValue,
+      proposal: evaluated.result.suggestions[snapshot.field],
+      model: provenance.model,
+      inputs: evaluated.inputs,
+      dependencies: provenance.dependencies,
+    });
+    result = fieldResult.safeParse({
+      output: evaluated.result,
+      provenance,
+      reviewKey,
+      correctionRecipe: evaluated.incomplete
+        ? undefined
+        : {
+            version: "field-correction-v2",
+            entity: snapshot.entity,
+            field: snapshot.field,
+            basis: snapshot.basis,
+            inputs: evaluated.inputs,
+            dependencies: provenance.dependencies,
+          },
+      correctionKey: await fieldCorrectionIdentity({
+        entity: snapshot.entity,
+        field: snapshot.field,
+        basis: snapshot.basis,
+        inputs: evaluated.inputs,
+        dependencies: provenance.dependencies,
+        incomplete: evaluated.incomplete,
+      }),
+    });
+    if (!result.success) throw result.error;
     if (
-      !prepared ||
-      prepared.provenance.inputFingerprint !==
-        claimed.provenance.inputFingerprint
+      !(await storeAiEvaluationResult(
+        db,
+        { id, attemptToken: token },
+        jsonSnapshot(result.data),
+      ))
+    )
+      throw new AiEvaluationAttemptObsoleteError();
+  }
+  const saved = result.data;
+  await publishAiEvaluation(db, id, token, async (tx) => {
+    const now = await prepareField(tx, target, fieldPorts);
+    if (
+      !now ||
+      now.provenance.inputFingerprint !== claimed.provenance.inputFingerprint
     )
       throw new Error("AI evaluation target changed during inference");
-    const previous = await assessmentStatesById(db, target.assessmentIds);
-    if (
-      previous.length !== target.assessmentIds.length ||
-      previous.some(
-        (row) =>
-          row.acceptanceReceipt === null &&
-          !["pending", "superseded", "applied"].includes(row.status),
-      )
-    )
-      throw new Error("AI evaluation member decision is obsolete");
-    let result = fieldResult.safeParse(claimed.result);
-    if (!result.success) {
-      const evaluated = await withAiInputs(false, () =>
-        suggestFields(
-          db,
-          claimed.runId,
-          {
-            entity: snapshot.entity,
-            entityId: snapshot.publicId,
-            targets: [snapshot.field],
-            basisMode: "provided",
-            basis: snapshot.basis,
-          },
-          { ...fieldPorts.suggestPorts, recordId: target.recordId },
-        ),
-      );
-      const provenance = {
-        ...prepared.provenance,
-        model:
-          evaluated.result.outcomes?.[snapshot.field]?.kind === "correction"
-            ? null
-            : ([...evaluated.inputs]
-                .reverse()
-                .find(
-                  (call) =>
-                    call.operation ===
-                    `suggestFields.${snapshot.entity}.${snapshot.field}`,
-                )?.model ??
-              snapshot.decisionModelOverride ??
-              null),
-      };
-      const reviewKey = await fieldReviewIdentity({
+    const decision = saved.output.suggestions[snapshot.field];
+    const correctionOutcome = saved.output.outcomes?.[snapshot.field];
+    if (correctionOutcome?.kind === "correction") {
+      await publishFieldCorrectionQuestion(tx, {
         entity: snapshot.entity,
         recordId: target.recordId,
         field: snapshot.field,
         currentValue: snapshot.currentValue,
-        proposal: evaluated.result.suggestions[snapshot.field],
-        model: provenance.model,
-        inputs: evaluated.inputs,
-        dependencies: provenance.dependencies,
+        outcome: correctionOutcome,
+        correctionRecipe: saved.correctionRecipe,
+        provenance: saved.provenance,
+        runId: claimed.runId,
       });
-      result = fieldResult.safeParse({
-        output: evaluated.result,
-        provenance,
-        reviewKey,
-        correctionRecipe: evaluated.incomplete
-          ? undefined
-          : {
-              version: "field-correction-v2",
-              entity: snapshot.entity,
-              field: snapshot.field,
-              basis: snapshot.basis,
-              inputs: evaluated.inputs,
-              dependencies: provenance.dependencies,
-            },
-        correctionKey: await fieldCorrectionIdentity({
-          entity: snapshot.entity,
-          field: snapshot.field,
-          basis: snapshot.basis,
-          inputs: evaluated.inputs,
-          dependencies: provenance.dependencies,
-          incomplete: evaluated.incomplete,
-        }),
-      });
-      if (!result.success) throw result.error;
-      if (
-        !(await storeAiEvaluationResult(
-          db,
-          { id, attemptToken: token },
-          jsonSnapshot(result.data),
-        ))
-      )
-        throw new Error("AI evaluation attempt is obsolete");
+      return {
+        outcome: "queued",
+        applicationFailures: [],
+        evaluatedOutcome: correctionOutcome,
+      };
     }
-    const saved = result.data;
-    await publishAiEvaluation(db, id, token, async (tx) => {
-      const now = await prepareField(tx, target, fieldPorts);
-      if (
-        !now ||
-        now.provenance.inputFingerprint !== claimed.provenance.inputFingerprint
-      )
-        throw new Error("AI evaluation target changed during inference");
-      const decision = saved.output.suggestions[snapshot.field];
-      const correctionOutcome = saved.output.outcomes?.[snapshot.field];
-      if (correctionOutcome?.kind === "correction") {
-        await publishFieldCorrectionQuestion(tx, {
-          entity: snapshot.entity,
-          recordId: target.recordId,
-          field: snapshot.field,
+    const model =
+      saved.provenance.model ?? snapshot.decisionModelOverride ?? "unknown";
+    const entry = decision
+      ? makeSweepSuggestion({
           currentValue: snapshot.currentValue,
-          outcome: correctionOutcome,
-          correctionRecipe: saved.correctionRecipe,
-          provenance: saved.provenance,
-          runId: claimed.runId,
-        });
-        return {
-          outcome: "queued",
-          applicationFailures: [],
-          evaluatedOutcome: correctionOutcome,
-        };
-      }
-      const model =
-        saved.provenance.model ?? snapshot.decisionModelOverride ?? "unknown";
-      const entry = decision
-        ? makeSweepSuggestion({
-            currentValue: snapshot.currentValue,
-            decision: {
-              value: decision.value,
-              confidence: decision.probability ?? 0,
+          decision: {
+            value: decision.value,
+            confidence: decision.probability ?? 0,
+          },
+          model,
+        })
+      : null;
+    const applicationFailures: string[] = [];
+    const outcome = await publishSweepSuggestions(
+      tx,
+      claimed.runId,
+      {
+        entity: snapshot.entity,
+        field: snapshot.field,
+        recordId: target.recordId,
+        currentValue: snapshot.currentValue,
+        fieldDecisionId: snapshot.fieldDecisionId,
+        predecessorIds: target.assessmentIds,
+        evaluationId: id,
+        provenance: saved.provenance,
+      },
+      entry
+        ? [
+            {
+              ...entry,
+              reviewKey: saved.reviewKey,
+              correctionKey: saved.correctionKey,
+              correctionRecipe: saved.correctionRecipe,
+              model: saved.provenance.model ?? entry.model,
             },
-            model,
-          })
-        : null;
-      const applicationFailures: string[] = [];
-      const outcome = await publishSweepSuggestions(
+          ]
+        : [],
+      decision?.financeReview?.fingerprint ?? null,
+      kernel(tx, ports, claimed.runId),
+      (error) => applicationFailures.push(scrubErrorMessage(String(error))),
+    );
+    const [predecessorId] = target.assessmentIds;
+    if (outcome === "settled" && predecessorId) {
+      await settleAppliedFieldRefresh(
         tx,
-        claimed.runId,
-        {
-          entity: snapshot.entity,
-          field: snapshot.field,
-          recordId: target.recordId,
-          currentValue: snapshot.currentValue,
-          fieldDecisionId: snapshot.fieldDecisionId,
-          predecessorIds: target.assessmentIds,
-          evaluationId: id,
-          provenance: saved.provenance,
-        },
-        entry
-          ? [
-              {
-                ...entry,
-                reviewKey: saved.reviewKey,
-                correctionKey: saved.correctionKey,
-                correctionRecipe: saved.correctionRecipe,
-                model: saved.provenance.model ?? entry.model,
-              },
-            ]
-          : [],
-        decision?.financeReview?.fingerprint ?? null,
-        kernel(tx, ports, claimed.runId),
-        (error) => applicationFailures.push(scrubErrorMessage(String(error))),
-      );
-      const [predecessorId] = target.assessmentIds;
-      if (outcome === "settled" && predecessorId) {
-        await settleAppliedFieldRefresh(
-          tx,
-          predecessorId,
-          await fieldInputFingerprint(
-            tx,
-            target.entity,
-            target.recordId,
-            target.field,
-          ),
-          saved.provenance,
-        );
-        await fenceFieldInputsAtCommit(
+        predecessorId,
+        await fieldInputFingerprint(
           tx,
           target.entity,
           target.recordId,
           target.field,
-        );
-      }
-      return {
-        outcome,
-        applicationFailures,
-        evaluatedOutcome: saved.output.outcomes?.[snapshot.field] ?? null,
-      };
-    });
-  } catch (error) {
-    const deferred = findErrorCause(
-      error,
-      (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
-    );
-    if (deferred) throw deferred;
-    const message = scrubErrorMessage(
-      error instanceof Error ? error.message : String(error),
-    );
-    // A changed connection source has a new fingerprint and so a new work key;
-    // discovery re-admits it (possibly after its pending backlog drains), so
-    // retrying this attempt against the old fingerprint can never succeed.
-    // Candidate-side evidence changes keep retrying: they do not re-admit
-    // this source.
-    const obsolete =
-      /obsolete|changed during inference|decided during inference|no longer exists|Connection (discovery )?source changed/.test(
-        message,
+        ),
+        saved.provenance,
       );
-    const admissionWait = message.includes("AI Gateway admission is waiting");
-    await recordAiRefreshAttemptFailure(db, id, token, {
-      state: obsolete
-        ? "obsolete"
-        : !admissionWait &&
-            claimed.attempts >= (currentJobExecution()?.claim.maxAttempts ?? 3)
-          ? "failed"
-          : "retry_wait",
-      error: message,
-    });
-    if (admissionWait)
-      throw new JobDeferredError(
-        message,
-        new Date(Date.now() + 30_000),
-        "rate_limit",
+      await fenceFieldInputsAtCommit(
+        tx,
+        target.entity,
+        target.recordId,
+        target.field,
       );
-    if (!obsolete) throw error;
-  }
-  return true;
+    }
+    return {
+      outcome,
+      applicationFailures,
+      evaluatedOutcome: saved.output.outcomes?.[snapshot.field] ?? null,
+    };
+  });
 }
 
 type ProductPagePreparation = PreparedProductIdentityPageOutcome & {
@@ -1333,15 +1001,13 @@ function inEvaluationContext<T>(
   target: EvaluationPageTarget,
   work: () => Promise<T>,
 ): Promise<T> {
-  return withJobExecution(db, target.claim, () =>
-    withWorkflowExecution(
-      {
-        runId: target.evaluation.runId,
-        attempt: target.claim.generation,
-        database: db,
-      },
-      work,
-    ),
+  return withWorkflowExecution(
+    {
+      runId: target.evaluation.runId,
+      attempt: currentJobExecution()?.claim.generation ?? 0,
+      database: db,
+    },
+    work,
   );
 }
 
@@ -1557,65 +1223,25 @@ function productEvaluationPageAdapter(
   };
 }
 
-function pageFailure(
-  target: EvaluationPageTarget,
-  error: unknown,
-): EvaluationPageFailure {
-  const deferred = findErrorCause(
-    error,
-    (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
-  );
-  const budget = findErrorCause(
-    error,
-    (cause): cause is AiBudgetExhaustedError =>
-      cause instanceof AiBudgetExhaustedError,
-  );
-  const capacity = aiWorkDeferral(error);
-  const message = scrubErrorMessage(
-    error instanceof Error ? error.message : String(error),
-  );
-  const obsolete =
-    !!findErrorCause(
-      error,
-      (cause): cause is ConnectionEvidenceInvalidatedError =>
-        cause instanceof ConnectionEvidenceInvalidatedError,
-    ) ||
-    /obsolete|changed during inference|changed during evaluation|decided during inference|no longer exists/.test(
-      message,
-    );
-  const admission = message.includes("AI Gateway admission is waiting");
-  const wait = deferred
-    ? { until: deferred.until, reason: deferred.reason }
-    : budget
-      ? {
-          until: new Date(budget.resumeAt),
-          reason: "ai_funding_window" as const,
-        }
-      : capacity
-        ? {
-            until: new Date(capacity.until),
-            reason: "provider_capacity" as const,
-          }
-        : admission
-          ? {
-              until: new Date(Date.now() + 30_000),
-              reason: "rate_limit" as const,
-            }
-          : undefined;
-  return {
-    target,
-    state: obsolete
-      ? "obsolete"
-      : !wait && target.claim.attempts >= target.claim.maxAttempts
-        ? "failed"
-        : "retry_wait",
-    error: message,
-    ...(wait ? { wait } : {}),
-  };
-}
+/** One drain page's evaluated outcomes; the drain publishes them in fenced chunks. */
+export type PreparedAiRefreshPage = {
+  /** Targets with an evaluated outcome and their publication weight. */
+  ready: Map<string, { target: EvaluationPageTarget; weight: number }>;
+  /** Business writes for guarded targets; one validity/receipt per target. */
+  publish(
+    tx: Database,
+    ids: readonly string[],
+  ): Promise<EvaluationPagePublication[]>;
+  /** Per-target errors for the drain's failure mapping. */
+  failures: Map<string, unknown>;
+  /** Evidence over the per-target bound can never fit a page. */
+  oversized: Map<string, string>;
+  /** Targets past this page's evidence budget stay due for the next page. */
+  overflow: string[];
+};
 
 /** A finite decision scope; each continuation captures its own target authority. */
-export async function executeAiRefreshPage<P, O>(
+async function evaluateAiRefreshPage<P, O>(
   db: Database,
   targets: readonly EvaluationPageTarget[],
   adapter: EvaluationPageAdapter<P, O>,
@@ -1623,33 +1249,15 @@ export async function executeAiRefreshPage<P, O>(
     db: Database,
     ready: readonly Extract<EvaluationPagePreparation<P>, { kind: "ready" }>[],
   ) => Promise<EvaluationPagePreparation<P>[]>,
-) {
-  const compiled = await compiledRefreshManifest();
-  const compatible = targets.filter((entry) =>
-    dependenciesCurrent(
-      {
-        ...entry.evaluation.provenance,
-        dependencies: entry.evaluation.provenance.dependencies.map((stamp) => ({
-          ...stamp,
-          generation: 0,
-        })),
-      },
-      compiled,
-    ),
-  );
-  const failures = targets
-    .filter((entry) => !compatible.includes(entry))
-    .map((target) =>
-      pageFailure(
-        target,
-        new Error("AI evaluation Worker prompt manifest is obsolete"),
-      ),
-    );
-  const prepared = await adapter.prepare(db, compatible);
+): Promise<PreparedAiRefreshPage> {
+  const failures = new Map<string, unknown>();
+  const oversized = new Map<string, string>();
+  const overflowed: string[] = [];
+  const prepared = await adapter.prepare(db, targets);
   if (
-    prepared.length !== compatible.length ||
+    prepared.length !== targets.length ||
     new Set(prepared.map((entry) => entry.target.evaluation.id)).size !==
-      compatible.length
+      targets.length
   )
     throw new Error("AI page adapter returned an unexpected preparation set");
   const ready: Extract<EvaluationPagePreparation<P>, { kind: "ready" }>[] = [];
@@ -1657,7 +1265,7 @@ export async function executeAiRefreshPage<P, O>(
   let overflow = false;
   for (const entry of prepared) {
     if (entry.kind === "failed") {
-      failures.push(pageFailure(entry.target, entry.error));
+      failures.set(entry.target.evaluation.id, entry.error);
       continue;
     }
     const bytes = new TextEncoder().encode(
@@ -1667,21 +1275,15 @@ export async function executeAiRefreshPage<P, O>(
       ),
     ).byteLength;
     if (bytes > 4 * 1024 * 1024) {
-      failures.push({
-        target: entry.target,
-        state: "failed",
-        error: "AI evaluation evidence exceeds the 4 MiB page bound",
-      });
+      oversized.set(
+        entry.target.evaluation.id,
+        "AI evaluation evidence exceeds the 4 MiB page bound",
+      );
       continue;
     }
     overflow ||= preparedBytes + bytes > 4 * 1024 * 1024;
     if (overflow) {
-      failures.push({
-        target: entry.target,
-        state: "retry_wait",
-        error: "AI page evidence suffix remains due",
-        wait: { until: new Date(), reason: "provider_capacity" },
-      });
+      overflowed.push(entry.target.evaluation.id);
       continue;
     }
     preparedBytes += bytes;
@@ -1692,7 +1294,7 @@ export async function executeAiRefreshPage<P, O>(
     ready.length = 0;
     for (const entry of staged) {
       if (entry.kind === "failed")
-        failures.push(pageFailure(entry.target, entry.error));
+        failures.set(entry.target.evaluation.id, entry.error);
       else ready.push(entry);
     }
   }
@@ -1717,7 +1319,7 @@ export async function executeAiRefreshPage<P, O>(
     }
     return usage;
   };
-  const outcomes: EvaluationPageOutcome<O>[] = [];
+  const outcomes = new Map<string, EvaluationPageOutcome<O>>();
   const settled = await settleDecisionWorkItems(
     ready,
     (entry) =>
@@ -1729,73 +1331,76 @@ export async function executeAiRefreshPage<P, O>(
     adapter.concurrency,
   );
   settled.forEach((result, index) => {
-    if (result.status === "fulfilled") outcomes.push(result.value);
-    else failures.push(pageFailure(ready[index]!.target, result.reason));
+    const id = ready[index]!.target.evaluation.id;
+    if (result.status === "fulfilled") outcomes.set(id, result.value);
+    else failures.set(id, result.reason);
   });
-  const publishChunk = async (
-    chunk: readonly EvaluationPageOutcome<O>[],
-  ): Promise<void> => {
-    if (!chunk.length) return;
-    try {
-      const published = await publishAiEvaluationPage(db, chunk, (tx, valid) =>
-        adapter.publish(tx, valid),
-      );
-      const ids = new Set(published.map((entry) => entry.evaluationId));
-      for (const entry of chunk)
-        if (!ids.has(entry.target.evaluation.id))
-          failures.push(
-            pageFailure(
-              entry.target,
-              new Error("AI evaluation generation or Run is obsolete"),
-            ),
-          );
-    } catch (error) {
-      // Only a failed chunk splits; already committed siblings never replay.
-      if (chunk.length > 1) {
-        const middle = Math.ceil(chunk.length / 2);
-        await publishChunk(chunk.slice(0, middle));
-        await publishChunk(chunk.slice(middle));
-      } else failures.push(pageFailure(chunk[0]!.target, error));
-    }
-  };
-  const chunks: EvaluationPageOutcome<O>[][] = [];
-  let weight = 0;
-  for (const outcome of outcomes) {
-    const cost = Math.max(1, adapter.weight?.(outcome) ?? 1);
-    const last = chunks.at(-1);
-    if (last && last.length < 25 && weight + cost <= 25) {
-      last.push(outcome);
-      weight += cost;
-    } else {
-      chunks.push([outcome]);
-      weight = cost;
-    }
-  }
-  for (const chunk of chunks) await publishChunk(chunk);
-  await failAiEvaluationPage(db, failures);
   log.info("evaluation page", {
     claimedSlots: targets.length,
     prepared: ready.length,
-    completed:
-      outcomes.length -
-      failures.filter((entry) =>
-        outcomes.some((outcome) => outcome.target === entry.target),
-      ).length,
-    failed: failures.length,
-    publicationChunks: chunks.length,
+    evaluated: outcomes.size,
+    failed: failures.size + oversized.size,
+    overflow: overflowed.length,
     usageGroups: groups.size,
     preparedBytes,
   });
+  return {
+    ready: new Map(
+      [...outcomes].map(([id, outcome]) => [
+        id,
+        {
+          target: outcome.target,
+          weight: Math.max(1, adapter.weight?.(outcome) ?? 1),
+        },
+      ]),
+    ),
+    publish: (tx, ids) =>
+      adapter.publish(
+        tx,
+        ids.map((id) => outcomes.get(id)!),
+      ),
+    failures,
+    oversized,
+    overflow: overflowed,
+  };
+}
+
+/**
+ * Product and connection refresh evaluate a whole drain page at once; source
+ * enrollment continuations commit in fenced chunks before enumeration settles.
+ */
+export async function prepareAiRefreshPage(
+  db: Database,
+  targets: readonly EvaluationPageTarget[],
+  context: JobContext,
+  ports: AiRefreshPorts = {},
+): Promise<PreparedAiRefreshPage> {
+  if (targets.every((entry) => entry.target.kind === "connection"))
+    return evaluateAiRefreshPage(
+      db,
+      targets,
+      connectionEvaluationPageAdapter(ports),
+    );
+  return evaluateAiRefreshPage(
+    db,
+    targets,
+    productEvaluationPageAdapter(ports),
+    (database, ready) =>
+      stageProductEnrollment(database, ready, context, ports),
+  );
 }
 
 /** Source edges share explicit guarded chunks across the page before enumeration settles. */
-export async function executeProductAiRefreshPage(
-  db: Database,
-  targets: readonly EvaluationPageTarget[],
-  ports: AiRefreshPorts = {},
-) {
-  const adapter = productEvaluationPageAdapter(ports);
-  await executeAiRefreshPage(db, targets, adapter, async (database, ready) => {
+async function stageProductEnrollment(
+  database: Database,
+  ready: readonly Extract<
+    EvaluationPagePreparation<ProductPagePreparation>,
+    { kind: "ready" }
+  >[],
+  context: JobContext,
+  ports: AiRefreshPorts,
+): Promise<EvaluationPagePreparation<ProductPagePreparation>[]> {
+  {
     type Ready = (typeof ready)[number];
     type Edge = {
       source: Ready;
@@ -1880,54 +1485,58 @@ export async function executeProductAiRefreshPage(
         ).values(),
       ];
       try {
-        await publishAiEvaluationContinuation(
-          database,
-          sources.map((source) => source.target),
-          async (tx) => {
-            const fences = await productIdentityEvidenceFences(tx, [
-              ...sources.map((source) => ({
-                key: source.target.evaluation.id,
-                productIds: source.prepared.productIds,
-              })),
-              ...chunk.map((edge, index) => ({
-                key: `edge:${index}`,
-                productIds: edge.pair.productIds,
-              })),
-            ]);
-            if (
-              sources.some(
-                (source) =>
-                  fences.get(source.target.evaluation.id) !==
-                  source.evidenceDigest,
-              ) ||
-              chunk.some(
-                (edge, index) =>
-                  fences.get(`edge:${index}`) !==
-                  edge.source.prepared.pairFences.get(
-                    productIdentityPairKey(edge.pair.productIds),
-                  ),
-              )
-            )
-              throw new Error(
-                "Product identity evidence changed during inference",
-              );
-            const exact = chunk.flatMap((edge) =>
-              edge.publication ? [edge.publication] : [],
-            );
-            if (
-              exact.length &&
-              (await publishProductIdentityChunk(tx, exact)).some(
-                (result) => !result.valid,
-              )
-            )
-              throw new Error(
-                "Product identity evidence changed during inference",
-              );
-            await enqueueAiEvaluations(
-              tx,
-              chunk.flatMap((edge) => (edge.request ? [edge.request] : [])),
-            );
-          },
+        await context.fenced(
+          (fenced) =>
+            continueAiEvaluationPage(
+              fenced,
+              sources.map((source) => source.target),
+              async (tx) => {
+                const fences = await productIdentityEvidenceFences(tx, [
+                  ...sources.map((source) => ({
+                    key: source.target.evaluation.id,
+                    productIds: source.prepared.productIds,
+                  })),
+                  ...chunk.map((edge, index) => ({
+                    key: `edge:${index}`,
+                    productIds: edge.pair.productIds,
+                  })),
+                ]);
+                if (
+                  sources.some(
+                    (source) =>
+                      fences.get(source.target.evaluation.id) !==
+                      source.evidenceDigest,
+                  ) ||
+                  chunk.some(
+                    (edge, index) =>
+                      fences.get(`edge:${index}`) !==
+                      edge.source.prepared.pairFences.get(
+                        productIdentityPairKey(edge.pair.productIds),
+                      ),
+                  )
+                )
+                  throw new Error(
+                    "Product identity evidence changed during inference",
+                  );
+                const exact = chunk.flatMap((edge) =>
+                  edge.publication ? [edge.publication] : [],
+                );
+                if (
+                  exact.length &&
+                  (await publishProductIdentityChunk(tx, exact)).some(
+                    (result) => !result.valid,
+                  )
+                )
+                  throw new Error(
+                    "Product identity evidence changed during inference",
+                  );
+                await enqueueAiEvaluations(
+                  tx,
+                  chunk.flatMap((edge) => (edge.request ? [edge.request] : [])),
+                );
+              },
+            ),
+          { isolationLevel: "serializable" },
         );
         for (const edge of chunk) {
           const enrollment = edge.source.prepared.enrollment!;
@@ -1976,7 +1585,7 @@ export async function executeProductAiRefreshPage(
         ? { kind: "failed" as const, target: entry.target, error }
         : entry;
     });
-  });
+  }
 }
 
 type ConnectionPagePreparation = {
@@ -2220,16 +1829,4 @@ function connectionEvaluationPageAdapter(
       return published;
     },
   };
-}
-
-export async function executeConnectionAiRefreshPage(
-  db: Database,
-  targets: readonly EvaluationPageTarget[],
-  ports: AiRefreshPorts = {},
-) {
-  await executeAiRefreshPage(
-    db,
-    targets,
-    connectionEvaluationPageAdapter(ports),
-  );
 }

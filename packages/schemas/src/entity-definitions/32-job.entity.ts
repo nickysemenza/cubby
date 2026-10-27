@@ -429,19 +429,13 @@ export default defineEntity({
   search: false,
   relations: [
     queryRelationship({
-      key: "requesting-runs",
-      label: "Requested by Runs",
-      target: "run",
-      query: "evaluationRuns",
-    }),
-    queryRelationship({
       key: "image-execution",
       label: "Image processing",
       target: "imageJob",
       query: "imageExecution",
       cardinality: "one",
     }),
-    ...localRelationshipEntities.flatMap((target) => [
+    ...localRelationshipEntities.map((target) =>
       queryRelationship({
         key: `subject-${target}`,
         label: "Subject",
@@ -449,13 +443,7 @@ export default defineEntity({
         query: `jobSubject${target}`,
         cardinality: "one",
       }),
-      queryRelationship({
-        key: `evaluation-${target}`,
-        label: "Evaluation target",
-        target,
-        query: `evaluationTarget${target}`,
-      }),
-    ]),
+    ),
     {
       key: "run",
       label: "Run",

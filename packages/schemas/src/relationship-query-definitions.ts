@@ -43,17 +43,9 @@ const definition = <const Kind extends string>(
 ) => ({ key, source, target, kind, history });
 
 const relationshipQueryDefinitions = [
-  ...localRelationshipEntities.flatMap((target) => [
+  ...localRelationshipEntities.map((target) =>
     definition(`jobSubject${target}`, "job", target, "jobSubject"),
-    definition(
-      `evaluationTarget${target}`,
-      "job",
-      target,
-      "evaluationTarget",
-      true,
-    ),
-  ]),
-  definition("evaluationRuns", "job", "run", "evaluationRuns", true),
+  ),
   definition("imageExecution", "job", "imageJob", "imageExecution"),
   definition("imageLeaseDevice", "imageJob", "device", "imageLeaseDevice"),
   definition("purchaseEmails", "purchase", "email", "purchaseEmails"),

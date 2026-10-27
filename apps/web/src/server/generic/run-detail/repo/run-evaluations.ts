@@ -14,13 +14,12 @@ const RECENT_OUTCOMES = 40;
 const PACE_MINUTES = 5;
 
 const S = aiEvaluationState.enum;
-const OPEN = [S.queued, S.retry_wait, S.result_ready, S.blocked];
+const OPEN = [S.queued, S.result_ready, S.blocked];
 
 /**
  * A Run's AI evaluations by record kind and feature, its recent pace, and its
  * latest settled outcomes (candidate counts, obsolete reasons, errors).
- * Durations are each Job's last claim to its settlement. Reads stay within
- * the Run’s request index (`AiEvaluationRequest_run_item_key`); Jobs join by their unique key.
+ * Reads stay within the Run’s request index (`AiEvaluationRequest_run_item_key`).
  */
 export async function readRunEvaluations(
   db: Database,
@@ -46,30 +45,24 @@ export async function readRunEvaluations(
     entity: string | null;
     feature: string;
     waiting: number;
-    running: number;
     completed: number;
     failed: number;
     obsolete: number;
     cancelled: number;
-    averageSeconds: number | null;
     completedPace: number;
     lastCompletedAt: string | null;
   }>(sql`
     WITH ${requested}
     SELECT e.target->>'entity' AS entity, e.feature,
       count(*) FILTER (WHERE e.state IN (${open}))::int AS waiting,
-      count(*) FILTER (WHERE e.state = ${S.running})::int AS running,
       count(*) FILTER (WHERE e.state = ${S.completed})::int AS completed,
       count(*) FILTER (WHERE e.state = ${S.failed})::int AS failed,
       count(*) FILTER (WHERE e.state = ${S.obsolete})::int AS obsolete,
       count(*) FILTER (WHERE e.state = ${S.cancelled})::int AS cancelled,
-      avg(extract(epoch FROM j."updatedAt" - j."lastClaimedAt"))
-        FILTER (WHERE e.state = ${S.completed} AND j."lastClaimedAt" IS NOT NULL)::float8 AS "averageSeconds",
       count(*) FILTER (WHERE e.state = ${S.completed}
         AND e."updatedAt" > ${at} - ${PACE_MINUTES} * interval '1 minute')::int AS "completedPace",
       max(e."updatedAt") FILTER (WHERE e.state = ${S.completed}) AS "lastCompletedAt"
     FROM requested e
-    LEFT JOIN "Job" j ON j.key = 'ai-evaluation:' || e.id::text
     GROUP BY 1, 2
     ORDER BY count(*) DESC
   `);
@@ -82,7 +75,6 @@ export async function readRunEvaluations(
     candidates: number | null;
     reason: string | null;
     error: string | null;
-    seconds: number | null;
     settledAt: string;
   }>(sql`
     WITH ${requested}
@@ -91,10 +83,8 @@ export async function readRunEvaluations(
       (e.receipt->>'candidates')::int AS candidates,
       e.receipt->>'reason' AS reason,
       left(e.error::text, 300) AS error,
-      extract(epoch FROM j."updatedAt" - j."lastClaimedAt")::float8 AS seconds,
       e."updatedAt" AS "settledAt"
     FROM requested e
-    LEFT JOIN "Job" j ON j.key = 'ai-evaluation:' || e.id::text
     LEFT JOIN "Entity" ent ON ent.id = (e.target->>'recordId')::uuid
     WHERE e.state IN (${
       input.failedOnly
@@ -110,12 +100,10 @@ export async function readRunEvaluations(
     entity: row.entity,
     feature: row.feature,
     waiting: row.waiting,
-    running: row.running,
     completed: row.completed,
     failed: row.failed,
     obsolete: row.obsolete,
     cancelled: row.cancelled,
-    averageSeconds: row.averageSeconds,
   }));
   const completedPace = kinds.rows.reduce(
     (sum, row) => sum + row.completedPace,
@@ -147,7 +135,6 @@ export async function readRunEvaluations(
       candidates: row.candidates,
       reason: row.reason,
       error: row.error,
-      seconds: row.seconds,
       settledAt: iso(row.settledAt) ?? now.toISOString(),
     })),
   };

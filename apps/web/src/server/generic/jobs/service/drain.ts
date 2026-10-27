@@ -42,6 +42,11 @@ export type DrainSpec<P> = {
     items: readonly WorkItem[],
     context: JobContext & { claim: JobClaim },
   ): Promise<DrainPreparation<P>>;
+  /**
+   * Domain locks taken before the items are locked: producers lock domain
+   * rows before marking, so locking items first would invert that order.
+   */
+  lock?(tx: Database, items: readonly WorkItem[], prepared: P): Promise<void>;
   /** Database writes for items still current and locked; never network work. */
   publish(tx: Database, items: readonly WorkItem[], prepared: P): Promise<void>;
   /** Record the terminal outcome of items that ran out of attempts. */
@@ -94,6 +99,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
         entries: readonly (readonly [WorkItem, unknown])[],
       ) => {
         for (const [item, error] of entries) {
+          await spec.lock?.(tx, [item], prepared);
           const held = await lockWork(tx, [item]);
           if (!held.length) continue;
           failed++;
@@ -120,6 +126,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
         try {
           await context.fenced(
             async (tx) => {
+              await spec.lock?.(tx, chunk, prepared);
               const held = await lockWork(tx, chunk);
               if (!held.length) return;
               await spec.publish(tx, held, prepared);

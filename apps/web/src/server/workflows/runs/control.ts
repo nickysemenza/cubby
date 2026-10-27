@@ -6,7 +6,12 @@ import {
   type RunControlAction,
 } from "@cubby/schemas/run-fields";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { z } from "zod";
 
+import {
+  AI_EVALUATION_TARGET,
+  markAiEvaluationWork,
+} from "~/server/ai/repo/ai-evaluation";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
@@ -14,12 +19,8 @@ import { ledgerParty, run as runTable } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  cancelJobsWhere,
-  cancelRunJobs,
-  pauseJob,
-} from "~/server/generic/jobs/repo/operator";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { cancelRunJobs, pauseJob } from "~/server/generic/jobs/repo/operator";
+import { dropWork } from "~/server/generic/jobs/repo/work-items";
 
 import type { ExecutedRunPurpose } from "./contract";
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
@@ -195,7 +196,7 @@ export async function controlWorkflowRun(
 
 /**
  * Stops a Run's pending AI work: evaluations it owns become cancelled and
- * its requests on shared evaluations are withdrawn; their Jobs stop.
+ * its requests on shared evaluations are withdrawn; their items drop.
  * Returns whether another requester still shares cancelled demand.
  */
 export async function cancelRunAiWork(
@@ -217,12 +218,7 @@ export async function cancelRunAiWork(
         .where(
           and(
             eq(aiEvaluation.runId, runId),
-            inArray(aiEvaluation.state, [
-              "queued",
-              "running",
-              "result_ready",
-              "retry_wait",
-            ]),
+            inArray(aiEvaluation.state, ["queued", "result_ready"]),
           ),
         );
     }
@@ -232,13 +228,20 @@ export async function cancelRunAiWork(
         await import("~/server/ai/repo/ai-evaluation-requests");
       sharedDemand = await cancelAiEvaluationRequests(tx, runId);
     }
-    // One statement: a per-Job loop under the caller's admission lock timed
-    // out for Runs owning tens of thousands of evaluations.
-    await cancelJobsWhere(
+    // Only work nobody else still wants was cancelled; another requester's
+    // pending evaluation keeps its item.
+    const withdrawn = await database.execute(sql`
+      SELECT w.ref::text AS ref FROM "WorkItem" w JOIN "AiEvaluation" e ON e.id = w.ref
+       WHERE w.target = ${AI_EVALUATION_TARGET} AND e.state = ${aiEvaluationState.enum.cancelled}
+         AND (e."runId" = ${runId}::uuid
+           OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId" = e.id AND r."runId" = ${runId}::uuid))`);
+    await dropWork(
       tx,
-      sql`${job.key} IN (SELECT 'ai-evaluation:' || e.id::text FROM "AiEvaluation" e
-        WHERE e.state=${aiEvaluationState.enum.cancelled} AND (e."runId"=${runId}::uuid
-          OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${runId}::uuid)))`,
+      AI_EVALUATION_TARGET,
+      z
+        .array(z.object({ ref: z.string() }))
+        .parse(withdrawn.rows)
+        .map((row) => row.ref),
     );
     return sharedDemand;
   });
@@ -290,11 +293,7 @@ export async function readmitFailedAiWork(
           .onConflictDoNothing()
           .returning({ id: aiEvaluation.id });
         if (replacement) {
-          await enqueueJob(tx, {
-            key: `ai-evaluation:${replacement.id}`,
-            kind: "ai.evaluation",
-            input: { evaluationId: replacement.id },
-          });
+          await markAiEvaluationWork(tx, [replacement.id]);
           await database
             .update(aiEvaluation)
             .set({ receipt: { retryEvaluationId: replacement.id } })
