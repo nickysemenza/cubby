@@ -434,6 +434,10 @@ compilers and renderers. Declaration source paths and errors live independently
 of compiler initialization so fresh-checkout generation needs no prior artifacts.
 Declaration helpers such as pagination import shared constants from their leaf
 owners, because the shared barrel also loads generated shortcode schemas.
+Runtime compiler imports follow the same boundary: import the entity vocabulary
+from `entity-core`, not the `entity` facade, which loads generated inspector and
+image policy artifacts. The compiler must load before any generated schema
+artifacts exist; warm local outputs must not hide a bootstrap cycle.
 Existing specialist list columns declare `route.listColumns: { module, export }`;
 the generated index route passes that synchronous override to `listPage`. Its
 component split owns the import, so other entities do not load that specialist

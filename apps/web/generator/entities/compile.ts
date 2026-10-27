@@ -20,7 +20,7 @@ import {
   parseEntityDeclarationMetadata,
 } from "@cubby/schemas/entity-definitions/definition";
 import { z } from "zod";
-import { entitySchema } from "@cubby/schemas/entity";
+import { entitySchema } from "@cubby/schemas/entity-core";
 import {
   FILTER_ALL,
   FILTER_ANY,
