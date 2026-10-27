@@ -1,0 +1,61 @@
+apps/web/src/server/db/helpers/build-where.unit.test.ts
+  s_9fb58b1f0c0012::t_d6e6a9b2faeb5c 25,632,634-636
+apps/web/src/server/domains/expense/operations.server.ts
+  s_9fb58b1f0c0012::t_70381bfb52bfe6 39-40,131,140-143
+apps/web/src/server/domains/expense/repo/analytics.ts
+  s_9fb58b1f0c0012::t_7fb83d6fdbdc03 8-9,70
+apps/web/src/server/domains/expense/repo/analyze.ts
+  s_9fb58b1f0c0012::t_f9b3d1b7050615 6,67-68,1241-1244
+apps/web/src/server/domains/expense/repo/expense-derived-read.ts
+  s_9fb58b1f0c0012::t_e948cb96ae7ea3 196-200,204-207
+apps/web/src/server/domains/expense/repo/expense-project-allocation.integration.test.ts
+  s_9fb58b1f0c0012::t_ec9e69a184dd3a 36,280
+apps/web/src/server/domains/expense/repo/expense.integration.test.ts
+  s_9fb58b1f0c0012::t_1dd22b44d6e64e 825,867
+apps/web/src/server/domains/expense/repo/lookup.ts
+  s_9fb58b1f0c0012::t_3de7a3d1af49d7 363
+apps/web/src/server/domains/ingredient/operations.server.ts
+  s_9fb58b1f0c0012::t_3bcf2f4daee80e 28
+apps/web/src/server/domains/ingredient/repo/ingredient-with-food.ts
+  s_9fb58b1f0c0012::t_c7641a0344ab13 43-44
+apps/web/src/server/domains/ingredient/repo/ingredient.integration.test.ts
+  s_9fb58b1f0c0012::t_f293ca4cb67b2d 80-90,116-124
+apps/web/src/server/domains/ingredient/repo/internal-types.ts
+  s_9fb58b1f0c0012::t_e43218c81d3f30 3-4
+apps/web/src/server/domains/ingredient/repo/recipe-usages.ts
+  s_9fb58b1f0c0012::t_30c541a4da92d9 1-26
+apps/web/src/server/domains/ingredient/repo/search.ts
+  s_9fb58b1f0c0012::t_5bf92f824a08bf 10,12,164,169-174,186,201,212-215,219,221,223-234,355,360-376,378-393,397-400
+apps/web/src/server/domains/product/repo/crud.ts
+  s_9fb58b1f0c0012::t_4288b63d726734 123
+apps/web/src/server/domains/product/repo/mappers.ts
+  s_9fb58b1f0c0012::t_5d7cbc8ae6db1b 20,40,174-177
+apps/web/src/server/domains/product/repo/mappers.unit.test.ts
+  s_9fb58b1f0c0012::t_906497e3fc8ba5 1,7
+apps/web/src/server/generic/entity-report/repo/records.ts
+  s_9fb58b1f0c0012::t_b24481d6528202 40
+apps/web/src/server/generic/list/repo/list-scopes.integration.test.ts
+  s_9fb58b1f0c0012::t_0f20b8be7f60ba 26,435
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_9fb58b1f0c0012::t_f17fe15ff95a3f 80,467,677
+docs/agents/generic-paths.md
+  s_9fb58b1f0c0012::t_61838a25bcfa72 119-121
+docs/entities.md
+  s_9fb58b1f0c0012::t_d9c9ea8d020af1 2096-2101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "faf6cc4b21bdaf15947eef70fb419a567b8df8eb",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
