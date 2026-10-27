@@ -2,6 +2,10 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 
 import type { Database } from "~/server/db";
+import {
+  EMBEDDING_REFRESH_DRAIN,
+  EMBEDDING_REFRESH_TARGET,
+} from "~/server/generic/embedding/repo/embedding-drain";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
   embedTexts,
@@ -13,12 +17,6 @@ import {
 } from "~/server/generic/embedding/service/semantic/vector-store";
 import { markWork } from "~/server/generic/jobs/repo/work-items";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
-
-export const EMBEDDING_REFRESH_DRAIN = {
-  key: "embedding:refresh",
-  kind: "embedding.refresh",
-} as const;
-export const EMBEDDING_REFRESH_TARGET = "embedding.refresh";
 
 export interface EmbeddingRefreshPort {
   readonly configured: () => boolean;

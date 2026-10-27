@@ -7,8 +7,8 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
-import { aiEvaluationAttemptLive } from "~/server/ai/repo/ai-evaluation";
 import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
+import { aiEvaluationAttemptLive } from "~/server/ai/repo/ai-evaluation-work";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { aiEvaluation, email, run } from "~/server/db/schema";

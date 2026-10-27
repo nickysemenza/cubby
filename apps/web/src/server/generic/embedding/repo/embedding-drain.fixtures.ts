@@ -4,13 +4,15 @@ import { eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { job, workItem } from "~/server/db/retained-tables";
+import {
+  EMBEDDING_REFRESH_DRAIN,
+  EMBEDDING_REFRESH_TARGET,
+} from "~/server/generic/embedding/repo/embedding-drain";
 import { embeddingRefreshHandler } from "~/server/generic/embedding/service/embedding-refresh";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
-  EMBEDDING_REFRESH_DRAIN,
-  EMBEDDING_REFRESH_TARGET,
   enqueueEmbeddingRefs,
   type EmbeddingRefreshPort,
 } from "~/server/workflows/background-tasks/embedding";

@@ -180,7 +180,7 @@ export async function enqueueAiEvaluations(
       .onConflictDoNothing();
     // New or re-input work takes a fresh ticket; joining demand re-marks only
     // a parked item or a more urgent one.
-    const { markAiEvaluationWork } = await import("./ai-evaluation");
+    const { markAiEvaluationWork } = await import("./ai-evaluation-work");
     const marked = new Set([
       ...created.map((row) => row.id),
       ...updates.map(({ row }) => row.id),
@@ -238,7 +238,7 @@ export async function evaluationIsExecutable(
   evaluation: { id: string; token: string },
   runId: RunId,
 ) {
-  const { aiEvaluationAttemptLive } = await import("./ai-evaluation");
+  const { aiEvaluationAttemptLive } = await import("./ai-evaluation-work");
   const [item] = await getDb(db)
     .select({ id: aiEvaluation.id })
     .from(aiEvaluation)

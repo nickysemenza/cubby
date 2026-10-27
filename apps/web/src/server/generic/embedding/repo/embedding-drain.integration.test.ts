@@ -11,6 +11,10 @@ import {
   EMBEDDING_CLEANUP_TARGET,
   queueEmbeddingCleanupPage,
 } from "~/server/generic/embedding/repo/embedding-cleanup";
+import {
+  EMBEDDING_REFRESH_DRAIN,
+  EMBEDDING_REFRESH_TARGET,
+} from "~/server/generic/embedding/repo/embedding-drain";
 import { embeddingCleanupHandler } from "~/server/generic/embedding/service/embedding-cleanup";
 import { embeddingRefreshHandler } from "~/server/generic/embedding/service/embedding-refresh";
 import {
@@ -30,8 +34,6 @@ import {
   renameFixtureRaw,
 } from "~/server/testing/repo.fixtures";
 import {
-  EMBEDDING_REFRESH_DRAIN,
-  EMBEDDING_REFRESH_TARGET,
   enqueueEmbeddingRefs,
   type EmbeddingRefreshPort,
 } from "~/server/workflows/background-tasks/embedding";

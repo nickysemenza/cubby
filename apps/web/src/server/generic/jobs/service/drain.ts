@@ -6,10 +6,9 @@
  */
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
-
-import { classifyJobFailure, stopsPage } from "../failure";
-import { jobKindPolicy } from "../kind-policy";
-import type { JobClaim } from "../repo/queue";
+import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
+import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
+import type { JobClaim } from "~/server/generic/jobs/repo/queue";
 import {
   claimWork,
   clearWork,
@@ -17,7 +16,8 @@ import {
   lockWork,
   nextWorkReadyAt,
   type WorkItem,
-} from "../repo/work-items";
+} from "~/server/generic/jobs/repo/work-items";
+
 import type { JobContext, JobHandler } from "../types";
 
 /** Items per publication transaction; an adapter may weight heavy items. */

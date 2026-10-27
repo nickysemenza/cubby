@@ -167,7 +167,7 @@ export async function launchWorkflowRun(
         WHERE e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.result_ready})
           AND (e."runId"=${input.runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${input.runId}::uuid AND r."cancelledAt" IS NULL))`);
       const { markAiEvaluationWork } =
-        await import("~/server/ai/repo/ai-evaluation");
+        await import("~/server/ai/repo/ai-evaluation-work");
       await markAiEvaluationWork(
         tx,
         pending.rows.map((row) => row.id),

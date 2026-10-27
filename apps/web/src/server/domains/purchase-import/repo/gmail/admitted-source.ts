@@ -193,7 +193,7 @@ export async function publishGmailEvidence<T>(
           // attempt's page can no longer clear it.
           const { aiEvaluation } = await import("~/server/db/schema");
           const { markAiEvaluationWork } =
-            await import("~/server/ai/repo/ai-evaluation");
+            await import("~/server/ai/repo/ai-evaluation-work");
           await tx
             .update(aiEvaluation)
             .set({

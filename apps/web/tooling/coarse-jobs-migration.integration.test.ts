@@ -126,10 +126,13 @@ it("retires every uploaded vector id without an artifact and re-admits open refr
     await migrateDatabase(db, { through: "0047_coarse_jobs_work_items" });
     const id = (n: number) =>
       `00000000-0000-4000-8000-${String(400 + n).padStart(12, "0")}`;
-    const [served, quiet, legacy] = [1, 2, 3].map(id);
-    const [selectedJob, finishedJob, openJob, cleanupJob] = [4, 5, 6, 7].map(
-      id,
-    );
+    const [served, quiet, legacy] = [id(1), id(2), id(3)];
+    const [selectedJob, finishedJob, openJob, cleanupJob] = [
+      id(4),
+      id(5),
+      id(6),
+      id(7),
+    ];
     await client.query(
       `INSERT INTO "Entity" (id,kind,shortcode) VALUES
        ($1,'product','PRD-SYNTH401'),($2,'product','PRD-SYNTH402'),

@@ -18,6 +18,7 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { getActiveAssessmentSuppressionKeys } from "~/server/generic/assessment/repo/assessment-state";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
+import { EMBEDDING_REFRESH_TARGET } from "~/server/generic/embedding/repo/embedding-drain";
 import { getStoredEmbeddingHashes } from "~/server/generic/embedding/repo/entity-embedding-refresh";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
@@ -41,10 +42,7 @@ import {
   renameFixtureRaw,
 } from "~/server/testing/repo.fixtures";
 import type { EmbeddingRefreshPort } from "~/server/workflows/background-tasks/embedding";
-import {
-  EMBEDDING_REFRESH_TARGET,
-  enqueueEmbeddingRefs,
-} from "~/server/workflows/background-tasks/embedding";
+import { enqueueEmbeddingRefs } from "~/server/workflows/background-tasks/embedding";
 import { executeWorkflow } from "~/server/workflows/runtime";
 
 import {

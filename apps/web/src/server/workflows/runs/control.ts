@@ -11,7 +11,7 @@ import { z } from "zod";
 import {
   AI_EVALUATION_TARGET,
   markAiEvaluationWork,
-} from "~/server/ai/repo/ai-evaluation";
+} from "~/server/ai/repo/ai-evaluation-work";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";

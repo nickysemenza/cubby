@@ -2,7 +2,10 @@ import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import {
+  repositoryQueries as getDb,
+  repositoryTransactionDatabase,
+} from "~/server/db/repository-access.boundary";
 import { entityEmbedding } from "~/server/db/retained-tables";
 import { markWork } from "~/server/generic/jobs/repo/work-items";
 
@@ -53,7 +56,7 @@ export async function queueEmbeddingCleanupPage(
   limit = 25,
 ) {
   const prepared = await prepareEmbeddingCleanupPage(db, after, limit);
-  await withTransactionDatabase(db, prepared.publish);
+  await repositoryTransactionDatabase(db, prepared.publish);
   return { queued: prepared.pending, nextCursor: prepared.nextCursor };
 }
 

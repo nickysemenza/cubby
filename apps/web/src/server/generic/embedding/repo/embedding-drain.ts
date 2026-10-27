@@ -11,7 +11,7 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database } from "~/server/db";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import { getDb } from "~/server/db/helpers";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { entityEmbedding } from "~/server/db/retained-tables";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import {
@@ -31,10 +31,13 @@ import {
   SHORTCODE_TABLE,
   orderedEntityLockKinds,
 } from "~/server/generic/shortcode/repo/shortcode-tables";
-import {
-  EMBEDDING_REFRESH_DRAIN,
-  EMBEDDING_REFRESH_TARGET,
-} from "~/server/workflows/background-tasks/embedding";
+
+/** One refresh drain Job; items are keyed by source entity id. */
+export const EMBEDDING_REFRESH_DRAIN = {
+  key: "embedding:refresh",
+  kind: "embedding.refresh",
+} as const;
+export const EMBEDDING_REFRESH_TARGET = "embedding.refresh";
 
 type Artifact = {
   id: string;

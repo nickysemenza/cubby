@@ -9,6 +9,7 @@ import {
   type EmbeddingDrainPage,
   type EmbeddingUploadReceipt,
 } from "~/server/generic/embedding/repo/embedding-drain";
+import { EMBEDDING_REFRESH_TARGET } from "~/server/generic/embedding/repo/embedding-drain";
 import {
   JobRetryableError,
   JobSupersededError,
@@ -22,7 +23,6 @@ import {
 import { defineDrain } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
 import {
-  EMBEDDING_REFRESH_TARGET,
   productionEmbeddingRefreshPort,
   type EmbeddingRefreshPort,
 } from "~/server/workflows/background-tasks/embedding";

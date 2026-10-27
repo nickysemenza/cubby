@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 
-import { aiEvaluationAttemptLive } from "~/server/ai/repo/ai-evaluation";
 import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
+import { aiEvaluationAttemptLive } from "~/server/ai/repo/ai-evaluation-work";
 import { type Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {

@@ -25,12 +25,12 @@ import {
   fenceAiEvaluationPage,
   guardAiEvaluationPage,
   lockAiEvaluationPage,
-  markAiEvaluationWork,
   readAiEvaluations,
   settleAiEvaluations,
   withAiEvaluationSavepoint,
 } from "~/server/ai/repo/ai-evaluation";
 import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
+import { markAiEvaluationWork } from "~/server/ai/repo/ai-evaluation-work";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type {
   EvaluationPagePublication,
