@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { QueueHealthSnapshot, WorkStream } from "~/contracts/job.contract";
+import type { WorkStream } from "~/contracts/job.contract";
 
 import {
   formatMinutesLeft,
-  isVisibleWorkStream,
-  watchdogReason,
   orderWorkStreams,
   STUCK_AFTER_SECONDS,
   workStreamLabel,
@@ -15,7 +13,6 @@ import {
 const NOW = Date.parse("2026-10-26T12:00:00Z");
 const stream = (overrides: Partial<WorkStream>): WorkStream => ({
   kind: "embedding.refresh",
-  feature: null,
   running: 0,
   due: 0,
   backingOff: 0,
@@ -32,18 +29,11 @@ const stream = (overrides: Partial<WorkStream>): WorkStream => ({
 const ago = (seconds: number) => new Date(NOW - seconds * 1000).toISOString();
 
 describe("work streams", () => {
-  it("names work in plain words, AI evaluations by feature", () => {
+  it("names work in plain words and groups AI evaluations by Job kind", () => {
     expect(workStreamLabel(stream({}))).toBe("Search embeddings");
-    expect(
-      workStreamLabel(
-        stream({ kind: "ai.evaluation", feature: "entity-connections" }),
-      ),
-    ).toBe("Connection suggestions");
-    expect(
-      workStreamLabel(
-        stream({ kind: "ai.evaluation", feature: "field:task.trade" }),
-      ),
-    ).toBe("Task trade suggestions");
+    expect(workStreamLabel(stream({ kind: "ai.evaluation" }))).toBe(
+      "AI evaluations",
+    );
     expect(workStreamLabel(stream({ kind: "synthetic.unknown_kind" }))).toBe(
       "Synthetic unknown kind",
     );
@@ -113,55 +103,4 @@ describe("work streams", () => {
     expect(formatMinutesLeft(300)).toBe("about 5 h");
     expect(formatMinutesLeft(5000)).toBe("about 3 days");
   });
-});
-
-it("watchdog alerts override an apparently running stream without parsing evidence", () => {
-  const health: QueueHealthSnapshot = {
-    measuredAt: new Date(NOW).toISOString(),
-    imageDisagreement: 0,
-    kinds: [
-      {
-        kind: "image.device",
-        lane: "apple_device",
-        due: 4,
-        queued: 4,
-        oldestDueSeconds: 4620,
-        unclaimedDue: 4,
-        claimsPerMinute: 0,
-        dueGrowth: 0,
-        expiredLeases: 0,
-      },
-    ],
-    alerts: [
-      {
-        kind: "image.device",
-        code: "no_claims",
-        evidence: "Synthetic diagnostic",
-      },
-      {
-        kind: "derived.drain",
-        code: "oldest_due",
-        evidence: "Synthetic derived diagnostic",
-      },
-    ],
-  };
-  const view = workStreamView(
-    stream({ kind: "image.device", running: 1 }),
-    NOW,
-    health,
-  );
-  expect(view.status).toBe("stuck");
-  expect(view.alertReason).toBe(
-    "Waiting work is not being picked up · oldest waiting 77 min",
-  );
-  expect(watchdogReason("derived.drain", health)).toBe(
-    "Waiting work is overdue",
-  );
-  expect(watchdogReason("embedding.refresh", health)).toBeNull();
-  expect(
-    ["derived.drain", "jobs.retention", "image.device.wake"].map((kind) =>
-      isVisibleWorkStream({ kind }),
-    ),
-  ).toEqual([false, false, false]);
-  expect(isVisibleWorkStream({ kind: "image.device" })).toBe(true);
 });

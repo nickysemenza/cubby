@@ -28,8 +28,8 @@ import { productScaffold } from "~/server/domains/product/repo/crud";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
 import { purchaseScaffold } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
-import { readRecordWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
@@ -237,9 +237,13 @@ describe("data quality: list filters, sort and hydration agree", () => {
   it("reads published price checks across catalog gaps and bounded hydration", async () => {
     const { weak, middling } = await seedProducts();
     const queueKeys = async () =>
-      (await publishedRecordWorkQueue(ctx.db, null, weak.id, false)).items.map(
-        (row) => row.key,
-      );
+      (
+        await publishedRecordWorkQueue(ctx.db, {
+          id: weak.id,
+          memberPartyId: null,
+          memberOnly: false,
+        })
+      ).items.map((row) => row.key);
     for (let index = 0; index < 64; index++)
       await createProductIdentityFixture(
         ctx.db,
@@ -774,13 +778,12 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(filtered.data.map((row) => row.id).sort()).toEqual(
       [neither.id, deleted.id].sort(),
     );
-    const queue = await publishedRecordWorkQueue(
-      ctx.db,
-      null,
-      externalOnly.id,
-      false,
-    );
-    expect(queue.items.filter((row) => row.kind === "research")).toEqual([]);
+    const queue = await publishedRecordWorkQueue(ctx.db, {
+      id: externalOnly.id,
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(queue.items.filter((row) => row.family === "research")).toEqual([]);
     await unwrapDb(ctx.db)
       .update(product)
       .set({ model: null })

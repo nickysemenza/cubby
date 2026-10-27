@@ -17,7 +17,7 @@ import {
   type StatementSuggestionOut,
   type StatementTransactionApplication,
 } from "@cubby/schemas/statement-suggestion";
-import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { workQueueInput } from "@cubby/schemas/work-queue";
 import { DECISION_MODEL } from "@cubby/shared/ai/models";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
@@ -66,6 +66,7 @@ import { answering } from "~/server/domains/transaction-import/repo/statement-de
 import * as statementSuggestionsRepo from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import * as statementLabelService from "~/server/domains/transaction-import/service/statement-suggestion-labels";
+import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import * as assessmentRepo from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
@@ -79,9 +80,9 @@ import {
 } from "~/server/generic/assessment/repo/suggestion-list";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { cancelJob, renewJob } from "~/server/generic/jobs/repo/jobs";
+import { renewJob } from "~/server/generic/jobs/repo/external-claim";
+import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import {
   captureBackgroundQueue,
   withJobFixtureExecution,
@@ -1470,24 +1471,20 @@ describe("statement Transaction suggestions", () => {
 
     expect(await generate(ctx)).toBe(2);
     expect(await generate(ctx)).toBe(0);
-    const queue = await readWorkQueue(
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({ pageSize: 100 }),
-      false,
-    );
-    // The household's Work has one row for the family, opening the
-    // Suggestions page; the account's own Work counts its own.
+    const queue = await readWorkQueue(ctx.db, {
+      input: workQueueInput.parse({ pageSize: 100 }),
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    // Pending statement proposals share one row for their source account.
     expect(
-      queue.items.filter(
-        (row) => row.suggestionFamily === "statement_transaction",
+      queue.items.filter((row) =>
+        row.reasonKeys.includes("suggestions:statement_transaction"),
       ),
     ).toEqual([
       expect.objectContaining({
-        entity: null,
-        id: null,
-        // A category rule is one vote: nothing is clean before a label.
-        reason: "2 transaction suggestions (0 ready to accept)",
+        entity: "financialAccount",
+        reason: "Pending suggestions",
       }),
     ]);
     const [first] = (await suggestions(ctx)).filter(
@@ -1527,18 +1524,15 @@ describe("statement Transaction suggestions", () => {
       status: "pending",
       active: true,
     });
-    const remainingWork = await readWorkQueue(
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({
+    const remainingWork = await readWorkQueue(ctx.db, {
+      input: workQueueInput.parse({
         reason: "suggestions:statement_transaction",
       }),
-      false,
-    );
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(remainingWork.items).toHaveLength(1);
-    expect(remainingWork.items[0]?.reason).toBe(
-      "1 transaction suggestion (0 ready to accept)",
-    );
+    expect(remainingWork.items[0]?.reason).toBe("Pending suggestions");
   });
 
   // A bounded key batch can contain only ignored identities; that must not
@@ -2306,15 +2300,8 @@ describe("statement Transaction suggestions", () => {
         key: "synthetic.cache-progress",
         kind: "run.execute",
         input: {},
-        recoveryTimeoutMs: 30 * 60_000,
       },
       async () => {
-        const owner = currentJobExecution()!;
-        const before = new Date(Date.now() - 60_000);
-        await getDb(ctx.db)
-          .update(job)
-          .set({ lastUsefulProgressAt: before })
-          .where(eq(job.id, owner.claim.id));
         const result = await runStatementLabels(ctx.db, {
           runId,
           cooperative: true,
@@ -2334,15 +2321,6 @@ describe("statement Transaction suggestions", () => {
           1,
         );
         const checkpoint = saved!.checkpoint!;
-        const readProgress = async () =>
-          (
-            await getDb(ctx.db)
-              .select()
-              .from(job)
-              .where(eq(job.id, owner.claim.id))
-          )[0]!.lastUsefulProgressAt;
-        const committed = await readProgress();
-        expect(committed!.getTime()).toBeGreaterThan(before.getTime());
         const subject = assessmentSubjects.statement_transaction.parse(
           saved!.subject,
         );
@@ -2354,7 +2332,6 @@ describe("statement Transaction suggestions", () => {
           evidenceFingerprint: saved!.evidenceFingerprint,
           checkpoint: stale,
         });
-        expect(await readProgress()).toEqual(committed);
         expect(
           (
             await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1)
@@ -2365,7 +2342,6 @@ describe("statement Transaction suggestions", () => {
           evidenceFingerprint: saved!.evidenceFingerprint,
           checkpoint,
         });
-        expect(await readProgress()).toEqual(committed);
         return result;
       },
     );
@@ -3076,7 +3052,6 @@ describe("statement Transaction suggestions", () => {
     let publishPeak = 0;
     const publish = assessmentRepo.publishAssessments;
     const releasePublications = Promise.withResolvers<void>();
-    const renewalStarted = Promise.withResolvers<number>();
     let publicationDb: Parameters<typeof publish>[0] | undefined;
     let claim:
       | NonNullable<ReturnType<typeof currentJobExecution>>["claim"]
@@ -3140,36 +3115,17 @@ describe("statement Transaction suggestions", () => {
       release.resolve();
       await expect.poll(() => publishActive).toBe(4);
       const owner = claim;
-      const held = publicationDb;
-      if (!owner || !held) throw new Error("Expected real Job publications");
-      renewal = databaseHelpers.withTransactionDatabase(ctx.db, async (tx) => {
-        const pid = await getDb(tx).execute<{ pid: number }>(
-          sql`SELECT pg_backend_pid() AS pid`,
-        );
-        const controlPid = pid.rows[0]?.pid;
-        if (!controlPid) throw new Error("Expected renewal connection");
-        renewalStarted.resolve(controlPid);
-        return renewJob(tx, owner);
-      });
-      renewal.catch(renewalStarted.reject);
-      const renewalPid = await renewalStarted.promise;
-      // Observe through a held publication connection: four holders plus the
-      // renewal already occupy the five-connection production pool shape.
-      await expect
-        .poll(async () => {
-          const waiting = await getDb(held).execute<{
-            waiting: boolean;
-          }>(sql`SELECT EXISTS (
-          SELECT 1 FROM pg_stat_activity WHERE pid = ${renewalPid}::int
-            AND cardinality(pg_blocking_pids(pid)) > 0
-        ) AS waiting`);
-          return waiting.rows[0]?.waiting;
-        })
-        .toBe(true);
+      if (!owner || !publicationDb)
+        throw new Error("Expected real Job publications");
+      // Held publications take the Job row lock only at commit, so the
+      // heartbeat renews while all four still wait.
+      renewal = databaseHelpers.withTransactionDatabase(ctx.db, (tx) =>
+        renewJob(tx, owner),
+      );
+      expect(await renewal).toBe(true);
       renewalQueued = true;
       releasePublications.resolve();
       const outcome = await pending;
-      expect(await renewal).toBe(true);
       expect(publicationsAfterQueue).toBe(2);
       expect(modelPeak).toBeGreaterThanOrEqual(30);
       expect(spendingPeak).toBeGreaterThan(1);

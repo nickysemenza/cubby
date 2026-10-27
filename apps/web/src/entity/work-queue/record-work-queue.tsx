@@ -11,21 +11,14 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
 
-import {
-  isTransferEvidenceRow,
-  TransferPairAccept,
-} from "./transfer-pair-accept";
-import {
-  GapChip,
-  WaitingForPill,
-  WorkActionDetails,
-} from "./work-queue-display";
+import { WorkActions } from "./work-actions";
+import { GapChip, OwnerPill } from "./work-queue-display";
 
 const EMPTY_ROWS: WorkQueueRow[] = [];
 
 /**
  * The record's own Work queue rows, one line each: failed checks (or the
- * reason), the next action, and who it waits for. Absent rows render nothing;
+ * reason), the row's declared actions, and who owns it. Absent rows render nothing;
  * a failed read shows its raw diagnostics.
  */
 export function RecordWorkQueue({
@@ -72,18 +65,15 @@ export function RecordWorkQueue({
                 ? row.gaps.map((gap) => <GapChip key={gap.check} gap={gap} />)
                 : row.reason}
             </div>
-            <div className="min-w-0 flex-1 text-muted-foreground">
-              {row.nextAction}
-              <WorkActionDetails explanations={row.explanations} />
+            <div className="min-w-0 flex-1">
+              <WorkActions
+                actions={row.actions}
+                target={{ scope: "item", row }}
+              />
             </div>
-            <WaitingForPill waitingFor={row.waitingFor} />
+            <OwnerPill {...row} />
           </div>
         ))}
-        {rows.some(isTransferEvidenceRow) ? (
-          <div data-needs-row className="px-3 py-2">
-            <TransferPairAccept transactionId={id} />
-          </div>
-        ) : null}
       </section>
     );
   return (
@@ -105,19 +95,18 @@ export function RecordWorkQueue({
                 ? row.gaps.map((gap) => <GapChip key={gap.check} gap={gap} />)
                 : row.reason}
             </LedgerCell>
-            <LedgerCell slot="secondary" className="text-muted-foreground">
-              {row.nextAction}
-              <WorkActionDetails explanations={row.explanations} />
+            <LedgerCell as="div" slot="secondary">
+              <WorkActions
+                actions={row.actions}
+                target={{ scope: "item", row }}
+              />
             </LedgerCell>
             <LedgerCell as="div" slot="trailing">
-              <WaitingForPill waitingFor={row.waitingFor} />
+              <OwnerPill {...row} />
             </LedgerCell>
           </LedgerRow>
         ))}
       </Ledger>
-      {rows.some(isTransferEvidenceRow) ? (
-        <TransferPairAccept transactionId={id} />
-      ) : null}
     </Section>
   );
 }

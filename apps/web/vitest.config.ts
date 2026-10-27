@@ -492,7 +492,7 @@ export default defineConfig({
             fsModuleCache: false,
             include: [
               "src/server/domains/calendar/**/*.workers.test.ts",
-              "src/server/generic/problems/**/*.workers.test.ts",
+              "src/server/db/freshness/*.workers.test.ts",
               "src/server/domains/purchase-import/**/*.workers.test.ts",
               "src/server/ai/**/*.workers.test.ts",
               "src/server/domains/run/**/*.workers.test.ts",

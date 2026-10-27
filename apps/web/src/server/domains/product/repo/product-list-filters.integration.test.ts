@@ -1,6 +1,6 @@
 import type { ProductCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ProductFilters } from "@cubby/schemas/product";
-import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { workQueueInput } from "@cubby/schemas/work-queue";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
@@ -12,7 +12,7 @@ import { location, product } from "~/server/db/schema";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
-import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
+import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
@@ -179,12 +179,11 @@ describe("product list declared filters", () => {
     ]);
     // Work binds the catalog's expected quantities as one statement-local
     // walk; it must find the same kit the per-row list filter does.
-    const work = await readWorkQueue(
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({ pageSize: 100 }),
-      false,
-    );
+    const work = await readWorkQueue(ctx.db, {
+      input: workQueueInput.parse({ pageSize: 100 }),
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(
       work.items
         .filter((row) => row.key.startsWith("kitsCountedTwice:"))

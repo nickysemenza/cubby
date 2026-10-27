@@ -62,7 +62,6 @@ const STATIC_TRACE_ROUTES = new Set([
   "/oauth/consent",
   "/pantry-view",
   "/privacy",
-  "/problems",
   "/recipes/compare",
   "/recipes/import",
   "/recipes/new",

@@ -396,12 +396,14 @@ view is visible manifest-backed URL state; `scopeFilters` is only a visible
 contextual scope. Missing filters never widen a query; renderer omissions are
 server-enforced and disclosed.
 
-The household and member Work queues share source admission before preparation:
-Source, Kind and Reason include/exclude filters prune impossible branches,
-including mixed gap/finding reasons. Search and Reason predicates narrow SQL
-candidates before ownership/routing is materialized. Exact totals and view/group
-counts use the complete eligible population; quality, execution explanations,
-display images and non-filtering facts load only for the selected page. Pending
+The Work queue's household and MCP reads share one engine over the composed
+Work sources. Reason include/exclude and record scope prune sources that cannot
+emit a row before the union; filters, search and the view then narrow the one
+materialized union. Exact totals and view/group counts use the complete
+eligible population in the same pass; quality gaps and display images load only
+for the selected page. A relation list's route derives its search schema from
+its declaration (`relationListSearch`), and its rows' declared actions render
+through the `workActions` feature table; neither is hand-listed per page. Pending
 statement-reference invalidation uses one hashable source-reference set rather
 than a source-record lookup per reference per pending suggestion.
 Statement counts decode one compact page-independent eligibility projection.

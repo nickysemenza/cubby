@@ -11,6 +11,7 @@ import type { DetailEditOverrideTable } from "~/entity/entity-detail/detail-edit
 import type { DetailSlotTable } from "~/entity/entity-detail/detail-slots";
 import type { SectionActionTable } from "~/entity/entity-detail/section-actions";
 import type { ListSlotTable } from "~/entity/entity-list/list-slots";
+import type { WorkActionTable } from "~/entity/work-queue/work-actions";
 import type { FinancialTransactionFormFields } from "~/features/finance/financial-transaction-form";
 import type { SpendingCategoryMergeReview } from "~/features/finance/spending-classification-review";
 import type { EntityPhotosSection } from "~/features/image/entity-photos-section";
@@ -35,6 +36,8 @@ export interface FeatureRegistry {
   sectionActions: SectionActionTable;
   collectionActions: CollectionActionTable;
   detailEditOverrides: DetailEditOverrideTable;
+  /** What performs each work source's declared row and group actions. */
+  workActions: WorkActionTable;
   detailFieldRenderers: {
     expense: EntityDetailFieldRenderers<"expense">;
     financialTransaction: EntityDetailFieldRenderers<"financialTransaction">;

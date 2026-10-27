@@ -397,7 +397,7 @@ describe("Sweeps", () => {
         () => advanceStepRun(ctx.db, { runId, attempt }),
       );
       if (advance.kind !== "continue") return advance.kind;
-      // An evaluate step waits on its ai.evaluation Jobs.
+      // An evaluate step waits on its evaluations.
       if (advance.waitSeconds) return "wait";
     }
     return "unbounded";
@@ -566,9 +566,10 @@ describe("Sweeps", () => {
   const evaluationsOf = async (runId: string) => {
     const { rows } = await getDb(ctx.db).execute<{
       state: string;
-      job: string | null;
-    }>(sql`SELECT e.state, j.state AS job FROM "AiEvaluation" e
-      LEFT JOIN "Job" j ON j.key = 'ai-evaluation:' || e.id::text
+      item: boolean;
+    }>(sql`SELECT e.state, EXISTS (SELECT 1 FROM "WorkItem" w
+        WHERE w.target = 'ai.evaluation' AND w.ref = e.id) AS item
+      FROM "AiEvaluation" e
       WHERE e."runId" = ${runId}::uuid
         OR e.id IN (SELECT "evaluationId" FROM "AiEvaluationRequest" WHERE "runId" = ${runId}::uuid)`);
     return rows;
@@ -609,8 +610,8 @@ describe("Sweeps", () => {
     });
     expect(await childRuns(first)).toEqual([]);
     expect(await evaluationsOf(first)).toEqual([
-      { state: "queued", job: "queued" },
-      { state: "queued", job: "queued" },
+      { state: "queued", item: true },
+      { state: "queued", item: true },
     ]);
     const second = await startSweep(ctx.db, ctx.actor, {
       trigger: "manual",
@@ -699,7 +700,7 @@ describe("Sweeps", () => {
     expect(evaluate).toMatchObject({ key: "field_evaluate", state: "running" });
     const pending = await evaluationsOf(runId);
     expect(pending.length).toBeGreaterThan(0);
-    expect(pending.every((item) => item.job === "queued")).toBe(true);
+    expect(pending.every((entry) => entry.item)).toBe(true);
 
     const shortcode = (
       await getDb(ctx.db)
@@ -717,7 +718,7 @@ describe("Sweeps", () => {
     );
     expect(
       (await evaluationsOf(runId)).every(
-        (item) => item.state === "cancelled" && item.job === "cancelled",
+        (item) => item.state === "cancelled" && !item.item,
       ),
     ).toBe(true);
   });

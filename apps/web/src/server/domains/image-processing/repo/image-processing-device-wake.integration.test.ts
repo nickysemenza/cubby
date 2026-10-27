@@ -13,8 +13,7 @@ import {
 } from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { dueJobs } from "~/server/generic/jobs/repo/jobs";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
+import { drainDueJobs } from "~/server/generic/jobs/service/jobs";
 import { productionJobHandlers } from "~/server/workflows/jobs";
 
 import {
@@ -101,16 +100,9 @@ describe("parked device work wakes idle companions", () => {
     return lease;
   }
 
-  /** Only scheduled server work runs: no unrelated save, pull or connect. */
+  /** Drain scheduled server work without a device pull or new domain save. */
   const runScheduledServerWork = async () => {
-    for (let round = 0; round < 10; round++) {
-      const due = (await dueJobs(ctx.db, 20)).filter((row) =>
-        row.kind.startsWith("image."),
-      );
-      if (!due.length) return;
-      for (const row of due)
-        await advanceJob(ctx.db, row.id, productionJobHandlers);
-    }
+    return drainDueJobs(ctx.db, productionJobHandlers, 250, 30_000, 1);
   };
   /** Time passes: every scheduled availability and lease moves two days back. */
   const elapse = () =>
@@ -182,11 +174,11 @@ describe("parked device work wakes idle companions", () => {
     expect(rings).toBeGreaterThan(0);
   });
 
-  // Review finding: the watchdog armed the wake on every tick while device
+  // The maintenance repair can run on every tick while device
   // work was parked. Arming is a restarting capture, so a tick made a
   // backing-off wake due at once and reset its attempts and error, defeating
   // its backoff after doorbell failures. A live wake now keeps its state.
-  it("keeps a backing-off wake's retry state across a watchdog tick", async () => {
+  it("keeps a backing-off wake's retry state across maintenance", async () => {
     const lease = await parked();
     await completeImageProcessingJob(ctx.db, {
       result: {
@@ -222,12 +214,10 @@ describe("parked device work wakes idle companions", () => {
       attempts: backingOff.attempts,
       error: backingOff.error,
     });
-    expect(
-      (await dueJobs(ctx.db, 20)).some((row) => row.id === backingOff.id),
-    ).toBe(false);
+    expect(backingOff.availableAt.getTime()).toBeGreaterThan(Date.now());
   });
 
-  it("requeues a finished wake from a watchdog tick without a capture", async () => {
+  it("requeues a finished wake during maintenance without a capture", async () => {
     await parked();
     await runScheduledServerWork();
     await getDb(ctx.db)
@@ -244,9 +234,7 @@ describe("parked device work wakes idle companions", () => {
       .from(durableJob)
       .where(eq(durableJob.key, "image.device.wake"));
     expect(wake?.state).toBe("queued");
-    expect((await dueJobs(ctx.db, 20)).some((row) => row.id === wake?.id)).toBe(
-      true,
-    );
+    expect(wake?.availableAt.getTime()).toBeLessThanOrEqual(Date.now());
     const [after] = await getDb(ctx.db)
       .select({ revision: sql<number>`count(*)::int` })
       .from(jobInvalidationCapture)
@@ -295,9 +283,7 @@ describe("parked device work wakes idle companions", () => {
       attempts: 3,
       error: "Synthetic concurrent doorbell failure",
     });
-    expect((await dueJobs(ctx.db, 20)).some((row) => row.id === wake?.id)).toBe(
-      false,
-    );
+    expect(wake?.availableAt.getTime()).toBeGreaterThan(Date.now());
   });
 
   it("rings when a device releases work it cannot run", async () => {

@@ -1,4 +1,4 @@
-import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { workQueueInput } from "@cubby/schemas/work-queue";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
@@ -24,19 +24,20 @@ import { publishPreparedEntityConnections } from "~/server/domains/connection/re
 import { publishProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
-import { executeAiRefreshTarget as executeAiRefreshTargetImplementation } from "~/server/domains/run/service/ai-refresh";
+import {
+  aiEvaluationItem,
+  drainAiEvaluations,
+} from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import {
   kernelCtx,
   PRIMARY_MODEL,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
-import { readWorkQueueWith } from "~/server/generic/work-queue/repo/work-queue";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -49,24 +50,6 @@ import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
 import { readEntityConnections } from "../repo/entity-connections";
 import { prepareEntityConnections } from "./entity-connections";
-
-const executeAiRefreshTarget = async (
-  ...args: Parameters<typeof executeAiRefreshTargetImplementation>
-) => {
-  const saved = await enqueueJob(args[0], {
-    key: `ai-evaluation:${args[1]}`,
-    kind: "ai.evaluation",
-    input: { evaluationId: args[1] },
-  });
-  return advanceJob(args[0], saved.id, {
-    "ai.evaluation": {
-      prepare: async () => {
-        await executeAiRefreshTargetImplementation(...args);
-        return { page: { done: true } };
-      },
-    },
-  });
-};
 
 // Existing rollback scenarios deliberately put all units in one caller-owned
 // transaction to verify that a publisher cannot escape its database capability.
@@ -137,7 +120,7 @@ describe("connection preparation and publication authority", () => {
     };
   };
 
-  it("publishes valid connections but retains retryable incomplete coverage instead of a durable negative", async () => {
+  it("retries incomplete coverage without partial publication, then fails it with the raw error after three attempts", async () => {
     const values = Array.from(
       { length: getSemanticEmbeddingConfig().dimensions },
       (_, axis) => (axis === 0 ? 1 : 0),
@@ -183,17 +166,37 @@ describe("connection preparation and publication authority", () => {
       .from(aiEvaluation)
       .where(eq(aiEvaluation.runId, runId));
     if (!evaluation) throw new Error("Synthetic incomplete target missing");
-    await executeAiRefreshTarget(ctx.db, evaluation.id, {
-      context: kernelCtx(ctx),
-    });
+    await drainAiEvaluations(
+      ctx.db,
+      [evaluation.id],
+      { context: kernelCtx(ctx) },
+      { pages: 1 },
+    );
     const [settled] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
       .where(eq(aiEvaluation.id, evaluation.id));
-    expect(settled?.state).toBe("retry_wait");
-    expect(await readEntityConnections(ctx.db, source)).toContainEqual(
-      expect.objectContaining({ relation: "product-expense" }),
+    expect(settled?.state).toBe("queued");
+    expect(await aiEvaluationItem(ctx.db, evaluation.id)).toMatchObject({
+      attempts: 1,
+      lastError: expect.stringContaining("coverage is unconfirmed"),
+    });
+    expect(await readEntityConnections(ctx.db, source)).toEqual([]);
+    await drainAiEvaluations(
+      ctx.db,
+      [evaluation.id],
+      { context: kernelCtx(ctx) },
+      { pages: 2 },
     );
+    const [exhausted] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.id, evaluation.id));
+    expect(exhausted).toMatchObject({
+      state: "failed",
+      error: expect.stringContaining("coverage is unconfirmed"),
+    });
+    expect(await aiEvaluationItem(ctx.db, evaluation.id)).toBeUndefined();
   });
 
   for (const change of ["cancel", "obsolete"] as const)
@@ -215,7 +218,7 @@ describe("connection preparation and publication authority", () => {
         throw new Error("Synthetic connection evaluation is missing");
       const entered = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
-      const execution = executeAiRefreshTarget(ctx.db, evaluation.id, {
+      const execution = drainAiEvaluations(ctx.db, [evaluation.id], {
         context: kernelCtx(ctx),
         suggestPorts: {
           decisionModel: PRIMARY_MODEL,
@@ -609,18 +612,14 @@ describe("connection preparation and publication authority", () => {
         integration: { kind: "field-review", field: "subjectProductId" },
       }),
     );
-    const before = await readWorkQueueWith(
-      async () => ({ selections: [], incompleteProjectIds: [] }),
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({ pageSize: 100 }),
-      false,
-      ctx.actor,
-    );
+    const before = await readWorkQueue(ctx.db, {
+      input: workQueueInput.parse({ pageSize: 100 }),
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(before.items).toContainEqual(
       expect.objectContaining({
-        key: "suggestions:field",
-        suggestionFamily: "field",
+        reasonKeys: ["suggestions:field"],
       }),
     );
     await getDb(ctx.db)
@@ -628,18 +627,14 @@ describe("connection preparation and publication authority", () => {
       .set({ name: "Synthetic renamed target evidence" })
       .where(eq(product.id, item.entityId));
     expect(await readEntityConnections(ctx.db, source)).toEqual([]);
-    const after = await readWorkQueueWith(
-      async () => ({ selections: [], incompleteProjectIds: [] }),
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({ pageSize: 100 }),
-      false,
-      ctx.actor,
-    );
+    const after = await readWorkQueue(ctx.db, {
+      input: workQueueInput.parse({ pageSize: 100 }),
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(after.items).toContainEqual(
       expect.objectContaining({
-        key: "suggestions:field",
-        suggestionFamily: "field",
+        reasonKeys: ["suggestions:field"],
       }),
     );
   });

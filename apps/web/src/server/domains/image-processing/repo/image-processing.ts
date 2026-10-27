@@ -85,24 +85,24 @@ import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { readConfirmedDescription } from "~/server/generic/assessment/repo/assessment-image";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
+import { JobSupersededError } from "~/server/generic/jobs/errors";
 import {
   deviceBackfillTurn,
   lockDeviceAdmission,
   type DeviceAdmission,
 } from "~/server/generic/jobs/repo/device-admission";
 import {
-  enqueueJob,
   claimJob,
   externalJobClaim,
   publishJobPage,
   failJob,
   releaseJobClaim,
-  retryJobsNow,
   assertJobClaim,
   jobRunOwned,
-  JobSupersededError,
   type JobClaim,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/external-claim";
+import { retryJobsNow } from "~/server/generic/jobs/repo/operator";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
@@ -164,7 +164,7 @@ export type ImageProcessingLane = "image.cloud" | "image.device";
  * description needs; the server runs every other cloud call. Mirrored by the
  * lane split in `drizzle/0029_image_job_lanes.sql`.
  */
-export function imageProcessingLane(job: {
+function imageProcessingLane(job: {
   kind: ImageProcessingJobKind;
   processorRevision: number;
   contentType: string | null;
@@ -1248,17 +1248,8 @@ const strandedImageWork =
   AND NOT EXISTS (SELECT 1 FROM "Job" dj WHERE dj.key = 'image-processing:' || "ImageProcessingJob".id::text
     AND dj.state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}))`;
 
-/** Open image rows without a live execution: the watchdog's disagreement count. */
-export async function countStrandedImageProcessing(db: Database) {
-  const [row] = await getDb(db)
-    .select({ count: sql<number>`count(*)::int` })
-    .from(imageProcessingJob)
-    .where(strandedImageWork());
-  return row?.count ?? 0;
-}
-
 /**
- * Self-healing for image execution, run by the queue watchdog in bounded
+ * Self-healing for image execution, run by recurring maintenance in bounded
  * batches: retire moot work, reopen legacy terminal or leased rows, and give
  * every open row a live Job in its lane. Image work is never abandoned, so a
  * stopped execution of open work is always a bug to repair, not a decision.

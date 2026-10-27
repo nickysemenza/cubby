@@ -1,10 +1,12 @@
 # One view of the work
 
-The Work queue derives work from records, gaps, findings, execution and review
-state. Its All, Automatic, Research, Review and Waiting views share one
-server projection with record work sections, including Runs. Views can overlap:
-automatic execution can be waiting for a prerequisite. GitHub Issues owns
-delivery and remaining domain coverage.
+The Work queue derives work from records, gaps, findings, execution, review
+state and Problems detectors. Each domain declares its Work sources (reasons,
+Work family, Executor, link, actions and a candidate query); the queue composes
+them explicitly and owns filtering, search, sorting, Group by, saved views,
+counts and paging. Its All, Automatic, Agent, Review, Waiting and Problems views
+share that one server read with record work sections, including Runs. GitHub
+Issues owns delivery and remaining domain coverage.
 
 The Runs header links to **Run types** (`/runs/types`), a catalog of every
 declared Run kind. Its indexed sections expose purpose keys, execution owners,
@@ -63,45 +65,60 @@ does not create another copy of the underlying problem.
 Keep durable evidence, decisions and execution in their existing owners:
 entity declarations and data-quality checks describe missing facts; findings
 and Assessments retain unresolved decisions; Runs record execution; domain
-commands own writes. Extend their shared projections rather than introducing
-another task ledger, workflow engine, or entity-specific queue state.
-Queue reads explain current work without launching inference or mutations.
-The Reason filter selects stable `reasonKeys`, including data-check keys,
-Problem keys and branch keys such as `reconciliation:purchase-unsettled`.
-`reasonExclude` keeps rows with none of the selected reasons; other failed
-checks remain visible in each retained row's explanation. Kind, Source and
-Vendor also accept their corresponding `Exclude` inputs on the member queue.
-The web queue and member MCP read share this filtered server path. Filters
-exclude unrelated source preparation before paging, while totals, view counts
-and group counts still describe all matching work. Only selected rows receive
-quality and execution explanations; listing does not reconstruct every source's
-review evidence.
-The current queue's work kind describes its category, not its execution state;
-keep those meanings separate when adding automatic and waiting views.
+commands own writes. Add a Work source in the owning domain rather than
+introducing another task ledger, workflow engine, or entity-specific queue
+state. Queue reads explain current work without launching inference or
+mutations.
+Counts cover known candidates while Project attention inputs are unavailable.
+The queue reports those incomplete Projects from the same request-local
+attention read, and displays that limitation beside its results.
 
-Each actionable step should explain:
+Pending reviewable suggestions produce one row per live record, combining their
+family reason keys and opening that record's Suggestions. Statement proposals
+belong to their financial account. There are no family-only suggestion rows.
+Purchase amounts are the sum of live Expense costs, including credits; other
+records carry their own amount and calendar date. Planned purchases are deferred
+across every family before counting or paging.
 
-- **Reason:** the record, evidence or failed check that makes it necessary.
-- **Readiness:** whether it can proceed, and the specific prerequisite if not.
-- **Executor:** automatic Cubby/Pi work, a Claude/Codex session, or a person.
-- **Authority:** whose sources, account access or decision it requires.
-- **Expected changes:** what it will create, attach, update or remove.
-- **Unblocks:** which next actions become eligible after its result is saved.
+The queue is a [Declared list](terminology.md) over its sources' union, so its
+filters behave as entity list filters do: Type, Owner, Family, Executor and
+Reason each accept their `Exclude` input, Type and Owner accept No value, and
+Owner accepts Me. The Reason filter selects stable `reasonKeys`: data-check
+keys, Problem keys and source keys such as `reconciliation:purchase-unsettled`.
+A reason filter prunes sources that cannot emit any selected reason before the
+union, and search matches a row's name, reason and shortcode. Totals, view
+counts and group counts are computed in the same pass and describe all matching
+work; only the page's rows receive quality gaps and thumbnails.
 
-Readiness, executor and authority are separate facts. A member's name in
-Waiting for does not explain a missing prerequisite, and an automated step can
-still be waiting for evidence, posting, the AI budget or an explicit
-resume. Unknown dependencies and effects stay unknown rather than becoming
-invented progress or promises.
+Owners follow the authority a source needs, never inventory ownership. Shared
+work lists every member, so filtering by a member (including Me) includes it;
+Unresolved is the Owner filter's No value. An agent's MCP read sees shared work
+and work owned only by its own member.
+
+A row states its Reason, Executor, Owner and the source's declared actions.
+Executor is who acts — Cubby automatically, an agent session, a member, or
+something outside the household — and is separate from Owner: an automatic
+step can still wait on a member's evidence, and Waiting covers posting windows,
+the AI budget and paused Runs.
 
 A reconciliation investigation is actionable member work even when the
-automatic writer lacks evidence. Its preview explains that limitation and the
-supported effects; it does not claim execution is scheduled. The shared routing
-roster drives both action executors and view membership before pagination.
-Running status alone does not establish automatic execution: the execution
-adapter requires a Workflow-backed purpose or a retained dispatch event.
-Unscheduled interactive Runs keep their domain handoff instead of appearing
-as automatic work; authorized Vendor-history prerequisite waits remain visible.
+automatic writer lacks evidence. Running status alone does not establish
+automatic execution: the Run source requires a Workflow-backed purpose or a
+retained dispatch event. Unscheduled interactive Runs keep their domain handoff
+instead of appearing as automatic work; authorized Vendor-history prerequisite
+waits remain visible.
+
+## Problems and declared actions
+
+Problems is the queue's saved view of the `problem` Work family. Each Problems
+declaration is a Work source: record-grain detectors contribute one row per
+record, and derived diagnostics contribute one row per count that filters the
+queue to its reason group. A source declares its remediations as actions: an
+item action on each row, and a group action on its reason group's header
+(Group by Reason) that re-reads the source's own query rather than trusting
+loaded rows. Guided flows open their domain's dialog; the web client's
+`workActions` feature table performs each declared action by id. Maintenance
+tools that are not a Problem's remediation live in Settings → Maintenance.
 
 ## Choose the executor
 
@@ -158,16 +175,13 @@ and completed receipts never reopen.
 
 ## Show the flow and its effects
 
-The queue is the scannable overview: record identity, reason and readiness;
-the next action belongs to the action details and an optional column. Opening an item shows its prerequisite records, evidence and expected
-changes in context. Record pages and Run progress consume the same
-server-projected explanation. Full explanations use the shared action-details
-popover. Virtualized queue rows retain their fixed height; opening details
-must not select or open the record. Reuse report timelines for the overall
-journey and DecisionSteps for the member's decisions before one apply;
-DecisionStep status is not the lifecycle of a background job.
-Domain adapters supply their evidence and supported commands; clients do not
-reconstruct eligibility or a second workflow from labels.
+The queue is the scannable overview: record identity, reason, Executor, Owner
+and actions. Opening an item shows its evidence and supported commands in the
+record's own workspace; record pages and Run progress read the same rows.
+Reuse report timelines for the overall journey and DecisionSteps for the
+member's decisions before one apply; DecisionStep status is not the lifecycle
+of a background job. Clients do not reconstruct eligibility or a second
+workflow from labels.
 
 Inspection is passive. Run links open retained progress and transcripts.
 Conversation observations read retained storage without constructing an agent

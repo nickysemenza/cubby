@@ -19,11 +19,9 @@ import {
 } from "~/server/domains/image/service/image-metadata-extraction.service";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { withJobExecution } from "~/server/generic/jobs/context";
-import {
-  cancelJob,
-  claimJob,
-  enqueueJob,
-} from "~/server/generic/jobs/repo/jobs";
+import { claimJob } from "~/server/generic/jobs/repo/external-claim";
+import { cancelJob } from "~/server/generic/jobs/repo/operator";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 // ---------------------------------------------------------------------------

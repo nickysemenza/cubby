@@ -21,14 +21,9 @@ delivery attempts the drain even when unreadable, and always acknowledges.
 Transport owns no retry budget. Admission stores the JSON wire shape,
 omitting undefined optional properties.
 
-A claim has one generation, token and expiration. Ordinary Jobs have a finite
-consecutive attempt budget. Sweep Jobs opt into a 30-minute useful-progress
-recovery window instead: interrupted claims can recover on the same Job beyond
-three attempts while new durable partial answers or settled population inputs
-continue to commit. Waiting, heartbeats and replayed answers never renew that
-window. An idle window ends in a retained failure, requiring explicit member
-retry; retry renews the window without clearing domain checkpoints or receipts.
-Terminal Jobs are never revived by migration or routine wakes. Claims
+A claim has one generation, token and expiration. A Job has a finite
+consecutive attempt budget, or `maxAttempts` null to never exhaust; reclaiming
+an expired lease spends an attempt (see the 2026-10 amendment). Terminal Jobs are never revived by migration or routine wakes. Claims
 are renewed during provider preparation. Native pulls use their requested
 bounded duration on that same Job lease. Successful bounded pages commit their
 output and cursor together and reset the consecutive failure budget. The drain
@@ -82,16 +77,15 @@ One best-effort wake follows the outer commit. The minute cron, app-open signal
 or another due-Job drain recovers a lost wake from the committed Job intent.
 Each drain selects fair batches in one SQL window query, interleaving kinds
 least recently claimed first by each Job's `lastClaimedAt`; enqueues and
-invalidations are not service. Priority
-ranks only within each kind; manual `run.execute` Jobs have raised priority.
-Queue position counts due Jobs ranked ahead in the same kind. Each drain
+wakes are not service. Priority ranks only within each kind; manual
+`run.execute` Jobs have raised priority. Each drain
 reselects batches of at most 25 due Jobs, with a default cap of
 256 pages and a 20-second budget between pages. One in-flight provider page may
 outlast that budget. Remaining immediately due work requests another wake; cron
 uses the same drain if that wake is lost. A large corpus, provider capacity or
 continuous edits can exceed the healthy roughly two-minute staleness target.
-Every authoritative invalidation restarts the broad cursor, so convergence is
-promised after edits quiet, not during an endless stream of writes.
+A wake never restarts a pass (see the 2026-10 amendment); edits during a pass
+make the Job due again once it finishes.
 
 ## Workload contracts
 
@@ -185,3 +179,41 @@ replacement paths. Transport queues remain only for background wakes and telemet
 queue, its consumer and its independent retry loop are removed. Job execution
 logs emit a single structured JSON object so Workers Logs indexes the execution
 identity, attempt and typed wait fields.
+
+## Amendment (2026-10): coarse Jobs and work items
+
+Status: Accepted.
+
+Per-item `ai.evaluation`, `embedding.refresh` and `embedding.cleanup` Jobs made
+the queue carry tens of thousands of rows whose only job was retry state. That
+forced batch and page-claim shapes, admission tokens, page keys, backfill
+reserves and weights, queue positions, a sweep recovery window, restarting and
+non-restarting invalidation policy, and AI and embedding special cases in the
+generic SQL.
+
+Durable Jobs are now coarse. Work that fans out over records is one drain Job
+per kind and feature over rows of the generic `WorkItem` table (the former
+derived dirty marks, ADR 0021, generalised with attempts, readiness and error).
+The drain Job's lease fences its claimed items; items have no leases. One
+claim → prepare → publish helper serves derived values, AI evaluations and
+embeddings, isolating per-item failures and publishing at most 25 items per
+fenced transaction, splitting a failed chunk.
+
+The queue becomes a deep module with three interfaces (producer, operator and
+external claim) and a private executor with one handler shape,
+`prepare(job, ctx) → publish(tx)`. A lost lease aborts `ctx.signal`; one
+classifier walks the cause chain; publication takes domain locks first, then
+one Job `FOR UPDATE` at commit. Every wake is non-restarting; only an explicit
+`invalidate` enqueue restarts a pass. Selection keeps Run-first ordering,
+least-recently-claimed round robin across kinds and a per-kind `maxInFlight`.
+
+Deleted: batch and page handler shapes, `admissionToken`, page keys,
+`JobInvalidation` and `restartsPass`, the never-exhausted kind list and its
+trigger (now `maxAttempts` null), the recovery window, backfill reserves and
+kind weights, server queue positions and ETA, the limits catalog, per-kind
+queue health and its alerts, and separate watchdog and retention Jobs (merged
+into `jobs.maintenance`). Embedding upload receipts and physical vector ids
+move onto `EntityEmbedding`. Interactive single-record work (`run.*`,
+`location-ai.*`, `image-metadata.extract`, calendar, image processing) stays a
+Job of one. [Durable Jobs](../jobs.md#coarse-jobs-and-work-items) owns the
+runtime contract.

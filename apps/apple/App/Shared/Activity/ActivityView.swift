@@ -2,7 +2,7 @@ import CubbyKit
 import SwiftUI
 
 /// Activity shows this device's work, the device backlog, Runs in progress and Runs needing
-/// attention. The household job queue (lanes, retries, leases) is web's `/work-queue`.
+/// attention. The household's actionable work across every source is web's `/work-queue`.
 struct ActivityView: View {
     @Environment(AppModel.self) private var appModel
 

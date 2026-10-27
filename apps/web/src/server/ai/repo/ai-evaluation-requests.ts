@@ -4,7 +4,6 @@ import {
   aiProvenance,
 } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { jobState } from "@cubby/schemas/job";
 import { runStatus } from "@cubby/schemas/run-fields";
 import {
   and,
@@ -27,7 +26,6 @@ import {
   aiEvaluationRequest,
   run,
 } from "~/server/db/retained-tables";
-import { enqueueJobs } from "~/server/generic/jobs/repo/jobs";
 
 /** Matches AiEvaluation's generated SQL key, including UTF-8 length prefixes. */
 export const evaluationSlotKey = ({
@@ -44,13 +42,9 @@ export const evaluationSlotKey = ({
     .map((value) => `${new TextEncoder().encode(value).length}:${value}`)
     .join("");
 
+/** Evaluations with outstanding work; retry and lease state live on the drain item. */
 export const PENDING_AI_STATES: readonly (typeof aiEvaluation.$inferSelect)["state"][] =
-  [
-    aiEvaluationState.enum.queued,
-    aiEvaluationState.enum.running,
-    aiEvaluationState.enum.result_ready,
-    aiEvaluationState.enum.retry_wait,
-  ];
+  [aiEvaluationState.enum.queued, aiEvaluationState.enum.result_ready];
 
 const inputIdentity = (
   provenance: (typeof aiEvaluation.$inferSelect)["provenance"],
@@ -117,14 +111,12 @@ export async function enqueueAiEvaluations(
       const reusable =
         latest &&
         inputIdentity(latest.provenance) === inputIdentity(input.provenance) &&
-        (["running", "result_ready"].includes(latest.state) ||
+        (latest.state === "result_ready" ||
           (latest.state === "completed" &&
             input.executionKind === aiExecutionKind.enum.ai_refresh))
           ? latest
           : undefined;
-      const open = rows.find(
-        (row) => row.state === "queued" || row.state === "retry_wait",
-      );
+      const open = rows.find((row) => row.state === "queued");
       const existing = reusable ?? open;
       const id = existing?.id ?? crypto.randomUUID();
       const base = input.workKey ?? `${input.executionKind}:${id}`;
@@ -138,7 +130,7 @@ export async function enqueueAiEvaluations(
       else {
         result.set(key, existing);
         if (
-          (existing.state === "queued" || existing.state === "retry_wait") &&
+          existing.state === "queued" &&
           inputIdentity(existing.provenance) !== inputIdentity(input.provenance)
         )
           updates.push({ row: existing, input, workKey });
@@ -186,14 +178,18 @@ export async function enqueueAiEvaluations(
         })),
       )
       .onConflictDoNothing();
-    await enqueueJobs(
+    // New or re-input work takes a fresh ticket; joining demand re-marks only
+    // a parked item or a more urgent one.
+    const { markAiEvaluationWork } = await import("./ai-evaluation-work");
+    const marked = new Set([
+      ...created.map((row) => row.id),
+      ...updates.map(({ row }) => row.id),
+    ]);
+    await markAiEvaluationWork(tx, [...marked]);
+    await markAiEvaluationWork(
       tx,
-      created.map((row) => ({
-        key: `ai-evaluation:${row.id}`,
-        kind: "ai.evaluation",
-        input: { evaluationId: row.id },
-        priority: row.executionKind === "ai_refresh" ? 0 : 10,
-      })),
+      [...result.values()].map((row) => row.id).filter((id) => !marked.has(id)),
+      { revive: true },
     );
     return inputs.map(({ input }) => result.get(evaluationSlotKey(input))!);
   });
@@ -242,6 +238,7 @@ export async function evaluationIsExecutable(
   evaluation: { id: string; token: string },
   runId: RunId,
 ) {
+  const { aiEvaluationAttemptLive } = await import("./ai-evaluation-work");
   const [item] = await getDb(db)
     .select({ id: aiEvaluation.id })
     .from(aiEvaluation)
@@ -249,8 +246,8 @@ export async function evaluationIsExecutable(
       and(
         eq(aiEvaluation.id, evaluation.id),
         eq(aiEvaluation.runId, runId),
-        sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key=${`ai-evaluation:${evaluation.id}`} AND j.state=${jobState.enum.running} AND j."leaseToken"=${evaluation.token}::uuid AND j."leaseExpiresAt">now())`,
-        inArray(aiEvaluation.state, ["running", "result_ready"]),
+        aiEvaluationAttemptLive(aiEvaluation.id, evaluation.token),
+        inArray(aiEvaluation.state, PENDING_AI_STATES),
         sql`EXISTS (
         SELECT 1 FROM "AiEvaluationRequest" AS demand JOIN "Run" AS requester ON requester.id = demand."runId"
         WHERE demand."evaluationId" = ${aiEvaluation.id} AND demand."cancelledAt" IS NULL

@@ -15,7 +15,7 @@ describe("derived backlog", () => {
   const ctx = withTestDb();
 
   it("reports recent publications per minute and the oldest waiting value", async () => {
-    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedDirty"`);
+    await getDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
     await getDb(ctx.db).execute(sql`
       WITH ages(n, minutes) AS (VALUES (1, 0), (2, 0), (3, 2), (4, 14), (5, 20)),
       entities AS (
@@ -28,7 +28,7 @@ describe("derived backlog", () => {
         now() - (ages.minutes * interval '1 minute') - interval '10 seconds'
       FROM entities JOIN ages ON entities.shortcode = 'PRD-ZZZ' || ages.n`);
     await getDb(ctx.db).execute(sql`
-      INSERT INTO "DerivedDirty" (target, ref, "dirtiedAt")
+      INSERT INTO "WorkItem" (target, ref, "dirtiedAt")
       VALUES (${`${KIND}.${KEY}`}, gen_random_uuid(), now() - interval '90 seconds')`);
 
     const backlog = await readDerivedBacklog(ctx.db);
@@ -44,7 +44,7 @@ describe("derived backlog", () => {
   });
 
   it("reports no wait when nothing is queued", async () => {
-    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedDirty"`);
+    await getDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
     expect((await readDerivedBacklog(ctx.db)).oldestWaitingSeconds).toBeNull();
   });
 });

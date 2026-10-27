@@ -13,7 +13,7 @@ import {
   fieldCorrectionKey,
   readConfirmedCorrection,
 } from "~/server/generic/assessment/repo/correction-sources";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 export const correctionWorkInput = z.object({
   sourceFeedbackId: assessmentChildHandle.nullable(),

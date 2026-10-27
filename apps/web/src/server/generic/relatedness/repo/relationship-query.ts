@@ -1,4 +1,3 @@
-import { aiEvaluationTargetKind } from "@cubby/schemas/ai-evaluation";
 import { imageProcessingJobState } from "@cubby/schemas/image-processing";
 import { jobState } from "@cubby/schemas/job";
 import { relationshipQueryDefinition } from "@cubby/schemas/relationship-query-definitions";
@@ -30,27 +29,9 @@ export function relationshipQueryCondition(
     sql`${sql.identifier(source)}.${sql.identifier(column)}`;
   const t = (column: string) =>
     sql`${sql.identifier(target)}.${sql.identifier(column)}`;
-  // Malformed retained inputs must not turn an unrelated graph read into a cast error.
-  const evaluationId = sql`CASE WHEN ${s("input")}->>'evaluationId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN (${s("input")}->>'evaluationId')::uuid END`;
   switch (query.kind) {
     case "jobSubject":
       return sql`${s("subjectKind")} = ${query.target} AND ${s("subjectId")} = ${t("id")}::text`;
-    case "evaluationRuns":
-      return sql`${s("kind")} = 'ai.evaluation' AND (EXISTS (
-        SELECT 1 FROM "AiEvaluationRequest" request
-        WHERE request."evaluationId" = ${evaluationId} AND request."runId" = ${t("id")}
-      ) OR EXISTS (
-        SELECT 1 FROM "AiEvaluation" evaluation WHERE evaluation.id = ${evaluationId} AND evaluation."runId" = ${t("id")}
-          AND NOT EXISTS (SELECT 1 FROM "AiEvaluationRequest" request WHERE request."evaluationId" = evaluation.id)
-      ))`;
-    case "evaluationTarget":
-      return sql`${s("kind")} = 'ai.evaluation' AND EXISTS (
-        SELECT 1 FROM "AiEvaluation" evaluation
-        WHERE evaluation.id = ${evaluationId}
-          AND evaluation.target->>'entity' = ${query.target}
-          AND (evaluation.target->>'recordId' = ${t("id")}::text
-            OR (evaluation.target->>${"kind"} = ${aiEvaluationTargetKind.enum.product_pair} AND evaluation.target->>'otherId' = ${t("id")}::text))
-      )`;
     case "imageExecution":
       return sql`${s("kind")} IN ('image.cloud', 'image.device') AND ${s("key")} = 'image-processing:' || ${t("id")}::text`;
     case "imageLeaseDevice":

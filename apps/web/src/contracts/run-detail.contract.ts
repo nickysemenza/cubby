@@ -79,15 +79,12 @@ const runEvaluationKind = z.object({
   entity: z.string().nullable(),
   feature: z.string(),
   waiting: z.number().int().nonnegative(),
-  running: z.number().int().nonnegative(),
   completed: z.number().int().nonnegative(),
   failed: z.number().int().nonnegative(),
   obsolete: z.number().int().nonnegative(),
   cancelled: z.number().int().nonnegative(),
-  /** Mean claim-to-settlement time of completed evaluations. */
-  averageSeconds: z.number().nonnegative().nullable(),
 });
-/** One settled evaluation: its record, outcome and duration. */
+/** One settled evaluation: its record and outcome. */
 const runEvaluationOutcome = z.object({
   id: z.uuid(),
   entity: z.string().nullable(),
@@ -98,7 +95,6 @@ const runEvaluationOutcome = z.object({
   candidates: z.number().int().nonnegative().nullable(),
   reason: z.string().nullable(),
   error: z.string().nullable(),
-  seconds: z.number().nonnegative().nullable(),
   settledAt: z.iso.datetime(),
 });
 const runEvaluationsOut = z.object({

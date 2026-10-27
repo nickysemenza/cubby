@@ -23,7 +23,7 @@ export default {
   },
 };
 
-export { DatabaseFreshnessDurableObject } from "~/server/generic/problems/operations/database-freshness-durable-object";
+export { DatabaseFreshnessDurableObject } from "~/server/db/freshness/database-freshness-durable-object";
 export { AiResponseCacheDurableObject } from "~/server/ai/response-cache-durable-object";
 export { ChatGptPlanDurableObject } from "~/server/ai/chatgpt/durable-object";
 export { UsdaReleaseDurableObject } from "~/server/domains/usda-release/operations/durable-object";

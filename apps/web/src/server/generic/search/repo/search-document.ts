@@ -833,7 +833,7 @@ export async function searchCoverageIncomplete(
   const result = await unwrapDb(db).execute(sql`SELECT ${
     targets.length
       ? sql`EXISTS (
-          SELECT 1 FROM "DerivedDirty" d WHERE d.target IN (${sql.join(
+          SELECT 1 FROM "WorkItem" d WHERE d.target IN (${sql.join(
             targets.map((target) => sql`${target}`),
             sql`, `,
           )}) LIMIT 1

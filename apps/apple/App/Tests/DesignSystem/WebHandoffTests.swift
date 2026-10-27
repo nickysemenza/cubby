@@ -22,7 +22,7 @@ struct WebHandoffTests {
     }
 
     @Test func routeSortsItsQueryAndCarriesNoFragment() {
-        #expect(url(.route(path: "/problems")) == "https://cubby.example.invalid/problems")
+        #expect(url(.route(path: "/work-queue")) == "https://cubby.example.invalid/work-queue")
         #expect(
             url(.route(path: "/expenses", query: ["view": "analytics", "group": "month"]))
                 == "https://cubby.example.invalid/expenses?group=month&view=analytics")

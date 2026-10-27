@@ -12,7 +12,7 @@ import {
   setMailImport,
 } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
-import { cancelJob } from "~/server/generic/jobs/repo/jobs";
+import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { dispatchAiRefreshDiscovery } from "~/server/workflows/ai-refresh-startup";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 

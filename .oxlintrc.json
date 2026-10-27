@@ -229,6 +229,32 @@
       }
     },
     {
+      // Queue selection and WorkItem drain internals stay inside generic/jobs.
+      // Other lanes use producer, operator or external-claim interfaces.
+      "files": ["apps/web/src/server/**/*.ts"],
+      "excludeFiles": [
+        "apps/web/src/server/generic/jobs/**",
+        "apps/web/src/server/ai/**",
+        "apps/web/src/server/domains/run/**",
+        "apps/web/src/server/generic/embedding/**",
+        "apps/web/src/server/workflows/background-tasks/embedding.ts",
+        "apps/web/src/server/workflows/runs/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(^|/)generic/jobs/(repo/queue|service/drain)(\\.ts)?$",
+                "message": "The queue scheduler and WorkItem drain internals are private to generic/jobs. Use producer.ts, operator.ts, or external-claim.ts for the owning operation."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": [
         "apps/web/src/integrations/tanstack-query/operation-overrides.ts"
       ],

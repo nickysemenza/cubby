@@ -34,7 +34,7 @@ import {
 
 type Executor = ReturnType<typeof unwrapDb>;
 
-export { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
+export { DERIVED_DRAIN_JOB_KEY };
 
 const ident = (name: string) => sql.raw(`"${name.replaceAll('"', '""')}"`);
 
@@ -80,8 +80,8 @@ export async function claimDerivedMarks(
   limit = DERIVED_PAGE_MARKS,
 ): Promise<Mark[]> {
   const result = await unwrapDb(db).execute(sql`
-    SELECT target, ref, ticket, priority FROM "DerivedDirty"
-     WHERE "readyAt" <= now()
+    SELECT target, ref, ticket, priority FROM "WorkItem"
+     WHERE drain = ${DERIVED_DRAIN_JOB_KEY} AND "readyAt" <= now()
      ORDER BY priority, "readyAt", ticket
      LIMIT ${limit}`);
   return z.array(markRow).parse(result.rows);
@@ -120,7 +120,7 @@ export async function prepareDerivedPage(
           .parse(
             (
               await unwrapDb(db).execute(sql`
-      SELECT ticket FROM "DerivedDirty"
+      SELECT ticket FROM "WorkItem"
        WHERE strpos(target, '@') > 0
          AND split_part(target, '@', 1) = ANY(ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(directTargets)}::jsonb)))`)
             ).rows,
@@ -226,14 +226,14 @@ const lockPublishableMarks = async (
   }
   if (candidates.length === 0) return [];
   const locked = await tx.execute(sql`
-    SELECT d.ref::text AS ref FROM "DerivedDirty" d
+    SELECT d.ref::text AS ref FROM "WorkItem" d
       JOIN jsonb_to_recordset(${JSON.stringify(
         candidates.map(({ ref, ticket }) => ({ ref, ticket })),
       )}::jsonb) AS m(ref uuid, ticket bigint)
         ON d.ref = m.ref AND d.ticket = m.ticket
      WHERE d.target = ${declaration.target}
        AND NOT EXISTS (
-         SELECT 1 FROM "DerivedDirty" pending
+         SELECT 1 FROM "WorkItem" pending
           WHERE starts_with(pending.target, ${`${declaration.target}@`})
             AND NOT EXISTS (
               SELECT 1 FROM jsonb_array_elements_text(${JSON.stringify(fanoutTickets)}::jsonb) observed(ticket)
@@ -256,7 +256,7 @@ const clearMarks = async (
   marks: readonly Mark[],
 ) => {
   await tx.execute(sql`
-    DELETE FROM "DerivedDirty" d
+    DELETE FROM "WorkItem" d
      USING jsonb_to_recordset(${JSON.stringify(
        marks.map(({ ref, ticket }) => ({ ref, ticket })),
      )}::jsonb) AS m(ref uuid, ticket bigint)
@@ -295,11 +295,11 @@ const propagate = async (
                   ON s.${ident(dependency.sourceColumn)} = d.${ident(dependency.entityColumn)}
                WHERE s.id = ANY(${uuidArrayParam(changedIds)})`;
     await tx.execute(sql`
-      INSERT INTO "DerivedDirty" (target, ref, priority)
+      INSERT INTO "WorkItem" (target, ref, priority)
       SELECT DISTINCT ${dependent.target}, r.id, 1 FROM (${refs}) AS r(id) WHERE r.id IS NOT NULL
       ON CONFLICT (target, ref) DO UPDATE SET
-        ticket = nextval('"DerivedTicket"'),
-        priority = LEAST("DerivedDirty".priority, EXCLUDED.priority),
+        ticket = nextval('"WorkTicket"'),
+        priority = LEAST("WorkItem".priority, EXCLUDED.priority),
         "readyAt" = now()`);
   }
 };
@@ -371,14 +371,14 @@ const publishValues = async (
         v."decidedBy" AS "previousDecidedBy", ${entityIdentity.kind} AS kind,
         (${entityIdentity.id} IS NOT NULL AND ${isNull(entityIdentity.deletedAt)}) AS live
         FROM input i
-        JOIN "DerivedDirty" d ON d.target = i.target
+        JOIN "WorkItem" d ON d.target = i.target
          AND d.ref = i."entityId" AND d.ticket = i.ticket
         LEFT JOIN "DerivedValue" v ON v."entityId" = i."entityId" AND v.key = i.key
         LEFT JOIN ${entityIdentity} ON ${entityIdentity.id} = i."entityId"
        WHERE NOT EXISTS (
          -- A source edit can precede dependent ticket expansion. Keep the
          -- previous result and direct work until that fanout has expanded.
-         SELECT 1 FROM "DerivedDirty" pending
+         SELECT 1 FROM "WorkItem" pending
           WHERE starts_with(pending.target, i.target || '@')
             AND NOT EXISTS (
               SELECT 1 FROM jsonb_array_elements_text(${JSON.stringify(groups[0]?.fanoutTickets ?? [])}::jsonb) observed(ticket)
@@ -410,7 +410,7 @@ const publishValues = async (
     ),`
         : sql``
     } cleared AS (
-      DELETE FROM "DerivedDirty" d USING current c
+      DELETE FROM "WorkItem" d USING current c
        WHERE d.target = c.target
          AND d.ref = c."entityId" AND d.ticket = c.ticket
     )
@@ -491,18 +491,18 @@ const expandFanouts = async (tx: Executor, marks: readonly Mark[]) => {
   const result = await tx.execute(sql`
     WITH dependents AS (${sql.join(selections, sql` UNION ALL `)}),
     written AS (
-      INSERT INTO "DerivedDirty" (target, ref, priority)
+      INSERT INTO "WorkItem" (target, ref, priority)
       SELECT target, ref, min(priority) FROM dependents GROUP BY target, ref
       ORDER BY target, ref
       ON CONFLICT (target, ref) DO UPDATE SET
-        ticket = nextval('"DerivedTicket"'),
-        priority = LEAST("DerivedDirty".priority, EXCLUDED.priority),
+        ticket = nextval('"WorkTicket"'),
+        priority = LEAST("WorkItem".priority, EXCLUDED.priority),
         "readyAt" = now()
       RETURNING target, ref::text AS ref
     ), cleared AS (
-      DELETE FROM "DerivedDirty" d
+      DELETE FROM "WorkItem" d
       USING (
-        SELECT held.target, held.ref, held.ticket FROM "DerivedDirty" held
+        SELECT held.target, held.ref, held.ticket FROM "WorkItem" held
         JOIN jsonb_to_recordset(${JSON.stringify(observed)}::jsonb)
           AS m(target text, ref uuid, ticket bigint)
           ON held.target = m.target AND held.ref = m.ref AND held.ticket = m.ticket
@@ -545,7 +545,7 @@ const deferFailed = async (
   error: string,
 ) => {
   await tx.execute(sql`
-    UPDATE "DerivedDirty" d SET
+    UPDATE "WorkItem" d SET
       attempts = d.attempts + 1,
       "lastError" = ${error.slice(0, 2000)},
       -- The exponent is clamped first: an unbounded power overflows bigint
@@ -728,7 +728,7 @@ export async function markAllStoredDerived(
   let marked = 0;
   for (const declaration of storedDerivedDeclarations().filter(include)) {
     const result = await unwrapDb(db).execute(sql`
-      INSERT INTO "DerivedDirty" (target, ref, priority)
+      INSERT INTO "WorkItem" (target, ref, priority)
       SELECT ${declaration.target}, t.id, 2 FROM ${ident(declaration.table)} t
       ${slice ? sql`WHERE mod(abs(hashtext(t.id::text)), ${slice.count}) = ${slice.index}` : sql``}
       ON CONFLICT (target, ref) DO NOTHING
@@ -751,7 +751,7 @@ export async function markExpiredClockDerived(
   if (targets.length === 0) return 0;
   const result = await unwrapDb(db).execute(sql`
     WITH marked AS (
-      INSERT INTO "DerivedDirty" (target, ref, priority)
+      INSERT INTO "WorkItem" (target, ref, priority)
       SELECT k.target, v."entityId", 2
         FROM jsonb_to_recordset(${JSON.stringify(targets)}::jsonb) AS k(target text, key text, entity text)
         JOIN "DerivedValue" v ON v.key = k.key

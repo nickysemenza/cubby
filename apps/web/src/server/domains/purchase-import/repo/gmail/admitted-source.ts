@@ -1,8 +1,7 @@
 import type { EmailExecutionPolicy } from "@cubby/schemas/email-fields";
 import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
-import { jobState } from "@cubby/schemas/job";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -190,22 +189,23 @@ export async function publishGmailEvidence<T>(
       };
       if (reason === "changed" && current) {
         if (guarded.row.restarts < 2) {
+          // A fresh ticket keeps the item for its latest evidence; this
+          // attempt's page can no longer clear it.
           const { aiEvaluation } = await import("~/server/db/schema");
+          const { markAiEvaluationWork } =
+            await import("~/server/ai/repo/ai-evaluation-work");
           await tx
             .update(aiEvaluation)
             .set({
-              state: "retry_wait",
               restarts: guarded.row.restarts + 1,
               result: null,
               error:
                 "Email evidence changed; continuing with its latest evidence",
             })
-            .where(
-              and(
-                eq(aiEvaluation.id, evaluation.id),
-                sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='ai-evaluation:' || ${aiEvaluation.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${evaluation.token}::uuid AND j."leaseExpiresAt">now())`,
-              ),
-            );
+            .where(eq(aiEvaluation.id, evaluation.id));
+          await markAiEvaluationWork(databaseForTransaction(tx), [
+            evaluation.id,
+          ]);
         } else {
           // Release the pending key before registering the next generation's demand.
           await completeAiEvaluation(

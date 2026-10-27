@@ -1,4 +1,4 @@
-import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { workQueueInput } from "@cubby/schemas/work-queue";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import { updatePurchase } from "~/server/domains/purchase/repo/purchase";
+import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import {
   derivedMarkTickets,
   drainStoredDerived,
@@ -90,15 +90,14 @@ describe("stored Expense quality", () => {
       pagination: { pageIndex: 0, pageSize: 10 },
     });
     expect(filtered.data.map((line) => line.id)).toEqual([principal.output.id]);
-    const queue = await readWorkQueue(
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({
+    const queue = await readWorkQueue(ctx.db, {
+      input: workQueueInput.parse({
         reason: "expense_product_resolution",
         pageSize: 1,
       }),
-      false,
-    );
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(queue.meta.totalCount).toBe(1);
     expect(queue.items[0]?.id).toBe(principal.output.id);
   });
@@ -203,15 +202,14 @@ describe("stored Expense quality", () => {
       }),
     );
     const queue = () =>
-      readWorkQueue(
-        ctx.db,
-        null,
-        workQueueHouseholdInput.parse({
+      readWorkQueue(ctx.db, {
+        input: workQueueInput.parse({
           query: line.output.name,
           reason: "expense_product_resolution",
         }),
-        false,
-      );
+        memberPartyId: null,
+        memberOnly: false,
+      });
     const list = () =>
       expenseScaffold.read(ctx.db, {
         filters: { dataGap: ["expense_product_resolution"] },

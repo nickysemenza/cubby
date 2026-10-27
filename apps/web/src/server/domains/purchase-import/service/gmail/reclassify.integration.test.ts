@@ -39,6 +39,7 @@ import {
 import { emailScaffold } from "~/server/domains/email/repo/email";
 import { pauseExecutionRun } from "~/server/domains/run/repo/execution-context";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
+import { aiEvaluationItem } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { resumeFundingPausedRuns } from "~/server/domains/run/service/ai-work";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
@@ -1044,8 +1045,11 @@ describe("member Reclassify", () => {
       (await getDb(ctx.db).select().from(run).where(eq(run.id, owner!.id)))[0]
         ?.status,
     ).toBe("paused_auth");
-    expect((await requestedAiEvaluations(ctx.db, owner!.id))[0]).toMatchObject({
-      state: "retry_wait",
+    const [waiting] = await requestedAiEvaluations(ctx.db, owner!.id);
+    expect(waiting).toMatchObject({ state: "queued" });
+    // The funding wait defers the drain without spending the item's attempts.
+    expect(await aiEvaluationItem(ctx.db, waiting!.id)).toMatchObject({
+      attempts: 0,
     });
     await reconcileWorkflowRuns(ctx.db);
     expect(

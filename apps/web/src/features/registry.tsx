@@ -38,6 +38,7 @@ import {
   implemented,
   type PresentationCoverage,
 } from "~/entity/presentation-coverage";
+import type { WorkActionTable } from "~/entity/work-queue/work-actions";
 import { expenseDetailFields } from "~/features/expense/detail-field-renderers";
 import { financialTransactionDetailFields } from "~/features/finance/detail-field-renderers";
 import {
@@ -441,6 +442,131 @@ const listSlots = {
   task: { calendar: taskList("calendar"), agenda: taskList("agenda") },
 } satisfies ListSlotTable;
 
+/** Each declared work action's lazily loaded performer, by action id. */
+const openProblemListAction = lazy(() =>
+  named(
+    import("~/features/work-queue/open-problem-list-action"),
+    "OpenProblemListAction",
+  ),
+);
+const transferPairAction = lazy(() =>
+  named(
+    import("~/features/finance/transfer-pair-accept"),
+    "TransferPairAction",
+  ),
+);
+const duplicateProductMergeAction = lazy(() =>
+  named(
+    import("~/features/product/product-problem-actions"),
+    "DuplicateProductMergeAction",
+  ),
+);
+const orphanedProductDeleteAction = lazy(() =>
+  named(
+    import("~/features/product/product-problem-actions"),
+    "OrphanedProductDeleteAction",
+  ),
+);
+const fetchProductImagesAction = lazy(() =>
+  named(
+    import("~/features/product/product-problem-actions"),
+    "FetchProductImagesAction",
+  ),
+);
+const duplicateVendorMergeAction = lazy(() =>
+  named(
+    import("~/features/vendor/vendor-problem-actions"),
+    "DuplicateVendorMergeAction",
+  ),
+);
+const vendorLogoFetchWorkAction = lazy(() =>
+  named(
+    import("~/features/vendor/vendor-problem-actions"),
+    "VendorLogoFetchWorkAction",
+  ),
+);
+const duplicateTransactionRefAction = lazy(() =>
+  named(
+    import("~/features/finance/duplicate-claim-actions"),
+    "DuplicateTransactionRefAction",
+  ),
+);
+const duplicateAccountAliasAction = lazy(() =>
+  named(
+    import("~/features/finance/duplicate-claim-actions"),
+    "DuplicateAccountAliasAction",
+  ),
+);
+const unusedWithProductDeleteAction = lazy(() =>
+  named(
+    import("~/features/ingredient/unused-ingredient-actions"),
+    "UnusedWithProductDeleteAction",
+  ),
+);
+const unusedWithoutProductDeleteAction = lazy(() =>
+  named(
+    import("~/features/ingredient/unused-ingredient-actions"),
+    "UnusedWithoutProductDeleteAction",
+  ),
+);
+const ingredientWorkbenchAction = lazy(() =>
+  named(
+    import("~/features/ingredient/unused-ingredient-actions"),
+    "IngredientWorkbenchAction",
+  ),
+);
+const partialCoverageAction = lazy(() =>
+  named(import("~/features/units/coverage-actions"), "PartialCoverageAction"),
+);
+const islandedMappingsAction = lazy(() =>
+  named(import("~/features/units/coverage-actions"), "IslandedMappingsAction"),
+);
+const addInventoryAction = lazy(() =>
+  named(
+    import("~/features/location/location-problem-actions"),
+    "AddInventoryAction",
+  ),
+);
+const analyzeLocationsAction = lazy(() =>
+  named(
+    import("~/features/location/location-problem-actions"),
+    "AnalyzeLocationsAction",
+  ),
+);
+const startRecountAction = lazy(() =>
+  named(
+    import("~/features/location/location-problem-actions"),
+    "StartRecountAction",
+  ),
+);
+
+const workActions: WorkActionTable = {
+  "open-list": openProblemListAction,
+  "pair-transfer": transferPairAction,
+  "duplicateProductIdentities:merge": duplicateProductMergeAction,
+  "orphanedProducts:delete": orphanedProductDeleteAction,
+  "productsWithNoImages:fetch-images": fetchProductImagesAction,
+  "duplicateVendors:merge": duplicateVendorMergeAction,
+  "vendorsWithoutLogos:fetch-logo": vendorLogoFetchWorkAction,
+  "duplicateFinancialTransactionSourceRefs:choose-keeper":
+    duplicateTransactionRefAction,
+  "duplicateFinancialAccountSourceAliases:choose-keeper":
+    duplicateAccountAliasAction,
+  "unusedIngredientsWithProduct:delete": unusedWithProductDeleteAction,
+  "unusedIngredientsWithProduct:delete-all": unusedWithProductDeleteAction,
+  "unusedIngredientsWithoutProduct:delete": unusedWithoutProductDeleteAction,
+  "unusedIngredientsWithoutProduct:delete-all":
+    unusedWithoutProductDeleteAction,
+  "ingredientsWithoutProduct:open-workbench": ingredientWorkbenchAction,
+  "ingredientsWithPartialCoverage:repair-coverage": partialCoverageAction,
+  "productsWithIslandedMappings:add-conversion": islandedMappingsAction,
+  "emptyLocations:add-inventory": addInventoryAction,
+  "locationsWithoutAiDescription:analyze-all": analyzeLocationsAction,
+  "staleLocations:start-recount": startRecountAction,
+  "neverVerifiedInventory:start-recount": startRecountAction,
+  "unknownParkedItems:start-recount": startRecountAction,
+};
+
 const headerAction = <E extends GenericDetailEntity>(
   load: () => Promise<{ default: DetailSlotComponent<E> }>,
 ) => lazy(load);
@@ -577,6 +703,7 @@ export function installFeatures(): void {
     sectionActions,
     collectionActions,
     detailEditOverrides,
+    workActions,
     detailFieldRenderers: {
       expense: expenseDetailFields,
       financialTransaction: financialTransactionDetailFields,

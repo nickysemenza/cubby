@@ -2898,7 +2898,10 @@ Rules:
           kind: "idMulti",
           placeholder: "Filter locations...",
           optionsKey: "productLocations",
-          brandRef: { entity: "location" },
+          brandRef: {
+            entity: "location",
+            optionsKind: "locationWithInventory",
+          },
         },
         {
           columnId: "servingAsLocations",
@@ -2917,7 +2920,10 @@ Rules:
           kind: "idMulti",
           placeholder: "Filter ingredient...",
           optionsKey: "productIngredients",
-          brandRef: { entity: "ingredient" },
+          brandRef: {
+            entity: "ingredient",
+            optionsKind: "ingredientWithProduct",
+          },
         },
         {
           columnId: "growsPlant",

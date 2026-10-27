@@ -5,6 +5,10 @@ import type {
   GeneratedInherit,
   GeneratedListScope,
 } from "@cubby/schemas/entity-projection-types";
+import {
+  excludableFilterKind,
+  filterExcludeField,
+} from "@cubby/schemas/filter-sentinel-fields";
 import { z } from "zod";
 import { humanize } from "@cubby/shared/text-case";
 
@@ -912,14 +916,14 @@ const withExcludeKey = (
   bound: CompiledListField | undefined,
 ): FilterDescriptor => {
   if (
-    (descriptor.kind !== "multiselect" && descriptor.kind !== "idMulti") ||
+    !excludableFilterKind(descriptor.kind) ||
     descriptor.singleValue !== null ||
     (descriptor.stored === null && bound === undefined)
   )
     return descriptor;
   return {
     ...descriptor,
-    exclude: { field: `${descriptor.columnId}Exclude` },
+    exclude: { field: filterExcludeField(descriptor.columnId) },
   };
 };
 

@@ -2,17 +2,15 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import {
-  JOB_BACKFILL_SHARE,
-  jobRunOwned,
-} from "~/server/generic/jobs/repo/jobs";
+import { jobRunOwned } from "~/server/generic/jobs/repo/external-claim";
 
 /**
  * Device pulls claim a bounded batch but keep the drain's two classes: an
  * active, member-visible Run's parked work (`jobRunOwned`) leads, and after
  * this many run-owned device services in a row backfill is owed the next.
  */
-const DEVICE_OWNED_STREAK = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
+export const DEVICE_BACKFILL_SHARE = 0.2;
+const DEVICE_OWNED_STREAK = Math.ceil(1 / DEVICE_BACKFILL_SHARE) - 1;
 
 const DEVICE_LANE = "image.device";
 
@@ -21,7 +19,7 @@ export type DeviceAdmission = { ownedStreak: number };
 
 /**
  * How many device services in a row were run-owned, up to
- * `DEVICE_OWNED_STREAK`, for queue positions. A service is a hand-off that
+ * `DEVICE_OWNED_STREAK`, for service admission. A service is a hand-off that
  * committed: an assigned attempt of `image.device` work, reclaims included.
  */
 export async function deviceOwnedStreak(db: Database): Promise<number> {
@@ -70,36 +68,3 @@ export async function recordDeviceService(
 /** Whether the next device hand-off owes backfill its turn. */
 export const deviceBackfillTurn = (streak: number) =>
   streak >= DEVICE_OWNED_STREAK;
-
-/**
- * Pulls served before the `classPosition`-th (1-based) parked Job of its
- * class, claiming one at a time from the current `streak` the way device
- * claims do. Ignores a device's preference for work another device last
- * ran, which only reorders that device's own pull.
- */
-export function deviceSelectionIndex(
-  job: { runOwned: boolean; classPosition: number },
-  totals: { owned: number; backfill: number },
-  streak: number,
-): number {
-  let owned = 0;
-  let backfill = 0;
-  let run = streak;
-  while (owned < totals.owned || backfill < totals.backfill) {
-    const backfillNext =
-      backfill < totals.backfill &&
-      (owned >= totals.owned || deviceBackfillTurn(run));
-    if (backfillNext) {
-      if (!job.runOwned && job.classPosition === backfill + 1)
-        return owned + backfill;
-      backfill++;
-      run = 0;
-    } else {
-      if (job.runOwned && job.classPosition === owned + 1)
-        return owned + backfill;
-      owned++;
-      run++;
-    }
-  }
-  return owned + backfill;
-}

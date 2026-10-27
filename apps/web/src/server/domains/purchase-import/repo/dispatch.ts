@@ -11,7 +11,7 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { wakeJobs } from "~/server/workflows/background-tasks/publish";
 
 /** Commit handoff intent with admission. Retries retain one operation identity. */

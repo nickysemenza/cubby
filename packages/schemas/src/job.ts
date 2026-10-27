@@ -37,24 +37,10 @@ export const jobWaitingOn = z.discriminatedUnion("reason", [
   z.object({
     reason: z.literal("due"),
     lane: jobLane,
-    /** Due Jobs the drain (or, for Apple work, the device pull) serves first. */
-    aheadCount: z.number().int().nonnegative(),
-    /**
-     * Exact only within the drain's next batch: later batches re-rank kinds
-     * by their last service, so a position beyond it (and its ETA) is a
-     * projection.
-     */
-    aheadIsEstimate: z.boolean(),
-    /** From the lane's measured claims over the last 30 minutes; null without throughput. */
-    etaSeconds: z.number().int().nonnegative().nullable(),
   }),
   z.object({
     reason: z.literal("waiting_device"),
     lane: jobLane,
-    aheadCount: z.number().int().nonnegative(),
-    /** Device pulls take one kind in a fixed order, so the position is exact. */
-    aheadIsEstimate: z.boolean(),
-    etaSeconds: z.number().int().nonnegative().nullable(),
   }),
   z.object({
     reason: z.literal("waiting_funding"),
@@ -125,9 +111,8 @@ export const enqueueJobInput = z.object({
   subjectKind: z.string().min(1).nullable().optional(),
   subjectId: z.string().min(1).nullable().optional(),
   priority: z.number().int().optional(),
-  maxAttempts: z.number().int().positive().optional(),
-  /** Opt-in inactivity budget; useful domain commits, not waits, renew it. */
-  recoveryTimeoutMs: z.number().int().positive().optional(),
+  /** Defaults to the kind policy; null never exhausts. */
+  maxAttempts: z.number().int().positive().nullable().optional(),
   availableAt: z.date().optional(),
   /** Explicit new input or member retry; routine recovery never revives failures. */
   invalidate: z.boolean().optional(),
@@ -186,20 +171,9 @@ export function describeJobWaitingOn(
   if (!waitingOn) return null;
   switch (waitingOn.reason) {
     case "due":
-    case "waiting_device": {
-      const label =
-        waitingOn.reason === "due"
-          ? "Due now"
-          : JOB_WAITING_ON_LABEL.waiting_device;
-      const ahead = waitingOn.aheadCount
-        ? `, behind ${waitingOn.aheadIsEstimate ? "about " : ""}${waitingOn.aheadCount}`
-        : "";
-      const eta =
-        waitingOn.etaSeconds !== null
-          ? `, about ${jobSpanText(waitingOn.etaSeconds)}`
-          : "";
-      return `${label}${ahead}${eta}`;
-    }
+      return "Due now";
+    case "waiting_device":
+      return JOB_WAITING_ON_LABEL.waiting_device;
     case "waiting_funding":
       return waitingOn.until
         ? `Waiting for AI funding ${untilText(waitingOn.until, now)}`

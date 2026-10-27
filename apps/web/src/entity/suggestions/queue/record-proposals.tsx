@@ -35,8 +35,7 @@ export function RecordProposals({ id }: { id: string }) {
       query.data?.items.find((row) => row.assessmentId === assessmentId)
         ?.record,
   );
-  const clean =
-    query.data?.facets.clean?.find((value) => value.value === true)?.count ?? 0;
+  const clean = query.data?.meta.cleanCount ?? 0;
   return (
     <section aria-label="Pending suggestions">
       <Stack gap="sm">

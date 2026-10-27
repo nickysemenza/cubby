@@ -100,7 +100,7 @@ import {
 } from "~/server/generic/assessment/repo/automatic-rules";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
-import { lockJobProgress } from "~/server/generic/jobs/repo/jobs";
+import { fenceJob } from "~/server/generic/jobs/repo/external-claim";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   assertWorkflowEffect,
@@ -3084,9 +3084,7 @@ export async function recordStatementLabelCheckpoint(
     tx: Database,
   ): Promise<"saved" | "settled" | "moved" | "out_of_scope"> => {
     const owner = currentJobExecution();
-    const progress = owner
-      ? await lockJobProgress(tx, owner.claim)
-      : async () => {};
+    if (owner) await fenceJob(tx, owner.claim);
     await assertWorkflowEffect(tx);
     if (input.scope) {
       const { rows } = await unwrapDb(tx).execute<{ id: string }>(sql`
@@ -3107,23 +3105,6 @@ export async function recordStatementLabelCheckpoint(
       )
         return "out_of_scope";
     }
-    let gainedAnswers = false;
-    const answerIds = (value: StatementLabelCheckpoint | null) =>
-      new Set([
-        ...(value?.judgment.candidates.flatMap((candidate) =>
-          candidate.label !== null
-            ? [
-                canonicalJson({
-                  id: candidate.transactionId,
-                  input: statementCandidateSubject(candidate),
-                }),
-              ]
-            : [],
-        ) ?? []),
-        ...(value?.kind ? ["kind"] : []),
-        ...(value?.counterparty ? ["counterparty"] : []),
-        ...(value?.spending ? ["spending"] : []),
-      ]);
     let matched = 0;
     await transitionAssessmentStates(
       tx,
@@ -3181,10 +3162,6 @@ export async function recordStatementLabelCheckpoint(
           merged.models = [...new Set([...retained.models, ...merged.models])];
           merged.model = merged.models.length === 1 ? merged.models[0]! : null;
         }
-        const committedAnswers = answerIds(retained);
-        gainedAnswers ||= [...answerIds(merged)].some(
-          (id) => !committedAnswers.has(id),
-        );
         return {
           data: {
             ...data,
@@ -3195,7 +3172,6 @@ export async function recordStatementLabelCheckpoint(
       { kind: "statement_label_checkpoint" },
     );
     if (matched) {
-      if (gainedAnswers) await progress();
       return "saved";
     }
     const { rows: settled } = await unwrapDb(tx).execute(sql`

@@ -309,7 +309,7 @@ describe("stored derived read sets", () => {
       expect(
         (
           await getDb(ctx.db).execute(
-            sql`SELECT target, attempts, "lastError" FROM "DerivedDirty"`,
+            sql`SELECT target, attempts, "lastError" FROM "WorkItem"`,
           )
         ).rows,
       ).toEqual([]);

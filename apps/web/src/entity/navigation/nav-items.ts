@@ -26,7 +26,6 @@ import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { WarehouseIcon } from "@phosphor-icons/react/dist/csr/Warehouse";
-import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { type LinkProps, useLocation } from "@tanstack/react-router";
@@ -62,7 +61,6 @@ const routeIcons = {
   "/": HouseIcon,
   "/activity": PulseIcon,
   "/work-queue": ListChecksIcon,
-  "/problems": WarningIcon,
   "/calendar": CalendarBlankIcon,
   "/meals/suggestions": SparkleIcon,
   "/meals/shopping-list": ShoppingCartIcon,

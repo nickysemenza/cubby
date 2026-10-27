@@ -12,7 +12,7 @@ import {
   listEntityRecords as listCurrentEntityRecords,
 } from "~/server/entity-kernel/repo/entity-records";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {

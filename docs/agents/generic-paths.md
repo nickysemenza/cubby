@@ -85,12 +85,18 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Kernel commands: `executeEntity` / `executeEntityAs`
   (`apps/web/src/server/entity-kernel/execute.ts`).
 - Repositories: `defineRepository`, `createEntityReader`, `createEntityCrud`
-  (`server/entity-kernel/repo/repository.ts`). The scaffold is the repository
-  read port; get-by-id uses `scaffold.getByIds` (see
-  [ADR 0023](../adr/0023-repository-read-declaration.md)).
-  `createEntityRowFetcher(table)` loads stored rows for audited updates. Keep
-  custom projections and relation-loaded fetches in their owning repository.
-  `declaredFilterPredicates` /
+  (`server/entity-kernel/repo/repository.ts`). `createEntityRowFetcher(table)`
+  owns full stored-row reads by ID with the live-row predicate; audited updates
+  use the same selection. Keep custom projections and relation-loaded fetches
+  in their owning repository. `compileDeclaredFilters`
+  (`server/generic/list/repo/declared-filters.ts`) compiles any declared
+  list's filters over a column resolver; a list over a SQL relation declares
+  itself with `defineRelationList` (`@cubby/schemas/relation-list`) and its
+  route search with `relationListSearch`. Work queue rows come from a domain's
+  `WorkSource` (`server/generic/work-queue/repo/work-source.ts`,
+  `selectWorkCandidates`). `declaredFilterPredicates` /
+  The scaffold owns the repository read port, including `getByIds` (see
+  [repository read declarations](../adr/0023-repository-read-declaration.md)).
   `listScaffold` (`server/generic/list/repo/list.ts`; public rows go through `read`,
   explicit repository-only selections through `raw`,
   passing its own `where`, `orderBy`, plain `select`, relation `load`, or joined

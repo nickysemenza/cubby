@@ -62,7 +62,11 @@ export const repositoryOwners = [
   "src/server/generic/audit-log/repo/field-write.ts",
   "src/server/generic/assessment/repo/field-input-fence.ts",
   "src/server/generic/jobs/errors.ts",
-  "src/server/generic/jobs/repo/jobs.ts",
+  "src/server/generic/jobs/failure.ts",
+  "src/server/generic/jobs/repo/queue.ts",
+  "src/server/generic/jobs/repo/producer.ts",
+  "src/server/generic/jobs/repo/external-claim.ts",
+  "src/server/generic/jobs/repo/work-items.ts",
   "src/server/generic/jobs/limits.ts",
   "src/server/generic/jobs/kind-policy.ts",
   "src/server/entity-kernel/repo/entity-identity-writer.ts",
@@ -105,6 +109,7 @@ export const repositoryOwners = [
   "src/server/generic/problems/repo/detectors-purchase.ts",
   "src/server/generic/problems/repo/reparse.ts",
   "src/server/ai/repo/ai-evaluation-requests.ts",
+  "src/server/ai/repo/ai-evaluation-work.ts",
   "src/server/entity-kernel/repo/entity-identity.ts",
   "src/server/entity-kernel/repo/debug.ts",
   "src/server/entity-kernel/repo/singular-attachment.ts",
@@ -237,9 +242,6 @@ export const repositoryOwners = [
   "src/server/generic/problems/repo/detectors-label-variants.ts",
   "src/server/generic/problems/repo/unused-aliases.ts",
   "src/server/generic/search/repo/search-lexical.ts",
-  "src/server/generic/work-queue/repo/work-attention.ts",
-  "src/server/generic/work-queue/repo/work-queue-projection.ts",
-  "src/server/generic/work-queue/repo/work-queue-routing.ts",
 ] as const;
 
 export function createRepositoryPrograms(

@@ -1,7 +1,6 @@
 import {
   locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
-  imageProcessingResultTaskSchema,
   imageMetadataExtractTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
@@ -15,6 +14,7 @@ import type { Database } from "~/server/db";
 import { deviceWakeHandler } from "~/server/domains/image-processing/service/device-wake";
 import { imageProcessingJobHandler } from "~/server/domains/image-processing/service/dispatch";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
+import { aiEvaluationJobHandler } from "~/server/domains/run/service/ai-evaluation-drain";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
 import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
 import {
@@ -22,28 +22,24 @@ import {
   derivedReconcileHandler,
 } from "~/server/generic/derived/service/drain-job";
 import { embeddingCleanupHandler } from "~/server/generic/embedding/service/embedding-cleanup";
+import { embeddingRefreshHandler } from "~/server/generic/embedding/service/embedding-refresh";
 import { JOB_DRAIN } from "~/server/generic/jobs/limits";
 import {
   defineJobHandler,
   drainDueJobs,
 } from "~/server/generic/jobs/service/jobs";
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
-import { embeddingJobHandler } from "~/server/workflows/background-tasks/embedding";
 import { handleBackgroundTask } from "~/server/workflows/background-tasks/handle";
-import {
-  runJobHandler,
-  aiEvaluationJobHandler,
-} from "~/server/workflows/runs/job-execution";
+import { runJobHandler } from "~/server/workflows/runs/job-execution";
 
 import { aiRefreshActivationHandler } from "./ai-refresh-startup";
 import { derivedComputes } from "./derived-computes";
-import { jobRetentionHandler, queueWatchdogHandler } from "./queue-watchdog";
+import { jobMaintenanceHandler } from "./job-maintenance";
 
 const background = defineJobHandler(
   z.discriminatedUnion("kind", [
     locationAiDescriptionRefreshTaskSchema,
     locationAiInventoryRefreshTaskSchema,
-    imageProcessingResultTaskSchema,
     imageMetadataExtractTaskSchema,
     maintenancePurchaseDiscoveryTaskSchema,
     calendarFeedMarkDirtyTaskSchema,
@@ -58,7 +54,6 @@ const background = defineJobHandler(
 const backgroundHandlers = {
   "location-ai.description.refresh": background,
   "location-ai.inventory.refresh": background,
-  "image-processing.result": background,
   "image-metadata.extract": background,
   "maintenance.purchase-discovery": background,
   "calendar-feed.mark-dirty": background,
@@ -70,16 +65,15 @@ export const productionJobHandlers: JobHandlers = {
   "derived.drain": derivedDrainHandler(derivedComputes),
   "derived.reconcile": derivedReconcileHandler,
   "discovery.connections": connectionDiscoveryJobHandler,
-  "embedding.refresh": embeddingJobHandler(),
+  "embedding.refresh": embeddingRefreshHandler(),
   "embedding.cleanup": embeddingCleanupHandler(),
   // `image.device` has no server handler: Apple devices claim it by pull.
   "image.cloud": imageProcessingJobHandler,
   "run.execute": runJobHandler,
-  "ai.evaluation": aiEvaluationJobHandler,
+  "ai.evaluation": aiEvaluationJobHandler(),
   "ai-refresh.activate": aiRefreshActivationHandler,
-  "queue.watchdog": queueWatchdogHandler,
   "image.device.wake": deviceWakeHandler,
-  "jobs.retention": jobRetentionHandler,
+  "jobs.maintenance": jobMaintenanceHandler,
   "purchase.dispatch": defineJobHandler(
     purchaseAgentEvent,
     async (_db, _claim, event) => {

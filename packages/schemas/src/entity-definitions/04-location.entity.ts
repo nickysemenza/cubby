@@ -1028,7 +1028,10 @@ Rules:
           kind: "idMulti",
           placeholder: "Filter product...",
           optionsKey: "locationProducts",
-          brandRef: { entity: "product" },
+          brandRef: {
+            entity: "product",
+            optionsKind: "locationIdentityProduct",
+          },
           deriveSchema: true,
           stored: { columns: ["productId"] },
         },

@@ -15,9 +15,9 @@ import { drainStoredDerived } from "~/server/testing/background-queue";
 export async function publishQualityFixtures(db: Database, kind: ScoredEntity) {
   const table = storedEntryFor(kind).table;
   await unwrapDb(db).execute(sql`
-    INSERT INTO "DerivedDirty" (target, ref, priority)
+    INSERT INTO "WorkItem" (target, ref, priority)
     SELECT ${`${kind}.dataQuality`}, t.id, 0 FROM ${table} t
-    ON CONFLICT (target, ref) DO UPDATE SET ticket = nextval('"DerivedTicket"')`);
+    ON CONFLICT (target, ref) DO UPDATE SET ticket = nextval('"WorkTicket"')`);
   await drainStoredDerived(db);
 }
 

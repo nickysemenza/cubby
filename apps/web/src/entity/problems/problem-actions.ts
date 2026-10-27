@@ -157,9 +157,6 @@ const problemActionCapabilities = {
       target: "global-backfill",
     }),
   ],
-  productsWithBetterUpcData: [
-    action({ id: "apply", label: "Apply", scope: "item", target: "item" }),
-  ],
 } as const satisfies Partial<Record<ProblemKey, readonly ProblemAction[]>>;
 
 export const problemActionsFor = (key: ProblemKey): readonly ProblemAction[] =>

@@ -129,6 +129,11 @@ export const renderFilterArtifacts = (
         ? []
         : [
             `referenceEntity:${JSON.stringify(descriptor.brandRef.entity)}`,
+            ...(descriptor.brandRef.optionsKind
+              ? [
+                  `referenceOptionsKind:${JSON.stringify(descriptor.brandRef.optionsKind)}`,
+                ]
+              : []),
             `brand:(value) => parseShortcodeFor(${JSON.stringify(descriptor.brandRef.entity)}, value)`,
           ]),
       ...(descriptor.expandRef === null

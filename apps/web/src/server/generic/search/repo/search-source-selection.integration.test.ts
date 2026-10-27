@@ -38,8 +38,8 @@ describe("search source selection", () => {
     const config = getSemanticEmbeddingConfig();
     const mark = (target: string) =>
       unwrapDb(ctx.db).execute(sql`
-        INSERT INTO "DerivedDirty" (target, ref) VALUES (${target}, ${crypto.randomUUID()}::uuid)`);
-    await unwrapDb(ctx.db).execute(sql`DELETE FROM "DerivedDirty"`);
+        INSERT INTO "WorkItem" (target, ref) VALUES (${target}, ${crypto.randomUUID()}::uuid)`);
+    await unwrapDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
     await mark("expense.searchDocument");
     expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(
       false,
@@ -51,7 +51,7 @@ describe("search source selection", () => {
       true,
     );
     await unwrapDb(ctx.db).execute(
-      sql`DELETE FROM "DerivedDirty" WHERE target <> 'expense.searchDocument'`,
+      sql`DELETE FROM "WorkItem" WHERE target <> 'expense.searchDocument'`,
     );
     await mark(product.target);
     expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(

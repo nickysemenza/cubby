@@ -2,7 +2,7 @@ import { userId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
 import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
-import type { claimAiEvaluation } from "~/server/ai/repo/ai-evaluation";
+import type { ClaimedAiEvaluation } from "~/server/ai/repo/ai-evaluation";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {
@@ -16,14 +16,12 @@ import { ingestGmailMessages } from "./ingest";
 
 export async function refreshEmailEvaluation(
   db: Database,
-  evaluation: NonNullable<Awaited<ReturnType<typeof claimAiEvaluation>>>,
+  evaluation: ClaimedAiEvaluation,
   ports: Pick<
     Parameters<typeof ingestGmailMessages>[2],
     "triage" | "relevance" | "storage"
   > = {},
 ) {
-  if (!evaluation.attemptToken)
-    throw new Error("Email refresh has no attempt token");
   const [{ current, owner }, activation] = await Promise.all([
     loadEmailRefreshTarget(db, evaluation),
     readAiRefreshActivation(db),

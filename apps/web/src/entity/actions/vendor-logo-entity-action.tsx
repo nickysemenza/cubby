@@ -12,8 +12,7 @@ import { VerbMenuItem } from "./action-verb-ui";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
-export const missingLogoWebsiteReason =
-  "Add a website in Edit to fetch a logo.";
+const missingLogoWebsiteReason = "Add a website in Edit to fetch a logo.";
 export const productionLogoOperations = {
   fetchLogo: vendor.fetchLogo.mutationOptions,
 };
