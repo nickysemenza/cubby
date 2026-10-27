@@ -1,0 +1,113 @@
+apps/web/src/entity/model/list-read-fields.ts
+  s_9fb58b1f0c0012::t_338e5a95d76d74 8-12
+apps/web/src/server/ai/field-suggest/registry.ts
+  s_9fb58b1f0c0012::t_9afab79a5fe3ff 64,365-370
+apps/web/src/server/domains/dashboard/operations/dashboard.integration.test.ts
+  s_9fb58b1f0c0012::t_3f8f06d9d46715 12,79,82
+apps/web/src/server/domains/dashboard/repo/dashboard.ts
+  s_9fb58b1f0c0012::t_6a68e8ebc02356 5-6,8,10-12,14-19,25-47,63-65
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction-allocations.integration.test.ts
+  s_9fb58b1f0c0012::t_80f70b8942100e 18,66
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction-itemization.integration.test.ts
+  s_9fb58b1f0c0012::t_19eb5c93260a0c 9,41
+apps/web/src/server/domains/financial-transaction/repo/financial.integration.test.ts
+  s_9fb58b1f0c0012::t_478315f263c754 33-34,874,966,1102,1167,1169,1242,1470,1563
+apps/web/src/server/domains/product/operations/product-bulk-workflow.integration.test.ts
+  s_9fb58b1f0c0012::t_70ccf7d056d588 7,21
+apps/web/src/server/domains/product/repo/collection-patch.integration.test.ts
+  s_9fb58b1f0c0012::t_9d8d3fad86afd9 9,76
+apps/web/src/server/domains/product/repo/write/product-orchestration.integration.test.ts
+  s_9fb58b1f0c0012::t_fc44400c21cd18 23,371
+apps/web/src/server/domains/purchase/repo/purchase-evidence-policy.integration.test.ts
+  s_9fb58b1f0c0012::t_6f90d5f339f82f 18,675,689,752,766
+apps/web/src/server/domains/purchase/repo/purchase.integration.test.ts
+  s_9fb58b1f0c0012::t_512ce1ec9e1b9f 36,380
+apps/web/src/server/domains/spending-category/repo/spending-category.ts
+  s_9fb58b1f0c0012::t_fc63b518bbf861 10,39,46,164-168,172-173,470
+apps/web/src/server/domains/vendor/repo/vendor-mail-search.integration.test.ts
+  s_9fb58b1f0c0012::t_0c491d5a4e44e6 19,164,186
+apps/web/src/server/domains/vendor/repo/vendor-suggestion-context.ts
+  s_9fb58b1f0c0012::t_9cfa911ba76407 125
+apps/web/src/server/domains/vendor/repo/vendor.integration.test.ts
+  s_9fb58b1f0c0012::t_04398a7e825be4 51,54,202,234,252,255,258,270,329,339,349,357,392,421,433,474,492,496,678,740,782
+apps/web/src/server/domains/vendor/repo/vendor.repository.ts
+  s_9fb58b1f0c0012::t_d2a7187c355e25 22,30
+apps/web/src/server/domains/vendor/repo/vendor.ts
+  s_9fb58b1f0c0012::t_08233bc12880e3 12,24,65,88-91,95,106,120,431,470-474,488-496,498-512,514-538,540-548,623,674,809,1150
+apps/web/src/server/domains/vendor/service/vendor-logo.service.ts
+  s_9fb58b1f0c0012::t_51e6d984063233 30,252
+apps/web/src/server/entity-kernel/adapter.ts
+  s_9fb58b1f0c0012::t_1d0e3e781abbc7 23-24,169-175,180,184-185,187-189,191
+apps/web/src/server/entity-kernel/bulk-update.integration.test.ts
+  s_9fb58b1f0c0012::t_ce5a7c527e8a33 21,280,476
+apps/web/src/server/entity-kernel/entity-operations.ts
+  s_9fb58b1f0c0012::t_aba3579649926f 334-337,339-351,380,427,441-446
+apps/web/src/server/entity-kernel/list-operations.ts
+  s_9fb58b1f0c0012::t_e82a61bd24a94c 1-30
+apps/web/src/server/entity-kernel/list-read.ts
+  s_9fb58b1f0c0012::t_c4318c1f09b18b 16,92,104-116,156,184,189
+apps/web/src/server/entity-kernel/repo/entity-display-image.ts
+  s_9fb58b1f0c0012::t_156a6134de5fe6 924
+apps/web/src/server/entity-kernel/repo/entity-identity.ts
+  s_9fb58b1f0c0012::t_fad4860b53bbb5 17
+apps/web/src/server/entity-kernel/repo/repository.ts
+  s_9fb58b1f0c0012::t_a34ede305522f1 16-17,38,52,84,124-127,132,135-151,189-192,212-215,229,236,272,464-476,482,485,532,639-677,679,681-690
+apps/web/src/server/entity-kernel/scaffolds.ts
+  s_9fb58b1f0c0012::t_428e339b673fb2 1-13
+apps/web/src/server/entity-kernel/selection-ids.ts
+  s_9fb58b1f0c0012::t_c36564acab4736 30-31
+apps/web/src/server/generic/data-quality/repo/finance-checks.integration.test.ts
+  s_9fb58b1f0c0012::t_da76f17073cd2e 18,370
+apps/web/src/server/generic/entity-graph/service/graph-preview.ts
+  s_9fb58b1f0c0012::t_64da603b7daeeb 12,43
+apps/web/src/server/generic/entity-links/repo/entity-edge-source.ts
+  s_9fb58b1f0c0012::t_ff2f675ba870ce 60-63,319-321,326,348-353,402,406,408,421,436
+apps/web/src/server/generic/entity-links/repo/entity-external-ids.integration.test.ts
+  s_9fb58b1f0c0012::t_dae7154b92eac3 26,208
+apps/web/src/server/generic/list/repo/field-compiler.ts
+  s_9fb58b1f0c0012::t_2b0e4369f78c10 404-428
+apps/web/src/server/generic/list/repo/filter-options.integration.test.ts
+  s_9fb58b1f0c0012::t_54eb1b387eaf05 17,191,237
+apps/web/src/server/generic/list/repo/list-field-compiler.integration.test.ts
+  s_9fb58b1f0c0012::t_162c25c13bf9e1 2,22,24,149,151,266,268,743
+apps/web/src/server/generic/list/repo/list-projection.ts
+  s_9fb58b1f0c0012::t_0eb81b7347e1d4 22,31,45,50,88,106,109-110,118,151-153,199,201,222,225,327-328,330,332-342,352-354,399,435,670
+apps/web/src/server/generic/list/repo/list-read-adapters.ts
+  s_9fb58b1f0c0012::t_12680ec22293a0 86,108
+apps/web/src/server/generic/list/repo/list-read-schema.ts
+  s_9fb58b1f0c0012::t_be0c451cce16f4 66
+apps/web/src/server/generic/list/repo/list.ts
+  s_9fb58b1f0c0012::t_55657694046b79 58,86,133,1382-1383,1545,1560-1561,1564-1588,1590,1593-1594,1599-1600,1603,1607,1622-1628,1630-1632,1643-1644,1678-1690,1694-1741,1886,2237-2241,2244-2247,2249-2259,2261-2263,2266-2375,2377,2380,2382-2383,2432,2516,2562,2682-2688,2691-2702
+apps/web/src/server/generic/problems/service/problem-views.service.ts
+  s_9fb58b1f0c0012::t_c2a30263852a24 45,95-128,133-147,349,354-359,571-577,594-598
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_9fb58b1f0c0012::t_0bf208ea4fcb50 97,422
+apps/web/src/server/generic/work-queue/service/work-queue-problems.ts
+  s_9fb58b1f0c0012::t_59bed1a42cd56d 50,123
+apps/web/src/server/mcp/entity-field-selection.ts
+  s_9fb58b1f0c0012::t_2591115ac52ec6 25-35,245
+apps/web/src/server/mcp/kernel-actions.ts
+  s_9fb58b1f0c0012::t_513df7868d6f15 64-68,153,172,190
+apps/web/src/server/observability/list-read-tracing.ts
+  s_9fb58b1f0c0012::t_ca5f4cf8e46c33 9-10,30
+apps/web/src/server/operation-runtime/entity-list-runtime.server.ts
+  s_9fb58b1f0c0012::t_dda63cde7a43fc 7,18,20
+apps/web/src/server/operation-runtime/entity-runtime.server.ts
+  s_9fb58b1f0c0012::t_42ac6676b84539 28,121-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "59bf08600f8fbf536777d8546fbd4802224d467b",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
