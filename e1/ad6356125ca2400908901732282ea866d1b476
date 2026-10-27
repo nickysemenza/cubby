@@ -1,0 +1,29 @@
+apps/web/src/server/db/job-schema.ts
+  s_9607b89cdf7e1e::t_ad850030b35c69 58
+apps/web/src/server/domains/run/service/ai-evaluation-drain.ts
+  s_9607b89cdf7e1e::t_8754b113e0b01d 2
+apps/web/src/server/generic/jobs/repo/work-items.ts
+  s_9607b89cdf7e1e::t_27fb627a32816f 2
+apps/web/src/server/generic/jobs/service/drain.ts
+  s_9607b89cdf7e1e::t_cd4dbf62191757 2
+docs/infrastructure.md
+  s_9607b89cdf7e1e::t_452889bd7e8a27 339
+docs/jobs.md
+  s_9607b89cdf7e1e::t_1eaf118070aa12 360-361,369-371,373,380-381,384-393,432-445,449-470,472-512,516-517,566-578,582
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e1ad6356125ca2400908901732282ea866d1b476",
+  "prompts": {},
+  "sessions": {
+    "s_9607b89cdf7e1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f56125d7-a4fa-4fe4-a445-81d11b32c3e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
