@@ -1,0 +1,43 @@
+apps/web/src/server/generic/embedding/repo/embedding-drain.fixtures.ts
+  s_8b07d067c671e4::t_762d60caffa6eb 9,14,51
+apps/web/src/server/generic/embedding/repo/embedding-drain.integration.test.ts
+  s_77bdb89dbc0fc6::t_8fb93f8d291460 16-19,203-208,217-222,384-389,416-417,441
+apps/web/src/server/generic/embedding/repo/embedding-drain.ts
+  s_ce489f1349f097::t_4d56a463e8d1cc 9
+apps/web/src/server/generic/embedding/service/semantic-search.service.integration.test.ts
+  s_8b07d067c671e4::t_9e7b64fe0a30ee 44-47,453-458
+apps/web/tooling/checks/batch-evaluation-profile.integration.test.ts
+  s_ce489f1349f097::t_d2def55198209f 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c5544d1b9278546bf7ee2d14e20834f151cfecb3",
+  "prompts": {},
+  "sessions": {
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_8b07d067c671e4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17e86-dcaa-79a1-8890-32428b8d1aa7",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_ce489f1349f097": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17e86-75d1-7b53-9e54-4b3fca6aea13",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
