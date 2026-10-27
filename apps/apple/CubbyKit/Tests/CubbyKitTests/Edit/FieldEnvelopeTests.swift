@@ -96,6 +96,16 @@ struct FieldEnvelopeTests {
         #expect(plain.visibleEmptyLabel(field: try itemization()) == nil)
     }
 
+    @Test func allocatedEmptyScalarIsNotUnset() throws {
+        let field = try owner()
+        let allocated = try envelope(
+            F.envelope(result: F.live(F.emptyDecision("unset", provenance: ["kind": "allocated"]))))
+        #expect(allocated.emptyLabel(field: field) == "Allocated")
+        let mixed = try envelope(
+            F.envelope(result: F.live(F.emptyDecision("mixed", provenance: ["kind": "allocated"]))))
+        #expect(mixed.emptyLabel(field: field) == "Mixed")
+    }
+
     @Test func freshCacheIsNotUpdating() throws {
         let fresh = try envelope(
             F.envelope(result: F.cached(F.decision("required", provenance: F.own), freshness: "fresh")))

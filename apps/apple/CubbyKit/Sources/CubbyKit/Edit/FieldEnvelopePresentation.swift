@@ -176,7 +176,9 @@ extension FieldEnvelope {
             case .empty(let reason):
                 switch reason {
                 case .explicitNone: return labels?.none ?? "None"
-                case .unset: return labels?.unresolved ?? "Not set"
+                case .unset:
+                    if case .allocated = decision.provenance { return "Allocated" }
+                    return labels?.unresolved ?? "Not set"
                 case .blocked: return "Blocked"
                 case .mixed: return "Mixed"
                 case .notApplicable: return "Not applicable"

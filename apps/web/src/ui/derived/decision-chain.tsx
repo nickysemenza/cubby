@@ -61,7 +61,10 @@ function DecisionResult({
         {
           {
             explicit_none: labels?.none ?? "None",
-            unset: labels?.unresolved ?? "Not set",
+            unset:
+              decision.provenance?.kind === "allocated"
+                ? "Allocated"
+                : (labels?.unresolved ?? "Not set"),
             blocked: "Blocked",
             mixed: "Mixed",
             not_applicable: "Not applicable",

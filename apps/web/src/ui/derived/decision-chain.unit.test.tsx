@@ -180,3 +180,28 @@ it("compares a cached value with an explicitly empty current result", () => {
   expect(comparison).toHaveTextContent("Stored 18 → live Not set");
   expect(comparison).not.toHaveTextContent("null");
 });
+
+it.each([
+  ["unset", "allocated", "Allocated"],
+  ["mixed", "allocated", "Mixed"],
+  ["unset", "computed", "Not set"],
+] as const)("labels %s with %s provenance as %s", (reason, kind, label) => {
+  const data = explain({
+    ...base,
+    current: {
+      assignment: { kind: "inherit" },
+      controls: { kind: "readonly", reason: "allocated" },
+    },
+    result: {
+      kind: "live",
+      decision: { outcome: { kind: "empty", reason }, provenance: { kind } },
+    },
+  });
+  data.field = "projectId";
+  render(<DecisionChain data={data} />);
+  expect(
+    within(screen.getByRole("region", { name: "Effective result" })).getByText(
+      label,
+    ),
+  ).toBeVisible();
+});
