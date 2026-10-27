@@ -1,0 +1,39 @@
+apps/web/generator/entities/render/data-quality.ts
+  s_9fb58b1f0c0012::t_03aa9fc9cf1a74 160-181,187-190
+apps/web/src/server/domains/ledger-party/repo/ledger-party.ts
+  s_9fb58b1f0c0012::t_bb115e612cf941 312
+apps/web/src/server/domains/product-category/repo/product-category.ts
+  s_9fb58b1f0c0012::t_f42920b8966a6b 406
+apps/web/src/server/domains/run/repo/run.ts
+  s_9fb58b1f0c0012::t_622ba723a8dbbc 261
+apps/web/src/server/domains/spending-category/repo/spending-category.ts
+  s_9fb58b1f0c0012::t_270bd8596ff43d 172
+apps/web/src/server/domains/wish/repo.ts
+  s_9fb58b1f0c0012::t_4dc090cc9da925 209
+apps/web/src/server/generic/data-quality/repo/entry.ts
+  s_9fb58b1f0c0012::t_fec20154c9695e 3,9-10
+apps/web/src/server/generic/embedding/repo/entity-embedding-refresh.ts
+  s_9fb58b1f0c0012::t_731184a4c6dc6a 128-130
+apps/web/src/server/generic/search/repo/search-document.ts
+  s_9fb58b1f0c0012::t_bd9b6a880d603e 158,194-196,231,248
+docs/agents/generic-paths.md
+  s_9fb58b1f0c0012::t_0910ea0ec16e8e 130-135
+docs/entities.md
+  s_9fb58b1f0c0012::t_3899436cdda59c 2708-2713
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "087d0fabf090a93a10845f4c519d02e625fb2138",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
