@@ -1,0 +1,31 @@
+apps/web/src/server/domains/financial-account/repo.ts
+  s_0df38daa5c28b7::t_c249a75a3bbe1e 47-50,63,100-104
+apps/web/src/server/domains/inventory/repo/crud.ts
+  s_0df38daa5c28b7::t_78fbf4fcd738a3 188
+apps/web/src/server/generic/list/repo/list.ts
+  s_0df38daa5c28b7::t_5656aaa4215af1 1703,3113-3125
+docs/agents/generic-paths.md
+  s_0df38daa5c28b7::t_fa3dce49a8b697 16-17
+docs/entities.md
+  s_0df38daa5c28b7::t_42dba4b6107d1a 1824-1826
+packages/schemas/src/entity-definitions/13-financialAccount.entity.ts
+  s_0df38daa5c28b7::t_99a336cb63e0ca 633
+tools/oxlint/cubby/no-raw-deleted-at-predicate-baseline.json
+  s_0df38daa5c28b7::t_ce50692d323684 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a479fa5cbcce0bdc78f07a563aaac4f5ffc472c9",
+  "prompts": {},
+  "sessions": {
+    "s_0df38daa5c28b7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17f1d-f07d-7741-8ecd-79b3441c233a",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
