@@ -63,7 +63,18 @@ provider's reviewer, or `gpt-6-astra` / high. When implementation and review
 disagree on something material, fable / high rules on both positions and the
 evidence.
 
-Sonnet, Terra, and Luna are not implementation lanes. The full-repository
+For bounded work, `gpt-6.1-terra` / medium is an optional alternative to Sol:
+browser operations with a defined saved outcome, screenshot inspection,
+editing supplied prose, or small code fixes with existing regression coverage.
+Give it explicit inputs, scope, and a completion check; verify saved results
+and completion claims. Keep architecture, difficult diagnosis, migrations,
+identity, money, security, and independent review on the lanes above. Escalate
+to Sol when the task exceeds those bounds or a failed check reveals a gap.
+Preserve the user-selected main model; this option does not change host defaults.
+OpenAI's [model-selection guidance](https://developers.openai.com/api/docs/guides/model-selection)
+supports these workloads; Cubby task quality and usage remain unmeasured.
+
+Sonnet and Luna are not implementation lanes. The full-repository
 audit (`.agents/skills/repo-audit`) is the one exception: its workflow declares
 its own measured audit lanes. The production research runtime's Luna/Sol
 routing (#1803) is separate from this agent routing.
@@ -159,4 +170,11 @@ Use existing host/session usage before adding telemetry:
 Publish aggregate or synthetic evidence only. Keep raw session logs private.
 Change one context/routing variable at a time and assess correctness alongside
 usage; cheaper setup that causes retries is not a completed-task improvement.
+For a Terra/Sol comparison under #2317, use the same task inputs, starting
+revision, tools, completion checks, and reasoning effort. Include a browser task
+with saved-result read-back, a screenshot inspection, a supplied-prose edit,
+and a small fix with an existing regression check. Compare completed outcomes,
+elapsed time, usage, retries, and review defects before proposing a default
+change; record unavailable host metrics rather than estimating them. Application
+runtime candidates use their existing fixed-model live evaluations separately.
 Application runtime model routing is a separate concern.
