@@ -1,0 +1,39 @@
+apps/web/src/server/domains/cookbook/repo/cookbook.ts
+  s_20e634a5f97065::t_8026fcb743e926 87-90,302-305
+apps/web/src/server/domains/financial-account/repo.ts
+  s_20e634a5f97065::t_b61be066a44153 54,154
+apps/web/src/server/domains/ingredient/repo/search.ts
+  s_20e634a5f97065::t_0ed29070be3557 81,622-625
+apps/web/src/server/domains/product/repo/crud.ts
+  s_20e634a5f97065::t_68e9dcc9da2110 173-176,468-471
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_20e634a5f97065::t_19af56936763a7 145-148,486-489
+apps/web/src/server/domains/recipe/repo/crud.ts
+  s_20e634a5f97065::t_720173b3c985af 83,459
+apps/web/src/server/domains/vendor/repo/vendor.ts
+  s_20e634a5f97065::t_1b7ff68af8a2ea 105,490
+apps/web/src/server/generic/field-explanation/operations/field-explanation.server.ts
+  s_20e634a5f97065::t_693dfdcad24a8d 53-54
+apps/web/src/server/generic/field-explanation/repo/field-count-evidence.ts
+  s_20e634a5f97065::t_48e56c9e04a922 1-16
+apps/web/src/server/generic/field-explanation/repo/field-explanation-evidence.ts
+  s_20e634a5f97065::t_f5fb9f72736a99 57,63,88,152,180,220,257,317,358,394,422,455
+apps/web/src/server/generic/list/repo/list.ts
+  s_20e634a5f97065::t_8634aa3e33652e 108,1576,2707
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d4453a8da130736d28eec1582a03f3cb911d34b1",
+  "prompts": {},
+  "sessions": {
+    "s_20e634a5f97065": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17efe-f732-7d51-be4a-0e8c2d2cb9d6",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
