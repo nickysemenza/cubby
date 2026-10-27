@@ -1,0 +1,141 @@
+apps/web/src/server/ai/enrichment/location-vision.ts
+  s_9fb58b1f0c0012::t_08db15052a9bfa 64,340,402,589,639
+apps/web/src/server/db/helpers/build-where.unit.test.ts
+  s_9fb58b1f0c0012::t_e5faf3f51dabb8 28-29,31,37,181-190,326-334,396,398,570,577
+apps/web/src/server/db/helpers/relations.ts
+  s_9fb58b1f0c0012::t_46cc98e07596bf 20
+apps/web/src/server/db/write-after-commit.integration.test.ts
+  s_9fb58b1f0c0012::t_11b2a90c6d000f 18,232,248
+apps/web/src/server/domains/cookbook/repo/cookbook-edit.integration.test.ts
+  s_9fb58b1f0c0012::t_a4ffb27122a8cf 4-7,65,73
+apps/web/src/server/domains/image-processing/repo/image-processing-issues.ts
+  s_9fb58b1f0c0012::t_2a040b05fe850d 9-10,39,44
+apps/web/src/server/domains/image-processing/repo/image-processing.integration.test.ts
+  s_9fb58b1f0c0012::t_31843484433a33 33,958-964,972-976
+apps/web/src/server/domains/image/operations/image.server.ts
+  s_9fb58b1f0c0012::t_b8a41d0a22c091 24,72
+apps/web/src/server/domains/image/repo/image-sighting.integration.test.ts
+  s_9fb58b1f0c0012::t_d351d0163fa804 13,111,153,186,355,382,402,417,424
+apps/web/src/server/domains/image/repo/image-storage.ts
+  s_9fb58b1f0c0012::t_ea8db7e920ca69 57,130,132,181,570,583
+apps/web/src/server/domains/image/repo/image-storage.unit.test.ts
+  s_9fb58b1f0c0012::t_c325c8a633a7c4 157
+apps/web/src/server/domains/image/repo/image.integration.test.ts
+  s_9fb58b1f0c0012::t_e2b14208ed1b80 70,74,254,261,269,282,296,304,319,399,940-946,954-958,963-967,1014-1018,1032-1036,1045-1050,1061,1410,1463-1464,1469-1471,1473
+apps/web/src/server/domains/image/repo/image.repository.ts
+  s_9fb58b1f0c0012::t_d910e261325264 1,7,16
+apps/web/src/server/domains/image/repo/image.ts
+  s_9fb58b1f0c0012::t_345d09619ff04f 154,571,714,721,1308-1311,1314,1319,1344-1355,1357-1472,1476-1481,1483-1497,1500-1504,1506-1509,1512-1526,1528-1533,1535-1543,1552,1555-1556,1562,1572,1643
+apps/web/src/server/domains/image/service/image-metadata-backfill.integration.test.ts
+  s_9fb58b1f0c0012::t_1959d26c3f427a 10,228,246,314
+apps/web/src/server/domains/ingredient/operations.server.ts
+  s_9fb58b1f0c0012::t_cb29644bb9472a 20-23,29,148-149
+apps/web/src/server/domains/ingredient/repo/crud.ts
+  s_9fb58b1f0c0012::t_ffafc080eb466d 18-22,38,51-52,57-58,63,69-75,83,125
+apps/web/src/server/domains/ingredient/repo/ingredient-mapping-gap.integration.test.ts
+  s_9fb58b1f0c0012::t_1e7e2a5aaba9eb 16,83-87,100-104
+apps/web/src/server/domains/ingredient/repo/ingredient-with-food.ts
+  s_9fb58b1f0c0012::t_d73b234750865a 43
+apps/web/src/server/domains/ingredient/repo/ingredient.integration.test.ts
+  s_9fb58b1f0c0012::t_d422267835e605 43,51,102,155,188,315,341-343,362,385,400,447,461-464,488,710
+apps/web/src/server/domains/ingredient/repo/internal-types.ts
+  s_9fb58b1f0c0012::t_e67d47ec3f90b5 5,33,44-46,48-53,74
+apps/web/src/server/domains/ingredient/repo/mappers.unit.test.ts
+  s_9fb58b1f0c0012::t_4f6f713b4c3a93 9,176
+apps/web/src/server/domains/ingredient/repo/repository.ts
+  s_9fb58b1f0c0012::t_520a3f3b3cc3a8 13,15,18,27,87
+apps/web/src/server/domains/ingredient/repo/search.ts
+  s_9fb58b1f0c0012::t_e9a0cf01dcddc2 4,7-10,12,15-17,20,32,34-35,51,62,64,73,77-80,394-404,408,511-620,639-642,644-645,649-651,653-698,700-712,714-715
+apps/web/src/server/domains/location/repo/crud.ts
+  s_9fb58b1f0c0012::t_a70868c3f2e457 23-27,29,31,55,82,207,256,331,361,380,404,536,688-736,759-846,848-858,860-880,882-905,981,990,1145-1146
+apps/web/src/server/domains/location/repo/helpers.ts
+  s_9fb58b1f0c0012::t_16dabf397f0d11 14,144
+apps/web/src/server/domains/location/repo/helpers.unit.test.ts
+  s_9fb58b1f0c0012::t_57d924a57c2b0b 2,9
+apps/web/src/server/domains/location/repo/location-shape.integration.test.ts
+  s_9fb58b1f0c0012::t_5bf2ab1c4e0cb8 22-23,49,73,78,81-85,89-93,98
+apps/web/src/server/domains/location/repo/location.integration.test.ts
+  s_9fb58b1f0c0012::t_594943becd198e 44,196,228,529
+apps/web/src/server/domains/location/repo/lookup.ts
+  s_9fb58b1f0c0012::t_0fa4a43cffc543 13-15,28,34,38,51-64,66-75
+apps/web/src/server/domains/location/repo/repository.ts
+  s_9fb58b1f0c0012::t_f76e8f1aea026c 3,11,22
+apps/web/src/server/domains/location/repo/stock-items.ts
+  s_9fb58b1f0c0012::t_57a728baba0377 21
+apps/web/src/server/domains/location/repo/tree.ts
+  s_9fb58b1f0c0012::t_ed265e3f33c056 353,357,396
+apps/web/src/server/domains/location/repo/valuation.integration.test.ts
+  s_9fb58b1f0c0012::t_010b70b60ba9f1 23,36,91-93,95,158-162,168-172
+apps/web/src/server/domains/recipe/operations/recipe-delete-staleness.integration.test.ts
+  s_9fb58b1f0c0012::t_c4e8957b1e2906 14,193
+apps/web/src/server/domains/recipe/operations/recipe-line-patch.integration.test.ts
+  s_9fb58b1f0c0012::t_3043598dbe137c 6,65
+apps/web/src/server/domains/recipe/operations/recipe-line-reparse.integration.test.ts
+  s_9fb58b1f0c0012::t_d9a4bd055c89bf 7,58
+apps/web/src/server/domains/recipe/operations/recipe.server.ts
+  s_9fb58b1f0c0012::t_305fd21c89c180 6,38,300-305,311-313
+apps/web/src/server/domains/recipe/repo/crud.ts
+  s_9fb58b1f0c0012::t_224b1767f30390 18,23,38,45,60-63,67,134,415-442,457-473,476-552,554-563,648,732,785,809,965,1044
+apps/web/src/server/domains/recipe/repo/forked-from.integration.test.ts
+  s_9fb58b1f0c0012::t_09ee6d8a663c44 17,102
+apps/web/src/server/domains/recipe/repo/helpers.ts
+  s_9fb58b1f0c0012::t_aab482bae2a850 12,214
+apps/web/src/server/domains/recipe/repo/recipe-cookbook-upsert.integration.test.ts
+  s_9fb58b1f0c0012::t_16026744506123 20,156,184,215
+apps/web/src/server/domains/recipe/repo/recipe-costing.integration.test.ts
+  s_9fb58b1f0c0012::t_85c205c46d2b1b 17-18,26,308-312,317-325
+apps/web/src/server/domains/recipe/repo/recipe-flow-state.ts
+  s_9fb58b1f0c0012::t_25a4f4c302d989 16,37
+apps/web/src/server/domains/recipe/repo/recipe.unit.test.ts
+  s_9fb58b1f0c0012::t_b7eb4aab290bcc 7,13,193-209,211-218,220-228,231
+apps/web/src/server/domains/recipe/repo/repository.ts
+  s_9fb58b1f0c0012::t_6da92ebf9d6221 1,9,17
+apps/web/src/server/domains/recipe/repo/servings.integration.test.ts
+  s_9fb58b1f0c0012::t_d0c79bf9e63254 1,12,24,50,59-63,65-67
+apps/web/src/server/domains/recipe/repo/soft-delete-recipe-consistency.integration.test.ts
+  s_9fb58b1f0c0012::t_7658ed04de2002 14,16,39-43,80,90,93,130,166
+apps/web/src/server/domains/recipe/service/availability.integration.test.ts
+  s_9fb58b1f0c0012::t_fd861b380d5090 9,279
+apps/web/src/server/generic/derived/service/public-read.integration.test.ts
+  s_9fb58b1f0c0012::t_7cf71d6616a7ec 6-9,11-14,105-106,110,194
+apps/web/src/server/generic/entity-report/repo/location.ts
+  s_9fb58b1f0c0012::t_34f2e57539ecf5 18,69
+apps/web/src/server/generic/entity-report/repo/recipe-walkthrough.ts
+  s_9fb58b1f0c0012::t_53786ab49fe414 19,25
+apps/web/src/server/generic/entity-report/repo/records.ts
+  s_9fb58b1f0c0012::t_c750b09eace65e 38,361
+apps/web/src/server/generic/list/repo/any-of-filter.integration.test.ts
+  s_9fb58b1f0c0012::t_2c6486d6c30359 20-21,23,330,358,390-399
+apps/web/src/server/generic/list/repo/list-field-compiler.integration.test.ts
+  s_9fb58b1f0c0012::t_6bdb6a852ef70e 16,843-848
+apps/web/src/server/generic/list/repo/list-grouping.integration.test.ts
+  s_9fb58b1f0c0012::t_74751ff26514e9 21,469-473,477-479
+apps/web/src/server/generic/list/repo/list-readers.integration.test.ts
+  s_9fb58b1f0c0012::t_121aa9e039ce2a 15,33-39,86,96-97,126
+apps/web/src/server/generic/list/repo/relative-dates.integration.test.ts
+  s_9fb58b1f0c0012::t_91e9724df6fe70 27,219-220,228-230
+apps/web/src/server/generic/removal/repo/delete-effects.integration.test.ts
+  s_9fb58b1f0c0012::t_19f163d3e6c70b 10,13,49
+apps/web/src/server/generic/work-queue/service/work-queue-problems.ts
+  s_9fb58b1f0c0012::t_21fae95cf3c053 38-39,41,47,86,92,99-109,129-139
+apps/web/src/server/workflows/ai-smoke-run.ts
+  s_9fb58b1f0c0012::t_ddaf03fb914ff3 68,84,343,421
+packages/schemas/src/image-processing.ts
+  s_9fb58b1f0c0012::t_25633ff2ba379e 553-554
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8ac716f0335c161c8ca0ea7a367b3d9b2cdf2453",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
