@@ -84,7 +84,8 @@ export interface DeclaredFilterDescriptor {
  * field that declares `resolution.inherit`.
  */
 export interface FilterColumn {
-  readonly column: AnyColumn;
+  /** The table column, when `value` reads one; a relation list has none. */
+  readonly column?: AnyColumn;
   readonly value: AnyColumn | SQL;
   readonly kind: string;
   readonly nullable: boolean;
@@ -107,7 +108,7 @@ export const textPredicate = (
  * (nullable) column it is presence: `true` is NOT NULL, `false` is NULL.
  */
 export const booleanPredicate = (
-  { column, value, kind }: FilterColumn,
+  { value, kind }: FilterColumn,
   flag: boolean | undefined,
 ): SQL | undefined =>
   kind === "boolean"
@@ -115,7 +116,7 @@ export const booleanPredicate = (
       ? flag === undefined
         ? undefined
         : sql`${value} = ${flag}`
-      : eqAny(column, flag)
+      : eqAny(value, flag)
     : presenceCondition(
         value,
         flag === undefined ? undefined : flag ? "has" : "none",
@@ -156,7 +157,7 @@ export const requestedIdsSql = (
  */
 export const referencePredicate = (
   label: string,
-  { column: { name }, value: column, reference }: FilterColumn,
+  { column: source, value: column, reference }: FilterColumn,
   codes: readonly string[] | undefined,
   includeDescendants: boolean,
   presence: PresenceFilter,
@@ -166,7 +167,7 @@ export const referencePredicate = (
   );
   if (!target)
     throw new Error(
-      `${label} id filter over ${name} references ${String(reference)}, which has no shortcode table`,
+      `${label} id filter over ${source?.name ?? "a column"} references ${String(reference)}, which has no shortcode table`,
     );
   // A reference to a soft-deleted record is no value, as the group key and
   // the related-path filters read it.
@@ -341,7 +342,7 @@ const columnPredicate = (
                   ),
               presenceCondition(first.value, presence),
             )
-          : eqAnyOrPresence(first.column, value, presence);
+          : eqAnyOrPresence(first.value, value, presence);
     case "presence":
       return presenceCondition(first.value, presenceFilter.parse(value));
     case "idMulti":

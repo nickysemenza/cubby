@@ -250,11 +250,48 @@ const inputFieldsOf = (filter: RelationFilter): Record<string, z.ZodType> => {
   }
 };
 
+/** The values a filter accepts: its options' values, else any text. */
+type FilterValue<F extends RelationFilter> = F extends {
+  readonly options: readonly { readonly value: infer V extends string }[];
+}
+  ? V
+  : string;
+type Optional<T> = z.ZodOptional<z.ZodType<T>>;
+type UnionToIntersection<U> = (
+  U extends unknown ? (union: U) => void : never
+) extends (intersection: infer I) => void
+  ? I
+  : never;
+
+/** The input keys one filter adds, typed by its kind. */
+type FilterInputFields<F extends RelationFilter> = F["kind"] extends "text"
+  ? { [K in F["columnId"]]: Optional<string> }
+  : F["kind"] extends "boolean"
+    ? { [K in F["columnId"]]: Optional<boolean> }
+    : F["kind"] extends "range"
+      ? {
+          [K in `${F["columnId"]}From` | `${F["columnId"]}To`]: Optional<
+            F["range"] extends "date" ? string : number
+          >;
+        }
+      : {
+          [K in F["columnId"] | `${F["columnId"]}Exclude`]: Optional<
+            FilterValue<F> | FilterValue<F>[]
+          >;
+        } & (F extends { readonly nullable: object }
+          ? { [K in `${F["columnId"]}Presence`]: typeof presenceFilter }
+          : unknown);
+type FiltersInputFields<Fs extends readonly RelationFilter[]> =
+  UnionToIntersection<
+    { [I in keyof Fs]: FilterInputFields<Fs[I]> }[number]
+  >;
+
 export interface RelationListDeclaration<
   C extends GeneratedGroupChoice = GeneratedGroupChoice,
   V extends string = string,
+  Fs extends readonly RelationFilter[] = readonly RelationFilter[],
 > {
-  readonly filters: readonly RelationFilter[];
+  readonly filters: Fs;
   readonly sorts: readonly [RelationSort, ...RelationSort[]];
   readonly defaultSort: { orderBy: string; direction: "asc" | "desc" };
   readonly grouping: readonly C[];
@@ -267,7 +304,8 @@ export interface RelationListDeclaration<
 export function defineRelationList<
   const C extends SupportedChoice<string> | UnsupportedChoice<string>,
   const V extends string,
->(list: RelationListDeclaration<C, V>) {
+  const Fs extends readonly RelationFilter[],
+>(list: RelationListDeclaration<C, V, Fs>) {
   const columnIds = new Set(list.filters.map((filter) => filter.columnId));
   for (const choice of list.grouping) {
     const columnId = choice.filter?.columnId;
@@ -289,7 +327,15 @@ export function defineRelationList<
     .map((choice) => choice.key);
   const sortKeys = nonEmptyTuple(list.sorts.map((sort) => sort.key));
   const viewKeys = list.views.map((view) => view.key);
-  const input = z.strictObject({
+  // SAFETY: each filter's fields are built by `inputFieldsOf` from the same
+  // kind, options and nullability the mapped type reads.
+  const filterFields = Object.assign(
+    {},
+    ...list.filters.map(inputFieldsOf),
+  ) as FiltersInputFields<Fs>;
+  const input = z.strictObject(
+    Object.assign(
+      {
     pageIndex: z.number().int().min(0).default(0),
     pageSize: z
       .number()
@@ -308,14 +354,12 @@ export function defineRelationList<
       .min(1)
       .max(3)
       .optional(),
-    ...(groupKeys.length
-      ? { group: z.enum(nonEmptyTuple(groupKeys)).optional() }
-      : {}),
-    ...(viewKeys.length
-      ? { view: z.enum(nonEmptyTuple(viewKeys)).optional() }
-      : {}),
-    ...Object.assign({}, ...list.filters.map(inputFieldsOf)),
-  });
+    group: z.enum(nonEmptyTuple(groupKeys.length ? groupKeys : ["none"])).optional(),
+    view: z.enum(nonEmptyTuple(viewKeys.length ? viewKeys : ["none"])).optional(),
+      },
+      filterFields,
+    ),
+  );
   return {
     ...list,
     specs: list.filters.map(specOf),
