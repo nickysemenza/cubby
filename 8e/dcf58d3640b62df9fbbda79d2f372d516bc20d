@@ -1,0 +1,59 @@
+apps/web/src/server/ai/repo/ai-evaluation-requests.ts
+  s_9607b89cdf7e1e::t_77de4470e83dae 183,241
+apps/web/src/server/ai/repo/ai-evaluation-work.ts
+  s_9607b89cdf7e1e::t_baec73e28af380 1-112
+apps/web/src/server/ai/repo/ai-evaluation.ts
+  s_9607b89cdf7e1e::t_427071606566f1 6,15-20
+apps/web/src/server/domains/purchase-import/repo/gmail/admitted-source.ts
+  s_9607b89cdf7e1e::t_279e8b9d4df0a3 196
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassification-work.ts
+  s_9607b89cdf7e1e::t_cb3b1f2ee61147 11
+apps/web/src/server/domains/purchase-import/repo/gmail/refresh-evaluation-state.ts
+  s_9607b89cdf7e1e::t_c28ff1cd920d99 4
+apps/web/src/server/domains/run/repo/ai-refresh-state.ts
+  s_9607b89cdf7e1e::t_6764aa1c58f25c 32
+apps/web/src/server/domains/run/repo/connection-discovery-pacing.integration.test.ts
+  s_9607b89cdf7e1e::t_41e3893419f107 3,435-442,479-486
+apps/web/src/server/domains/run/service/ai-evaluation-drain.ts
+  s_9607b89cdf7e1e::t_b613b06e4ddaa9 33
+apps/web/src/server/generic/embedding/repo/embedding-cleanup.ts
+  s_9607b89cdf7e1e::t_044c3a281b1d26 5-8,59
+apps/web/src/server/generic/embedding/repo/embedding-drain.fixtures.ts
+  s_9607b89cdf7e1e::t_cf85e4764c9252 7-10
+apps/web/src/server/generic/embedding/repo/embedding-drain.integration.test.ts
+  s_9607b89cdf7e1e::t_933be24fcd96f1 14-17
+apps/web/src/server/generic/embedding/repo/embedding-drain.ts
+  s_9607b89cdf7e1e::t_8dd4431d719383 14,34-40
+apps/web/src/server/generic/embedding/service/embedding-refresh.ts
+  s_9607b89cdf7e1e::t_07e4a966427945 12
+apps/web/src/server/generic/embedding/service/semantic-search.service.integration.test.ts
+  s_9607b89cdf7e1e::t_563a9bca3d1e02 21,45
+apps/web/src/server/generic/jobs/service/drain.ts
+  s_9607b89cdf7e1e::t_e4154a21406d61 9-11,19-20
+apps/web/src/server/workflows/background-tasks/embedding.ts
+  s_9607b89cdf7e1e::t_58ff24c04b1539 5-8
+apps/web/src/server/workflows/runs/control.ts
+  s_9607b89cdf7e1e::t_9071378044486f 14
+apps/web/src/server/workflows/runs/lifecycle.ts
+  s_9607b89cdf7e1e::t_bc08febadb829e 170
+apps/web/tooling/coarse-jobs-migration.integration.test.ts
+  s_9607b89cdf7e1e::t_923a22c7665480 129-135
+apps/web/tooling/typecheck-repositories.ts
+  s_9607b89cdf7e1e::t_e3a10b40a4546d 61-65,108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8edcf58d3640b62df9fbbda79d2f372d516bc20d",
+  "prompts": {},
+  "sessions": {
+    "s_9607b89cdf7e1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f56125d7-a4fa-4fe4-a445-81d11b32c3e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
