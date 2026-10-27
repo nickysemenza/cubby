@@ -12,7 +12,6 @@ import {
 } from "~/server/domains/run/repo/connection-refresh";
 import {
   claimDerivedDiscovery,
-  memberStoppedDiscovery,
   prepareConnectionDiscoveryPage,
 } from "~/server/domains/run/repo/derived-discovery";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -50,19 +49,6 @@ export const connectionDiscoveryJobHandler = defineJobHandler(
     if (!activation?.enabled || !activation.manifest["entity-connections"])
       return { page: { done: true, result: { outcome: "disabled" } } };
     const previous = cursorSchema.parse(claim.cursor ?? { after: null });
-    if (
-      await memberStoppedDiscovery(
-        db,
-        [previous.runId, previous.replacing].filter((id) => id !== null),
-      )
-    )
-      return {
-        page: {
-          done: false,
-          cursor: { after: null, runId: null, replacing: null },
-          waitUntil: new Date(Date.now() + MEMBER_STOP_MS),
-        },
-      };
     // Backpressure: hold the cursor until the evaluation backlog drains.
     if (
       (await pendingConnectionEvaluations(db)) >=
@@ -95,6 +81,14 @@ export const connectionDiscoveryJobHandler = defineJobHandler(
           }),
         }),
     });
+    if (page.outcome === "member-stopped")
+      return {
+        page: {
+          done: false,
+          cursor: { after: null, runId: null, replacing: null },
+          waitUntil: new Date(Date.now() + MEMBER_STOP_MS),
+        },
+      };
     return {
       page: {
         done: !page.next,

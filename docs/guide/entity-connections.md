@@ -161,3 +161,7 @@ excluded from connection fingerprints.
 Assessment selection is batched. Current freshness validation also rereads
 family evidence for returned proposals, so batch reads do not yet guarantee a
 constant query count independent of proposal count.
+
+Acquisition discovery sends only the identity query to lexical search. If the
+identity has fewer than three characters, lexical retrieval is skipped;
+description and notes remain eligible for semantic retrieval.

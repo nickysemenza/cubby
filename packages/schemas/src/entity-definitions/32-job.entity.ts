@@ -253,6 +253,7 @@ export default defineEntity({
       })),
       { key: "availableAt", kind: "timestamp" },
       { key: "leaseToken", kind: "identifier", nullable: true },
+      { key: "admissionToken", kind: "identifier", nullable: true },
       ...["input", "cursor", "result"].map((key) => ({
         key,
         kind: "json" as const,
@@ -290,6 +291,7 @@ export default defineEntity({
       "lastUsefulProgressAt",
       { key: "availableAt", defaultSql: "now()" },
       "leaseToken",
+      "admissionToken",
       "leaseExpiresAt",
       "lastClaimedAt",
       "error",

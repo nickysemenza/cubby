@@ -75,6 +75,7 @@ import type {
 } from "~/server/ai/repo/evaluation-page";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
+import { ConnectionEvidenceInvalidatedError } from "~/server/domains/connection/repo/entity-connections";
 import { productIdentityEvidenceFences } from "~/server/domains/product/repo/match/product-identity-fence";
 import { productIdentityEvidenceFence } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
@@ -877,6 +878,19 @@ export async function executeAiRefreshTarget(
               id,
               token,
               async (transactionDb) => {
+                // A single unit owns its ordered locks. Combined legacy units
+                // must acquire their union before any later callback runs.
+                if (chunk.length > 1) {
+                  const { connectionRecords } =
+                    await import("~/server/domains/connection/repo/connection-evidence");
+                  await connectionRecords(
+                    transactionDb,
+                    preparation.lockRefs.filter(
+                      (ref) => ref.entityKind !== "email",
+                    ),
+                    true,
+                  );
+                }
                 for (const publish of chunk) await publish(transactionDb);
                 await fenceSource(transactionDb);
                 return null;
@@ -1545,6 +1559,11 @@ function pageFailure(
     error instanceof Error ? error.message : String(error),
   );
   const obsolete =
+    !!findErrorCause(
+      error,
+      (cause): cause is ConnectionEvidenceInvalidatedError =>
+        cause instanceof ConnectionEvidenceInvalidatedError,
+    ) ||
     /obsolete|changed during inference|changed during evaluation|decided during inference|no longer exists/.test(
       message,
     );
@@ -1954,6 +1973,7 @@ type ConnectionPagePreparation = {
 };
 type ConnectionPageOutcome = {
   source: EntityRef;
+  lockRefs: EntityRef[];
   productPairs: readonly PreparedProductPairPublication[];
   connections: Awaited<
     ReturnType<
@@ -2046,6 +2066,13 @@ function connectionEvaluationPageAdapter(
         const fingerprint = source
           ? current.get(entityRefKey(source.entityKind, source.entityId))
           : null;
+        const captured = source ? initial.get(source.entityId) : undefined;
+        if (captured?.status === "rejected")
+          return {
+            kind: "failed" as const,
+            target: entry,
+            error: captured.reason,
+          };
         return source &&
           fingerprint === entry.evaluation.provenance.inputFingerprint
           ? {
@@ -2054,7 +2081,8 @@ function connectionEvaluationPageAdapter(
               evidenceDigest: fingerprint,
               prepared: {
                 source,
-                initialConnections: initial.get(source.entityId),
+                initialConnections:
+                  captured?.status === "fulfilled" ? captured.value : undefined,
               },
             }
           : { kind: "failed" as const, target: entry, error: changed() };
@@ -2097,6 +2125,7 @@ function connectionEvaluationPageAdapter(
         );
       return {
         source,
+        lockRefs: preparation.lockRefs,
         connections: preparation.connections,
         productPairs: preparation.productPairs,
         publications: preparation.publications,
@@ -2116,6 +2145,17 @@ function connectionEvaluationPageAdapter(
         await import("~/server/domains/connection/repo/entity-connections");
       const valid = outcomes.filter(
         (entry, index) => fingerprints[index] === entry.evidenceDigest,
+      );
+      // Prelock the entire publication, including later field callbacks. A
+      // callback must not acquire a parent after an earlier child was locked.
+      const { connectionRecords } =
+        await import("~/server/domains/connection/repo/connection-evidence");
+      await connectionRecords(
+        tx,
+        valid.flatMap((entry) =>
+          entry.outcome.lockRefs.filter((ref) => ref.entityKind !== "email"),
+        ),
+        true,
       );
       await publishPreparedEntityConnections(
         tx,

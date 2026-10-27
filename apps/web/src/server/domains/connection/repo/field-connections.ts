@@ -141,6 +141,7 @@ export async function saveConnectionFieldGuard(
   const reviewKey = input.reviewKey;
   return {
     reviewKey,
+    lockRefs: [candidate.source, candidate.target],
     provenance: {
       inputFingerprint: fingerprint,
       optionFingerprint: await sha256Hex(

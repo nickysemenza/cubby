@@ -2,6 +2,7 @@ import type { JobId } from "@cubby/schemas/identifiers";
 import { pollUntil } from "@cubby/shared/retry";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, inArray, ne, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -10,6 +11,8 @@ import { readAiBudget } from "~/server/ai/budget";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { entityEmbedding, job, aiUsage } from "~/server/db/retained-tables";
+import { product, project } from "~/server/db/schema";
+import { connectionRecords } from "~/server/domains/connection/repo/connection-evidence";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
 import { embeddingCleanupHandler } from "~/server/generic/embedding/service/embedding-cleanup";
@@ -105,6 +108,125 @@ describe("embedding batches in the shared drain", () => {
   async function read(ids: readonly JobId[]) {
     return getDb(ctx.db).select().from(job).where(inArray(job.id, ids));
   }
+
+  it("locks Project before Product in embedding and connection publication", async () => {
+    const { products } = await seed(1);
+    const order = await createRepoEntity(ctx, "project", {
+      name: "Synthetic lock order project",
+    });
+    const refs = [
+      { entityKind: "product" as const, entityId: products[0]!.entityId },
+      { entityKind: "project" as const, entityId: order.entityId },
+    ];
+    const jobs = await enqueueEmbeddingRefs(
+      ctx.db,
+      await prepareSearchDocuments(ctx.db, refs),
+      getSemanticEmbeddingConfig(),
+    );
+    expect(jobs).toHaveLength(2);
+    const handler = embeddingJobHandler(port());
+    const claimAll = async () =>
+      Promise.all(
+        jobs.map(async (row) => {
+          const claim = await claimJob(ctx.db, row.id);
+          if (!claim) throw new Error("Missing synthetic mixed-kind claim");
+          return claim;
+        }),
+      );
+    const uploads = await claimAll();
+    await handler.batch!.execute(ctx.db, uploads, {
+      deadline: Infinity,
+      checkpoint: async (results) => {
+        for (const claim of uploads) {
+          const result = results.get(claim.id);
+          if (!result || result.status !== "fulfilled")
+            throw new Error("Missing upload receipt");
+          await publishJobPage(
+            ctx.db,
+            claim,
+            result.value.page,
+            result.value.publish,
+          );
+        }
+      },
+    });
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(0) })
+      .where(
+        inArray(
+          job.id,
+          jobs.map(({ id }) => id),
+        ),
+      );
+    const claims = await claimAll();
+    await handler.batch!.execute(ctx.db, claims, {
+      deadline: Infinity,
+      checkpoint: async (results) => {
+        const group = results.get(claims[0]!.id);
+        if (
+          !group ||
+          group.status !== "fulfilled" ||
+          !group.value.publicationGroup
+        )
+          throw new Error("Missing mixed-kind publication");
+        const publish = group.value.publicationGroup.publish;
+        // A blocked Project must leave Product unlocked: otherwise the other
+        // publisher can hold Project while waiting for Product, forming a cycle.
+        for (const [operationIndex, operation] of [
+          () =>
+            withTransactionDatabase(ctx.db, (tx) =>
+              publish(tx, new Set(claims.map((claim) => claim.id))),
+            ),
+          () =>
+            withTransactionDatabase(ctx.db, (tx) =>
+              connectionRecords(
+                tx,
+                [
+                  { entityKind: "product", entityId: products[0]!.id },
+                  { entityKind: "project", entityId: order.output.id },
+                ],
+                true,
+              ),
+            ),
+        ].entries()) {
+          let pending: Promise<unknown> | undefined;
+          try {
+            await withTransactionDatabase(ctx.db, async (tx) => {
+              const held = await getDb(tx).execute(
+                sql`SELECT id FROM ${project} WHERE ${project.id} = ${order.entityId} FOR UPDATE`,
+              );
+              expect(held.rows).toHaveLength(1);
+              pending = operation();
+              // Wait for the real lock wait, not an arbitrary timing interval.
+              await pollUntil(
+                async () => {
+                  const result = await getDb(ctx.db).execute<{
+                    waiting: boolean;
+                  }>(sql`SELECT EXISTS (
+                SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
+                  AND pid <> pg_backend_pid() AND wait_event_type = 'Lock'
+
+              ) AS waiting`);
+                  return result.rows[0]?.waiting ? true : undefined;
+                },
+                {
+                  label: `mixed-kind publication lock ${operationIndex}`,
+                  timeoutMs: 5000,
+                  intervalMs: 10,
+                },
+              );
+              await getDb(tx).execute(
+                sql`SELECT id FROM ${product} WHERE ${product.id} = ${products[0]!.entityId} FOR UPDATE NOWAIT`,
+              );
+            });
+          } finally {
+            await pending;
+          }
+        }
+      },
+    });
+  });
 
   it(
     "publishes 1 and 100 completed selections with the same statement count",

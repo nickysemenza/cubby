@@ -79,11 +79,16 @@ describe("visible Job positions", () => {
       const before = await explain();
       // Scale-only fixture: valid Job defaults and atomic Entity identities,
       // matching the existing bulk-cancel regression's generate_series seed.
+      // Pin later ordering and due time to the anchor rather than relying on
+      // server/connection clocks during concurrent integration suites.
       await getDb(ctx.db).execute(sql`
-      WITH seeds AS MATERIALIZED (SELECT n, gen_random_uuid() AS id FROM generate_series(1,55000) n), identities AS (
+      WITH anchor AS MATERIALIZED (SELECT "updatedAt", "availableAt" FROM "Job" WHERE id=${visible.id}::uuid),
+      seeds AS MATERIALIZED (SELECT n, gen_random_uuid() AS id FROM generate_series(1,55000) n), identities AS (
         INSERT INTO "Entity" (id,kind,shortcode) SELECT id,'job','JOB-' || lpad(translate(to_hex(n),'0123456789abcdef','23456789ABCDEFGH'),10,'2') FROM seeds RETURNING id,shortcode
-      ) INSERT INTO "Job" (id,shortcode,key,kind,input)
-      SELECT i.id,i.shortcode,'synthetic.unrelated:' || s.n,CASE WHEN s.n <= 5000 THEN 'synthetic.visible' ELSE 'synthetic.unrelated' END,'{}'::jsonb FROM identities i JOIN seeds s ON s.id=i.id`);
+      ) INSERT INTO "Job" (id,shortcode,key,kind,input,"updatedAt","availableAt")
+      SELECT i.id,i.shortcode,'synthetic.unrelated:' || s.n,CASE WHEN s.n <= 5000 THEN 'synthetic.visible' ELSE 'synthetic.unrelated' END,'{}'::jsonb,
+        anchor."updatedAt" + interval '1 second',anchor."availableAt"
+      FROM identities i JOIN seeds s ON s.id=i.id CROSS JOIN anchor`);
       await getDb(ctx.db).execute(sql`ANALYZE "Job"`);
       const after = await explain();
       const nodeSchema = z.object({

@@ -1,7 +1,10 @@
+import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { enqueueAiEvaluations } from "~/server/ai/repo/ai-evaluation-requests";
+import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -12,6 +15,7 @@ import { drainDueJobs } from "../service/jobs";
 import type { JobHandlers } from "../types";
 import {
   claimJob,
+  claimJobPage,
   dueJobs,
   enqueueJob,
   releaseJobClaim,
@@ -46,6 +50,100 @@ async function drainRounds(
 // and every other kind waited behind the per-kind round-robin.
 describe("fair drain under a flood", () => {
   const ctx = withTestDb();
+
+  it("counts a running evaluation page as one unit and executes another feature", async () => {
+    const activation = await activateAiRefresh(
+      ctx.db,
+      "synthetic-page-fairness",
+      { enabled: true },
+    );
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_refresh",
+      trigger: "scheduled",
+      status: "running",
+      execution: false,
+      input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
+    });
+    const evaluations = await enqueueAiEvaluations(
+      ctx.db,
+      [0, 1, 2, 3].map((sequence) => ({
+        sequence,
+        input: {
+          runId,
+          executionKind: "ai_refresh",
+          shareKey: null,
+          feature: sequence < 3 ? "entity-connections" : "product-identity",
+          target: {
+            kind: "product",
+            entity: "product",
+            recordId: crypto.randomUUID(),
+            field: null,
+            assessmentIds: [],
+          },
+          provenance: {
+            dependencies: [],
+            inputFingerprint: `synthetic-page-${sequence}`,
+            optionFingerprint: "synthetic",
+            model: null,
+          },
+          snapshot: {},
+        },
+      })),
+    );
+    const jobs = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(
+        inArray(
+          job.key,
+          evaluations.map((entry) => `ai-evaluation:${entry.id}`),
+        ),
+      );
+    const page = jobs.filter(
+      (entry) => entry.key !== `ai-evaluation:${evaluations[3]!.id}`,
+    );
+    const claims = await claimJobPage(ctx.db, {
+      where: inArray(
+        job.id,
+        page.map((entry) => entry.id),
+      ),
+      limit: 100,
+    });
+    expect(claims).toHaveLength(3);
+    expect(new Set(claims.map((claim) => claim.leaseToken)).size).toBe(3);
+    const livePage = await getDb(ctx.db)
+      .select({ admissionToken: job.admissionToken })
+      .from(job)
+      .where(
+        inArray(
+          job.id,
+          page.map((entry) => entry.id),
+        ),
+      );
+    expect(new Set(livePage.map((entry) => entry.admissionToken)).size).toBe(1);
+    const other = jobs.find(
+      (entry) => entry.key === `ai-evaluation:${evaluations[3]!.id}`,
+    )!;
+    expect((await dueJobs(ctx.db)).map((entry) => entry.id)).toContain(
+      other.id,
+    );
+    const executed: string[] = [];
+    await drainDueJobs(
+      ctx.db,
+      {
+        "ai.evaluation": {
+          prepare: async (_db, claim) => {
+            executed.push(claim.id);
+            return { page: { done: true } };
+          },
+        },
+      },
+      1,
+      1000,
+      1,
+    );
+    expect(executed).toContain(other.id);
+  });
 
   it("settles an already claimed lane before returning another lane's failure", async () => {
     const active = await enqueueJob(ctx.db, {

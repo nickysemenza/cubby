@@ -14,10 +14,13 @@ import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
   email,
+  financialTransaction,
+  purchase as purchaseTable,
   job,
   orderMailEvent,
   run,
 } from "~/server/db/schema";
+import * as connectionRepo from "~/server/domains/connection/repo/entity-connections";
 import { readEntityConnections } from "~/server/domains/connection/repo/entity-connections";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
@@ -48,6 +51,7 @@ import { aiEvaluationJobHandler } from "~/server/workflows/runs/job-execution";
 describe("connection evaluation pages", () => {
   const ctx = withTestDb();
   afterEach(() => {
+    vi.restoreAllMocks();
     setCfEnv(undefined);
     vi.unstubAllEnvs();
   });
@@ -257,6 +261,105 @@ describe("connection evaluation pages", () => {
       );
     expect(incremental).toBeLessThanOrEqual(40);
     expect(many.queryCount / sources.length).toBeLessThanOrEqual(40);
+  });
+
+  it("completes other sources when a candidate disappears during shared evidence capture", async () => {
+    await setup();
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic isolation card",
+      identity: { kind: "cash" },
+    });
+    const vendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic isolation vendor",
+    });
+    await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-10-01",
+      statedTotal: 24,
+    });
+    const sources: EntityRef[] = [];
+    for (let i = 0; i < 2; i++) {
+      const payment = await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 24,
+        transactionDate: "2026-10-01",
+        postedDate: "2026-10-01",
+        sourceRefs: [
+          { source: "synthetic-isolation", externalId: `payment-${i}` },
+        ],
+      });
+      sources.push({
+        entityKind: "financialTransaction",
+        entityId: payment.output.id,
+      });
+    }
+    const ids = await scheduleSources(sources);
+    const capture = connectionRepo.prepareEntityConnectionEvidence;
+    // Inject the deletion precisely between retrieval and evidence capture.
+    vi.spyOn(
+      connectionRepo,
+      "prepareEntityConnectionEvidence",
+    ).mockImplementationOnce(async (db, candidates) => {
+      expect(candidates.length).toBeGreaterThan(0);
+      const id = await resolveOrThrow(
+        db,
+        "financialTransaction",
+        candidates[0]!.source.entityId,
+      );
+      await getDb(db)
+        .update(financialTransaction)
+        .set({ deletedAt: new Date() })
+        .where(eq(financialTransaction.id, id));
+      return capture(db, candidates);
+    });
+    await runPage(ids);
+    expect(
+      (await states(ids)).filter((state) => state === "completed"),
+    ).toHaveLength(1);
+  });
+
+  it("settles invalidated connection evidence as obsolete on the final attempt", async () => {
+    const base = await setup();
+    const created = await createRepoEntity(ctx, "purchase", {
+      vendorId: base.vendor.shortcode,
+      orderId: "SYNTHETIC-FINAL-ATTEMPT",
+      date: "2026-10-01",
+      statedTotal: 24,
+    });
+    const order = { id: created.entityId, orderId: created.output.orderId };
+    const [message] = await emails(base, 1, "final-attempt");
+    if (!message) throw new Error("Synthetic Email missing");
+    await getDb(ctx.db).insert(orderMailEvent).values({
+      orderMailId: message.mail.id,
+      event: "placed",
+      orderId: order.orderId,
+      sourceKey: "synthetic-final-event",
+    });
+    const ids = await schedule([message.message]);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ attempts: 2, maxAttempts: 3 })
+      .where(
+        inArray(
+          job.key,
+          ids.map((id) => `ai-evaluation:${id}`),
+        ),
+      );
+    const publish = connectionRepo.publishPreparedEntityConnections;
+    vi.spyOn(
+      connectionRepo,
+      "publishPreparedEntityConnections",
+    ).mockImplementationOnce(async (db, prepared) => {
+      await getDb(db)
+        .update(purchaseTable)
+        .set({ statedTotal: 99 })
+        .where(eq(purchaseTable.id, order.id));
+      return publish(db, prepared);
+    });
+    await runPage(ids);
+    expect(await states(ids)).toEqual(["obsolete"]);
   });
 
   it("bounds FinancialTransaction page statements with settlement candidates", async () => {

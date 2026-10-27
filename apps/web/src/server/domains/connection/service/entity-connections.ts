@@ -47,7 +47,10 @@ import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { prepareTagSuggestions } from "~/server/generic/assessment/service/tag-suggestions";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  lookupShortcodes,
+  resolveOrThrow,
+} from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { discoverAcquisitionCandidateScan } from "./acquisition-discovery";
@@ -77,6 +80,7 @@ export async function prepareEntityConnections(
   const source = entityGraphRootSchema.parse(raw);
   const publishers: ((transactionDb: Database) => Promise<void>)[] = [];
   const productPairs: PreparedProductPairPublication[] = [];
+  const lockRefs: EntityRef[] = [source];
   let productRecordId: ProductId | undefined;
   const stage = <T>(name: string, fn: () => Promise<T>) =>
     withTrace(TraceNames.service("connections", name), fn, {
@@ -163,16 +167,43 @@ export async function prepareEntityConnections(
       if (prepared.length !== identity.pairs.slice(offset, offset + 16).length)
         throw new Error("Product pair evidence changed during inference");
       productPairs.push(...prepared);
+      const codes = await lookupShortcodes(
+        db,
+        prepared.flatMap(({ input }) =>
+          input.productIds.map((id) => ({ entity: "product" as const, id })),
+        ),
+      );
+      lockRefs.push(
+        ...[...codes.values()].map((entityId) => ({
+          entityKind: "product" as const,
+          entityId,
+        })),
+      );
     }
   }
   publishers.push(
     ...(await stage("fieldConnections", () =>
-      prepareFieldConnections(db, context, source, ports, productRecordId),
+      prepareFieldConnections(
+        db,
+        context,
+        source,
+        ports,
+        lockRefs,
+        productRecordId,
+      ),
     )),
+  );
+  lockRefs.push(
+    ...connections.flatMap(({ candidate }) =>
+      candidate.relation === "email-purchase"
+        ? [candidate.target]
+        : [candidate.source, candidate.target],
+    ),
   );
   return {
     connections,
     productPairs,
+    lockRefs,
     publications: publishers,
     complete: acquisition.complete,
     coverageErrors: acquisition.coverageErrors,
@@ -184,6 +215,7 @@ async function prepareFieldConnections(
   context: EntityKernelContext,
   source: EntityRef,
   ports: ConnectionPreparationPorts,
+  lockRefs: EntityRef[],
   resolvedRecordId?: string,
 ) {
   const publishers: ((transactionDb: Database) => Promise<void>)[] = [];
@@ -300,6 +332,7 @@ async function prepareFieldConnections(
       reviewKey,
     });
     entry.reviewKey = guard.reviewKey;
+    lockRefs.push(...guard.lockRefs);
     publishers.push((transactionDb) =>
       guard.publish(
         runId,
@@ -386,11 +419,33 @@ export async function prepareEntityConnectionSources(
     owners.push(...values.map(() => owner));
     return values;
   });
-  const evidence = await prepareEntityConnectionEvidence(db, candidates);
-  const out = new Map<string, PreparedEntityConnection[]>(
-    [...retrieved.keys()].map((key) => [key, []]),
-  );
-  for (const [index, entry] of evidence.entries())
-    out.get(owners[index]!)!.push(entry);
+  const out = new Map<
+    string,
+    PromiseSettledResult<PreparedEntityConnection[]>
+  >();
+  try {
+    const evidence = await prepareEntityConnectionEvidence(db, candidates);
+    const grouped = new Map<string, PreparedEntityConnection[]>(
+      [...retrieved.keys()].map((key) => [key, []]),
+    );
+    for (const [index, entry] of evidence.entries())
+      grouped.get(owners[index]!)!.push(entry);
+    for (const [owner, value] of grouped)
+      out.set(owner, { status: "fulfilled", value });
+  } catch {
+    // SILENT: Recapture each source below and return its individual error to the executor.
+    // Keep the normal page's shared reads. On invalid evidence, recapture per
+    // source so one removed candidate cannot poison its healthy neighbours.
+    for (const [owner, values] of retrieved) {
+      try {
+        out.set(owner, {
+          status: "fulfilled",
+          value: await prepareEntityConnectionEvidence(db, values),
+        });
+      } catch (reason) {
+        out.set(owner, { status: "rejected", reason });
+      }
+    }
+  }
   return out;
 }

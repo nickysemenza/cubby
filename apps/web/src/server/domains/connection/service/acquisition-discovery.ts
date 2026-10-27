@@ -63,11 +63,10 @@ export async function discoverAcquisitionCandidateScan(
     .join(" ")
     .trim()
     .slice(0, 500);
+  const identityQuery = basisValueOf(record.name) ?? identity;
   const queries = [
     ...new Set(
-      [basisValueOf(record.name) ?? identity, description || identity].filter(
-        (q) => q.length >= 3,
-      ),
+      [identityQuery, description || identity].filter((q) => q.length >= 3),
     ),
   ].slice(0, 2);
   const kinds: SearchableEntity[] =
@@ -89,7 +88,7 @@ export async function discoverAcquisitionCandidateScan(
   // ANDs dozens of prefix terms and trigram-compares the whole string, which
   // took 150-400 ms per search on production data and matched only records
   // its semantic search already finds.
-  const lexicalQuery = queries[0];
+  const lexicalQuery = identityQuery.length >= 3 ? identityQuery : null;
   const searches = await Promise.all(
     kinds.flatMap((kind) =>
       queries.map(async (query) => {

@@ -68,6 +68,9 @@ const keyFor = (candidate: ConnectionCandidate) =>
     sourceKey(candidate.target),
   ]);
 
+/** Fresh retrieval may be retried; it must never exhaust an execution attempt. */
+export class ConnectionEvidenceInvalidatedError extends Error {}
+
 export type PreparedEntityConnection = z.infer<
   typeof connectionAssessmentEvidence
 >;
@@ -128,7 +131,7 @@ export async function publishPreparedEntityConnections(
         locked,
       );
       if (canonicalJson(basis) !== canonicalJson(original.basis))
-        throw new Error(
+        throw new ConnectionEvidenceInvalidatedError(
           "Connection evidence changed after candidate retrieval; discover again before publishing",
         );
       if (
@@ -137,7 +140,7 @@ export async function publishPreparedEntityConnections(
           .object({ dependencies: z.object({ eventId: z.string() }) })
           .safeParse(basis).success
       )
-        throw new Error(
+        throw new ConnectionEvidenceInvalidatedError(
           "Retained Email evidence changed; discover again before publishing",
         );
       const evidence = connectionAssessmentEvidence.parse({
