@@ -6,10 +6,12 @@ import { getDb } from "~/server/db/helpers";
 import { job, workItem } from "~/server/db/retained-tables";
 import { embeddingRefreshHandler } from "~/server/generic/embedding/service/embedding-refresh";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
+import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
   EMBEDDING_REFRESH_DRAIN,
   EMBEDDING_REFRESH_TARGET,
+  enqueueEmbeddingRefs,
   type EmbeddingRefreshPort,
 } from "~/server/workflows/background-tasks/embedding";
 
@@ -46,6 +48,7 @@ export async function embedFixtures(
   const uniqueRefs = [
     ...new Map(refs.map((ref) => [ref.entityId, ref])).values(),
   ];
+  await enqueueEmbeddingRefs(db, await prepareSearchDocuments(db, uniqueRefs));
   for (let attempt = 0; attempt < 5; attempt++) {
     await advanceEmbeddingFixture(db, port);
     const pending = await getDb(db)

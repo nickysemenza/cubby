@@ -13,7 +13,10 @@ import {
 } from "~/server/generic/embedding/repo/embedding-cleanup";
 import { embeddingCleanupHandler } from "~/server/generic/embedding/service/embedding-cleanup";
 import { embeddingRefreshHandler } from "~/server/generic/embedding/service/embedding-refresh";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import {
+  getSemanticEmbeddingConfig,
+  type SemanticEmbeddingConfig,
+} from "~/server/generic/embedding/service/semantic/config";
 import type { VectorStorePort } from "~/server/generic/embedding/service/semantic/vector-store";
 import { JobRetryableError } from "~/server/generic/jobs/errors";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
@@ -197,7 +200,12 @@ describe("embedding refresh and cleanup drains", () => {
     const [second] = await getDb(ctx.db)
       .select()
       .from(workItem)
-      .where(eq(workItem.ref, ref.entityId));
+      .where(
+        and(
+          eq(workItem.target, EMBEDDING_REFRESH_TARGET),
+          eq(workItem.ref, ref.entityId),
+        ),
+      );
     expect(second).toMatchObject({ attempts: 0 });
 
     remote.setVisible(true);
@@ -206,7 +214,12 @@ describe("embedding refresh and cleanup drains", () => {
       await getDb(ctx.db)
         .select({ id: workItem.ref })
         .from(workItem)
-        .where(eq(workItem.ref, ref.entityId)),
+        .where(
+          and(
+            eq(workItem.target, EMBEDDING_REFRESH_TARGET),
+            eq(workItem.ref, ref.entityId),
+          ),
+        ),
     ).toEqual([]);
     expect(
       await getDb(ctx.db)
@@ -368,7 +381,12 @@ describe("embedding refresh and cleanup drains", () => {
     const longItem = await getDb(ctx.db)
       .select()
       .from(workItem)
-      .where(eq(workItem.ref, long.entityId));
+      .where(
+        and(
+          eq(workItem.target, EMBEDDING_REFRESH_TARGET),
+          eq(workItem.ref, long.entityId),
+        ),
+      );
     expect(longItem).toHaveLength(1);
     expect(longItem[0]?.attempts).toBe(1);
     expect(
@@ -395,7 +413,8 @@ describe("embedding refresh and cleanup drains", () => {
     );
     const ref = { entityKind: "product", entityId: subject.entityId } as const;
     const remote = fakeStore();
-    const port = embeddingPort(remote.store);
+    let activeConfig: SemanticEmbeddingConfig = config;
+    const port = embeddingPort(remote.store, [], () => activeConfig);
     await markRefresh(ctx.db, [ref]);
     await advanceRefresh(ctx.db, port);
     await advanceRefresh(ctx.db, port);
@@ -419,6 +438,7 @@ describe("embedding refresh and cleanup drains", () => {
     );
     await refreshSearchDocument(ctx.db, "product", ref.entityId);
     await markRefresh(ctx.db, [ref]);
+    activeConfig = { ...config, dimensions: config.dimensions + 1 };
     await advanceRefresh(ctx.db, port);
     await advanceRefresh(ctx.db, port);
     const [replacement] = await getDb(ctx.db)

@@ -6,7 +6,7 @@ import {
   type SearchableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database } from "~/server/db";
