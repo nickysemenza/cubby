@@ -1,0 +1,67 @@
+apps/web/src/server/domains/email/repo/email.ts
+  s_538963c3b46569::t_fab46ff7dd90c2 477
+apps/web/src/server/domains/financial-account/repo.ts
+  s_538963c3b46569::t_91e9fe5d694652 156
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction.ts
+  s_538963c3b46569::t_203220ca934e74 132,255-258
+apps/web/src/server/domains/garden/repo/garden.ts
+  s_538963c3b46569::t_b530974af4581f 782,868
+apps/web/src/server/domains/image-job/repo.ts
+  s_538963c3b46569::t_4b58c7ef4c09fc 300
+apps/web/src/server/domains/inventory/repo/crud.ts
+  s_538963c3b46569::t_c41e3c7ff95322 188
+apps/web/src/server/domains/ledger-party/repo/ledger-party.ts
+  s_538963c3b46569::t_28fa689e6f17e8 311-313
+apps/web/src/server/domains/ledger-transfer/repo.ts
+  s_538963c3b46569::t_c2cdb61adb7912 104
+apps/web/src/server/domains/meal/repo/crud.ts
+  s_538963c3b46569::t_32e5cd9f13c525 20,118
+apps/web/src/server/domains/plant/repo/plant.ts
+  s_538963c3b46569::t_436db36e5d4b7c 17,107
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_538963c3b46569::t_1b440959874372 52,478-482
+apps/web/src/server/domains/run/repo/run.ts
+  s_538963c3b46569::t_53a9b10c0e9309 10,261
+apps/web/src/server/domains/transaction-import/repo/entity-repositories.ts
+  s_538963c3b46569::t_095f9b6806c0ed 191-194
+apps/web/src/server/domains/vendor-account/repo/vendor-account.ts
+  s_538963c3b46569::t_c88bbdef07cc84 261
+apps/web/src/server/domains/vendor/repo/vendor.ts
+  s_538963c3b46569::t_8a6f783e3425fb 486,499-501
+apps/web/src/server/generic/entity-graph/repo/entity-graph.integration.test.ts
+  s_538963c3b46569::t_059ef43b7213d9 221-223
+apps/web/src/server/generic/entity-graph/repo/record-label.ts
+  s_538963c3b46569::t_19b81d5b90a7db 2-3,5-6,8,11-18,20
+apps/web/src/server/generic/list/repo/field-compiler.unit.test.ts
+  s_538963c3b46569::t_242baa30832987 244,288,324-327
+apps/web/src/server/generic/list/repo/filter-options.ts
+  s_538963c3b46569::t_86385745ac148c 44-45,68,80,84,97-124,126-173,175-177,217-218,281,283-284,290-294,297-300,310
+apps/web/src/server/generic/list/repo/list.ts
+  s_538963c3b46569::t_6b612da81329a1 135,1699-1700,3110-3114,3116,3126
+apps/web/src/server/generic/list/repo/list.unit.test.ts
+  s_538963c3b46569::t_328df6d6d5d342 35-38,42
+apps/web/src/server/generic/shortcode/repo/shortcode-resolver-labels.unit.test.ts
+  s_538963c3b46569::t_d45999d5f8ae42 2,5-6,8,10-11,13,15-18,23-30
+apps/web/src/server/generic/shortcode/repo/shortcode-resolver.ts
+  s_538963c3b46569::t_886a99808b32ce 4,18,27,249,260,307,309
+docs/agents/generic-paths.md
+  s_538963c3b46569::t_f0b0915d4ea123 17-19
+docs/entities.md
+  s_538963c3b46569::t_f0e36263582cb0 2096-2102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6c75eaf67bfff36ce7950ea080436abc3556af55",
+  "prompts": {},
+  "sessions": {
+    "s_538963c3b46569": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17f37-7c1c-7a21-a0d2-09b00654f8b3",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
