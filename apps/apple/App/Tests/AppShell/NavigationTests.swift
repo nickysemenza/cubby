@@ -353,6 +353,10 @@ struct NavigationTests {
         @Test func legacyLinksLandInVisiblePhoneDestinations() {
             let navigator = Navigator()
 
+            #expect(PhoneTab.work.title == "Today")
+            #expect(PhoneTab.work.symbol == "sun.horizon")
+            #expect(PhoneTab.find.title == "Search")
+
             navigator.open(.photos)
             #expect(navigator.phoneTab == .library)
             #expect(navigator.path(for: PhoneTab.library).wrappedValue == [.photosLibrary])

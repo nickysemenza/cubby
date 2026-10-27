@@ -39,17 +39,17 @@ enum PhoneTab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .work: "Work"
+        case .work: "Today"
         case .capture: "Capture"
         case .library: "Library"
-        case .find: "Find"
+        case .find: "Search"
         case .settings: "Settings"
         }
     }
 
     var symbol: String {
         switch self {
-        case .work: "checklist"
+        case .work: "sun.horizon"
         case .capture: "barcode.viewfinder"
         case .library: "books.vertical"
         case .find: "magnifyingglass"

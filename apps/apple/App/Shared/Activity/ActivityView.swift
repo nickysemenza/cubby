@@ -104,6 +104,7 @@ struct ActivityView: View {
                                 "purpose", "status", "waitingOn", "stalled", "startedAt", "chargedCost",
                             ])
                     }
+                    .accessibilityIdentifier("activity.run.\(row.id)")
                 }
                 listState(model)
                 activityDestination(.entityList(.run, savedView: savedView)) {
