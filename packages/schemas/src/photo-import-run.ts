@@ -111,6 +111,8 @@ export const photoGroupReview = z.object({
       }),
     )
     .optional(),
+  /** Server-captured existing Brand and photo evidence before a proposed Vendor exists. */
+  brandCreateInputFingerprint: z.string().optional(),
   /** Written by the server only after the Product transaction succeeds. */
   confirmation: z
     .object({ by: userId, at: z.iso.datetime() })

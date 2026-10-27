@@ -986,7 +986,9 @@ it("keeps a dirty field through refresh and saves it before approval", async () 
 
   rejectName = false;
   await userEvent.click(approve);
-  await userEvent.click(screen.getByRole("button", { name: /^Results · 1$/ }));
+  await userEvent.click(
+    screen.getByRole("button", { name: /^All items · 1$/ }),
+  );
   await waitFor(() =>
     expect(screen.getByLabelText("Products from this import")).toBeVisible(),
   );
@@ -1205,6 +1207,10 @@ it("reviews evidence-matched brands in the workbench without replacing explicit 
     "First fixture shirt",
   );
   expect(screen.getByRole("combobox", { name: "Brand" })).toBeVisible();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Read from 1 photo" }),
+  );
+  expect(screen.getByRole("region", { name: "Photo evidence" })).toBeVisible();
   await userEvent.click(
     screen.getByText("Use Fixture Apparel for 2 matching items", {
       exact: true,

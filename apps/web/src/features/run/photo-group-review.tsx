@@ -1648,10 +1648,12 @@ function PhotoBrandEvidence({
   proposal,
   save,
   busy,
+  onShowEvidence,
 }: {
   proposal: PhotoGroupProposal;
   save: Save;
   busy: boolean;
+  onShowEvidence?: () => void;
 }) {
   const proposals = useContext(PhotoProposalsContext);
   const normalize = (name: string) => name.trim().toLocaleLowerCase();
@@ -1713,9 +1715,9 @@ function PhotoBrandEvidence({
               <span>
                 Brand: <strong>{item.name}</strong>
               </span>
-              <span className="text-muted-foreground">
+              <Button size="sm" variant="ghost" onClick={onShowEvidence}>
                 Read from {countLabel(item.imageIds.length, "photo")}
-              </span>
+              </Button>
               {selected ? (
                 <span className="text-muted-foreground">
                   In proposal · applies on approval
@@ -1840,6 +1842,7 @@ function PhotoBrandControl({
       : proposal.review?.productChanges;
   return (
     <Stack gap="xs">
+      <span className="text-muted-foreground">{label}</span>
       <PhotoBrandPicker
         label={label}
         value={value}
@@ -1886,6 +1889,7 @@ function ProductPanel({
   step,
   runLocation,
   labelText,
+  onShowEvidence,
 }: {
   runId: string;
   proposal: PhotoGroupProposal;
@@ -1895,6 +1899,7 @@ function ProductPanel({
   step: string;
   runLocation: RunLocation | null;
   labelText: string;
+  onShowEvidence?: () => void;
 }) {
   const saveGroup: SaveGroup = (build, onSaved) =>
     save(
@@ -2057,7 +2062,12 @@ function ProductPanel({
   return (
     <Stack gap="sm" className="min-w-0">
       <IdentityDecision runId={runId} proposal={proposal} busy={busy} />
-      <PhotoBrandEvidence proposal={proposal} save={save} busy={busy} />
+      <PhotoBrandEvidence
+        proposal={proposal}
+        save={save}
+        busy={busy}
+        onShowEvidence={onShowEvidence}
+      />
       {product.kind === "existing" &&
       !labelText.trim() &&
       !proposal.review?.unresolvedReason ? (
@@ -2777,6 +2787,7 @@ function ProposalCard({
   action: ReturnType<typeof useReviewAction>;
   approve: (groupKey: string) => Promise<void>;
 }) {
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const currentProduct = useSelectedPhotoProduct(runId, proposal.product);
   const { state } = usePhotoDraft();
   const approving = state.approving !== null;
@@ -2918,9 +2929,16 @@ function ProposalCard({
               editable
               busy={busy}
             />
-            <Disclosure summary="Photo evidence and label text" keepMounted>
-              <GroupEvidence proposal={proposal} imagesById={imagesById} />
-            </Disclosure>
+            <div id={`photo-evidence-${proposal.groupKey}`}>
+              <Disclosure
+                summary="Photo evidence and label text"
+                open={evidenceOpen}
+                onOpenChange={setEvidenceOpen}
+                keepMounted
+              >
+                <GroupEvidence proposal={proposal} imagesById={imagesById} />
+              </Disclosure>
+            </div>
           </div>
           <div className="min-w-0 space-y-4">
             <Disclosure summary="Choose a different Product" keepMounted>
@@ -2943,6 +2961,14 @@ function ProposalCard({
                 save={save}
                 busy={busy}
                 step="identity"
+                onShowEvidence={() => {
+                  setEvidenceOpen(true);
+                  requestAnimationFrame(() =>
+                    document
+                      .getElementById(`photo-evidence-${proposal.groupKey}`)
+                      ?.scrollIntoView({ block: "nearest" }),
+                  );
+                }}
                 runLocation={runLocation}
                 labelText={proposal.images
                   .map((entry) => imagesById.get(entry.id)?.recognizedText)

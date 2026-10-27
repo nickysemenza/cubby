@@ -44,7 +44,6 @@ import {
   photoGroupProposal,
   product,
   vendor,
-  assessmentState,
 } from "~/server/db/schema";
 import { attachExistingImageToEntity } from "~/server/domains/image/repo/image";
 import {
@@ -52,7 +51,10 @@ import {
   updateInventoryEntry,
 } from "~/server/domains/inventory/repo/crud";
 import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
-import { photoProductSuggestions } from "~/server/domains/photo-import/repo/run/product-suggestions";
+import {
+  assertPhotoProductReviewCurrent,
+  photoProductSuggestions,
+} from "~/server/domains/photo-import/repo/run/product-suggestions";
 import { createProductWithSideEffects } from "~/server/domains/product/repo/write/product-orchestration";
 import { createProductWriteActions } from "~/server/domains/product/repo/write/product-writes";
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
@@ -364,6 +366,12 @@ async function resolveProduct(
       input.review?.productChanges &&
       Object.keys(input.review.productChanges).length
     ) {
+      await assertPhotoProductReviewCurrent(
+        txDb,
+        input.product.existingId,
+        input.review,
+        input.images.map((image) => image.id),
+      );
       const crud = buildCrudServices(txDb);
       const brandId = await resolvePhotoBrand(
         txDb,
@@ -373,23 +381,24 @@ async function resolveProduct(
       const { brandCreate: _brandCreate, ...changes } =
         input.review.productChanges;
       if (brandId !== undefined) changes.brandId = brandId;
-      const review = { ...input.review, productChanges: changes };
-      const suggestions = await photoProductSuggestions(txDb, {
-        runId: input.runId,
-        groupKey: input.groupKey,
-        productId: input.product.existingId,
-        review,
-        imageIds: input.images.map((image) => image.id),
-      });
-      for (const suggestion of suggestions) {
-        const [state] = await getDb(txDb)
-          .select({ status: assessmentState.status })
-          .from(assessmentState)
-          .where(eq(assessmentState.id, suggestion.id));
-        if (state?.status !== "pending")
-          throw new Error(
-            "A selected Product correction was already reviewed; revise the photo draft before approval",
-          );
+      const suggestions = [...(input.review.fieldSuggestions ?? [])].filter(
+        (suggestion) =>
+          suggestion.field in changes &&
+          (suggestion.field !== "brandId" ||
+            !input.review?.productChanges?.brandCreate),
+      );
+      if (input.review.productChanges.brandCreate) {
+        const createdBrandSuggestions = await photoProductSuggestions(txDb, {
+          runId: input.runId,
+          groupKey: input.groupKey,
+          productId: input.product.existingId,
+          review: {
+            ...input.review,
+            productChanges: { brandId: changes.brandId },
+          },
+          imageIds: input.images.map((image) => image.id),
+        });
+        suggestions.push(...createdBrandSuggestions);
       }
       await createProductWriteActions(txDb, crud.usdaClient).updateProduct(
         id,

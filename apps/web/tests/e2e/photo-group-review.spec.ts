@@ -334,7 +334,9 @@ test("approves two selected photo groups with one reviewed batch action", async 
       .getByRole("navigation", { name: "Items to review" })
       .getByRole("button", { name: /Applied/ }),
   ).toHaveCount(2);
-  await page.getByRole("button", { name: "Results · 2", exact: true }).click();
+  await page
+    .getByRole("button", { name: "All items · 2", exact: true })
+    .click();
   await expect(
     page
       .getByLabel("Products from this import")

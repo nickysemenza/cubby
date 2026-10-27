@@ -103,7 +103,10 @@ import {
   effectivePhotoGroupConcern,
   photoGroupSteps,
 } from "~/server/domains/photo-import/repo/run/photo-group-steps";
-import { photoProductSuggestions } from "~/server/domains/photo-import/repo/run/product-suggestions";
+import {
+  photoBrandCreateInputFingerprint,
+  photoProductSuggestions,
+} from "~/server/domains/photo-import/repo/run/product-suggestions";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
@@ -111,6 +114,7 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { currentMemberLedgerParty } from "~/server/http/member-login";
 import { buildCrudServices } from "~/server/http/request-context";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 import { assertPhotoGroupReviewIntent, commitPhotoGroup } from "./writer";
 
@@ -863,12 +867,37 @@ async function upsertProposal(
 ) {
   const { group } = entry;
   if (group.product.kind === "existing" && group.review) {
+    const [previous] = await getDb(txDb)
+      .select()
+      .from(photoGroupProposal)
+      .where(
+        and(
+          eq(photoGroupProposal.runId, runId),
+          eq(photoGroupProposal.groupKey, group.groupKey),
+        ),
+      );
+    const retained =
+      previous?.productId === entry.productId ? previous.review : null;
+    group.review.brandCreateInputFingerprint = group.review.productChanges
+      ?.brandCreate
+      ? retained?.brandCreateInputFingerprint &&
+        retained.productChanges?.brandCreate &&
+        canonicalJson(retained.productChanges.brandCreate) ===
+          canonicalJson(group.review.productChanges.brandCreate)
+        ? retained.brandCreateInputFingerprint
+        : await photoBrandCreateInputFingerprint(
+            txDb,
+            group.product.existingId,
+            group.images.map((image) => image.id),
+          )
+      : undefined;
     group.review.fieldSuggestions = await photoProductSuggestions(txDb, {
       runId,
       groupKey: group.groupKey,
       productId: group.product.existingId,
       review: group.review,
       imageIds: group.images.map((image) => image.id),
+      retained: retained?.fieldSuggestions,
     });
   }
   const values = {
