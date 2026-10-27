@@ -1,3 +1,5 @@
+import { appendFile } from "node:fs/promises";
+import { scrubCredentialValues } from "@cubby/worker-tracing/scrub-error-message";
 import { createTypeSafeAi } from "@ai-sdk/typesafe-ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { decisionExecutor } from "@e2e-dev/decision";
@@ -25,6 +27,39 @@ export function journeyAgent() {
     feature: "tester-army",
     operation: "driver",
   };
+  const inspectResponse = async (provider: string, response: Response) => {
+    if (!response.ok) {
+      // The executor wraps provider errors; retain the upstream diagnostic with evidence.
+      const diagnostic = {
+        timestamp: new Date().toISOString(),
+        provider,
+        status: response.status,
+        requestId: response.headers.get("cf-ray"),
+        body: scrubCredentialValues(
+          (await response.clone().text()).replaceAll(token, "[redacted]"),
+        ),
+      };
+      console.error("Tester Army provider failed", diagnostic);
+      try {
+        await appendFile(
+          new URL(
+            "../../artifacts/tester-army/provider-errors.jsonl",
+            import.meta.url,
+          ),
+          `${JSON.stringify(diagnostic)}\n`,
+          { mode: 0o600 },
+        );
+      } catch (error) {
+        console.error(
+          "Could not retain provider diagnostic",
+          scrubCredentialValues(
+            error instanceof Error ? error.message : String(error),
+          ),
+        );
+      }
+    }
+    return response;
+  };
   const decision = createTypeSafeAi({
     apiKey: token,
     baseURL: gatewayBaseURL("workers-ai"),
@@ -41,16 +76,11 @@ export function journeyAgent() {
         signal: request.signal,
         gateway: { id: CUBBY_AI_GATEWAY_ID, metadata, skipCache: true },
       });
-      const response = await fetch(upstream.url, upstream.init);
-      if (!response.ok) {
-        // The executor wraps provider errors; retain the upstream diagnostic in CI.
-        console.error("Tester Army decision provider failed", {
-          status: response.status,
-          requestId: response.headers.get("cf-ray"),
-          body: (await response.clone().text()).replaceAll(token, "[redacted]"),
-        });
-        return response;
-      }
+      const response = await inspectResponse(
+        "Jev",
+        await fetch(upstream.url, upstream.init),
+      );
+      if (!response.ok) return response;
       const body: unknown = await response.json();
       const envelope = z.object({ result: z.unknown() }).safeParse(body);
       const payload = envelope.success ? envelope.data.result : body;
@@ -62,6 +92,8 @@ export function journeyAgent() {
   }).decisionModel(DECISION_MODEL);
   const text = createOpenAI({
     apiKey: token,
+    fetch: async (input, init) =>
+      inspectResponse("text companion", await fetch(input, init)),
     baseURL: `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/v1`,
     headers: {
       "cf-aig-authorization": `Bearer ${token}`,

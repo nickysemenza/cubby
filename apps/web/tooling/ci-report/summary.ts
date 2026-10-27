@@ -41,6 +41,8 @@ const summarizedLanes = [
 const [vitestPath, playwrightPath, testerArmyPath] = process.argv.slice(2);
 const env = process.env;
 const missing: string[] = [];
+// Tester Army is outside `CI passed`: its gaps never change the gate header.
+const optionalMissing: string[] = [];
 
 function readReport<T>(
   path: string | undefined,
@@ -80,16 +82,17 @@ const testerArmy =
         }),
       );
 if (testerArmy && !testerArmy.complete)
-  missing.push(
+  optionalMissing.push(
     ...(testerArmy.missing.length
       ? testerArmy.missing
       : ["Tester Army failed / incomplete"]),
   );
-const records = [
+const gateRecords = [
   ...(vitest ?? []),
-  ...(testerArmy?.records ?? []),
   ...(playwright ? playwrightRecords(playwright, "apps/web/tests/e2e") : []),
 ];
+const optionalRecords = testerArmy?.records ?? [];
+const records = [...gateRecords, ...optionalRecords];
 
 async function github<T>(
   path: string,
@@ -146,10 +149,16 @@ const icon = new Map([
   ["skipped", "⏭️"],
 ]);
 
-const failed = records.filter((record) => record.state === "failed");
-const flaky = records.filter((record) => record.flaky);
+const failed = gateRecords.filter((record) => record.state === "failed");
+const flaky = gateRecords.filter((record) => record.flaky);
+const optionalFailed = optionalRecords.filter(
+  (record) => record.state === "failed",
+);
+const optionalLane = (job: Job) => job.name.startsWith("Tester Army");
 const laneFailed = jobs.some(
-  (job) => job.conclusion === "failure" || job.conclusion === "cancelled",
+  (job) =>
+    !optionalLane(job) &&
+    (job.conclusion === "failure" || job.conclusion === "cancelled"),
 );
 const lines: string[] = [];
 const lastFinish = Math.max(
@@ -159,7 +168,7 @@ const lastFinish = Math.max(
 const wall =
   run && lastFinish ? lastFinish - Date.parse(run.run_started_at) : 0;
 lines.push(
-  `## ${failed.length > 0 || laneFailed || missing.length > 0 ? "❌" : "✅"} CI tests · ${records.length.toLocaleString("en-US")} tests` +
+  `## ${failed.length > 0 || laneFailed || missing.length > 0 ? "❌" : "✅"} CI tests · ${gateRecords.length.toLocaleString("en-US")} tests` +
     (wall > 0 ? ` · ${minutes(wall)} wall clock` : ""),
   "",
 );
@@ -220,6 +229,25 @@ const list = (title: string, items: TestRecord[], limit: number) => {
 };
 list("❌ Failures", failed, 25);
 list("⚠️ Flaky: failed, then passed on retry", flaky, 25);
+if (testerArmy || optionalMissing.length > 0) {
+  const passed = optionalRecords.filter((record) => record.state === "passed");
+  lines.push(
+    `### Optional: Tester Army web journeys · ${passed.length}/${optionalRecords.length} passed${testerArmy?.complete ? "" : " · failed / incomplete"}`,
+    "",
+    "_Outside `CI passed`; these never change the gate result above._",
+    "",
+  );
+  list("Optional journey failures", optionalFailed, 25);
+  if (optionalMissing.length > 0)
+    lines.push(
+      "**Incomplete evidence:**",
+      ...optionalMissing.slice(0, 25).map((item) => `- ${cell(item)}`),
+      ...(optionalMissing.length > 25
+        ? [`- …and ${optionalMissing.length - 25} more`]
+        : []),
+      "",
+    );
+}
 
 const slowest = records
   .filter((record) => record.state !== "skipped")

@@ -31,13 +31,30 @@ export async function writeJourneySummary(output: string, setupMs: number) {
     (sum, fixture) => sum + (fixture.journeyMs ?? 0),
     0,
   );
-  const validPass = journeyPassed(run, fixtures.length);
+  await writeFile(
+    path.join(output, "timings.json"),
+    JSON.stringify({
+      runnerSetupMs,
+      setupMs,
+      journeyMs,
+      runnerMs: durationMs,
+      summary: run.summary,
+    }),
+  );
+  const evidence = await readJourneyEvidence(output);
+  const validPass =
+    journeyPassed(run, fixtures.length) && evidence.issues.length === 0;
   const text = [
     "## Tester Army web journeys (informational)",
     "",
     `Result: **${validPass ? "passed" : "failed / incomplete"}**. Setup: ${(setupMs / 1000).toFixed(1)}s; journey execution: ${(journeyMs / 1000).toFixed(1)}s; total runner: ${(durationMs / 1000).toFixed(1)}s.`,
     `Fixture timing evidence: ${fixtures.length}/${run.summary.executed} attempts. Missing records are unknown, not zero.`,
     `Evidence executed at ${run.startedAt}; a whole-result cache replay retains this timestamp.`,
+    ...evidence.issues.map((issue) => `Missing evidence: ${issue}`),
+    ...evidence.providerDiagnostics.map(
+      (entry) =>
+        `Upstream provider failure: ${entry.provider} HTTP ${entry.status}${entry.requestId ? ` (${entry.requestId})` : ""}. See the HTML report for the retained response body.`,
+    ),
     "",
     "| Journey | Result | Seconds | Failing boundary |",
     "| --- | --- | ---: | --- |",
@@ -59,16 +76,6 @@ export async function writeJourneySummary(output: string, setupMs: number) {
     "",
   ].join("\n");
   await writeFile(path.join(output, "summary.md"), text);
-  await writeFile(
-    path.join(output, "timings.json"),
-    JSON.stringify({
-      runnerSetupMs,
-      setupMs,
-      journeyMs,
-      runnerMs: durationMs,
-      summary: run.summary,
-    }),
-  );
-  await writeJourneyHtml(output, [await readJourneyEvidence(output)]);
+  await writeJourneyHtml(output, [evidence]);
   return validPass;
 }

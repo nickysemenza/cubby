@@ -45,7 +45,9 @@ for (let shard = 1; shard <= count; shard++) {
     label: `Shard ${shard}/${count} report (attempt ${choice.attempt})`,
   });
   try {
-    sources.push(await readJourneyEvidence(destination, prefix));
+    const source = await readJourneyEvidence(destination, prefix);
+    sources.push(source);
+    missing.push(...source.issues);
   } catch (error) {
     missing.push(
       `Shard ${shard}/${count}: ${error instanceof Error ? error.message : "unreadable test evidence"}`,

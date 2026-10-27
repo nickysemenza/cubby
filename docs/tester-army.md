@@ -80,8 +80,11 @@ existing `localSecret` lookup for `TESTER_ARMY_CF_API_TOKEN` or
 `AI_GATEWAY_API_KEY`; only that key is loaded, never household database settings.
 Missing credentials are incomplete setup, not a passing or silently skipped
 test. The gateway’s TypeSafe BYOK organization also needs available Jev credits;
-HTTP 402 is a provider failure. The runner retains the redacted upstream status
-and error body rather than substituting another model.
+HTTP 402 is a provider failure. The SDK reports every upstream failure as
+`MODEL_PROVIDER_FAILED`, so the runner appends each non-OK Jev or text-companion
+response to `provider-errors.jsonl` (HTTP status, `cf-ray`, body with the
+gateway token and credential headers scrubbed, mode 0600) and never substitutes
+another model. The summary names the status; the HTML report links the record.
 
 Two caches have different meanings:
 
@@ -104,15 +107,20 @@ Fork PRs receive no model credentials and do not run it.
 `apps/web/artifacts/tester-army/` holds the SDK JSON, JUnit, step traces,
 sanitized Worker logs, setup/scenario timings and a static HTML report. Every
 journey records video and an end-state screenshot; setup failures may have only
-startup diagnostics. Videos are retained for successful flows too. Session
+startup diagnostics. A passing journey, or one that failed inside its body,
+without a nonempty screenshot and video inside `run/results/` is incomplete:
+the shard exits nonzero (so Nx caches nothing), the combined report is not
+complete, and broken or traversing artifact paths are listed instead of linked. Videos are retained for successful flows too. Session
 cookies stay inside each fixture's browser and API contexts, never in an
 interchange file. The gateway token is registered as an SDK secret.
 
 The existing CI `Test report` job assembles the three shard reports, checks
 catalog coverage and publishes HTML, screenshots and videos through the existing
-Nx cache Worker's `/reports/{run}/{attempt}/tester-army/` route. It also adds
-Tester Army counts, failures, slow journeys, shard balance and the report link
-to the combined CI summary. Original execution timestamps remain visible on
+Nx cache Worker's `/reports/{run}/{attempt}/tester-army/` route. The combined
+CI summary keeps its header, failure list and flaky list to the required Vitest
+and Playwright lanes; Tester Army totals, failures and incomplete evidence follow
+under a separate optional heading with the report link, so optional failures
+never hide or flip the gate result. Original execution timestamps remain visible on
 cached evidence. GitHub artifacts remain the fallback when publishing is
 unavailable. Only synthetic CI evidence is published; local reports stay local.
 
