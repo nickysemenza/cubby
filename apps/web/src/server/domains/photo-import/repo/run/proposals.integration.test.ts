@@ -879,7 +879,10 @@ describe("photo group proposals", () => {
         observedName: "Blue shirt",
         unresolvedReason: "Choose the size",
         stockIntent: "evidence" as const,
-        productChanges: { notes: "Label: medium" },
+        productChanges: {
+          notes: "Label: medium",
+          tags: ["synthetic", "reviewed"],
+        },
       },
     };
     await proposePhotoGroups(ctx.db, { runId: run.shortcode, groups: [draft] });
@@ -910,12 +913,13 @@ describe("photo group proposals", () => {
     );
     expect(applied.results[0]?.outcome).toBe("committed");
     const [saved] = await getDb(ctx.db)
-      .select({ name: product.name, notes: product.notes })
+      .select({ name: product.name, notes: product.notes, tags: product.tags })
       .from(product)
       .where(eq(product.id, original.entityId));
     expect(saved).toEqual({
       name: "Synthetic blue shirt",
       notes: "Label: medium",
+      tags: ["synthetic", "reviewed"],
     });
     const states = await getDb(ctx.db)
       .select({
