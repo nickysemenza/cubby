@@ -54,7 +54,7 @@ const files = readdirSync(directory, { recursive: true, encoding: "utf8" })
 // Unbounded parallel PUTs of a media-heavy report make Cloudflare close the
 // HTTP/2 connection (NGHTTP2_ENHANCE_YOUR_CALM); bound them and retry
 // transient network failures. Any file that still fails fails the publish.
-async function put(file: string) {
+async function put(directory: string, file: string) {
   for (let attempt = 1; ; attempt++) {
     try {
       const response = await fetch(new URL(prefix + file, NX_CACHE_URL), {
@@ -84,7 +84,7 @@ const queue = [...files];
 await Promise.all(
   Array.from({ length: 8 }, async () => {
     for (let file = queue.shift(); file !== undefined; file = queue.shift())
-      await put(file);
+      await put(directory, file);
   }),
 );
 

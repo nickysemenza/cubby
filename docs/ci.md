@@ -454,7 +454,9 @@ and merges Vitest and Playwright shards into HTML reports (`vitest --merge-repor
 `playwright merge-reports`). It also assembles the Tester Army SDK documents,
 rejecting missing or overlapping shard coverage. It publishes the reports to the Nx cache Worker, which
 serves them publicly at `/reports/{run}/{attempt}/{vitest|playwright|tester-army}/`, and
-also uploads them as 14-day artifacts. The workflows set `NX_CACHE_URL`, the
+also uploads them as 14-day artifacts. Uploader workers receive the validated
+report directory explicitly and share an eight-request upload limit, retrying
+transient failures twice. The workflows set `NX_CACHE_URL`, the
 Worker's public origin, as a plain value rather than a secret: Actions withholds
 step outputs containing a secret, which would drop the report links. Only
 `NX_CACHE_TOKEN` is secret; fork PRs lack it and fall back to the artifacts.
