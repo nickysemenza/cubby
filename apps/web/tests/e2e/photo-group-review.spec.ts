@@ -473,6 +473,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
 
   // The Photos table lists every seeded image.
   const photosCard = page.getByRole("region", { name: "Run photos" });
+  await photosCard.getByRole("button", { name: "Photos", exact: true }).click();
   await expect(
     photosCard.getByRole("link", { name: /^Open photo / }),
   ).toHaveCount(3);
