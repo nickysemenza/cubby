@@ -3,10 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import * as cfEnv from "~/server/cf-env";
-import {
-  withJobExecution,
-  withJobBatchExecution,
-} from "~/server/generic/jobs/context";
+import { withJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 import {
@@ -200,7 +197,7 @@ describe("AI response cache", () => {
           });
         await expect(
           scope === "batch"
-            ? withJobBatchExecution(prepare)
+            ? withJobExecution(fromPartial({}), fromPartial({}), prepare)
             : withJobExecution(fromPartial({}), fromPartial({}), prepare),
         ).rejects.toSatisfy(
           (error: unknown) =>
@@ -224,19 +221,22 @@ describe("AI response cache", () => {
       await release.promise;
       return { choice: "one" };
     });
-    const results = await withJobBatchExecution(() =>
-      Promise.all(
-        [0, 1].map((index) =>
-          withAiResponseCache({
-            enabled: true,
-            batch: { batch, index },
-            keyInput,
-            validate,
-            compute,
-            onWait: () => release.resolve(),
-          }),
+    const results = await withJobExecution(
+      fromPartial({}),
+      fromPartial({}),
+      () =>
+        Promise.all(
+          [0, 1].map((index) =>
+            withAiResponseCache({
+              enabled: true,
+              batch: { batch, index },
+              keyInput,
+              validate,
+              compute,
+              onWait: () => release.resolve(),
+            }),
+          ),
         ),
-      ),
     );
     expect(results).toEqual([{ choice: "one" }, { choice: "one" }]);
     expect(compute).toHaveBeenCalledOnce();

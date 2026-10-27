@@ -41,11 +41,11 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { discoverAiRefresh } from "~/server/domains/run/service/ai-refresh";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { publishAssessments } from "~/server/generic/assessment/repo/assessment";
+import { jobRunOwned } from "~/server/generic/jobs/repo/external-claim";
 import {
   jobDue,
-  jobRunOwned,
   unobservedJobInvalidation,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/queue";
 import { drainDueJobs } from "~/server/generic/jobs/service/jobs";
 import {
   createProductIdentityFixture,

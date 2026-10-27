@@ -15,7 +15,7 @@ import { runAfterCommit } from "~/server/db/helpers/core";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
 import { imageProcessingJob } from "~/server/db/schema";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
 

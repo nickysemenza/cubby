@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import type { DeviceBacklog } from "~/contracts/job.contract";
 import type { Database } from "~/server/db";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import { jobDue } from "~/server/generic/jobs/repo/jobs";
+import { jobDue } from "~/server/generic/jobs/repo/queue";
 
 const DEVICE_LANE = "image.device";
 

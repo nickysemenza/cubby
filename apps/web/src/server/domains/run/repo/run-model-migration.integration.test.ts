@@ -16,7 +16,7 @@ import {
   run,
   runStep,
 } from "~/server/db/schema";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import {
   createProductIdentityFixture,
   makeProductInput,

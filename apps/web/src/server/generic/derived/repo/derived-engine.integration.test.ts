@@ -4,6 +4,7 @@ import type {
   ProductId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import {
@@ -54,11 +55,9 @@ import {
 import { explainLiveDerived } from "~/server/generic/derived/repo/explain";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { attachLinks } from "~/server/generic/entity-links/repo/entity-links";
-import {
-  withJobBatchExecution,
-  withJobExecution,
-} from "~/server/generic/jobs/context";
-import { claimJob, enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { withJobExecution } from "~/server/generic/jobs/context";
+import { claimJob } from "~/server/generic/jobs/repo/external-claim";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   makeLocationInput,
@@ -117,13 +116,13 @@ describe("stored derived values", () => {
   const marks = async (target: string) =>
     (
       await getDb(ctx.db).execute(
-        sql`SELECT ref::text AS ref FROM "DerivedDirty" WHERE target = ${target} ORDER BY ref`,
+        sql`SELECT ref::text AS ref FROM "WorkItem" WHERE target = ${target} ORDER BY ref`,
       )
     ).rows.map((row) => String((row as { ref: string }).ref));
   const fanoutMarks = async (target: string) =>
     (
       await getDb(ctx.db).execute(
-        sql`SELECT target, ref::text AS ref FROM "DerivedDirty" WHERE target LIKE ${`${target}@%`}`,
+        sql`SELECT target, ref::text AS ref FROM "WorkItem" WHERE target LIKE ${`${target}@%`}`,
       )
     ).rows.map((row) => ({
       target: String((row as { target: string }).target),
@@ -250,7 +249,7 @@ describe("stored derived values", () => {
     const background = await makeProduct("Synthetic background source", 2);
     const member = await makeProduct("Synthetic member source", 3);
     // Isolate source capture from fixture creation, without invoking compute adapters.
-    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedDirty"`);
+    await getDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
     const saved = await enqueueJob(ctx.db, {
       key: "synthetic:derived-source-priority",
       kind: "image.cloud",
@@ -289,7 +288,7 @@ describe("stored derived values", () => {
 
   it("keeps caller-owned member transactions at member priority inside a Job scope", async () => {
     const item = await makeProduct("Synthetic nested priority", 2);
-    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedDirty"`);
+    await getDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
     const saved = await enqueueJob(ctx.db, {
       key: "synthetic:derived-nested-priority",
       kind: "image.cloud",
@@ -315,9 +314,9 @@ describe("stored derived values", () => {
 
   it("inherits background priority through savepoints and clears it after rollback", async () => {
     const item = await makeProduct("Synthetic batch priority", 2);
-    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedDirty"`);
+    await getDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
     await expect(
-      withJobBatchExecution(() =>
+      withJobExecution(fromPartial({}), fromPartial({}), () =>
         withTransaction(ctx.db, async (outer) => {
           const db = databaseForTransaction(outer);
           await withTransaction(db, (inner) =>
@@ -349,7 +348,7 @@ describe("stored derived values", () => {
     const beans = await makeProduct("Synthetic failing beans", 2);
     await drain();
     await getDb(ctx.db).execute(sql`
-      INSERT INTO "DerivedDirty" (target, ref, priority, attempts)
+      INSERT INTO "WorkItem" (target, ref, priority, attempts)
       VALUES ('product.price', ${beans}, 0, 60)
       ON CONFLICT (target, ref) DO UPDATE SET attempts = 60`);
     const failing = {
@@ -371,7 +370,7 @@ describe("stored derived values", () => {
     const [row] = (
       await getDb(ctx.db).execute(sql`
         SELECT attempts, "lastError", "readyAt" <= now() + interval '15 minutes' AS bounded
-          FROM "DerivedDirty" WHERE target = 'product.price' AND ref = ${beans}`)
+          FROM "WorkItem" WHERE target = 'product.price' AND ref = ${beans}`)
     ).rows;
     expect(row).toMatchObject({
       attempts: 61,
@@ -444,7 +443,7 @@ describe("stored derived values", () => {
     expect(await marks("product.ledgerExpectedQuantity")).not.toContain(beans);
     const [failure] = (
       await getDb(ctx.db).execute(sql`
-      SELECT attempts, "lastError" FROM "DerivedDirty" WHERE target = 'product.price' AND ref = ${beans}
+      SELECT attempts, "lastError" FROM "WorkItem" WHERE target = 'product.price' AND ref = ${beans}
     `)
     ).rows;
     expect(failure).toMatchObject({
@@ -483,7 +482,7 @@ describe("stored derived values", () => {
       expect((await valuation(entry))?.value).toBe(6);
       const [failed] = (
         await getDb(ctx.db).execute(sql`
-        SELECT attempts, "lastError" FROM "DerivedDirty"
+        SELECT attempts, "lastError" FROM "WorkItem"
          WHERE target = 'product.searchDocument' AND ref = ${beans}`)
       ).rows;
       expect(failed).toMatchObject({
@@ -492,7 +491,7 @@ describe("stored derived values", () => {
       });
       const [rejectedValue] = (
         await unwrapDb(ctx.db).execute(sql`
-      SELECT attempts, "lastError" FROM "DerivedDirty"
+      SELECT attempts, "lastError" FROM "WorkItem"
        WHERE target = 'product.price' AND ref = ${beans}`)
       ).rows;
       expect(rejectedValue).toMatchObject({
@@ -603,7 +602,7 @@ describe("stored derived values", () => {
     const release = Promise.withResolvers<void>();
     const writer = withTransaction(ctx.db, async (tx) => {
       await tx.execute(
-        sql`SELECT ref FROM "DerivedDirty" WHERE target = 'product.price' AND ref = ${busy}::uuid FOR UPDATE`,
+        sql`SELECT ref FROM "WorkItem" WHERE target = 'product.price' AND ref = ${busy}::uuid FOR UPDATE`,
       );
       locked.resolve();
       await release.promise;
@@ -697,7 +696,7 @@ describe("stored derived values", () => {
     const plan = await prepareDerivedPage(ctx.db, derivedComputes, claimed);
     // Delete and re-create the same mark: a fresh sequence ticket.
     await getDb(ctx.db).execute(
-      sql`DELETE FROM "DerivedDirty" WHERE target = 'inventory.valuation' AND ref = ${entry}`,
+      sql`DELETE FROM "WorkItem" WHERE target = 'inventory.valuation' AND ref = ${entry}`,
     );
     await getDb(ctx.db).execute(
       sql`SELECT derived_mark('inventory.valuation', ARRAY[${entry}::uuid])`,
@@ -786,7 +785,7 @@ describe("stored derived values", () => {
     const held = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const writer = withTransaction(ctx.db, async (tx) => {
-      await tx.execute(sql`SELECT ref FROM "DerivedDirty"
+      await tx.execute(sql`SELECT ref FROM "WorkItem"
         WHERE target LIKE 'inventory.valuation@%' AND ref = ${item}::uuid FOR UPDATE`);
       held.resolve();
       await release.promise;
@@ -842,7 +841,7 @@ describe("stored derived values", () => {
           mark.target.startsWith("task.searchDocument@"),
         ),
       );
-      await withJobBatchExecution(() =>
+      await withJobExecution(fromPartial({}), fromPartial({}), () =>
         withTransaction(ctx.db, (tx) =>
           publishDerivedPage(databaseForTransaction(tx), plan),
         ),
@@ -853,7 +852,7 @@ describe("stored derived values", () => {
     );
     // An edit's dependents keep its priority instead of queuing behind backfill.
     const priorities = await getDb(ctx.db).execute(
-      sql`SELECT DISTINCT priority FROM "DerivedDirty" WHERE target = 'task.searchDocument'`,
+      sql`SELECT DISTINCT priority FROM "WorkItem" WHERE target = 'task.searchDocument'`,
     );
     expect(priorities.rows).toEqual([{ priority: 0 }]);
   });

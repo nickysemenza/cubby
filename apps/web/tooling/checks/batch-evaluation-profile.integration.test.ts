@@ -49,7 +49,7 @@ import * as attempts from "~/server/domains/run/repo/ai-work-state";
 import { discoverAiRefresh } from "~/server/domains/run/service/ai-refresh";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import * as jobExecution from "~/server/generic/jobs/repo/execution";
-import * as jobRepo from "~/server/generic/jobs/repo/jobs";
+import * as jobRepo from "~/server/generic/jobs/repo/queue";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {

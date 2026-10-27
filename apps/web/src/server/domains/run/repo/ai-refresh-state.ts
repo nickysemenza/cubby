@@ -48,7 +48,7 @@ import {
 } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
-import { enqueueJobs } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJobs } from "~/server/generic/jobs/repo/producer";
 
 import {
   hasAiRefreshRunCapacity,

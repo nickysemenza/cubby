@@ -19,7 +19,7 @@ import {
   prepareDerivedPage,
   publishDerivedPage,
 } from "~/server/generic/derived/repo/drain";
-import { repeatJob } from "~/server/generic/jobs/repo/jobs";
+import { repeatJob } from "~/server/generic/jobs/repo/producer";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { JobHandler } from "~/server/generic/jobs/types";
 

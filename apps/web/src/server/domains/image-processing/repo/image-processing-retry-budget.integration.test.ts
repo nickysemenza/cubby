@@ -19,7 +19,7 @@ import { createDevice } from "~/server/domains/device/repo/device";
 import { claimCompanionImageCommands } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { deviceOwnedStreak } from "~/server/generic/jobs/repo/device-admission";
-import { JOB_BACKFILL_SHARE } from "~/server/generic/jobs/repo/jobs";
+import { DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE } from "~/server/generic/jobs/repo/device-admission";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
 import {

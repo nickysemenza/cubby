@@ -22,11 +22,8 @@ import {
   saveMailboxMetadata,
 } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import * as changes from "~/server/generic/changes/repo/change";
-import {
-  claimJob,
-  enqueueJob,
-  renewJob,
-} from "~/server/generic/jobs/repo/jobs";
+import { claimJob, renewJob } from "~/server/generic/jobs/repo/external-claim";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { derivedMarkTickets } from "~/server/testing/background-queue";
 
@@ -121,7 +118,7 @@ describe("finance.record source and Job lifecycle contention", () => {
       sql`SELECT key, generation, xmin::text AS xmin FROM "Job" ORDER BY key`,
     );
     const marksBefore = await getDb(ctx.db).execute(
-      sql`SELECT target, ref, ticket FROM "DerivedDirty" ORDER BY target, ref`,
+      sql`SELECT target, ref, ticket FROM "WorkItem" ORDER BY target, ref`,
     );
     const invalidationsBefore = await getDb(ctx.db).execute(
       sql`SELECT key, "restartsPass", xmin::text AS xmin FROM "JobInvalidation" ORDER BY key`,
@@ -162,7 +159,7 @@ describe("finance.record source and Job lifecycle contention", () => {
       expect(
         (
           await getDb(ctx.db).execute(
-            sql`SELECT target, ref, ticket FROM "DerivedDirty" ORDER BY target, ref`,
+            sql`SELECT target, ref, ticket FROM "WorkItem" ORDER BY target, ref`,
           )
         ).rows,
       ).toEqual(marksBefore.rows);

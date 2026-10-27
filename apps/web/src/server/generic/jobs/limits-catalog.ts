@@ -29,7 +29,7 @@ import {
   DEFAULT_JOB_MAX_ATTEMPTS,
   JOB_LEASE_MS,
   JOB_RETRY_BACKOFF,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/queue";
 
 /**
  * Every limit that can set a Run's speed, read from the constant or config

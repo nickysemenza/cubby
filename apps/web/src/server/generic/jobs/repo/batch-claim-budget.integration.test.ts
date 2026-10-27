@@ -5,10 +5,10 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 import { drainDueJobs } from "../service/jobs";
 import type { JobHandlers } from "../types";
-import { enqueueJob } from "./jobs";
 
 const CLAIM_DELAY_SECONDS = 0.05;
 

@@ -79,7 +79,8 @@ import {
 } from "~/server/generic/assessment/repo/suggestion-list";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { cancelJob, renewJob } from "~/server/generic/jobs/repo/jobs";
+import { renewJob } from "~/server/generic/jobs/repo/external-claim";
+import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import {

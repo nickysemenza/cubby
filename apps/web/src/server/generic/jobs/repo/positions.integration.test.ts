@@ -6,8 +6,11 @@ import { z } from "zod";
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-
-import { dueJobPositions, dueJobPositionsQuery, enqueueJob } from "./jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import {
+  dueJobPositions,
+  dueJobPositionsQuery,
+} from "~/server/generic/jobs/repo/queue";
 
 // List diagnostics must stay bounded by visible kinds, independently of the
 // drain's global fairness. Ordinary correctness tests cannot expose that scan.

@@ -15,7 +15,7 @@ import {
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getEntityGraphExplore } from "~/server/generic/entity-graph/repo/entity-graph-explore";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import {
   createImageFixture,
   createProductIdentityFixture,

@@ -241,7 +241,7 @@ describe("assignment and stored projection precedence", () => {
         }),
       ]),
     );
-    await getDb(ctx.db).execute(sql`UPDATE "DerivedDirty"
+    await getDb(ctx.db).execute(sql`UPDATE "WorkItem"
       SET "lastError" = 'Synthetic unit-price input refresh failure', "readyAt" = now() + interval '1 hour'
       WHERE target = 'product.price' AND ref = ${product.entityId}`);
     const failed = entityFieldEnvelopeSchemas.product.detail.parse(

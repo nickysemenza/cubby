@@ -1,9 +1,12 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   index,
   integer,
+  pgSequence,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -11,16 +14,10 @@ import {
 
 export { job } from "./generated/entity-table-definitions.gen";
 
-/** Stable invalidation policy; capture writers never update this row. */
-export const jobInvalidation = pgTable("JobInvalidation", {
-  key: text("key").primaryKey(),
-  restartsPass: boolean("restartsPass").notNull(),
-});
-
 /**
- * A source transaction appends its own input, without a shared mutable revision.
- * A fresh claim acknowledges only captures visible in that transaction; a
- * capture committed later remains pending even if it started earlier.
+ * A source transaction appends its own wake, without a shared mutable revision.
+ * A claim acknowledges only captures visible in that transaction; a capture
+ * committed later stays pending and makes the Job due again after its pass.
  */
 export const jobInvalidationCapture = pgTable(
   "JobInvalidationCapture",
@@ -49,3 +46,40 @@ export const jobLaneAdmission = pgTable("JobLaneAdmission", {
   ownedStreak: integer("ownedStreak").notNull().default(0),
   updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
 });
+
+/**
+ * Tickets order work items across all drains. A per-row counter restarts
+ * after a delete and reinsert, so a slow drain holding an old number could
+ * clear newer work (ABA); a sequence value never repeats.
+ */
+export const workTicket = pgSequence("WorkTicket");
+
+/**
+ * Pending work a drain Job claims in pages (docs/jobs.md#drains). `drain` is
+ * the owning Job key; `target` names the work family (derived targets are
+ * `<entity>.<key>` or `<entity>.<key>@<column>` fanout marks) and is unique
+ * across drains, so `(target, ref)` identifies an item. Items carry retry
+ * state only: the drain Job's lease fences every claimed item, and a
+ * publication clears an item only while its ticket is unchanged.
+ */
+export const workItem = pgTable(
+  "WorkItem",
+  {
+    drain: text("drain").notNull().default("derived:drain"),
+    target: text("target").notNull(),
+    ref: uuid("ref").notNull(),
+    ticket: bigint("ticket", { mode: "number" })
+      .notNull()
+      .default(sql`nextval('"WorkTicket"')`),
+    /** Lower drains first: 0 = member or Run demand, 1 = background, 2 = reconcile or backfill. */
+    priority: integer("priority").notNull().default(0),
+    dirtiedAt: timestamp("dirtiedAt", { mode: "date" }).notNull().defaultNow(),
+    readyAt: timestamp("readyAt", { mode: "date" }).notNull().defaultNow(),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("lastError"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.target, t.ref] }),
+    index("WorkItem_ready_idx").on(t.drain, t.priority, t.readyAt),
+  ],
+);

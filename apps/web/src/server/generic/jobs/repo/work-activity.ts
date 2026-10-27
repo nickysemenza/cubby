@@ -9,7 +9,7 @@ import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import { INTERNAL_JOB_KINDS } from "~/server/generic/jobs/kind-policy";
-import { jobDue } from "~/server/generic/jobs/repo/jobs";
+import { jobDue } from "~/server/generic/jobs/repo/queue";
 
 /** Completions and failures are counted over these recent windows. */
 const RECENT_MINUTES = { pace: 5, completed: 15, failed: 60 } as const;

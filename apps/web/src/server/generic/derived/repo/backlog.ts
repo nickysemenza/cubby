@@ -19,12 +19,12 @@ export async function readDerivedBacklog(
   db: Database,
 ): Promise<DerivedBacklog> {
   const result = await repositoryQueries(db).execute(
-    sql`SELECT split_part(target, '@', 1) AS target, count(*)::int AS count FROM "DerivedDirty" GROUP BY split_part(target, '@', 1) ORDER BY 1`,
+    sql`SELECT split_part(target, '@', 1) AS target, count(*)::int AS count FROM "WorkItem" WHERE drain = 'derived:drain' GROUP BY split_part(target, '@', 1) ORDER BY 1`,
   );
   const rows = z.array(countRow).parse(result.rows);
   const [oldest, published] = await Promise.all([
     repositoryQueries(db).execute(
-      sql`SELECT extract(epoch FROM now() - min("dirtiedAt"))::int AS seconds FROM "DerivedDirty"`,
+      sql`SELECT extract(epoch FROM now() - min("dirtiedAt"))::int AS seconds FROM "WorkItem" WHERE drain = 'derived:drain'`,
     ),
     repositoryQueries(db).execute(
       sql`SELECT floor(extract(epoch FROM now() - "computedAt") / 60)::int AS age, count(*)::int AS count

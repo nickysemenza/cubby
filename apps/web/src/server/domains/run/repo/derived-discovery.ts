@@ -1,7 +1,7 @@
 import type { Database } from "~/server/db";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
-import { repeatJob } from "~/server/generic/jobs/repo/jobs";
+import { repeatJob } from "~/server/generic/jobs/repo/producer";
 
 import { prepareConnectionDiscoveryRoster } from "./connection-refresh";
 

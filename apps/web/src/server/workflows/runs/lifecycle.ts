@@ -28,13 +28,10 @@ import {
   assertCurrentJob,
   currentJobExecution,
 } from "~/server/generic/jobs/repo/execution";
-import { enqueueJob, retryJob } from "~/server/generic/jobs/repo/jobs";
+import { retryJob } from "~/server/generic/jobs/repo/operator";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
-import {
-  runJobRecovery,
-  type WorkflowRunParams,
-  type ExecutedRunPurpose,
-} from "./contract";
+import { type WorkflowRunParams, type ExecutedRunPurpose } from "./contract";
 
 export const runFailureText = (
   error: Error | string,
@@ -117,18 +114,13 @@ export async function launchWorkflowRun(
     let execution = await enqueueJob(tx, {
       key: `run:${input.runId}`,
       kind: "run.execute",
-      ...runJobRecovery(input.purpose),
       input: { runId: input.runId, purpose: input.purpose },
       runId: input.runId,
       priority,
     });
     if (["failed", "cancelled", "paused"].includes(execution.state)) {
       if (input.automatic) return null;
-      const retried = await retryJob(
-        tx,
-        execution.id,
-        runJobRecovery(input.purpose).recoveryTimeoutMs,
-      );
+      const retried = await retryJob(tx, execution.id);
       if (retried) execution = retried;
     }
     if (execution.state === "completed") {
@@ -145,7 +137,6 @@ export async function launchWorkflowRun(
         key: execution.key,
         kind: execution.kind,
         input: execution.input,
-        ...runJobRecovery(input.purpose),
         runId: input.runId,
         priority,
         invalidate: true,

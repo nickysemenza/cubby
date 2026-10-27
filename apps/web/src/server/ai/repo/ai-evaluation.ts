@@ -42,13 +42,13 @@ import {
   assertCurrentJob,
   currentJobExecution,
 } from "~/server/generic/jobs/repo/execution";
+import { jobRunOwned } from "~/server/generic/jobs/repo/external-claim";
 import {
   claimJobPage,
   completeJobPage,
   guardJobPage,
-  jobRunOwned,
   releaseJobPage,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/queue";
 
 import { readAiRefreshActivation } from "./ai-refresh";
 import type {

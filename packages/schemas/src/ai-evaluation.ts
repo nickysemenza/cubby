@@ -54,11 +54,10 @@ export const suggestionSupersessionReceipt = z.object({
 export type SuggestionSupersessionReceipt = z.infer<
   typeof suggestionSupersessionReceipt
 >;
+/** Domain states only: retry and lease state belong to the drain's work item. */
 export const aiEvaluationState = z.enum([
   "queued",
-  "running",
   "result_ready",
-  "retry_wait",
   "completed",
   "blocked",
   "failed",

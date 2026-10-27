@@ -19,11 +19,8 @@ import {
   deviceOwnedStreak,
   deviceSelectionIndex,
 } from "~/server/generic/jobs/repo/device-admission";
-import {
-  dueJobPositions,
-  jobRunOwned,
-  type JobRow,
-} from "~/server/generic/jobs/repo/jobs";
+import { jobRunOwned } from "~/server/generic/jobs/repo/external-claim";
+import { dueJobPositions, type JobRow } from "~/server/generic/jobs/repo/queue";
 
 /** Lane throughput is measured over this window. */
 const LANE_THROUGHPUT_WINDOW_MS = 30 * 60_000;

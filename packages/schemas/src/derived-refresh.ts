@@ -5,7 +5,6 @@ export const derivedRefreshReceipt = z.object({
 });
 
 export const embeddingArtifactState = z.enum([
-  "legacy",
   "prepared",
   "submitting",
   "submitted",

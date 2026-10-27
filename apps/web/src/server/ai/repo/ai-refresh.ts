@@ -13,7 +13,7 @@ import {
   appSettings,
   AI_REFRESH_ACTIVATION_SETTINGS_ID,
 } from "~/server/db/schema";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 // Infrastructure identity, independent of the hourly app-open catch-up claim.
 const SETTINGS_ID = AI_REFRESH_ACTIVATION_SETTINGS_ID;

@@ -112,7 +112,7 @@ export async function loadStoredDerived(
        declarations.map(({ key, target }) => ({ key, target })),
      )}::jsonb) AS k(key text, target text)
       LEFT JOIN "DerivedValue" v ON v."entityId" = i.id AND v.key = k.key
-      LEFT JOIN "DerivedDirty" d ON d.target = k.target AND d.ref = i.id`);
+      LEFT JOIN "WorkItem" d ON d.target = k.target AND d.ref = i.id`);
   for (const row of z.array(valueRow).parse(result.rows)) {
     const byKey = out.get(row.entityId) ?? new Map();
     const metadata = storedFieldDecision.safeParse(row.decidedBy);

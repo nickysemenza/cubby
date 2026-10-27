@@ -18,8 +18,8 @@ import {
   cancelJobsWhere,
   cancelRunJobs,
   pauseJob,
-  enqueueJob,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/operator";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 import type { ExecutedRunPurpose } from "./contract";
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";

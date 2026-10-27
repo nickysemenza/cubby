@@ -1,113 +1,74 @@
 import type { JobLane } from "@cubby/schemas/job";
-import { BACKGROUND_QUEUE_CONSUMER } from "@cubby/shared/background-queue";
 
-/**
- * How a failed page waits before its next claim. `exhaust: true` fails the Job
- * after its row's `maxAttempts` consecutive failures; `exhaust: false` keeps
- * retrying forever with capped exponential backoff, and neither claims nor
- * lease expiry count as attempts — only reported failures do.
- */
-export type JobRetryPolicy =
-  | { readonly exhaust: true }
-  | {
-      readonly exhaust: false;
-      readonly baseMs: number;
-      readonly maxMs: number;
-    };
+/** A failed page waits `baseMs · 2^(failures - 1)`, capped at `maxMs`. */
+export type JobBackoff = { readonly baseMs: number; readonly maxMs: number };
 
 export type JobKindPolicy = {
   readonly internal: boolean;
   readonly lane: JobLane;
   /** False: only an external executor's pull claims it; the server drain never does. */
   readonly drained: boolean;
-  readonly retry: JobRetryPolicy;
-  /** Queued Jobs a kind should keep at most; the watchdog alerts above it. */
-  readonly maxQueued: number | null;
-  /** Jobs one kind handler can prepare together inside a single drain lane. */
-  readonly batchSize?: number;
-  /** Background claims across all drains, counted only while their leases are live. */
+  /**
+   * Consecutive reported failures before the Job fails. Null never exhausts:
+   * subject-owned work and drains back off forever. Reclaiming an expired
+   * lease counts as a failure, so a crash loop still exhausts.
+   */
+  readonly maxAttempts: number | null;
+  readonly backoff: JobBackoff;
+  /** Live leases of this kind across every drain; Run-owned work is exempt. */
   readonly maxInFlight?: number;
-  /** Background pages in one drain; active Run work bypasses this limit. */
-  readonly maxConcurrentPages?: number;
-  /** Live background pages across consumers; a batch shares one lease token. */
-  readonly maxInFlightPages?: number;
-  /** Start these background page slots before other backfill when due. */
-  readonly reservedConcurrentPages?: number;
 };
 
-/** Strict shares: one kind never borrows all lanes or all queue consumers. */
-export const JOB_BACKGROUND_SHARE = {
-  maxConcurrentPages: 1,
-  maxInFlightPages: Math.max(
-    1,
-    Math.floor(BACKGROUND_QUEUE_CONSUMER.maxConcurrency / 2),
-  ),
-};
-
-const IMAGE_RETRY = {
-  exhaust: false,
-  baseMs: 30_000,
-  maxMs: 24 * 60 * 60_000,
-} as const satisfies JobRetryPolicy;
-
-const MAINTENANCE_RETRY = {
-  exhaust: false,
-  baseMs: 60_000,
-  maxMs: 15 * 60_000,
-} as const satisfies JobRetryPolicy;
+const IMAGE_BACKOFF = { baseMs: 30_000, maxMs: 24 * 60 * 60_000 };
+const MAINTENANCE_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
 
 const SERVER: JobKindPolicy = {
-  ...JOB_BACKGROUND_SHARE,
   internal: false,
   lane: "server",
   drained: true,
-  retry: { exhaust: true },
-  maxQueued: null,
+  maxAttempts: 3,
+  backoff: { baseMs: 1_000, maxMs: 60_000 },
 };
+/** Self-arming pages and drains: a failure backs off, never stops the Job. */
+const MAINTENANCE: JobKindPolicy = {
+  ...SERVER,
+  internal: true,
+  maxAttempts: null,
+  backoff: MAINTENANCE_BACKOFF,
+};
+/** A drain Job owns no work of its own; its items retry on their own rows. */
+const DRAIN: JobKindPolicy = { ...MAINTENANCE, internal: false };
 
 /**
  * The one registry of per-kind execution policy. A kind absent here runs on
- * the server drain and fails after its attempt budget.
+ * the server drain and fails after three consecutive failures.
  */
 export const JOB_KIND_POLICY = {
   // Image processing is never abandoned (docs/jobs.md#image-processing).
   "image.cloud": {
     ...SERVER,
     lane: "frontier_ai",
-    retry: IMAGE_RETRY,
+    maxAttempts: null,
+    backoff: IMAGE_BACKOFF,
   },
   // Parked for Apple devices: their pull claims it; enqueue and connect ring them.
   "image.device": {
-    internal: false,
+    ...SERVER,
     lane: "apple_device",
     drained: false,
-    retry: IMAGE_RETRY,
-    maxQueued: null,
+    maxAttempts: null,
+    backoff: IMAGE_BACKOFF,
   },
-  // Self-arming maintenance pages must never stop on a transient failure.
-  "queue.watchdog": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
   // Rings companions when parked device work comes due (docs/jobs.md#image-processing).
-  "image.device.wake": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
-  "jobs.retention": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
+  "image.device.wake": MAINTENANCE,
+  "jobs.maintenance": MAINTENANCE,
   "ai-refresh.activate": { ...SERVER, internal: true },
-  // The derived drain and reconcile never fail: a failing page backs off (ADR 0021).
-  "derived.drain": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
-  "derived.reconcile": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
-  "ai.evaluation": {
-    ...SERVER,
-    lane: "frontier_ai",
-    maxQueued: 2_000,
-    // Matches the inherited two-page share: blocked evaluations still leave
-    // the other drain lanes and consumers available.
-    maxInFlight: 2,
-  },
-  "assessment.correction": { ...SERVER, maxQueued: 500 },
-  "embedding.refresh": {
-    ...SERVER,
-    batchSize: 100,
-    maxConcurrentPages: 1,
-    reservedConcurrentPages: 1,
-  },
+  "derived.drain": MAINTENANCE,
+  "derived.reconcile": MAINTENANCE,
+  // One drain per feature; two pages at once leave the other lanes free.
+  "ai.evaluation": { ...DRAIN, lane: "frontier_ai", maxInFlight: 2 },
+  "embedding.refresh": DRAIN,
+  "embedding.cleanup": DRAIN,
   "purchase.dispatch": { ...SERVER, lane: "external" },
 } as const satisfies Record<string, JobKindPolicy>;
 
@@ -118,7 +79,7 @@ const POLICY_BY_KIND: ReadonlyMap<string, JobKindPolicy> = new Map(
 export const jobKindPolicy = (kind: string): JobKindPolicy =>
   POLICY_BY_KIND.get(kind) ?? SERVER;
 
-/** Hidden from ordinary execution lists, but still counted by queue health. */
+/** Hidden from ordinary execution lists. */
 export const INTERNAL_JOB_KINDS = Object.entries(JOB_KIND_POLICY)
   .filter(([, policy]) => policy.internal)
   .map(([kind]) => kind);
@@ -130,15 +91,6 @@ export const UNDRAINED_JOB_KINDS: readonly string[] = Object.entries(
   .filter(([, policy]) => !policy.drained)
   .map(([kind]) => kind);
 
-/** Kinds whose failures never end the Job. */
-export const NEVER_EXHAUSTED_JOB_KINDS: readonly string[] = Object.entries(
-  JOB_KIND_POLICY,
-)
-  .filter(([, policy]) => !policy.retry.exhaust)
-  .map(([kind]) => kind);
-
-/** The wait after `failures` consecutive reported failures of a never-exhausted kind. */
-export const neverExhaustedRetryDelayMs = (
-  retry: Extract<JobRetryPolicy, { exhaust: false }>,
-  failures: number,
-) => Math.min(retry.maxMs, retry.baseMs * 2 ** Math.max(0, failures - 1));
+/** The wait after `failures` consecutive reported failures. */
+export const jobRetryDelayMs = (backoff: JobBackoff, failures: number) =>
+  Math.min(backoff.maxMs, backoff.baseMs * 2 ** Math.max(0, failures - 1));

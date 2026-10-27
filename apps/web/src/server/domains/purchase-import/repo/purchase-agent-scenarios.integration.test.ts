@@ -63,7 +63,8 @@ import {
   resolvePhotoGroupConcern,
 } from "~/server/domains/photo-import/repo/run/proposals";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
-import { enqueueJob, claimJob } from "~/server/generic/jobs/repo/jobs";
+import { claimJob } from "~/server/generic/jobs/repo/external-claim";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {

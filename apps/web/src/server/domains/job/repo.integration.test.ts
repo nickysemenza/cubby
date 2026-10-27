@@ -10,7 +10,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
 import { retryJobSet } from "~/server/generic/jobs/repo/job-queue";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { measureQueueHealth } from "~/server/generic/jobs/repo/queue-health";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 

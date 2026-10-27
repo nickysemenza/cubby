@@ -16,7 +16,7 @@ import { run } from "~/server/db/retained-tables";
 import { readRun } from "~/server/domains/run/repo/ai-work-state";
 import { JobPausedError, JobDeferredError } from "~/server/generic/jobs/errors";
 import { JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
-import { renewJobPage } from "~/server/generic/jobs/repo/jobs";
+import { renewJobPage } from "~/server/generic/jobs/repo/queue";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { PreparedJobPage } from "~/server/generic/jobs/types";

@@ -25,8 +25,8 @@ import {
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { deviceOwnedStreak } from "~/server/generic/jobs/repo/device-admission";
+import { DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE } from "~/server/generic/jobs/repo/device-admission";
 import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
-import { JOB_BACKFILL_SHARE } from "~/server/generic/jobs/repo/jobs";
 
 import {
   claimImageProcessingJob,
