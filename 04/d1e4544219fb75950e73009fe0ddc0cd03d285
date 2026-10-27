@@ -1,0 +1,45 @@
+apps/web/src/server/db/helpers/crud.ts
+  s_9fb58b1f0c0012::t_2adaf13752156e 389-394
+apps/web/src/server/db/helpers/index.ts
+  s_9fb58b1f0c0012::t_1e83183e6a6146 30
+apps/web/src/server/domains/garden/repo/garden.ts
+  s_9fb58b1f0c0012::t_1b6f4db9e82803 38,513,741
+apps/web/src/server/domains/image/repo/image.integration.test.ts
+  s_9fb58b1f0c0012::t_4a13cbfe0ef280 26,617,623,635,711,752,1124
+apps/web/src/server/domains/image/repo/image.ts
+  s_9fb58b1f0c0012::t_3ccb279545cdfe 95,326,335,344,353,362,371,380,389,2261,2281,2846,2859,2862,2865,2870,2887,2890,2893
+apps/web/src/server/domains/location/repo/crud.ts
+  s_9fb58b1f0c0012::t_b333d8ad08ff5d 45,315,468
+apps/web/src/server/domains/meal/repo/crud.ts
+  s_9fb58b1f0c0012::t_44375d79490473 25,325,376
+apps/web/src/server/domains/photo-import/repo/photo-import.ts
+  s_9fb58b1f0c0012::t_0713b59f0fc4b2 33,490
+apps/web/src/server/domains/product/repo/crud.ts
+  s_9fb58b1f0c0012::t_0d7e947cf41fef 89,177,1532
+apps/web/src/server/domains/product/repo/update-helpers.ts
+  s_9fb58b1f0c0012::t_7e0259a9a2f299 17,433,453,493
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_9fb58b1f0c0012::t_03ce6ea416980b 56,417
+apps/web/src/server/domains/recipe/repo/crud.ts
+  s_9fb58b1f0c0012::t_77b58497602e6a 37,621
+apps/web/src/server/domains/recipe/repo/update-helpers.ts
+  s_9fb58b1f0c0012::t_de7944184268d5 23,401
+apps/web/src/server/domains/task/repo/crud.ts
+  s_9fb58b1f0c0012::t_ece96294c12381 35,398,622
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "04d1e4544219fb75950e73009fe0ddc0cd03d285",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
