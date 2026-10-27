@@ -145,9 +145,7 @@ Preserve consequential ordinary-workflow regressions before removal.
 Reuse a healthy HMR session for iteration and fingerprint-verified builds.
 Finish source edits and formatting before starting a web build, and keep the
 checkout unchanged through its E2E run. Build fingerprints include tests and
-tooling under `src`; queue the build after implementation lanes settle. Selecting
-an integration-workerd test can implicitly build: its exclusive Vitest slot must
-also freeze all source writers until that build and replay finish.
+tooling under `src`; queue the build after implementation lanes settle.
 For test-speed investigations, extract the existing GitHub reports, traces and
 job logs before considering a local run. Label cache replays and timings from
 other revisions; missing timing artifacts do not justify rerunning a whole tier.

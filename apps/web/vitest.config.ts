@@ -181,14 +181,6 @@ const mcpContractTests = [
   "src/server/mcp/mcp-workflow-tools.unit.test.ts",
   "src/server/mcp/tools/tool-json-schema.unit.test.ts",
 ];
-// PostgreSQL files that start the built Worker (`tooling/workerd-harness.ts`,
-// directly or through `workerd-runtime.ts`). CI runs them in the Worker build
-// step against its verified bundle. Keep consumers in this list explicitly:
-// an ordinary integration step can inherit a browser-built bundle when paired,
-// so CI's refusal to rebuild a missing/stale bundle does not enforce membership.
-const workerdIntegrationTests = [
-  "src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts",
-];
 const integrationTests = [
   "src/**/*.integration.test.ts",
   "tooling/**/*.integration.test.ts",
@@ -451,26 +443,10 @@ export default defineConfig({
             ...integrationProject,
             name: "integration",
             include: integrationTests,
-            exclude: ["**/node_modules/**", ...workerdIntegrationTests],
             // Larger IntegreSQL pools do not reduce CREATE latency; sequencing
             // stays a distinct serial group so its shared-worker singletons
             // above never interleave with the unit/UI/mcp-contract group.
             sequence: { groupOrder: 3 },
-          },
-        },
-        {
-          // Same database harness as `integration`; a later group so a local
-          // full run never starts workerd beside the PostgreSQL forks.
-          extends: true,
-          test: {
-            ...integrationProject,
-            name: "integration-workerd",
-            globalSetup: [
-              ...integrationProject.globalSetup,
-              "./tooling/workerd-integration-setup.ts",
-            ],
-            include: workerdIntegrationTests,
-            sequence: { groupOrder: 4 },
           },
         },
         {
@@ -564,10 +540,7 @@ export default defineConfig({
           : project,
       )
       .filter((project) => {
-        if (
-          project.test.name === "integration" ||
-          project.test.name === "integration-workerd"
-        )
+        if (project.test.name === "integration")
           return wantsIntegrationTier(project.test.name);
         if (project.test.name === "preview") return wantsPreviewTier();
         if (project.test.name === "live-eval")
