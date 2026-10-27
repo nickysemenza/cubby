@@ -1,0 +1,43 @@
+apps/web/drizzle.database-freshness.config.ts
+  s_77bdb89dbc0fc6::t_68d6f47a7b5aa0 6-7
+apps/web/src/cf-server.ts
+  s_77bdb89dbc0fc6::t_d7b46c583ff022 12
+apps/web/src/entity/actions/vendor-logo-entity-action.tsx
+  s_77bdb89dbc0fc6::t_b3b1e3d3712d02 15
+apps/web/src/entity/problems/problem-query.ts
+  s_77bdb89dbc0fc6::t_e4f1f24f093ef1 88
+apps/web/src/features/maintenance/maintenance-tools.tsx
+  s_77bdb89dbc0fc6::t_102b03734e111f 12,14-16,28-32,34,164-181,423-429
+apps/web/src/features/purchase/purchase-reconciliation.tsx
+  s_77bdb89dbc0fc6::t_f8aefc61896997 58
+apps/web/src/features/work-queue/problem-items-action.tsx
+  s_77bdb89dbc0fc6::t_da8b8c41a90d3b 11,79-81,87-89,92-94
+apps/web/src/features/work-queue/work-row-link.tsx
+  s_77bdb89dbc0fc6::t_5ba81ddc54b021 22
+apps/web/src/server/db/freshness/database-freshness-durable-object.ts
+  s_77bdb89dbc0fc6::t_1401d441f1df18 18
+apps/web/src/server/generic/list/repo/declared-filters.ts
+  s_77bdb89dbc0fc6::t_e573055aa57d33 104,152,187,230,237
+apps/web/src/server/mcp/server.ts
+  s_77bdb89dbc0fc6::t_cae2c3ad21f536 67
+apps/web/tooling/calendar-test-worker.ts
+  s_77bdb89dbc0fc6::t_c59c12d29215bd 26
+packages/schemas/src/relation-list.ts
+  s_77bdb89dbc0fc6::t_d186a295d8ed17 371,410
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "71760a946e9fa3446c1181935099ba6280fe5c04",
+  "prompts": {},
+  "sessions": {
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
