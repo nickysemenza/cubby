@@ -41,7 +41,10 @@ import {
   renameFixtureRaw,
 } from "~/server/testing/repo.fixtures";
 import type { EmbeddingRefreshPort } from "~/server/workflows/background-tasks/embedding";
-import { enqueueEmbeddingRefs } from "~/server/workflows/background-tasks/embedding";
+import {
+  EMBEDDING_REFRESH_TARGET,
+  enqueueEmbeddingRefs,
+} from "~/server/workflows/background-tasks/embedding";
 import { executeWorkflow } from "~/server/workflows/runtime";
 
 import {
@@ -447,7 +450,12 @@ describe("semantic search background tasks", () => {
     const [work] = await getDb(ctx.db)
       .select()
       .from(workItem)
-      .where(eq(workItem.ref, ref.entityId));
+      .where(
+        and(
+          eq(workItem.target, EMBEDDING_REFRESH_TARGET),
+          eq(workItem.ref, ref.entityId),
+        ),
+      );
     expect(work?.attempts).toBe(1);
     expect(work?.lastError).toContain("vectorize outage");
 

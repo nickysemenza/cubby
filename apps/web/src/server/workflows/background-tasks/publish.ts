@@ -58,8 +58,6 @@ function taskKey(task: BackgroundTaskInput) {
       return task.kind;
     case "image-processing.wakeup":
       return `image-processing:${task.jobId}`;
-    case "entity-embedding.refresh":
-      return `embedding:${task.entityKind}:${task.entityId}`;
     case "image-metadata.extract":
       return `image-metadata:${task.imageId}`;
     case "location-ai.description.refresh":

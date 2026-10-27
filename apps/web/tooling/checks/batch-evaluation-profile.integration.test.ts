@@ -25,7 +25,7 @@ import {
   refreshSearchDocument,
   getSearchDocumentEmbeddingText,
 } from "~/server/generic/search/repo/search-document";
-import { settleEmbeddingProjectionJobs } from "~/server/generic/embedding/repo/embedding-job.fixtures";
+import { settleEmbeddingProjectionJobs } from "~/server/generic/embedding/repo/embedding-drain.fixtures";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import * as identity from "~/server/ai/product-identity";
 import * as evaluations from "~/server/ai/repo/ai-evaluation";
