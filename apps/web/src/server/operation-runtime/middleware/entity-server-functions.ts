@@ -7,7 +7,7 @@ export const authenticatedStartServerFunction = createMiddleware({
   const request = getRequest();
   return await next({
     context: {
-      startOperation: { headers: request.headers, signal: request.signal },
+      operationContext: { headers: request.headers, signal: request.signal },
     },
   });
 });

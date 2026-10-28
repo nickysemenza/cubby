@@ -8,7 +8,7 @@ const requestOrigins = new WeakMap<APIRequestContext, Promise<string>>();
  * signed-in request context (the dispatch requires a same-origin `Origin`).
  * A refusal is the bare error under its status; `body` is the data or error.
  */
-export async function startOperation(
+export async function operationCall(
   request: APIRequestContext,
   operation: string,
   input: unknown,

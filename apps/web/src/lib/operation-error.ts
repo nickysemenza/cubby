@@ -1,18 +1,18 @@
 import { z } from "zod";
 
-import type { PublicStartOperationError } from "~/server/operation-runtime/start-operation.contract";
+import type { PublicOperationError } from "~/server/operation-runtime/operation.contract";
 
 /**
  * Every client-side operation failure: a server refusal, and a transport or
  * protocol failure described in the same public error shape.
  */
-export class StartOperationError extends Error {
-  readonly data: Omit<PublicStartOperationError, "message">;
+export class OperationError extends Error {
+  readonly data: Omit<PublicOperationError, "message">;
   readonly requestId: string | undefined;
 
-  constructor(error: PublicStartOperationError, options?: ErrorOptions) {
+  constructor(error: PublicOperationError, options?: ErrorOptions) {
     super(error.message, options);
-    this.name = "StartOperationError";
+    this.name = "OperationError";
     this.requestId = error.requestId;
     const { message: _message, ...data } = error;
     this.data = data;
@@ -24,7 +24,7 @@ const schemaError = (
   stage: "input" | "output",
   error: z.ZodError,
 ) =>
-  new StartOperationError(
+  new OperationError(
     {
       code: stage === "input" ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR",
       reason:

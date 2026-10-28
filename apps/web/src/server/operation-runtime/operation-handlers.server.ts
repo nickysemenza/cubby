@@ -1,34 +1,33 @@
-import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
+import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
 import {
-  START_OPERATION_HANDLERS,
+  OPERATION_HANDLERS,
   WORKFLOW_STREAM_HANDLERS,
-} from "~/server/generated/start-operation-handler-data.gen";
+} from "~/server/generated/operation-handler-data.gen";
 import type {
-  StartOperationResult,
-  UnparsedStartOperationData,
-} from "~/server/operation-runtime/start-operation.contract";
-import type { StartOperationRequest } from "~/server/operation-runtime/start-operation.server";
+  OperationResult,
+  OperationWireValue,
+} from "~/server/operation-runtime/operation.contract";
+import type { OperationRequest } from "~/server/operation-runtime/operation.server";
 import type { WorkflowStreamHandler } from "~/server/operation-runtime/subscription-domain.server";
 
-export type UnaryOperationId = StartOperationIdOfKind<"query" | "mutation">;
-export type StreamOperationId = StartOperationIdOfKind<"subscription">;
+export type UnaryOperationId = OperationIdOfKind<"query" | "mutation">;
+export type StreamOperationId = OperationIdOfKind<"subscription">;
 export type UnaryHandlerTable = Readonly<
   Record<UnaryOperationId, readonly [string, string]>
 >;
 export type StreamHandlerTable = Readonly<
   Record<StreamOperationId, readonly [string, string]>
 >;
-export type StartOperationHandler<Output = UnparsedStartOperationData> =
-  (options: {
-    data: UnparsedStartOperationData;
-    request: StartOperationRequest;
-  }) => Promise<StartOperationResult<Output>>;
-export type OperationHandler = StartOperationHandler<unknown>;
+export type OperationHandler<Output = OperationWireValue> = (options: {
+  data: OperationWireValue;
+  request: OperationRequest;
+}) => Promise<OperationResult<Output>>;
+type AnyOperationHandler = OperationHandler<unknown>;
 
 type HandlerModule = Record<
   string,
   {
-    operations?: Record<string, OperationHandler>;
+    operations?: Record<string, AnyOperationHandler>;
     streams?: Record<string, WorkflowStreamHandler>;
   }
 >;
@@ -49,7 +48,7 @@ const modules = import.meta.glob<HandlerModule>([
 // Fail at module load, not on a member's first call, when a generated table
 // path has no glob entry (the keys are relative to this directory).
 for (const [path] of [
-  ...Object.values(START_OPERATION_HANDLERS),
+  ...Object.values(OPERATION_HANDLERS),
   ...Object.values(WORKFLOW_STREAM_HANDLERS),
 ])
   if (!(path in modules))
@@ -66,8 +65,8 @@ async function loadDomain([path, name]: readonly [string, string]) {
 /** Only the selected handler module and its static dependencies initialize. */
 export async function loadOperationHandler(
   operation: UnaryOperationId,
-): Promise<OperationHandler> {
-  const domain = await loadDomain(START_OPERATION_HANDLERS[operation]);
+): Promise<AnyOperationHandler> {
+  const domain = await loadDomain(OPERATION_HANDLERS[operation]);
   const handler =
     domain.operations?.[operation.slice(operation.lastIndexOf(".") + 1)];
   if (!handler) throw new Error(`No operation handler for ${operation}`);

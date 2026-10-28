@@ -1,9 +1,9 @@
 import type { WorkflowCommandMetadata } from "@cubby/schemas/workflow-command";
 
-import { START_OPERATIONS } from "~/lib/generated/start-operation-registry.gen";
+import { OPERATIONS } from "~/lib/generated/operation-registry.gen";
 import type { OperationRegistry } from "~/lib/operation-registry-types";
 
-const registry: OperationRegistry = START_OPERATIONS;
+const registry: OperationRegistry = OPERATIONS;
 
 /** Rendering command labels never initializes a domain's operation descriptors. */
 export function workflowCommandMetadata(

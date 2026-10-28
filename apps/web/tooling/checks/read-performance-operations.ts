@@ -3,12 +3,12 @@ import { createPaginatedResponseSchema } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
-import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
+import { operationDefinitionFor } from "~/lib/operation-observability";
 import {
-  publicStartOperationErrorSchema,
-  unparsedStartOperationDataSchema,
-  unparsedStartOperationResultSchema,
-} from "~/server/operation-runtime/start-operation.contract";
+  publicOperationErrorSchema,
+  operationWireValueSchema,
+  operationResultSchema,
+} from "~/server/operation-runtime/operation.contract";
 
 import { percentile, readDatabaseTiming } from "./read-performance-metrics";
 import { requestedReadMetadata } from "./read-performance-shape";
@@ -18,10 +18,10 @@ const querySchema = z
     operation: z
       .string()
       .refine(
-        (name) => startOperationDefinitionFor(name)?.kind === "query",
+        (name) => operationDefinitionFor(name)?.kind === "query",
         "Only registered queries can be measured",
       ),
-    input: unparsedStartOperationDataSchema,
+    input: operationWireValueSchema,
   })
   .strict();
 export const readOperationInputSchema = z.union([
@@ -30,7 +30,7 @@ export const readOperationInputSchema = z.union([
 ]);
 const lineSchema = z.object({
   i: z.number().int().nonnegative(),
-  r: batchResultSchema(unparsedStartOperationResultSchema),
+  r: batchResultSchema(operationResultSchema),
 });
 const listPageSchema = createPaginatedResponseSchema(z.unknown());
 
@@ -87,7 +87,7 @@ export async function measureOperationRead(
 
   const decodeEnvelope = (text: string) => {
     try {
-      return unparsedStartOperationResultSchema.parse(JSON.parse(text));
+      return operationResultSchema.parse(JSON.parse(text));
     } catch {
       throw new InvalidOperationResponse();
     }
@@ -95,7 +95,7 @@ export async function measureOperationRead(
 
   const record = (
     index: number,
-    result: z.output<typeof unparsedStartOperationResultSchema> | null,
+    result: z.output<typeof operationResultSchema> | null,
   ) => {
     const item = items[index];
     if (!item || seen.has(index)) throw new InvalidOperationResponse();
@@ -151,9 +151,9 @@ export async function measureOperationRead(
       responseBodyBytes = body.byteLength;
       bodyComplete = true;
       // A dispatch refusal is the bare error under its status.
-      let refusal: z.output<typeof publicStartOperationErrorSchema> | undefined;
+      let refusal: z.output<typeof publicOperationErrorSchema> | undefined;
       try {
-        refusal = publicStartOperationErrorSchema.safeParse(
+        refusal = publicOperationErrorSchema.safeParse(
           JSON.parse(new TextDecoder().decode(body)),
         ).data;
       } catch {

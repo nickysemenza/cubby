@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
-import { StartOperationError } from "~/lib/start-operation-error";
-import type { StartOperationId } from "~/lib/start-operation-observability";
+import { OperationError } from "~/lib/operation-error";
+import type { OperationId } from "~/lib/operation-observability";
 
 import { dispatchBrowserOperation } from "./browser-operation-transport";
 
@@ -90,7 +90,7 @@ describe("browser operation transport", () => {
       ),
     ]);
     for (const error of errors) {
-      expect(error).toBeInstanceOf(StartOperationError);
+      expect(error).toBeInstanceOf(OperationError);
       expect(error).toMatchObject({
         data: {
           code: "INVALID_TRANSPORT_RESPONSE",
@@ -197,7 +197,7 @@ describe("browser operation transport", () => {
   it("sends queries issued in the same tick as one request", async () => {
     const { sent, fetchMock } = stubDispatch();
     // Each call carries its own operation trace headers, as production does.
-    const traced = (operation: StartOperationId) => ({
+    const traced = (operation: OperationId) => ({
       headers: {
         "x-cubby-operation": operation,
         "x-cubby-operation-kind": "query",

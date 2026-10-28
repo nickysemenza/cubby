@@ -26,7 +26,7 @@ type HandlerDefinition = {
   exportName: string;
   /**
    * The handler is `<exportName>.<table>[<member>]`, already
-   * `StartOperationHandler` / `WorkflowStreamHandler`-shaped, so the emitted
+   * `OperationHandler` / `WorkflowStreamHandler`-shaped, so the emitted
    * loader needs no cast.
    */
   member: string;
@@ -399,7 +399,7 @@ const isImplementer = (name: string | undefined): name is ImplementerName =>
   name !== undefined && Object.hasOwn(IMPLEMENTERS, name);
 
 export type CollectedHandlers = {
-  /** `query` | `mutation` members, dispatched by `dispatchStartOperation`. */
+  /** `query` | `mutation` members, dispatched by `dispatchOperation`. */
   operations: Map<string, HandlerDefinition>;
   /** `subscription` members, dispatched by `dispatchWorkflowStream`. */
   subscriptions: Map<string, HandlerDefinition>;
@@ -414,7 +414,7 @@ let cachedHandlers: Promise<CollectedHandlers> | undefined;
  * the tables into lazy adapters rather than maintaining a second handwritten
  * dispatcher registry.
  */
-export const collectStartOperationHandlers = (): Promise<CollectedHandlers> => {
+export const collectOperationHandlers = (): Promise<CollectedHandlers> => {
   cachedHandlers ??= (async () => {
     const collected: CollectedHandlers = {
       operations: new Map(),
@@ -517,7 +517,7 @@ async function collectHandlerVariable(
  * puzzle, so it fails here, earlier and more clearly than the generated
  * loader's `satisfies` exhaustiveness failure (which stays as belt-and-braces).
  */
-export const collectStartOperations = async (): Promise<
+export const collectOperations = async (): Promise<
   Map<
     string,
     {
@@ -528,7 +528,7 @@ export const collectStartOperations = async (): Promise<
   >
 > => {
   const declarations = await collectDeclaredOperations();
-  const handlers = await collectStartOperationHandlers();
+  const handlers = await collectOperationHandlers();
   for (const [operation, declared] of declarations) {
     const implementer = implementerForKind(declared.kind);
     const table =

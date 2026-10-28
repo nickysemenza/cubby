@@ -11,8 +11,8 @@
 
 import type { z } from "zod";
 
-import { START_OPERATIONS } from "~/lib/generated/start-operation-registry.gen";
-import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";
+import { OPERATIONS } from "~/lib/generated/operation-registry.gen";
+import { publicOperationErrorSchema } from "~/server/operation-runtime/operation.contract";
 
 /** Response header carrying the server's request id back to the client. */
 import {
@@ -53,7 +53,7 @@ export async function fetchWithRequestDiagnostics(
   const rawOperation = requestHeaders.get("x-cubby-operation");
   const operation =
     context?.operation ??
-    (rawOperation && Object.hasOwn(START_OPERATIONS, rawOperation)
+    (rawOperation && Object.hasOwn(OPERATIONS, rawOperation)
       ? rawOperation
       : undefined);
   const started = performance.now();
@@ -101,11 +101,9 @@ export async function fetchWithRequestDiagnostics(
         throw error;
       bodyFailure = describeErrorCauses(error, { includeStacks: true });
     }
-    let publicError:
-      | z.infer<typeof publicStartOperationErrorSchema>
-      | undefined;
+    let publicError: z.infer<typeof publicOperationErrorSchema> | undefined;
     try {
-      publicError = publicStartOperationErrorSchema.safeParse(
+      publicError = publicOperationErrorSchema.safeParse(
         JSON.parse(body ?? ""),
       ).data;
     } catch {

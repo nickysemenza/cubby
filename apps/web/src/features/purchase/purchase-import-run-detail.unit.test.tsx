@@ -7,7 +7,7 @@ import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web
 import type { RunDetail } from "~/contracts/run.contract";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { importReportBlocks } from "~/server/generic/entity-report/repo/run";
 
 import {
@@ -105,7 +105,7 @@ beforeEach(() => {
   harness = createBrowserTestHarness();
   detailRun = run;
   operationCalls.length = 0;
-  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+  restoreDispatch = overrideOperationDispatch(async (operation, input) => {
     operationCalls.push({ operation, input });
     if (operation === "run.work") return { ok: true, data: detailRun };
     // The transcript and system log are server-composed report slots.

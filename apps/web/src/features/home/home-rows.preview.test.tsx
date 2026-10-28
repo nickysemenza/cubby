@@ -9,7 +9,7 @@ import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-displa
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityMedia } from "~/integrations/tanstack-query/domains/entityMedia";
 import { entityReport } from "~/integrations/tanstack-query/domains/entityReport";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { TodayAttention } from "./house-card";
@@ -110,7 +110,7 @@ it("gives Today tasks and projects separate readable lines with bounded due date
       ],
     },
   );
-  const restoreDispatch = overrideStartDispatch(async (operation) => {
+  const restoreDispatch = overrideOperationDispatch(async (operation) => {
     if (operation === "entityMedia.displayImages")
       return { ok: true, data: {} };
     if (operation === "entityReport.get") {

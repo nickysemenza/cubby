@@ -87,7 +87,7 @@ import { assessRecipeFlowCandidate } from "~/server/domains/recipe/service/recip
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { embedTexts } from "~/server/generic/embedding/service/semantic/embeddings";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
+import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 
 import { finishSmokeAttempt, withSmokeUsage } from "../ai/smoke-attempt";
 import { AI_SMOKE_CASES } from "../ai/smoke-catalog";
@@ -129,7 +129,7 @@ const purchaseCapture = (fixture: "standard" | "ambiguous") =>
   });
 
 async function imageSources(
-  db: AuthenticatedStartOperationContext["db"],
+  db: AuthenticatedOperationContext["db"],
   shortcodes: string[],
 ) {
   const ids = await Promise.all(
@@ -157,7 +157,7 @@ async function imageSources(
 }
 
 async function ingredientSources(
-  db: AuthenticatedStartOperationContext["db"],
+  db: AuthenticatedOperationContext["db"],
   shortcodes: string[],
 ) {
   return Promise.all(
@@ -183,7 +183,7 @@ type SmokeJson = z.infer<typeof aiSmokeRunInput>["input"];
 // The switch lists caller shapes; each branch delegates its work to a production AI helper.
 // eslint-disable-next-line complexity
 async function runCase(
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   scenario: AiSmokeScenario,
   raw: SmokeJson,
   runId: RunId,
@@ -990,7 +990,7 @@ async function runCase(
 }
 
 export async function runAiSmoke(
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   scenario: AiSmokeScenario,
   raw: SmokeJson,
   structuredPorts?: StructuredRunPorts,

@@ -12,11 +12,11 @@ import { withErrorReporting } from "~/server/errors/report-error";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import type { AppSpan } from "~/server/observability/tracing";
-import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";
+import { publicOperationErrorSchema } from "~/server/operation-runtime/operation.contract";
 import type {
-  AuthenticatedStartOperationContext,
-  StartOperationRequest,
-} from "~/server/operation-runtime/start-operation.server";
+  AuthenticatedOperationContext,
+  OperationRequest,
+} from "~/server/operation-runtime/operation.server";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
@@ -33,7 +33,7 @@ const context = requireActor(
   }),
 );
 
-const request = (): StartOperationRequest => ({
+const request = (): OperationRequest => ({
   principal: systemPrincipal(context, {
     channel: "browser",
     credential: "cookie",
@@ -43,7 +43,7 @@ const request = (): StartOperationRequest => ({
 });
 
 type StreamRun = (
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   input: Record<string, never>,
   signal: AbortSignal,
 ) => AsyncIterable<unknown> | Promise<AsyncIterable<unknown>>;
@@ -93,7 +93,7 @@ const collect = async <T>(stream: ReadableStream<T>) => {
 
 const streamFrameSchema = z.object({
   ok: z.boolean(),
-  error: publicStartOperationErrorSchema.optional(),
+  error: publicOperationErrorSchema.optional(),
 });
 
 describe("workflow stream freshness notifications", () => {

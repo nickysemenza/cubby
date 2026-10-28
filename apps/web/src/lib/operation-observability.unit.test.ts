@@ -1,51 +1,49 @@
 import { describe, expect, it } from "vitest";
 
-import { START_OPERATIONS } from "./generated/start-operation-registry.gen";
+import { OPERATIONS } from "./generated/operation-registry.gen";
 import {
-  readStartOperationTraceContext,
-  startOperationDefinitionFor,
-  startOperationHeaders,
-  startOperationTraceAttributes,
-  type StartOperationTraceContext,
-} from "./start-operation-observability";
+  readOperationTraceContext,
+  operationDefinitionFor,
+  operationTraceHeaders,
+  operationTraceAttributes,
+  type OperationTraceContext,
+} from "./operation-observability";
 
 describe("Start operation trace context", () => {
   it("round-trips every generated operation definition", () => {
-    for (const operation of Object.keys(START_OPERATIONS)) {
-      const registered = startOperationDefinitionFor(operation);
+    for (const operation of Object.keys(OPERATIONS)) {
+      const registered = operationDefinitionFor(operation);
       if (!registered) throw new Error(`Missing operation ${operation}`);
       const entity = registered.entities[0];
       const headerInput = {
         operation: registered.id,
         kind: registered.kind,
       };
-      const expected: StartOperationTraceContext = { ...headerInput };
+      const expected: OperationTraceContext = { ...headerInput };
       if (entity) expected.entity = entity;
-      const headers = startOperationHeaders(
+      const headers = operationTraceHeaders(
         entity ? { ...headerInput, entity } : headerInput,
       );
-      expect(readStartOperationTraceContext(new Headers(headers))).toEqual(
-        expected,
-      );
+      expect(readOperationTraceContext(new Headers(headers))).toEqual(expected);
     }
   });
 
   it("round-trips only the approved operation, kind, and entity dimensions", () => {
     const headers = new Headers(
-      startOperationHeaders({
+      operationTraceHeaders({
         operation: "entity.detail",
         kind: "query",
         entity: "product",
       }),
     );
 
-    const context = readStartOperationTraceContext(headers);
+    const context = readOperationTraceContext(headers);
     expect(context).toEqual({
       operation: "entity.detail",
       kind: "query",
       entity: "product",
     });
-    expect(startOperationTraceAttributes(context)).toEqual({
+    expect(operationTraceAttributes(context)).toEqual({
       "rpc.system": "start",
       "rpc.method": "entity.detail",
       "rpc.type": "query",
@@ -55,7 +53,7 @@ describe("Start operation trace context", () => {
 
   it("drops arbitrary, mismatched, and high-cardinality header values", () => {
     expect(
-      readStartOperationTraceContext(
+      readOperationTraceContext(
         new Headers({
           "x-cubby-operation": "entity.detail.secret-shortcode",
           "x-cubby-operation-kind": "query",
@@ -64,7 +62,7 @@ describe("Start operation trace context", () => {
       ),
     ).toBeUndefined();
     expect(
-      readStartOperationTraceContext(
+      readOperationTraceContext(
         new Headers({
           "x-cubby-operation": "entity.detail",
           "x-cubby-operation-kind": "query",
@@ -73,7 +71,7 @@ describe("Start operation trace context", () => {
       ),
     ).toEqual({ operation: "entity.detail", kind: "query" });
     expect(
-      readStartOperationTraceContext(
+      readOperationTraceContext(
         new Headers({
           "x-cubby-operation": "entity.detail",
           "x-cubby-operation-kind": "mutation",
@@ -82,7 +80,7 @@ describe("Start operation trace context", () => {
       ),
     ).toBeUndefined();
     expect(
-      readStartOperationTraceContext(
+      readOperationTraceContext(
         new Headers({
           "x-cubby-operation": "cookbook.list",
           "x-cubby-operation-kind": "query",

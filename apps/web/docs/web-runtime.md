@@ -65,7 +65,7 @@ Every client speaks plain JSON to `/api/operations/<id>`; the browser adds
 operations. Dates cross as ISO strings and each operation's schemas restore them
 on parse; generic entity reads parse through their entity's lazily loaded read
 schema. The envelope is validated once per path, and a client-side schema
-rejection surfaces as a `StartOperationError`.
+rejection surfaces as a `OperationError`.
 Workflow streams POST to the same endpoint and answer with NDJSON result lines,
 ending with a data-less success line that carries the read marker; a body that
 ends without it is treated as cut off. The owning screen opens the stream

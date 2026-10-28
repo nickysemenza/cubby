@@ -2,9 +2,9 @@ import type { WorkflowCommandRequest } from "@cubby/schemas/workflow-command";
 import type { z } from "zod";
 type WorkflowCommandResult = z.output<z.ZodUnknown>;
 
-import { START_OPERATIONS } from "~/lib/generated/start-operation-registry.gen";
+import { OPERATIONS } from "~/lib/generated/operation-registry.gen";
+import { parseOperationInput } from "~/lib/operation-error";
 import type { OperationRegistry } from "~/lib/operation-registry-types";
-import { parseOperationInput } from "~/lib/start-operation-error";
 
 import type { MutationDescriptor } from "./operation-catalog";
 import { workflowCommandMetadata } from "./workflow-commands";
@@ -14,7 +14,7 @@ type DomainModule = Record<
   Record<string, { definition: { kind: string } }>
 >;
 const domains = import.meta.glob<DomainModule>("./domains/*.ts");
-const registry: OperationRegistry = START_OPERATIONS;
+const registry: OperationRegistry = OPERATIONS;
 
 export async function workflowCommandOptions(operation: string) {
   const command = workflowCommandMetadata(operation);

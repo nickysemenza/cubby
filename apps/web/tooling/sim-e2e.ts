@@ -34,7 +34,7 @@ import {
   selectIOSSimulator,
 } from "../../apple/tooling/apple-simulator-selection.ts";
 import { scrubErrorMessage } from "../src/lib/error-diagnostics";
-import { startOperation } from "../tests/e2e/support/start-operation";
+import { operationCall } from "../tests/e2e/support/operation";
 import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
 import { leaseNamedDatabase } from "./test-database-lease";
 import { buildWebWorker } from "./build-cf";
@@ -734,7 +734,7 @@ async function runHeadlessPhotoScenario(
     ];
     const proposalPool = createPostgresPool({ connectionString: databaseURL });
     try {
-      const proposed = await startOperation(context, "photoImport.saveGroups", {
+      const proposed = await operationCall(context, "photoImport.saveGroups", {
         runId: runID,
         groups,
       });
@@ -753,11 +753,10 @@ async function runHeadlessPhotoScenario(
     const proposedAt = performance.now();
     await exercisePhotoProcessingJobs(imageIDs);
     // Group decisions are web's (`run/<id>#photo-batch`), so approval uses the web operation.
-    const approved = await startOperation(
-      context,
-      "photoImport.approveGroups",
-      { runId: runID, groupKeys: ["synthetic-shirt", "synthetic-boots"] },
-    );
+    const approved = await operationCall(context, "photoImport.approveGroups", {
+      runId: runID,
+      groupKeys: ["synthetic-shirt", "synthetic-boots"],
+    });
     if (!approved.ok())
       throw new Error(`Photo approval failed: ${await approved.text()}`);
     const reviewedAt = performance.now();

@@ -6,7 +6,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { MealPortionsSection } from "./meal-portions-section";
@@ -19,7 +19,7 @@ let answer: EntityReportOut;
 
 beforeEach(() => {
   harness = createBrowserTestHarness();
-  restoreDispatch = overrideStartDispatch(async (operation) => {
+  restoreDispatch = overrideOperationDispatch(async (operation) => {
     if (operation === "entityReport.get") return { ok: true, data: answer };
     throw new Error(`Unexpected operation: ${operation}`);
   });

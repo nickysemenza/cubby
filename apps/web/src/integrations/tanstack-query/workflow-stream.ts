@@ -3,15 +3,12 @@ import type { z } from "zod";
 import { streamOperation } from "~/integrations/tanstack-query/browser-operation-transport";
 import {
   beginOperationCall,
-  unwrapStartOperationResult,
-} from "~/integrations/tanstack-query/start-transport";
-import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
+  unwrapOperationResult,
+} from "~/integrations/tanstack-query/operation-call";
+import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
+import { parseOperationOutput, OperationError } from "~/lib/operation-error";
 import { acceptMemberWriteCookie } from "~/lib/read-consistency";
-import {
-  parseOperationOutput,
-  StartOperationError,
-} from "~/lib/start-operation-error";
-import { unparsedStartOperationDataSchema } from "~/server/operation-runtime/start-operation.contract";
+import { operationWireValueSchema } from "~/server/operation-runtime/operation.contract";
 
 /**
  * Open a workflow stream over `POST /api/operations/<id>`. The server ends a
@@ -22,13 +19,13 @@ export async function openWorkflowStream<
   Input,
   EventSchema extends z.ZodTypeAny,
 >(options: {
-  operation: StartOperationIdOfKind<"subscription">;
+  operation: OperationIdOfKind<"subscription">;
   kind: "query" | "mutation";
   input: Input;
   eventSchema: EventSchema;
   signal?: AbortSignal;
 }): Promise<AsyncIterable<z.output<EventSchema>>> {
-  const input = unparsedStartOperationDataSchema.parse(options.input);
+  const input = operationWireValueSchema.parse(options.input);
   const call = beginOperationCall({
     operation: options.operation,
     kind: options.kind,
@@ -62,13 +59,13 @@ export async function openWorkflowStream<
           completed = true;
           continue;
         }
-        const event = unwrapStartOperationResult(options.operation, result);
+        const event = unwrapOperationResult(options.operation, result);
         yield await parseOperationOutput(options.operation, () =>
           options.eventSchema.parse(event),
         );
       }
       if (!completed)
-        throw new StartOperationError({
+        throw new OperationError({
           code: "INVALID_TRANSPORT_RESPONSE",
           message: `${options.operation} ended before its stream completed`,
         });

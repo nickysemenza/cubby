@@ -45,7 +45,7 @@ import {
   waitForAppHydration,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { startOperation } from "./support/start-operation";
+import { operationCall } from "./support/operation";
 import {
   createEntityFixture,
   createFixtureGraph,
@@ -77,7 +77,7 @@ const recordRows =
     fingerprint: string,
     rows: Partial<SourceTransactionRecordInput>[],
   ) => {
-    const response = await startOperation(
+    const response = await operationCall(
       page.request,
       "sourceTransactionRecord.record",
       {

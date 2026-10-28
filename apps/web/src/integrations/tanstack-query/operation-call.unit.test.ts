@@ -1,27 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { OperationError } from "~/lib/operation-error";
 import { reset, snapshot } from "~/lib/perf/perf-store";
-import { StartOperationError } from "~/lib/start-operation-error";
-import type { StartOperationResult } from "~/server/operation-runtime/start-operation.contract";
+import type { OperationResult } from "~/server/operation-runtime/operation.contract";
 
 import {
-  overrideStartDispatch,
-  startOperation,
-  unwrapStartOperationResult,
-} from "./start-transport";
+  overrideOperationDispatch,
+  operationCall,
+  unwrapOperationResult,
+} from "./operation-call";
 
 let restore = () => {};
 beforeEach(reset);
 afterEach(() => restore());
 
-const ok = <T>(data: T): StartOperationResult<T> => ({ ok: true, data });
+const ok = <T>(data: T): OperationResult<T> => ({ ok: true, data });
 
 describe("Start operation binding", () => {
   it("dispatches through the shared seam and observes the bound entity", async () => {
     const dispatch = vi.fn(async () => ok({ items: ["one"] }));
-    restore = overrideStartDispatch(dispatch);
-    const operation = startOperation<{ entity: string }, { items: string[] }>({
+    restore = overrideOperationDispatch(dispatch);
+    const operation = operationCall<{ entity: string }, { items: string[] }>({
       operation: "entity.list",
       parse: (result) => z.object({ items: z.array(z.string()) }).parse(result),
     });
@@ -42,8 +42,10 @@ describe("Start operation binding", () => {
   });
 
   it("records transport errors", async () => {
-    restore = overrideStartDispatch(() => Promise.reject(new Error("broken")));
-    const operation = startOperation<Record<string, never>, never>({
+    restore = overrideOperationDispatch(() =>
+      Promise.reject(new Error("broken")),
+    );
+    const operation = operationCall<Record<string, never>, never>({
       operation: "entity.filterOptions",
       parse: z.never().parse,
     });
@@ -56,8 +58,8 @@ describe("Start operation binding", () => {
   });
 
   it("records registered mutations through the mutation channel", async () => {
-    restore = overrideStartDispatch(() => Promise.resolve(ok(null)));
-    const operation = startOperation<null, null>({
+    restore = overrideOperationDispatch(() => Promise.resolve(ok(null)));
+    const operation = operationCall<null, null>({
       operation: "image.delete",
       kind: "mutation",
       parse: () => null,
@@ -73,7 +75,7 @@ describe("Start operation binding", () => {
   });
 
   it("derives query metadata from the same declaration the call observes", () => {
-    const operation = startOperation<null, null>({
+    const operation = operationCall<null, null>({
       operation: "cookbook.list",
       parse: () => null,
     });
@@ -89,8 +91,8 @@ describe("Start operation binding", () => {
   });
 
   it("raises the bound error type for a refused operation", async () => {
-    class DetailError extends StartOperationError {}
-    restore = overrideStartDispatch(async () => ({
+    class DetailError extends OperationError {}
+    restore = overrideOperationDispatch(async () => ({
       ok: false,
       error: {
         code: "NOT_FOUND",
@@ -98,21 +100,21 @@ describe("Start operation binding", () => {
         requestId: "ray-operation-test",
       },
     }));
-    const operation = startOperation<null, null>({
+    const operation = operationCall<null, null>({
       operation: "entity.detail",
       parse: () => null,
       createError: (error) => new DetailError(error),
     });
 
     await expect(operation.call(null)).rejects.toMatchObject({
-      name: "StartOperationError",
+      name: "OperationError",
       requestId: "ray-operation-test",
     });
   });
 
   it("keeps request ids on their own out-of-order failures", async () => {
     const requestSchema = z.object({ id: z.string(), delay: z.number() });
-    restore = overrideStartDispatch((_operation, input) => {
+    restore = overrideOperationDispatch((_operation, input) => {
       const { id, delay } = requestSchema.parse(input);
       return new Promise((resolve) =>
         setTimeout(
@@ -125,7 +127,7 @@ describe("Start operation binding", () => {
         ),
       );
     });
-    const operation = startOperation<{ id: string; delay: number }, null>({
+    const operation = operationCall<{ id: string; delay: number }, null>({
       operation: "entity.detail",
       parse: () => null,
     });
@@ -147,13 +149,13 @@ describe("Start operation binding", () => {
 
   it("rejects undefined before TanStack Query receives it", () => {
     expect(() =>
-      unwrapStartOperationResult("entity.detail", {
+      unwrapOperationResult("entity.detail", {
         ok: true,
         data: undefined,
       }),
-    ).toThrowError(StartOperationError);
+    ).toThrowError(OperationError);
     expect(
-      unwrapStartOperationResult("entity.detail", { ok: true, data: null }),
+      unwrapOperationResult("entity.detail", { ok: true, data: null }),
     ).toBeNull();
   });
 });

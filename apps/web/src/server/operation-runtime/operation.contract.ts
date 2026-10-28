@@ -38,7 +38,7 @@ const diagnosticsSchema = errorDiagnosticsSchema
   .optional()
   .catch(({ value }) => malformedDiagnostics(value));
 
-export const publicStartOperationErrorSchema = z.object({
+export const publicOperationErrorSchema = z.object({
   message: z.string(),
   code: z.string(),
   reason: z.string().optional(),
@@ -50,8 +50,8 @@ export const publicStartOperationErrorSchema = z.object({
 });
 
 /** Plain-object branch of the recursive operation wire value. */
-interface StartOperationProperties {
-  readonly [key: string]: UnparsedStartOperationData;
+interface OperationProperties {
+  readonly [key: string]: OperationWireValue;
 }
 
 /**
@@ -60,38 +60,35 @@ interface StartOperationProperties {
  * schemas validate the domain shape; this type only keeps callers honest at
  * compile time.
  */
-export type UnparsedStartOperationData =
+export type OperationWireValue =
   | string
   | number
   | boolean
   | null
   | undefined
   | Date
-  | readonly UnparsedStartOperationData[]
-  | StartOperationProperties;
+  | readonly OperationWireValue[]
+  | OperationProperties;
 
-export const unparsedStartOperationDataSchema =
-  z.custom<UnparsedStartOperationData>();
+export const operationWireValueSchema = z.custom<OperationWireValue>();
 
 export type PublicStartValidationIssue = z.infer<
   typeof publicStartValidationIssueSchema
 >;
-export type PublicStartOperationError = z.infer<
-  typeof publicStartOperationErrorSchema
->;
-export type StartOperationResult<T> =
+export type PublicOperationError = z.infer<typeof publicOperationErrorSchema>;
+export type OperationResult<T> =
   | { ok: true; data: T; readMarker?: string }
-  | { ok: false; error: PublicStartOperationError; readMarker?: string };
+  | { ok: false; error: PublicOperationError; readMarker?: string };
 
-export const unparsedStartOperationResultSchema = z.discriminatedUnion("ok", [
+export const operationResultSchema = z.discriminatedUnion("ok", [
   z.object({
     ok: z.literal(true),
-    data: unparsedStartOperationDataSchema,
+    data: operationWireValueSchema,
     readMarker: z.string().optional(),
   }),
   z.object({
     ok: z.literal(false),
-    error: publicStartOperationErrorSchema,
+    error: publicOperationErrorSchema,
     readMarker: z.string().optional(),
   }),
 ]);

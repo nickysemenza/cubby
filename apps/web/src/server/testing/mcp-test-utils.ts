@@ -27,9 +27,9 @@ import {
   type McpEntityExecutor,
 } from "~/server/mcp/kernel-actions";
 import { observeOperation } from "~/server/observability/observed-request";
-import type { StartOperationHandler } from "~/server/operation-runtime/operation-handlers.server";
-import { unparsedStartOperationDataSchema } from "~/server/operation-runtime/start-operation.contract";
-import { createStartOperationRunner } from "~/server/operation-runtime/start-operation.server";
+import type { OperationHandler } from "~/server/operation-runtime/operation-handlers.server";
+import { operationWireValueSchema } from "~/server/operation-runtime/operation.contract";
+import { createOperationExecutor } from "~/server/operation-runtime/operation.server";
 
 import {
   type McpToolBindings,
@@ -85,7 +85,7 @@ export function observedMcpRuntime(spies: {
   const recordDatabaseWrite =
     spies.recordDatabaseWrite ?? (async () => undefined);
   return {
-    runStartOperation: createStartOperationRunner({
+    executeOperation: createOperationExecutor({
       observe: observeOperation,
       markCalendarDirty: (reason) => spies.markCalendarDirty?.(reason),
       recordDatabaseWrite,
@@ -98,7 +98,7 @@ export function observedMcpRuntime(spies: {
  * Register one single-action tool backed by an ad hoc handler, for tests of
  * the shared adapter (errors, deadlines, batches, bookkeeping). The action is
  * `run`; call it as `{ action: "run", ...input }`. The handler runs through
- * `runtime.runStartOperation` (default: the shared runner with isolated
+ * `runtime.executeOperation` (default: the shared runner with isolated
  * side-effect observers) as the ad hoc
  * operation `${name}.run`, the way a generated handler runs its operation.
  */
@@ -127,8 +127,8 @@ export function registerTestTool<
   const defaultRuntime = observedMcpRuntime({
     recordDatabaseWrite: runtime?.recordDatabaseWrite,
   });
-  const run = runtime?.runStartOperation ?? defaultRuntime.runStartOperation!;
-  const handler: StartOperationHandler<z.output<Output>> = (options) => {
+  const run = runtime?.executeOperation ?? defaultRuntime.executeOperation!;
+  const handler: OperationHandler<z.output<Output>> = (options) => {
     // Ad hoc writes still exercise the runner's after-commit path. Supply a
     // harmless test database handle when the tool test intentionally omitted
     // request context; real database tests keep their provided handle.
@@ -176,7 +176,7 @@ export function registerTestTool<
     { [config.name]: { description: "Test tool." } },
     {
       ...runtime,
-      runStartOperation: run,
+      executeOperation: run,
       // The test id is not in the registry, so it bypasses dispatch's
       // resolver and runs the handler directly.
       dispatchOperation: async (principal, call) => {
@@ -193,7 +193,7 @@ export function registerTestTool<
           result: result.ok
             ? {
                 ...result,
-                data: unparsedStartOperationDataSchema.parse(result.data),
+                data: operationWireValueSchema.parse(result.data),
               }
             : result,
         };

@@ -12,7 +12,7 @@ import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { persistAppleImageDescriptionSubmission } from "~/server/domains/image-processing/repo/image-processing-submission";
 import { createEvidenceHarnessContext } from "./fixtures/core";
 import { expect, test } from "./support/e2e-test";
-import { startOperation } from "./support/start-operation";
+import { operationCall } from "./support/operation";
 
 const jpeg = readFileSync(
   new URL("./fixtures/synthetic-white.jpg", import.meta.url),
@@ -131,13 +131,13 @@ test.describe("companion doorbell", () => {
     );
     const hello = helloFor(randomUUID());
     const first = pulled.parse(
-      (await startOperation(page.request, "imageProcessing.pull", { hello }))
+      (await operationCall(page.request, "imageProcessing.pull", { hello }))
         .body,
     );
     expect(first.command?.jobId).toBe(jobId);
     if (!first.command) throw new Error("No command was pulled");
 
-    const completed = await startOperation(
+    const completed = await operationCall(
       page.request,
       "imageProcessing.complete",
       {
@@ -157,14 +157,14 @@ test.describe("companion doorbell", () => {
     );
     expect(completed.body).toEqual({ adopted: true });
     const next = pulled.parse(
-      (await startOperation(page.request, "imageProcessing.pull", { hello }))
+      (await operationCall(page.request, "imageProcessing.pull", { hello }))
         .body,
     );
     // Parallel tests share the household queue, so another job may be
     // waiting; the failed job backs off, so it is not handed out again at once.
     expect(next.command?.jobId).not.toBe(jobId);
     if (next.command)
-      await startOperation(page.request, "imageProcessing.release", {
+      await operationCall(page.request, "imageProcessing.release", {
         deviceId: hello.deviceId,
         jobId: next.command.jobId,
         attemptId: next.command.attemptId,

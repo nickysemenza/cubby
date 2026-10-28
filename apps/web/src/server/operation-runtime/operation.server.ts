@@ -7,14 +7,14 @@ import {
   scrubErrorMessage,
   sentryEventUrl,
 } from "~/lib/error-diagnostics";
-import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
+import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
 import {
-  isStartOperationEntity,
-  type StartOperationDefinition,
-  type StartOperationId,
-  type StartOperationKind,
-  startOperationDefinitionFor,
-} from "~/lib/start-operation-observability";
+  isOperationEntity,
+  type OperationDefinition,
+  type OperationId,
+  type OperationKind,
+  operationDefinitionFor,
+} from "~/lib/operation-observability";
 import { noteRequestOperation } from "~/server/db/db-observability";
 import {
   recordDatabaseWrite,
@@ -65,13 +65,13 @@ import {
   getRequestId,
 } from "~/server/observability/tracing";
 import type {
-  PublicStartOperationError,
-  StartOperationResult,
-} from "~/server/operation-runtime/start-operation.contract";
+  PublicOperationError,
+  OperationResult,
+} from "~/server/operation-runtime/operation.contract";
 
-const log = createLogger("start-operation");
+const log = createLogger("operation");
 
-export type StartOperationRequest = {
+export type OperationRequest = {
   /** Minted by `authenticate` before any request JSON is read. */
   principal: Principal;
   /** Correlation only (request id, ray); never authority. */
@@ -81,7 +81,7 @@ export type StartOperationRequest = {
   modelBacked?: boolean;
 };
 
-export type AuthenticatedStartOperationContext = AuthenticatedRequestContext;
+export type AuthenticatedOperationContext = AuthenticatedRequestContext;
 
 export type OperationStage =
   | "context"
@@ -91,15 +91,15 @@ export type OperationStage =
   | "dispatch";
 
 type ObservedStartResult<Output> = {
-  result: StartOperationResult<Output>;
-  observedError?: StartOperationFailureCause;
+  result: OperationResult<Output>;
+  observedError?: OperationFailureCause;
 };
 
-type StartOperationFailureCause = ObservedFailure;
+type OperationFailureCause = ObservedFailure;
 
-type NormalizedStartOperationError = {
-  publicError: PublicStartOperationError;
-  observedError: StartOperationFailureCause;
+type NormalizedOperationError = {
+  publicError: PublicOperationError;
+  observedError: OperationFailureCause;
 };
 
 /** What a deadline answer reports about the call it abandoned. */
@@ -109,8 +109,8 @@ type RunState = {
   entity: string | undefined;
 };
 
-type StartOperationInspection = {
-  error?: StartOperationFailureCause;
+type OperationInspection = {
+  error?: OperationFailureCause;
   workload: Workload;
   reported?: boolean;
 };
@@ -120,7 +120,7 @@ const abortError = (signal: AbortSignal): Error =>
     ? signal.reason
     : new DOMException("The operation was cancelled", "AbortError");
 
-export function throwIfStartOperationAborted(signal: AbortSignal): void {
+export function throwIfOperationAborted(signal: AbortSignal): void {
   if (signal.aborted) throw abortError(signal);
 }
 
@@ -151,12 +151,12 @@ function normalizePublicError<TError>(
   error: TError,
   stage: OperationStage,
   requestId?: string,
-): NormalizedStartOperationError {
+): NormalizedOperationError {
   const failure = parseObservedFailure(error);
   if (stage === "output" && failure instanceof z.ZodError) {
     // A handler's result drifted from its declared output: name the path so
     // the caller (often an MCP agent) can report the exact field.
-    const publicError: PublicStartOperationError = {
+    const publicError: PublicOperationError = {
       code: "INTERNAL_SERVER_ERROR",
       reason: "INVALID_OUTPUT",
       message: `Output does not match its schema: ${validationMessage(failure)}`,
@@ -166,7 +166,7 @@ function normalizePublicError<TError>(
     return { publicError, observedError: failure };
   }
   if (stage === "input" && failure instanceof SyntaxError) {
-    const publicError: PublicStartOperationError = {
+    const publicError: PublicOperationError = {
       code: "BAD_REQUEST",
       reason: "INVALID_INPUT",
       message: "Invalid request input",
@@ -175,7 +175,7 @@ function normalizePublicError<TError>(
     return { publicError, observedError: publicError };
   }
   if (stage === "input" && failure instanceof z.ZodError) {
-    const publicError: PublicStartOperationError = {
+    const publicError: PublicOperationError = {
       code: "BAD_REQUEST",
       reason: "INVALID_INPUT",
       message: validationMessage(failure),
@@ -193,7 +193,7 @@ function normalizePublicError<TError>(
   if (knownError) {
     const payload = toPublicErrorPayload(knownError);
     const { code, ...details } = payload;
-    const publicError: PublicStartOperationError = {
+    const publicError: PublicOperationError = {
       code:
         code ??
         (payload.blockers && payload.blockers.length > 0
@@ -215,7 +215,7 @@ function normalizePublicError<TError>(
   const carried = toPublicErrorPayload(failure);
   if (carried.code && failure instanceof Error && isExpectedAppError(failure)) {
     const { code, ...details } = carried;
-    const publicError: PublicStartOperationError = {
+    const publicError: PublicOperationError = {
       code,
       message: failure.message || "The operation could not be completed",
       ...details,
@@ -224,7 +224,7 @@ function normalizePublicError<TError>(
     return { publicError, observedError: failure };
   }
 
-  const publicError: PublicStartOperationError = {
+  const publicError: PublicOperationError = {
     code: "INTERNAL_SERVER_ERROR",
     reason: stage === "output" ? "INVALID_OUTPUT" : "UNKNOWN_ERROR",
     message: "The operation could not be completed",
@@ -255,12 +255,12 @@ function unauthenticatedErrorMessage(
     : "The operation could not be completed";
 }
 
-export function normalizeStartOperationError<TError>(
+export function normalizeOperationError<TError>(
   error: TError,
   stage: OperationStage,
   requestId?: string,
   context?: OperationFailureContext,
-): NormalizedStartOperationError {
+): NormalizedOperationError {
   const normalized = normalizePublicError(error, stage, requestId);
   if (!context) return normalized;
   const { publicError } = normalized;
@@ -342,7 +342,7 @@ const EXPIRED = Symbol("deadline expired");
 
 /** Mutations and workflow streams write; reads may wait on a model. */
 export const deadlineClassOf = (
-  kind: StartOperationKind,
+  kind: OperationKind,
   modelBacked?: boolean,
 ): DeadlineClass =>
   kind !== "query" ? "write" : modelBacked ? "modelRead" : "read";
@@ -442,23 +442,23 @@ export const CHANNEL_OBSERVATION = {
 >;
 
 /** The operations a caller reaches: the kinds callable here, and `internal` ids or not. */
-export type OperationAccess<Kind extends StartOperationKind> = {
+export type OperationAccess<Kind extends OperationKind> = {
   readonly kinds: readonly Kind[];
   /** `internal` also reaches the web UI's own plumbing; `external` refuses it. */
   readonly exposure: "internal" | "external";
 };
 
-type ResolvedOperation<Kind extends StartOperationKind> =
+type ResolvedOperation<Kind extends OperationKind> =
   | {
       ok: true;
-      definition: StartOperationDefinition<StartOperationIdOfKind<Kind>>;
+      definition: OperationDefinition<OperationIdOfKind<Kind>>;
     }
-  | { ok: false; error: PublicStartOperationError };
+  | { ok: false; error: PublicOperationError };
 
-export const isOperationOfKind = <Kind extends StartOperationKind>(
-  definition: StartOperationDefinition,
+export const isOperationOfKind = <Kind extends OperationKind>(
+  definition: OperationDefinition,
   kinds: readonly Kind[],
-): definition is StartOperationDefinition<StartOperationIdOfKind<Kind>> =>
+): definition is OperationDefinition<OperationIdOfKind<Kind>> =>
   kinds.some((kind) => kind === definition.kind);
 
 /**
@@ -466,12 +466,12 @@ export const isOperationOfKind = <Kind extends StartOperationKind>(
  * answers `NOT_FOUND`; a reachable id of another kind answers `BAD_REQUEST`.
  * Without a failure context the refusal is neither reported nor annotated.
  */
-export function resolveOperation<Kind extends StartOperationKind>(
+export function resolveOperation<Kind extends OperationKind>(
   operation: string,
   access: OperationAccess<Kind>,
   failure?: Omit<OperationFailureContext, "operation"> & { requestId?: string },
 ): ResolvedOperation<Kind> {
-  const definition = startOperationDefinitionFor(operation);
+  const definition = operationDefinitionFor(operation);
   let refusal: AppError;
   if (
     !definition ||
@@ -491,7 +491,7 @@ export function resolveOperation<Kind extends StartOperationKind>(
   }
   return {
     ok: false,
-    error: normalizeStartOperationError(
+    error: normalizeOperationError(
       refusal,
       "dispatch",
       failure?.requestId,
@@ -517,13 +517,8 @@ export function operationFailure<TError>(
   stage: OperationStage,
   requestId: string | undefined,
   context: OperationFailureContext,
-): NormalizedStartOperationError {
-  const normalized = normalizeStartOperationError(
-    error,
-    stage,
-    requestId,
-    context,
-  );
+): NormalizedOperationError {
+  const normalized = normalizeOperationError(error, stage, requestId, context);
   // Keep public failure classification outside the native error object,
   // whose boolean error flag can obscure nested diagnostic attributes.
   span.setAttributes({
@@ -552,9 +547,9 @@ export async function withReadMarker<Result extends { readMarker?: string }>(
   return result;
 }
 
-export interface StartOperationRuntime {
+export interface OperationExecutorRuntime {
   observe<Result>(
-    definition: { readonly id: string; readonly kind: StartOperationKind },
+    definition: { readonly id: string; readonly kind: OperationKind },
     observation: OperationObservation<Result>,
     run: (span: AppSpan) => Promise<Result>,
   ): Promise<Result>;
@@ -591,20 +586,20 @@ export type AdHocOperation = {
   readonly kind: "query" | "mutation";
 };
 
-export type RunStartOperationOptions<
+export type RunOperationOptions<
   InputSchema extends z.ZodType,
   OutputSchema extends z.ZodType,
 > = {
-  operation: StartOperationId | AdHocOperation;
+  operation: OperationId | AdHocOperation;
   type: "query" | "mutation" | "subscription";
   input: z.input<z.ZodUnknown>;
   inputSchema: InputSchema;
   outputSchema: OutputSchema | OutputSchemaResolver<InputSchema, OutputSchema>;
-  request: StartOperationRequest;
+  request: OperationRequest;
   readPolicy?: ReadPolicy;
   workload?: Workload;
   run: (
-    context: AuthenticatedStartOperationContext,
+    context: AuthenticatedOperationContext,
     input: z.output<InputSchema>,
     /** The request's signal, also aborted when the principal's budget runs out. */
     signal: AbortSignal,
@@ -612,8 +607,8 @@ export type RunStartOperationOptions<
 };
 
 function runnerDefinition(
-  operation: StartOperationId | AdHocOperation,
-  type: StartOperationKind,
+  operation: OperationId | AdHocOperation,
+  type: OperationKind,
 ) {
   if (typeof operation === "string") {
     const resolved = resolveOperation(operation, {
@@ -623,21 +618,21 @@ function runnerDefinition(
     if (!resolved.ok) throw new Error(resolved.error.message);
     return { ...resolved.definition, registered: operation };
   }
-  if (startOperationDefinitionFor(operation.id))
+  if (operationDefinitionFor(operation.id))
     throw new Error(`Ad hoc operation ${operation.id} shadows a registry id`);
   if (operation.kind !== type)
     throw new Error(`Ad hoc operation ${operation.id} is not a ${type}`);
   return { id: operation.id, kind: operation.kind, registered: undefined };
 }
 
-export function createStartOperationRunner(runtime: StartOperationRuntime) {
+export function createOperationExecutor(runtime: OperationExecutorRuntime) {
   const recordWrite = runtime.recordDatabaseWrite ?? recordDatabaseWrite;
-  return async function runStartOperation<
+  return async function executeOperation<
     InputSchema extends z.ZodType,
     OutputSchema extends z.ZodType,
   >(
-    options: RunStartOperationOptions<InputSchema, OutputSchema>,
-  ): Promise<StartOperationResult<z.output<OutputSchema>>> {
+    options: RunOperationOptions<InputSchema, OutputSchema>,
+  ): Promise<OperationResult<z.output<OutputSchema>>> {
     const { principal } = options.request;
     const channel = CHANNEL_OBSERVATION[principal.channel];
     const workload = options.workload ?? channel.workload;
@@ -662,7 +657,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
       try {
         // Client cancellation, not the budget: work that finishes past its
         // deadline still parses its output and schedules its side effects.
-        throwIfStartOperationAborted(options.request.signal);
+        throwIfOperationAborted(options.request.signal);
         enterOperationSpan(span, principal);
         if (options.type !== "query") assertClientMayWrite(principal);
         state.stage = "input";
@@ -671,10 +666,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
         state.entity =
           entityInput.success &&
           (!definition.registered ||
-            isStartOperationEntity(
-              definition.registered,
-              entityInput.data.entity,
-            ))
+            isOperationEntity(definition.registered, entityInput.data.entity))
             ? entityInput.data.entity
             : undefined;
         if (state.entity) span.setAttribute("cubby.entity", state.entity);
@@ -710,21 +702,21 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
         });
 
         noteRequestOperation(definition.id, state.entity);
-        throwIfStartOperationAborted(options.request.signal);
+        throwIfOperationAborted(options.request.signal);
 
         state.stage = "run";
         state.mutationStarted =
           options.type === "mutation" &&
           mutationChangesHouseholdData(definition.id);
         const rawOutput = await options.run(context, input, signal);
-        throwIfStartOperationAborted(options.request.signal);
+        throwIfOperationAborted(options.request.signal);
 
         state.stage = "output";
         const outputSchema = isOutputSchemaResolver(options.outputSchema)
           ? options.outputSchema(input)
           : options.outputSchema;
         const data = outputSchema.parse(rawOutput);
-        throwIfStartOperationAborted(options.request.signal);
+        throwIfOperationAborted(options.request.signal);
         if (state.mutationStarted) {
           // Inside a delegated transaction the mark waits for the outer
           // commit; marked earlier, the calendar alarm could publish and clear
@@ -736,7 +728,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             );
           });
         }
-        const result: StartOperationResult<z.output<OutputSchema>> = {
+        const result: OperationResult<z.output<OutputSchema>> = {
           ok: true,
           data,
         };
@@ -766,7 +758,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
           requestId,
           failureContext(),
         );
-        const result: StartOperationResult<z.output<OutputSchema>> = {
+        const result: OperationResult<z.output<OutputSchema>> = {
           ok: false,
           error: normalized.publicError,
         };
@@ -792,7 +784,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
               workload,
               requestId,
               inspectResult: (result) => {
-                const inspection: StartOperationInspection = {
+                const inspection: OperationInspection = {
                   workload,
                 };
                 if (result.observedError) {
@@ -817,7 +809,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
           return {
             result: {
               ok: false as const,
-              error: normalizeStartOperationError(
+              error: normalizeOperationError(
                 deadlineExceededError(definition.id, budgetMs),
                 state.stage,
                 requestId,
@@ -832,7 +824,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
   };
 }
 
-const productionStartOperationRuntime = {
+const productionOperationExecutorRuntime = {
   observe: observeOperation,
   markCalendarDirty: (reason, headers) => {
     const headerOrigin = headers.get("origin");
@@ -845,8 +837,8 @@ const productionStartOperationRuntime = {
     scheduleCalendarFeedDirty(reason, { origin });
   },
   recordDatabaseWrite,
-} satisfies StartOperationRuntime;
+} satisfies OperationExecutorRuntime;
 
-export const runStartOperation = createStartOperationRunner(
-  productionStartOperationRuntime,
+export const executeOperation = createOperationExecutor(
+  productionOperationExecutorRuntime,
 );

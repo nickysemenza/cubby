@@ -22,7 +22,7 @@ import type { WorkerdLog } from "../../tooling/e2e-workerd-logs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { entityApi } from "../e2e/support/entity-api";
-import { startOperation } from "../e2e/support/start-operation";
+import { operationCall } from "../e2e/support/operation";
 
 /** Public identity routed only to this fixture's local R2 adapter. */
 const IMAGE_ORIGIN = "http://cubby-e2e-images.test";
@@ -92,7 +92,7 @@ function openApi(
       };
     },
     async operation(name: string, input: unknown) {
-      const response = await startOperation(client, name, input);
+      const response = await operationCall(client, name, input);
       assert(
         response.ok(),
         `Operation failed (${name}): ${await response.text()}`,

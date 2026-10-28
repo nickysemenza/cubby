@@ -15,7 +15,7 @@ import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { listOverrides } from "~/entity/list-columns/list-overrides.fixtures";
 import { listPage } from "~/entity/routing/list-page";
 import { installFeatures } from "~/features/registry";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { mock } from "~/lib/test/mock-schema";
 import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
 const productListItem = getEntityListItemSchema("product");
@@ -326,7 +326,7 @@ it("bulk-edits all matching identities including an unloaded record", async () =
       initialPath: "/tasks?name=Example",
       route: { path: "/tasks", component: Page },
     });
-    restore = overrideStartDispatch(async (operation, input) => {
+    restore = overrideOperationDispatch(async (operation, input) => {
       if (operation === "entity.selectionIds") {
         selections.push(input);
         return { ok: true, data: { ids, totalCount: 3, nextCursor: null } };

@@ -17,13 +17,13 @@ import type {
   SubscriptionContract,
 } from "~/contracts/define";
 import { openWorkflowStream } from "~/integrations/tanstack-query/workflow-stream";
-import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
-import { parseOperationInput } from "~/lib/start-operation-error";
+import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
+import { parseOperationInput } from "~/lib/operation-error";
 import {
-  startOperationDefinitionFor,
-  type StartOperationId,
-} from "~/lib/start-operation-observability";
-import { unparsedStartOperationDataSchema } from "~/server/operation-runtime/start-operation.contract";
+  operationDefinitionFor,
+  type OperationId,
+} from "~/lib/operation-observability";
+import { operationWireValueSchema } from "~/server/operation-runtime/operation.contract";
 
 import {
   EMPTY_INVALIDATION_TAG_SET,
@@ -31,6 +31,7 @@ import {
   rippleFor,
   type InvalidationTagSet,
 } from "./cache-tags";
+import { type OperationCallOptions, operationCall } from "./operation-call";
 import type {
   CubbyOperationMeta,
   OperationCacheProfile,
@@ -41,12 +42,11 @@ import {
   operationCachePolicy,
   type ResolvedOperationCachePolicy,
 } from "./query-policy";
-import { type StartCallOptions, startOperation } from "./start-transport";
 
 type RawOperationValue = z.input<z.ZodUnknown>;
 
 type OperationTransport<Input, Output> = (request: {
-  operation: StartOperationId;
+  operation: OperationId;
   input: Input;
   signal?: AbortSignal;
 }) => Promise<Output>;
@@ -142,12 +142,12 @@ type InputArguments<Input> = undefined extends Input
 
 export type OperationQueryKey<Input> = readonly [
   "operation",
-  StartOperationId,
+  OperationId,
   { entity?: string; input: Input },
 ];
 export type InfiniteOperationQueryKey<Input> = readonly [
   "operation",
-  StartOperationId,
+  OperationId,
   "infinite",
   { entity?: string; input: Input },
 ];
@@ -170,7 +170,7 @@ export const isOperationQueryKey = (
     queryKey.length === 3 &&
     queryKey[0] === "operation" &&
     typeof operation === "string" &&
-    startOperationDefinitionFor(operation) !== undefined &&
+    operationDefinitionFor(operation) !== undefined &&
     isOperationQueryPayload(queryKey[2])
   );
 };
@@ -185,7 +185,7 @@ export const infiniteOperationQueryKey = <Input>(
 ];
 
 const invalidationPolicies = new Map<
-  StartOperationId,
+  OperationId,
   (input: RawOperationValue) => InvalidationTagSet
 >();
 
@@ -206,7 +206,7 @@ export const operationInvalidationTags = (
   input: RawOperationValue,
 ): InvalidationTagSet | undefined => {
   if (!operation) return undefined;
-  const definition = startOperationDefinitionFor(operation);
+  const definition = operationDefinitionFor(operation);
   return definition
     ? invalidationPolicies.get(definition.id)?.(input)
     : undefined;
@@ -216,7 +216,7 @@ export type QueryDescriptor<
   Input extends z.ZodTypeAny,
   Output extends z.ZodTypeAny,
 > = {
-  readonly id: StartOperationId;
+  readonly id: OperationId;
   readonly definition: QueryDefinition<Input, Output>;
   readonly meta: CubbyOperationMeta;
   policy(input: z.input<Input>): {
@@ -225,8 +225,8 @@ export type QueryDescriptor<
   };
   call(
     ...args: undefined extends z.input<Input>
-      ? [input?: z.input<Input>, options?: StartCallOptions]
-      : [input: z.input<Input>, options?: StartCallOptions]
+      ? [input?: z.input<Input>, options?: OperationCallOptions]
+      : [input: z.input<Input>, options?: OperationCallOptions]
   ): Promise<z.output<Output>>;
   queryKey(
     ...args: InputArguments<z.input<Input>>
@@ -272,13 +272,13 @@ export type MutationDescriptor<
   Input extends z.ZodTypeAny,
   Output extends z.ZodTypeAny,
 > = {
-  readonly id: StartOperationId;
+  readonly id: OperationId;
   readonly definition: MutationDefinition<Input, Output>;
   readonly meta: CubbyOperationMeta;
   call(
     ...args: undefined extends z.input<Input>
-      ? [input?: z.input<Input>, options?: StartCallOptions]
-      : [input: z.input<Input>, options?: StartCallOptions]
+      ? [input?: z.input<Input>, options?: OperationCallOptions]
+      : [input: z.input<Input>, options?: OperationCallOptions]
   ): Promise<z.output<Output>>;
   mutationOptions(
     options?: Omit<
@@ -297,7 +297,7 @@ type SubscriptionDescriptor<
   Input extends z.ZodTypeAny,
   Event extends z.ZodTypeAny,
 > = {
-  readonly id: StartOperationIdOfKind<"subscription">;
+  readonly id: OperationIdOfKind<"subscription">;
   readonly definition: SubscriptionDefinition<Input, Event>;
   /**
    * Opens the stream. There is no `queryOptions`/`mutationOptions` sibling:
@@ -337,7 +337,7 @@ const descriptorMeta = <
   Input extends z.ZodTypeAny,
   Output extends z.ZodTypeAny,
 >(
-  id: StartOperationId,
+  id: OperationId,
   definition:
     | QueryDefinition<Input, Output>
     | MutationDefinition<Input, Output>,
@@ -391,9 +391,9 @@ const omitKeyInput = <Input>(input: Input, omit: readonly string[]): Input => {
 };
 
 function isSubscriptionOperationId(
-  id: StartOperationId,
-): id is StartOperationIdOfKind<"subscription"> {
-  return startOperationDefinitionFor(id)?.kind === "subscription";
+  id: OperationId,
+): id is OperationIdOfKind<"subscription"> {
+  return operationDefinitionFor(id)?.kind === "subscription";
 }
 
 type OperationBuildOptions<
@@ -403,7 +403,7 @@ type OperationBuildOptions<
     | QueryDefinition<Input, Output>
     | MutationDefinition<Input, Output>,
 > = {
-  id: StartOperationId;
+  id: OperationId;
   definition: Definition;
   entity?: string;
   transport?: OperationTransport<z.output<Input>, z.output<Output>>;
@@ -425,25 +425,25 @@ function catalogOperation<
       ? definition.parse(value, input)
       : definition.output.parse(value);
   const config: Parameters<
-    typeof startOperation<z.output<Input>, z.output<Output>>
+    typeof operationCall<z.output<Input>, z.output<Output>>
   >[0] = { operation: id, kind: definition.kind, parse };
   if (entity) config.entity = entity;
   // Test seam: a bound transport answers in place of dispatch.
   if (transport)
     config.dispatch = async (input, { signal }) => ({
       ok: true,
-      data: unparsedStartOperationDataSchema.parse(
+      data: operationWireValueSchema.parse(
         await transport({ operation: id, input, signal }),
       ),
     });
-  return startOperation(config);
+  return operationCall(config);
 }
 
 function buildSubscriptionDescriptor<
   Input extends z.ZodTypeAny,
   Event extends z.ZodTypeAny,
 >(
-  id: StartOperationId,
+  id: OperationId,
   definition: SubscriptionDefinition<Input, Event>,
 ): SubscriptionDescriptor<Input, Event> {
   if (!isSubscriptionOperationId(id)) {
@@ -648,7 +648,7 @@ function buildQueryDescriptor<
 }
 
 function buildDescriptor(options: {
-  id: StartOperationId;
+  id: OperationId;
   definition: AnyDefinition;
 }): OperationDescriptorFor<AnyDefinition> {
   const { id, definition } = options;
@@ -750,9 +750,7 @@ export function defineOperationDomain<const Contract extends OperationContract>(
   // correlation from TypeScript's standard-library return type.
   return Object.fromEntries(
     Object.entries(contract.ops).map(([name, member]) => {
-      const operation = startOperationDefinitionFor(
-        `${contract.domain}.${name}`,
-      );
+      const operation = operationDefinitionFor(`${contract.domain}.${name}`);
       if (!operation) {
         throw new Error(
           `${contract.domain}.${name} is missing from the generated registry`,

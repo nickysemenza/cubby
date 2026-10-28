@@ -1,6 +1,6 @@
 import { reportSlot } from "@cubby/schemas/entity-report";
 import { z } from "zod";
-import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
+import type { OperationWireValue } from "~/server/operation-runtime/operation.contract";
 import {
   entityListInputSchema,
   listEntities,
@@ -29,7 +29,7 @@ const entitySchema = z.enum(listEntities);
 /** Selected contract metadata only; never a recursive copy or a loaded-work claim. */
 export function requestedReadMetadata(
   operation: string,
-  rawInput: UnparsedStartOperationData,
+  rawInput: OperationWireValue,
 ) {
   const parsed = record.safeParse(rawInput);
   if (!parsed.success) return null;

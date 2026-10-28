@@ -10,7 +10,7 @@ import { tsModule } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import {
   assertContractPurity,
-  collectStartOperationHandlers,
+  collectOperationHandlers,
   loadContracts,
   SOURCE_ROOT,
 } from "./collect.ts";
@@ -245,7 +245,7 @@ const resolveMcpTools = async (): Promise<ResolvedTool[]> => {
       `MCP overrides name operations that are not capabilities: ${unknownOverrides.join(", ")}`,
     );
 
-  const { operations } = await collectStartOperationHandlers();
+  const { operations } = await collectOperationHandlers();
   const split = new Map<string, OperationAction[]>();
   /** A split tool's contract group and its sibling, for the inherited description. */
   const splitFrom = new Map<string, { group: string; sibling: string }>();

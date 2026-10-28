@@ -18,7 +18,7 @@ import { runFinding } from "~/server/testing/run-finding.fixtures";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { createEvidenceHarnessContext } from "../fixtures/core";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { startOperation } from "./start-operation";
+import { operationCall } from "./operation";
 import { entityApi } from "./entity-api";
 import { expect } from "./e2e-test";
 
@@ -31,7 +31,7 @@ export async function recordReviewedConvergenceStatement(
 ) {
   const { source, ...row } = names.sourceTransactionRecord;
   const fingerprint = `synthetic-statement-${names.token}`;
-  const recorded = await startOperation(
+  const recorded = await operationCall(
     page.request,
     "sourceTransactionRecord.record",
     {

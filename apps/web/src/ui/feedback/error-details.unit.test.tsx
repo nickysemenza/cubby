@@ -13,7 +13,7 @@ import {
   CLOUDFLARE_OBSERVABILITY_URL,
   sentryEventUrl,
 } from "~/lib/error-diagnostics";
-import { StartOperationError } from "~/lib/start-operation-error";
+import { OperationError } from "~/lib/operation-error";
 
 import { errorToastId, showErrorToast } from "./error-details";
 import { ErrorDetailsDialogHost } from "./error-details-dialog";
@@ -25,7 +25,7 @@ import {
 import { ErrorDisplay } from "./error-display";
 
 const makeError = (overrides?: { code?: string }) =>
-  new StartOperationError({
+  new OperationError({
     code: overrides?.code ?? "INTERNAL_SERVER_ERROR",
     message: "Connection limit exceeded",
     requestId: "sample-ray",

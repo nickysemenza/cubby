@@ -169,21 +169,19 @@ const main = async () => {
 
   // The later stages import the earlier stages' artifacts, so they load only
   // after those are on disk: a fresh checkout has no generated files at all.
-  const { renderStartOperationArtifacts } =
-    await import("./start-operations/render.ts");
+  const { renderOperationArtifacts } = await import("./operations/render.ts");
   const { renderDirectNativeArtifacts } =
     await import("./http-api/native-artifacts.ts");
   const { renderApplePreviewFixtures } =
     await import("../tooling/checks/apple-preview-fixtures.ts");
-  const { renderMcpToolArtifacts } =
-    await import("./start-operations/mcp-tools.ts");
-  const startOperations = await renderStartOperationArtifacts();
-  await settle(startOperations.artifacts);
+  const { renderMcpToolArtifacts } = await import("./operations/mcp-tools.ts");
+  const operations = await renderOperationArtifacts();
+  await settle(operations.artifacts);
   await settle(await renderMcpToolArtifacts());
   await settle(
     await renderDirectNativeArtifacts(
       kernelHttpActionsFor(entities),
-      startOperations.operationIds,
+      operations.operationIds,
       entityOutputsFor(entities),
     ),
   );

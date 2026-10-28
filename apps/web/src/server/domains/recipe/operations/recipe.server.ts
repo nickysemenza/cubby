@@ -61,7 +61,7 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { harvestEquivalences } from "~/server/lib/harvest-equivalences";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
+import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
 import {
   bindWorkflow,
@@ -85,7 +85,7 @@ async function getManyRecipesByIDs(
 }
 
 export const duplicateWorkflow = bindWorkflow(
-  workflow<AuthenticatedStartOperationContext, typeof recipeIdInput._output>(
+  workflow<AuthenticatedOperationContext, typeof recipeIdInput._output>(
     "recipe.duplicate",
   )
     .call("sourceId", async ({ context }, { input }) =>
@@ -127,7 +127,7 @@ const cookbookScoped =
         : undefined,
     );
 
-type Costing = AuthenticatedStartOperationContext["services"]["recipeCosting"];
+type Costing = AuthenticatedOperationContext["services"]["recipeCosting"];
 async function recomputeOne(
   db: Database,
   input: typeof recipeIdInput._output,
@@ -288,7 +288,7 @@ async function harvestEquivalencesReport(
 }
 
 type MakeableAvailability = Pick<
-  AuthenticatedStartOperationContext["services"]["availability"],
+  AuthenticatedOperationContext["services"]["availability"],
   "getRecipeAvailability"
 >;
 const makeableWorkflow = bindWorkflow(
@@ -535,7 +535,7 @@ const recipeServingBasis = entityFieldEnvelopeSchemas.recipe.detail.pick({
 
 /** Refuses a recipe with no effective serving basis instead of guessing. */
 async function recipeNutrition(
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   input: { recipeId: string; servings: number },
 ) {
   const detail = await executeEntityAs(context, "get", {

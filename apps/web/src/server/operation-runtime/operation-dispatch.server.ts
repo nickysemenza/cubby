@@ -3,7 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import { z } from "zod";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
-import type { StartOperationKind } from "~/lib/start-operation-observability";
+import type { OperationKind } from "~/lib/operation-observability";
 import { createAppError } from "~/server/errors/app-error";
 import {
   API_AUTH,
@@ -21,18 +21,18 @@ import {
   loadWorkflowStreamHandler,
 } from "~/server/operation-runtime/operation-handlers.server";
 import {
-  type PublicStartOperationError,
-  type StartOperationResult,
-  type UnparsedStartOperationData,
-  unparsedStartOperationDataSchema,
-} from "~/server/operation-runtime/start-operation.contract";
+  type PublicOperationError,
+  type OperationResult,
+  type OperationWireValue,
+  operationWireValueSchema,
+} from "~/server/operation-runtime/operation.contract";
 import {
   isOperationOfKind,
-  normalizeStartOperationError,
+  normalizeOperationError,
   type OperationAccess,
   type OperationStage,
   resolveOperation,
-} from "~/server/operation-runtime/start-operation.server";
+} from "~/server/operation-runtime/operation.server";
 import type { WorkflowStream } from "~/server/operation-runtime/workflow-stream.server";
 import { settleBatch } from "~/server/workflows/settle-batch";
 
@@ -54,11 +54,11 @@ const CHANNEL_ACCESS = {
   cli: { kinds: ["query", "mutation"], exposure: "external" },
   mcp: { kinds: ["query", "mutation"], exposure: "internal" },
   system: { kinds: ["query", "mutation"], exposure: "internal" },
-} as const satisfies Record<Channel, OperationAccess<StartOperationKind>>;
+} as const satisfies Record<Channel, OperationAccess<OperationKind>>;
 
 export type OperationCall = {
   operation: string;
-  input: UnparsedStartOperationData;
+  input: OperationWireValue;
   /** Correlation only (request id, ray); never authority. */
   headers: Headers;
   signal: AbortSignal;
@@ -66,7 +66,7 @@ export type OperationCall = {
   modelBacked?: boolean;
 };
 
-type DispatchResult = StartOperationResult<UnparsedStartOperationData>;
+type DispatchResult = OperationResult<OperationWireValue>;
 /** One settled batch item, in settle order. */
 type BatchLine = { i: number; r: BatchResult<DispatchResult> };
 
@@ -106,7 +106,7 @@ const NDJSON_TYPE = "application/x-ndjson; charset=utf-8";
 
 /** Every client reads a refusal as the bare error under its HTTP status. */
 const errorResponse = (
-  error: PublicStartOperationError,
+  error: PublicOperationError,
   extraHeaders?: HeadersInit,
   status = statusForCode(error.code),
 ) =>
@@ -134,7 +134,7 @@ const ndjsonResponse = <T>(
 const envelopeSchema = z.object({
   operation: z.string(),
   // Omitted input is the JSON equivalent of an operation with no input.
-  input: unparsedStartOperationDataSchema.optional(),
+  input: operationWireValueSchema.optional(),
 });
 
 const batchBodySchema = z.object({
@@ -160,11 +160,11 @@ export function createOperationDispatch(
   async function dispatchOperation(
     principal: Principal,
     call: OperationCall,
-    kinds?: readonly StartOperationKind[],
+    kinds?: readonly OperationKind[],
   ): Promise<DispatchedOperation> {
     const requestId = getRequestId(call.headers);
     const access = CHANNEL_ACCESS[principal.channel];
-    const allowed: readonly StartOperationKind[] = access.kinds;
+    const allowed: readonly OperationKind[] = access.kinds;
     const resolved = resolveOperation(
       call.operation,
       {
@@ -200,7 +200,7 @@ export function createOperationDispatch(
         result: result.ok
           ? {
               ...result,
-              data: unparsedStartOperationDataSchema.parse(result.data),
+              data: operationWireValueSchema.parse(result.data),
             }
           : result,
       };
@@ -209,7 +209,7 @@ export function createOperationDispatch(
       return {
         result: {
           ok: false,
-          error: normalizeStartOperationError(error, "dispatch", requestId, {
+          error: normalizeOperationError(error, "dispatch", requestId, {
             operation: definition.id,
             authenticated: true,
             headers: call.headers,
@@ -236,7 +236,7 @@ export function createOperationDispatch(
       extraHeaders?: HeadersInit,
     ) =>
       errorResponse(
-        normalizeStartOperationError(error, stage, requestId, {
+        normalizeOperationError(error, stage, requestId, {
           operation,
           authenticated,
           headers: request.headers,

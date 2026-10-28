@@ -11,7 +11,7 @@ import { z } from "zod";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { installFeatures } from "~/features/registry";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { mock } from "~/lib/test/mock-schema";
 
 import { LinkExpensesDialog } from "./link-expenses-dialog";
@@ -103,7 +103,7 @@ describe("LinkExpensesDialog", () => {
     const links = vi.fn();
     let releaseSecond: (() => void) | undefined;
     let released = false;
-    restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    restoreDispatch = overrideOperationDispatch(async (operation, input) => {
       if (operation === "purchase.linkExpenseCandidates")
         return { ok: true, data: candidates };
       if (operation === "purchase.checkLinkExpenses") {
@@ -151,7 +151,7 @@ describe("LinkExpensesDialog", () => {
   it("asks before moving an expense off another purchase", async () => {
     const links = vi.fn();
     const sentence = "Attaching moves 1 expense off its current purchase.";
-    restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    restoreDispatch = overrideOperationDispatch(async (operation, input) => {
       if (operation === "purchase.linkExpenseCandidates")
         return { ok: true, data: candidates };
       if (operation === "purchase.checkLinkExpenses")

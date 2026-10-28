@@ -6,7 +6,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { expect, it, vi } from "vitest";
 
 import { createEditorBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import type { CubbyRow } from "~/ui/data-table/table-features";
 
 import { useRedundantOverrideBulkAction } from "./field-resolution";
@@ -39,7 +39,7 @@ it.each([true, false])(
       id: testShortcode("expense", "synthetic-bulk-expense"),
       fields: { projectId: envelope },
     };
-    const dispatch = vi.fn<Parameters<typeof overrideStartDispatch>[0]>(
+    const dispatch = vi.fn<Parameters<typeof overrideOperationDispatch>[0]>(
       async () => ({
         ok: true,
         data: {
@@ -51,7 +51,7 @@ it.each([true, false])(
         },
       }),
     );
-    const restoreDispatch = overrideStartDispatch(dispatch);
+    const restoreDispatch = overrideOperationDispatch(dispatch);
     const row = fromPartial<CubbyRow<typeof record>>({ original: record });
     const preview = fromPartial<FieldExplanationOutput>({
       envelope: {

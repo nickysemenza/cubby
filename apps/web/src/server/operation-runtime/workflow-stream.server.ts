@@ -1,7 +1,7 @@
 import type { z } from "zod";
 
-import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
-import { startOperationDefinition } from "~/lib/start-operation-observability";
+import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
+import { operationDefinition } from "~/lib/operation-observability";
 import { recordDatabaseWrite } from "~/server/db/freshness/member-marker";
 import { withErrorReporting } from "~/server/errors/report-error";
 import type { Workload } from "~/server/http/workload";
@@ -11,33 +11,33 @@ import {
 } from "~/server/observability/observed-request";
 import { type AppSpan, getRequestId } from "~/server/observability/tracing";
 import {
-  type StartOperationResult,
-  type UnparsedStartOperationData,
-  unparsedStartOperationDataSchema,
-} from "~/server/operation-runtime/start-operation.contract";
+  type OperationResult,
+  type OperationWireValue,
+  operationWireValueSchema,
+} from "~/server/operation-runtime/operation.contract";
 import {
   assertClientMayWrite,
-  type AuthenticatedStartOperationContext,
+  type AuthenticatedOperationContext,
   CHANNEL_OBSERVATION,
   deadlineClassOf,
   deadlineExceededError,
   enterOperationSpan,
-  normalizeStartOperationError,
+  normalizeOperationError,
   type OperationStage,
   operationFailure,
-  type StartOperationRequest,
-  type StartOperationRuntime,
-  throwIfStartOperationAborted,
+  type OperationRequest,
+  type OperationExecutorRuntime,
+  throwIfOperationAborted,
   withinBudget,
   withReadMarker,
-} from "~/server/operation-runtime/start-operation.server";
+} from "~/server/operation-runtime/operation.server";
 
-type StreamResult = StartOperationResult<UnparsedStartOperationData>;
+type StreamResult = OperationResult<OperationWireValue>;
 
 export type WorkflowStream = ReadableStream<StreamResult>;
 
 export interface WorkflowStreamRuntime {
-  observe: StartOperationRuntime["observe"];
+  observe: OperationExecutorRuntime["observe"];
   recordDatabaseWrite: (operation: string) => Promise<void>;
 }
 
@@ -55,14 +55,14 @@ const productionWorkflowStreamRuntime = {
  */
 export function workflowStream<InputSchema extends z.ZodType, Event>(
   options: {
-    request: StartOperationRequest;
-    input: UnparsedStartOperationData;
-    operation: StartOperationIdOfKind<"subscription">;
+    request: OperationRequest;
+    input: OperationWireValue;
+    operation: OperationIdOfKind<"subscription">;
     inputSchema: InputSchema;
     eventSchema: z.ZodType<Event>;
     workload?: Workload;
     run: (
-      context: AuthenticatedStartOperationContext,
+      context: AuthenticatedOperationContext,
       input: z.output<InputSchema>,
       signal: AbortSignal,
     ) => AsyncIterable<unknown> | Promise<AsyncIterable<unknown>>;
@@ -70,7 +70,7 @@ export function workflowStream<InputSchema extends z.ZodType, Event>(
   runtime: WorkflowStreamRuntime = productionWorkflowStreamRuntime,
 ): WorkflowStream {
   const { principal, headers } = options.request;
-  const definition = startOperationDefinition(options.operation);
+  const definition = operationDefinition(options.operation);
   const requestId = getRequestId(headers);
   const cancelled = new AbortController();
   const signal = AbortSignal.any([options.request.signal, cancelled.signal]);
@@ -91,7 +91,7 @@ export function workflowStream<InputSchema extends z.ZodType, Event>(
         budgetSignal: AbortSignal,
       ): Promise<{ observedError?: ObservedFailure }> => {
         try {
-          throwIfStartOperationAborted(signal);
+          throwIfOperationAborted(signal);
           enterOperationSpan(span, principal);
           assertClientMayWrite(principal);
           stage = "input";
@@ -107,14 +107,14 @@ export function workflowStream<InputSchema extends z.ZodType, Event>(
             budgetSignal,
           );
           for await (const event of events) {
-            throwIfStartOperationAborted(budgetSignal);
+            throwIfOperationAborted(budgetSignal);
             stage = "output";
             const parsed = options.eventSchema.parse(event);
             await runtime.recordDatabaseWrite(options.operation);
             controller.enqueue(
               await withReadMarker<StreamResult>({
                 ok: true,
-                data: unparsedStartOperationDataSchema.parse(parsed),
+                data: operationWireValueSchema.parse(parsed),
               }),
             );
             stage = "run";
@@ -178,7 +178,7 @@ export function workflowStream<InputSchema extends z.ZodType, Event>(
               controller.enqueue(
                 await withReadMarker<StreamResult>({
                   ok: false,
-                  error: normalizeStartOperationError(
+                  error: normalizeOperationError(
                     deadlineExceededError(options.operation, budgetMs),
                     stage,
                     requestId,

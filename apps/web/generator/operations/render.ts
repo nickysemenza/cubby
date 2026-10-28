@@ -2,14 +2,14 @@ import { tsModule } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import {
   collectOperationIds,
-  collectStartOperationHandlers,
+  collectOperationHandlers,
   validateStrongQueryOperations,
-  collectStartOperations,
+  collectOperations,
   loadContracts,
 } from "./collect.ts";
 
-const renderStartOperationRegistry = async (): Promise<string> => {
-  const operations = [...(await collectStartOperations())].sort(([a], [b]) =>
+const renderOperationRegistry = async (): Promise<string> => {
+  const operations = [...(await collectOperations())].sort(([a], [b]) =>
     a.localeCompare(b),
   );
   await validateStrongQueryOperations();
@@ -51,7 +51,7 @@ const renderStartOperationRegistry = async (): Promise<string> => {
     ],
     consts: [
       {
-        name: "START_OPERATIONS",
+        name: "OPERATIONS",
         value: Object.fromEntries(
           operations.map(([operation, { kind, exposure, observability }]) => [
             operation,
@@ -73,23 +73,23 @@ const renderStartOperationRegistry = async (): Promise<string> => {
     ],
     types: [
       {
-        name: "StartOperationId",
-        target: "RegistryKeys<typeof START_OPERATIONS>",
+        name: "OperationId",
+        target: "RegistryKeys<typeof OPERATIONS>",
       },
       {
-        name: "RegisteredStartOperationKind<Id extends StartOperationId>",
-        target: "RegisteredKind<typeof START_OPERATIONS, Id>",
+        name: "RegisteredOperationKind<Id extends OperationId>",
+        target: "RegisteredKind<typeof OPERATIONS, Id>",
       },
       {
-        name: 'StartOperationIdOfKind<Kind extends "query" | "mutation" | "subscription">',
-        target: "RegistryIdOfKind<typeof START_OPERATIONS, Kind>",
+        name: 'OperationIdOfKind<Kind extends "query" | "mutation" | "subscription">',
+        target: "RegistryIdOfKind<typeof OPERATIONS, Kind>",
       },
     ],
   });
 };
 
-const renderStartOperationHandlers = async (): Promise<string> => {
-  const { operations, subscriptions } = await collectStartOperationHandlers();
+const renderOperationHandlers = async (): Promise<string> => {
+  const { operations, subscriptions } = await collectOperationHandlers();
   const table = (handlers: typeof operations) =>
     Object.fromEntries(
       [...handlers]
@@ -116,7 +116,7 @@ const renderStartOperationHandlers = async (): Promise<string> => {
     ],
     consts: [
       {
-        name: "START_OPERATION_HANDLERS",
+        name: "OPERATION_HANDLERS",
         value: table(operations),
         satisfies: "UnaryHandlerTable",
       },
@@ -129,20 +129,19 @@ const renderStartOperationHandlers = async (): Promise<string> => {
   });
 };
 
-export const renderStartOperationArtifacts = async (): Promise<{
+export const renderOperationArtifacts = async (): Promise<{
   artifacts: EntityArtifacts[];
   operationIds: string[];
 }> => ({
   artifacts: [
     {
-      relativePath:
-        "apps/web/src/lib/generated/start-operation-registry.gen.ts",
-      source: await renderStartOperationRegistry(),
+      relativePath: "apps/web/src/lib/generated/operation-registry.gen.ts",
+      source: await renderOperationRegistry(),
     },
     {
       relativePath:
-        "apps/web/src/server/generated/start-operation-handler-data.gen.ts",
-      source: await renderStartOperationHandlers(),
+        "apps/web/src/server/generated/operation-handler-data.gen.ts",
+      source: await renderOperationHandlers(),
     },
   ],
   operationIds: await collectOperationIds(),

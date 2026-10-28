@@ -6,11 +6,11 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 import { calendarHouseholdRipple, exactRippleTags } from "./cache-tags";
 import { invalidateOperationTags } from "./operation-cache";
+import { overrideOperationDispatch } from "./operation-call";
 import {
   defineOperationDomain,
   isOperationQueryKey,
 } from "./operation-catalog";
-import { overrideStartDispatch } from "./start-transport";
 
 const calendarContract = defineContract("calendar", {
   range: query({
@@ -53,7 +53,7 @@ describe("operation catalog", () => {
   });
 
   it("reads current data when an invalidated inactive baseline is fetched later", async () => {
-    const restore = overrideStartDispatch(
+    const restore = overrideOperationDispatch(
       async (_operation, _input, { headers }) => ({
         ok: true,
         data: {

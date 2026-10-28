@@ -5,13 +5,13 @@ import {
 import { AppErrors, getErrorMessage, type AppErrorReason } from "@cubby/shared";
 import { z } from "zod";
 
-import type { PublicStartValidationIssue } from "~/server/operation-runtime/start-operation.contract";
+import type { PublicStartValidationIssue } from "~/server/operation-runtime/operation.contract";
 
 import {
   type ErrorDiagnostics,
   errorDiagnosticsSchema,
 } from "./error-diagnostics";
-import { StartOperationError } from "./start-operation-error";
+import { OperationError } from "./operation-error";
 
 export const SUPERSEDED_VIEW_TRANSITION_MESSAGE =
   "Old view transition aborted by new view transition.";
@@ -101,7 +101,7 @@ type AppErrorDetails = {
 };
 
 export function getAppErrorDetails(error: UnparsedError): AppErrorDetails {
-  if (error instanceof StartOperationError) {
+  if (error instanceof OperationError) {
     const { data } = error;
     const details: AppErrorDetails = { message: error.message };
     if (data.requestId) details.requestId = data.requestId;

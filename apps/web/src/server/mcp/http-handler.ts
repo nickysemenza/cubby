@@ -9,7 +9,7 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { AppError } from "~/server/errors/app-error";
 import { withErrorReporting } from "~/server/errors/report-error";
 import { getRequestId } from "~/server/observability/tracing";
-import { normalizeStartOperationError } from "~/server/operation-runtime/start-operation.server";
+import { normalizeOperationError } from "~/server/operation-runtime/operation.server";
 
 const log = createLogger("MCP");
 
@@ -154,7 +154,7 @@ async function jsonRpcFailure<TError>(failure: {
       ? `${tool}.${action}`
       : tool
     : jsonRpcMethod.safeParse(message).data?.method;
-  const detail = normalizeStartOperationError(
+  const detail = normalizeOperationError(
     error,
     authenticated ? "dispatch" : "context",
     getRequestId(headers),

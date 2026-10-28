@@ -83,9 +83,9 @@ import { ai } from "~/integrations/tanstack-query/domains/ai";
 import { assessment } from "~/integrations/tanstack-query/domains/assessment";
 import { suggestions } from "~/integrations/tanstack-query/domains/suggestions";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import type { OperationCallOptions } from "~/integrations/tanstack-query/operation-call";
 import { operationCachePolicy } from "~/integrations/tanstack-query/query-policy";
 import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
-import type { StartCallOptions } from "~/integrations/tanstack-query/start-transport";
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { CellFrame } from "~/ui/data-table/cell-frame";
 import { WhyValueContents } from "~/ui/derived/why-value";
@@ -259,7 +259,7 @@ export interface StoredSuggestionOperations {
       recordIds: string[];
       fields: string[];
     },
-    options?: StartCallOptions,
+    options?: OperationCallOptions,
   ) => Promise<SuggestionReviewRow[]>;
   review: (input: {
     assessmentId: string;
@@ -277,12 +277,12 @@ export interface StoredSuggestionOperations {
   /** Remembered declines for a page batch, positional with `questions`. */
   settled: (
     input: SettledSuggestionQuestionsInput,
-    options?: StartCallOptions,
+    options?: OperationCallOptions,
   ) => Promise<BatchOut<SettledSuggestionAnswer>>;
   /** Saved-record answer previews for a page batch; omitted shows none. */
   previews?: (
     input: Omit<SettledSuggestionQuestionsInput, "read">,
-    options?: StartCallOptions,
+    options?: OperationCallOptions,
   ) => Promise<BatchOut<SettledSuggestionAnswer>>;
 }
 
@@ -301,12 +301,12 @@ export const everyPendingSuggestion =
   (
     read: (
       input: PendingPageInput & { cursor?: string; limit: number },
-      options?: StartCallOptions,
+      options?: OperationCallOptions,
     ) => Promise<PendingPage>,
   ) =>
   async (
     input: PendingPageInput,
-    options?: StartCallOptions,
+    options?: OperationCallOptions,
   ): Promise<SuggestionReviewRow[]> => {
     const rosters: string[][] = [];
     for (
@@ -1056,7 +1056,7 @@ function useSettledQuestions(
     createRequestBatcher<
       {
         question: SettledSuggestionQuestion;
-        consistency?: StartCallOptions["consistency"];
+        consistency?: OperationCallOptions["consistency"];
       },
       SettledSuggestionAnswer
     >(
@@ -1183,7 +1183,7 @@ function useSavedAnswerPreviews(
     createRequestBatcher<
       {
         question: SettledSuggestionQuestion;
-        consistency?: StartCallOptions["consistency"];
+        consistency?: OperationCallOptions["consistency"];
       },
       SettledSuggestionAnswer
     >(
@@ -1327,7 +1327,7 @@ function BoundRecordSuggestions({
   const loadLiveSuggestion = (
     source: FieldSuggestionSource,
     signal: AbortSignal,
-    consistency?: StartCallOptions["consistency"],
+    consistency?: OperationCallOptions["consistency"],
   ) => {
     liveBatcher.current ??= import("./record-suggestion-batch").then(
       ({ createRecordSuggestionBatch }) =>

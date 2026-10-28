@@ -1,23 +1,20 @@
+import { parseOperationOutput, OperationError } from "~/lib/operation-error";
+import {
+  isOperationEntity,
+  registeredOperationKind,
+  type OperationId,
+} from "~/lib/operation-observability";
 import {
   acceptMemberWriteCookie,
   beginMemberWrite,
   STRONG_READ_HEADER,
 } from "~/lib/read-consistency";
 import {
-  parseOperationOutput,
-  StartOperationError,
-} from "~/lib/start-operation-error";
-import {
-  isStartOperationEntity,
-  registeredStartOperationKind,
-  type StartOperationId,
-} from "~/lib/start-operation-observability";
-import {
-  type PublicStartOperationError,
-  type StartOperationResult,
-  type UnparsedStartOperationData,
-  unparsedStartOperationDataSchema,
-} from "~/server/operation-runtime/start-operation.contract";
+  type PublicOperationError,
+  type OperationResult,
+  type OperationWireValue,
+  operationWireValueSchema,
+} from "~/server/operation-runtime/operation.contract";
 
 import {
   dispatchBrowserOperation,
@@ -31,11 +28,11 @@ import {
   operationHeaders,
 } from "./operation-recorder";
 
-export function unwrapStartOperationResult<T>(
+export function unwrapOperationResult<T>(
   operation: string,
-  result: StartOperationResult<T>,
-  createError: (error: PublicStartOperationError) => Error = (error) =>
-    new StartOperationError(error),
+  result: OperationResult<T>,
+  createError: (error: PublicOperationError) => Error = (error) =>
+    new OperationError(error),
 ): T {
   acceptMemberWriteCookie(result.readMarker);
   if (!result.ok) throw createError(result.error);
@@ -57,13 +54,13 @@ type ObservedOutcome = Parameters<typeof finishObservedOperation>[1];
  * it fails or is abandoned, so no read settles on data from before it.
  */
 export function beginOperationCall(options: {
-  operation: StartOperationId;
+  operation: OperationId;
   kind: "query" | "mutation";
   entity?: string;
   speculative?: boolean;
-  input: UnparsedStartOperationData;
+  input: OperationWireValue;
 }) {
-  const writes = registeredStartOperationKind(options.operation) !== "query";
+  const writes = registeredOperationKind(options.operation) !== "query";
   const observed = beginObservedOperation({ ...options, transport: "start" });
   if (writes) beginMemberWrite();
   return {
@@ -77,14 +74,14 @@ export function beginOperationCall(options: {
 }
 
 async function observedStartCall<T>(options: {
-  operation: StartOperationId;
+  operation: OperationId;
   kind?: "query" | "mutation";
   entity?: string;
   speculative?: boolean;
-  input: UnparsedStartOperationData;
+  input: OperationWireValue;
   call: (headers: Headers) => Promise<T>;
 }): Promise<T> {
-  const registeredKind = registeredStartOperationKind(options.operation);
+  const registeredKind = registeredOperationKind(options.operation);
   if (registeredKind === "subscription") {
     throw new Error(
       `${options.operation} is a workflow stream, not a Start transport operation`,
@@ -106,7 +103,7 @@ async function observedStartCall<T>(options: {
   }
 }
 
-export type StartCallOptions = {
+export type OperationCallOptions = {
   /** Keep this read in its own Worker invocation while retaining shared admission. */
   batch?: boolean;
   signal?: AbortSignal;
@@ -115,20 +112,20 @@ export type StartCallOptions = {
 };
 
 type StartDispatch = (
-  operation: StartOperationId,
-  input: UnparsedStartOperationData,
+  operation: OperationId,
+  input: OperationWireValue,
   transport: OperationTransportOptions,
-) => Promise<StartOperationResult<UnparsedStartOperationData>>;
+) => Promise<OperationResult<OperationWireValue>>;
 
 /**
  * SSR answers through the same `/api/operations` handler and response
  * decoding as the browser, in process, under the page request's credential.
  */
 async function dispatchServerOperation(
-  operation: StartOperationId,
-  input: UnparsedStartOperationData,
+  operation: OperationId,
+  input: OperationWireValue,
   transport: OperationTransportOptions,
-): Promise<StartOperationResult<UnparsedStartOperationData>> {
+): Promise<OperationResult<OperationWireValue>> {
   const [{ getRequest }, { handleBrowserOperationDispatch }] =
     await Promise.all([
       import("@tanstack/react-start/server"),
@@ -160,7 +157,7 @@ let dispatchOverride: StartDispatch | null = null;
  * inside the test instead of reaching the real dispatcher and rejecting after
  * teardown.
  */
-export function overrideStartDispatch(dispatch: StartDispatch): () => void {
+export function overrideOperationDispatch(dispatch: StartDispatch): () => void {
   const previous = dispatchOverride;
   dispatchOverride = dispatch;
   return () => {
@@ -175,16 +172,16 @@ const dispatchStart: StartDispatch = (operation, input, transport) => {
   return dispatchServerOperation(operation, input, transport);
 };
 
-export interface StartOperation<Input, Output> {
-  readonly operation: StartOperationId;
+export interface Operation<Input, Output> {
+  readonly operation: OperationId;
   /**
    * Query/mutation metadata derived from the same declaration the call uses, so
    * `meta.operation`/`meta.entity` cannot drift from what the recorder observes.
    */
   readonly meta: CubbyOperationMeta;
-  call(input: Input, options?: StartCallOptions): Promise<Output>;
+  call(input: Input, options?: OperationCallOptions): Promise<Output>;
   /** Label a generic entity operation with the entity it was invoked for. */
-  forEntity(entity: string): StartOperation<Input, Output>;
+  forEntity(entity: string): Operation<Input, Output>;
 }
 
 /**
@@ -192,30 +189,24 @@ export interface StartOperation<Input, Output> {
  * one shared dispatcher; importing a domain catalog never initializes Start
  * or any server module.
  */
-export function startOperation<Input, Output>(config: {
-  operation: StartOperationId;
+export function operationCall<Input, Output>(config: {
+  operation: OperationId;
   kind?: "query" | "mutation";
   entity?: string;
-  parse: (
-    data: UnparsedStartOperationData,
-    input: Input,
-  ) => Output | Promise<Output>;
-  createError?: (error: PublicStartOperationError) => Error;
+  parse: (data: OperationWireValue, input: Input) => Output | Promise<Output>;
+  createError?: (error: PublicOperationError) => Error;
   /** `withTransport`'s bound answer, still observed and fenced like dispatch. */
   dispatch?: (
     input: Input,
     transport: { signal?: AbortSignal },
-  ) => Promise<StartOperationResult<UnparsedStartOperationData>>;
-}): StartOperation<Input, Output> {
-  if (
-    config.entity &&
-    !isStartOperationEntity(config.operation, config.entity)
-  ) {
+  ) => Promise<OperationResult<OperationWireValue>>;
+}): Operation<Input, Output> {
+  if (config.entity && !isOperationEntity(config.operation, config.entity)) {
     throw new Error(
       `${config.entity} is not registered for ${config.operation}`,
     );
   }
-  const build = (entity: string | undefined): StartOperation<Input, Output> => {
+  const build = (entity: string | undefined): Operation<Input, Output> => {
     const meta: CubbyOperationMeta = {
       transport: "start",
       operation: config.operation,
@@ -226,7 +217,7 @@ export function startOperation<Input, Output>(config: {
       operation: config.operation,
       meta,
       call: (input, options) => {
-        const data = unparsedStartOperationDataSchema.parse(input);
+        const data = operationWireValueSchema.parse(input);
         return observedStartCall({
           operation: config.operation,
           kind: config.kind,
@@ -243,7 +234,7 @@ export function startOperation<Input, Output>(config: {
                   headers,
                   ...(options?.batch === false ? { batch: false } : {}),
                 });
-            const value = unwrapStartOperationResult(
+            const value = unwrapOperationResult(
               config.operation,
               result,
               config.createError,
@@ -255,7 +246,7 @@ export function startOperation<Input, Output>(config: {
         });
       },
       forEntity: (next) => {
-        if (!isStartOperationEntity(config.operation, next)) {
+        if (!isOperationEntity(config.operation, next)) {
           throw new Error(`${next} is not registered for ${config.operation}`);
         }
         return build(next);

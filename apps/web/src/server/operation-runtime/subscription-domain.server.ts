@@ -4,20 +4,20 @@ import type {
   OperationContract,
   SubscriptionMemberName,
 } from "~/contracts/define";
-import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
-import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
+import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
+import type { OperationWireValue } from "~/server/operation-runtime/operation.contract";
 import {
-  type AuthenticatedStartOperationContext,
+  type AuthenticatedOperationContext,
   resolveOperation,
-  type StartOperationRequest,
-} from "~/server/operation-runtime/start-operation.server";
+  type OperationRequest,
+} from "~/server/operation-runtime/operation.server";
 import {
   workflowStream,
   type WorkflowStream,
 } from "~/server/operation-runtime/workflow-stream.server";
 
 type SubscriptionDomainDescriptor = {
-  readonly id: StartOperationIdOfKind<"subscription">;
+  readonly id: OperationIdOfKind<"subscription">;
   readonly definition: {
     readonly kind: "subscription";
     readonly input: z.ZodType;
@@ -30,7 +30,7 @@ type DeclaredSubscriptionInput<
 > = z.output<Descriptor["definition"]["input"]>;
 
 type SubscriptionRun<Descriptor extends SubscriptionDomainDescriptor> = (
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   input: DeclaredSubscriptionInput<Descriptor>,
   /** Aborts when the browser drops the stream; pass it into workflows. */
   signal: AbortSignal,
@@ -40,15 +40,15 @@ type SubscriptionRun<Descriptor extends SubscriptionDomainDescriptor> = (
 
 /** Same call shape as a unary handler; the endpoint already authenticated. */
 export type WorkflowStreamHandler = (options: {
-  data: UnparsedStartOperationData;
-  request: StartOperationRequest;
+  data: OperationWireValue;
+  request: OperationRequest;
 }) => Promise<WorkflowStream>;
 
 type SubscriptionDescriptorOf<
   Contract extends OperationContract,
   Member extends keyof Contract["ops"],
 > = {
-  readonly id: StartOperationIdOfKind<"subscription">;
+  readonly id: OperationIdOfKind<"subscription">;
   readonly definition: Extract<
     Contract["ops"][Member],
     { kind: "subscription" }

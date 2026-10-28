@@ -2,17 +2,17 @@ import { isCancelledError, type QueryClient } from "@tanstack/react-query";
 import { type JSONType, z } from "zod";
 
 import { FLAGS } from "~/lib/flags";
+import type { OperationId } from "~/lib/operation-observability";
+import {
+  registeredOperationKind,
+  operationTraceHeaders,
+} from "~/lib/operation-observability";
 import {
   type OperationOutcome,
   type OperationTransport,
   recordMutation,
   recordQueryOperation,
 } from "~/lib/perf/perf-store";
-import type { StartOperationId } from "~/lib/start-operation-observability";
-import {
-  registeredStartOperationKind,
-  startOperationHeaders,
-} from "~/lib/start-operation-observability";
 
 import {
   type OperationDescriptor,
@@ -22,7 +22,7 @@ import {
 type ObservedKind = "query" | "mutation";
 
 export interface ObservedOperation extends OperationDescriptor {
-  operation: StartOperationId;
+  operation: OperationId;
   id: string;
   kind: ObservedKind;
   startedAt: number;
@@ -55,7 +55,7 @@ const consoleEnabled = () => "window" in globalThis && FLAGS.queryLogger;
 export function beginObservedOperation(options: {
   kind: ObservedKind;
   transport: OperationTransport;
-  operation: StartOperationId;
+  operation: OperationId;
   entity?: string;
   speculative?: boolean;
   input?: unknown;
@@ -127,9 +127,9 @@ export function finishObservedOperation<Failure>(
 }
 
 export function operationHeaders(observed: ObservedOperation): HeadersInit {
-  return startOperationHeaders({
+  return operationTraceHeaders({
     ...observed,
-    kind: registeredStartOperationKind(observed.operation),
+    kind: registeredOperationKind(observed.operation),
   });
 }
 

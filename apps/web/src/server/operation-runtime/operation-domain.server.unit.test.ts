@@ -8,11 +8,11 @@ import {
   createRequestContext,
   requireActor,
 } from "~/server/http/request-context";
-import type { StartOperationHandler } from "~/server/operation-runtime/operation-handlers.server";
+import type { OperationHandler } from "~/server/operation-runtime/operation-handlers.server";
 import type {
-  AuthenticatedStartOperationContext,
-  StartOperationRequest,
-} from "~/server/operation-runtime/start-operation.server";
+  AuthenticatedOperationContext,
+  OperationRequest,
+} from "~/server/operation-runtime/operation.server";
 
 import { implementOperationDomain } from "./operation-domain.server";
 
@@ -25,12 +25,12 @@ const domain = defineContract("calendar", {
 });
 
 interface RangeObservation {
-  context?: AuthenticatedStartOperationContext & { signal: AbortSignal };
+  context?: AuthenticatedOperationContext & { signal: AbortSignal };
   input?: unknown;
 }
 
-let baseContext: AuthenticatedStartOperationContext;
-let request: StartOperationRequest;
+let baseContext: AuthenticatedOperationContext;
+let request: OperationRequest;
 
 // Each handler runs through the production runner under a principal on a
 // context that needs no database, so these checks see what the runner hands
@@ -133,12 +133,12 @@ describe("implementOperationDomain", () => {
     expect(Object.keys(handlers.operations)).toEqual(["range", "rotateFeed"]);
   });
 
-  it("returns operations already shaped as StartOperationHandler", async () => {
+  it("returns operations already shaped as OperationHandler", async () => {
     const handlers = implementOperationDomain(domain, {
       range: async () => ({ days: 1 }),
       rotateFeed: async () => "rotated",
     });
-    const handler: StartOperationHandler = handlers.operations.rotateFeed;
+    const handler: OperationHandler = handlers.operations.rotateFeed;
     await expect(handler({ data: undefined, request })).resolves.toEqual({
       ok: true,
       data: "rotated",

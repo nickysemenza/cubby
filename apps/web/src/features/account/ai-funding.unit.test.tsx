@@ -2,7 +2,7 @@ import type { AiFundingStatus } from "@cubby/schemas/mail-import-settings";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
@@ -55,7 +55,7 @@ describe("AI funding controls", () => {
   it("shows a credit refusal with its raw reason and retries Claude credit on request", async () => {
     harness = createBrowserTestHarness();
     const calls: string[] = [];
-    restore = overrideStartDispatch(async (operation) => {
+    restore = overrideOperationDispatch(async (operation) => {
       calls.push(operation);
       if (operation === "aiFunding.status") return { ok: true, data: refused };
       if (operation === "aiFunding.resetCreditRefusal")
@@ -93,7 +93,7 @@ describe("AI funding controls", () => {
   // Unknown quota reset must still offer the provider's usage controls.
   it("offers Manage usage without inventing a plan reset", async () => {
     harness = createBrowserTestHarness();
-    restore = overrideStartDispatch(async () => ({
+    restore = overrideOperationDispatch(async () => ({
       ok: true,
       data: budget({
         plan: {

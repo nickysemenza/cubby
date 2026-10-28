@@ -11,7 +11,7 @@ import {
   authorizePurchaseAgent,
   workerdDiagnostic,
 } from "~/server/domains/purchase-import/repo/purchase-agent-workerd.fixtures";
-import { startOperation } from "./support/start-operation";
+import { operationCall } from "./support/operation";
 import { getDb } from "~/server/db/helpers";
 
 import {
@@ -394,7 +394,7 @@ test("admits several retained confirmations as separate tasks in the same Run", 
       ...finished("batch"),
     ],
   });
-  const response = await startOperation(
+  const response = await operationCall(
     page.request,
     "purchaseImport.emailImport",
     {

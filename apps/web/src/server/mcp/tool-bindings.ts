@@ -6,7 +6,7 @@ import {
   type McpToolDeclaration,
 } from "~/contracts/mcp-define";
 import { MCP_ACTION_OVERRIDES, MCP_TOOLS } from "~/contracts/mcp-tools";
-import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
+import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
 import { MCP_TOOL_DATA } from "~/server/generated/mcp-tool-data.gen";
 import { KERNEL_MCP_ACTIONS } from "~/server/mcp/kernel-actions";
 import type { McpToolBindings } from "~/server/mcp/tools/tool-registration";
@@ -26,7 +26,7 @@ export type McpToolData = Readonly<
           { kind: "query" | "mutation" } & (
             | { kernel: keyof typeof KERNEL_MCP_ACTIONS }
             | {
-                operation: StartOperationIdOfKind<"query" | "mutation">;
+                operation: OperationIdOfKind<"query" | "mutation">;
                 contract: keyof typeof contracts;
                 member: string;
               }

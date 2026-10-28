@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { startOperation } from "./support/start-operation";
+import { operationCall } from "./support/operation";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import {
   dispatchOperations,
@@ -95,25 +95,21 @@ test("applies selected notes to a resolved historical Product without changing i
       return { existing, historicalStock };
     },
   );
-  const proposed = await startOperation(
-    page.request,
-    "photoImport.saveGroups",
-    {
-      runId: seed.runId,
-      groups: [
-        {
-          ...seed.groups[0]!,
-          product: { kind: "existing", existingId: existing.id },
-          review: {
-            observedName: "Blue cotton shirt",
-            unresolvedReason: "Confirm the label size",
-            stockIntent: "receive",
-          },
+  const proposed = await operationCall(page.request, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: [
+      {
+        ...seed.groups[0]!,
+        product: { kind: "existing", existingId: existing.id },
+        review: {
+          observedName: "Blue cotton shirt",
+          unresolvedReason: "Confirm the label size",
+          stockIntent: "receive",
         },
-        seed.groups[1]!,
-      ],
-    },
-  );
+      },
+      seed.groups[1]!,
+    ],
+  });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
   await gotoAuthenticatedPage(
     page,
@@ -188,7 +184,7 @@ test("fills the owned-items destination once and applies ready items without sel
     batchName,
     e2eRuntime.objectStorageUrl,
   );
-  const configured = await startOperation(
+  const configured = await operationCall(
     page.request,
     "photoImport.setDefaults",
     {
@@ -207,11 +203,10 @@ test("fills the owned-items destination once and applies ready items without sel
     inventory: undefined,
     review: undefined,
   };
-  const proposed = await startOperation(
-    page.request,
-    "photoImport.saveGroups",
-    { runId: seed.runId, groups: [owned, seed.groups[1]!] },
-  );
+  const proposed = await operationCall(page.request, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: [owned, seed.groups[1]!],
+  });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
   await gotoAuthenticatedPage(
     page,
@@ -286,14 +281,10 @@ test("approves two selected photo groups with one reviewed batch action", async 
     e2eRuntime.objectStorageUrl,
   );
 
-  const proposed = await startOperation(
-    page.request,
-    "photoImport.saveGroups",
-    {
-      runId: seed.runId,
-      groups: seed.groups,
-    },
-  );
+  const proposed = await operationCall(page.request, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: seed.groups,
+  });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
   await gotoAuthenticatedPage(
     page,
@@ -361,11 +352,10 @@ test("approves only the selected ready group and leaves the other proposed", asy
     `Selected one ${Date.now()}`,
     e2eRuntime.objectStorageUrl,
   );
-  const proposed = await startOperation(
-    page.request,
-    "photoImport.saveGroups",
-    { runId: seed.runId, groups: seed.groups },
-  );
+  const proposed = await operationCall(page.request, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: seed.groups,
+  });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
   await gotoAuthenticatedPage(
     page,
@@ -422,14 +412,10 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   );
   const g2Name = `${name} solo find`;
   const { db } = await createEvidenceHarnessContext(page);
-  const proposed = await startOperation(
-    page.request,
-    "photoImport.saveGroups",
-    {
-      runId: seed.runId,
-      groups: seed.groups,
-    },
-  );
+  const proposed = await operationCall(page.request, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: seed.groups,
+  });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
   await gotoAuthenticatedPage(
     page,
@@ -579,14 +565,10 @@ test("suggests an existing variant and previews every merge decision for a creat
       label: "color same; size same",
     },
   ]);
-  const proposed = await startOperation(
-    page.request,
-    "photoImport.saveGroups",
-    {
-      runId: seed.runId,
-      groups: seed.groups,
-    },
-  );
+  const proposed = await operationCall(page.request, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: seed.groups,
+  });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
   await gotoAuthenticatedPage(
     page,
@@ -647,7 +629,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   expect(createdId).toBeTruthy();
   const evidence =
     "Synthetic photo and retained retailer page show the same crew shirt and size.";
-  const match = await startOperation(
+  const match = await operationCall(
     page.request,
     "recommendations.proposeProductMatch",
     {
@@ -770,7 +752,7 @@ test("reviews an occupied location and adds the photo count to its chosen stock 
       label: "color same; size same",
     },
   ]);
-  const saved = await startOperation(page.request, "photoImport.saveGroups", {
+  const saved = await operationCall(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
     groups,
   });
@@ -822,7 +804,7 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
     `Synthetic decisions ${Date.now()}`,
     e2eRuntime.objectStorageUrl,
   );
-  const saved = await startOperation(page.request, "photoImport.saveGroups", {
+  const saved = await operationCall(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
     groups: [
       {
@@ -983,7 +965,7 @@ async function seedEvidenceReview(
       },
     },
   ];
-  const saved = await startOperation(page.request, "photoImport.saveGroups", {
+  const saved = await operationCall(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
     groups,
   });
@@ -1129,7 +1111,7 @@ test("keeps proposed edits separate while saved product evidence loads, fails, a
   );
   const attach = page.locator("#photo-group-g1");
   // Evidence keeps the saved value; pending edits appear separately as a diff.
-  const changed = await startOperation(page.request, "photoImport.saveGroups", {
+  const changed = await operationCall(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
     groups: [
       {
@@ -1288,7 +1270,7 @@ test("keeps a noisy care label to meaningful checks and linked purchase evidence
   });
   const agentNote =
     "Synthetic agent note: label OCR reads a style code. INVENTORY DRAFT HELD for a synthetic reason that should stay out of the way.";
-  const saved = await startOperation(page.request, "photoImport.saveGroups", {
+  const saved = await operationCall(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
     groups: [
       {
@@ -1352,11 +1334,10 @@ test("photo approval follows filtered ready scope and explicit selection overrid
     `Scoped review ${Date.now()}`,
     e2eRuntime.objectStorageUrl,
   );
-  const proposed = await startOperation(
-    page.request,
-    "photoImport.saveGroups",
-    { runId: seed.runId, groups: seed.groups },
-  );
+  const proposed = await operationCall(page.request, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: seed.groups,
+  });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
   await gotoAuthenticatedPage(
     page,

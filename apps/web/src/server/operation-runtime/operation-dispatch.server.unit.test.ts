@@ -8,7 +8,7 @@ import {
   type Channel,
   type Principal,
 } from "~/server/http/authenticate";
-import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
+import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 
 import { createOperationDispatch } from "./operation-dispatch.server";
 
@@ -16,7 +16,7 @@ const principal = (channel: Channel, responseHeaders = new Headers()) =>
   fromPartial<Principal>({
     channel,
     credential: channel === "browser" ? "cookie" : "api-key",
-    context: fromPartial<AuthenticatedStartOperationContext>({}),
+    context: fromPartial<AuthenticatedOperationContext>({}),
     client: null,
     delegation: null,
     budget: null,

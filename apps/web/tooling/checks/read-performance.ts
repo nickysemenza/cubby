@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { z } from "zod";
 import { listEntities } from "~/entity/generated/entity-lists.gen";
-import { unparsedStartOperationDataSchema } from "~/server/operation-runtime/start-operation.contract";
+import { operationWireValueSchema } from "~/server/operation-runtime/operation.contract";
 
 import { percentile, readDatabaseTiming } from "./read-performance-metrics";
 import {
@@ -224,7 +224,7 @@ export async function readPerformance(
           ? "resource.list"
           : (path.split(".").at(-1) ?? path);
       if (sample >= 0) {
-        const metadataInput = unparsedStartOperationDataSchema.safeParse(body);
+        const metadataInput = operationWireValueSchema.safeParse(body);
         requestedReads.push({
           entity,
           operation,

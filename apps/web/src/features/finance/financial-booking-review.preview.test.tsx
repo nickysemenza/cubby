@@ -14,7 +14,7 @@ import { userEvent } from "vitest/browser";
 import { z } from "zod";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { mock } from "~/lib/test/mock-schema";
 import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
 import { getEntityListOutputSchema } from "~/server/generated/entity-lists.server.gen";
@@ -99,7 +99,7 @@ it("reviews a reimbursement against the chosen Purchase and commits its exact ap
   });
   const previews: unknown[] = [];
   const commits: unknown[] = [];
-  restore = overrideStartDispatch(async (operation, input) => {
+  restore = overrideOperationDispatch(async (operation, input) => {
     if (operation === "entity.list") {
       z.object({ entity: z.literal("purchase") }).parse(input);
       return {

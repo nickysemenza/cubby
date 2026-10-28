@@ -7,9 +7,9 @@ import { once } from "node:events";
 import type { BatchResult } from "@cubby/schemas/batch";
 import { describe, expect, it } from "vitest";
 import type {
-  StartOperationResult,
-  UnparsedStartOperationData,
-} from "~/server/operation-runtime/start-operation.contract";
+  OperationResult,
+  OperationWireValue,
+} from "~/server/operation-runtime/operation.contract";
 
 import { readPerformance } from "./read-performance";
 import {
@@ -32,7 +32,7 @@ const failure = {
 } as const;
 const line = (
   i: number,
-  value: BatchResult<StartOperationResult<UnparsedStartOperationData>>,
+  value: BatchResult<OperationResult<OperationWireValue>>,
 ) => JSON.stringify({ i, r: value }) + "\n";
 
 async function serve<T>(

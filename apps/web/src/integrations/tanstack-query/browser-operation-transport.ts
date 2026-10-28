@@ -9,26 +9,26 @@ import {
   type ErrorDiagnostics,
   scrubErrorMessage,
 } from "~/lib/error-diagnostics";
+import { OperationError } from "~/lib/operation-error";
+import {
+  OPERATION_TRACE_HEADERS,
+  type OperationId,
+  operationDefinitionFor,
+} from "~/lib/operation-observability";
 import { recordResponse } from "~/lib/request-id";
-import { StartOperationError } from "~/lib/start-operation-error";
 import {
-  START_OPERATION_TRACE_HEADERS,
-  type StartOperationId,
-  startOperationDefinitionFor,
-} from "~/lib/start-operation-observability";
-import {
-  publicStartOperationErrorSchema,
-  type StartOperationResult,
-  type UnparsedStartOperationData,
-  unparsedStartOperationResultSchema,
-} from "~/server/operation-runtime/start-operation.contract";
+  publicOperationErrorSchema,
+  type OperationResult,
+  type OperationWireValue,
+  operationResultSchema,
+} from "~/server/operation-runtime/operation.contract";
 
 type DispatchItem = {
-  operation: StartOperationId;
-  input: UnparsedStartOperationData;
+  operation: OperationId;
+  input: OperationWireValue;
 };
 
-type DispatchResult = StartOperationResult<UnparsedStartOperationData>;
+type DispatchResult = OperationResult<OperationWireValue>;
 type QueuedDispatchItem = { item: DispatchItem; headers: HeadersInit };
 
 export type OperationTransportOptions = {
@@ -65,7 +65,7 @@ class BatchFallback extends Error {
 
 const batchLineSchema = z.object({
   i: z.number().int().nonnegative(),
-  r: batchResultSchema(unparsedStartOperationResultSchema),
+  r: batchResultSchema(operationResultSchema),
 });
 
 const postInit = (
@@ -95,12 +95,12 @@ function protocolFailure<TCause>(
   started: number,
   body: string | undefined,
   cause: TCause,
-): StartOperationError {
+): OperationError {
   const causes = describeErrorCauses(cause, { includeStacks: true });
   const message = scrubErrorMessage(
     `${operation} returned an invalid response (HTTP ${response.status}): ${body ?? causes.causes.at(-1)?.message ?? "response body could not be read"}`,
   );
-  return new StartOperationError(
+  return new OperationError(
     {
       code: "INVALID_TRANSPORT_RESPONSE",
       message,
@@ -137,7 +137,7 @@ async function send(
     response = await fetchImpl(url, init);
   } catch (error) {
     if (init.signal?.aborted) throw error;
-    throw new StartOperationError(
+    throw new OperationError(
       {
         code: "NETWORK_ERROR",
         message: scrubErrorMessage(
@@ -169,8 +169,8 @@ async function readResult(
   try {
     body = await response.text();
     const json: unknown = JSON.parse(body);
-    if (response.ok) return unparsedStartOperationResultSchema.parse(json);
-    return { ok: false, error: publicStartOperationErrorSchema.parse(json) };
+    if (response.ok) return operationResultSchema.parse(json);
+    return { ok: false, error: publicOperationErrorSchema.parse(json) };
   } catch (error) {
     if (signal?.aborted) throw error;
     throw protocolFailure(response, operation, started, body, error);
@@ -254,7 +254,7 @@ export async function streamOperation(
     try {
       for await (const next of ndjsonLines(body)) {
         line = next;
-        yield unparsedStartOperationResultSchema.parse(JSON.parse(next));
+        yield operationResultSchema.parse(JSON.parse(next));
       }
     } catch (error) {
       if (signal.aborted) throw error;
@@ -335,7 +335,7 @@ const queryBatchers = new Map<
 
 function queryBatcherFor(headers: HeadersInit) {
   const entries = [...new Headers(headers).entries()]
-    .filter(([name]) => !START_OPERATION_TRACE_HEADERS.includes(name))
+    .filter(([name]) => !OPERATION_TRACE_HEADERS.includes(name))
     .sort();
   const key = JSON.stringify(entries);
   let batcher = queryBatchers.get(key);
@@ -372,12 +372,12 @@ function queryBatcherFor(headers: HeadersInit) {
 
 /** Batch reads where possible; a mutation or a fallen-back read posts alone. */
 export async function dispatchBrowserOperation(
-  operation: StartOperationId,
-  input: UnparsedStartOperationData,
+  operation: OperationId,
+  input: OperationWireValue,
   transport: OperationTransportOptions,
 ): Promise<DispatchResult> {
   const item = { operation, input };
-  if (startOperationDefinitionFor(operation)?.kind !== "query")
+  if (operationDefinitionFor(operation)?.kind !== "query")
     return postOperation(item, transport.headers, transport.signal);
   const signal = transport.signal ?? new AbortController().signal;
   if (transport.batch !== false) {

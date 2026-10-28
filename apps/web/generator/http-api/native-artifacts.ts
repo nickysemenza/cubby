@@ -4,7 +4,7 @@ import { generatedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import type { KernelActions } from "../entities/render/index.ts";
 import { renderEntityKernelArtifacts } from "./entity-kernel.ts";
-import { loadContracts } from "../start-operations/collect.ts";
+import { loadContracts } from "../operations/collect.ts";
 import { checkHeroActionPlans } from "./native-plan-validation.ts";
 import { collectNativeContract } from "./native-contract.ts";
 import { renderNativeCommands } from "./native-commands.ts";

@@ -13,7 +13,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 
 // The view lazily loads its explorer; load it with the file so no test ends
 // with that import still in flight.
@@ -82,7 +82,7 @@ describe("expense analytics query lifecycle", () => {
   it("retries an initial failure and retains loaded analytics on refresh failure", async () => {
     let fail = true;
     const operations: string[] = [];
-    const restore = overrideStartDispatch(async (operation) => {
+    const restore = overrideOperationDispatch(async (operation) => {
       operations.push(operation);
       if (operation === "expense.analyze") return { ok: true, data: analyze };
       if (operation === "expense.flowSankey") return { ok: true, data: flow };

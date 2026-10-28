@@ -12,7 +12,7 @@ import {
 import { useProductCategories } from "~/entity/hooks/use-product-categories";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 
 import { CategoryLabelById } from "./category-label";
 
@@ -103,7 +103,7 @@ afterEach(() => harness.dispose());
 
 describe("CategoryLabelById", () => {
   it("falls back to a known record link after an initial vocabulary error", async () => {
-    const restore = overrideStartDispatch(async () => {
+    const restore = overrideOperationDispatch(async () => {
       throw new Error("Synthetic vocabulary unavailable");
     });
     try {
@@ -121,7 +121,7 @@ describe("CategoryLabelById", () => {
 
   it("retains a loaded pill during refresh failure and links a completed missing reference", async () => {
     let fail = false;
-    const restore = overrideStartDispatch(async (operation) => {
+    const restore = overrideOperationDispatch(async (operation) => {
       if (fail) throw new Error("Synthetic vocabulary refresh failed");
       if (operation === "entity.list")
         return {
@@ -181,7 +181,7 @@ describe("CategoryLabelById", () => {
   });
 
   it("links an unresolved reference when a later vocabulary page fails", async () => {
-    const restore = overrideStartDispatch(async (operation, input) => {
+    const restore = overrideOperationDispatch(async (operation, input) => {
       if (operation !== "entity.list")
         throw new Error(`Unexpected category operation: ${operation}`);
       const { pagination } = z
@@ -227,7 +227,7 @@ describe("CategoryLabelById", () => {
   it("shares the projected vocabulary and resolves a later-page inherited feature without tree reads", async () => {
     const operations: string[] = [];
     const pageIndexes: number[] = [];
-    const restore = overrideStartDispatch(async (operation, input) => {
+    const restore = overrideOperationDispatch(async (operation, input) => {
       operations.push(operation);
       if (operation !== "entity.list")
         throw new Error(`Unexpected category operation: ${operation}`);
