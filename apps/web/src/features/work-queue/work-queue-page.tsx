@@ -12,6 +12,7 @@ import {
   workRecordTypeOptions,
 } from "@cubby/schemas/work-queue";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { TrayIcon } from "@phosphor-icons/react/dist/csr/Tray";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -107,7 +108,10 @@ type QueueTablePage = Omit<WorkQueueOut, "items" | "meta"> & {
   meta: ListQueryResponse<QueueTableRow>["meta"] &
     Pick<
       WorkQueueOut["meta"],
-      "viewCounts" | "reasons" | "incompleteProjectIds"
+      | "viewCounts"
+      | "reasons"
+      | "incompleteProjectIds"
+      | "incompleteDiagnosticSources"
     > & {
       /** Each section's declared group actions, by its raw key. */
       groupActions: Readonly<Record<string, readonly WorkAction[]>>;
@@ -721,9 +725,25 @@ export function WorkQueue({
   const PreviewSheet = inspection.PreviewSheet;
 
   const incompleteCount = firstPage?.meta.incompleteProjectIds?.length ?? 0;
+  const incompleteDiagnostics = firstPage?.meta.incompleteDiagnosticSources;
+  const diagnosticError = incompleteDiagnostics?.find(
+    (source) => source.error,
+  )?.error;
   return (
     <>
       <AttentionInputStatus count={incompleteCount} />
+      {!!incompleteDiagnostics?.length && (
+        <p className="text-sm text-muted-foreground">
+          Diagnostic counts are unavailable or out of date for{" "}
+          {countLabel(incompleteDiagnostics.length, "check")}. Counts include
+          known findings only.
+          {incompleteDiagnostics.some((source) => source.pending) &&
+            " Updates are pending."}
+          {diagnosticError && (
+            <span className="block font-mono">{diagnosticError}</span>
+          )}
+        </p>
+      )}
       {tabsTarget &&
         createPortal(
           <ViewTabs

@@ -1,14 +1,11 @@
 import type { Database } from "~/server/db";
 import { computeAttentionItems } from "~/server/domains/project/repo/attention";
-import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { WorkScope } from "~/server/generic/work-queue/repo/work-source";
 
-/** One composition belongs to one read, including diagnostics and Project rows. */
+/** One composition shares current attention checks across admitted Project reasons. */
 export const projectWorkContext = () => {
-  let loaded: ReturnType<typeof loadProjectDateWindows> | undefined;
   let attention: ReturnType<typeof computeAttentionItems> | undefined;
-  const load = (db: Database) => (loaded ??= loadProjectDateWindows(db));
   const attentionItems = (db: Database, scope: WorkScope) =>
     (attention ??= (async () => {
       const ids =
@@ -25,6 +22,6 @@ export const projectWorkContext = () => {
     })());
   const incompleteProjectIds = async () =>
     attention ? (await attention).incompleteProjectIds : [];
-  return { load, attentionItems, incompleteProjectIds };
+  return { attentionItems, incompleteProjectIds };
 };
 export type ProjectWorkContext = ReturnType<typeof projectWorkContext>;

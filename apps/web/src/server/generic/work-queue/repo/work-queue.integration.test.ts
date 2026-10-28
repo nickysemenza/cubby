@@ -1,4 +1,11 @@
+import { entitySchema } from "@cubby/schemas/entity-core";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project-fields";
 import { testUserId } from "@cubby/schemas/testing";
+import {
+  workDiagnosticFacts,
+  type WorkDiagnosticFacts,
+} from "@cubby/schemas/work-diagnostic-facts";
 import {
   workQueueInput,
   type WorkQueueInput,
@@ -6,15 +13,25 @@ import {
   type WorkExecutor,
 } from "@cubby/schemas/work-queue";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { user } from "~/server/db/auth.schema";
+import { derivedTriggerDdl } from "~/server/db/derived-trigger-ddl";
 import { getDb } from "~/server/db/helpers";
+import { project, financialAccount } from "~/server/db/schema";
+import { loadWorkDiagnosticFacts } from "~/server/domains/work/repo/work-diagnostic-facts";
+import {
+  diagnosticWorkSources,
+  computeWorkDiagnosticFacts,
+} from "~/server/domains/work/service/work-diagnostics";
 import { readWorkQueue as readComposedQueue } from "~/server/domains/work/service/work-queue-read";
 import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
+import { markAllStoredDerived } from "~/server/generic/derived/repo/drain";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createProductIdentityFixture,
@@ -301,6 +318,255 @@ describe("composed Work queue engine", () => {
       "theirs",
       "unresolved",
     ]);
+  });
+
+  // Copy a writer-created Project through the identity writer to install the reserved system anchor.
+  const diagnosticAnchor = async () => {
+    const created = await createRepoEntity(ctx, "project", {
+      name: "Synthetic diagnostic anchor",
+    });
+    const [row] = await getDb(ctx.db)
+      .select()
+      .from(project)
+      .where(eq(project.shortcode, created.output.id));
+    if (!row) throw new Error("Synthetic project was not persisted");
+    const { id: _id, shortcode: _shortcode, ...values } = row;
+    const anchor = await insertWithShortcode(ctx.db, "project", values, {
+      generate: (entity) =>
+        parseShortcodeFor(entity, HOUSEHOLD_PROJECT_SHORTCODE),
+    });
+    return anchor.id;
+  };
+  const publishDiagnostics = async (
+    id: string,
+    value: WorkDiagnosticFacts,
+    computedAt = new Date(),
+  ) => {
+    const parsed = workDiagnosticFacts.parse(value);
+    await getDb(ctx.db).execute(sql`
+      INSERT INTO "DerivedValue" ("entityId", kind, key, value, "computedAt", "decidedBy")
+      VALUES (${id}::uuid, ${entitySchema.enum.project}, 'workDiagnosticFacts', ${JSON.stringify(parsed)}::jsonb,
+        ${computedAt.toISOString()}::timestamp, '{"outcome":{"kind":"value"},"provenance":{"kind":"computed"}}'::jsonb)
+      ON CONFLICT ("entityId", key) DO UPDATE SET value = excluded.value, "computedAt" = excluded."computedAt", "decidedBy" = excluded."decidedBy"`);
+  };
+  const readDiagnostics = (
+    input: WorkQueueInput,
+    memberPartyId: Parameters<
+      typeof readWorkQueueWith
+    >[2]["memberPartyId"] = null,
+    memberOnly = false,
+  ) =>
+    readWorkQueueWith(
+      ctx.db,
+      { ...diagnosticWorkSources(), deferrals: [] },
+      { input, memberPartyId, memberOnly },
+    );
+
+  it("retains published diagnostic counts across missing inputs, errors and day expiry without read repair", async () => {
+    const anchor = await diagnosticAnchor();
+    await getDb(ctx.db).execute(
+      sql.raw(
+        `DO $install$ BEGIN EXECUTE $ddl$${derivedTriggerDdl()}$ddl$; END $install$;`,
+      ),
+    );
+    const before = await getDb(ctx.db).execute(
+      sql`SELECT target, ref, ticket FROM "WorkItem" ORDER BY target, ref`,
+    );
+    const missing = await readDiagnostics({ reason: "dependencyCycles" });
+    expect(missing.items).toEqual([]);
+    expect(missing.meta.incompleteDiagnosticSources).toEqual([
+      expect.objectContaining({
+        key: "dependencyCycles",
+        state: "unavailable",
+      }),
+    ]);
+    expect(
+      (
+        await getDb(ctx.db).execute(
+          sql`SELECT target, ref, ticket FROM "WorkItem" ORDER BY target, ref`,
+        )
+      ).rows,
+    ).toEqual(before.rows);
+    await publishDiagnostics(anchor, {
+      counts: { dependencyCycles: 17, unconnectedEntities: 0 },
+      privateEntries: {},
+    });
+    const published = await readDiagnostics({ reason: "dependencyCycles" });
+    expect(published.meta.totalCount).toBe(1);
+    expect(published.items[0]?.reason).toContain("17 work items.");
+    const knownEmpty = await readDiagnostics({ reason: "unconnectedEntities" });
+    expect(knownEmpty.items).toEqual([]);
+    expect(knownEmpty.meta.incompleteDiagnosticSources).not.toContainEqual(
+      expect.objectContaining({ state: "unavailable" }),
+    );
+    // A failed refresh preserves the last successful result and its diagnostic.
+    await getDb(ctx.db)
+      .execute(sql`INSERT INTO "WorkItem" (target, ref, "lastError") VALUES ('project.workDiagnosticFacts', ${anchor}::uuid, 'Synthetic refresh failure')
+      ON CONFLICT (target, ref) DO UPDATE SET "lastError" = excluded."lastError"`);
+    const failed = await readDiagnostics({ reason: "dependencyCycles" });
+    expect(failed.items).toEqual(published.items);
+    expect(failed.meta.incompleteDiagnosticSources).toEqual([
+      expect.objectContaining({
+        state: "stale",
+        pending: true,
+        error: "Synthetic refresh failure",
+      }),
+    ]);
+    await getDb(ctx.db).execute(
+      sql`DELETE FROM "WorkItem" WHERE target LIKE 'project.workDiagnosticFacts%'`,
+    );
+    await publishDiagnostics(
+      anchor,
+      { counts: { dependencyCycles: 17 }, privateEntries: {} },
+      new Date("2020-01-01T12:00:00Z"),
+    );
+    expect(
+      (await readDiagnostics({ reason: "dependencyCycles" })).meta
+        .incompleteDiagnosticSources,
+    ).toEqual([expect.objectContaining({ state: "stale", pending: false })]);
+    // A Project without rollups must not certify a partial computation as a healthy zero.
+    await expect(computeWorkDiagnosticFacts(ctx.db, [anchor])).rejects.toThrow(
+      "project.rollups",
+    );
+    expect(
+      (await loadWorkDiagnosticFacts(ctx.db))?.counts?.dependencyCycles,
+    ).toBe(17);
+    await getDb(ctx.db)
+      .update(project)
+      .set({ name: "Synthetic changed diagnostic anchor" })
+      .where(eq(project.id, anchor));
+    expect((await loadWorkDiagnosticFacts(ctx.db))?.pending).toBe(true);
+    // The production adapter publishes only after its declared upstream roots are ready.
+    await markAllStoredDerived(ctx.db);
+    await drainStoredDerived(ctx.db);
+    const ready = await loadWorkDiagnosticFacts(ctx.db);
+    expect(ready?.counts?.dependencyCycles).toBe(0);
+    expect(ready).toMatchObject({ stale: false, pending: false, error: null });
+    await getDb(ctx.db).execute(
+      sql`INSERT INTO "ExternalSource" (slug, label, "vendorId", issuer) VALUES ('synthetic-work-source', 'Synthetic work source', NULL, false)`,
+    );
+    expect((await loadWorkDiagnosticFacts(ctx.db))?.pending).toBe(true);
+    await getDb(ctx.db).execute(
+      sql`DELETE FROM "WorkItem" WHERE target LIKE 'project.workDiagnosticFacts%'`,
+    );
+    await getDb(ctx.db).execute(
+      sql`UPDATE "ExternalSource" SET issuer = true WHERE slug = 'synthetic-work-source'`,
+    );
+    expect((await loadWorkDiagnosticFacts(ctx.db))?.pending).toBe(true);
+  });
+
+  it("pages stored private findings under current member ownership instead of private population samples", async () => {
+    const anchor = await diagnosticAnchor();
+    const first = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic diagnostic member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const otherUser = testUserId("synthetic-diagnostic-other");
+    await getDb(ctx.db)
+      .insert(user)
+      .values({
+        id: otherUser,
+        name: "Synthetic diagnostic other",
+        email: "diagnostic-other@example.test",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    const second = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic diagnostic other",
+      kind: "member",
+      userId: otherUser,
+    });
+    const own = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic own account",
+      ledgerPartyId: first.shortcode,
+    });
+    const other = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic other account",
+      ledgerPartyId: second.shortcode,
+    });
+    const ownRef = {
+      type: "financialAccount",
+      shortcode: own.output.id,
+    } as const;
+    const otherRef = {
+      type: "financialAccount",
+      shortcode: other.output.id,
+    } as const;
+    await publishDiagnostics(anchor, {
+      counts: { invalidFinancialJson: 3 },
+      privateEntries: {
+        invalidFinancialJson: [
+          {
+            key: "private:own",
+            name: "Synthetic own finding",
+            reason: "Synthetic private evidence",
+            refs: [ownRef],
+          },
+          {
+            key: "private:other",
+            name: "Synthetic other finding",
+            reason: "Synthetic private evidence",
+            refs: [otherRef],
+          },
+          {
+            key: "private:mixed",
+            name: "Synthetic mixed finding",
+            reason: "Synthetic private evidence",
+            refs: [ownRef, otherRef],
+          },
+        ],
+      },
+    });
+    const household = await readDiagnostics({
+      reason: "invalidFinancialJson",
+      pageSize: 1,
+      pageIndex: 1,
+      sort: [{ orderBy: "name", direction: "asc" }],
+    });
+    expect(household.meta.totalCount).toBe(3);
+    expect(household.items).toHaveLength(1);
+    const member = await readDiagnostics(
+      { reason: "invalidFinancialJson" },
+      first.id,
+      true,
+    );
+    expect(member.items.map((row) => row.key)).toEqual(["private:own"]);
+    expect(member.meta.totalCount).toBe(1);
+    const searched = await readDiagnostics({
+      reason: "invalidFinancialJson",
+      query: "mixed",
+      group: "reason",
+    });
+    expect(searched.meta.totalCount).toBe(1);
+    expect(searched.meta.groups?.map((group) => group.count)).toEqual([1]);
+    await getDb(ctx.db).execute(
+      sql`UPDATE "FinancialAccount" SET "ledgerPartyId" = (SELECT id FROM "LedgerParty" WHERE shortcode = ${second.shortcode}) WHERE shortcode = ${own.output.id}`,
+    );
+    expect(
+      (
+        await readDiagnostics(
+          { reason: "invalidFinancialJson" },
+          first.id,
+          true,
+        )
+      ).items,
+    ).toEqual([]);
+    // A deleted reference fails closed even though its published finding remains retained.
+    await getDb(ctx.db)
+      .update(financialAccount)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialAccount.shortcode, own.output.id));
+    expect(
+      (
+        await readDiagnostics(
+          { reason: "invalidFinancialJson" },
+          first.id,
+          true,
+        )
+      ).meta.totalCount,
+    ).toBe(0);
   });
 
   it("composes real gap sources with their declared labels and fresh record facts", async () => {

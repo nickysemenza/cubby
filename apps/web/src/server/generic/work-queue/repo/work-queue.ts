@@ -12,6 +12,7 @@ import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { oneOrManyValues } from "@cubby/schemas/pagination";
 import type { ProjectAttentionReport } from "@cubby/schemas/project";
+import type { IncompleteWorkDiagnosticSource } from "@cubby/schemas/work-diagnostic-facts";
 import {
   workExecutor,
   workQueueGapViews,
@@ -57,6 +58,9 @@ import {
 export interface WorkQueueComposition {
   readonly sources: readonly WorkSource[];
   readonly deferrals: readonly SQL[];
+  readonly incompleteDiagnosticSources?: () => Promise<
+    IncompleteWorkDiagnosticSource[]
+  >;
   readonly incompleteProjectIds?: () => Promise<
     ProjectAttentionReport["incompleteProjectIds"]
   >;
@@ -402,6 +406,8 @@ async function queryWorkQueue(
       pageIndex: input.pageIndex,
       pageSize: input.pageSize,
       incompleteProjectIds: await composition.incompleteProjectIds?.(),
+      incompleteDiagnosticSources:
+        await composition.incompleteDiagnosticSources?.(),
       totalCount: row.total,
       viewCounts: row.viewCounts,
       reasons,
