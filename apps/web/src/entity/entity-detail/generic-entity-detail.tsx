@@ -725,7 +725,10 @@ function FullEntityDetail<E extends GenericDetailEntity>({
                       content: (
                         <>
                           <QualitySectionChecks section={section.id} />
-                          {detail.sections.some(
+                          {/* Retained review actions must be available without
+                              first scrolling their lower detail section. */}
+                          {section.id === "suggestions" ||
+                          detail.sections.some(
                             (declared) => declared.id === section.id,
                           ) ? (
                             section.content

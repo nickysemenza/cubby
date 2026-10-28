@@ -83,7 +83,8 @@ household date inputs. Needs you, What changed, Meals, the key-number strip,
 detail summary cells and the first declared relation stream their real data.
 Do not add client-session or hydration gates to these reads. Later sections
 use `VisibleContent` for one-shot viewport admission and remain mounted after
-admission. Interaction-only authenticated reads can use `useHydrated() &&
+admission. Retained record suggestions load with the record so review actions
+are available before scrolling their lower section. Interaction-only authenticated reads can use `useHydrated() &&
 session`; passive loading branches use `useHydratedLoading`/`useHydrated`. Interactive controls in streamed sections, design showcases, and lazy
 detail slots stay disabled until their own
 `useHydrated()` is true; shell hydration alone does not establish their handlers
