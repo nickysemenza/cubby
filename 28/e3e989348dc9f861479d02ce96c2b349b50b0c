@@ -1,0 +1,27 @@
+apps/web/src/server/domains/maintenance/service/maintenance-run.ts
+  s_41504dfc385516::t_c51ae401ceba5e 26-29,180-186,189-192
+apps/web/src/server/domains/run/service/step-run.ts
+  s_41504dfc385516::t_464df09d5d7269 87-111
+apps/web/src/server/domains/run/service/sweep.ts
+  s_41504dfc385516::t_fc15993e8bf93c 54-59,217-232,354-355,357-385
+docs/adr/0016-shared-assessments-and-feedback.md
+  s_41504dfc385516::t_6298d299d85dfc 419-426
+docs/agents/generic-paths.md
+  s_41504dfc385516::t_73ece7b7a94796 38-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "28e3e989348dc9f861479d02ce96c2b349b50b0c",
+  "prompts": {},
+  "sessions": {
+    "s_41504dfc385516": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20c7954d-2a54-4f64-9b83-4f2c98fd3f87",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
