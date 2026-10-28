@@ -3,18 +3,13 @@ import { uniq } from "es-toolkit";
 
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import { getCalendarRange } from "~/server/domains/calendar/repo/calendar";
+import { visitCalendarFeedItems } from "~/server/domains/calendar/repo/calendar";
 
 import type {
   CalendarRefreshResult,
   StoredCalendarDocument,
 } from "../repo/contracts";
-import {
-  calendarItemCount,
-  type IcsFeed,
-  kindsForFeed,
-  renderIcs,
-} from "./ics";
+import { createIcsDocument, type IcsFeed, kindsForFeed } from "./ics";
 
 const PAST_DAYS = 60;
 /** PAST_DAYS + FUTURE_DAYS stays within the range schema's 366-day cap. */
@@ -34,47 +29,51 @@ async function etagFor(body: string): Promise<string> {
 export async function buildCalendarSnapshot(
   db: Database,
   options: { origin: string; now: Date; revision: number },
-  getRange: typeof getCalendarRange = getCalendarRange,
+  visitItems: typeof visitCalendarFeedItems = visitCalendarFeedItems,
 ): Promise<CalendarSnapshot> {
   const startDate = householdDaysAgo(PAST_DAYS, options.now);
   const endDateExclusive = householdDaysFromNow(FUTURE_DAYS, options.now);
-  // One read covers every published feed: the union of what "all" and
-  // "garden" each publish, so a feed-specific render below never needs a
-  // kind this range read didn't fetch.
-  const { items } = await getRange(db, {
-    startDate,
-    endDateExclusive,
-    kinds: uniq([...kindsForFeed("all"), ...kindsForFeed("garden")]),
-  });
+  const documentOptions = {
+    now: options.now,
+    origin: options.origin,
+    maxBytes: MAX_CALENDAR_DOCUMENT_BYTES,
+  };
+  const builders = {
+    meals: createIcsDocument({ ...documentOptions, feed: "meals" }),
+    tasks: createIcsDocument({ ...documentOptions, feed: "tasks" }),
+    all: createIcsDocument({ ...documentOptions, feed: "all" }),
+    garden: createIcsDocument({ ...documentOptions, feed: "garden" }),
+  };
+  // One read covers the union of kinds published by every feed.
+  await visitItems(
+    db,
+    {
+      startDate,
+      endDateExclusive,
+      kinds: uniq([...kindsForFeed("all"), ...kindsForFeed("garden")]),
+    },
+    async (items) => {
+      for (const builder of Object.values(builders)) builder.append(items);
+    },
+  );
   const generatedAt = options.now.toISOString();
   const renderDocument = async (
     feed: IcsFeed,
   ): Promise<StoredCalendarDocument> => {
-    const body = renderIcs(items, {
-      feed,
-      now: options.now,
-      origin: options.origin,
-    });
-    const size = new TextEncoder().encode(body).byteLength;
-    if (size > MAX_CALENDAR_DOCUMENT_BYTES) {
-      throw new Error(
-        `Calendar ${feed} snapshot is ${size} bytes; maximum is ${MAX_CALENDAR_DOCUMENT_BYTES}`,
-      );
-    }
+    const builder = builders[feed];
+    const body = builder.finish();
     return {
       body,
       etag: await etagFor(body),
       generatedAt,
       revision: options.revision,
-      itemCount: calendarItemCount(items, feed),
+      itemCount: builder.itemCount,
     };
   };
-  const [meals, tasks, all, garden] = await Promise.all([
-    renderDocument("meals"),
-    renderDocument("tasks"),
-    renderDocument("all"),
-    renderDocument("garden"),
-  ]);
+  const meals = await renderDocument("meals");
+  const tasks = await renderDocument("tasks");
+  const all = await renderDocument("all");
+  const garden = await renderDocument("garden");
   const documents = { meals, tasks, all, garden };
   const counts = {
     meals: meals.itemCount,

@@ -17,7 +17,7 @@ import { preferredImageDescriptionPolicy } from "~/server/domains/image-processi
 import { getDb } from "~/server/db/helpers";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { saveImageDescriptionAnalysis } from "~/server/domains/image-processing/repo/image-processing";
-import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
+import { imageDescriptionInputFingerprint } from "~/server/domains/image-processing/repo/description-policy";
 import { scheduleImageProcessingJobs } from "~/server/domains/image-processing/service/image-processing.service";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { createEvidenceHarnessContext } from "./fixtures/core";

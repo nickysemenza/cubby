@@ -6,7 +6,7 @@ import {
   taskShortcode,
 } from "@cubby/schemas/identifiers";
 import { MEAL_TYPE_LABELS } from "@cubby/schemas/meal-classification";
-import { and, eq, isNotNull, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, or } from "drizzle-orm";
 
 import { shiftPlainDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -36,94 +36,78 @@ const shiftDate = (value: string, days: number) => {
 
 const timestamp = (value: Date) => value.toISOString();
 
-/** Full, unbounded publication snapshot for the CalDAV Durable Object. */
-export async function loadCalDavProjection(
+/**
+ * Read the full collection in one repeatable snapshot, retaining only one page.
+ * The transaction intentionally spans the awaited render/staging callback so
+ * concurrent writes cannot make offset pages omit or duplicate records.
+ */
+export async function visitCalDavProjection(
   db: Database,
-): Promise<{ projections: CalendarProjection[] }> {
-  return withTransaction(db, async (tx) => {
-    await tx.execute(
-      sql`set transaction isolation level repeatable read read only`,
-    );
-    const meals: Array<
-      Pick<
-        typeof meal.$inferSelect,
-        "id" | "shortcode" | "name" | "date" | "mealType" | "updatedAt"
-      >
-    > = [];
-    const tasks: Array<
-      Pick<
-        typeof task.$inferSelect,
-        | "id"
-        | "shortcode"
-        | "name"
-        | "dueDate"
-        | "dueEndDate"
-        | "status"
-        | "updatedAt"
-      >
-    > = [];
-    for (let offset = 0; ; offset += PAGE_SIZE) {
-      const page = await tx.query.meal.findMany({
-        where: notDeleted(meal),
-        columns: {
-          id: true,
-          shortcode: true,
-          name: true,
-          date: true,
-          mealType: true,
-          updatedAt: true,
-        },
-        orderBy: (row, { asc }) => [asc(row.createdAt), asc(row.id)],
-        limit: PAGE_SIZE,
-        offset,
-      });
-      meals.push(...page);
-      if (page.length < PAGE_SIZE) break;
-    }
-    for (let offset = 0; ; offset += PAGE_SIZE) {
-      const page = await tx.query.task.findMany({
-        where: and(
-          notDeleted(task),
-          or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
-        ),
-        columns: {
-          id: true,
-          shortcode: true,
-          name: true,
-          dueDate: true,
-          dueEndDate: true,
-          status: true,
-          updatedAt: true,
-        },
-        orderBy: (row, { asc }) => [asc(row.createdAt), asc(row.id)],
-        limit: PAGE_SIZE,
-        offset,
-      });
-      tasks.push(...page);
-      if (page.length < PAGE_SIZE) break;
-    }
-    return {
-      projections: [
-        ...meals.map((row) => ({
-          entity: "meal" as const,
-          id: parseShortcodeFor("meal", row.shortcode),
-          name: row.name,
-          date: row.date,
-          mealType: row.mealType,
-          updatedAt: timestamp(row.updatedAt),
-        })),
-        ...tasks.map((row) => ({
-          entity: "task" as const,
-          id: parseShortcodeFor("task", row.shortcode),
-          name: row.name,
-          dueDate: row.dueDate,
-          dueEndDate: row.dueEndDate,
-          status: row.status,
-          updatedAt: timestamp(row.updatedAt),
-        })),
-      ],
-    };
-  });
+  visit: (projections: CalendarProjection[]) => Promise<void>,
+): Promise<void> {
+  await withTransaction(
+    db,
+    async (tx) => {
+      for (let offset = 0; ; offset += PAGE_SIZE) {
+        const page = await tx.query.meal.findMany({
+          where: notDeleted(meal),
+          columns: {
+            shortcode: true,
+            name: true,
+            date: true,
+            mealType: true,
+            updatedAt: true,
+          },
+          orderBy: (row, { asc }) => [asc(row.createdAt), asc(row.id)],
+          limit: PAGE_SIZE,
+          offset,
+        });
+        await visit(
+          page.map((row) => ({
+            entity: "meal",
+            id: parseShortcodeFor("meal", row.shortcode),
+            name: row.name,
+            date: row.date,
+            mealType: row.mealType,
+            updatedAt: timestamp(row.updatedAt),
+          })),
+        );
+        if (page.length < PAGE_SIZE) break;
+      }
+      for (let offset = 0; ; offset += PAGE_SIZE) {
+        const page = await tx.query.task.findMany({
+          where: and(
+            notDeleted(task),
+            or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
+          ),
+          columns: {
+            shortcode: true,
+            name: true,
+            dueDate: true,
+            dueEndDate: true,
+            status: true,
+            updatedAt: true,
+          },
+          orderBy: (row, { asc }) => [asc(row.createdAt), asc(row.id)],
+          limit: PAGE_SIZE,
+          offset,
+        });
+        await visit(
+          page.map((row) => ({
+            entity: "task",
+            id: parseShortcodeFor("task", row.shortcode),
+            name: row.name,
+            dueDate: row.dueDate,
+            dueEndDate: row.dueEndDate,
+            status: row.status,
+            updatedAt: timestamp(row.updatedAt),
+          })),
+        );
+        if (page.length < PAGE_SIZE) break;
+      }
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
 }
 
 const caldavContext = (

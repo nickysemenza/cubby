@@ -1,7 +1,11 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { userId } from "@cubby/schemas/identifiers";
 import { testShortcode } from "@cubby/schemas/testing";
-import { evictDurableObject, runInDurableObject } from "cloudflare:test";
+import {
+  evictDurableObject,
+  runInDurableObject,
+  runDurableObjectAlarm,
+} from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { createDAVClient } from "tsdav";
 import { describe, expect, it } from "vitest";
@@ -34,6 +38,12 @@ const resource = {
     updatedAt: "2026-09-07T00:00:00.000Z",
   },
 } satisfies CalDavResource;
+
+function publish(store: CalendarSqlStore, resources: CalDavResource[]) {
+  const generation = store.beginPublication();
+  store.stageResources(generation, resources);
+  return store.publish(generation, documents(), ORIGIN);
+}
 
 function documents() {
   const generatedAt = "2026-09-07T00:00:00.000Z";
@@ -95,7 +105,7 @@ async function seededStub(resources: CalDavResource[] = [resource]) {
   await runInDurableObject(stub, async (_instance, state) => {
     const store = new CalendarSqlStore(state.storage);
     await store.migrate();
-    store.publish(resources, documents(), ORIGIN);
+    publish(store, resources);
   });
   return stub;
 }
@@ -385,9 +395,9 @@ describe("CalendarFeedDurableObject in workerd", () => {
     );
     await runInDurableObject(stub, async (_instance, state) => {
       const store = new CalendarSqlStore(state.storage);
-      store.publish([resource], documents(), ORIGIN);
+      publish(store, [resource]);
       expect(store.uncertainWrites()).toHaveLength(1);
-      expect(store.identities()).toContainEqual({
+      expect(store.identityFor(resource.projection.id)).toEqual({
         entity: "task",
         shortcode: resource.projection.id,
         filename: resource.filename,
@@ -420,6 +430,57 @@ describe("CalendarFeedDurableObject in workerd", () => {
     expect(response.status).toBe(503);
   });
 
+  // A reset between page writes must retain dirty work and the last complete feed.
+  it("discards interrupted staging after eviction and publishes a complete retry", async () => {
+    const stub = await seededStub();
+    const replacement: CalDavResource = {
+      ...resource,
+      filename: "replacement.ics",
+      uid: "replacement@calendar-test.example",
+      projection: {
+        ...resource.projection,
+        id: testShortcode("task", "replacement"),
+      },
+    };
+    await runInDurableObject(stub, async (_instance, state) => {
+      const store = new CalendarSqlStore(state.storage);
+      store.dirty("test.write", ORIGIN);
+      await state.storage.deleteAlarm();
+      const generation = store.beginPublication();
+      store.stageResources(generation, [replacement]);
+      expect(store.get("tasks", replacement.filename)).toBeNull();
+      expect(store.get("tasks", resource.filename)?.etag).toBe(resource.etag);
+      expect(store.document("all")?.revision).toBe(1);
+      expect(store.identityFor(replacement.projection.id)).toBeUndefined();
+    });
+    await evictDurableObject(stub);
+    await runInDurableObject(stub, async (_instance, state) => {
+      const store = new CalendarSqlStore(state.storage);
+      const dirty = store.meta().dirtySequence;
+      expect(store.meta().dirtyReason).toBe("test.write");
+      expect(await state.storage.getAlarm()).not.toBeNull();
+      const generation = store.beginPublication();
+      // This would violate the staging primary key if abandoned rows survived.
+      store.stageResources(generation, [replacement]);
+      // A newer dirty notification arriving during publication must survive.
+      store.dirty("test.newer-write", ORIGIN);
+      store.publish(generation, documents(), ORIGIN);
+      store.clearDirty(dirty);
+      expect(store.meta().dirtyReason).toBe("test.newer-write");
+      expect(store.list("tasks")).toHaveLength(1);
+      expect(store.list("tasks")[0]).toMatchObject(replacement);
+      expect(store.document("all")?.revision).toBe(generation);
+      expect(store.identityFor(resource.projection.id)?.uid).toBe(resource.uid);
+      expect(store.identityFor(replacement.projection.id)?.uid).toBe(
+        replacement.uid,
+      );
+      store.clearDirty(store.meta().dirtySequence);
+    });
+    // The constructor's re-armed alarm must not refresh a now-clean generation.
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    expect((await stub.inspect(ORIGIN)).snapshot?.revision).toBe(2);
+  });
+
   it("keeps publication atomic and identities durable across the cutover reset", async () => {
     const stub = await seededStub();
 
@@ -428,15 +489,15 @@ describe("CalendarFeedDurableObject in workerd", () => {
       async (_instance, state: DurableObjectState) => {
         const store = new CalendarSqlStore(state.storage);
         const duplicate = { ...resource, filename: "duplicate.ics" };
-        expect(() =>
-          store.publish([resource, duplicate], documents(), ORIGIN),
-        ).toThrow(/UNIQUE constraint failed/i);
+        expect(() => publish(store, [resource, duplicate])).toThrow(
+          /UNIQUE constraint failed/i,
+        );
         expect(store.meta().generation).toBe(1);
         expect(store.list("tasks")).toHaveLength(1);
         await store.migrate();
         expect(store.list("tasks")).toHaveLength(1);
-        store.publish([], documents(), ORIGIN);
-        expect(store.identities()).toContainEqual({
+        publish(store, []);
+        expect(store.identityFor(resource.projection.id)).toEqual({
           entity: "task",
           shortcode: resource.projection.id,
           filename: resource.filename,
@@ -455,9 +516,11 @@ describe("CalendarFeedDurableObject in workerd", () => {
             updatedAt: resource.projection.updatedAt,
           },
         };
-        store.publish([completed], documents(), ORIGIN);
+        publish(store, [completed]);
         expect(store.list("completed-tasks")).toHaveLength(1);
-        expect(store.identities()).toHaveLength(1);
+        expect(store.identityFor(resource.projection.id)?.uid).toBe(
+          resource.uid,
+        );
         const indexes = state.storage.sql
           .exec<{ name: string }>("PRAGMA index_list('calendar_resources')")
           .toArray()

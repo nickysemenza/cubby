@@ -5,7 +5,7 @@ import type {
 import type { RawCalendarItem as CalendarItem } from "@cubby/schemas/calendar-raw-read";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { AnyColumn, SQL } from "drizzle-orm";
-import { and, eq, gte, isNotNull, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, gte, isNotNull, isNull, lte, or } from "drizzle-orm";
 
 import { shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
@@ -55,11 +55,12 @@ export const loadCalendarPlantings = (
   input: CalendarRangeInput,
   endInclusive: string,
   sourceCondition?: SQL,
+  page?: { limit: number; offset: number },
 ) => {
   if (input.kinds && !input.kinds.includes("planting")) {
     return Promise.resolve([]);
   }
-  return getDb(db)
+  const query = getDb(db)
     .select({
       shortcode: planting.shortcode,
       plantName: plant.name,
@@ -79,7 +80,9 @@ export const loadCalendarPlantings = (
         milestoneInRange(input, endInclusive),
         sourceCondition,
       ),
-    );
+    )
+    .orderBy(asc(planting.id));
+  return page ? query.limit(page.limit).offset(page.offset) : query;
 };
 
 /** The Schedule includes fully undated Plantings in every visible window. */

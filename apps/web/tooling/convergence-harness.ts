@@ -41,7 +41,7 @@ import {
   completeImageProcessingJob,
 } from "~/server/domains/image-processing/repo/image-processing";
 import { assignImageProcessingExecutor } from "~/server/domains/image-processing/repo/image-processing-history";
-import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
+import { imageDescriptionInputFingerprint } from "~/server/domains/image-processing/repo/description-policy";
 
 import type { CreatableEntity, EntityOverrides } from "./factories/build";
 

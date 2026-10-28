@@ -11,8 +11,10 @@ import {
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   saveImageDescriptionAnalysis,
 } from "~/server/domains/image-processing/repo/image-processing";
-import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
-import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/repo/description-policy";
+import {
+  imageDescriptionInputFingerprint,
+  preferredImageDescriptionPolicy,
+} from "~/server/domains/image-processing/repo/description-policy";
 import {
   IMAGE_IDENTIFICATION_MODEL,
   IMAGE_IDENTIFICATION_PROMPT_REVISION,

@@ -27,6 +27,7 @@ import {
   imageProcessingOrphan,
   searchDocument,
 } from "~/server/db/schema";
+import { imageDescriptionInputFingerprint } from "~/server/domains/image-processing/repo/description-policy";
 import {
   createUploadedImageRecord,
   deleteImages,
@@ -38,7 +39,6 @@ import {
 } from "~/server/domains/image/repo/image-analysis-summary";
 import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
-import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";

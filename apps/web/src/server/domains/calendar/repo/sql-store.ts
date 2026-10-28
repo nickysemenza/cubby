@@ -1,5 +1,5 @@
 import type { DurableObjectStorage } from "@cloudflare/workers-types";
-import { and, count, eq, gt, lt, ne } from "drizzle-orm";
+import { and, count, eq, gt, lt, ne, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 
@@ -75,23 +75,20 @@ export class CalendarSqlStore {
       .run();
   }
 
-  publish(
-    resources: CalDavResource[],
-    documents: Record<IcsFeed, StoredCalendarDocument>,
-    origin: string,
-  ) {
-    const generation = this.meta().generation + 1;
+  /** Discard an interrupted staging generation; the published generation stays readable. */
+  beginPublication() {
+    const generation = this.meta().generation;
+    this.db
+      .delete(calendarResources)
+      .where(ne(calendarResources.generation, generation))
+      .run();
+    return generation + 1;
+  }
+
+  stageResources(generation: number, resources: CalDavResource[]) {
+    this.assertNextGeneration(generation);
     this.db.transaction((tx) => {
       for (const resource of resources) {
-        tx.insert(calendarIdentities)
-          .values({
-            entity: resource.projection.entity,
-            shortcode: resource.projection.id,
-            uid: resource.uid,
-            filename: resource.filename,
-          })
-          .onConflictDoNothing({ target: calendarIdentities.shortcode })
-          .run();
         tx.insert(calendarResources)
           .values({
             generation,
@@ -107,6 +104,41 @@ export class CalendarSqlStore {
           })
           .run();
       }
+    });
+  }
+
+  private assertNextGeneration(generation: number) {
+    if (generation !== this.meta().generation + 1)
+      throw new Error("Calendar publication generation is no longer current");
+  }
+
+  publish(
+    generation: number,
+    documents: Record<IcsFeed, StoredCalendarDocument>,
+    origin: string,
+  ) {
+    this.assertNextGeneration(generation);
+    this.db.transaction((tx) => {
+      // Keep identity publication atomic without materializing every identity in JS.
+      tx.insert(calendarIdentities)
+        .select(
+          tx
+            .select({
+              shortcode: calendarResources.shortcode,
+              entity: sql<
+                CalendarIdentity["entity"]
+              >`json_extract(${calendarResources.projection}, '$.entity')`.as(
+                "entity",
+              ),
+              filename: calendarResources.filename,
+              uid: calendarResources.uid,
+            })
+            .from(calendarResources)
+            // SQLite INSERT/SELECT/ON CONFLICT requires a WHERE to disambiguate ON.
+            .where(eq(calendarResources.generation, generation)),
+        )
+        .onConflictDoNothing({ target: calendarIdentities.shortcode })
+        .run();
       for (const [feed, document] of Object.entries(documents)) {
         const value = { feed, ...document, revision: generation };
         tx.insert(calendarDocuments)
@@ -227,8 +259,12 @@ export class CalendarSqlStore {
       .run();
   }
 
-  identities() {
-    return this.db.select().from(calendarIdentities).all();
+  identityFor(shortcode: CalendarIdentity["shortcode"]) {
+    return this.db
+      .select()
+      .from(calendarIdentities)
+      .where(eq(calendarIdentities.shortcode, shortcode))
+      .get();
   }
   rememberIdentity(identity: CalendarIdentity) {
     this.db

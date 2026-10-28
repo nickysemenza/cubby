@@ -48,8 +48,19 @@ creating again.
 
 Dirty notifications refresh promptly; the daily cron is the backstop. Refresh
 publishes current entity state even with uncertain markers. Failed refreshes
-retain the previous complete generation. Refresh cannot recover uncommitted
-intent, lost mappings, duplicates, or arbitrary missed after-commit side effects.
+retain the previous complete generation. Refresh reads the full CalDAV collection
+in 500-record pages and stages rendered resources in SQLite. Only a completed
+publication switches the visible generation and records new durable identities.
+After an isolate reset, a pending dirty notification re-arms its alarm; the retry
+discards partial staging and starts again. New dirty notifications that arrive
+during a refresh remain pending after that generation publishes.
+
+Read-only subscription rendering hydrates at most 100 records of each feed kind
+per page under a repeatable-read snapshot, using the same calendar item values
+as the interactive calendar. It skips daily summaries and appends one event at
+a time to size-limited serialized documents. The existing rolling window and
+document byte limits still apply. Refresh cannot recover uncommitted intent,
+lost mappings, duplicates, or arbitrary missed after-commit side effects.
 
 DELETE is absent from the HTTP adapter's `METHODS` policy and advertised
 privileges. A future PR must add its canonical implementation and decide how

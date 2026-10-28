@@ -1,4 +1,4 @@
-import { calendarRangeInput } from "@cubby/schemas/calendar";
+import { calendarRangeInput, type CalendarItem } from "@cubby/schemas/calendar";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -15,7 +15,8 @@ import {
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
 
-import { getCalendarRange } from "./calendar";
+import { renderIcs } from "../service/ics";
+import { getCalendarRange, visitCalendarFeedItems } from "./calendar";
 
 describe("calendar day membership", () => {
   const ctx = withTestDb();
@@ -175,6 +176,26 @@ describe("calendar day membership", () => {
       },
     });
     expect(covers.get(meal.id)).toBe(expected.get(meal.id));
+    const feedItems: CalendarItem[] = [];
+    await visitCalendarFeedItems(
+      ctx.db,
+      calendarRangeInput.parse({
+        startDate: date,
+        endDateExclusive: "2026-09-22",
+        kinds: ["meal", "task"],
+      }),
+      async (items) => {
+        feedItems.push(...items);
+      },
+    );
+    const feedOptions = {
+      feed: "all" as const,
+      now: new Date("2026-09-21T12:00:00Z"),
+      origin: "https://calendar-test.example",
+    };
+    expect(renderIcs(feedItems, feedOptions)).toBe(
+      renderIcs(range.items, feedOptions),
+    );
   });
 
   it("coalesces purchase lines and keeps later refunds, standalone charges and plans", async () => {

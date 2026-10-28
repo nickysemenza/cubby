@@ -9,7 +9,7 @@ import {
   taskCalendarSourceFixture,
 } from "~/features/calendar/calendar-source.fixtures";
 import { createDatabase } from "~/server/db/database-runtime";
-import type { getCalendarRange } from "~/server/domains/calendar/repo/calendar";
+import type { visitCalendarFeedItems } from "~/server/domains/calendar/repo/calendar";
 
 import { buildCalendarSnapshot, MAX_CALENDAR_DOCUMENT_BYTES } from "./snapshot";
 
@@ -83,10 +83,12 @@ const planting = (): CalendarItem => ({
 
 describe("calendar snapshot", () => {
   it("renders all feed variants from one range read and one timestamp", async () => {
-    const getRange = vi.fn<typeof getCalendarRange>(async () => ({
-      items: [meal(), task()],
-      days: {},
-    }));
+    const getRange = vi.fn<typeof visitCalendarFeedItems>(
+      async (_db, _input, visit) => {
+        await visit([meal()]);
+        await visit([task()]);
+      },
+    );
     const snapshot = await buildCalendarSnapshot(
       database,
       { origin: "https://cubby.example", now, revision: 7 },
@@ -106,10 +108,12 @@ describe("calendar snapshot", () => {
   });
 
   it("renders the garden feed from the same range read", async () => {
-    const getRange = vi.fn<typeof getCalendarRange>(async () => ({
-      items: [meal(), task(), planting()],
-      days: {},
-    }));
+    const getRange = vi.fn<typeof visitCalendarFeedItems>(
+      async (_db, _input, visit) => {
+        await visit([meal(), task()]);
+        await visit([planting()]);
+      },
+    );
     const snapshot = await buildCalendarSnapshot(
       database,
       { origin: "https://cubby.example", now, revision: 7 },
@@ -126,10 +130,11 @@ describe("calendar snapshot", () => {
   });
 
   it("produces stable ETags for unchanged rendered bytes", async () => {
-    const getRange = vi.fn<typeof getCalendarRange>(async () => ({
-      items: [meal()],
-      days: {},
-    }));
+    const getRange = vi.fn<typeof visitCalendarFeedItems>(
+      async (_db, _input, visit) => {
+        await visit([meal()]);
+      },
+    );
     const first = await buildCalendarSnapshot(
       database,
       { origin: "https://cubby.example", now, revision: 1 },
@@ -144,10 +149,11 @@ describe("calendar snapshot", () => {
   });
 
   it("rejects a document above the Durable Object value limit", async () => {
-    const getRange = vi.fn<typeof getCalendarRange>(async () => ({
-      items: [meal("x".repeat(MAX_CALENDAR_DOCUMENT_BYTES))],
-      days: {},
-    }));
+    const getRange = vi.fn<typeof visitCalendarFeedItems>(
+      async (_db, _input, visit) => {
+        await visit([meal("x".repeat(MAX_CALENDAR_DOCUMENT_BYTES))]);
+      },
+    );
     await expect(
       buildCalendarSnapshot(
         database,
