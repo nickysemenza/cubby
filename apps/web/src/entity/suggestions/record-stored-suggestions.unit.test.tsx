@@ -652,11 +652,14 @@ describe("stored suggestions in generic list cells", () => {
     );
 
     expect(await screen.findByText("Food")).toBeInTheDocument();
-    expect(operations.list).toHaveBeenCalledWith({
-      entity: "product",
-      recordIds: [publicId],
-      fields: expect.any(Array),
-    });
+    expect(operations.list).toHaveBeenCalledWith(
+      {
+        entity: "product",
+        recordIds: [publicId],
+        fields: expect.any(Array),
+      },
+      { consistency: undefined, signal: expect.any(AbortSignal) },
+    );
     fireEvent.click(
       await screen.findByRole("button", { name: "Accept suggestions (1)" }),
     );

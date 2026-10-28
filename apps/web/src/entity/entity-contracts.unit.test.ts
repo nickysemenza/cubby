@@ -56,7 +56,10 @@ describe("kernel browser transport", () => {
     expect(options.queryKey).toEqual([
       "operation",
       "entity.list",
-      { entity: "product", input: { entity: "product", ...params } },
+      {
+        entity: "product",
+        input: { entity: "product", ...params, includeCount: true },
+      },
     ]);
     expect(options.queryFn).toEqual(expect.any(Function));
   });

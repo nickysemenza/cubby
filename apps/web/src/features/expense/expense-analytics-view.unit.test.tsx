@@ -12,8 +12,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 // The view lazily loads its explorer; load it with the file so no test ends
 // with that import still in flight.

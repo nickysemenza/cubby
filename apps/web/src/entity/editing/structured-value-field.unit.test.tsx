@@ -1,11 +1,14 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import nativeVectors from "@cubby/shared/golden-vectors/structured-roundtrip.json";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { type FieldValues, FormProvider, useForm } from "react-hook-form";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { createEditorTestQueryClient } from "#web/tests/editor-metadata.fixtures.ts";
+import {
+  renderWithEditorMetadata as render,
+  createEditorTestQueryClient,
+} from "#web/tests/editor-metadata.fixtures.ts";
 
 import { collectionDraft, type CollectionDescriptor } from "./collection-edit";
 import { structuredSchemaFor } from "./structured-schema";

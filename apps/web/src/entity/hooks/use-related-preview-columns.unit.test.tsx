@@ -3,8 +3,8 @@ import { relatedViewsFor } from "@cubby/schemas/related-view-registry";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog/relatedData.gen";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { createCubbyColumnHelper } from "~/ui/data-table/table-features";
 
 import {

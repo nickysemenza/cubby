@@ -1776,7 +1776,7 @@ private struct EntityTablePreviewHost: View {
         let source = EntityListPageSource(id: "synthetic-table-preview") { page in
             ListPage(
                 items: rows,
-                meta: ListPageMeta(pageIndex: page, pageSize: 50, totalCount: rows.count))
+                meta: ListPageMeta(pageIndex: page, pageSize: 50, totalCount: rows.count, hasNextPage: false))
         }
         _appModel = State(initialValue: appModel)  // state-init-ok: constant synthetic preview fixture
         _model = State(  // state-init-ok: constant synthetic preview fixture

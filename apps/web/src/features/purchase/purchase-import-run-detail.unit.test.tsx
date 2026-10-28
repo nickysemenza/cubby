@@ -3,11 +3,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import type { RunDetail } from "~/contracts/run.contract";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { importReportBlocks } from "~/server/generic/entity-report/repo/run";
 
 import {

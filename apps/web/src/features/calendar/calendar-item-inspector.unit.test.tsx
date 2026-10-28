@@ -5,11 +5,11 @@ import { rawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import {
   entityBrowserMutationCommandSchema,
   type EntityBrowserMutationInput,

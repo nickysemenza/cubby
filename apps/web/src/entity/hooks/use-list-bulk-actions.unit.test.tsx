@@ -3,8 +3,8 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { installFeatures } from "~/features/registry";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import type { CubbyRow as Row } from "~/ui/data-table/table-features";
 

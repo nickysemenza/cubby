@@ -238,7 +238,9 @@ hydrated value as saved intent. Physical Product price reads share one SQL value
 for overrides, cached fallback, price-presence filters, sorting and footer totals.
 Reset rejects a cached own value or a snapshot with unknown provenance. List
 filters and totals do not walk kit history to manufacture a fallback before its
-stored computation completes. Product Cost is a separate readonly envelope:
+stored computation completes. UPC enrichment compares authoritative purchase
+pricing before writing an override; a missing display publication never makes
+that purchase history absent. Product Cost is a separate readonly envelope:
 physical Cost projects the complete selected valuation price (including provenance,
 freshness and work), while service Cost publishes its average, positive-charge count
 and latest dated charge atomically. Cost sorting uses that same selected snapshot;

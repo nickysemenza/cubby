@@ -572,13 +572,13 @@ describe("MCP entity kernel boundary", () => {
 
     const summary = await list(command);
     expect(summary.isError).not.toBe(true);
-    // Summary detail publishes identity only, so it skips USDA, quality,
-    // pricing, and media enrichment the full row needs.
+    // Summary detail publishes identity only; full reads use stored food facts.
+    // Neither interactive read may call the USDA provider.
     expect(findFoodsBatch).not.toHaveBeenCalled();
 
     const full = await list({ ...command, resultDetail: "full" });
     expect(full.isError).not.toBe(true);
-    expect(findFoodsBatch).toHaveBeenCalled();
+    expect(findFoodsBatch).not.toHaveBeenCalled();
     const fullResult = z
       .object({ action: z.literal("list"), entity: z.literal("product") })
       .passthrough()

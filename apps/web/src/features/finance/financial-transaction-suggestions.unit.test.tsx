@@ -5,8 +5,8 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useForm, useWatch } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { installFeatures } from "~/features/registry";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
   emptyFinancialTransactionForm,

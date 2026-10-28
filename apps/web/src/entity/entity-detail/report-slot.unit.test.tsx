@@ -14,9 +14,9 @@ import {
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { installFeatures } from "~/features/registry";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { DetailActionProvider } from "./detail-action-bar";
 import type { DetailRecordOf } from "./detail-record";

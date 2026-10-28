@@ -488,7 +488,12 @@ describe("server list grouping", () => {
       { key: "room", label: "room", count: 2 },
       { key: "box", label: "box", count: 1 },
     ]);
-    expect(await grouped(0, "count")).toEqual({ data: [], count: 3 });
+    expect(await grouped(0, "count")).toEqual({
+      data: [],
+      count: 3,
+      hasNextPage: true,
+      unresolvedCount: undefined,
+    });
   });
 
   it("applies Ledger Party secondary sorts before its stable tie breaker", async () => {

@@ -27,7 +27,7 @@ import { z } from "zod";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
-import { entityMetadata } from "~/entity/metadata";
+import { ensureEntityMetadata, entityMetadata } from "~/entity/metadata";
 import { installFeatures } from "~/features/registry";
 import { rippleFor } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
@@ -864,7 +864,8 @@ describe("record suggestions", () => {
   // Regression: deriving a basis and a query observer per row during SSR cost
   // list pages hundreds of ms of Worker CPU; suggestions only resolve in the
   // browser, so the server render must not create any.
-  it("creates no suggestion queries while rendering on the server", () => {
+  it("creates no suggestion queries while rendering on the server", async () => {
+    await ensureEntityMetadata(harness.queryClient, "product");
     const cachedQueries = harness.queryClient.getQueryCache().getAll();
     const suggestFields = vi.fn();
     const operations: EntitySuggestionsOperations = {

@@ -1,9 +1,10 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { createEditorTestQueryClient } from "#web/tests/editor-metadata.fixtures.ts";
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 
 import {
   createCubbyColumnHelper,
@@ -52,7 +53,7 @@ function ToolbarHarness({
 
 // The filter bar's facet and view-count hooks need a client even when idle.
 const queryWrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={new QueryClient()}>
+  <QueryClientProvider client={createEditorTestQueryClient()}>
     {children}
   </QueryClientProvider>
 );

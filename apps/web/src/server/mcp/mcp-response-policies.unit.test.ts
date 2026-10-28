@@ -82,7 +82,7 @@ describe("MCP response policies", () => {
       );
       expect(result.structuredContent).toEqual({
         items: [],
-        meta: { ...page, totalCount: 123 },
+        meta: { ...page, totalCount: 123, hasNextPage: true },
       });
     },
   );

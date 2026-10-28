@@ -208,11 +208,11 @@ struct PhotoRelatedDestinationChooser: View {
                 imageURL: node.imageURL,
                 raw: .object(["id": .string(reference.id), "name": .string(node.label)]))
         }
-        // The cursor reports `nextOffset`, not a total: one past this page keeps `hasMore` true
-        // until the cursor ends.
-        let totalCount = branch?.nextOffset == nil ? offset + loaded.count : page * pageSize + 1
+        // Cursor continuation is authoritative; this response has no exact total.
         return ListPage(
-            items: loaded, meta: ListPageMeta(pageIndex: page, pageSize: pageSize, totalCount: totalCount))
+            items: loaded,
+            meta: ListPageMeta(
+                pageIndex: page, pageSize: pageSize, totalCount: nil, hasNextPage: branch?.nextOffset != nil))
     }
 
     private struct UnsupportedRelationPath: LocalizedError {

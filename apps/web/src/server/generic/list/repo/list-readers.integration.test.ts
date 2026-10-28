@@ -331,7 +331,8 @@ describe("custom list readers", () => {
     expect(await read(0, "count")).toEqual({
       data: [],
       count: 3,
-      sums: undefined,
+      hasNextPage: true,
+      unresolvedCount: undefined,
     });
 
     // Five entries of one product tie on product and amount, so the
@@ -425,7 +426,12 @@ describe("custom list readers", () => {
     expect(await projectScaffold.totals(ctx.db, { search: "Paging" })).toEqual({
       costEstimate: 60,
     });
-    expect(await read(0, "count")).toEqual({ data: [], count: 3 });
+    expect(await read(0, "count")).toEqual({
+      data: [],
+      count: 3,
+      hasNextPage: true,
+      unresolvedCount: undefined,
+    });
 
     // Four rows tie on cost and status, so the shortcode decides.
     const lead = await insertWithShortcode(ctx.db, "project", {

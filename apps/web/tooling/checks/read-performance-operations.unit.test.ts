@@ -77,6 +77,7 @@ describe("operation performance evidence", () => {
                   pageIndex: 0,
                   pageSize: 25,
                   totalCount: 9,
+                  hasNextPage: false,
                   unresolvedCount: 2,
                   incompleteSums: ["synthetic-private-total"],
                 },
@@ -112,7 +113,12 @@ describe("operation performance evidence", () => {
               ok: true,
               data: {
                 items: [],
-                meta: { pageIndex: 0, pageSize: 25, totalCount: 0 },
+                meta: {
+                  pageIndex: 0,
+                  pageSize: 25,
+                  totalCount: 0,
+                  hasNextPage: false,
+                },
               },
             }),
           ),

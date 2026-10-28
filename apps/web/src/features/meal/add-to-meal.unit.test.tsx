@@ -13,10 +13,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
 import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 
 import { type AddToMealOperations, AddToMeal } from "./add-to-meal";

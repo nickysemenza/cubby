@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
+import { createEditorTestQueryClient } from "#web/tests/editor-metadata.fixtures.ts";
 import { smokeCatalog } from "~/server/ai/smoke-catalog";
 
 import {
@@ -124,7 +125,7 @@ describe("AI smoke form", () => {
       );
     }
     render(
-      <QueryClientProvider client={new QueryClient()}>
+      <QueryClientProvider client={createEditorTestQueryClient()}>
         <Form />
       </QueryClientProvider>,
     );

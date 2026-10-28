@@ -8,7 +8,7 @@ import { EnvelopeIcon } from "@phosphor-icons/react/dist/csr/Envelope";
 import { PlugsIcon } from "@phosphor-icons/react/dist/csr/Plugs";
 import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
