@@ -1,0 +1,115 @@
+apps/apple/AGENTS.md
+  s_f9b38eae28f662::t_6eefb783a87a43 24-25
+apps/web/docs/web-runtime.md
+  s_f9b38eae28f662::t_c57c43e13f18cd 28-31,33,37,92-93
+apps/web/src/entity/editing/entity-edit-dialog.lifecycle.unit.test.tsx
+  s_f9b38eae28f662::t_284762553e8684 10
+apps/web/src/entity/editing/use-entity-commands.unit.test.tsx
+  s_f9b38eae28f662::t_d7e715a6de8248 11
+apps/web/src/entity/fields/field-resolution-bulk.unit.test.tsx
+  s_f9b38eae28f662::t_fd225f04c4cb42 9,42-53
+apps/web/src/entity/hooks/use-workflow-command.unit.test.tsx
+  s_f9b38eae28f662::t_c3a9d6282d7cf7 26-29,97-100
+apps/web/src/entity/suggestions/queue/suggestion-review-context.unit.test.tsx
+  s_f9b38eae28f662::t_ee39cab4e4af04 25
+apps/web/src/integrations/tanstack-query/browser-operation-transport.ts
+  s_f9b38eae28f662::t_9c3c39bf05a801 12-13,20,34-47,54-57,60,66,68,78-80,83-92,97-99,101,103-104,106-107,112,123-207,211,215,218-219,222-223,225-250,252-263,275-276,279-280,282,299,301-307,309-316,318-319,365,373,377,379-383,385-388,390,393-395
+apps/web/src/integrations/tanstack-query/browser-operation-transport.unit.test.ts
+  s_f9b38eae28f662::t_90cbded1477ab8 4,27,30,34,38,55-76,79,92-93,99-102,106,164,298,301,304,331
+apps/web/src/integrations/tanstack-query/operation-catalog.ts
+  s_f9b38eae28f662::t_31f714a23adfff 25,421-424,427,429-431,433-435
+apps/web/src/integrations/tanstack-query/start-transport.ts
+  s_f9b38eae28f662::t_ab2412347ffaec 6,13-15,19-23,49-75,81,95,97-98,101,107,114-118,120-124,126-127,129-136,140-148,152,155-158,160,168-172,188-190,192-203,222-224,229,233-239,243,249-250
+apps/web/src/integrations/tanstack-query/start-transport.unit.test.ts
+  s_f9b38eae28f662::t_28d98cca3265bb 1-2,5,9,14,16,21,23-26,28-31,45,59,93-100,114-127
+apps/web/src/integrations/tanstack-query/workflow-stream.ts
+  s_f9b38eae28f662::t_48042dd7bf8b4e 3,5-7,9-11,13-17,28-29,31-32,34,39,41-43,45,48,51-81
+apps/web/src/lib/error-diagnostics.ts
+  s_f9b38eae28f662::t_cf9ead14c4ecc1 21
+apps/web/src/lib/error-utils.ts
+  s_f9b38eae28f662::t_8cb2ab37f34d2c 14,104-115
+apps/web/src/lib/request-id.ts
+  s_f9b38eae28f662::t_7cce7f3a9ea978 12,87,108-110,152-177
+apps/web/src/lib/request-id.unit.test.ts
+  s_f9b38eae28f662::t_3fdb7d9e1871b4 129-130
+apps/web/src/lib/start-operation-error.ts
+  s_f9b38eae28f662::t_d2318c777f39d1 1,4-5,7-17
+apps/web/src/server/domains/run/operations/run-mail-import.integration.test.ts
+  s_f9b38eae28f662::t_7282743589e785 8,20,32-55,57-60
+apps/web/src/server/errors/app-error.ts
+  s_f9b38eae28f662::t_094f69b13ad419 46
+apps/web/src/server/mcp/entity-kernel.integration.test.ts
+  s_f9b38eae28f662::t_344b60c2476110 31,408,411
+apps/web/src/server/mcp/tools/tool-registration.ts
+  s_f9b38eae28f662::t_d148bee3cf60ef 41,77,122-123,518-529,531-533
+apps/web/src/server/operation-runtime/browser-operation-dispatch.ts
+  s_f9b38eae28f662::t_6622e2ad3ecb3c 1,4-6,8,10-11
+apps/web/src/server/operation-runtime/operation-dispatch.server.ts
+  s_f9b38eae28f662::t_cee8f38a30a01b 1-7,9-17,20-30,32-34,36-138,140-145,148-149,151-183,185-188,190-206,208,210-213,215-217,220-322,324-326
+apps/web/src/server/operation-runtime/operation-dispatch.server.unit.test.ts
+  s_f9b38eae28f662::t_cf7f403cf23e90 8,13,15,17-18,27-39,41,43-44,48,50-60,63,65,67,69-72,74-77,79,81,83-85,90-97,99,106,109-129,131-132,135-152
+apps/web/src/server/operation-runtime/operation-domain.server.ts
+  s_f9b38eae28f662::t_22faad20d991a4 7,10,13,184-189
+apps/web/src/server/operation-runtime/operation-domain.server.unit.test.ts
+  s_f9b38eae28f662::t_662a79cdc9d3b3 11
+apps/web/src/server/operation-runtime/operation-handlers.server.ts
+  s_f9b38eae28f662::t_aa94dbfd841cff 57
+apps/web/src/server/operation-runtime/start-operation.server.ts
+  s_f9b38eae28f662::t_258d811626c9c4 10,13,343-344,348,351,368,433,444-554,614-617,619-624,628-629,644,666,694-697,762-763,830
+apps/web/src/server/operation-runtime/subscription-domain.server.ts
+  s_f9b38eae28f662::t_5646c7876d3b9f 9-13,41,43-44,86,89,116-121
+apps/web/src/server/operation-runtime/workflow-stream.server.ts
+  s_f9b38eae28f662::t_0f92b3b23f0260 5,9-13,21-24,27-29,31-32,35,37,40-41,49-56,58,71-78,80-86,89-92,94-98,100-146,148-173,175,177-189,192-194,196,198-205,210
+apps/web/src/server/operation-runtime/workflow-stream.server.unit.test.ts
+  s_f9b38eae28f662::t_905680bd12f91a 16-19,36-43,106,137,180
+apps/web/src/server/testing/mcp-test-utils.ts
+  s_f9b38eae28f662::t_ec1af1a43a6970 31,180-200
+apps/web/src/ui/feedback/error-details.tsx
+  s_f9b38eae28f662::t_97d66efe69c41f 69,71
+apps/web/src/ui/feedback/error-details.unit.test.tsx
+  s_f9b38eae28f662::t_4c0c18f5f7fe01 16
+apps/web/src/ui/feedback/route-error.tsx
+  s_f9b38eae28f662::t_6303e2af9f97db 21
+apps/web/tests/e2e/browser-operation-dispatch.spec.ts
+  s_f9b38eae28f662::t_cb5d31028b20b3 11,17,26,32,35,43,45,53,56,61-63,69,73-77
+apps/web/tests/e2e/suggestions.spec.ts
+  s_f9b38eae28f662::t_f02f07a4f81307 126-136,138,140,198-222,234-244,246,248,983-997,999,1001
+apps/web/tests/e2e/support/dispatch-wire.ts
+  s_f9b38eae28f662::t_e1bb538c93615b 27,57-60,73,77
+apps/web/tests/e2e/support/start-operation.ts
+  s_f9b38eae28f662::t_4f5635609d3cda 7-9,27,29,31-32,36
+apps/web/tooling/checks/read-performance-operations.ts
+  s_f9b38eae28f662::t_ef6cbc71140332 8,33,90,119,131,142,150-151,153-167,172
+apps/web/tooling/checks/read-performance-operations.unit.test.ts
+  s_f9b38eae28f662::t_8397028e2fc5ef 36,65-71,73-80,82-83,108-116,118-119,139,141-142,145,152,161-162,164,199,237,256-257,260-264,286,398,436
+apps/web/tooling/server-function-id.ts
+  s_f9b38eae28f662::t_529d9c176f6e88 50
+apps/web/tsconfig.client.json
+  s_f9b38eae28f662::t_600fcce45b0c4b 31-32
+apps/web/tsconfig.contracts.json
+  s_f9b38eae28f662::t_71c1ba5fd7923c 9
+docs/agents/mcp.md
+  s_f9b38eae28f662::t_e27cb52b9bf555 165
+docs/agents/validation-tests.md
+  s_f9b38eae28f662::t_d723750bf33587 595-596
+docs/development.md
+  s_f9b38eae28f662::t_39316ef8e0d79d 631-632,639-649,655-656
+packages/shared/src/error-utils.ts
+  s_f9b38eae28f662::t_0ee27e84a56d68 55-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "55b9b70c2869878b47b120f39a0e69c9fb73fd8f",
+  "prompts": {},
+  "sessions": {
+    "s_f9b38eae28f662": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15d31a0c-0fdb-4745-b359-8664bbd5360e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
