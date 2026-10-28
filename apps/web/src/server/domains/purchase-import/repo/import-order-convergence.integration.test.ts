@@ -27,8 +27,8 @@ import { type TestDbContext, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import * as schema from "~/server/db/schema";
 import { emailScaffold } from "~/server/domains/email/repo/email";
 import {
   commitFinancialBooking,

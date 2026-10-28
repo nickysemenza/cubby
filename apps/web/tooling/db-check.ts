@@ -8,7 +8,7 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Client } from "pg";
 
 import { renderDerivedDdl } from "../src/server/db/derived-ddl";
-import * as schema from "../src/server/db/schema";
+import { drizzleSchema as schema } from "../src/server/db/drizzle-schema";
 import { diffSchemaCatalogs, readSchemaCatalog } from "./db-catalog";
 import { ensureDbExtensions } from "./db-extensions";
 import { MIGRATIONS_FOLDER, migrateDatabase } from "./db-migrate";

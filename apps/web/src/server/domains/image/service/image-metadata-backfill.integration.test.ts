@@ -19,9 +19,9 @@ import {
 } from "~/server/domains/image/service/image-metadata-extraction.service";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { withJobExecution } from "~/server/generic/jobs/context";
+import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { claimJob } from "~/server/generic/jobs/repo/queue";
 import { claimContext } from "~/server/generic/jobs/service/jobs";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
@@ -198,7 +198,7 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
         kind: "image-metadata.extract",
         input: {},
       });
-      const claim = await claimJob(ctx.db, saved.id);
+      const claim = await claimExternal(ctx.db, saved.id);
       if (!claim) throw new Error("Expected metadata Job");
       const ports: ExtractImageMetadataPorts = {
         ...stubbedPorts(buildJpegWithExif("2025:07:04 09:15:00", 40, -74)),

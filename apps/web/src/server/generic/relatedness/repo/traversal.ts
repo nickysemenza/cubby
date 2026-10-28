@@ -11,9 +11,9 @@ import {
   effectiveFieldSql,
   inheritedFieldOfColumn,
 } from "~/server/db/computed/effective-field";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import * as schema from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import {
   effectiveExpenseProjectSql,

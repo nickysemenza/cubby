@@ -37,7 +37,6 @@ import {
   asc,
   desc,
   eq,
-  gt,
   inArray,
   lte,
   ne,
@@ -74,7 +73,6 @@ import {
   imageProcessingAttempt,
   imageProcessingSubmissionJob,
 } from "~/server/db/image-processing-schema";
-import { job as durableJob } from "~/server/db/retained-tables";
 import { aiAnalysis, image } from "~/server/db/schema";
 import {
   isCurrentPreferredImageDescription,
@@ -101,6 +99,7 @@ import {
   assertExternalClaim,
   claimExternal,
   endExternalWaits,
+  externalExecution,
   externalLeaseHeld,
   externalRunOwned,
   failExternalClaim,
@@ -707,7 +706,7 @@ export async function claimImageProcessingJob(
         tx
           .select({
             id: imageProcessingJob.id,
-            executionId: durableJob.id,
+            executionId: externalExecution.id,
             imageId: imageProcessingJob.imageId,
             kind: imageProcessingJob.kind,
             sourceContentHash: imageProcessingJob.sourceContentHash,
@@ -722,9 +721,7 @@ export async function claimImageProcessingJob(
           })
           .from(imageProcessingJob)
           .innerJoin(
-            durableJob,
-            eq(
-              durableJob.key,
+            ...externalExecution.join(
               sql`'image-processing:' || ${imageProcessingJob.id}::text`,
             ),
           )
@@ -782,35 +779,12 @@ export async function claimImageProcessingJob(
                   )
                 : undefined,
               currentExecution
-                ? and(
-                    eq(durableJob.id, currentExecution.claim.id),
-                    eq(durableJob.state, "running"),
-                    eq(
-                      durableJob.generation,
-                      currentExecution.claim.generation,
-                    ),
-                    eq(
-                      durableJob.leaseToken,
-                      currentExecution.claim.leaseToken,
-                    ),
-                    gt(durableJob.leaseExpiresAt, now),
-                  )
-                : and(
-                    // Devices claim parked device work directly, honoring its
-                    // backoff; an expired lease is claimable at once.
-                    input.processorRevisions
-                      ? eq(durableJob.kind, "image.device")
-                      : undefined,
-                    or(
-                      and(
-                        inArray(durableJob.state, ["queued", "retry_wait"]),
-                        lte(durableJob.availableAt, now),
-                      ),
-                      and(
-                        eq(durableJob.state, "running"),
-                        lte(durableJob.leaseExpiresAt, now),
-                      ),
-                    ),
+                ? externalExecution.held(currentExecution.claim, now)
+                : // Devices claim parked device work directly, honoring its
+                  // backoff; an expired lease is claimable at once.
+                  externalExecution.claimable(
+                    now,
+                    input.processorRevisions ? "image.device" : undefined,
                   ),
             ),
           )
@@ -823,7 +797,7 @@ export async function claimImageProcessingJob(
                 ]
               : []),
             ...(ranOnThisDevice ? [asc(ranOnThisDevice)] : []),
-            asc(durableJob.availableAt),
+            asc(externalExecution.availableAt),
             asc(imageProcessingJob.id),
           )
           .limit(limit);
@@ -1211,10 +1185,9 @@ export async function retryImageProcessingNow(
     // Executions missing since a legacy failure are recreated in their lane.
     for (const row of reopened)
       await enqueueImageProcessingExecution(transactionDb, row);
-    await retryJobsNow(
-      transactionDb,
-      inArray(durableJob.key, ids.map(imageProcessingJobKey)),
-    );
+    await retryJobsNow(transactionDb, {
+      keys: ids.map(imageProcessingJobKey),
+    });
     await recordChange(tx, {
       kind: "projection",
       categories: ["imageJob"],
@@ -1226,13 +1199,7 @@ export async function retryImageProcessingNow(
 
 /** A newer Apple build may succeed where an older one failed: due again now. */
 export const retryBackingOffDeviceWork = (db: Database) =>
-  retryJobsNow(
-    db,
-    and(
-      eq(durableJob.kind, "image.device"),
-      eq(durableJob.state, "retry_wait"),
-    )!,
-  );
+  retryJobsNow(db, { kind: "image.device", states: ["retry_wait"] });
 
 /** Open rows whose execution is missing or stopped: work no executor would reach. */
 const strandedImageWork =
@@ -1289,13 +1256,7 @@ export async function repairImageProcessingExecution(
     .limit(limit);
   if (stranded.length) {
     const keys = stranded.map((row) => imageProcessingJobKey(row.id));
-    await retryJobsNow(
-      db,
-      and(
-        inArray(durableJob.key, keys),
-        inArray(durableJob.state, ["failed", "cancelled"]),
-      )!,
-    );
+    await retryJobsNow(db, { keys, states: ["failed", "cancelled"] });
     // A finished or paused execution of open work restarts too.
     await restartExternalJobs(db, keys);
     for (const row of stranded) await enqueueImageProcessingExecution(db, row);

@@ -17,9 +17,9 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
-import { job } from "~/server/db/retained-tables";
 import { device, imageProcessingJob } from "~/server/db/schema";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { loadJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
 import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -198,10 +198,7 @@ const imageJobRead = {
       const keyOf = new Map(
         open.map((row) => [imageProcessingJobKey(row.id), row.id]),
       );
-      const jobs = await unwrapDb(db)
-        .select()
-        .from(job)
-        .where(inArray(job.key, [...keyOf.keys()]));
+      const jobs = await readJobs(db, { keys: [...keyOf.keys()] });
       const [waiting, holders] = await Promise.all([
         loadJobWaitingOn(jobs),
         loadLeaseDevices(

@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { expect, it } from "vitest";
 
 import { createDatabase } from "~/server/db/database-runtime";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";

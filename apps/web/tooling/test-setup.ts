@@ -37,7 +37,7 @@ import { type Pool } from "pg";
 import { afterEach, beforeEach, expect } from "vitest";
 import { Database } from "../src/server/db/database";
 import { tracePool } from "../src/server/db/db-pg-tracing";
-import * as schema from "../src/server/db/schema";
+import { drizzleSchema as schema } from "../src/server/db/drizzle-schema";
 import type {
   EntityCreateInput,
   EntityKernelContext,

@@ -30,13 +30,14 @@ import {
   notDeleted,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { entityIdentity, job, run, aiEvaluation } from "~/server/db/schema";
+import { entityIdentity, run, aiEvaluation } from "~/server/db/schema";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
 import {
   connectionDiscoveryFingerprint,
   connectionDiscoveryFingerprints,
   connectionDiscoveryFingerprintsOrMissing,
 } from "~/server/domains/connection/repo/discovery-fingerprint";
+import { readJob } from "~/server/generic/jobs/repo/job-reads";
 
 import {
   hasAdmissibleTarget,
@@ -353,18 +354,9 @@ const sweepKinds = (entityKinds?: readonly string[]) =>
  * no live pass cursor names the Run (a finished pass or another Run).
  */
 export async function connectionDiscoveryPosition(db: Database, runId: string) {
-  const [pass] = await getDb(db)
-    .select({ cursor: job.cursor })
-    .from(job)
-    .where(
-      and(
-        eq(job.key, "discovery:connections"),
-        sql`${job.cursor}->>'runId' = ${runId}`,
-      ),
-    )
-    .limit(1);
+  const pass = await readJob(db, { key: "discovery:connections" });
   const after = z
-    .object({ after: z.string().nullable() })
+    .object({ runId: z.literal(runId), after: z.string().nullable() })
     .safeParse(pass?.cursor);
   if (!after.success) return null;
   const total = await countConnectionSweepSources(db);

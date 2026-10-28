@@ -1,17 +1,10 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
-import { inArray } from "drizzle-orm";
-
 import type { Database } from "~/server/db";
-import {
-  getDb,
-  runAfterCommit,
-  withTransactionDatabase,
-} from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
+import { runAfterCommit, withTransactionDatabase } from "~/server/db/helpers";
 import {
   DERIVED_DRAIN_JOB_KEY,
   markAllStoredDerived,
 } from "~/server/generic/derived/repo/drain";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { retryJob } from "~/server/generic/jobs/repo/operator";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { wakeJobs } from "~/server/workflows/background-tasks/publish";
@@ -37,12 +30,4 @@ export const scheduleSearchRepair = (db: Database) =>
   });
 
 export const readSearchRepairJobs = (db: Database, ids: string[]) =>
-  getDb(db)
-    .select()
-    .from(job)
-    .where(
-      inArray(
-        job.id,
-        ids.map((id) => parseEntityId("job", id)),
-      ),
-    );
+  readJobs(db, { ids });

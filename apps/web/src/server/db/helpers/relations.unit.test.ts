@@ -7,7 +7,7 @@ import {
 } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 
 import { relations } from "./relations";
 

@@ -229,39 +229,106 @@
       }
     },
     {
-      // Queue selection, item claiming and the WorkItem tables stay inside
-      // generic/jobs. Drains use defineDrain and the work-items interface;
-      // external executors use external-claim. Tests and test support set up
-      // claims directly.
+      // Queue selection, item claiming and the Job and WorkItem tables stay
+      // inside generic/jobs. Drains use defineDrain and the work-items
+      // interface; external executors use external-claim; other readers use
+      // job-reads and operator. Tests and test support use those interfaces
+      // and generic/jobs/jobs.fixtures.ts. Only the owner and the files that
+      // declare or assemble the tables are exempt.
       "files": ["apps/web/src/server/**/*.ts", "apps/web/tooling/**/*.ts"],
       "excludeFiles": [
         "apps/web/src/server/generic/jobs/**",
-        "apps/web/src/server/db/**",
-        "apps/web/src/server/testing/**",
-        "**/*.test.ts",
-        "**/*.fixtures.ts"
+        "apps/web/src/server/db/job-schema.ts",
+        "apps/web/src/server/db/retained-tables.ts",
+        "apps/web/src/server/db/schema.ts",
+        "apps/web/src/server/db/drizzle-schema.ts",
+        "apps/web/src/server/db/generated/entity-table-definitions.gen.ts",
+        "apps/web/src/server/db/generated/entity-tables.gen.ts",
+        "apps/web/src/server/db/generated/entity-edges.gen.ts"
       ],
       "rules": {
         "no-restricted-imports": [
           "error",
           {
-            "paths": [
-              {
-                "name": "~/server/db/retained-tables",
-                "importNames": ["workItem", "jobInvalidationCapture"],
-                "message": "WorkItem and invalidation capture rows belong to generic/jobs. Use work-items.ts (markWork, workPending, workItemsFor) or the drain interface."
-              },
-              {
-                "name": "~/server/db/job-schema",
-                "message": "Job tables belong to generic/jobs. Import job reads from retained-tables, and WorkItem behavior from work-items.ts."
-              }
-            ],
             "patterns": [
               {
+                "regex": "(^|/)db/(schema|retained-tables)(\\.ts)?$",
+                "importNames": [
+                  "job",
+                  "jobInvalidationCapture",
+                  "jobLaneAdmission",
+                  "workItem",
+                  "workTicket"
+                ],
+                "message": "Job and WorkItem tables belong to generic/jobs. Read Jobs through job-reads.ts, control them through operator.ts, and WorkItems through work-items.ts; tests use jobs.fixtures.ts. Whole-model consumers import drizzleSchema from db/drizzle-schema."
+              },
+              {
+                "regex": "(^|/)generated/entity-table(s|-definitions)\\.gen(\\.ts)?$",
+                "importNames": ["job"],
+                "message": "The Job table belongs to generic/jobs. Read Jobs through job-reads.ts."
+              },
+              {
+                "regex": "(^|/)db/job-schema(\\.ts)?$",
+                "message": "Job tables belong to generic/jobs. Use job-reads.ts, operator.ts or work-items.ts; tests use jobs.fixtures.ts."
+              },
+              {
                 "regex": "(^|/)generic/jobs/repo/(queue|work-claims)(\\.ts)?$",
-                "message": "The queue scheduler and item claiming are private to generic/jobs. Use producer.ts, operator.ts, work-items.ts, defineDrain, or external-claim.ts."
+                "message": "The queue scheduler and item claiming are private to generic/jobs. Use producer.ts, operator.ts, job-reads.ts, work-items.ts, defineDrain, or external-claim.ts."
               }
             ]
+          }
+        ],
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "schema",
+            "property": "job",
+            "message": "Job and WorkItem tables belong to generic/jobs. Use its read, operator or work-item interfaces, or jobs.fixtures.ts in tests."
+          },
+          {
+            "object": "schema",
+            "property": "jobInvalidationCapture",
+            "message": "Job and WorkItem tables belong to generic/jobs. Use its read, operator or work-item interfaces, or jobs.fixtures.ts in tests."
+          },
+          {
+            "object": "schema",
+            "property": "jobLaneAdmission",
+            "message": "Job and WorkItem tables belong to generic/jobs. Use its read, operator or work-item interfaces, or jobs.fixtures.ts in tests."
+          },
+          {
+            "object": "schema",
+            "property": "workItem",
+            "message": "Job and WorkItem tables belong to generic/jobs. Use its read, operator or work-item interfaces, or jobs.fixtures.ts in tests."
+          },
+          {
+            "object": "schema",
+            "property": "workTicket",
+            "message": "Job and WorkItem tables belong to generic/jobs. Use its read, operator or work-item interfaces, or jobs.fixtures.ts in tests."
+          },
+          {
+            "object": "drizzleSchema",
+            "property": "job",
+            "message": "Job and WorkItem tables belong to generic/jobs. Use its read, operator or work-item interfaces, or jobs.fixtures.ts in tests."
+          },
+          {
+            "object": "drizzleSchema",
+            "property": "jobInvalidationCapture",
+            "message": "Job and WorkItem tables belong to generic/jobs. Use its read, operator or work-item interfaces, or jobs.fixtures.ts in tests."
+          },
+          {
+            "object": "drizzleSchema",
+            "property": "jobLaneAdmission",
+            "message": "Job and WorkItem tables belong to generic/jobs. Use its read, operator or work-item interfaces, or jobs.fixtures.ts in tests."
+          },
+          {
+            "object": "drizzleSchema",
+            "property": "workItem",
+            "message": "Job and WorkItem tables belong to generic/jobs. Use its read, operator or work-item interfaces, or jobs.fixtures.ts in tests."
+          },
+          {
+            "object": "drizzleSchema",
+            "property": "workTicket",
+            "message": "Job and WorkItem tables belong to generic/jobs. Use its read, operator or work-item interfaces, or jobs.fixtures.ts in tests."
           }
         ]
       }
@@ -349,11 +416,11 @@
                   "../src/server/**",
                   "!../src/server/db/database",
                   "!../src/server/db/database-runtime",
-                  "!../src/server/db/schema",
+                  "!../src/server/db/drizzle-schema",
                   "!../src/server/db/db-pg-tracing"
                 ],
                 "allowTypeImports": true,
-                "message": "test-setup.ts doubles as vitest's globalSetup, which runs before test.env applies, and most of ~/server pulls in env.ts validation that would fail there. Only db/database, db/database-runtime, db/schema, and db/db-pg-tracing are safe to import eagerly; import anything else lazily with import() inside the function that needs it."
+                "message": "test-setup.ts doubles as vitest's globalSetup, which runs before test.env applies, and most of ~/server pulls in env.ts validation that would fail there. Only db/database, db/database-runtime, db/drizzle-schema, and db/db-pg-tracing are safe to import eagerly; import anything else lazily with import() inside the function that needs it."
               },
               {
                 "group": ["../src/env", "~/env", "~/server/**"],

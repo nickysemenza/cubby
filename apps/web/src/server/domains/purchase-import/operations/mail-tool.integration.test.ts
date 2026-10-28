@@ -32,7 +32,6 @@ import * as s3 from "~/server/clients/s3";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
-  job,
   emailClassificationObservation,
   feedback,
   assessment,
@@ -60,6 +59,7 @@ import {
   retainedMailJoin,
 } from "~/server/domains/mail/repo/retained-mail";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { loadMailAttachmentOriginal } from "../repo/gmail/attachment-original";
@@ -1390,10 +1390,7 @@ describe("public mail tool", () => {
         .from(run)
         .where(eq(run.purpose, "mail_reclassify"));
       expect(classifiers).toHaveLength(2);
-      const classifierJobs = await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.kind, "run.execute"));
+      const classifierJobs = await readJobs(ctx.db, { kind: "run.execute" });
       expect(classifierJobs.map((item) => item.runId).sort()).toEqual(
         classifiers.map((item) => item.id).sort(),
       );

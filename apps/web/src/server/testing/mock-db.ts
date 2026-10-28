@@ -19,7 +19,7 @@ import { Database } from "~/server/db/database";
  * test double — it cannot execute anything, only build query text.
  */
 import { createDatabase } from "~/server/db/database-runtime";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 
 const dialect = new PgDialect();
 

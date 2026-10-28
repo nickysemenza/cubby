@@ -1,11 +1,12 @@
-import { job } from "~/server/db/retained-tables";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { pauseJob } from "~/server/generic/jobs/repo/operator";
 import { postponeWorkRefs } from "~/server/generic/jobs/repo/work-items";
 import { AI_EVALUATION_TARGET } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { run } from "~/server/db/schema";
@@ -70,24 +71,17 @@ export async function driveAiWork(
     "ai.evaluation": aiEvaluationJobHandler(runAiEvaluationExecution(ports)),
   };
   for (let cycle = 0; cycle < 205; cycle++) {
-    const [execution] = await getDb(db)
-      .select()
-      .from(job)
-      .where(eq(job.key, `run:${id}`));
+    const execution = await readJob(db, { key: `run:${id}` });
     if (!execution) throw new Error("Synthetic Run execution is missing");
     if (
       ["completed", "failed", "paused", "cancelled"].includes(execution.state)
     )
       return;
-    await getDb(db)
-      .update(job)
-      .set({ availableAt: new Date(0) })
-      .where(
-        and(
-          eq(job.id, execution.id),
-          inArray(job.state, ["queued", "retry_wait"]),
-        ),
-      );
+    await updateJobs(
+      db,
+      { id: execution.id, states: ["queued", "retry_wait"] },
+      { availableAt: new Date(0) },
+    );
     await advanceJob(db, execution.id, handlers);
     const [owner] = await getDb(db).select().from(run).where(eq(run.id, id));
     if (!owner) return;
@@ -120,10 +114,7 @@ export async function driveAiWork(
       new Date(),
     );
     for (const key of drains) {
-      const [target] = await getDb(db)
-        .select()
-        .from(job)
-        .where(eq(job.key, key));
+      const target = await readJob(db, { key });
       if (
         !target ||
         ["paused", "failed", "cancelled", "completed"].includes(target.state)
@@ -134,15 +125,11 @@ export async function driveAiWork(
         owner.status === "paused_auth"
       )
         return;
-      await getDb(db)
-        .update(job)
-        .set({ availableAt: new Date(0), waitUntil: null, waitReason: null })
-        .where(
-          and(
-            eq(job.id, target.id),
-            inArray(job.state, ["queued", "retry_wait"]),
-          ),
-        );
+      await updateJobs(
+        db,
+        { id: target.id, states: ["queued", "retry_wait"] },
+        { availableAt: new Date(0), waitUntil: null, waitReason: null },
+      );
       const outcome = await advanceJob(db, target.id, handlers);
       if (["superseded", "paused", "deferred"].includes(outcome)) return;
       if (ports.sweep?.pauseAfter !== undefined) {

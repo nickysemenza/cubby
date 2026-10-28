@@ -4,8 +4,8 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
+import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { claimJob } from "~/server/generic/jobs/repo/queue";
 import { requestCatchUp } from "~/server/workflows/catch-up";
 
 // App-open coalesces queue wakes; a lost wake cannot erase committed work.
@@ -60,6 +60,6 @@ describe("app-open catch-up queue handoff", () => {
     await expect(requestCatchUp(ctx.db)).resolves.toEqual({ status: "queued" });
     await expect(requestCatchUp(ctx.db)).resolves.toEqual({ status: "recent" });
     expect(calls).toBe(1);
-    expect((await claimJob(ctx.db, pending.id))?.id).toBe(pending.id);
+    expect((await claimExternal(ctx.db, pending.id))?.id).toBe(pending.id);
   });
 });

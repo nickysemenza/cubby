@@ -1,9 +1,8 @@
-import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { job } from "~/server/db/schema";
+import { withTransactionDatabase } from "~/server/db/helpers";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 
 import { handleBackgroundQueueMessage } from "./consume";
 import { publishInBackground, publishBackgroundTasks } from "./publish";
@@ -21,10 +20,7 @@ describe("durable task intent", () => {
 
   it("persists intent when no queue producer is installed", async () => {
     await publishInBackground(ctx.db, [task], { source: "synthetic-test" });
-    const rows = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.kind, task.kind));
+    const rows = await readJobs(ctx.db, { kind: task.kind });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.input).toEqual(task);
     expect(rows[0]).toMatchObject({
@@ -54,20 +50,16 @@ describe("durable task intent", () => {
     expect(message.ack).toHaveBeenCalledOnce();
     expect(message.retry).not.toHaveBeenCalled();
     expect(captureException).not.toHaveBeenCalled();
-    expect(
-      (await getDb(ctx.db).select().from(job).where(eq(job.kind, task.kind)))[0]
-        ?.state,
-    ).toBe("completed");
+    expect((await readJobs(ctx.db, { kind: task.kind }))[0]?.state).toBe(
+      "completed",
+    );
   });
 
   it("omits explicitly undefined optional fields from durable input", async () => {
     await publishBackgroundTasks(ctx.db, [{ ...task, runId: undefined }], {
       source: "synthetic-optional",
     });
-    const [saved] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.kind, task.kind));
+    const [saved] = await readJobs(ctx.db, { kind: task.kind });
     expect(saved?.input).toEqual(task);
     expect(saved?.runId).toBeNull();
   });
@@ -76,14 +68,10 @@ describe("durable task intent", () => {
     await expect(
       withTransactionDatabase(ctx.db, async (tx) => {
         await publishBackgroundTasks(tx, [task], { source: "synthetic-test" });
-        expect(
-          await getDb(tx).select().from(job).where(eq(job.kind, task.kind)),
-        ).toHaveLength(1);
+        expect(await readJobs(tx, { kind: task.kind })).toHaveLength(1);
         throw new Error("Synthetic rejected mutation");
       }),
     ).rejects.toThrow("Synthetic rejected mutation");
-    expect(
-      await getDb(ctx.db).select().from(job).where(eq(job.kind, task.kind)),
-    ).toEqual([]);
+    expect(await readJobs(ctx.db, { kind: task.kind })).toEqual([]);
   });
 });

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { type getAiGateway, setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { entityEmbedding, job, workItem } from "~/server/db/schema";
+import { entityEmbedding } from "~/server/db/schema";
 import { countUnembeddedEntities } from "~/server/domains/maintenance/service/maintenance.service";
 import { productPairFingerprint } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
@@ -26,6 +26,9 @@ import {
   createInMemoryVectorizeIndex,
   type VectorStorePort,
 } from "~/server/generic/embedding/service/semantic/vector-store";
+import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
+import { workItemStates } from "~/server/generic/jobs/repo/work-items";
 import { requestEmbeddingRefreshWorkflow } from "~/server/generic/search/operations/search.server";
 import {
   countUnembeddedSearchDocuments,
@@ -190,16 +193,14 @@ describe("semantic search background tasks", () => {
         queueType: "background",
       }),
     ]);
-    const jobs = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.key, "embedding:refresh"));
+    const jobs = await readJobs(ctx.db, { key: "embedding:refresh" });
     expect(jobs).toHaveLength(1);
-    const pending = await getDb(ctx.db)
-      .select({ ref: workItem.ref })
-      .from(workItem)
-      .where(eq(workItem.target, "embedding.refresh"));
-    expect(pending).toEqual([{ ref: product.entityId }]);
+    const pending = await readWorkItems(ctx.db, {
+      target: "embedding.refresh",
+    });
+    expect(pending.map(({ ref }) => ({ ref }))).toEqual([
+      { ref: product.entityId },
+    ]);
   });
 
   it("dismisses a current duplicate group and suppresses its recommendation", async () => {
@@ -445,15 +446,9 @@ describe("semantic search background tasks", () => {
       await prepareSearchDocuments(ctx.db, [ref]),
     );
     await advanceEmbeddingFixture(ctx.db, port);
-    const [work] = await getDb(ctx.db)
-      .select()
-      .from(workItem)
-      .where(
-        and(
-          eq(workItem.target, EMBEDDING_REFRESH_TARGET),
-          eq(workItem.ref, ref.entityId),
-        ),
-      );
+    const [work] = await workItemStates(ctx.db, EMBEDDING_REFRESH_TARGET, [
+      ref.entityId,
+    ]);
     expect(work?.attempts).toBe(1);
     expect(work?.lastError).toContain("vectorize outage");
 

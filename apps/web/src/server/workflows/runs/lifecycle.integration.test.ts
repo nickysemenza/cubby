@@ -3,11 +3,15 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { job, run } from "~/server/db/schema";
+import { run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { withJobExecution } from "~/server/generic/jobs/context";
+import {
+  claimExternal,
+  settleExternalClaim,
+} from "~/server/generic/jobs/repo/external-claim";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { pauseJob } from "~/server/generic/jobs/repo/operator";
-import { claimJob, publishJobPage } from "~/server/generic/jobs/repo/queue";
 import { claimContext } from "~/server/generic/jobs/service/jobs";
 
 import { controlWorkflowRun } from "./control";
@@ -35,12 +39,9 @@ describe("Run Job admission", () => {
       }),
     ]);
     expect(launches[0]?.instanceId).toBe(launches[1]?.instanceId);
-    const [execution] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.key, `run:${id}`));
+    const [execution] = await readJobs(ctx.db, { key: `run:${id}` });
     if (!execution) throw new Error("Missing execution");
-    const claimed = await claimJob(ctx.db, execution.id);
+    const claimed = await claimExternal(ctx.db, execution.id);
     if (!claimed) throw new Error("Missing claim");
     const [owner] = await getDb(ctx.db)
       .select()
@@ -55,7 +56,7 @@ describe("Run Job admission", () => {
     );
     let published = false;
     expect(
-      await publishJobPage(ctx.db, claimed, { done: true }, async () => {
+      await settleExternalClaim(ctx.db, claimed, { done: true }, async () => {
         published = true;
       }),
     ).toBe(false);
@@ -74,12 +75,9 @@ describe("Run Job admission", () => {
       trigger: "manual",
       status: "running",
     });
-    const [execution] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.key, `run:${id}`));
+    const [execution] = await readJobs(ctx.db, { key: `run:${id}` });
     if (!execution) throw new Error("Missing execution");
-    const claim = await claimJob(ctx.db, execution.id);
+    const claim = await claimExternal(ctx.db, execution.id);
     if (!claim) throw new Error("Missing claim");
     await expect(
       withJobExecution(ctx.db, claim, () =>
@@ -137,6 +135,6 @@ describe("Run Job admission", () => {
     expect(
       await getDb(ctx.db).select().from(run).where(eq(run.clientKey, key)),
     ).toEqual([]);
-    expect(await getDb(ctx.db).select().from(job)).toEqual([]);
+    expect(await readJobs(ctx.db, {})).toEqual([]);
   });
 });

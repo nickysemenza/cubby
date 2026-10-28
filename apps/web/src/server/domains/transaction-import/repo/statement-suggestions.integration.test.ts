@@ -41,7 +41,6 @@ import {
   feedback,
   run,
   runStep,
-  job,
   automaticRule,
   appSettings,
   transactionImport,
@@ -83,8 +82,9 @@ import {
 } from "~/server/generic/assessment/repo/suggestion-list";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { renewJob } from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
-import { renewJob } from "~/server/generic/jobs/repo/queue";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   captureBackgroundQueue,
@@ -4699,7 +4699,6 @@ describe("statement Transaction suggestions", () => {
           expense,
           run,
           runStep,
-          job,
           automaticRule,
           appSettings,
         ]) {
@@ -4708,6 +4707,7 @@ describe("statement Transaction suggestions", () => {
           );
           snapshots.push(rows[0]?.records);
         }
+        snapshots.push(await readJobs(tx, {}, { order: ["id"] }));
         return snapshots;
       };
       const before = await retained();

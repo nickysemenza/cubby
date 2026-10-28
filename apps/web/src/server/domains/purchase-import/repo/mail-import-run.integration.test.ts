@@ -18,7 +18,6 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import {
-  job,
   aiUsage,
   assessment,
   feedback,
@@ -32,6 +31,7 @@ import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { paidRunPreflight } from "~/server/domains/run/service/execution-transport";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import {
@@ -75,8 +75,7 @@ import {
 // replay cannot create a second Run, and stale/foreign sources cannot enter it.
 describe("mail research admission", () => {
   const ctx = withTestDb();
-  const dispatches = () =>
-    getDb(ctx.db).select().from(job).where(eq(job.kind, "purchase.dispatch"));
+  const dispatches = () => readJobs(ctx.db, { kind: "purchase.dispatch" });
   // The Run's admitted Emails, frozen at their admitted checksums.
   const frozenSources = async (runId: string) => {
     const [saved] = await getDb(ctx.db)
@@ -236,10 +235,7 @@ describe("mail research admission", () => {
       .select()
       .from(runOperation)
       .where(eq(runOperation.runId, queuedId));
-    const oldJobs = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.runId, queuedId));
+    const oldJobs = await readJobs(ctx.db, { runId: queuedId });
     const request = await startControlledMailImport(ctx.db, ctx.actor, {
       mailboxId: mail.mailboxId,
       vendorId: vendorShortcode.parse(seller.shortcode),
@@ -336,9 +332,7 @@ describe("mail research admission", () => {
         .from(runOperation)
         .where(eq(runOperation.runId, queuedId)),
     ).toEqual(expect.arrayContaining(oldEvidence));
-    expect(
-      await getDb(ctx.db).select().from(job).where(eq(job.runId, queuedId)),
-    ).toEqual(oldJobs);
+    expect(await readJobs(ctx.db, { runId: queuedId })).toEqual(oldJobs);
     const [foreignEmail] = await getDb(ctx.db)
       .select()
       .from(emailTable)
@@ -374,12 +368,9 @@ describe("mail research admission", () => {
         .map((item) => item.runId)
         .sort(),
     ).toEqual(admitted.map((item) => item.runId).sort());
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.kind, "purchase.dispatch")),
-    ).toHaveLength(4);
+    expect(await readJobs(ctx.db, { kind: "purchase.dispatch" })).toHaveLength(
+      4,
+    );
     const owned = await getDb(ctx.db)
       .select()
       .from(emailTable)
@@ -530,10 +521,7 @@ describe("mail research admission", () => {
     try {
       await discoverPurchases(ctx.db);
       expect(
-        await getDb(ctx.db)
-          .select()
-          .from(job)
-          .where(eq(job.kind, "maintenance.purchase-discovery")),
+        await readJobs(ctx.db, { kind: "maintenance.purchase-discovery" }),
       ).toMatchObject([{ state: "queued" }]);
       let owners = await getDb(ctx.db)
         .select()
@@ -1525,10 +1513,9 @@ describe("mail research admission", () => {
       withTransaction(ctx.db, async (tx) => {
         await startMailImport(databaseForTransaction(tx), input);
         expect(
-          await getDb(databaseForTransaction(tx))
-            .select()
-            .from(job)
-            .where(eq(job.kind, "purchase.dispatch")),
+          await readJobs(databaseForTransaction(tx), {
+            kind: "purchase.dispatch",
+          }),
         ).toHaveLength(1);
         throw new Error("Synthetic admission rollback");
       }),
@@ -1538,10 +1525,9 @@ describe("mail research admission", () => {
     await withTransaction(ctx.db, async (tx) => {
       await startMailImport(databaseForTransaction(tx), input);
       expect(
-        await getDb(databaseForTransaction(tx))
-          .select()
-          .from(job)
-          .where(eq(job.kind, "purchase.dispatch")),
+        await readJobs(databaseForTransaction(tx), {
+          kind: "purchase.dispatch",
+        }),
       ).toHaveLength(1);
     });
     expect(await dispatches()).toHaveLength(1);

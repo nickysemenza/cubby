@@ -21,9 +21,11 @@ import {
 import { aiBudgetWindow } from "~/server/ai/budget-window";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { aiUsage, job, run, runControlEvent } from "~/server/db/schema";
+import { aiUsage, run, runControlEvent } from "~/server/db/schema";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { claimJob } from "~/server/generic/jobs/repo/queue";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { productionJobHandlers } from "~/server/workflows/jobs";
@@ -532,14 +534,12 @@ describe("household AI funding at the paid transport boundary", () => {
     expect(await resumeFundingPausedRuns(ctx.db, {})).toBe(0);
     await pausedBefore(runId);
     await pausedBefore(discovery);
-    await getDb(ctx.db)
-      .update(job)
-      .set({ availableAt: new Date(0) })
-      .where(eq(job.id, discoveryJob.id));
-    const [resume] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.kind, "run.funding-resume"));
+    await updateJobs(
+      ctx.db,
+      { id: discoveryJob.id },
+      { availableAt: new Date(0) },
+    );
+    const [resume] = await readJobs(ctx.db, { kind: "run.funding-resume" });
     // One resume per funding window, not per Run: its handler resumes all.
     expect(resume).toMatchObject({
       runId: null,
@@ -549,13 +549,14 @@ describe("household AI funding at the paid transport boundary", () => {
     });
     if (!resume) throw new Error("Expected durable funding resume");
     // The window ends: the timer's own deadline has passed.
-    await getDb(ctx.db)
-      .update(job)
-      .set({
+    await updateJobs(
+      ctx.db,
+      { id: resume.id },
+      {
         availableAt: new Date(0),
         input: { until: new Date(0).toISOString() },
-      })
-      .where(eq(job.id, resume.id));
+      },
+    );
     expect(await advanceJob(ctx.db, resume.id, productionJobHandlers)).toBe(
       "succeeded",
     );
@@ -565,17 +566,14 @@ describe("household AI funding at the paid transport boundary", () => {
       status: "paused_auth",
       failureCode: "execution_limit",
     });
-    expect(await claimJob(ctx.db, discoveryJob.id)).toMatchObject({
+    expect(await claimExternal(ctx.db, discoveryJob.id)).toMatchObject({
       id: discoveryJob.id,
       generation: discoveryJob.generation,
     });
     expect(
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(job)
-          .where(eq(job.kind, "purchase.dispatch"))
-      ).map((item) => item.runId),
+      (await readJobs(ctx.db, { kind: "purchase.dispatch" })).map(
+        (item) => item.runId,
+      ),
     ).toEqual([runId]);
   });
 
@@ -590,10 +588,9 @@ describe("household AI funding at the paid transport boundary", () => {
         paidRunPreflight(ctx.db, runId)(chatRequest()),
       ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
     expect(await status(second)).toMatchObject({ status: "paused_auth" });
-    const timers = await getDb(ctx.db)
-      .select({ key: job.key, runId: job.runId })
-      .from(job)
-      .where(eq(job.kind, "run.funding-resume"));
+    const timers = await readJobs(ctx.db, { kind: "run.funding-resume" }).then(
+      (rows) => rows.map(({ key, runId }) => ({ key, runId })),
+    );
     expect(timers).toEqual([
       { key: expect.stringMatching(/^funding-resume:/), runId: null },
     ]);
@@ -609,12 +606,7 @@ describe("household AI funding at the paid transport boundary", () => {
       paidRunPreflight(ctx.db, runId)(chatRequest()),
     ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
     const timer = async () =>
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(job)
-          .where(eq(job.kind, "run.funding-resume"))
-      )[0];
+      (await readJobs(ctx.db, { kind: "run.funding-resume" }))[0];
     const armed = await timer();
     if (!armed) throw new Error("Expected durable funding resume");
     await resumeFundingPausedRuns(ctx.db, { anyWindow: true });
@@ -652,12 +644,9 @@ describe("household AI funding at the paid transport boundary", () => {
       resumeFundingPausedRuns(ctx.db),
     ]);
     expect([...counts].sort()).toEqual([0, 1]);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.kind, "purchase.dispatch")),
-    ).toHaveLength(1);
+    expect(await readJobs(ctx.db, { kind: "purchase.dispatch" })).toHaveLength(
+      1,
+    );
   });
 
   it("pauses a reclassification Run for recovery in a later window", async () => {

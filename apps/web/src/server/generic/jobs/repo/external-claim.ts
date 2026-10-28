@@ -5,7 +5,7 @@
  * executor's attempt id. Image processing is the one caller.
  */
 import type { JobWaitReason } from "@cubby/schemas/job";
-import { and, eq, gt, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, gt, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
@@ -79,6 +79,48 @@ export const externalRunOwned = jobRunOwned;
 
 /** The drain's due predicate, for an external executor's backlog counts. */
 export const externalJobDue = jobDue;
+
+/**
+ * The Job executing an external executor's own row, joined by key so the
+ * executor's candidate or attempt query reads (and row-locks) both in one
+ * statement: `.innerJoin(...externalExecution.join(key))`. Callers read the
+ * execution only through these fields and predicates.
+ */
+export const externalExecution = {
+  join: (key: SQL) => [job, eq(job.key, key)] as const,
+  id: job.id,
+  availableAt: job.availableAt,
+  /** Claimable at `now`: due, or running under a lapsed lease. `kind` narrows to one lane. */
+  claimable: (now: Date, kind?: string) =>
+    and(
+      kind === undefined ? undefined : eq(job.kind, kind),
+      or(
+        and(
+          inArray(job.state, ["queued", "retry_wait"]),
+          lte(job.availableAt, now),
+        ),
+        and(eq(job.state, "running"), lte(job.leaseExpiresAt, now)),
+      ),
+    ),
+  /**
+   * Running under `claim`'s token (and its id and generation, when given).
+   * `liveAt` also requires an unexpired lease; without it an expired lease no
+   * newer claim replaced still belongs to the attempt (late adoption).
+   */
+  held: (
+    claim: { id?: JobClaim["id"]; leaseToken: string; generation?: number },
+    liveAt?: Date,
+  ) =>
+    and(
+      claim.id === undefined ? undefined : eq(job.id, claim.id),
+      eq(job.state, "running"),
+      claim.generation === undefined
+        ? undefined
+        : eq(job.generation, claim.generation),
+      eq(job.leaseToken, claim.leaseToken),
+      liveAt === undefined ? undefined : gt(job.leaseExpiresAt, liveAt),
+    ),
+};
 
 /** Record who holds a claim's lease, in the hand-off's transaction. */
 export async function recordLeaseHolder(

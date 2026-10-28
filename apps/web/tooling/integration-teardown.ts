@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg, { type Pool } from "pg";
 import { afterAll, afterEach, vi } from "vitest";
 import type { DatabaseRuntime } from "../src/server/db/database-runtime";
-import * as schema from "../src/server/db/schema";
+import { drizzleSchema as schema } from "../src/server/db/drizzle-schema";
 import { createPostgresPool } from "./postgres-pool";
 import { closeTestDb } from "./test-setup";
 

@@ -5,14 +5,13 @@
  * targeted search falls through to whole-mailbox history or searches a Vendor
  * name; completed coverage keeps chaining passes; one mailbox starves another. */
 import { runEntityId, vendorShortcode } from "@cubby/schemas/identifiers";
-import { and, asc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
-  job,
   mailboxCursor,
   email as emailTable,
   orderMail,
@@ -22,6 +21,8 @@ import {
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
 import {
@@ -133,15 +134,27 @@ const failMailDiscovery = (
 
 describe("scheduled Gmail discovery", () => {
   const ctx = withTestDb();
-  const created = () =>
-    getDb(ctx.db)
-      .select({ runId: run.id, attempt: job.generation })
-      .from(job)
-      .innerJoin(run, eq(run.id, job.runId))
-      .where(
-        and(eq(job.kind, "run.execute"), eq(run.purpose, "mail_discovery")),
+  const created = async () => {
+    const discovery = new Set(
+      (
+        await getDb(ctx.db)
+          .select({ id: run.id })
+          .from(run)
+          .where(eq(run.purpose, "mail_discovery"))
+      ).map((row) => row.id),
+    );
+    return (
+      await readJobs(
+        ctx.db,
+        { kind: "run.execute" },
+        { order: ["createdAt", "id"] },
       )
-      .orderBy(asc(job.createdAt), asc(job.id));
+    ).flatMap((row) =>
+      row.runId && discovery.has(row.runId)
+        ? [{ runId: row.runId, attempt: row.generation }]
+        : [],
+    );
+  };
   const seed = async ({ targeted = true } = {}) => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic discovery member",
@@ -504,12 +517,9 @@ describe("scheduled Gmail discovery", () => {
       status: "researching",
     });
     expect((await readRun(selected.runId)).shortcode).toBe(request.run);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.kind, "purchase.dispatch")),
-    ).toHaveLength(1);
+    expect(await readJobs(ctx.db, { kind: "purchase.dispatch" })).toHaveLength(
+      1,
+    );
   });
   it("admits retained originals once through page replay and continuation", async () => {
     const state = await seed();
@@ -570,19 +580,21 @@ describe("scheduled Gmail discovery", () => {
 
   it("preserves a waiting Job and projects a terminal Job's raw diagnostic", async () => {
     const state = await seed();
-    await getDb(ctx.db)
-      .update(job)
-      .set({
+    await updateJobs(
+      ctx.db,
+      { key: `run:${state.params.runId}` },
+      {
         state: "retry_wait",
         availableAt: new Date(Date.now() + 3_600_000),
-      })
-      .where(eq(job.key, `run:${state.params.runId}`));
+      },
+    );
     expect(await reconcileWorkflowRuns(ctx.db)).toBe(0);
     expect((await readRun(state.params.runId)).status).toBe("running");
-    await getDb(ctx.db)
-      .update(job)
-      .set({ state: "failed", error: "HTTP 503: Synthetic ended execution" })
-      .where(eq(job.key, `run:${state.params.runId}`));
+    await updateJobs(
+      ctx.db,
+      { key: `run:${state.params.runId}` },
+      { state: "failed", error: "HTTP 503: Synthetic ended execution" },
+    );
     expect(await reconcileWorkflowRuns(ctx.db)).toBe(1);
     expect(await readRun(state.params.runId)).toMatchObject({
       status: "failed",
@@ -733,12 +745,9 @@ describe("scheduled Gmail discovery", () => {
       executionPolicy: "import",
     });
     expect(message?.runId).not.toBeNull();
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.kind, "purchase.dispatch")),
-    ).toHaveLength(1);
+    expect(await readJobs(ctx.db, { kind: "purchase.dispatch" })).toHaveLength(
+      1,
+    );
     const search = async () =>
       (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage
         ?.scoped[0];
@@ -751,12 +760,9 @@ describe("scheduled Gmail discovery", () => {
     expect(await search()).not.toHaveProperty("completedAt");
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.kind, "purchase.dispatch")),
-    ).toHaveLength(1);
+    expect(await readJobs(ctx.db, { kind: "purchase.dispatch" })).toHaveLength(
+      1,
+    );
     expect((await search())?.emailCount).toBe(1);
   });
 

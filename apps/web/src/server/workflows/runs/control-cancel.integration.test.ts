@@ -1,5 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -8,6 +8,7 @@ import { aiEvaluationItem } from "~/server/ai/evaluation/service/ai-evaluation-d
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluation } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -64,10 +65,9 @@ describe("Run AI work cancel", () => {
       .where(eq(aiEvaluation.runId, runId));
     expect(evaluations).toHaveLength(120);
     expect(evaluations.every((row) => row.state === "cancelled")).toBe(true);
-    const items = await getDb(ctx.db).execute(
-      sql`SELECT count(*)::int AS count FROM "WorkItem" WHERE target = 'ai.evaluation'`,
+    expect(await readWorkItems(ctx.db, { target: "ai.evaluation" })).toEqual(
+      [],
     );
-    expect(items.rows[0]).toEqual({ count: 0 });
   });
 
   it("keeps work another live requester still wants", async () => {

@@ -4,12 +4,10 @@ import {
   type BackgroundTaskMessage,
 } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
 import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
 import {
   type DerivedAdapter,
@@ -23,6 +21,13 @@ import {
   markAllStoredDerived,
 } from "~/server/generic/derived/repo/drain";
 import { derivedDrainHandler } from "~/server/generic/derived/service/drain-job";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import {
+  claimExternal,
+  heldExternalClaim,
+  releaseExternalClaim,
+} from "~/server/generic/jobs/repo/external-claim";
+import { readJob, readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { wakeJob } from "~/server/generic/jobs/repo/producer";
 import {
   drainItems,
@@ -135,20 +140,17 @@ export async function drainDerivedPage(
 async function advanceDerivedPage(db: Database, handler: JobHandler) {
   await wakeJob(db, { ...DERIVED_DRAIN, input: {} });
   // Job retries and waits end now: the helper drains what is ready.
-  const [drain] = await getDb(db)
-    .update(job)
-    .set({ availableAt: new Date(0), waitReason: null, waitUntil: null })
-    .where(eq(job.key, DERIVED_DRAIN_JOB_KEY))
-    .returning({ id: job.id });
+  const [drain] = await updateJobs(
+    db,
+    { key: DERIVED_DRAIN_JOB_KEY },
+    { availableAt: new Date(0), waitReason: null, waitUntil: null },
+  );
   if (!drain) throw new Error("Derived drain Job is missing");
   const outcome = await advanceJob(db, drain.id, {
     [DERIVED_DRAIN.kind]: handler,
   });
   if (outcome !== "succeeded") {
-    const [failed] = await getDb(db)
-      .select({ error: job.error })
-      .from(job)
-      .where(eq(job.id, drain.id));
+    const failed = await readJob(db, { id: drain.id });
     throw new Error(
       `Derived drain page ${outcome}: ${JSON.stringify(failed?.error)}`,
     );
@@ -249,17 +251,11 @@ export function captureBackgroundQueue() {
         (await import("~/server/workflows/jobs")).productionJobHandlers;
       const maxPages = options.maxTasks ?? 10_000;
       for (let page = 0; page < maxPages; page++) {
-        const [pending] = await getDb(db)
-          .select()
-          .from(job)
-          .where(
-            and(
-              inArray(job.kind, Object.keys(handlers)),
-              inArray(job.state, ["queued", "retry_wait"]),
-            ),
-          )
-          .orderBy(job.availableAt, job.id)
-          .limit(1);
+        const [pending] = await readJobs(
+          db,
+          { kinds: Object.keys(handlers), states: ["queued", "retry_wait"] },
+          { order: ["availableAt", "id"], limit: 1 },
+        );
         if (!pending) {
           messages.length = 0;
           return page;
@@ -294,13 +290,11 @@ export async function withJobFixtureExecution<T>(
   options: { releaseClaim?: true } = {},
 ) {
   const { enqueueJob } = await import("~/server/generic/jobs/repo/producer");
-  const { externalJobClaim, claimJob, releaseJobClaim } =
-    await import("~/server/generic/jobs/repo/queue");
   const { claimContext } = await import("~/server/generic/jobs/service/jobs");
   const { withJobExecution } = await import("~/server/generic/jobs/context");
   const saved = await enqueueJob(db, input);
-  const existing = await externalJobClaim(db, saved.key);
-  const claim = existing ?? (await claimJob(db, saved.id));
+  const existing = await heldExternalClaim(db, saved.key);
+  const claim = existing ?? (await claimExternal(db, saved.id));
   if (!claim)
     throw new Error(`Synthetic execution ${saved.key} is ${saved.state}`);
   const context = claimContext(db, claim);
@@ -325,6 +319,7 @@ export async function withJobFixtureExecution<T>(
   } finally {
     // Completed fixture work can free admission capacity. Multi-step fence
     // fixtures retain their token by default; borrowed claims stay with their caller.
-    if (options.releaseClaim && !existing) await releaseJobClaim(db, claim);
+    if (options.releaseClaim && !existing)
+      await releaseExternalClaim(db, claim);
   }
 }

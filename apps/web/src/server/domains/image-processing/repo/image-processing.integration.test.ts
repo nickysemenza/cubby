@@ -16,7 +16,6 @@ import type { DatabaseChanges } from "~/lib/doorbell";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { job as durableJob } from "~/server/db/retained-tables";
 import {
   appSettings,
   aiAnalysis,
@@ -41,6 +40,8 @@ import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/ima
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
@@ -129,12 +130,7 @@ describe("durable image representations", () => {
       .set({ sha256: "b".repeat(64) })
       .where(eq(image.id, row.id));
     const execution = async (jobId: ImageJobId) =>
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(durableJob)
-          .where(eq(durableJob.key, `image-processing:${jobId}`))
-      )[0]!;
+      (await readJobs(ctx.db, { key: `image-processing:${jobId}` }))[0]!;
     const payload = async (jobId: ImageJobId) =>
       (
         await getDb(ctx.db)
@@ -296,20 +292,19 @@ describe("durable image representations", () => {
           leaseMs: 60000,
         }),
       ).toBeNull();
-      await getDb(ctx.db)
-        .update(durableJob)
-        .set(
-          transition === "expired"
-            ? { leaseExpiresAt: new Date(0) }
-            : {
-                state: "queued",
-                leaseToken: null,
-                leaseExpiresAt: null,
-                attempts: 0,
-                availableAt: new Date(0),
-              },
-        )
-        .where(eq(durableJob.key, `image-processing:${row.jobId}`));
+      await updateJobs(
+        ctx.db,
+        { key: `image-processing:${row.jobId}` },
+        transition === "expired"
+          ? { leaseExpiresAt: new Date(0) }
+          : {
+              state: "queued",
+              leaseToken: null,
+              leaseExpiresAt: null,
+              attempts: 0,
+              availableAt: new Date(0),
+            },
+      );
       expect(
         (
           await getDb(ctx.db)
@@ -915,10 +910,9 @@ describe("durable image representations", () => {
       state: "pending",
       lastError: "no_subject",
     });
-    const [execution] = await getDb(ctx.db)
-      .select()
-      .from(durableJob)
-      .where(eq(durableJob.key, `image-processing:${row.jobId}`));
+    const [execution] = await readJobs(ctx.db, {
+      key: `image-processing:${row.jobId}`,
+    });
     expect(execution).toMatchObject({ state: "retry_wait", attempts: 1 });
     expect(execution!.availableAt.getTime()).toBeGreaterThan(Date.now());
     const [attempt] = await getDb(ctx.db)
@@ -965,10 +959,11 @@ describe("durable image representations", () => {
         })
       ).data,
     ).toEqual([]);
-    await getDb(ctx.db)
-      .update(durableJob)
-      .set({ attempts: JOB_NEEDS_ATTENTION_ATTEMPTS })
-      .where(eq(durableJob.key, `image-processing:${failed.jobId}`));
+    await updateJobs(
+      ctx.db,
+      { key: `image-processing:${failed.jobId}` },
+      { attempts: JOB_NEEDS_ATTENTION_ATTEMPTS },
+    );
     const problems = await imageScaffold.read(ctx.db, {
       filters: { processingIssue: "failed" },
       sorts: [],

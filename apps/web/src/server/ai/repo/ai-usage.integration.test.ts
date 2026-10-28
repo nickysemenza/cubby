@@ -11,6 +11,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 import { z } from "zod";
 
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { getDb } from "~/server/db/helpers";
 import {
   aiUsage,
@@ -18,7 +19,6 @@ import {
   imageProcessingAttempt,
   run as runTable,
 } from "~/server/db/schema";
-import * as schema from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {

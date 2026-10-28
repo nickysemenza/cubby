@@ -8,8 +8,13 @@ import {
   withTransactionDatabase,
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
-import { job, product } from "~/server/db/schema";
+import { product } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import {
+  lockJobs,
+  replaceJobGeneration,
+} from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -40,21 +45,14 @@ describe("snapshot write recovery", () => {
     });
     return subject;
   };
-  const replaceJobGeneration = () =>
-    getDb(ctx.db)
-      .update(job)
-      .set({ generation: sql`${job.generation} + 1` })
-      .where(eq(job.key, "synthetic:snapshot-contention"));
+  const replaceGeneration = () =>
+    replaceJobGeneration(ctx.db, { key: "synthetic:snapshot-contention" });
 
   // Force a real stale-row lock error independently of capture storage. This
   // synthetic fence tests snapshot retry ownership, not a production writer.
   const conflictOnExecutionGuard = async (tx: Parameters<typeof getDb>[0]) => {
-    await replaceJobGeneration();
-    await getDb(tx)
-      .select()
-      .from(job)
-      .where(eq(job.key, "synthetic:snapshot-contention"))
-      .for("update");
+    await replaceGeneration();
+    await lockJobs(tx, { key: "synthetic:snapshot-contention" });
   };
 
   // Marking source rows does not replace an execution tuple another worker owns.
@@ -65,15 +63,12 @@ describe("snapshot write recovery", () => {
       ctx.db,
       async (tx) => {
         attempts++;
-        await getDb(tx)
-          .select()
-          .from(job)
-          .where(eq(job.key, "synthetic:snapshot-contention"));
+        await readJobs(tx, { key: "synthetic:snapshot-contention" });
         await getDb(tx)
           .update(product)
           .set({ notes: "Synthetic saved note" })
           .where(eq(product.id, subject.entityId));
-        await replaceJobGeneration();
+        await replaceGeneration();
         await recordChange(tx, { kind: "source", categories: ["product"] });
       },
       { isolationLevel: "serializable" },
@@ -89,10 +84,7 @@ describe("snapshot write recovery", () => {
       ctx.db,
       async (tx) => {
         const attempt = ++attempts;
-        await getDb(tx)
-          .select()
-          .from(job)
-          .where(eq(job.key, "synthetic:snapshot-contention"));
+        await readJobs(tx, { key: "synthetic:snapshot-contention" });
         await getDb(tx)
           .update(product)
           .set({ notes: "Synthetic saved note" })
@@ -166,10 +158,7 @@ describe("snapshot write recovery", () => {
         ctx.db,
         async (tx) => {
           const attempt = ++attempts;
-          await getDb(tx)
-            .select()
-            .from(job)
-            .where(eq(job.key, "synthetic:snapshot-contention"));
+          await readJobs(tx, { key: "synthetic:snapshot-contention" });
           await runAfterCommit(tx, async () => {
             publications.push(attempt);
           });
@@ -194,10 +183,7 @@ describe("snapshot write recovery", () => {
             outer,
             async (tx) => {
               attempts++;
-              await getDb(tx)
-                .select()
-                .from(job)
-                .where(eq(job.key, "synthetic:snapshot-contention"));
+              await readJobs(tx, { key: "synthetic:snapshot-contention" });
               await conflictOnExecutionGuard(tx);
               await recordChange(tx, {
                 kind: "source",

@@ -13,11 +13,11 @@ import {
 } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
 import { ledgerParty, run as runTable } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { createAppError } from "~/server/errors/app-error";
+import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { cancelRunJobs, pauseJob } from "~/server/generic/jobs/repo/operator";
 import { dropWork, workItemsFor } from "~/server/generic/jobs/repo/work-items";
 
@@ -86,10 +86,7 @@ export async function controlWorkflowRun(
         .update(runTable)
         .set({ status: "paused" })
         .where(eq(runTable.id, row.id));
-      const [execution] = await getDb(tx)
-        .select({ id: job.id })
-        .from(job)
-        .where(eq(job.key, `run:${row.id}`));
+      const execution = await readJob(tx, { key: `run:${row.id}` });
       if (execution) await pauseJob(tx, execution.id);
     });
     return;

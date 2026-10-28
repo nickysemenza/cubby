@@ -1,10 +1,10 @@
 import type { SearchableEntityRef } from "@cubby/schemas/search";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { entityEmbedding, job, workItem } from "~/server/db/retained-tables";
+import { entityEmbedding } from "~/server/db/retained-tables";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import {
   EMBEDDING_CLEANUP_DRAIN,
@@ -23,6 +23,16 @@ import {
 } from "~/server/generic/embedding/service/semantic/config";
 import type { VectorStorePort } from "~/server/generic/embedding/service/semantic/vector-store";
 import { JobRetryableError } from "~/server/generic/jobs/errors";
+import {
+  updateJobs,
+  updateWorkItems,
+  readWorkItems,
+} from "~/server/generic/jobs/jobs.fixtures";
+import { readJob } from "~/server/generic/jobs/repo/job-reads";
+import {
+  workItemsFor,
+  workItemStates,
+} from "~/server/generic/jobs/repo/work-items";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import {
   prepareSearchDocuments,
@@ -128,20 +138,14 @@ async function advanceRefresh(
   db: Parameters<typeof advanceJob>[0],
   port: EmbeddingRefreshPort,
 ) {
-  const [execution] = await getDb(db)
-    .select({ id: job.id })
-    .from(job)
-    .where(eq(job.key, EMBEDDING_REFRESH_DRAIN.key))
-    .limit(1);
+  const execution = await readJob(db, { key: EMBEDDING_REFRESH_DRAIN.key });
   if (!execution) throw new Error("Missing embedding refresh drain");
-  await getDb(db)
-    .update(job)
-    .set({ availableAt: new Date(0) })
-    .where(eq(job.id, execution.id));
-  await getDb(db)
-    .update(workItem)
-    .set({ readyAt: new Date(0) })
-    .where(eq(workItem.drain, EMBEDDING_REFRESH_DRAIN.key));
+  await updateJobs(db, { id: execution.id }, { availableAt: new Date(0) });
+  await updateWorkItems(
+    db,
+    { drain: EMBEDDING_REFRESH_DRAIN.key },
+    { readyAt: new Date(0) },
+  );
   await advanceJob(db, execution.id, {
     "embedding.refresh": embeddingRefreshHandler(port),
   });
@@ -151,20 +155,14 @@ async function advanceCleanup(
   db: Parameters<typeof advanceJob>[0],
   store: VectorStorePort,
 ) {
-  const [execution] = await getDb(db)
-    .select({ id: job.id })
-    .from(job)
-    .where(eq(job.key, EMBEDDING_CLEANUP_DRAIN.key))
-    .limit(1);
+  const execution = await readJob(db, { key: EMBEDDING_CLEANUP_DRAIN.key });
   if (!execution) throw new Error("Missing embedding cleanup drain");
-  await getDb(db)
-    .update(job)
-    .set({ availableAt: new Date(0) })
-    .where(eq(job.id, execution.id));
-  await getDb(db)
-    .update(workItem)
-    .set({ readyAt: new Date(0) })
-    .where(eq(workItem.drain, EMBEDDING_CLEANUP_DRAIN.key));
+  await updateJobs(db, { id: execution.id }, { availableAt: new Date(0) });
+  await updateWorkItems(
+    db,
+    { drain: EMBEDDING_CLEANUP_DRAIN.key },
+    { readyAt: new Date(0) },
+  );
   await advanceJob(db, execution.id, {
     "embedding.cleanup": embeddingCleanupHandler(store),
   });
@@ -186,42 +184,22 @@ describe("embedding refresh and cleanup drains", () => {
     await markRefresh(ctx.db, [ref]);
 
     await advanceRefresh(ctx.db, port);
-    const [first] = await getDb(ctx.db)
-      .select()
-      .from(workItem)
-      .where(
-        and(
-          eq(workItem.target, EMBEDDING_REFRESH_TARGET),
-          eq(workItem.ref, ref.entityId),
-        ),
-      );
+    const [first] = await workItemStates(ctx.db, EMBEDDING_REFRESH_TARGET, [
+      ref.entityId,
+    ]);
     expect(first).toMatchObject({ attempts: 0 });
     expect(first?.readyAt.getTime()).toBeGreaterThan(Date.now());
 
     await advanceRefresh(ctx.db, port);
-    const [second] = await getDb(ctx.db)
-      .select()
-      .from(workItem)
-      .where(
-        and(
-          eq(workItem.target, EMBEDDING_REFRESH_TARGET),
-          eq(workItem.ref, ref.entityId),
-        ),
-      );
+    const [second] = await workItemStates(ctx.db, EMBEDDING_REFRESH_TARGET, [
+      ref.entityId,
+    ]);
     expect(second).toMatchObject({ attempts: 0 });
 
     remote.setVisible(true);
     await advanceRefresh(ctx.db, port);
     expect(
-      await getDb(ctx.db)
-        .select({ id: workItem.ref })
-        .from(workItem)
-        .where(
-          and(
-            eq(workItem.target, EMBEDDING_REFRESH_TARGET),
-            eq(workItem.ref, ref.entityId),
-          ),
-        ),
+      await workItemsFor(ctx.db, EMBEDDING_REFRESH_TARGET, [ref.entityId]),
     ).toEqual([]);
     expect(
       await getDb(ctx.db)
@@ -316,10 +294,7 @@ describe("embedding refresh and cleanup drains", () => {
     await advanceRefresh(ctx.db, port);
     await advanceRefresh(ctx.db, port);
     expect(
-      await getDb(ctx.db)
-        .select({ ref: workItem.ref })
-        .from(workItem)
-        .where(eq(workItem.target, EMBEDDING_REFRESH_TARGET)),
+      await readWorkItems(ctx.db, { target: EMBEDDING_REFRESH_TARGET }),
     ).toEqual([]);
     expect(
       await getDb(ctx.db)
@@ -380,30 +355,17 @@ describe("embedding refresh and cleanup drains", () => {
           ) <= 300_000,
       ),
     ).toBe(true);
-    const longItem = await getDb(ctx.db)
-      .select()
-      .from(workItem)
-      .where(
-        and(
-          eq(workItem.target, EMBEDDING_REFRESH_TARGET),
-          eq(workItem.ref, long.entityId),
-        ),
-      );
+    const longItem = await workItemStates(ctx.db, EMBEDDING_REFRESH_TARGET, [
+      long.entityId,
+    ]);
     expect(longItem).toHaveLength(1);
     expect(longItem[0]?.attempts).toBe(1);
     expect(
-      await getDb(ctx.db)
-        .select({ ref: workItem.ref })
-        .from(workItem)
-        .where(
-          and(
-            eq(workItem.target, EMBEDDING_REFRESH_TARGET),
-            inArray(
-              workItem.ref,
-              refs.slice(0, -1).map((ref) => ref.entityId),
-            ),
-          ),
-        ),
+      await workItemsFor(
+        ctx.db,
+        EMBEDDING_REFRESH_TARGET,
+        refs.slice(0, -1).map((ref) => ref.entityId),
+      ),
     ).toHaveLength(39);
   });
 
@@ -490,15 +452,9 @@ describe("embedding refresh and cleanup drains", () => {
     const before = Date.now();
 
     await advanceCleanup(ctx.db, remote.store);
-    const [work] = await getDb(ctx.db)
-      .select()
-      .from(workItem)
-      .where(
-        and(
-          eq(workItem.target, EMBEDDING_CLEANUP_TARGET),
-          eq(workItem.ref, staged.id),
-        ),
-      );
+    const [work] = await workItemStates(ctx.db, EMBEDDING_CLEANUP_TARGET, [
+      staged.id,
+    ]);
     expect(work?.attempts).toBe(1);
     expect(work?.lastError).toContain("429");
     expect(work?.readyAt.getTime()).toBeGreaterThan(before);

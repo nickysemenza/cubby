@@ -12,6 +12,10 @@ import {
 } from "~/server/db/derived-declarations";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import {
+  deleteWorkItems,
+  insertWorkItems,
+} from "~/server/generic/jobs/jobs.fixtures";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
@@ -37,9 +41,8 @@ describe("search source selection", () => {
   it("confirms coverage for a kind unless that kind's search documents are pending", async () => {
     const config = getSemanticEmbeddingConfig();
     const mark = (target: string) =>
-      unwrapDb(ctx.db).execute(sql`
-        INSERT INTO "WorkItem" (target, ref) VALUES (${target}, ${crypto.randomUUID()}::uuid)`);
-    await unwrapDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
+      insertWorkItems(ctx.db, [{ target, ref: crypto.randomUUID() }]);
+    await deleteWorkItems(ctx.db);
     await mark("expense.searchDocument");
     expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(
       false,
@@ -50,9 +53,9 @@ describe("search source selection", () => {
     expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(
       true,
     );
-    await unwrapDb(ctx.db).execute(
-      sql`DELETE FROM "WorkItem" WHERE target <> 'expense.searchDocument'`,
-    );
+    await deleteWorkItems(ctx.db, {
+      target: fanoutTarget(product.target, fanout),
+    });
     await mark(product.target);
     expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(
       true,

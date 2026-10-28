@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
 import { getDb, withTransaction } from "~/server/db/helpers";
-import { job, run as runTable } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import type {
   RunServices,
@@ -24,6 +24,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { importReportBlocks } from "~/server/generic/entity-report/repo/run";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import {
   runFinding,
@@ -111,10 +112,7 @@ describe("purchase import run admission", () => {
 
   it("retries the same operation after a lost submission and never resubmits a started coordinator", async () => {
     const subject = await startAgentRun(await createMember());
-    const [intent] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.runId, subject.id));
+    const [intent] = await readJobs(ctx.db, { runId: subject.id });
     if (!intent) throw new Error("Expected transactional dispatch intent");
     const event = purchaseAgentEvent.parse(intent.input);
     const dispatch = vi

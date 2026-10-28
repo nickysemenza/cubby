@@ -34,7 +34,6 @@ import {
   assessmentState,
   assessmentCorrectionLock,
   feedback,
-  job,
   auditLog,
   aiEvaluation,
 } from "~/server/db/schema";
@@ -76,6 +75,8 @@ import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-in
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { deleteJobs, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 
 describe("confirmed correction propagation", () => {
@@ -146,15 +147,10 @@ describe("confirmed correction propagation", () => {
 
   async function drain() {
     for (let page = 0; page < 10; page++) {
-      const pending = await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(
-          and(
-            eq(job.kind, "assessment.correction"),
-            inArray(job.state, ["queued", "retry_wait"]),
-          ),
-        );
+      const pending = await readJobs(ctx.db, {
+        kind: "assessment.correction",
+        states: ["queued", "retry_wait"],
+      });
       if (!pending.length) return;
       for (const work of pending)
         expect(
@@ -171,14 +167,15 @@ describe("confirmed correction propagation", () => {
   it("explicitly enrolls retained field roots without resetting completed history", async () => {
     const target = await propose({ automatic: true });
     const root = await correct();
-    await getDb(ctx.db)
-      .update(job)
-      .set({
+    await updateJobs(
+      ctx.db,
+      { kind: "assessment.correction" },
+      {
         state: "completed",
         result: { status: "held", reason: "Synthetic old identity scan" },
-      })
-      .where(eq(job.kind, "assessment.correction"));
-    const original = await getDb(ctx.db).select().from(job);
+      },
+    );
+    const original = await readJobs(ctx.db, {});
     const preview = enrollSuggestionCorrectionsInput.parse({ family: "field" });
     expect(await enrollSuggestionCorrections(ctx.db, preview)).toMatchObject({
       family: "field",
@@ -186,11 +183,11 @@ describe("confirmed correction propagation", () => {
       receiptBackedRoots: 1,
       enrolledRoots: 0,
     });
-    expect(await getDb(ctx.db).select().from(job)).toEqual(original);
+    expect(await readJobs(ctx.db, {})).toEqual(original);
     const apply = { ...preview, dryRun: false };
     await enrollSuggestionCorrections(ctx.db, apply);
     await enrollSuggestionCorrections(ctx.db, apply);
-    const enrolled = await getDb(ctx.db).select().from(job);
+    const enrolled = await readJobs(ctx.db, {});
     expect(enrolled).toHaveLength(original.length + 1);
     expect(
       enrolled.find((row) => !original.some((old) => old.id === row.id)),
@@ -209,29 +206,22 @@ describe("confirmed correction propagation", () => {
     for (const old of original.filter(
       (row) => row.kind === "assessment.correction",
     ))
-      expect(
-        (await getDb(ctx.db).select().from(job).where(eq(job.id, old.id)))[0],
-      ).toEqual(old);
-    const completed = await getDb(ctx.db).select().from(job);
+      expect((await readJobs(ctx.db, { id: old.id }))[0]).toEqual(old);
+    const completed = await readJobs(ctx.db, {});
     await enrollSuggestionCorrections(ctx.db, apply);
-    expect(await getDb(ctx.db).select().from(job)).toEqual(completed);
+    expect(await readJobs(ctx.db, {})).toEqual(completed);
   });
 
   it("checks one publication commit's served targets in one Job", async () => {
     const source = await correct();
     const first = await propose();
     const second = await propose();
-    await getDb(ctx.db)
-      .delete(job)
-      .where(eq(job.kind, "assessment.correction"));
+    await deleteJobs(ctx.db, { kind: "assessment.correction" });
     await recordCorrectionWork(ctx.db, {
       kind: "publications",
       ids: [first.prediction.id, second.prediction.id],
     });
-    const queued = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.kind, "assessment.correction"));
+    const queued = await readJobs(ctx.db, { kind: "assessment.correction" });
     expect(queued).toHaveLength(1);
     expect(queued[0]).toMatchObject({
       key: `assessment-correction-publication:${first.prediction.id}`,
@@ -241,10 +231,9 @@ describe("confirmed correction propagation", () => {
       },
     });
     await drain();
-    const enrolled = await getDb(ctx.db)
-      .select({ key: job.key })
-      .from(job)
-      .where(eq(job.kind, "assessment.correction"));
+    const enrolled = await readJobs(ctx.db, {
+      kind: "assessment.correction",
+    }).then((rows) => rows.map(({ key }) => ({ key })));
     expect(enrolled.map((row) => row.key)).toEqual(
       expect.arrayContaining([
         `assessment-correction:${source.result.feedbackId}:${first.prediction.id}`,
@@ -1035,7 +1024,7 @@ describe("confirmed correction propagation", () => {
           .where(eq(assessmentCorrectionLock.key, question.correctionKey)),
       ).toHaveLength(1);
       // Exclude incidental shared Job contention from the authority serialization proof.
-      await getDb(ctx.db).update(job).set({ state: "failed" });
+      await updateJobs(ctx.db, {}, { state: "failed" });
       const started = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
       const applying = withSnapshotWriteDatabase(
@@ -1387,10 +1376,10 @@ describe("confirmed correction propagation", () => {
           .totalCount,
       ).toBe(0);
       const before = await getDb(ctx.db).select().from(feedback);
-      const jobsBefore = await getDb(ctx.db).select().from(job);
+      const jobsBefore = await readJobs(ctx.db, {});
       await listAutomaticDecisions(ctx.db, { recordIds: [source.product.id] });
       expect(await getDb(ctx.db).select().from(feedback)).toEqual(before);
-      expect(await getDb(ctx.db).select().from(job)).toEqual(jobsBefore);
+      expect(await readJobs(ctx.db, {})).toEqual(jobsBefore);
       const attempt = automatic.items[0]?.correctionAttempt;
       if (!attempt)
         throw new Error("Synthetic correction attempt was not returned");

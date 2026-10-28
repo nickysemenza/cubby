@@ -3,7 +3,7 @@ import type pg from "pg";
 import { describe, expect, it, vi } from "vitest";
 
 import { withJobExecution, setJobStepKey } from "../generic/jobs/context";
-import type { JobClaim } from "../generic/jobs/repo/queue";
+import type { ExternalClaim as JobClaim } from "../generic/jobs/repo/external-claim";
 import * as tracing from "../observability/tracing";
 import type { Database } from "./database";
 import { withDatabaseOperationMetrics } from "./db-observability";

@@ -51,8 +51,8 @@ import { explainLiveDerived } from "~/server/generic/derived/repo/explain";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { attachLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { withJobExecution } from "~/server/generic/jobs/context";
+import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { claimJob } from "~/server/generic/jobs/repo/queue";
 import {
   drainItems,
   dropWork,
@@ -254,7 +254,7 @@ describe("stored derived values", () => {
       kind: "image.cloud",
       input: {},
     });
-    const claim = await claimJob(ctx.db, saved.id);
+    const claim = await claimExternal(ctx.db, saved.id);
     if (!claim) throw new Error("Expected synthetic Job claim");
     const rename = (id: ProductId, name: string) =>
       withTransaction(ctx.db, (tx) =>
@@ -291,7 +291,7 @@ describe("stored derived values", () => {
       kind: "image.cloud",
       input: {},
     });
-    const claim = await claimJob(ctx.db, saved.id);
+    const claim = await claimExternal(ctx.db, saved.id);
     if (!claim) throw new Error("Expected synthetic Job claim");
     await withTransaction(ctx.db, (outer) => {
       const db = databaseForTransaction(outer);

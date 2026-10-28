@@ -1,12 +1,12 @@
 import { imageId, type RunId } from "@cubby/schemas/identifiers";
 import { runStepDeclaration } from "@cubby/schemas/run-fields";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import { image, imageProcessingJob, job, run } from "~/server/db/schema";
+import { image, imageProcessingJob, run } from "~/server/db/schema";
 import {
   countImagesStaleMetadata,
   createUploadedImageRecord,
@@ -21,6 +21,8 @@ import {
   retryRunStep,
   type StepPlan,
 } from "~/server/domains/run/service/step-run";
+import { deleteWorkItems } from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
@@ -196,7 +198,7 @@ describe("maintenance Run", () => {
     await getDb(ctx.db).execute(sql`
       UPDATE "Entity" SET "deletedAt" = now() WHERE id = ${item.entityId}::uuid`);
     // As if the removal predated the triggers: nothing is marked.
-    await getDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
+    await deleteWorkItems(ctx.db);
     const id = await startPass();
     await drive(id, only("derived-refresh", {}));
     const [document] = (
@@ -233,10 +235,9 @@ describe("maintenance Run", () => {
     const payloads = await getDb(ctx.db).select().from(imageProcessingJob);
     expect(payloads.length).toBeGreaterThanOrEqual(3);
     expect(payloads.every((payload) => payload.attemptId === null)).toBe(true);
-    const admitted = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(inArray(job.kind, ["image.cloud", "image.device"]));
+    const admitted = await readJobs(ctx.db, {
+      kinds: ["image.cloud", "image.device"],
+    });
     expect(admitted).toHaveLength(payloads.length);
     expect(admitted.every((execution) => execution.state === "queued")).toBe(
       true,

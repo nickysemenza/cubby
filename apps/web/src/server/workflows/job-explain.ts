@@ -1,30 +1,27 @@
 import {
   emailShortcode,
-  parseEntityId,
   imageJobShortcode,
   runShortcode,
   jobShortcode,
   type RunId,
 } from "@cubby/schemas/identifiers";
-import { jobState } from "@cubby/schemas/job";
 import { RUN_PURPOSE_LABEL, runPurpose } from "@cubby/schemas/run-fields";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import type { JobFacts, RunRollup } from "~/contracts/job.contract";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
 import { email, imageProcessingJob, run } from "~/server/db/schema";
 import { imageJobDisplayStateSql } from "~/server/domains/image-processing/repo/image-job-state";
 import { imageProcessingJobKey } from "~/server/domains/image-processing/repo/image-processing";
 import { createAppError } from "~/server/errors/app-error";
 import {
   jobFactsOf,
+  readRunJobSamples,
   readRunRollups,
-  runDemandWhere,
 } from "~/server/generic/jobs/repo/job-queue";
-import { jobWaitingOnReasonSql } from "~/server/generic/jobs/repo/waiting-on";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 
 type Step = {
   ref: string;
@@ -63,28 +60,7 @@ async function explainRun(
     .from(run)
     .where(and(eq(run.id, runId), notDeleted(run)));
   if (!owner) throw createAppError("RUN_NOT_FOUND", "Run was not found");
-  const reason = jobWaitingOnReasonSql();
-  // The executing Job, then the oldest live Jobs of each waiting-on reason.
-  const samples = await getDb(db).execute<{ id: string }>(sql`
-    SELECT id FROM (
-      SELECT "Job".id, row_number() OVER (
-        PARTITION BY ${reason} ORDER BY "Job"."availableAt", "Job".id
-      ) AS position, "Job".kind
-      FROM "Job" WHERE ${runDemandWhere(runId)}
-        AND "Job".state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}, ${jobState.enum.paused})
-    ) ranked WHERE position <= ${SAMPLES_PER_REASON} OR kind = 'run.execute'`);
-  const rows = samples.rows.length
-    ? await getDb(db)
-        .select()
-        .from(job)
-        .where(
-          inArray(
-            job.id,
-            samples.rows.map((row) => parseEntityId("job", row.id)),
-          ),
-        )
-        .orderBy(asc(job.availableAt))
-    : [];
+  const rows = await readRunJobSamples(db, runId, SAMPLES_PER_REASON);
   const [facts, [rollup]] = await Promise.all([
     jobFactsOf(db, rows),
     readRunRollups(db, [owner]),
@@ -135,10 +111,7 @@ async function explainImageJob(db: Database, code: string) {
     .where(eq(imageProcessingJob.shortcode, code));
   if (!row)
     throw createAppError("IMAGE_JOB_NOT_FOUND", "Image job was not found");
-  const executions = await getDb(db)
-    .select()
-    .from(job)
-    .where(eq(job.key, imageProcessingJobKey(row.id)));
+  const executions = await readJobs(db, { key: imageProcessingJobKey(row.id) });
   const [facts] = await jobFactsOf(db, executions);
   const steps: Step[] = [
     {
@@ -184,14 +157,10 @@ async function explainEmail(db: Database, code: string) {
 }
 
 async function explainJob(db: Database, id: string) {
-  const rows = await getDb(db)
-    .select()
-    .from(job)
-    .where(
-      jobShortcode.safeParse(id).success
-        ? eq(job.shortcode, id)
-        : eq(job.id, parseEntityId("job", id)),
-    );
+  const rows = await readJobs(
+    db,
+    jobShortcode.safeParse(id).success ? { code: id } : { id },
+  );
   const [facts] = await jobFactsOf(db, rows);
   if (!facts || !rows[0])
     throw createAppError("JOB_NOT_FOUND", "Job was not found");

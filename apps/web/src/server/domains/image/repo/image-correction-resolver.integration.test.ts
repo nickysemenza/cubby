@@ -10,7 +10,7 @@ import { z } from "zod";
 import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
 import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { getDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
-import { image, assessmentState, feedback, job } from "~/server/db/schema";
+import { image, assessmentState, feedback } from "~/server/db/schema";
 import { getImageProcessingReadProjection } from "~/server/domains/image-processing/repo/image-processing";
 import { imageScaffold } from "~/server/domains/image/repo/image";
 import {
@@ -32,6 +32,8 @@ import {
 } from "~/server/generic/assessment/repo/correction-sources";
 import { enqueueCorrectionWork } from "~/server/generic/assessment/repo/correction-work";
 import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
@@ -97,15 +99,10 @@ describe("image correction authority", () => {
 
   async function drain() {
     for (let page = 0; page < 10; page++) {
-      const pending = await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(
-          and(
-            eq(job.kind, "assessment.correction"),
-            inArray(job.state, ["queued", "retry_wait"]),
-          ),
-        );
+      const pending = await readJobs(ctx.db, {
+        kind: "assessment.correction",
+        states: ["queued", "retry_wait"],
+      });
       if (!pending.length) return;
       for (const work of pending)
         expect(
@@ -125,14 +122,15 @@ describe("image correction authority", () => {
     );
     // Simulate pre-adapter completed work; these operational records are immutable
     // inputs to enrollment, not jobs that the new operation may reset.
-    await getDb(ctx.db)
-      .update(job)
-      .set({
+    await updateJobs(
+      ctx.db,
+      { kind: "assessment.correction" },
+      {
         state: "completed",
         result: { status: "held", reason: "Synthetic pre-adapter history" },
-      })
-      .where(eq(job.kind, "assessment.correction"));
-    const original = await getDb(ctx.db).select().from(job);
+      },
+    );
+    const original = await readJobs(ctx.db, {});
     const previewInput = enrollSuggestionCorrectionsInput.parse({
       family: "image_description",
     });
@@ -145,13 +143,13 @@ describe("image correction authority", () => {
       enrolledRoots: 0,
       done: true,
     });
-    expect(await getDb(ctx.db).select().from(job)).toEqual(original);
+    expect(await readJobs(ctx.db, {})).toEqual(original);
     const applyInput = { ...previewInput, dryRun: false };
     for (let attempt = 0; attempt < 2; attempt++)
       expect(
         await enrollSuggestionCorrections(ctx.db, applyInput),
       ).toMatchObject({ enrolledRoots: 1 });
-    const enrolled = await getDb(ctx.db).select().from(job);
+    const enrolled = await readJobs(ctx.db, {});
     expect(enrolled).toHaveLength(original.length + 1);
     expect(
       enrolled.find((row) => !original.some((old) => old.id === row.id)),
@@ -176,12 +174,10 @@ describe("image correction authority", () => {
     for (const old of original.filter(
       (row) => row.kind === "assessment.correction",
     ))
-      expect(
-        (await getDb(ctx.db).select().from(job).where(eq(job.id, old.id)))[0],
-      ).toEqual(old);
-    const completed = await getDb(ctx.db).select().from(job);
+      expect((await readJobs(ctx.db, { id: old.id }))[0]).toEqual(old);
+    const completed = await readJobs(ctx.db, {});
     await enrollSuggestionCorrections(ctx.db, applyInput);
-    expect(await getDb(ctx.db).select().from(job)).toEqual(completed);
+    expect(await readJobs(ctx.db, {})).toEqual(completed);
   });
 
   it("never restarts failed versioned enrollment on repeated execution", async () => {
@@ -195,22 +191,19 @@ describe("image correction authority", () => {
     });
     await enrollSuggestionCorrections(ctx.db, input);
     const key = `assessment-correction-history:image-description-v1:${root.result.feedbackId}`;
-    await getDb(ctx.db)
-      .update(job)
-      .set({
+    await updateJobs(
+      ctx.db,
+      { key: key },
+      {
         state: "failed",
         error: "Synthetic retained failure",
         attempts: 3,
-      })
-      .where(eq(job.key, key));
-    const before = (
-      await getDb(ctx.db).select().from(job).where(eq(job.key, key))
-    )[0];
+      },
+    );
+    const before = (await readJobs(ctx.db, { key: key }))[0];
     expect(before).toMatchObject({ state: "failed", attempts: 3 });
     await enrollSuggestionCorrections(ctx.db, input);
-    expect(
-      (await getDb(ctx.db).select().from(job).where(eq(job.key, key)))[0],
-    ).toEqual(before);
+    expect((await readJobs(ctx.db, { key: key }))[0]).toEqual(before);
   });
 
   it("advances bounded enrollment past refused member applications without inventing authority", async () => {
@@ -229,7 +222,7 @@ describe("image correction authority", () => {
       }),
     ).rejects.toThrow("Image evidence changed before confirmation");
     await correct("valid-enrollment", "Synthetic valid correction");
-    const jobsBefore = await getDb(ctx.db).select().from(job);
+    const jobsBefore = await readJobs(ctx.db, {});
     let after: string | null = null;
     let scanned = 0;
     let roots = 0;
@@ -255,7 +248,7 @@ describe("image correction authority", () => {
       roots: 1,
       emptyCandidatePages: 1,
     });
-    expect(await getDb(ctx.db).select().from(job)).toEqual(jobsBefore);
+    expect(await readJobs(ctx.db, {})).toEqual(jobsBefore);
   });
 
   it.each(["historical", "future"])(

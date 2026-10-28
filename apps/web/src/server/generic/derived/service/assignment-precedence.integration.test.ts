@@ -6,7 +6,6 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { getDb } from "~/server/db/helpers";
 import {
   createExpense,
   updateExpense,
@@ -19,6 +18,7 @@ import {
 import { listOperations } from "~/server/entity-kernel/list-operations";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
+import { updateWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import {
   drainDerivedPage,
   drainStoredDerived,
@@ -305,9 +305,14 @@ describe("assignment and stored projection precedence", () => {
         }),
       ]),
     );
-    await getDb(ctx.db).execute(sql`UPDATE "WorkItem"
-      SET "lastError" = 'Synthetic unit-price input refresh failure', "readyAt" = now() + interval '1 hour'
-      WHERE target = 'product.price' AND ref = ${product.entityId}`);
+    await updateWorkItems(
+      ctx.db,
+      { target: "product.price", refs: [product.entityId] },
+      {
+        lastError: "Synthetic unit-price input refresh failure",
+        readyAt: sql`now() + interval '1 hour'`,
+      },
+    );
     const failed = entityFieldEnvelopeSchemas.product.detail.parse(
       (
         await executeEntity(context(), {

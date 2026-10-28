@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import { withInvocationDb } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { job } from "~/server/db/schema";
 import type {
   CalDavResource,
   CalendarProjection,
@@ -13,6 +12,7 @@ import type {
 import { readMealById } from "~/server/domains/meal/repo/crud";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { updateTask } from "~/server/domains/task/repo/crud";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 
 import { executeCalDavWrite, visitCalDavProjection } from "./calendar-caldav";
 import { scheduleCalendarFeedDirty } from "./client";
@@ -275,7 +275,7 @@ describe("durable calendar dirty-mark fallback", () => {
         }),
       );
       expect(
-        (await getDb(ctx.db).select().from(job)).some(
+        (await readJobs(ctx.db, {})).some(
           (row) => row.kind === "calendar-feed.mark-dirty",
         ),
       ).toBe(true);

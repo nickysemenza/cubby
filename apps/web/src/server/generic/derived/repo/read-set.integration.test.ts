@@ -36,6 +36,7 @@ import {
   isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
 import { markAllStoredDerived } from "~/server/generic/derived/repo/drain";
+import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
@@ -306,13 +307,7 @@ describe("stored derived read sets", () => {
     const drain = async () => {
       await drainStoredDerived(ctx.db, 100, adapters);
       // Ready-only draining must not hide deferred computations from this proof.
-      expect(
-        (
-          await getDb(ctx.db).execute(
-            sql`SELECT target, attempts, "lastError" FROM "WorkItem"`,
-          )
-        ).rows,
-      ).toEqual([]);
+      expect(await readWorkItems(ctx.db)).toEqual([]);
     };
     const snapshot = async () => ({
       values: (

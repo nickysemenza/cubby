@@ -1,15 +1,14 @@
 import { jobShortcode } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { JobSetFilter } from "~/contracts/job.contract";
-import { getDb } from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
 import { retryJobSet } from "~/server/generic/jobs/repo/job-queue";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
@@ -84,10 +83,7 @@ describe("Job entity reads and scoped retry", () => {
         null,
       ),
     ).toEqual([backingOff.id]);
-    const [retained] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.id, other.id));
+    const [retained] = await readJobs(ctx.db, { id: other.id });
     expect(retained?.availableAt.getTime()).toBeGreaterThan(Date.now());
   });
   it("keeps attention and internal-kind filters scoped to the requested population", async () => {
@@ -103,15 +99,11 @@ describe("Job entity reads and scoped retry", () => {
       input: {},
     });
     for (const row of [failed, internal])
-      await getDb(ctx.db)
-        .update(job)
-        .set({ state: "failed" })
-        .where(eq(job.id, row.id));
+      await updateJobs(ctx.db, { id: row.id }, { state: "failed" });
     expect(
-      await getDb(ctx.db)
-        .select({ state: job.state, kind: job.kind })
-        .from(job)
-        .where(eq(job.id, internal.id)),
+      await readJobs(ctx.db, { id: internal.id }).then((rows) =>
+        rows.map(({ kind, state }) => ({ state, kind })),
+      ),
     ).toEqual([{ state: "failed", kind: "ai-refresh.activate" }]);
     const read = (includeInternal: boolean) =>
       jobRepository.repository.listRead(
@@ -167,14 +159,10 @@ describe("Job entity reads and scoped retry", () => {
         null,
       ),
     ).toEqual([selected.id]);
-    expect(
-      (await getDb(ctx.db).select().from(job).where(eq(job.id, other.id)))[0]
-        ?.availableAt,
-    ).toEqual(future);
-    await getDb(ctx.db)
-      .update(job)
-      .set({ availableAt: future })
-      .where(eq(job.id, selected.id));
+    expect((await readJobs(ctx.db, { id: other.id }))[0]?.availableAt).toEqual(
+      future,
+    );
+    await updateJobs(ctx.db, { id: selected.id }, { availableAt: future });
     const exclusions: JobSetFilter[] = [
       { states: ["failed"] },
       { lanes: ["apple_device"] },
@@ -194,10 +182,7 @@ describe("Job entity reads and scoped retry", () => {
     expect(
       await retryJobSet(ctx.db, { entityFilters: {}, ids: [other.id] }, owner),
     ).toEqual([]);
-    await getDb(ctx.db)
-      .update(job)
-      .set({ attempts: 5 })
-      .where(eq(job.id, selected.id));
+    await updateJobs(ctx.db, { id: selected.id }, { attempts: 5 });
     expect(
       await retryJobSet(
         ctx.db,
@@ -208,10 +193,9 @@ describe("Job entity reads and scoped retry", () => {
     expect(await retryJobSet(ctx.db, { entityFilters: {} }, owner)).toEqual([
       selected.id,
     ]);
-    expect(
-      (await getDb(ctx.db).select().from(job).where(eq(job.id, other.id)))[0]
-        ?.availableAt,
-    ).toEqual(future);
+    expect((await readJobs(ctx.db, { id: other.id }))[0]?.availableAt).toEqual(
+      future,
+    );
   });
 
   it("keeps internal-only work out of navigable counts", async () => {

@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { Database } from "~/server/db";
 import { tracePool } from "~/server/db/db-pg-tracing";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   entityBrowserMutationCommandSchema,

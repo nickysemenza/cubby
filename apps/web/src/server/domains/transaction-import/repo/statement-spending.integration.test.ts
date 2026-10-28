@@ -13,12 +13,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { getDb, runAfterCommit } from "~/server/db/helpers";
-import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import {
-  assessmentState,
-  job,
-  vendor as vendorTable,
-} from "~/server/db/schema";
+import { assessmentState, vendor as vendorTable } from "~/server/db/schema";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
 import { bookFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-booking";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -30,6 +25,10 @@ import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automat
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import * as changes from "~/server/generic/changes/repo/change";
+import {
+  lockJobs,
+  replaceJobGeneration,
+} from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 import { recordSourceTransactionRecords } from "./source-transaction-record";
@@ -242,15 +241,10 @@ describe("statement spending review and re-import", () => {
             if (mode === "exhausted" || (mode !== "committed" && calls === 1)) {
               // A synthetic stale-row fence keeps real PostgreSQL retry and
               // money/receipt rollback coverage without a mutable capture counter.
-              await getDb(ctx.db)
-                .update(job)
-                .set({ generation: sql`${job.generation} + 1` })
-                .where(eq(job.key, "synthetic:statement-contention"));
-              await repositoryQueries(db)
-                .select()
-                .from(job)
-                .where(eq(job.key, "synthetic:statement-contention"))
-                .for("update");
+              await replaceJobGeneration(ctx.db, {
+                key: "synthetic:statement-contention",
+              });
+              await lockJobs(db, { key: "synthetic:statement-contention" });
             }
             if (mode === "committed" && calls === 1) {
               await runAfterCommit(db, async () => {

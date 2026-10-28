@@ -2,8 +2,8 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { describe, expect, it } from "vitest";
 
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { product } from "~/server/db/schema";
-import * as schema from "~/server/db/schema";
 
 import { categoryFeatureSql } from "./category-feature";
 

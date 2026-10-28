@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterEach, beforeEach, vi } from "vitest";
 import { createDatabase } from "~/server/db/database-runtime";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { seedBaseWorld } from "../factories/base-world";
 import { leaseNamedDatabase } from "../test-database-lease";
 import type { withTestDb as ordinaryTestDb } from "../test-setup";

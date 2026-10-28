@@ -15,7 +15,6 @@ import {
   email,
   financialTransaction,
   purchase as purchaseTable,
-  workItem,
   orderMailEvent,
   run,
 } from "~/server/db/schema";
@@ -26,6 +25,7 @@ import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
+import { updateWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { readRunEvaluationsByCode } from "~/server/generic/run-detail/repo/run-evaluations";
 import {
   refreshSearchDocument,
@@ -310,10 +310,7 @@ describe("connection evaluation pages", () => {
       sourceKey: "synthetic-final-event",
     });
     const ids = await schedule([message.message]);
-    await getDb(ctx.db)
-      .update(workItem)
-      .set({ attempts: 2 })
-      .where(inArray(workItem.ref, ids));
+    await updateWorkItems(ctx.db, { refs: ids }, { attempts: 2 });
     const publish = connectionRepo.publishPreparedEntityConnections;
     vi.spyOn(
       connectionRepo,

@@ -28,7 +28,6 @@ import { aiEvaluationItem } from "~/server/ai/evaluation/service/ai-evaluation-d
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
 import {
   aiEvaluation,
   aiEvaluationRequest,
@@ -42,6 +41,7 @@ import { emailScaffold } from "~/server/domains/email/repo/email";
 import { pauseExecutionRun } from "~/server/domains/run/repo/execution-context";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { resumeFundingPausedRuns } from "~/server/domains/run/service/ai-work";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { reconcileWorkflowRuns } from "~/server/workflows/runs/lifecycle";
@@ -211,12 +211,7 @@ describe("member Reclassify", () => {
       .where(eq(run.shortcode, result.runIds[0]!));
     expect(recorded?.status).toBe("running");
     expect(
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(job)
-          .where(eq(job.key, `run:${recorded!.id}`))
-      )[0],
+      (await readJobs(ctx.db, { key: `run:${recorded!.id}` }))[0],
     ).toMatchObject({
       state: "queued",
       kind: "run.execute",

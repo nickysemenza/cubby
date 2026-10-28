@@ -1,18 +1,15 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { BackgroundTaskMessage } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { DatabaseChanges } from "~/lib/doorbell";
 import { setCfEnv } from "~/server/cf-env";
-import { getDb } from "~/server/db/helpers";
 import {
   recordCommittedChanges,
   withTransactionDatabase,
 } from "~/server/db/helpers/core";
-import { job, jobInvalidationCapture } from "~/server/db/schema";
 import {
   createLocation,
   readLocationById,
@@ -24,6 +21,8 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { jobInvalidationCaptureCounts } from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { derivedMarkTickets } from "~/server/testing/background-queue";
 import {
@@ -113,21 +112,11 @@ describe("repository writes publish after their commit", () => {
   it("coalesces source wakes across savepoints without enrolling work from notifications", async () => {
     await recordChange(ctx.db, { kind: "source", categories: ["task"] });
     // Captures append input without changing the execution Job.
-    const generations = () =>
-      getDb(ctx.db)
-        .select({
-          key: jobInvalidationCapture.key,
-          generation: sql<number>`count(*)::int`,
-        })
-        .from(jobInvalidationCapture)
-        .groupBy(jobInvalidationCapture.key)
-        .orderBy(jobInvalidationCapture.key);
-    const executions = () =>
-      getDb(ctx.db)
-        .select({ id: job.id, generation: job.generation, state: job.state })
-        .from(job)
-        .where(eq(job.kind, "derived.drain"))
-        .orderBy(job.id);
+    const generations = () => jobInvalidationCaptureCounts(ctx.db);
+    const executions = async () =>
+      (
+        await readJobs(ctx.db, { kind: "derived.drain" }, { order: ["id"] })
+      ).map(({ id, generation, state }) => ({ id, generation, state }));
     const before = await generations();
     const executionsBefore = await executions();
     const published = recordingQueue();

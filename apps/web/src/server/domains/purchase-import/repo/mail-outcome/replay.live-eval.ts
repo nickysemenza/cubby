@@ -19,7 +19,8 @@ import { z } from "zod";
 
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { aiUsage, assessment, job, run as runTable } from "~/server/db/schema";
+import { aiUsage, assessment, run as runTable } from "~/server/db/schema";
+import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import {
@@ -271,10 +272,7 @@ describe("isolated Mail coordinator replay", () => {
             userId: ctx.actor.userId,
             messageIds: [mail.id],
           });
-          const [dispatch] = await getDb(ctx.db)
-            .select()
-            .from(job)
-            .where(eq(job.runId, parseEntityId("run", started!.runId)));
+          const dispatch = await readJob(ctx.db, { runId: started!.runId });
           const event = dispatch
             ? purchaseAgentEvent.parse(dispatch.input)
             : null;

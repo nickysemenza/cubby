@@ -257,10 +257,17 @@ or re-arm leases; record the lease holder; retire, restart or end the waits of
 external Jobs. Image processing is its one caller and owns device admission,
 backlog and leases (`domains/image-processing/repo/device-*.ts`). Producers use
 `repo/producer.ts`, member and Run controls `repo/operator.ts`, drains
-`defineDrain` and `repo/work-items.ts`. The queue core, selection and item
-claiming (`repo/queue.ts`, `repo/work-claims.ts`) and the `WorkItem` and
-invalidation capture tables are private to `generic/jobs`; oxlint's
-`no-restricted-imports` keeps them so outside tests and test support.
+`defineDrain` and `repo/work-items.ts`, and readers `repo/job-reads.ts` (rows
+by identity, a Run's live lease, stopped Run executions). The queue core,
+selection and item claiming (`repo/queue.ts`, `repo/work-claims.ts`),
+`db/job-schema.ts` and the `Job`, `JobInvalidationCapture`,
+`JobLaneAdmission`, `WorkItem` and `WorkTicket` table objects are private to
+`generic/jobs`, tests included: oxlint's `no-restricted-imports` and
+`no-restricted-properties` exempt only `generic/jobs` and the files that
+declare or aggregate the tables. Tests seed, age, lock and inspect that state
+through `generic/jobs/jobs.fixtures.ts` and claim through
+`repo/external-claim.ts`. Whole-model consumers (the database client,
+migrations checks, test setup) import `db/drizzle-schema.ts`.
 
 ## Wakes
 

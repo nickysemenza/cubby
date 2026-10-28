@@ -5,8 +5,9 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { job, run as runTable } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -271,15 +272,16 @@ describe("Run lineage and waiting-on reads", () => {
       input: {},
       runId,
     });
-    await getDb(ctx.db)
-      .update(job)
-      .set({
+    await updateJobs(
+      ctx.db,
+      { id: abandoned.id },
+      {
         state: "running",
         leaseToken: crypto.randomUUID(),
         leaseExpiresAt: new Date(Date.now() - 60_000),
         lastClaimedAt: new Date(Date.now() - 5 * 60_000),
-      })
-      .where(eq(job.id, abandoned.id));
+      },
+    );
 
     const read = await readRun(ctx.db, await codeOf(runId));
 

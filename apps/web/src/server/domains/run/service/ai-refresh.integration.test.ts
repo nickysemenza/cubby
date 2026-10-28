@@ -44,7 +44,6 @@ import {
   product,
   appSettings,
   feedback,
-  workItem,
 } from "~/server/db/schema";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
@@ -60,6 +59,7 @@ import {
   acceptSuggestion,
   canAutomaticallyFillField,
 } from "~/server/generic/assessment/repo/suggestion-review";
+import { workItemStates } from "~/server/generic/jobs/repo/work-items";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   drainDerivedRefreshFrontier,
@@ -1379,15 +1379,9 @@ describe("targeted prompt refresh", () => {
       state: "queued",
       error: null,
     });
-    const [pending] = await getDb(ctx.db)
-      .select()
-      .from(workItem)
-      .where(
-        and(
-          eq(workItem.target, "ai.evaluation"),
-          eq(workItem.ref, evaluation!.id),
-        ),
-      );
+    const [pending] = await workItemStates(ctx.db, "ai.evaluation", [
+      evaluation!.id,
+    ]);
     expect(pending).toMatchObject({
       attempts: 1,
       lastError: expect.stringContaining("candidate coverage is unconfirmed"),

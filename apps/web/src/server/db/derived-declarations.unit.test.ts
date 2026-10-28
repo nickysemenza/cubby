@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
 import { derivedTriggerDdl } from "~/server/db/derived-trigger-ddl";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 
 // PL/pgSQL resolves trigger column references when a row fires, not when the
 // trigger is created: a misspelled declared column would fail every save to

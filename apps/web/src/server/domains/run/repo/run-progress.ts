@@ -13,9 +13,10 @@ import { and, eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { run, job } from "~/server/db/schema";
+import { run } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
+import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
 
 /** The small, durable progress read shared by every Run detail page. */
@@ -43,12 +44,7 @@ export async function getRunLiveProgress(db: Database, shortcode: string) {
     record.run.purpose === "mail_discovery"
       ? mailDiscoveryRunProgress.safeParse(record.run.progress).data
       : undefined;
-  const { job } = await import("~/server/db/retained-tables");
-  const [execution] = await database
-    .select()
-    .from(job)
-    .where(eq(job.key, `run:${record.run.id}`))
-    .limit(1);
+  const execution = await readJob(db, { key: `run:${record.run.id}` });
   const workflow = execution
     ? {
         purpose: record.run.purpose,
@@ -108,12 +104,9 @@ export async function recordRunProgress(
     if (!current) throw new Error("Progress Run does not exist");
     const eventIds = current.progressEventIds ?? [];
     if (eventIds.includes(input.eventId)) return { recorded: false };
-    const [execution] = current.dispatchEventId
-      ? []
-      : await tx
-          .select({ id: job.id, generation: job.generation })
-          .from(job)
-          .where(eq(job.key, `run:${id}`));
+    const execution = current.dispatchEventId
+      ? null
+      : await readJob(database, { key: `run:${id}` });
     const generation =
       current.dispatchEventId ??
       (execution && owner?.claim.id === execution.id

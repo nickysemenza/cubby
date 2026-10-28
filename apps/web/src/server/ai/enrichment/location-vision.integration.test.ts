@@ -9,9 +9,9 @@ import { deleteImages } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { withJobExecution } from "~/server/generic/jobs/context";
+import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { claimJob } from "~/server/generic/jobs/repo/queue";
 import { claimContext } from "~/server/generic/jobs/service/jobs";
 import {
   createImageFixture,
@@ -65,7 +65,7 @@ describe("describeLocation previous description", () => {
         kind: "location-ai.description.refresh",
         input: {},
       });
-      const claim = await claimJob(ctx.db, saved.id);
+      const claim = await claimExternal(ctx.db, saved.id);
       if (!claim) throw new Error("Expected location Job");
       const ai: LocationVisionAiPort = {
         ...portSaying("Synthetic stale answer"),
@@ -129,7 +129,7 @@ describe("describeLocation previous description", () => {
       kind: "location-ai.description.refresh",
       input: {},
     });
-    const claim = await claimJob(ctx.db, saved.id);
+    const claim = await claimExternal(ctx.db, saved.id);
     if (!claim) throw new Error("Expected location Job");
     const deleted = Promise.withResolvers<void>();
     const allowCommit = Promise.withResolvers<void>();

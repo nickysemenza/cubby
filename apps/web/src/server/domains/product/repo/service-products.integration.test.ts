@@ -19,6 +19,7 @@ import {
   productPricingSummary,
   productStockSummary,
 } from "~/server/generic/entity-report/repo/summary";
+import { updateWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
@@ -313,9 +314,14 @@ describe("category-based service Products", () => {
       // An unsuccessful refresh retains one complete published tuple for display and sorting.
       await getDb(ctx.db).execute(sql`UPDATE "Expense" SET cost = 190
         WHERE "productId" = ${service.entityId} AND cost = 90`);
-      await getDb(ctx.db).execute(sql`UPDATE "WorkItem"
-        SET "lastError" = 'Synthetic Cost refresh failure', "readyAt" = now() + interval '1 hour'
-        WHERE target = 'product.cost' AND ref = ${service.entityId}`);
+      await updateWorkItems(
+        ctx.db,
+        { target: "product.cost", refs: [service.entityId] },
+        {
+          lastError: "Synthetic Cost refresh failure",
+          readyAt: sql`now() + interval '1 hour'`,
+        },
+      );
       const readCanonical = async () =>
         entityFieldEnvelopeSchemas.product.detail.parse(
           (
@@ -363,8 +369,11 @@ describe("category-based service Products", () => {
         service.id,
         physical.id,
       ]);
-      await getDb(ctx.db).execute(sql`UPDATE "WorkItem" SET "readyAt" = now()
-        WHERE target = 'product.cost' AND ref = ${service.entityId}`);
+      await updateWorkItems(
+        ctx.db,
+        { target: "product.cost", refs: [service.entityId] },
+        { readyAt: sql`now()` },
+      );
       await drainStoredDerived(ctx.db);
       const refreshed = await readCanonical();
       expect(refreshed.fields.cost.result).toMatchObject({
