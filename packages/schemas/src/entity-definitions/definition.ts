@@ -1,4 +1,5 @@
 import { optionalFieldResolutionsSchema } from "../field-resolution";
+import { storedProjectionVersionsSchema } from "../field-envelope";
 import {
   detailSummarySchema,
   detailSurfacesSchema,
@@ -3302,11 +3303,8 @@ type OwnCheckId<D> = D extends {
 export type ReadSchemaFacts<D> = Readonly<{
   ownDataCheck: z.ZodEnum<{ [Id in OwnCheckId<D>]: Id }>;
 }>;
-const storedProjectionVersions = z
-  .record(z.string(), z.string().nullable())
-  .optional();
 type BaseReadFields<D> = {
-  storedProjectionVersions: typeof storedProjectionVersions;
+  storedProjectionVersions: typeof storedProjectionVersionsSchema;
   fieldResolutions: typeof optionalFieldResolutionsSchema;
 } & (D extends ReadableDeclaration ? ReadFieldSchemas<D> : {}) &
   (D extends { capabilities: { dataQuality: object } }
@@ -3360,7 +3358,7 @@ export function defaultReadSchemas<
   const base = z.object({
     // Resolver evidence is internal to raw reads, never an entity field descriptor.
     fieldResolutions: optionalFieldResolutionsSchema,
-    storedProjectionVersions,
+    storedProjectionVersions: storedProjectionVersionsSchema,
     ...fields,
     ...(declaration.capabilities?.dataQuality ? { dataQuality } : {}),
   }) as BaseReadSchema<D>;

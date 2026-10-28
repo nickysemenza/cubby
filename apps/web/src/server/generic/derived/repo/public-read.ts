@@ -3,6 +3,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldEnvelopeNested } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { storedProjectionVersionsSchema } from "@cubby/schemas/field-envelope";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
@@ -241,10 +242,9 @@ export function publicFieldEnvelopeRow(
     throw new Error("An entity field read requires an object schema");
   const row = rowRecord.parse(value);
   const stored = new Map(context?.stored);
-  const versions = z
-    .record(z.string(), z.string().nullable())
-    .optional()
-    .parse(row.storedProjectionVersions);
+  const versions = storedProjectionVersionsSchema.parse(
+    row.storedProjectionVersions,
+  );
   for (const field of entityFieldModels[entity].fields) {
     const readKey = field.readKey ?? field.key;
     if (!field.storedKey) continue;

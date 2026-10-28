@@ -4,6 +4,11 @@ import { entitySchema } from "./entity-core";
 import { fieldEmptyReason } from "./field-outcome";
 export { fieldEmptyReason } from "./field-outcome";
 
+/** Private raw-read witnesses; outward field envelopes carry their own publication identity. */
+export const storedProjectionVersionsSchema = z
+  .record(z.string(), z.string().nullable())
+  .optional();
+
 /** Schema identities own validation graphs; record values never enter this cache. */
 const shareSchema = <Input extends z.ZodType, Output extends z.ZodType>(
   build: (input: Input) => Output,

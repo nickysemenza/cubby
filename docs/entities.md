@@ -2884,6 +2884,9 @@ unavailable instead of attaching another revision's provenance. The witness is
 never part of public web, Apple or MCP reads. A `storedPath` supplies the default
 unscoped live comparison; contextual projections without one report that a
 standalone comparison is unavailable.
+Embedded entity summaries carry the same private witness from their nested
+SELECT through raw mapping; Meal's Recipe totals must not omit it merely because
+the Recipe is rendered inside another record. Serialization removes the witness.
 
 An own-table result stored on the entity row declares `recordSource` with its
 payload and publication timestamp columns. The page reader takes both from the
