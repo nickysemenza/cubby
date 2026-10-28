@@ -1,0 +1,39 @@
+apps/web/src/server/domains/transaction-import/repo/statement-suggestions.ts
+  s_d150f5d0e75878::t_ac24fdc0f1fd66 103-114,1655,1783-1807,1809-1846,1850-1903,1908-1909,1913,1919,1922-1929,1935,1945-2017,2019-2027,2029,2034-2036,2042,2044,2055,2058,2062-2070,2072-2074,2076-2168,2255,2257-2263,2270,2283-2284,2301,2304,2340,2400-2410,2453-2457,2513-2514,2516-2521,2523-2525,2527-2529,2531-2535,2792-2793,2795-2811,2813,3245,3453-3457
+docs/adr/0016-shared-assessments-and-feedback.md
+  s_d150f5d0e75878::t_e0d49213b1ad71 386-424
+apps/web/src/server/generic/assessment/repo/suggestion-publication.ts
+  s_d150f5d0e75878::t_93728274870037 1-572
+apps/web/src/server/domains/financial-transaction/repo/transfer-pair-suggestions.ts
+  s_d150f5d0e75878::t_2e1e6e26f3a406 71-77,1283-1285,1287-1299,1323-1324,1338,1344-1366,1925,1928,1939-1943,1956-1960
+docs/agents/generic-paths.md
+  s_d150f5d0e75878::t_fbebe2c49f3d3c 51-56
+apps/web/src/server/generic/assessment/repo/suggestion-publication.integration.test.ts
+  s_41504dfc385516::t_d726fb45950e94 1-177
+docs/guide/terminology.md
+  s_d150f5d0e75878::t_851e5ca4536093 798-810
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "55fceaea26a52c692a43ea31098ab8a008b3f4bb",
+  "prompts": {},
+  "sessions": {
+    "s_41504dfc385516": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20c7954d-2a54-4f64-9b83-4f2c98fd3f87",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_d150f5d0e75878": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ee233bd6-f486-4df9-a96f-4a4ebbebf8f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
