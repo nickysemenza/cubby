@@ -240,7 +240,9 @@ everything else:
   fence, never deadlocks.
 - **Explicit fences.** A fence is passed, never looked up. Run workflow code
   receives the claim's `fence`/`check` through `withWorkflowExecution`
-  (`assertWorkflowEffect`, `assertWorkflowCurrent`); a single-record handler
+  (`assertWorkflowEffect`, `assertWorkflowCurrent`); a standalone provider
+  Job (`location-ai.*`, `image.cloud`) registers through `withJobFence` so the
+  Gateway checks its lease before every paid request. A single-record handler
   passes `ctx.fenced` to its publication, and member or maintenance callers of
   the same publication pass `outsideJob(db)`, an ordinary transaction.
 - **Failure.** One classifier walks the cause chain: a pause stops the Job; a

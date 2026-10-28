@@ -6,14 +6,13 @@ import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobSupersededError } from "~/server/generic/jobs/errors";
 import type { JobContext } from "~/server/generic/jobs/types";
 
-type WorkflowExecution = Readonly<{
-  runId: string;
-  attempt: number;
-  database?: Database;
+type ExecutionFence = Readonly<{
   /** The executing Job's fence, handed in by the handler that owns the claim. */
   job: Pick<JobContext, "fence" | "check">;
 }>;
-const execution = new AsyncLocalStorage<WorkflowExecution>();
+type WorkflowExecution = ExecutionFence &
+  Readonly<{ runId: string; attempt: number; database?: Database }>;
+const execution = new AsyncLocalStorage<ExecutionFence>();
 export const hasWorkflowExecution = () =>
   execution.getStore() !== undefined || currentJobExecution() !== undefined;
 
@@ -43,6 +42,11 @@ export const withWorkflowExecution = <T>(
   identity: WorkflowExecution,
   work: () => Promise<T>,
 ) => execution.run(identity, work);
+/** A standalone Job that calls providers outside a Run scopes its own fence, so a lost lease stops the next paid request. */
+export const withJobFence = <T>(
+  job: ExecutionFence["job"],
+  work: () => Promise<T>,
+) => execution.run({ job }, work);
 
 /** Check current ownership before starting another provider batch; no connection spans inference. */
 export async function assertWorkflowCurrent(): Promise<void> {
