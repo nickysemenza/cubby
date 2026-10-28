@@ -10,6 +10,7 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   expense,
+  financialTransactionAllocation,
   emailFinancialAssociation,
   ledgerParty,
   orderMail,
@@ -131,6 +132,17 @@ describe("server verified financial convergence", () => {
     expect(await liveCosts()).toEqual([]);
     const result = await convergeFinancialTransaction(ctx.db, input, ctx.actor);
     expect(result.status).toBe("applied");
+    expect(
+      (
+        await getDb(ctx.db).query.financialTransactionAllocation.findMany({
+          where: eq(
+            financialTransactionAllocation.transactionId,
+            transaction.entityId,
+          ),
+          columns: { confirmsMerchant: true },
+        })
+      ).map((row) => row.confirmsMerchant),
+    ).toEqual([true]);
     expect(
       await convergeFinancialTransaction(ctx.db, input, ctx.actor),
     ).toMatchObject({ status: "already_recorded" });
@@ -667,6 +679,17 @@ describe("server verified financial convergence", () => {
         first.prepared,
       ),
     ).toMatchObject({ status: "applied" });
+    expect(
+      (
+        await getDb(ctx.db).query.financialTransactionAllocation.findMany({
+          where: eq(
+            financialTransactionAllocation.transactionId,
+            transaction.entityId,
+          ),
+          columns: { confirmsMerchant: true },
+        })
+      ).map((row) => row.confirmsMerchant),
+    ).toEqual([false]);
     expect(
       await convergeFinancialTransaction(
         ctx.db,

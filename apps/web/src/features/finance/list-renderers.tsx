@@ -18,7 +18,7 @@ const possibleVendor: ListRenderer<"financialTransaction"> = (helper) =>
         },
         {
           id: "vendorInference",
-          header: "Possible vendor",
+          header: "Statement vendor",
           enableSorting: false,
           meta: { className: "w-48", mobile: { slot: "hidden" } },
           cell: (info) =>

@@ -29,8 +29,6 @@ import {
   commitAcceptedSourceOrderReconciliationOut,
   commitPurchaseImportInput,
   commitPurchaseImportOut,
-  confirmMerchantVendorRuleInput,
-  confirmMerchantVendorRuleOut,
   importOperationStatusInput,
   importOperationStatusOut,
   preparePurchaseImportInput,
@@ -136,13 +134,6 @@ export const purchaseImportContract = defineContract(
       input: importOperationStatusInput,
       output: importOperationStatusOut,
     }),
-    confirmMerchantVendor: mutation({
-      description:
-        "Confirm that one exact statement merchant descriptor belongs to a Vendor for the authenticated household member; a later call replaces the mapping for that exact normalized descriptor.",
-      input: confirmMerchantVendorRuleInput,
-      output: confirmMerchantVendorRuleOut,
-    }),
-    /** Read one retained Email, optionally one attachment's original bytes. */
     mailImportOutcomes: query({
       description:
         "Read bounded immutable import outcomes for one owned Email, newest first. Read purchase_import_read.mail_read and lock a blind grade before revealing these predictions. Includes Assessment handles, imported lines/total or linked/unrelated/unresolved disposition and rule/model producer. Grade member-confirmed outcomes through suggestions.review_batch with intent history; grades never change the ledger.",

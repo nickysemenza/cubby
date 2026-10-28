@@ -123,7 +123,6 @@ const actionCapability = {
   "purchase_import.prepare": "prepare",
   "purchase_import.prepare_reconciliation": "prepare",
   "purchase_import.commit": "commit_purchase_import",
-  "purchase_import.confirm_merchant_vendor": "generic_mutation",
   "expenses.reclassify_document": "generic_mutation",
   "expenses.link": "generic_mutation",
   "expenses.split_with_delta": "generic_mutation",

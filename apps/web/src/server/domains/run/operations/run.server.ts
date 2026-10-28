@@ -23,10 +23,6 @@ import {
   setMailImport,
 } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import {
-  confirmMerchantVendorRule,
-  listMerchantVendorRules,
-} from "~/server/domains/purchase-import/repo/merchant-vendor-rules";
-import {
   controlRun,
   loadRunDetail,
   loadRunLog,
@@ -434,13 +430,6 @@ export const runHandlers = implementOperationDomain(runContract, {
       );
     await pauseAuthorizedRuns(context.db, context.auth.userId);
     return { authorized: false, expiresAt: null };
-  },
-  merchantRules: async (context) =>
-    listMerchantVendorRules(context.db, (await memberParty(context)).id),
-  confirmMerchantRule: async (context, input) => {
-    const party = await memberParty(context);
-    await confirmMerchantVendorRule(context.db, input, context.actorContext);
-    return listMerchantVendorRules(context.db, party.id);
   },
   aiUsage: async (context, input) =>
     listAiUsageForRun(

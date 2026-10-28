@@ -166,8 +166,14 @@ describe("generic bulk updates", () => {
         await read("financialTransaction", transaction.output.id),
       ).toMatchObject({
         allocations: expect.arrayContaining([
-          { purchaseId: purchases[index]!.output.id, amount: 4 },
-          { purchaseId: purchases[2]!.output.id, amount: 6 },
+          expect.objectContaining({
+            purchaseId: purchases[index]!.output.id,
+            amount: 4,
+          }),
+          expect.objectContaining({
+            purchaseId: purchases[2]!.output.id,
+            amount: 6,
+          }),
         ]),
       });
     }

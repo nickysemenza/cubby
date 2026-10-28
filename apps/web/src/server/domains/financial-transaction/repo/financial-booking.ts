@@ -39,6 +39,7 @@ import {
 } from "~/server/domains/financial-account/repo/purchaser";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
+import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -234,6 +235,66 @@ async function bookingAction(
     remainingBookedAmount: remainingCents / 100,
   };
 }
+/** Resolve an omitted Vendor and carry inference authority into the booking snapshot. */
+async function resolveBookingVendor(
+  db: Database,
+  input: FinancialBookingInput,
+  merchant: string | null,
+) {
+  const merchantHistory =
+    merchant &&
+    !input.purchaseId &&
+    (!input.vendorId || input.confirmsMerchant === false)
+      ? await merchantVendorInferenceFor(db, merchant)
+      : null;
+  if (!input.purchaseId && !input.vendorId && merchantHistory) {
+    if (merchantHistory.status === "suggested") {
+      input.vendorId = merchantHistory.candidates[0].vendorId;
+      input.confirmsMerchant = false;
+    }
+  }
+  if (
+    !input.purchaseId &&
+    !input.vendorId &&
+    merchantHistory?.status === "ambiguous"
+  )
+    return fail(
+      "This statement label identifies several Vendors; choose the Vendor or an existing Purchase before booking.",
+    );
+  if (
+    !input.purchaseId &&
+    !input.vendorId &&
+    input.economicRole === "reimbursement"
+  ) {
+    const merchantLabel = merchant?.trim();
+    if (!merchantLabel)
+      return fail(
+        "This transaction names no merchant; pass vendorId or purchaseId to book it.",
+      );
+    const [named] = await resolveNames(
+      db,
+      "vendor",
+      [{ name: merchantLabel }],
+      {
+        create: false,
+      },
+    );
+    if (!named?.row)
+      return fail(
+        `No Vendor is named "${merchantLabel}" by name or alias; pass vendorId or purchaseId to book it.`,
+      );
+    if (named.candidates.length > 0)
+      return fail(
+        `Merchant "${merchantLabel}" matches ${[named.row, ...named.candidates].map(({ shortcode }) => shortcode).join(", ")}; pass the intended vendorId.`,
+      );
+    input.vendorId = parseShortcodeFor("vendor", named.row.shortcode);
+    input.confirmsMerchant = false;
+  }
+  if (!input.purchaseId && !input.vendorId)
+    return fail("Choose the vendor or an existing Purchase before booking.");
+  return merchantHistory;
+}
+
 export async function previewFinancialBooking(
   db: Database,
   raw: FinancialBookingInput,
@@ -241,8 +302,7 @@ export async function previewFinancialBooking(
 ) {
   const input = financialBookingInput.parse(raw);
   const row = await transactionForBooking(db, input, projection);
-  if (!input.purchaseId && !input.vendorId)
-    return fail("Choose the vendor or an existing Purchase before booking.");
+  const merchantHistory = await resolveBookingVendor(db, input, row.merchant);
   const purchaseId = input.purchaseId
     ? await resolveOrThrow(db, "purchase", input.purchaseId)
     : null;
@@ -315,7 +375,8 @@ export async function previewFinancialBooking(
       : null;
   }
   const decision = {
-    ...input,
+    // Reparse after inference so optional keys have the same order on commit replay.
+    ...financialBookingInput.parse(input),
     categoryOverride: input.spendingCategoryId,
     spendingCategoryId: category
       ? parseShortcodeFor("spendingCategory", category.shortcode)
@@ -330,6 +391,7 @@ export async function previewFinancialBooking(
     account,
     purchaserProof,
     category,
+    merchantHistory: input.confirmsMerchant === false ? merchantHistory : null,
     classificationRevision: await spendingClassificationRevision(db),
   });
   return financialBookingPreview.parse({
@@ -492,7 +554,13 @@ export async function commitFinancialBooking(
         txDb,
         review.transactionId,
         {
-          allocations: [{ purchaseId: target, amount: fresh.amount }],
+          allocations: [
+            {
+              purchaseId: target,
+              amount: fresh.amount,
+              confirmsMerchant: fresh.confirmsMerchant,
+            },
+          ],
         },
         actor,
       );
@@ -575,32 +643,6 @@ export async function bookFinancialTransaction(
   actor: ActorContext,
 ) {
   const input = financialBookingInput.parse(raw);
-  if (
-    !input.purchaseId &&
-    !input.vendorId &&
-    input.economicRole === "reimbursement"
-  ) {
-    const row = await transactionForBooking(db, input);
-    const merchant = row.merchant?.trim();
-    if (!merchant)
-      return fail(
-        "This transaction names no merchant; pass vendorId or purchaseId to book it.",
-      );
-    const [named] = await resolveNames(db, "vendor", [{ name: merchant }], {
-      create: false,
-    });
-    if (!named?.row)
-      return fail(
-        `No Vendor is named "${merchant}" by name or alias; pass vendorId or purchaseId to book it.`,
-      );
-    if (named.candidates.length > 0)
-      return fail(
-        `Merchant "${merchant}" matches ${[named.row, ...named.candidates]
-          .map(({ shortcode }) => shortcode)
-          .join(", ")}; pass the intended vendorId.`,
-      );
-    input.vendorId = parseShortcodeFor("vendor", named.row.shortcode);
-  }
   const review = await previewFinancialBooking(db, input);
   return commitFinancialBooking(db, review, actor);
 }

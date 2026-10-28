@@ -192,13 +192,7 @@ describe("possibleVendorLabel", () => {
     ).toBe("Corner Hardware");
   });
 
-  it("says nothing for a single prior match or none", () => {
-    expect(
-      possibleVendorLabel({
-        status: "insufficient_history",
-        candidates: [candidate("Corner Hardware", 1)],
-      }),
-    ).toBeNull();
+  it("says nothing for absent evidence", () => {
     expect(possibleVendorLabel({ status: "none", candidates: [] })).toBeNull();
     expect(possibleVendorLabel(null)).toBeNull();
   });

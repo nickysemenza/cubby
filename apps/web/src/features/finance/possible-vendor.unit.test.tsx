@@ -78,27 +78,10 @@ describe("PossibleVendor", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders no relationship for absent or one-vote evidence", () => {
-    const { container, rerender } = render(
+  it("renders no relationship for absent evidence", () => {
+    const { container } = render(
       <PossibleVendor inference={{ status: "none", candidates: [] }} />,
       { wrapper: harness.wrapper },
-    );
-    expect(container).toBeEmptyDOMElement();
-
-    rerender(
-      <PossibleVendor
-        inference={{
-          status: "insufficient_history",
-          candidates: [
-            {
-              vendorId: testShortcode("vendor", "possible-vendor-one-off"),
-              vendorName: "One-Off Supply",
-              supportingTransactionCount: 1,
-              lastSeenDate: "2026-08-20",
-            },
-          ],
-        }}
-      />,
     );
     expect(container).toBeEmptyDOMElement();
   });

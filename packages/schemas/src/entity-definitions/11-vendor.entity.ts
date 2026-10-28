@@ -127,6 +127,7 @@ export default defineEntity({
           title: "Details",
           fields: [
             "aliases",
+            "statementLabels",
             "orderUrlTemplate",
             "orderEvidence",
             "orderEmailSenders",
@@ -567,6 +568,22 @@ export default defineEntity({
           create: vendorOrderEvidence.nullable().default(null),
           update: vendorOrderEvidence.nullable().optional(),
         },
+      },
+      {
+        key: "statementLabels",
+        kind: "text-array",
+        provenance: {
+          kind: "derived",
+          sources: [
+            { entity: "financialTransaction", relation: "transactions" },
+          ],
+        },
+        collection: { key: "value" },
+        description:
+          "Normalized statement labels from confirmed purchase allocations across all household members. Labels shared by several Vendors remain ambiguous for matching.",
+        control: null,
+        display: { columnGroup: "Purchasing" },
+        validation: { read: z.array(z.string()), create: null, update: null },
       },
       {
         key: "aliases",
@@ -1237,6 +1254,7 @@ export default defineEntity({
       "browserDomains",
       "agentHints",
       "agentHintsLabel",
+      "statementLabels",
       "returnWindowDays",
       "notes",
       "role",

@@ -302,9 +302,11 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
 - **Merchant** (`FinancialTransaction.merchant`, `SourceTransactionRecord.merchant`) is the
   provider's settlement label. It may name a processor or marketplace rather
   than the place the household bought from, so it is evidence text rather than
-  Vendor identity. A Possible vendor suggestion derived from repeated Merchant
-  history remains advisory; only an Allocation through a Purchase establishes
-  the relationship.
+  Vendor identity by itself. Exact normalized labels identify a Vendor when
+  independently confirmed allocations across the household name exactly one
+  Vendor; conflicting history stays ambiguous. Automatically inferred allocations
+  never confirm that history. The Vendor's Statement labels are derived from it;
+  an Allocation through a Purchase establishes the transaction relationship.
 
 - **Vendor** (`Vendor`) — a canonical identity used for marketed brands and
   purchase sellers. Separate Vendors can share a name; a name or alias alone

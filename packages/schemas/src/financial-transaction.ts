@@ -526,7 +526,7 @@ export const financialTransactionImportPreviewRow = z.object({
     .nullable()
     .default(null)
     .describe(
-      "Advisory Vendor evidence only. Null for completed or duplicate rows. It neither matches nor links anything.",
+      "Vendor identification from independently confirmed history for the exact normalized statement label. One candidate identifies the Vendor; competing candidates remain ambiguous. Null for completed or duplicate rows; this read does not create an allocation.",
     ),
 });
 

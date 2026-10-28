@@ -1,6 +1,6 @@
 {
-  "id": "68a033f3-f807-492f-af59-ddbd77ab540b",
-  "prevId": "24cef0f6-2bfc-42a5-a235-fd550734b7b7",
+  "id": "9f0a1e35-cc75-463e-9f70-41957452bf66",
+  "prevId": "68a033f3-f807-492f-af59-ddbd77ab540b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -9208,6 +9208,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "confirmsMerchant": {
+          "name": "confirmsMerchant",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "false"
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -14080,126 +14087,6 @@
           "value": "\n  (\"MealRecipePortion\".\"amountValue\" IS NULL AND \"MealRecipePortion\".\"amountUnit\" IS NULL) OR (\n    \"MealRecipePortion\".\"amountValue\" IS NOT NULL AND \"MealRecipePortion\".\"amountUnit\" IS NOT NULL\n    AND \"MealRecipePortion\".\"amountValue\" > 0 AND \"MealRecipePortion\".\"amountValue\" < 'Infinity'::double precision\n    AND length(trim(\"MealRecipePortion\".\"amountUnit\")) > 0 AND \"MealRecipePortion\".\"amountUnit\" = trim(\"MealRecipePortion\".\"amountUnit\")\n  )\n"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.MerchantVendorRule": {
-      "name": "MerchantVendorRule",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "ledgerPartyId": {
-          "name": "ledgerPartyId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "normalizedMerchant": {
-          "name": "normalizedMerchant",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "vendorId": {
-          "name": "vendorId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "confirmedByUserId": {
-          "name": "confirmedByUserId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "MerchantVendorRule_party_merchant_key": {
-          "name": "MerchantVendorRule_party_merchant_key",
-          "columns": [
-            {
-              "expression": "ledgerPartyId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "normalizedMerchant",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "MerchantVendorRule_ledgerPartyId_LedgerParty_id_fk": {
-          "name": "MerchantVendorRule_ledgerPartyId_LedgerParty_id_fk",
-          "tableFrom": "MerchantVendorRule",
-          "tableTo": "LedgerParty",
-          "columnsFrom": [
-            "ledgerPartyId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "MerchantVendorRule_vendorId_Vendor_id_fk": {
-          "name": "MerchantVendorRule_vendorId_Vendor_id_fk",
-          "tableFrom": "MerchantVendorRule",
-          "tableTo": "Vendor",
-          "columnsFrom": [
-            "vendorId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "MerchantVendorRule_confirmedByUserId_user_id_fk": {
-          "name": "MerchantVendorRule_confirmedByUserId_user_id_fk",
-          "tableFrom": "MerchantVendorRule",
-          "tableTo": "user",
-          "columnsFrom": [
-            "confirmedByUserId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.OrderMail": {

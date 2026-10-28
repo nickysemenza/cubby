@@ -372,6 +372,13 @@
       "when": 1793129860303,
       "tag": "0051_work_item_retired_fields_check",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1793159433505,
+      "tag": "0053_statement_vendor_history",
+      "breakpoints": true
     }
   ]
 }

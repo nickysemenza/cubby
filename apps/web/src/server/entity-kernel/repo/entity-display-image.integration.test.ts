@@ -185,12 +185,9 @@ describe("entity display image resolver", () => {
     const key = entityRefKey(ref.entityKind, ref.entityId);
     await addHistory(purchase.output.id);
     expect(
-      (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key),
-    ).toBeUndefined();
-    await addHistory(purchase.output.id);
-    expect(
       (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key)?.url,
     ).toBe(getR2PublicUrl(logo.key));
+    await addHistory(purchase.output.id);
     const presence = await getDb(ctx.db).execute(
       sql`SELECT ${entityDisplayImagePresenceSql("sourceTransactionRecord", sql`${record.id}::uuid`)} AS present`,
     );

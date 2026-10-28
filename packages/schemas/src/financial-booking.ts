@@ -97,6 +97,12 @@ export const financialSpendingPlan = z.discriminatedUnion("status", [
 export type FinancialSpendingPlan = z.infer<typeof financialSpendingPlan>;
 
 export const financialBookingInput = z.object({
+  confirmsMerchant: z
+    .boolean()
+    .optional()
+    .describe(
+      "Set false when the Vendor was copied from statement-label inference rather than independently confirmed.",
+    ),
   transactionId: financialTransactionShortcode,
   purchaseId: purchaseShortcode.nullable().default(null),
   vendorId: vendorShortcode.nullable().default(null),
@@ -160,7 +166,11 @@ export type FinancialWorkPreview = z.infer<typeof financialWorkPreview>;
 
 export const financialSettlementAllocationInput = z.strictObject({
   transactionId: financialTransactionShortcode,
-  priorAllocations: z.array(financialTransactionAllocationInput),
+  priorAllocations: z
+    .array(financialTransactionAllocationInput)
+    .describe(
+      "Echo the current allocations from the transaction read, including confirmsMerchant. This is the expected state for the stale-write guard.",
+    ),
   allocations: z.array(financialTransactionAllocationInput),
   acknowledgeConflicts: z
     .strictObject({ note: z.string().trim().min(1).max(2_000) })

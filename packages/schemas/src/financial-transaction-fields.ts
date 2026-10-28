@@ -61,6 +61,13 @@ export const financialTransactionSourceRefs = z
 export const financialTransactionAllocation = z.object({
   purchaseId: purchaseShortcode,
   amount: wholeCentAmount,
+  confirmsMerchant: z
+    .boolean()
+    .optional()
+    .meta({ opaque: true })
+    .describe(
+      "Whether this write independently confirms the statement merchant's Vendor. Set false when copying an inferred Vendor; automatic settlement never adds confirmation. Existing independent confirmation survives inferred replays until the allocation is removed.",
+    ),
 });
 export const financialTransactionAllocations = z.array(
   financialTransactionAllocation,
@@ -95,21 +102,11 @@ const noMerchantVendorCandidates = z.object({
   status: z.literal("none"),
   candidates: z.tuple([]),
 });
-const insufficientMerchantVendorCandidate = merchantVendorCandidate.extend({
-  supportingTransactionCount: z.literal(1),
-});
-const suggestedMerchantVendorCandidate = merchantVendorCandidate.extend({
-  supportingTransactionCount: z.number().int().min(2),
-});
 export const merchantVendorInference = z.discriminatedUnion("status", [
   noMerchantVendorCandidates,
   z.object({
-    status: z.literal("insufficient_history"),
-    candidates: z.tuple([insufficientMerchantVendorCandidate]),
-  }),
-  z.object({
     status: z.literal("suggested"),
-    candidates: z.tuple([suggestedMerchantVendorCandidate]),
+    candidates: z.tuple([merchantVendorCandidate]),
   }),
   z.object({
     status: z.literal("ambiguous"),

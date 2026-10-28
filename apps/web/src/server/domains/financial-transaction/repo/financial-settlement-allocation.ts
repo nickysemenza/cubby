@@ -54,11 +54,19 @@ async function conflictsToAcknowledge(
 }
 
 const canonicalAllocations = (
-  rows: readonly { purchaseId: string; amount: number }[],
+  rows: readonly {
+    purchaseId: string;
+    amount: number;
+    confirmsMerchant?: boolean;
+  }[],
 ) =>
   JSON.stringify(
     rows
-      .map((row) => [row.purchaseId, cents(row.amount)])
+      .map((row) => [
+        row.purchaseId,
+        cents(row.amount),
+        row.confirmsMerchant ?? true,
+      ])
       .sort((left, right) => String(left[0]).localeCompare(String(right[0]))),
   );
 
@@ -93,6 +101,7 @@ export async function applyFinancialSettlementAllocation(
         .select({
           purchaseId: purchase.shortcode,
           amount: financialTransactionAllocation.amount,
+          confirmsMerchant: financialTransactionAllocation.confirmsMerchant,
         })
         .from(financialTransactionAllocation)
         .innerJoin(

@@ -8,6 +8,7 @@ import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   expense,
   financialTransaction,
+  financialTransactionAllocation,
   sourceTransactionRecord,
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
@@ -32,6 +33,7 @@ describe("generated booking evidence corrections", () => {
   async function fixture(
     postedOnly = false,
     extraReference?: { source: string; externalId: string },
+    confirmsMerchant = true,
   ) {
     const owner = await createRepoEntity(ctx, "ledgerParty", {
       kind: "member",
@@ -64,7 +66,9 @@ describe("generated booking evidence corrections", () => {
         },
         ...(extraReference ? [extraReference] : []),
       ],
-      allocations: [{ purchaseId: purchase.output.id, amount: 25 }],
+      allocations: [
+        { purchaseId: purchase.output.id, amount: 25, confirmsMerchant },
+      ],
     });
     const line = await createRepoEntity(ctx, "expense", {
       name: "Synthetic generated lump",
@@ -153,46 +157,67 @@ describe("generated booking evidence corrections", () => {
     return { input, transaction, line, lineage, money };
   }
 
-  it("corrects a new observation of the accepted charge once without changing member shares", async () => {
-    const { input, transaction, lineage, money } = await fixture();
-    const before = await lineage();
-    expect(
-      await reconcileFinancialEvidenceCorrection(ctx.db, input, ctx.actor),
-    ).toEqual({ status: "corrected", reason: "amount_changed" });
-    expect(await money()).toEqual({
-      amount: 30,
-      status: "observed",
-      allocations: [30],
-      expenses: [30],
-    });
-    expect(
-      (await lineage()).attributions.map((row) => row.ExpenseAttribution),
-    ).toEqual(before.attributions.map((row) => row.ExpenseAttribution));
-    expect(await settlementRefsFor(ctx.db, [transaction.entityId])).toEqual(
-      new Map([
-        [
-          transaction.entityId,
+  it.each([false, true])(
+    "corrects a new observation without changing member shares or confirmation (%s)",
+    async (confirmsMerchant) => {
+      const { input, transaction, lineage, money } = await fixture(
+        false,
+        undefined,
+        confirmsMerchant,
+      );
+      const before = await lineage();
+      expect(
+        await reconcileFinancialEvidenceCorrection(ctx.db, input, ctx.actor),
+      ).toEqual({ status: "corrected", reason: "amount_changed" });
+      expect(await money()).toEqual({
+        amount: 30,
+        status: "observed",
+        allocations: [30],
+        expenses: [30],
+      });
+      expect(
+        (await lineage()).attributions.map((row) => row.ExpenseAttribution),
+      ).toEqual(before.attributions.map((row) => row.ExpenseAttribution));
+      expect(
+        (
+          await getDb(ctx.db).query.financialTransactionAllocation.findMany({
+            where: and(
+              eq(
+                financialTransactionAllocation.transactionId,
+                transaction.entityId,
+              ),
+              notDeleted(financialTransactionAllocation),
+            ),
+            columns: { confirmsMerchant: true },
+          })
+        ).map((row) => row.confirmsMerchant),
+      ).toEqual([confirmsMerchant]);
+      expect(await settlementRefsFor(ctx.db, [transaction.entityId])).toEqual(
+        new Map([
           [
-            {
-              source: "synthetic-bank",
-              externalId:
-                "v3:1111111111111111111111111111111111111111111111111111111111111111",
-            },
-            {
-              source: "synthetic-bank",
-              externalId:
-                "v3:2222222222222222222222222222222222222222222222222222222222222222",
-            },
+            transaction.entityId,
+            [
+              {
+                source: "synthetic-bank",
+                externalId:
+                  "v3:1111111111111111111111111111111111111111111111111111111111111111",
+              },
+              {
+                source: "synthetic-bank",
+                externalId:
+                  "v3:2222222222222222222222222222222222222222222222222222222222222222",
+              },
+            ],
           ],
-        ],
-      ]),
-    );
-    const corrected = await lineage();
-    expect(
-      await reconcileFinancialEvidenceCorrection(ctx.db, input, ctx.actor),
-    ).toEqual({ status: "unchanged", reason: "already_current" });
-    expect(await lineage()).toEqual(corrected);
-  });
+        ]),
+      );
+      const corrected = await lineage();
+      expect(
+        await reconcileFinancialEvidenceCorrection(ctx.db, input, ctx.actor),
+      ).toEqual({ status: "unchanged", reason: "already_current" });
+      expect(await lineage()).toEqual(corrected);
+    },
+  );
 
   // Direct correction probes cannot establish the real intake's
   // corroboration and completed-window proof, including empty windows.

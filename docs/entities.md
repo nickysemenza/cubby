@@ -1886,7 +1886,7 @@ null values alone do not establish that a contract is unnecessary.
 - **Historical Run machinery.** `ImportPreparedOrder` and `ImportPreparedLine`
   are active contracts. Audit legacy approval/control storage only after
   checking current readers.
-- **Review queues.** `MerchantVendorRule`. Shared Assessment/Feedback history
+- **Review queues.** Shared Assessment/Feedback history
   and current projections have active review readers. `MailboxCursor` is active in
   Gmail pagination/replay and must be preserved. Recheck against Product match
   recall, collision review, and [purchase correction work](https://github.com/nickysemenza/cubby/issues?q=is%3Aissue%20is%3Aopen%20label%3Aarea%3Afinance);
@@ -3807,8 +3807,32 @@ paths for Product navigation. A split settlement includes products and vendors
 from every allocated Purchase, deduplicating targets while retaining each
 witnessed path. Transaction context highlights purchase Vendors
 and Products; Product and Vendor context exposes settlement Transactions.
-Merchant-label inference remains a suggestion and never creates a confirmed
-Vendor or Product connection. These are related purchase products, not a claim
+Statement labels identify Vendors from live, confirmed purchase allocations across
+all household members. Matching lowercases, trims and collapses whitespace; it
+never strips punctuation, store numbers or suffixes. One distinct Vendor is a
+match even with one supporting transaction; conflicting Vendors remain ambiguous.
+The Vendors table's read-only **Statement labels** column derives all known labels
+from the same history, including ambiguous labels on each supported Vendor.
+
+An explicit UI or MCP allocation outside unattended Runs confirms merchant history
+by default. System and Run-scoped writes preserve existing confirmations but do
+not create them by default. Set
+`confirmsMerchant: false` when copying an inferred Vendor; automatic retained
+settlement and automatic Email convergence always set it false, including
+member-authenticated MCP convergence calls. Source amount corrections, ordinary
+amount-only edits and Purchase merges preserve
+this provenance. Booking may identify an omitted Vendor from an unambiguous
+statement label, but its resulting allocation is inferred and cannot teach the
+label again. Neither label identification nor its display creates a confirmed
+Vendor or Product connection without a purchase allocation. Specific order
+matching still requires independent settlement evidence and may not contradict
+confirmed merchant history; ambiguity blocks automatic settlement for every
+candidate until it is resolved.
+
+Explicit member-scoped merchant rules and their Settings panel are retired.
+The migration promotes existing matching allocations using those confirmations
+before removing the rule store. Unsupported rules are discarded; it creates no
+archive, notes or synthetic transaction history. These are related purchase products, not a claim
 that a partial settlement paid for a particular item or a new source of spend.
 
 `recommendations.forEntity` returns a source reference, a source-context

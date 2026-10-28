@@ -1,4 +1,3 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { purchaseAgentConnectionStatus } from "@cubby/schemas/purchase-import-debug";
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
@@ -10,7 +9,7 @@ import { EnvelopeIcon } from "@phosphor-icons/react/dist/csr/Envelope";
 import { PlugsIcon } from "@phosphor-icons/react/dist/csr/Plugs";
 import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -18,10 +17,7 @@ import { z } from "zod";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { Page } from "~/entity/page/page";
-import {
-  buildRecordComboboxItem,
-  buildVendorComboboxItem,
-} from "~/entity/picker/combobox-builders";
+import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { Picker } from "~/entity/picker/picker";
 import { AiFundingSettings } from "~/features/account/ai-funding";
 import { ChatGptPlanSettings } from "~/features/account/chatgpt-plan-card";
@@ -32,7 +28,6 @@ import { MaintenanceRunCard } from "~/features/maintenance/maintenance-run-card"
 import { MaintenanceTools } from "~/features/maintenance/maintenance-tools";
 import { calendar } from "~/integrations/tanstack-query/generated/catalog/calendar.gen";
 import { ledgerParty } from "~/integrations/tanstack-query/generated/catalog/ledgerParty.gen";
-import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
 import { authClient } from "~/lib/auth-client";
 import { copyTextWithToast } from "~/lib/clipboard";
 import { hasGmailReadonlyScope } from "~/lib/google-auth";
@@ -50,7 +45,6 @@ import { Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
-import { Input } from "~/ui/primitives/input";
 import { StatusText } from "~/ui/primitives/status-text";
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -125,13 +119,6 @@ function SettingsPage() {
                   <PurchaseImportAgentConnection feedback={purchaseAgent} />
                 ),
               },
-              {
-                id: "merchant-routing",
-                title: "Purchase merchant routing",
-                icon: PlugsIcon,
-                overflowVisible: true,
-                content: <MerchantVendorRulesSettings />,
-              },
             ],
           },
           {
@@ -186,105 +173,6 @@ function SettingsPage() {
         ]}
       />
     </Page>
-  );
-}
-
-function MerchantVendorRulesSettings() {
-  const queryClient = useQueryClient();
-  const [merchant, setMerchant] = useState("");
-  const [vendorId, setVendorId] = useState("");
-  const rules = useQuery(runOperations.merchantRules.queryOptions());
-  const vendorItems = useMemo(
-    () =>
-      (rules.data?.vendors ?? []).map((vendor) =>
-        buildVendorComboboxItem(
-          {
-            id: parseShortcodeFor("vendor", vendor.shortcode),
-            name: vendor.name,
-          },
-          { itemId: "shortcode" },
-        ),
-      ),
-    [rules.data],
-  );
-  const save = useMutation({
-    mutationFn: () =>
-      runOperations.confirmMerchantRule.call({
-        merchant,
-        vendorId,
-      }),
-    onSuccess: (data) => {
-      queryClient.setQueryData(runOperations.merchantRules.queryKey(), data);
-      setMerchant("");
-      toast.success("Merchant routing saved");
-    },
-  });
-  return (
-    <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        Route a statement merchant label to the vendor whose orders should be
-        searched.
-      </p>
-
-      {rules.isError ? (
-        <StatusText tone="destructive">
-          {getErrorMessage(rules.error)}
-        </StatusText>
-      ) : (
-        <Stack gap="md">
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-            <label
-              className="grid gap-1 text-sm font-medium"
-              htmlFor="purchase-merchant-label"
-            >
-              Merchant label
-              <Input
-                id="purchase-merchant-label"
-                value={merchant}
-                onChange={(event) => setMerchant(event.target.value)}
-                placeholder="AMZN Mktp"
-              />
-            </label>
-            <div className="grid gap-1 text-sm font-medium">
-              <label htmlFor="purchase-merchant-vendor">Vendor</label>
-              <Picker
-                inputId="purchase-merchant-vendor"
-                label="Vendor"
-                placeholder="Choose a vendor"
-                entity="vendor"
-                items={vendorItems}
-                value={vendorItems.find((item) => item.id === vendorId) ?? null}
-                setValue={(next) => setVendorId(next?.id ?? "")}
-              />
-            </div>
-            <Button
-              type="button"
-              disabled={!merchant.trim() || !vendorId || save.isPending}
-              onClick={() => save.mutate()}
-            >
-              Save rule
-            </Button>
-          </div>
-          {rules.data?.rules.length ? (
-            <Stack gap="tight">
-              {rules.data.rules.map((rule) => (
-                <div
-                  key={rule.merchant}
-                  className="flex justify-between gap-4 border-b border-border py-2 text-sm last:border-0"
-                >
-                  <span>{rule.merchant}</span>
-                  <span className="text-muted-foreground">
-                    {rule.vendorName}
-                  </span>
-                </div>
-              ))}
-            </Stack>
-          ) : (
-            <StatusText>No merchant routing rules yet.</StatusText>
-          )}
-        </Stack>
-      )}
-    </div>
   );
 }
 

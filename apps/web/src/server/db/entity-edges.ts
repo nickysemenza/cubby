@@ -136,7 +136,6 @@ import {
   mealRecipePortion,
   mailboxCursor,
   email as emailTable,
-  merchantVendorRule,
   orderMail,
   orderMailAttachment,
   photoGroupProposal,
@@ -766,13 +765,6 @@ export const ENTITY_EDGES = {
       description: "The member whose import requires review.",
       liveness: { kind: "must-target-live" },
     },
-    "MerchantVendorRule.ledgerPartyId": {
-      column: merchantVendorRule.ledgerPartyId,
-      role: "metadata",
-      label: "merchant routing rules",
-      description: "A member-scoped confirmed merchant-to-vendor route.",
-      liveness: { kind: "must-target-live" },
-    },
     "MailboxCursor.ledgerPartyId": {
       column: mailboxCursor.ledgerPartyId,
       role: "metadata",
@@ -1277,13 +1269,6 @@ export const ENTITY_EDGES = {
         reason:
           "Preparation is an immutable capture; commit refuses a deleted or merged Vendor and the order must be prepared again.",
       },
-    },
-    "MerchantVendorRule.vendorId": {
-      column: merchantVendorRule.vendorId,
-      role: "metadata",
-      label: "merchant routing rules",
-      description: "A confirmed normalized merchant route to this vendor.",
-      liveness: { kind: "must-target-live" },
     },
     "OrderMail.vendorId": {
       column: orderMail.vendorId,
