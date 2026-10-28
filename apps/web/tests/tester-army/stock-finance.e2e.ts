@@ -51,7 +51,7 @@ test("receiving purchase stock and adding inventory preserve existing units", as
   );
   await screen
     .getByRole("dialog")
-    .getByRole("button", { name: /^Add \d+ to inventory$/ })
+    .getByRole("button", { name: /^Add \d+ products? to inventory$/ })
     .click();
   await expect(screen.getByRole("dialog")).toBeHidden();
   const added = z

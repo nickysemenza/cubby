@@ -263,8 +263,8 @@ export const ProductBulkAddToInventoryDialog: FC<
       title="Add to inventory"
       description={`Stock ${countLabel(products.length, "product")} at one location.`}
       primary={{
-        label: `Add ${fields.length} to inventory`,
-        pendingLabel: `Adding ${fields.length}…`,
+        label: `Add ${countLabel(fields.length, "product")} to inventory`,
+        pendingLabel: `Adding ${countLabel(fields.length, "product")}…`,
         pending: addMutation.isPending,
         disabled:
           fields.length === 0 ||
