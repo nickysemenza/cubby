@@ -73,44 +73,6 @@ runs:
         SENTRY_AUTH_TOKEN: ${{ inputs.sentry-auth-token }}
       run: ${{ inputs.build-command }}
 
-    - name: Describe the source deployment
-      if: steps.current_main.outputs.current == 'true'
-      id: release
-      shell: bash
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" > "$RUNNER_TEMP/source-prs.json"
-        python3 - <<'PYTHON'
-        import html
-        import json
-        import os
-        import pathlib
-        import subprocess
-        import uuid
-
-        env = os.environ
-        sha = env["GITHUB_SHA"]
-        repository = f'{env["GITHUB_SERVER_URL"]}/{env["GITHUB_REPOSITORY"]}'
-        run = f'{repository}/actions/runs/{env["GITHUB_RUN_ID"]}/attempts/{env["GITHUB_RUN_ATTEMPT"]}'
-        subject, author = subprocess.check_output(
-            ["git", "show", "-s", "--format=%s%n%an", sha, "--"], text=True
-        ).strip().split("\n", 1)
-        prs = json.loads(pathlib.Path(env["RUNNER_TEMP"], "source-prs.json").read_text())
-        pr = next((pr for pr in prs if pr["merged_at"] and pr["base"]["ref"] == "main"
-                   and pr["merge_commit_sha"] == sha), None)
-        attribution = f'PR #{pr["number"]} by @{pr["user"]["login"]}: {pr["html_url"]}' if pr else f'Commit author: {author}'
-        # Preserve links before truncating the subject to Cloudflare's 1000-byte limit.
-        message = f'{attribution}\nDeployed by @{env["GITHUB_ACTOR"]}; run by @{env["GITHUB_TRIGGERING_ACTOR"]}\n{run}\n{subject}'
-        message = message.encode("utf-8")[:1000].decode("utf-8", errors="ignore")
-        delimiter = uuid.uuid4().hex
-        with open(env["GITHUB_OUTPUT"], "a") as output:
-            output.write(f'tag={sha}\nmessage<<{delimiter}\n{message}\n{delimiter}\n')
-        with open(env["GITHUB_STEP_SUMMARY"], "a") as summary:
-            summary.write(f'### Production deployment\n\nSource: [{sha}]({repository}/commit/{sha})\n\n')
-            summary.write(f'{html.escape(subject)}\n\n{html.escape(attribution)}\n\n[Deployment run]({run})\n\n')
-        PYTHON
-
     - name: Apply production migrations
       if: steps.current_main.outputs.current == 'true'
       shell: bash
@@ -148,6 +110,4 @@ runs:
       env:
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
         CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
-        CF_DEPLOY_TAG: ${{ steps.release.outputs.tag }}
-        CF_DEPLOY_MESSAGE: ${{ steps.release.outputs.message }}
       run: ${{ inputs.deploy-command }}

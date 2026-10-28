@@ -535,9 +535,8 @@ Deployment reuses this output with
 `cf deploy --prebuilt --mode production`, uploading the release identity as
 deploy-time Worker values ([error tracking](infrastructure.md#error-tracking-and-traces));
 the output contains no commit. GitHub Actions adds the full source SHA as the
-Cloudflare version tag and a bounded message with the originating PR/author,
-deployment actors and run link. Source attribution is prepared before migrations;
-it does not change the build cache key.
+Cloudflare version tag and the commit subject plus Actions run link as the version
+message, directly in the deploy command. This does not change the build cache key.
 Nx's `@cubby/web:build-cf` owns its staleness
 from content inputs alone. The plugin writes directly into this output tree;
 there is no separate `dist` bundle.
