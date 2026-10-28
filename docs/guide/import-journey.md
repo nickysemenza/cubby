@@ -46,10 +46,38 @@ Targeted pages alternate with new mail;
 there is no all-of-Gmail crawl, and Spam and Trash are excluded. Shared
 platform domains do not identify the seller, establish purchase ownership, or
 authorize an identifier issuer namespace.
+Related mail observed on a shared sender domain also seeds an exact-address
+history search in that same member mailbox. These searches use the existing
+targeted discovery cursor and do not establish the seller. A shared commerce
+platform address never supplies seller proof, even when a Vendor accidentally
+records it as an exact receipt sender. Receipt content identifies the actual
+seller; automatic alias learning cannot attach its name to the platform.
+An existing platform alias from an older policy cannot silently win seller
+resolution: an actual canonical seller is reused, otherwise the import stays
+blocked for a reviewed alias correction and explicit seller identity. Historical
+Purchases and aliases are not rewritten by discovery.
 Search completion describes the scope actually scanned, not proof that every
 purchase from that Vendor has been found.
 
-Mail coverage, alongside Emails and linked from Settings, shows every known
+Mail coverage starts with mailbox discovery: last recorded poll, whether a
+paginated new-mail catch-up remains, automatic import status, active discovery
+Run, current targeted searches completed/total, and separate local scanned,
+classified, retained, pending, blocked and imported counts. Imported Emails
+have accepted Purchase evidence; lifecycle links alone do not count. A poll is not proof of
+completed classification, import or exhaustive history. Shared senders show
+their exact history query, recorded completion and Run, local classification
+and retention counts, linked Emails and distinct Purchases. These counts overlap
+Vendor coverage and must not be added together. Completed queries cover only
+their actual definitions; the rest of Gmail history remains unscanned.
+
+Seller unresolved counts related retained originals without attributed seller
+or accepted/linked Purchase evidence. Its drilldown lists the latest 50 across
+connected mailboxes, explicitly showing the displayed count against the full
+local count, with links to the original Emails. It does not create a Generic
+Vendor or infer seller identity from sender matches. Vendor/account-scoped
+coverage retains its existing Vendor context.
+
+Vendor coverage, alongside Emails and linked from Settings, shows every known
 Vendor in each connected member mailbox. Existing Vendor Accounts provide the
 member/Vendor record context; unsearched rows do not create accounts. Each row
 separates search coverage from local scanned, classified and retained Emails,

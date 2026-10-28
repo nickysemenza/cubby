@@ -914,6 +914,7 @@ const searchCount = z.object({
 export const mailSearchProgress = z.strictObject({
   vendors: searchCount,
   charges: searchCount,
+  senders: searchCount,
   /** The search part-way through its pages, if any. */
   inProgress: mailboxScopedQuery.nullable(),
   /** The next untouched searches in search order. */
@@ -935,9 +936,14 @@ export const summarizeMailSearchProgress = (
     query,
     state: scopedPositionState(currentScopedPosition(coverage, query)),
   }));
-  const count = (vendor: boolean) => {
-    const group = states.filter(
-      ({ query }) => isVendorMailSearchKey(query.key) === vendor,
+  const count = (kind: "vendor" | "charge" | "sender") => {
+    const group = states.filter(({ query }) =>
+      kind === "vendor"
+        ? isVendorMailSearchKey(query.key)
+        : kind === "sender"
+          ? query.key.startsWith("sender:")
+          : query.key.startsWith("merchant:") ||
+            query.key.startsWith("descriptor:"),
     );
     return {
       completed: group.filter(({ state }) => state === "done").length,
@@ -958,8 +964,9 @@ export const summarizeMailSearchProgress = (
   const inProgress =
     queue.find(({ state }) => state === "in_progress")?.query ?? null;
   return {
-    vendors: count(true),
-    charges: count(false),
+    vendors: count("vendor"),
+    charges: count("charge"),
+    senders: count("sender"),
     inProgress,
     nextPending: queue
       .filter(({ state }) => state === "not_started")

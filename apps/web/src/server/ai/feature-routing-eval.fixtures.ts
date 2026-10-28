@@ -67,6 +67,7 @@ const expense = (
   name,
   amount,
   lineKind,
+  costType: lineKind === "principal" ? "materials" : "services",
   quantity: lineKind === "principal" ? 1 : null,
   product: linked,
 });

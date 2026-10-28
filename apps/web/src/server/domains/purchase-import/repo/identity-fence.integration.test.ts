@@ -389,24 +389,41 @@ describe("member prepare and commit identity fences", () => {
       ]);
     });
 
-    it("never matches a shared storefront or relay domain", async () => {
-      const { party } = await memberImportWorld(ctx.db, ctx.actor);
-      await insertWithShortcode(ctx.db, "vendor", {
-        name: "Alpha Pottery",
-        website: "https://shopifyemail.com/stores/alpha",
-      });
-      await insertWithShortcode(ctx.db, "vendor", {
-        name: "Beta Candles",
-        website: "https://beta-candles.myshopify.com",
-      });
-      const mail = await orderMail(party.id, "store@shopifyemail.com");
-      await prepareNamed("shared-storefront", mail, { name: "Gamma Goods" });
-      expect((await vendorRows()).map(({ name }) => name).sort()).toEqual([
-        "Alpha Pottery",
-        "Beta Candles",
-        "Gamma Goods",
-      ]);
-    });
+    it.each(["shopifyemail.com", "order.online"])(
+      "never matches the shared platform %s, even with an exact sender configured",
+      async (domain) => {
+        const { party } = await memberImportWorld(ctx.db, ctx.actor);
+        const platform = await insertWithShortcode(ctx.db, "vendor", {
+          name: "Alpha Pottery",
+          website: `https://${domain}/stores/alpha`,
+          orderEmailSenders: [`store@${domain}`],
+        });
+        await insertWithShortcode(ctx.db, "vendor", {
+          name: "Beta Candles",
+          website: "https://beta-candles.myshopify.com",
+        });
+        const mail = await orderMail(party.id, `store@${domain}`);
+        await prepareNamed("shared-storefront", mail, { name: "Gamma Goods" });
+        expect((await vendorRows()).map(({ name }) => name).sort()).toEqual([
+          "Alpha Pottery",
+          "Beta Candles",
+          "Gamma Goods",
+        ]);
+        expect(
+          (await vendorRows()).every(({ aliases }) => aliases.length === 0),
+        ).toBe(true);
+        // An older sender-proof policy could already have polluted this alias.
+        await getDb(ctx.db)
+          .update(vendorTable)
+          .set({ aliases: ["Delta Bistro"] })
+          .where(eq(vendorTable.id, platform.id));
+        await expect(
+          prepareNamed("historical-platform-alias", mail, {
+            name: "Delta Bistro",
+          }),
+        ).rejects.toThrow("historical Vendor alias");
+      },
+    );
 
     it("refuses a new Vendor beside a similar name until it is marked distinct", async () => {
       const { party } = await memberImportWorld(ctx.db, ctx.actor);

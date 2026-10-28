@@ -915,6 +915,7 @@ async function runCase(
                     name: "Cordless drill kit",
                     amount: 79.95,
                     lineKind: "principal",
+                    costType: "tools",
                     quantity: 1,
                     product: null,
                   },

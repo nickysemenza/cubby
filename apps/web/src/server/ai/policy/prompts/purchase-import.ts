@@ -30,6 +30,7 @@ export type PurchaseAuditRenderedBatch = readonly {
     name: string;
     amount: number | null;
     lineKind: string;
+    costType: string;
     quantity: number | null;
     product: {
       id: string;

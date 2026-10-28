@@ -208,6 +208,16 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
   const coverage = page.getByRole("table", {
     name: "Mail coverage by Vendor and mailbox",
   });
+  await expect(
+    page.getByRole("table", { name: "Mailbox discovery status" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Shared senders", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Seller unresolved/ }).click();
+  await expect(
+    page.getByRole("region", { name: "Seller unresolved", exact: true }),
+  ).toContainText(/Showing \d+ of \d+/);
   const row = coverage.getByRole("row").filter({ hasText: vendorName });
   await expect(row).toBeVisible();
   await expect(

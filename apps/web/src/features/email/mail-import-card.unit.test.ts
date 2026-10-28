@@ -15,6 +15,7 @@ const status = (
       searches: {
         vendors: { completed: 0, total: pending.length },
         charges: { completed: 0, total: 0 },
+        senders: { completed: 0, total: 0 },
         inProgress: null,
         nextPending: pending,
       },
