@@ -3,7 +3,14 @@ import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { publicImageUrlSummary } from "@cubby/schemas/image-summary";
 import { renderHook, screen } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+} from "vitest";
 import { z } from "zod";
 
 import { renderWithEditorMetadata as render } from "#web/tests/editor-metadata.fixtures.ts";
@@ -158,6 +165,8 @@ describe("useMobileListModel", () => {
 });
 
 it("reserves mobile image slots for canonical covers and bounded specialist inputs", () => {
+  const harness = createEditorBrowserTestHarness();
+  onTestFinished(() => harness.dispose());
   const cover = computedFieldEnvelope(displayImagesField);
   const image = {
     fields: {
