@@ -76,6 +76,11 @@ attention read, and displays that limitation beside its results.
 Pending reviewable suggestions produce one row per live record, combining their
 family reason keys and opening that record's Suggestions. Statement proposals
 belong to their financial account. There are no family-only suggestion rows.
+Home's Needs you preview excludes the pending-suggestion family and links to
+the same scoped queue, avoiding the population-wide statement eligibility read
+on every Home visit. Suggestions remain available in the full Work queue,
+Suggestions, and record work sections. Unrelated record reads skip statement
+evidence entirely; account reads scope evidence before materialization.
 Purchase amounts are the sum of live Expense costs, including credits; other
 records carry their own amount and calendar date. Planned purchases are deferred
 across every family before counting or paging.

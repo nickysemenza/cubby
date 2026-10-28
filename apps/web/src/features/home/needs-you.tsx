@@ -27,12 +27,14 @@ import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
 const NEEDS_YOU_INPUT = workQueueInput.parse({
   view: "human",
   owner: CURRENT_MEMBER_FILTER,
+  familyExclude: "suggestion",
   pageSize: 3,
 });
 
 const NEEDS_YOU_SEARCH = {
   view: "human",
   owner: CURRENT_MEMBER_FILTER,
+  familyExclude: "suggestion",
 } as const;
 
 /** The queue read is client-only so Home's first paint never waits on it. */
