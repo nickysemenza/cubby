@@ -86,6 +86,10 @@ const source: WorkSource = {
     transfer_pair: "Pending transfer pairs",
   }).map(([family, label]) => ({ key: `suggestions:${family}`, label })),
   candidates: async (db, scope) => {
+    // Statement evidence is population-sized; unrelated record strips must
+    // never materialize it just to discard its rows later.
+    const statements =
+      !scope.record || scope.record.entity === "financialAccount";
     const target = (field: "entityId" | "entityKind") =>
       sql`prediction.target->>${field}`;
     const connectionWhere = sql`current.family = ${assessmentFamily.enum.recommendation} AND current.active AND current.status = ${suggestionStatus.enum.pending}
@@ -121,7 +125,7 @@ const source: WorkSource = {
       UNION ALL SELECT s.entity, s."recordId"::text, ${"suggestions:image_description"}::text FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE ${pendingImageDescriptionEligibility()}
       UNION ALL SELECT root.kind, root.id::text, ${"suggestions:recommendation"}::text FROM ${connectionFrom} WHERE ${connectionWhere}
       UNION ALL SELECT other.kind, other.id::text, ${"suggestions:recommendation"}::text FROM ${connectionFrom} WHERE ${connectionWhere}
-      UNION ALL SELECT ${entitySchema.enum.financialAccount}::text, ${suggestionField("accountId")}, ${"suggestions:statement_transaction"}::text FROM work_statement_state s WHERE ${pendingSuggestion("s", { populationRead: true })}
+      ${statements ? sql`UNION ALL SELECT ${entitySchema.enum.financialAccount}::text, ${suggestionField("accountId")}, ${"suggestions:statement_transaction"}::text FROM work_statement_state s WHERE ${pendingSuggestion("s", { populationRead: !scope.record })}` : sql``}
       UNION ALL SELECT refs.value->>'entity', refs.value->>'id', ${"suggestions:transfer_pair"}::text FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
         CROSS JOIN LATERAL jsonb_array_elements(${reviewFamilyDeclarations.transfer_pair.records}) refs(value)
         WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.active AND s.status = ${suggestionStatus.enum.pending} AND a.served`;
@@ -153,7 +157,18 @@ const source: WorkSource = {
         sql` UNION ALL `,
       ),
       ctes: [
-        { name: "work_statement_state", sql: pendingStatementStateSql() },
+        ...(statements
+          ? [
+              {
+                name: "work_statement_state",
+                sql: pendingStatementStateSql(
+                  scope.record
+                    ? sql`s.data->>'accountId' = (SELECT account.id::text FROM "FinancialAccount" account WHERE account.shortcode = ${scope.record.id})`
+                    : undefined,
+                ),
+              },
+            ]
+          : []),
         {
           name: "work_connection_prediction",
           sql: sql`SELECT a.id, a.subject, a.fingerprint, coalesce(s.data->'connectionTarget', a.evidence->'candidate'->${"target"}) AS target FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE a.served AND s.family = ${assessmentFamily.enum.recommendation} AND s.active AND s.status = ${suggestionStatus.enum.pending} AND a.subject->>'scope' LIKE 'connection.%'`,

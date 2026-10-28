@@ -135,7 +135,7 @@ export const pendingSuggestion = (
  * candidate evidence. Decode its JSON once and retain a compact statement-local
  * projection so repeated eligibility predicates do not detoast it per field. */
 // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- source is a JSON property name, not a vocabulary value.
-export const pendingStatementStateSql = (): SQL => sql`
+export const pendingStatementStateSql = (scope?: SQL): SQL => sql`
   SELECT s.family, s.active, s.status,
     jsonb_strip_nulls(jsonb_build_object(
       'source', fields.source, 'headRef', fields."headRef",
@@ -149,4 +149,5 @@ export const pendingStatementStateSql = (): SQL => sql`
   )
   WHERE s.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.statement_transaction)}
     AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
+    ${scope ? sql`AND (${scope})` : sql``}
 `;
