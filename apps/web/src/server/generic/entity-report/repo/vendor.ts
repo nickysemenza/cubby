@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { vendor } from "~/server/db/schema";
+import { readCompletedControlledSearches } from "~/server/domains/purchase-import/repo/controlled-mail-import";
 import { loadGmailCursor } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
@@ -57,24 +58,33 @@ export async function vendorMailSearchReport(
         text: "No Mail searches: add a verified order Email sender or a website.",
       },
     ];
-  const cursors = await Promise.all(
-    mailboxes.map(async (mailbox) => ({
-      mailbox,
-      coverage: (
-        await loadGmailCursor(db, {
-          ledgerPartyId: mailbox.ledgerPartyId,
-          mailboxId: mailbox.mailboxId,
-        })
-      ).coverage,
-    })),
-  );
+  const [cursors, controlledSearches] = await Promise.all([
+    Promise.all(
+      mailboxes.map(async (mailbox) => ({
+        mailbox,
+        coverage: (
+          await loadGmailCursor(db, {
+            ledgerPartyId: mailbox.ledgerPartyId,
+            mailboxId: mailbox.mailboxId,
+          })
+        ).coverage,
+      })),
+    ),
+    readCompletedControlledSearches(db, [vendorId]),
+  ]);
   return [
     {
       kind: "table",
       columns: ["Search", "Mailbox", "Status", "Finished", "Emails"],
       rows: cursors.flatMap(({ mailbox, coverage }) =>
         queries.map((query) => {
-          const position = currentScopedPosition(coverage, query);
+          const position = currentScopedPosition(
+            coverage,
+            query,
+            controlledSearches.get(
+              `${vendorId}/${mailbox.ledgerPartyId}/${mailbox.mailboxId}`,
+            ),
+          );
           return {
             id: `${mailbox.ledgerPartyId}:${mailbox.mailboxId}:${query.key}`,
             cells: [

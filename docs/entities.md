@@ -679,6 +679,9 @@ once (`entityReport.get`, builders in `server/generic/entity-report/repo/`, bloc
 in `packages/schemas/src/entity-report.ts`) and web (`ReportBlocks`) and native
 (`ReportDetailSlot`, Swift Charts) only draw it. `entityReport.get` accepts an
 explicit `record`, filtered `list`, or bounded `selection` scope in a POST body.
+Records reports can supply relative workspace `links` alongside their entity
+list link; the web renderer uses them for scoped related workflows such as
+Vendor and Vendor Account Mail coverage.
 Each builder validates its supported entity, filters, and cursor; unsupported
 scopes fail rather than falling through to a record read. Portfolio analytics
 reuse the domain allocation query and sum selected scope roots once; task

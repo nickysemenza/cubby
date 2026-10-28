@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { user } from "~/server/db/schema";
+import { readMailCoverage } from "~/server/domains/purchase-import/repo/gmail/mail-coverage";
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { vendorMailQueries } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
@@ -116,7 +117,10 @@ describe("vendor Mail search status", () => {
     }) => vendorMailQueries(row.id, vendorSearchTerms(row));
     const at = (
       row: Parameters<typeof queries>[0],
-      position: Pick<MailboxScopedPosition, "pageToken" | "completed">,
+      position: Pick<
+        MailboxScopedPosition,
+        "pageToken" | "completed" | "messageCount"
+      >,
     ) => queries(row).map((query) => ({ ...query, ...position }));
     const finished = { pageToken: null, completed: true };
     const coverage = (scoped: MailboxScopedPosition[]): MailboxCoverage => ({
@@ -134,7 +138,7 @@ describe("vendor Mail search status", () => {
       mailboxId: a.mailboxId,
       from: null,
       to: coverage([
-        ...at(done, finished),
+        ...at(done, { ...finished, messageCount: 0 }),
         ...at(partial, finished),
         ...at(untouched, { pageToken: null, completed: false }),
         ...at(trailingDot, finished),
@@ -215,5 +219,30 @@ describe("vendor Mail search status", () => {
     expect(
       await vendorMailSearchReport(ctx.db, unresearched.shortcode),
     ).toEqual([expect.objectContaining({ kind: "note" })]);
+    const report = await readMailCoverage(ctx.db, ctx.actor.userId);
+    expect(
+      report.rows.filter((row) => row.vendorId === done.shortcode),
+    ).toEqual([
+      expect.objectContaining({
+        mailboxId: a.mailboxId,
+        state: "no_matches",
+        vendorAccountId: null,
+      }),
+      expect.objectContaining({
+        mailboxId: b.mailboxId,
+        state: "complete",
+        vendorAccountId: null,
+      }),
+    ]);
+    expect(
+      report.rows.filter((row) => row.vendorId === unresearched.shortcode),
+    ).toHaveLength(2);
+    expect(
+      report.rows.some((row) => row.vendorName === "Generic / Unbranded"),
+    ).toBe(false);
+    expect(report.mailboxes).toEqual([
+      expect.objectContaining({ mailboxId: a.mailboxId, canControl: true }),
+      expect.objectContaining({ mailboxId: b.mailboxId, canControl: false }),
+    ]);
   });
 });

@@ -10,6 +10,7 @@ const status = (
   mailboxes: [
     {
       mailboxId: "synthetic-mailbox",
+      label: "Synthetic member · Gmail",
       enabled,
       searches: {
         vendors: { completed: 0, total: pending.length },

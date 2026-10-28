@@ -3,11 +3,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import {
-  AiFundingLine,
-  aiFundingStatusQuery,
-  PaidRunButton,
-} from "~/features/account/ai-funding";
 import { run } from "~/integrations/tanstack-query/generated/catalog/run.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
@@ -27,40 +22,6 @@ export const mailImportRefetchInterval = (
     ? MAIL_IMPORT_REFRESH_MS
     : false;
 
-/** Targeted-search progress over today's targets, then the search queue. */
-function MailSearchSummary({
-  searches,
-}: {
-  searches: MailImportStatus["mailboxes"][number]["searches"];
-}) {
-  const { vendors, charges, inProgress, nextPending } = searches;
-  return (
-    <div className="space-y-1 text-xs text-muted-foreground">
-      <p className="tabular-nums">
-        Searches: Vendors {vendors.completed}/{vendors.total} · charges{" "}
-        {charges.completed}/{charges.total}
-      </p>
-      {inProgress ? (
-        <p className="truncate">
-          Searching <span className="text-foreground">{inProgress.query}</span>
-        </p>
-      ) : null}
-      {nextPending.length > 0 ? (
-        <div>
-          <p>Up next</p>
-          <ul className="ms-3 list-disc">
-            {nextPending.map((query) => (
-              <li key={query.key} className="truncate">
-                {query.query}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 /** Discovery spends within the household AI funding budgets. */
 export function MailImportSettings() {
   const queryClient = useQueryClient();
@@ -79,17 +40,7 @@ export function MailImportSettings() {
       queryClient.setQueryData(run.mailImport.queryOptions({}).queryKey, data);
     },
   });
-  const funding = useQuery(aiFundingStatusQuery());
-  const discover = useActionMutation({
-    mutationFn: () => run.discoverMail.mutationOptions(),
-    success: (data) =>
-      data.started > 0
-        ? "Discovery started with paid models allowed"
-        : "Discovery is already running; paid models are now allowed for it",
-    error: "Couldn't start discovery",
-  });
   const mailboxes = status.data?.mailboxes ?? [];
-  const budget = funding.data;
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
@@ -99,7 +50,8 @@ export function MailImportSettings() {
         <Link to="/work-queue" className="underline">
           Work queue
         </Link>
-        . Inventory is never received automatically.
+        . Turning this off prevents new automatic imports; previously admitted
+        work may finish. Inventory is never received automatically.
       </p>
 
       <Stack gap="md">
@@ -120,7 +72,7 @@ export function MailImportSettings() {
                 htmlFor={id}
                 className="flex min-h-11 items-center justify-between gap-4 text-sm"
               >
-                <span className="min-w-0 truncate">{mailbox.mailboxId}</span>
+                <span className="min-w-0 truncate">{mailbox.label}</span>
                 <Switch
                   id={id}
                   checked={mailbox.enabled}
@@ -130,23 +82,6 @@ export function MailImportSettings() {
                   }
                 />
               </label>
-              <MailSearchSummary searches={mailbox.searches} />
-              {mailbox.enabled ? (
-                <div className="mt-2">
-                  <PaidRunButton
-                    label="Run discovery now, paid allowed"
-                    budget={budget}
-                    pending={discover.isPending}
-                    onConfirm={(paidOverBudgetUsd) =>
-                      discover.mutate({
-                        mailboxId: mailbox.mailboxId,
-                        paidAllowed: true,
-                        paidOverBudgetUsd,
-                      })
-                    }
-                  />
-                </div>
-              ) : null}
             </div>
           );
         })}
@@ -159,7 +94,13 @@ export function MailImportSettings() {
             Mail imports waiting for review
           </Link>
         ) : null}
-        {budget ? <AiFundingLine budget={budget} /> : null}
+        <Link
+          to="/emails/coverage"
+          search={{}}
+          className="self-start text-sm underline"
+        >
+          View Mail coverage and import a Vendor
+        </Link>
       </Stack>
     </div>
   );

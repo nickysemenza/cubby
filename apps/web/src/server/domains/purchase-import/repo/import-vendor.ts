@@ -8,6 +8,7 @@ import { arrayContains, and, eq, ilike, sql } from "drizzle-orm";
 
 import {
   distinctSenderDomain,
+  senderAddress,
   SHARED_SENDER_DOMAINS,
   vendorWebsiteDomain,
 } from "~/lib/vendor/domains";
@@ -35,14 +36,6 @@ const SIMILAR_NAME_REASON =
   "Similar Vendor name: reuse it by vendorId, or mark it distinctFrom with research notes.";
 const SAME_DOMAIN_REASON =
   "Same website domain as the order Email's sender, shared by several Vendors.";
-
-/** The bare address of a From header such as `"Store" <orders@store.example>`. */
-const senderAddress = (sender: string | null): string | null => {
-  const address = (/<([^>]+)>/u.exec(sender ?? "")?.[1] ?? sender ?? "")
-    .trim()
-    .toLowerCase();
-  return address.includes("@") ? address : null;
-};
 
 const words = (value: string) =>
   value

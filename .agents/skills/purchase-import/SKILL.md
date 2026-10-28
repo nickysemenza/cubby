@@ -1,6 +1,6 @@
 ---
 name: purchase-import
-description: Support Cubby purchase imports when learning a vendor, importing an order Email, receipt or vendor export, resolving order Email, reconciling financial settlement, or booking shared-cost repayments.
+description: Support Cubby purchase imports when learning a vendor, controlling a vendor mailbox import, importing an order Email, receipt or vendor export, resolving order Email, reconciling financial settlement, or booking shared-cost repayments.
 ---
 
 # Purchase-import support
@@ -47,7 +47,7 @@ separate evidence.
 `run.lifecycle` takes every Run `controlAction` (cancel, retry, restart,
 resume …) through the shared member-owned controls; cancel refuses a Run that
 already ended. Spending and review decisions (`run.set_mail_import`,
-`run.discover_mail`, `run.commit_prepared`, `activity.resolve_run_finding`) are
+`run.discover_mail`, `run.controlled_mail_import`, `run.resume_controlled_mail_import`, `run.commit_prepared`, `activity.resolve_run_finding`) are
 callable, but only on the member's explicit instruction; never infer one.
 Per-operation approvals no longer exist. Runs that were approval-paused are now
 member `paused`, and their never-run operations are `failed` ("Approval pause
@@ -56,6 +56,22 @@ after the member resumes the Run, re-issue that work under a new operation id.
 Respect an explicit member pause: do
 not retry or restart until imports are resumed. Follow the returned successor;
 the preceding attempt remains immutable.
+
+For a member-requested Vendor-only mailbox import, read
+`run_read.mail_coverage`, then call `run.controlled_mail_import` with the chosen
+Vendor, owned mailbox and optional received-date bounds. This pauses other
+automatic imports for that mailbox until the member explicitly resumes them;
+active work finishes before the selected scope runs. Paid AI is allowed within
+the household budget, with no over-budget grant. Follow the returned Run;
+queued or completed discovery alone does not prove Purchase import completion.
+Vendor Account is the member/Vendor relationship for attributed purchase
+evidence; a mailbox identifies its source. Searching and coverage reporting
+do not create empty Vendor Accounts. See the
+[mail coverage contract](../../../docs/guide/import-journey.md#discover-from-financial-history)
+for count meanings and scope.
+`run.resume_controlled_mail_import` releases queued work and restores the
+automatic-import setting from before the control; a mailbox that was off
+stays off. `run.set_mail_import` remains an explicit on/off decision.
 
 An explicit `purchase_import.email_import` selection — up to 50 Emails, each by its `id`
 (`EML-` code) and current checksum as `purchase_import.mail_search` and `purchase_import_read.mail_read`
@@ -78,11 +94,12 @@ checksums, replay, money conservation and unresolved-identity review still apply
    excluding Spam and Trash; there is no all-of-Gmail crawl. The decision model
    routes relevant mail and escalates uncertainty to the relevance model; each
    message records which stage decided and why. An
-   unrelated message retains only its provider identity and scan/classification
-   status; related originals and useful attachments become retained evidence.
+   unrelated message retains its provider identity, sender, subject, received
+   date and scan/classification status; related originals and useful
+   attachments become retained evidence.
    Frontier chat-model calls share the household AI budget, a $1 per six-hour
    UTC safety net; classification, decision models and embeddings are not
-   budgeted (`run_read.mail_import` shows the window).
+   budgeted (`ai_funding_read.status` shows the window).
    Confirmation,
    shipping, delivery, cancellation and refund mail may link to one Purchase.
    An exact order id helps; a unique supported match can use account, items,

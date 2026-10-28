@@ -12,6 +12,26 @@ import type { MailboxScopedQuery } from "@cubby/schemas/mailbox-research";
 const LITERAL_SENDER =
   /^(?:[a-z0-9._%+-]+@)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/u;
 
+/** A supporting expression cannot escape the host's parenthesized Vendor scope. */
+export function isClosedMailSearch(query: string): boolean {
+  if (query.includes("\\")) return false;
+  if (/^(?:OR|AND)\b|\b(?:OR|AND)$/iu.test(query.trim())) return false;
+  let quoted = false;
+  const groups: string[] = [];
+  for (const character of query) {
+    if (character === '"') quoted = !quoted;
+    else if (!quoted) {
+      if (character === "(" || character === "{") groups.push(character);
+      else if (
+        (character === ")" && groups.pop() !== "(") ||
+        (character === "}" && groups.pop() !== "{")
+      )
+        return false;
+    }
+  }
+  return !quoted && groups.length === 0;
+}
+
 /** One literal sender or website-domain query per verified term. */
 export function vendorMailQueries(
   vendorId: VendorId,

@@ -116,4 +116,22 @@ describe("Mail search progress", () => {
     // A new-mail page names no search and leaves coverage as listed.
     expect(creditScopedPage({ nextCoverage: last }, 9, now)).toEqual(last);
   });
+  it("counts all matches separately from retained originals and preserves unknown historical counts", () => {
+    const nextCoverage = coverage([
+      { ...vendorA, pageToken: null, completed: true, messageCount: 0 },
+      { ...vendorB, pageToken: null, completed: true },
+    ]);
+    const counted = creditScopedPage(
+      { nextCoverage, scopedKey: vendorA.key, messageIds: ["one", "two"] },
+      1,
+      new Date("2026-10-01T12:00:00Z"),
+    );
+    expect(counted.scoped[0]).toMatchObject({ messageCount: 2, emailCount: 1 });
+    const historical = creditScopedPage(
+      { nextCoverage: counted, scopedKey: vendorB.key, messageIds: ["three"] },
+      1,
+      new Date("2026-10-01T12:00:00Z"),
+    );
+    expect(historical.scoped[1]?.messageCount).toBeUndefined();
+  });
 });

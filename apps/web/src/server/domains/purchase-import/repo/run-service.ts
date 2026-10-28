@@ -126,6 +126,7 @@ import {
   type PhotoImportCommitPorts,
 } from "~/server/domains/photo-import/repo/photo-import-commit";
 import { finalizeImportedImages } from "~/server/domains/photo-import/repo/photo-import-finalize";
+import { waitForMailImportPermission } from "~/server/domains/purchase-import/repo/controlled-mail-import";
 import {
   readMailRunRoster,
   releaseUnsettledMailRunSources,
@@ -605,6 +606,7 @@ export async function canDispatchRunCoordinator(
   db: Database,
   input: { runId: string; eventId: string },
 ) {
+  await waitForMailImportPermission(db, runEntityId.parse(input.runId));
   const [run] = await getDb(db)
     .select({ id: runTable.id })
     .from(runTable)

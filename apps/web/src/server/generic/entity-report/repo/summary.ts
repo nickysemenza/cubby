@@ -253,6 +253,12 @@ export async function emailSummary(
           entity === "vendor" ? { vendorId: code } : { vendorAccountId: code },
       },
       footer: `${result.count} total`,
+      links: [
+        {
+          label: "Mail coverage",
+          href: `/emails/coverage?${entity === "vendor" ? "vendor" : "account"}=${encodeURIComponent(code)}`,
+        },
+      ],
       empty: "No related Emails.",
     },
   ];

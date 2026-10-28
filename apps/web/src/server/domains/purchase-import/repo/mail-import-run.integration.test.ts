@@ -1,9 +1,13 @@
-import { parseEntityId, runShortcode } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  runShortcode,
+  vendorShortcode,
+} from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -37,17 +41,35 @@ import {
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { discoverPurchases } from "~/server/workflows/catch-up";
 
-import { readMailImportOutcomes, settleMail } from "../operations/mail-tool";
+import { startControlledMailImport } from "../operations/gmail/controlled-import";
+import {
+  readMailImportOutcomes,
+  searchMail,
+  settleMail,
+} from "../operations/mail-tool";
 import { retainedMailFixture } from "../operations/order-import.fixtures";
 import { reconcileSettledRun } from "../operations/run-review";
 import { startAgentRunFixture } from "../service/import-run.fixtures";
 import { writeOutcomeReceipts } from "../service/run-outcome.fixtures";
+import {
+  retainedControlledMailIds,
+  waitForActiveMailboxImports,
+} from "./controlled-mail-import";
 import * as gmailProvider from "./gmail/provider";
 import { importPendingEmails, startMailImport } from "./mail-import-run";
-import { setMailImport } from "./mail-import-settings";
+import {
+  readMailImportSettings,
+  resumeControlledMailImport,
+  setMailImport,
+} from "./mail-import-settings";
 import { transferMailRunSources } from "./mail-run-membership";
 import * as sourceIdentity from "./mail-source-identity";
-import { controlRun, loadRunDetail, markRunFailed } from "./run-service";
+import {
+  canDispatchRunCoordinator,
+  controlRun,
+  loadRunDetail,
+  markRunFailed,
+} from "./run-service";
 
 // Admission must bind original sources without a known Vendor, order, or Mac;
 // replay cannot create a second Run, and stale/foreign sources cannot enter it.
@@ -110,6 +132,295 @@ describe("mail research admission", () => {
     const replayed = await startMailImport(ctx.db, input);
     expect(replayed[0]?.runId).toBe(admitted[0]?.runId);
     expect(replayed[0]?.status).toBe("running");
+  });
+
+  it("transfers only selected Vendor sources from an unstarted mixed owner, preserving active work, old evidence and replay", async () => {
+    const { party, mail } = await source();
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic Selected Seller",
+      orderEmailSenders: ["receipts@shop.example"],
+    });
+    const other = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic Other Seller",
+      orderEmailSenders: ["receipts@other.example"],
+    });
+    const selected = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      messageId: "synthetic-selected-queued",
+      checksum: "b".repeat(64),
+      vendorId: seller.id,
+    });
+    const foreign = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      messageId: "synthetic-foreign-queued",
+      checksum: "c".repeat(64),
+      vendorId: other.id,
+    });
+    const active = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      messageId: "synthetic-active-original",
+      checksum: "d".repeat(64),
+      vendorId: seller.id,
+    });
+    const fresh = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      messageId: "synthetic-fresh-selected",
+      checksum: "e".repeat(64),
+      vendorId: seller.id,
+    });
+    const settled = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      messageId: "synthetic-settled-selected",
+      checksum: "1".repeat(64),
+      vendorId: seller.id,
+    });
+    const blocked = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      messageId: "synthetic-review-selected",
+      checksum: "2".repeat(64),
+      vendorId: seller.id,
+    });
+    // Historical settled/reviewed mail may no longer have a live Run owner.
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ status: "completed" })
+      .where(eq(emailTable.orderMailId, settled.id));
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ status: "blocked" })
+      .where(eq(emailTable.orderMailId, blocked.id));
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mail.mailboxId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: true });
+    const base = {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      mailboxId: mail.mailboxId,
+      automatic: true,
+    };
+    const [queued] = await startMailImport(ctx.db, {
+      ...base,
+      messageIds: [mail.id, selected.id, foreign.id],
+    });
+    const [running] = await startMailImport(ctx.db, {
+      ...base,
+      messageIds: [active.id],
+    });
+    if (!queued || !running)
+      throw new Error("Synthetic automatic owners were not admitted");
+    const queuedId = parseEntityId("run", queued.runId);
+    const activeId = parseEntityId("run", running.runId);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ coordinatorStartedAt: new Date() })
+      .where(eq(run.id, activeId));
+    await writeOutcomeReceipts(ctx.db, [
+      {
+        runId: queuedId,
+        entityKind: "run",
+        entityId: queuedId,
+        workKey: foreign.id,
+        sourceKind: "mail_message",
+        sourceExternalKey: foreign.id,
+        targetFingerprint: foreign.rawChecksum,
+        state: "pending",
+      },
+    ]);
+    const oldRoster = await frozenSources(queuedId);
+    const oldEvidence = await getDb(ctx.db)
+      .select()
+      .from(runOperation)
+      .where(eq(runOperation.runId, queuedId));
+    const oldJobs = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.runId, queuedId));
+    const request = await startControlledMailImport(ctx.db, ctx.actor, {
+      mailboxId: mail.mailboxId,
+      vendorId: vendorShortcode.parse(seller.shortcode),
+    });
+    const [control] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, request.run));
+    if (!control)
+      throw new Error("Synthetic controlled discovery was not saved");
+    expect(await retainedControlledMailIds(ctx.db, control.id)).not.toEqual(
+      expect.arrayContaining([settled.id]),
+    );
+    expect(await retainedControlledMailIds(ctx.db, control.id)).not.toEqual(
+      expect.arrayContaining([blocked.id]),
+    );
+    const wait = () =>
+      waitForActiveMailboxImports(ctx.db, {
+        mailboxId: mail.mailboxId,
+        memberId: party.id,
+        controlRunId: control.id,
+      });
+    await expect(wait()).rejects.toThrow("active Mail import to finish");
+    // A currently started coordinator retains its source even if admission is replayed.
+    expect(
+      await startMailImport(ctx.db, {
+        ...base,
+        parentRunId: control.id,
+        messageIds: [active.id],
+      }),
+    ).toEqual([running]);
+    const [stillActive] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, activeId));
+    expect(stillActive).toMatchObject({
+      status: "running",
+      coordinatorStartedAt: expect.any(Date),
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed" })
+      .where(eq(run.id, activeId));
+    await expect(wait()).resolves.toBeUndefined();
+    const admission = {
+      ...base,
+      parentRunId: control.id,
+      messageIds: [
+        mail.id,
+        selected.id,
+        foreign.id,
+        fresh.id,
+        settled.id,
+        blocked.id,
+      ],
+    };
+    const admitted = await startMailImport(ctx.db, admission);
+    expect(admitted).toHaveLength(2);
+    const children = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.parentRunId, control.id));
+    expect(children).toHaveLength(2);
+    const controlledChild = children[0];
+    if (!controlledChild) throw new Error("Synthetic controlled child missing");
+    await expect(
+      searchMail(
+        ctx.db,
+        { query: ") OR in:anywhere OR (" },
+        { ...ctx.actor, runId: controlledChild.id },
+      ),
+    ).rejects.toThrow("Controlled mail search requires closed grouping");
+    await expect(
+      searchMail(
+        ctx.db,
+        { query: "receipt OR" },
+        { ...ctx.actor, runId: controlledChild.id },
+      ),
+    ).rejects.toThrow("Controlled mail search requires closed grouping");
+    expect(children.map((child) => child.vendorId)).toEqual([
+      seller.id,
+      seller.id,
+    ]);
+    const selectedRoster = (
+      await Promise.all(children.map((child) => frozenSources(child.id)))
+    ).flat();
+    expect(selectedRoster.map((source) => source.orderMailId).sort()).toEqual(
+      [mail.id, selected.id, fresh.id].sort(),
+    );
+    expect(await frozenSources(queuedId)).toEqual(oldRoster);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runOperation)
+        .where(eq(runOperation.runId, queuedId)),
+    ).toEqual(expect.arrayContaining(oldEvidence));
+    expect(
+      await getDb(ctx.db).select().from(job).where(eq(job.runId, queuedId)),
+    ).toEqual(oldJobs);
+    const [foreignEmail] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, foreign.id));
+    expect(foreignEmail).toMatchObject({
+      runId: queuedId,
+      status: "researching",
+    });
+    const [oldOwner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, queuedId));
+    if (!oldOwner?.dispatchEventId)
+      throw new Error("Synthetic original dispatch missing");
+    await expect(
+      canDispatchRunCoordinator(ctx.db, {
+        runId: queuedId,
+        eventId: oldOwner.dispatchEventId,
+      }),
+    ).rejects.toThrow("Automatic Mail import is paused");
+    for (const child of children) {
+      if (!child.dispatchEventId)
+        throw new Error("Synthetic controlled child dispatch missing");
+      expect(
+        await canDispatchRunCoordinator(ctx.db, {
+          runId: child.id,
+          eventId: child.dispatchEventId,
+        }),
+      ).toBe(true);
+    }
+    expect(
+      (await startMailImport(ctx.db, admission))
+        .map((item) => item.runId)
+        .sort(),
+    ).toEqual(admitted.map((item) => item.runId).sort());
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "purchase.dispatch")),
+    ).toHaveLength(4);
+    const owned = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(inArray(emailTable.orderMailId, [mail.id, selected.id, fresh.id]));
+    expect(
+      owned.every((email) =>
+        children.some((child) => child.id === email.runId),
+      ),
+    ).toBe(true);
+    const preserved = await getDb(ctx.db)
+      .select({ status: emailTable.status, runId: emailTable.runId })
+      .from(emailTable)
+      .where(inArray(emailTable.orderMailId, [settled.id, blocked.id]));
+    expect(preserved).toEqual(
+      expect.arrayContaining([
+        { status: "completed", runId: null },
+        { status: "blocked", runId: null },
+      ]),
+    );
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed" })
+      .where(eq(run.id, control.id));
+    await resumeControlledMailImport(ctx.db, mail.mailboxId);
+    expect((await readMailImportSettings(ctx.db)).enabledMailboxes).toContain(
+      mail.mailboxId,
+    );
+    await settleMail(ctx.db, {
+      mail: foreign,
+      importRunId: queuedId,
+      status: "completed",
+      detail: "Synthetic unrelated lifecycle notice",
+    });
+    await expect(
+      reconcileSettledRun(ctx.db, {
+        runId: queuedId,
+        operationId: "settled:after-controlled-transfer",
+        generation: oldOwner.dispatchEventId,
+        sequence: 1,
+      }),
+    ).resolves.toMatchObject({ reconciled: true, status: "completed" });
   });
 
   // Admission freezes the Mail population before any of its targets finish.

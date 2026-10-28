@@ -7,6 +7,10 @@ const mailboxId = z.string().min(1);
 /** Stored switch: automatic Mail import runs only for listed mailboxes. */
 export const mailImportSettings = z.strictObject({
   enabledMailboxes: z.array(mailboxId),
+  /** A member-selected import parks queued automatic work until explicit resume. */
+  controlledPauses: z
+    .array(z.strictObject({ mailboxId, enabledBefore: z.boolean() }))
+    .default([]),
 });
 export type MailImportSettings = z.infer<typeof mailImportSettings>;
 
@@ -84,6 +88,7 @@ export const mailImportStatus = z.strictObject({
   mailboxes: z.array(
     z.strictObject({
       mailboxId,
+      label: z.string(),
       enabled: z.boolean(),
       searches: mailSearchProgress,
     }),

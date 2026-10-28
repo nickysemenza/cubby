@@ -375,6 +375,7 @@
         "packages/schemas/src/workflow-runs.ts",
         "packages/schemas/src/job.ts",
         "packages/schemas/src/mailbox-research.ts",
+        "packages/schemas/src/mail-coverage-control.ts",
         "packages/schemas/src/shipment-evidence.ts",
         "packages/schemas/src/email-actions.ts",
         "packages/schemas/src/email-observations.ts",

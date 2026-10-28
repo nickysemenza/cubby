@@ -226,6 +226,7 @@ export default defineEntity({
     },
     list: {
       views: ["table"],
+      links: [{ label: "Mail coverage", path: "/emails/coverage" }],
       savedViews: [
         {
           id: "pipeline-worklist",

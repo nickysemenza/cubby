@@ -39,7 +39,7 @@ export async function initializeMailboxCoverage(
       ...new Map(
         scopedQueries.map((query) => [
           query.key,
-          { ...query, pageToken: null, completed: false },
+          { ...query, pageToken: null, completed: false, messageCount: 0 },
         ]),
       ).values(),
     ],
@@ -72,7 +72,12 @@ export function mergeMailboxQueries(
   for (const query of queries) {
     const prior = byKey.get(query.key);
     if (!prior || prior.query !== query.query)
-      byKey.set(query.key, { ...query, pageToken: null, completed: false });
+      byKey.set(query.key, {
+        ...query,
+        pageToken: null,
+        completed: false,
+        messageCount: 0,
+      });
   }
   next.scoped = [...byKey.values()];
   return next;
@@ -84,7 +89,8 @@ export function mergeMailboxQueries(
  * Deterministic but for `now`, so a replayed page commits the same counts.
  */
 export function creditScopedPage(
-  page: Pick<MailboxPage, "nextCoverage" | "scopedKey">,
+  page: Pick<MailboxPage, "nextCoverage" | "scopedKey"> &
+    Partial<Pick<MailboxPage, "messageIds">>,
   retained: number,
   now: Date,
 ): MailboxCoverage {
@@ -92,6 +98,8 @@ export function creditScopedPage(
   const position = next.scoped.find((query) => query.key === page.scopedKey);
   if (!position) return next;
   position.emailCount = (position.emailCount ?? 0) + retained;
+  if (position.messageCount !== undefined && page.messageIds)
+    position.messageCount += page.messageIds.length;
   if (position.completed) position.completedAt = now.toISOString();
   // Re-parse so key order matches a stored read; the checkpoint compares JSON.
   return mailboxCoverage.parse(next);
@@ -103,12 +111,16 @@ export async function listGmailPage(
   mailboxId: string,
   startCoverage: MailboxCoverage,
   discovery: "new_mail" | "targeted" = "new_mail",
+  scopedKeys?: readonly string[],
 ): Promise<MailboxPage> {
   if (!mailboxId.trim() || mailboxId === "me")
     throw new Error("A stable Google account id is required");
   const nextCoverage = mailboxCoverage.parse(startCoverage);
   if (discovery === "targeted") {
-    const position = nextCoverage.scoped.find((query) => !query.completed);
+    const position = nextCoverage.scoped.find(
+      (query) =>
+        !query.completed && (!scopedKeys || scopedKeys.includes(query.key)),
+    );
     if (!position)
       return { messageIds: [], events: [], startCoverage, nextCoverage };
     const request: Parameters<GmailProvider["listMessages"]>[0] = {

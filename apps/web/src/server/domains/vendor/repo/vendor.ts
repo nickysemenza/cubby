@@ -13,6 +13,7 @@ import {
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import {
   scopedPositionState,
+  currentScopedPosition,
   type MailSearchState,
 } from "@cubby/schemas/mailbox-research";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
@@ -68,6 +69,7 @@ import {
   detachVendorIdentifierSources,
   repointVendorIdentifierSources,
 } from "~/server/domains/product/repo/product-identifier-source";
+import { readCompletedControlledSearches } from "~/server/domains/purchase-import/repo/controlled-mail-import";
 import { loadGmailCursor } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
@@ -368,21 +370,32 @@ async function loadVendorMailSearch(
       ),
     listMemberMailboxes(db),
   ]);
-  const cursors = await Promise.all(
-    mailboxes.map(async (mailbox) => {
-      const { coverage } = await loadGmailCursor(db, mailbox);
-      return new Map(coverage?.scoped.map((entry) => [entry.key, entry]));
-    }),
-  );
+  const [cursors, controlledSearches] = await Promise.all([
+    Promise.all(
+      mailboxes.map(async (mailbox) => {
+        const { coverage } = await loadGmailCursor(db, mailbox);
+        return coverage;
+      }),
+    ),
+    readCompletedControlledSearches(
+      db,
+      rows.map((row) => row.id),
+    ),
+  ]);
   return Object.fromEntries(
     rows.flatMap((row) => {
       const queries = vendorMailQueries(row.id, vendorSearchTerms(row));
       if (queries.length === 0) return [];
-      const states = cursors.flatMap((cursor) =>
+      const states = cursors.flatMap((cursor, index) =>
         queries.map((query) => {
-          const position = cursor.get(query.key);
+          const mailbox = mailboxes[index];
+          const completed = mailbox
+            ? controlledSearches.get(
+                `${row.id}/${mailbox.ledgerPartyId}/${mailbox.mailboxId}`,
+              )
+            : undefined;
           return scopedPositionState(
-            position?.query === query.query ? position : undefined,
+            currentScopedPosition(cursor, query, completed),
           );
         }),
       );

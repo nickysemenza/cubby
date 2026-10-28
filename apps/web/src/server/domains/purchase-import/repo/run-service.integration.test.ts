@@ -1,4 +1,4 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
+import { runEntityId, vendorShortcode } from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { runFindingProblemSchema } from "@cubby/schemas/problems";
@@ -8,6 +8,7 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { account } from "~/server/db/auth.schema";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { job, run as runTable } from "~/server/db/schema";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
@@ -29,8 +30,15 @@ import {
   seedRunFindings,
 } from "~/server/testing/run-finding.fixtures";
 
+import { startControlledMailImport } from "../operations/gmail/controlled-import";
+import { waitForActiveMailboxImports } from "./controlled-mail-import";
 import { resolveRunFinding } from "./findings";
 import { admitMailImport } from "./mail-import-run";
+import {
+  readMailImportSettings,
+  resumeControlledMailImport,
+  setMailImport,
+} from "./mail-import-settings";
 import { coordinatorRetired } from "./run-retirement";
 import {
   controlRun,
@@ -150,6 +158,117 @@ describe("purchase import run admission", () => {
         eventId: event.eventId,
       }),
     ).toBe(false);
+  });
+  it("retains queued automatic imports while a controlled Vendor waits for active work, until manual resume", async () => {
+    const party = await createMember();
+    const queued = await startAgentRun(party);
+    const active = await startAgentRun(
+      party,
+      (await retainMail(party, ["Synthetic active receipt"])).map(
+        (source) => source.id,
+      ),
+    );
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ coordinatorStartedAt: new Date() })
+      .where(eq(runTable.id, active.id));
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: "synthetic-restart-mailbox",
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    const { insertWithShortcode } =
+      await import("~/server/generic/shortcode/repo/shortcode-utils");
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic Controlled Vendor",
+      orderEmailSenders: ["orders@controlled.example.test"],
+    });
+    const request = await startControlledMailImport(ctx.db, ctx.actor, {
+      mailboxId: "synthetic-restart-mailbox",
+      vendorId: vendorShortcode.parse(seller.shortcode),
+    });
+    const [control] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.shortcode, request.run));
+    if (!control) throw new Error("Controlled import was not persisted");
+    const wait = () =>
+      waitForActiveMailboxImports(ctx.db, {
+        mailboxId: "synthetic-restart-mailbox",
+        memberId: party.id,
+        controlRunId: control.id,
+      });
+    await expect(wait()).rejects.toThrow("active Mail import to finish");
+    await expect(
+      canDispatchRunCoordinator(ctx.db, {
+        runId: queued.id,
+        eventId: queued.dispatchEventId,
+      }),
+    ).rejects.toThrow("Automatic Mail import is paused");
+    expect(
+      await canDispatchRunCoordinator(ctx.db, {
+        runId: active.id,
+        eventId: active.dispatchEventId,
+      }),
+    ).toBe(false);
+    // Finishing active work does not dispose the queued Run or its source ownership.
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "completed" })
+      .where(eq(runTable.id, active.id));
+    await expect(wait()).resolves.toBeUndefined();
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "completed" })
+      .where(eq(runTable.id, control.id));
+    await expect(
+      canDispatchRunCoordinator(ctx.db, {
+        runId: queued.id,
+        eventId: queued.dispatchEventId,
+      }),
+    ).rejects.toThrow("Automatic Mail import is paused");
+    await resumeControlledMailImport(ctx.db, "synthetic-restart-mailbox");
+    expect(await readMailImportSettings(ctx.db)).toEqual({
+      enabledMailboxes: [],
+      controlledPauses: [],
+    });
+    expect(
+      await canDispatchRunCoordinator(ctx.db, {
+        runId: queued.id,
+        eventId: queued.dispatchEventId,
+      }),
+    ).toBe(true);
+    // A later ordinary switch-off only stops new admission; the completed
+    // control no longer creates an implicit permanent queued-work pause.
+    await setMailImport(ctx.db, {
+      mailboxId: "synthetic-restart-mailbox",
+      enabled: false,
+    });
+    expect(
+      await canDispatchRunCoordinator(ctx.db, {
+        runId: queued.id,
+        eventId: queued.dispatchEventId,
+      }),
+    ).toBe(true);
+    await setMailImport(ctx.db, {
+      mailboxId: "synthetic-restart-mailbox",
+      enabled: true,
+    });
+    await setMailImport(
+      ctx.db,
+      { mailboxId: "synthetic-restart-mailbox", enabled: false },
+      { kind: "controlled_pause" },
+    );
+    await setMailImport(ctx.db, {
+      mailboxId: "synthetic-restart-mailbox",
+      enabled: false,
+    });
+    await resumeControlledMailImport(ctx.db, "synthetic-restart-mailbox");
+    expect(
+      (await readMailImportSettings(ctx.db)).enabledMailboxes,
+    ).not.toContain("synthetic-restart-mailbox");
   });
 
   // A manual pause must remain cancellable and resumable; legacy recovery must

@@ -204,6 +204,14 @@ async function preparedOrderVendor(
       : scope.vendorId;
   if (!vendorId)
     throw new Error("Name each order's Vendor (vendorId or vendor.name).");
+  // Resolution and this fence share the preparation transaction: a refused
+  // Vendor rolls back, while Sender proof can still learn a valid alias.
+  if (
+    scope.purpose === "mail_import" &&
+    scope.vendorId &&
+    vendorId !== scope.vendorId
+  )
+    throw new Error("This Mail import is limited to its selected Vendor.");
   return { vendorId, vendorCandidates };
 }
 
@@ -1057,6 +1065,14 @@ export async function commitPurchaseImport(
           const vendorId = order.vendorId ?? scope.vendorId;
           if (!vendorId)
             throw new Error("Prepared purchase import order has no Vendor");
+          if (
+            scope.purpose === "mail_import" &&
+            scope.vendorId &&
+            vendorId !== scope.vendorId
+          )
+            throw new Error(
+              "This Mail import is limited to its selected Vendor.",
+            );
           const [live] = await getDb(transactionDb)
             .select({ id: vendor.id })
             .from(vendor)

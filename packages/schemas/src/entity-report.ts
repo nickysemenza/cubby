@@ -459,6 +459,15 @@ export const reportRecordsBlock = z.object({
   thumbnail: z.enum(["small", "large"]).optional(),
   /** One line under the rows, such as a total. */
   footer: z.string().optional(),
+  /** Related workspaces for this report's scope, separate from its record list. */
+  links: z
+    .array(
+      z.strictObject({
+        label: z.string(),
+        href: z.string().regex(/^\/(?!\/)/),
+      }),
+    )
+    .optional(),
   /**
    * Finance verbs (`SECTION_ACTION_IDS`) with the server's word on each: a verb with a
    * `disabledReason` is shown unavailable with it. Each acts on the section's record and runs an

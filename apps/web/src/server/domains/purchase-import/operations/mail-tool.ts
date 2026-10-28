@@ -73,7 +73,9 @@ import {
   retainedMailJoin,
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
+import { controlledMailScopeForRun } from "~/server/domains/purchase-import/repo/controlled-mail-import";
 import { GmailApiError } from "~/server/domains/purchase-import/repo/gmail/types";
+import { isClosedMailSearch } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
 import {
   assertMailRunMembership,
   assertMailRunReadAuthority,
@@ -1044,6 +1046,17 @@ export async function resolveMail(
           "PURCHASE_NOT_FOUND",
           "A reviewed Purchase no longer exists.",
         );
+      const controlled = actor.runId
+        ? await controlledMailScopeForRun(tdb, actor.runId)
+        : null;
+      if (
+        controlled &&
+        targets.some((target) => target.vendorId !== controlled.vendorId)
+      )
+        throw createAppError(
+          "MAIL_REQUEST_REFUSED",
+          "This Mail import is limited to its selected Vendor.",
+        );
       if (
         targets.some(
           (row) =>
@@ -1328,6 +1341,14 @@ export async function searchMail(
   const input = mailSearchInput.parse(rawInput);
   // Before any Gmail fetch or classification spends against the Run.
   await mailImportRun(db, actor.runId);
+  const controlled = actor.runId
+    ? await controlledMailScopeForRun(db, actor.runId)
+    : null;
+  if (controlled && !isClosedMailSearch(input.query))
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
+      "Controlled mail search requires closed grouping and quotes, without backslash escapes.",
+    );
   const database = getDb(db);
   const connected = await database
     .select({ mailboxId: account.accountId })
@@ -1338,6 +1359,7 @@ export async function searchMail(
     .orderBy(asc(account.id));
   const mailboxId =
     input.mailboxId ??
+    controlled?.mailboxId ??
     (connected.length === 1 ? connected[0]?.mailboxId : undefined);
   if (!mailboxId)
     return {
@@ -1351,12 +1373,17 @@ export async function searchMail(
       "MAIL_REQUEST_REFUSED",
       "That Google mailbox is not connected to this member.",
     );
+  if (controlled && mailboxId !== controlled.mailboxId)
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
+      "This Mail import is limited to its selected mailbox.",
+    );
   const [party] = await memberPartyIds(db, actor.userId);
   if (!party) throw new Error("Only a household member can search Email.");
   try {
     const provider = await gmailProviderForUser(db, actor.userId, mailboxId);
     const request: Parameters<typeof provider.listMessages>[0] = {
-      query: `(${input.query}) -in:spam -in:trash`,
+      query: `(${input.query}) ${controlled ? `(${controlled.scopedQueries.map(({ query }) => `(${query})`).join(" OR ")}) ` : ""}-in:spam -in:trash`,
       maxResults: GMAIL_PAGE_SIZE,
     };
     if (input.pageToken) request.pageToken = input.pageToken;

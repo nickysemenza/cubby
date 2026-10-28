@@ -20,6 +20,38 @@ import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
+export const MAIL_SOURCE_TRANSFER_OPERATION = "mail_source_transfer";
+export const mailSourceTransferReceipt = z.strictObject({
+  toRunId: runEntityId,
+  sources: mailResearchRunInput.shape.sources,
+});
+
+/** A completed transfer ends this Run's responsibility while retaining its original roster. */
+export async function readMailSourceTransfers(
+  client: DrizzleClient | DrizzleTransaction,
+  runId: RunId,
+): Promise<Map<string, string>> {
+  const rows = await client
+    .select({ result: runOperation.result })
+    .from(runOperation)
+    .where(
+      and(
+        eq(runOperation.runId, runId),
+        eq(runOperation.kind, MAIL_SOURCE_TRANSFER_OPERATION),
+        eq(runOperation.state, "completed"),
+      ),
+    );
+  return new Map(
+    rows.flatMap((row) =>
+      mailSourceTransferReceipt
+        .parse(row.result)
+        .sources.map(
+          (source) => [source.orderMailId, source.checksum] as const,
+        ),
+    ),
+  );
+}
+
 /**
  * The admitted source roster is Run input: admission freezes it and a
  * supporting admission only appends. Current Email status only describes

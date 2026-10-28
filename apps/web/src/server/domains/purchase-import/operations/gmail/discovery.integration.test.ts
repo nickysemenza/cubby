@@ -4,7 +4,7 @@
  * bounded passes wait a day instead of scheduling the next durable pass;
  * targeted search falls through to whole-mailbox history or searches a Vendor
  * name; completed coverage keeps chaining passes; one mailbox starves another. */
-import { runEntityId } from "@cubby/schemas/identifiers";
+import { runEntityId, vendorShortcode } from "@cubby/schemas/identifiers";
 import { and, asc, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -18,6 +18,7 @@ import {
   orderMail,
   orderMailAttachment,
   run,
+  vendor,
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
@@ -187,6 +188,253 @@ describe("scheduled Gmail discovery", () => {
       delete: async () => undefined,
     },
     research: async () => [],
+  });
+  it("finishes active discovery before the selected Vendor, keeps other cursors, and never lists mailbox history for the control", async () => {
+    const state = await seed();
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic Selected Vendor",
+      orderEmailSenders: ["orders@selected.example.test"],
+    });
+    const { startControlledMailImport } = await import("./controlled-import");
+    const control = await startControlledMailImport(ctx.db, ctx.actor, {
+      mailboxId: "synthetic-google-subject",
+      vendorId: vendorShortcode.parse(seller.shortcode),
+    });
+    expect(control.state).toBe("queued");
+    expect((await readRun(state.params.runId)).status).toBe("running");
+    expect(await created()).toHaveLength(1);
+    // The active Run retains and commits its current work before the control starts.
+    const original = ports(
+      gmail({ listHistory: async () => ({ historyId: "110" }) }),
+    );
+    await listMailDiscovery(ctx.db, state.params, original);
+    await saveMailDiscoveryBatch(ctx.db, state.params, 0, original);
+    await finishMailDiscovery(ctx.db, state.params);
+    await continueMailDiscovery(ctx.db, state.params);
+    const selected = (await created())[1];
+    if (!selected) throw new Error("Controlled discovery was not launched");
+    const listMessages = vi
+      .fn<GmailProvider["listMessages"]>()
+      .mockResolvedValueOnce({
+        messages: [],
+        nextPageToken: "selected-page-two",
+      })
+      .mockResolvedValueOnce({ messages: [] });
+    const listHistory = vi.fn<GmailProvider["listHistory"]>();
+    const seam = ports(gmail({ listMessages, listHistory }));
+    expect(await listMailDiscovery(ctx.db, selected, seam)).toEqual({
+      kind: "listed",
+      more: true,
+    });
+    await saveMailDiscoveryBatch(ctx.db, selected, 0, seam);
+    expect(await listMailDiscovery(ctx.db, selected, seam)).toEqual({
+      kind: "listed",
+      more: false,
+    });
+    await saveMailDiscoveryBatch(ctx.db, selected, 1, seam);
+    await finishMailDiscovery(ctx.db, selected);
+    await continueMailDiscovery(ctx.db, selected);
+    expect(listHistory).not.toHaveBeenCalled();
+    expect(listMessages.mock.calls.map(([request]) => request)).toEqual([
+      {
+        query: "(from:orders@selected.example.test) -in:spam -in:trash",
+        maxResults: 25,
+      },
+      {
+        query: "(from:orders@selected.example.test) -in:spam -in:trash",
+        maxResults: 25,
+        pageToken: "selected-page-two",
+      },
+    ]);
+    const { loadGmailCursor } = await import("../../repo/gmail/persistence");
+    const cursor = await loadGmailCursor(ctx.db, {
+      ledgerPartyId: state.party.id,
+      mailboxId: "synthetic-google-subject",
+    });
+    expect(cursor.coverage?.history.historyId).toBe("100");
+    expect(cursor.coverage?.scoped).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          query: "from:orders@seed.example.test",
+          completed: false,
+        }),
+        expect.objectContaining({
+          query: "from:orders@selected.example.test",
+          completed: true,
+          messageCount: 0,
+        }),
+      ]),
+    );
+    expect(await created()).toHaveLength(2);
+    const { mailImportEnabled } =
+      await import("../../repo/mail-import-settings");
+    expect(await mailImportEnabled(ctx.db, "synthetic-google-subject")).toBe(
+      false,
+    );
+  });
+  it("finds new selected mail after canonical search completion without rewinding mailbox coverage", async () => {
+    const state = await seed();
+    const initial = ports(
+      gmail({ listMessages: async () => ({ messages: [] }) }),
+    );
+    await listMailDiscovery(ctx.db, state.params, initial);
+    await saveMailDiscoveryBatch(ctx.db, state.params, 0, initial);
+    await finishMailDiscovery(ctx.db, state.params);
+    const [before] = await getDb(ctx.db).select().from(mailboxCursor);
+    const canonical = before?.coverage?.scoped[0];
+    if (!before?.coverage || !canonical)
+      throw new Error("Synthetic canonical search has no coverage");
+    expect(canonical.completed).toBe(true);
+    const unrelated = {
+      key: "merchant:synthetic-unrelated",
+      query: '"SYNTHETIC UNRELATED"',
+      pageToken: "unrelated-query-page",
+      completed: false,
+      messageCount: 3,
+    };
+    // Retain historical positions from other lanes while this member requests
+    // a new scan of just one already-completed Vendor search.
+    const baseline = {
+      ...before.coverage,
+      broad: { pageToken: "unrelated-broad-page", completed: false },
+      history: {
+        historyId: "100",
+        pageToken: "unrelated-history-page",
+        targetHistoryId: "140",
+      },
+      scoped: [...before.coverage.scoped, unrelated],
+    };
+    await getDb(ctx.db)
+      .update(mailboxCursor)
+      .set({ coverage: baseline })
+      .where(eq(mailboxCursor.id, before.id));
+    const [seller] = await getDb(ctx.db)
+      .select()
+      .from(vendor)
+      .where(eq(vendor.name, "Synthetic Seed Vendor"));
+    if (!seller) throw new Error("Synthetic canonical Vendor missing");
+    const { startControlledMailImport } = await import("./controlled-import");
+    const request = await startControlledMailImport(ctx.db, ctx.actor, {
+      mailboxId: "synthetic-google-subject",
+      vendorId: vendorShortcode.parse(seller.shortcode),
+    });
+    const selected = (await created())[1];
+    if (!selected) throw new Error("Synthetic fresh controlled scan missing");
+    const listMessages = vi
+      .fn<GmailProvider["listMessages"]>()
+      .mockResolvedValue({
+        messages: [{ id: "synthetic-new-selected-original" }],
+      });
+    const listHistory = vi.fn<GmailProvider["listHistory"]>();
+    const provider = gmail({
+      listMessages,
+      listHistory,
+      getMessage: async (id) => ({
+        id,
+        internalDate: "1788220800000",
+        payload: {
+          mimeType: "text/plain",
+          headers: [{ name: "From", value: "orders@seed.example.test" }],
+          body: {
+            data: Buffer.from(
+              "Your order receipt: synthetic item $24",
+            ).toString("base64url"),
+          },
+        },
+      }),
+    });
+    const seam = { ...ports(provider), research: startMailImport };
+    expect(await listMailDiscovery(ctx.db, selected, seam)).toEqual({
+      kind: "listed",
+      more: false,
+    });
+    await saveMailDiscoveryBatch(ctx.db, selected, 0, seam);
+    await saveMailDiscoveryBatch(ctx.db, selected, 0, seam);
+    await finishMailDiscovery(ctx.db, selected);
+    await continueMailDiscovery(ctx.db, selected);
+    expect(listMessages).toHaveBeenCalledExactlyOnceWith({
+      query: "(from:orders@seed.example.test) -in:spam -in:trash",
+      maxResults: 25,
+    });
+    expect(listHistory).not.toHaveBeenCalled();
+    const [after] = await getDb(ctx.db).select().from(mailboxCursor);
+    expect(after?.coverage?.broad).toEqual(baseline.broad);
+    expect(after?.coverage?.history).toEqual(baseline.history);
+    expect(
+      after?.coverage?.scoped.find((query) => query.key === canonical.key),
+    ).toEqual(canonical);
+    expect(
+      after?.coverage?.scoped.find((query) => query.key === unrelated.key),
+    ).toEqual(unrelated);
+    const refreshed = after?.coverage?.scoped.find((query) =>
+      query.key.startsWith(`${canonical.key}:controlled:`),
+    );
+    expect(refreshed).toMatchObject({
+      query: canonical.query,
+      completed: true,
+      messageCount: 1,
+      emailCount: 1,
+    });
+    const [child] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.parentRunId, selected.runId));
+    expect(child).toMatchObject({
+      purpose: "mail_import",
+      vendorId: seller.id,
+      status: "running",
+    });
+    const { readMailCoverage } =
+      await import("~/server/domains/purchase-import/repo/gmail/mail-coverage");
+    const currentCoverage = await readMailCoverage(ctx.db, ctx.actor.userId);
+    expect(
+      currentCoverage.rows.find((row) => row.vendorId === seller.shortcode),
+    ).toMatchObject({
+      state: "matches_found",
+      scanned: 1,
+      retained: 1,
+      controlledRun: {
+        status: "completed",
+        imports: { running: 1, completed: 0 },
+      },
+    });
+    // Normal discovery can prune request-only cursor entries; the completed
+    // all-history Run still proves coverage, but never invents a zero total.
+    await getDb(ctx.db)
+      .update(mailboxCursor)
+      .set({ coverage: baseline })
+      .where(eq(mailboxCursor.id, before.id));
+    const prunedCoverage = await readMailCoverage(ctx.db, ctx.actor.userId);
+    expect(
+      prunedCoverage.rows.find((row) => row.vendorId === seller.shortcode)
+        ?.state,
+    ).toBe("complete");
+    const { vendorScaffold } =
+      await import("~/server/domains/vendor/repo/vendor");
+    const vendors = await vendorScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
+    expect(
+      vendors.data.find((row) => row.id === seller.shortcode)?.mailSearch,
+    ).toBe("done");
+    const [message] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.messageId, "synthetic-new-selected-original"));
+    expect(message).toMatchObject({
+      classification: "related",
+      runId: child?.id,
+      status: "researching",
+    });
+    expect((await readRun(selected.runId)).shortcode).toBe(request.run);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "purchase.dispatch")),
+    ).toHaveLength(1);
   });
   it("admits retained originals once through page replay and continuation", async () => {
     const state = await seed();

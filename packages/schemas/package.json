@@ -27,6 +27,8 @@
     "./email-accuracy": "./src/email-accuracy.ts",
     "./purchase-import-debug": "./src/purchase-import-debug.ts",
     "./mailbox-research": "./src/mailbox-research.ts",
+    "./mail-coverage-control": "./src/mail-coverage-control.ts",
+    "./mail-coverage": "./src/mail-coverage.ts",
     "./mail-import-outcome": "./src/mail-import-outcome.ts",
     "./ai-cost": "./src/ai-cost.ts",
     "./ai-analysis-fields": "./src/ai-analysis-fields.ts",
