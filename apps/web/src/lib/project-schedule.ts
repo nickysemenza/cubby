@@ -4,6 +4,7 @@ import { type TaskOut } from "@cubby/schemas/entities/task";
 // (the `project.schedule` report both clients draw) and the web portfolio list.
 import type { ReportScheduleRow } from "@cubby/schemas/entity-report";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { fieldMissingLabel } from "@cubby/schemas/field-envelope-presentation";
 
 export type ProjectScheduleRow = ReportScheduleRow;
 
@@ -54,13 +55,11 @@ export function projectScheduleRow(
     envelope.work.kind !== "idle" ||
     (envelope.result.kind === "cached" && envelope.result.freshness === "stale")
   )
-    row.meta += " · Updating…";
+    row.meta += ` · ${fieldMissingLabel(envelope.work)}`;
   if (!dated)
     row.noDateLabel =
       envelope.result.kind === "missing"
-        ? envelope.work.kind === "failed"
-          ? "Unavailable"
-          : "Updating…"
+        ? fieldMissingLabel(envelope.work)
         : "No dates";
   return row;
 }

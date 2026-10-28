@@ -2,6 +2,7 @@ import {
   fieldDecisionOf,
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
+import { fieldMissingLabel } from "@cubby/schemas/field-envelope-presentation";
 import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
@@ -74,7 +75,7 @@ export function FieldValueMark({
         </span>
       ) : null}
       <span className="min-w-0 truncate">
-        {missing ? (error === null ? "Updating…" : "Unavailable") : children}
+        {missing && envelope ? fieldMissingLabel(envelope.work) : children}
       </span>
       {auto ? <span className="shrink-0 text-3xs">auto</span> : null}
       {updating ? <UpdatingDot /> : null}

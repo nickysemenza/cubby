@@ -243,8 +243,8 @@ private struct PhotoTab: View {
                 }
             } else {
                 Text(
-                    FieldEnvelope(record["fields"]?["sightings"] ?? .null)?.isUpdating == true
-                        ? "Updating…" : "Unavailable"
+                    FieldEnvelope.missingLabel(
+                        failure: FieldEnvelope(record["fields"]?["sightings"] ?? .null)?.failure)
                 )
                 .foregroundStyle(.secondary)
                 FieldValueStatus(

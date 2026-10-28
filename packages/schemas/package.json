@@ -239,6 +239,7 @@
     "./derived-backlog": "./src/derived-backlog.ts",
     "./derived-value": "./src/derived-value.ts",
     "./field-envelope": "./src/field-envelope.ts",
+    "./field-envelope-presentation": "./src/field-envelope-presentation.ts",
     "./entity-field-envelopes": "./src/entity-field-envelopes.ts",
     "./entity-fields": "./src/entity-fields.ts",
     "./entity-stored-derived": "./src/entity-stored-derived.ts",

@@ -153,6 +153,10 @@ a missing computation. A missing result renders Updating… (or Unavailable with
 evidence, never a cached `automaticFields` value; edits and same-value confirmation
 end that ownership immediately.
 
+`packages/schemas/src/field-envelope-presentation.ts` and CubbyKit's
+`FieldEnvelopePresentation.swift` are the client twin owners of empty and missing
+labels and assignment-action rules.
+
 Envelope validation graphs are shared by their stored and effective schema
 identities across projections. These weak caches contain schemas only, never
 assignments, controls, results or other record data. Repeated nested reads must

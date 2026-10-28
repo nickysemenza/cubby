@@ -2,9 +2,9 @@ import { entitySchema } from "@cubby/schemas/entity";
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import {
   fieldEnvelopeFor,
-  fieldValueOf,
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
+import { fieldAssignmentActions } from "@cubby/schemas/field-envelope-presentation";
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
@@ -196,29 +196,12 @@ export function FieldResolutionEntityActions({
   );
   if (!entity) return null;
   const policy = resolutionPolicyFor(queryClient, entity, field);
-  if (!policy) return null;
-  const actions: Array<{ label: string; patch: ResolutionPatch }> = [];
-  const controls = resolution.current.controls;
-  if (controls.kind !== "editable") return null;
-  const value = fieldValueOf(resolution);
-  if (controls.reset.kind === "available")
-    actions.push({
-      label: "Use inherited",
-      patch: resolutionPatchSchema.parse(policy.reset),
-    });
-  if (policy.confirm && controls.canConfirm && value !== null)
-    actions.push({
-      label: "Keep this value",
-      patch: {
-        ...resolutionPatchSchema.parse(policy.confirm),
-        [field]: z.json().parse(value),
-      },
-    });
-  if (policy.none && controls.canSetNone)
-    actions.push({
-      label: `Set to ${policy.labels?.none ?? "none"}`,
-      patch: resolutionPatchSchema.parse(policy.none),
-    });
+  const actions = fieldAssignmentActions(resolution, policy, field).map(
+    (action) => ({
+      ...action,
+      patch: resolutionPatchSchema.parse(action.patch),
+    }),
+  );
   if (actions.length === 0) return null;
   return (
     <BoundFieldResolutionActions entity={entity} id={id} actions={actions} />

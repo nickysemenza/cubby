@@ -15,6 +15,10 @@ public struct FieldAssignmentAction: Sendable, Hashable, Identifiable {
     public let label: String
     public let payload: [String: JSONValue]
     public var id: Kind { kind }
+
+    public static func setNoneLabel(_ policy: FieldResolutionDescriptor) -> String {
+        "Set to \(policy.labels?.none ?? "none")"
+    }
 }
 
 /// The state marker beside a value, in the one vocabulary the web popover uses.
@@ -85,7 +89,7 @@ extension FieldEnvelope {
         }
         if canSetNone, let none = policy.none, assignment != .explicitNone {
             actions.append(
-                .init(kind: .setNone, label: "Set to \(policy.labels?.none ?? "none")", payload: none))
+                .init(kind: .setNone, label: FieldAssignmentAction.setNoneLabel(policy), payload: none))
         }
         return actions
     }
@@ -119,11 +123,15 @@ extension FieldEnvelope {
         }
         if isMissing {
             return failure == nil
-                ? .init(tone: .missing, label: "Updating", systemImage: "clock")
-                : .init(tone: .missing, label: "Unavailable", systemImage: "exclamationmark.triangle")
+                ? .init(
+                    tone: .missing, label: String(Self.missingLabel(failure: nil).dropLast()),
+                    systemImage: "clock")
+                : .init(
+                    tone: .missing, label: Self.missingLabel(failure: failure),
+                    systemImage: "exclamationmark.triangle")
         }
         if case .empty(.explicitNone) = decision?.outcome {
-            return .init(tone: .none, label: field.resolution?.labels?.none ?? "None", systemImage: "nosign")
+            return .init(tone: .none, label: Self.noneLabel(field: field), systemImage: "nosign")
         }
         switch decision?.provenance {
         case .inherited?:
@@ -164,10 +172,18 @@ extension FieldEnvelope {
         Self.label(for: result, field: field, failure: failure)
     }
 
+    public static func missingLabel(failure: String?) -> String {
+        failure == nil ? "Updating…" : "Unavailable"
+    }
+
+    public static func noneLabel(field: FieldDescriptor) -> String {
+        field.resolution?.labels?.none ?? "None"
+    }
+
     public static func label(for result: Result, field: FieldDescriptor, failure: String? = nil) -> String {
         let labels = field.resolution?.labels
         switch result {
-        case .missing: return failure == nil ? "Updating…" : "Unavailable"
+        case .missing: return missingLabel(failure: failure)
         case .unsupported(let kind): return "Unsupported result: \(kind)"
         case .live(let decision), .cached(let decision, _, _):
             switch decision.outcome {
@@ -175,7 +191,7 @@ extension FieldEnvelope {
             case .unsupported(let kind): return "Unsupported result: \(kind)"
             case .empty(let reason):
                 switch reason {
-                case .explicitNone: return labels?.none ?? "None"
+                case .explicitNone: return noneLabel(field: field)
                 case .unset:
                     if case .allocated = decision.provenance { return "Allocated" }
                     return labels?.unresolved ?? "Not set"
