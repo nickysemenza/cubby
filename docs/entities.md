@@ -23,6 +23,11 @@ then validates the complete graph against entity and module child storage.
 Image routing names actual model fields; disabled create routes do not count as
 active alternatives. Counterfactual override comparisons use this same pass.
 
+Compiler renderers use bootstrap-safe entity and identifier leaves, never their
+own generated catalogs. The lean Problem classification is emitted from the
+canonical detector catalog after entity schema artifacts exist, so a clean
+checkout needs no prior generated output.
+
 ## Named groupings
 
 Named groupings use code-declared saved views with category, family, location,
