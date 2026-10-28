@@ -1,5 +1,5 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, notFound, useParams } from "@tanstack/react-router";
@@ -108,7 +108,7 @@ export function detailPage<TQuery extends DetailQueryFactory>({
   title = (data) =>
     entity === undefined
       ? undefined
-      : readRecordField(data, entitySummary[entity].titleField, recordTitle),
+      : readRecordField(data, entityRoster[entity].titleField, recordTitle),
 }: DetailPageOptions<TQuery>) {
   return function EntityDetailPage() {
     // `useParams({ strict: false })` because this component is built before any

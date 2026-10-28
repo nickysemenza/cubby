@@ -242,7 +242,7 @@ export async function importReconciliationSummary(
         projection: selectedListProjection("sourceTransactionRecord", ["id"]),
         readIntent: "count",
       });
-      return { state, count: result.count };
+      return { state, count: z.number().parse(result.count) };
     }),
   );
   // Charge state includes observations outside this collection; IN counts each

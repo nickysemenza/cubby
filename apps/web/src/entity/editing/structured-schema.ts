@@ -1,11 +1,15 @@
+import type { Entity } from "@cubby/schemas/entity";
 import type { StructuredValueSchema } from "@cubby/schemas/structured-value-schema";
-import { structuredValueSchemas } from "@cubby/schemas/structured-value-schemas";
+import type { QueryClient } from "@tanstack/react-query";
 
-/** The generated schema the generic structured-value editor draws for `entity.field`, if any. */
+import { entityMetadata } from "~/entity/metadata";
+
+/** Only the requested entity's serialized structured schemas enter an editor. */
 export const structuredSchemaFor = (
-  entity: string,
+  queryClient: QueryClient,
+  entity: Entity,
   field: string,
 ): StructuredValueSchema | undefined =>
-  Object.entries(structuredValueSchemas).find(
-    ([key]) => key === `${entity}.${field}`,
+  Object.entries(entityMetadata(queryClient, entity).structuredSchemas).find(
+    ([key]) => key === field,
   )?.[1];

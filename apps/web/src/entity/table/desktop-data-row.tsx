@@ -1,5 +1,6 @@
 import { parseShortcode } from "@cubby/shared";
 import { BugIcon } from "@phosphor-icons/react/dist/csr/Bug";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import {
@@ -40,10 +41,8 @@ import {
   useRowActivity,
 } from "../../ui/data-table/row-activity";
 import type { CubbyRow as Row } from "../../ui/data-table/table-features";
-import {
-  type CubbyColumnMeta,
-  resolveColumnExplanation,
-} from "../../ui/data-table/table-meta";
+import { type CubbyColumnMeta } from "../../ui/data-table/table-meta";
+import { resolveColumnExplanation } from "./column-explanation";
 import { RelationFieldWorkbench } from "./relation-field-workbench";
 
 // Quantities, money, and dates read in Inter with tabular figures; mono is
@@ -108,10 +107,12 @@ function cellPresentation<TItem extends RowData>(
 }
 
 function explainedCellContent<TItem extends RowData>(
+  queryClient: QueryClient,
   cell: ReturnType<Row<TItem>["getVisibleCells"]>[number],
   content: ReactNode,
 ) {
   const explanation = resolveColumnExplanation(
+    queryClient,
     cell.column.columnDef.meta?.explanation,
     cell.row.original,
     cell.column.id,
@@ -160,6 +161,7 @@ function DesktopDataCell<TItem extends RowData>({
   cellClassName: string;
 }) {
   const presentation = cellPresentation(cell);
+  const queryClient = useQueryClient();
   const { selectable, selected, anchor, pinned, boundary, width, offset } =
     presentation;
   const inset =
@@ -174,7 +176,7 @@ function DesktopDataCell<TItem extends RowData>({
     rendered,
     cell.column.columnDef.meta,
   );
-  const explained = explainedCellContent(cell, content);
+  const explained = explainedCellContent(queryClient, cell, content);
   const activity = useContext(RowActivityStoreContext);
   const cellKey = tableCellKey(cell.row.id, cell.column.id);
   return (

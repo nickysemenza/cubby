@@ -23,7 +23,7 @@ import {
 import {
   type ViewProblemDeclaration,
   viewProblemDeclarations,
-} from "~/entity/model/view-manifest";
+} from "~/entity/model/view-problems";
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import type {
   DiagnosticKey,
@@ -371,6 +371,7 @@ export const executeEntityProblem = async (
       : undefined;
   return {
     ...page,
+    count: z.number().parse(page.count),
     items: presentProblemRows(key, page.data),
     source,
     status: projection
@@ -583,7 +584,7 @@ export const findAllViewProblemIds = async (
     const pageIds = page.data.map(
       (row) => z.object({ id: z.string() }).parse(row).id,
     );
-    const hasMore = (pageIndex + 1) * PAGE < page.count;
+    const hasMore = page.hasNextPage;
     ids.push(...pageIds);
     if (!hasMore) return ids;
   }
@@ -605,5 +606,5 @@ export const countViewProblem = async (
     sorts: [],
     pagination: { pageIndex: 0, pageSize: SAMPLE_SIZE },
   });
-  return count;
+  return z.number().parse(count);
 };

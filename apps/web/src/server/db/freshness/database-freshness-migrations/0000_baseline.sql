@@ -1,4 +1,0 @@
-CREATE TABLE IF NOT EXISTS freshness (
-	id INTEGER PRIMARY KEY CHECK (id = 1),
-	last_write_at REAL NOT NULL
-);

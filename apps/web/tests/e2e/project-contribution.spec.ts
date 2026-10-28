@@ -14,6 +14,7 @@ test("project contribution shows credits as a negative adjustment, both party li
   await gotoAuthenticatedPage(page, `/projects/${project.id}`);
 
   const contribution = page.locator("section#contribution");
+  await contribution.scrollIntoViewIfNeeded();
   await expect(contribution.getByText("Whole-group cost")).toBeVisible();
   await expect(
     contribution.getByText("Whole-group cost").locator("xpath=.."),

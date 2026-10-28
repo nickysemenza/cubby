@@ -586,7 +586,9 @@ struct PhotoEntityChooserModelTests {
     private nonisolated static func page(
         _ rows: [EntityRow], page: Int, total: Int
     ) -> ListPage<EntityRow> {
-        ListPage(items: rows, meta: ListPageMeta(pageIndex: page, pageSize: 1, totalCount: total))
+        ListPage(
+            items: rows,
+            meta: ListPageMeta(pageIndex: page, pageSize: 1, totalCount: total, hasNextPage: page < total))
     }
 }
 

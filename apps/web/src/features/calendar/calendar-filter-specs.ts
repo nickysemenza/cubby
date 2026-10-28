@@ -3,13 +3,19 @@ import {
   calendarSourceEntity,
   type CalendarSourceKind,
 } from "@cubby/schemas/calendar";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import {
+  type QueryClient,
+  useQueries,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useMemo } from "react";
 
 import {
   getEntityFilters,
   filterSpecLabel,
   type FilterSpec,
 } from "~/entity/filter-manifest";
+import { entityMetadata, entityMetadataQueryOptions } from "~/entity/metadata";
 
 // SAFETY: calendarSources is exhaustive over the CalendarSourceKind union.
 export const calendarKinds = Object.keys(
@@ -18,29 +24,31 @@ export const calendarKinds = Object.keys(
 export const calendarFilterKey = (kind: CalendarSourceKind, key: string) =>
   `${kind}.${key}`;
 
-export const calendarEntityFilterSpecs = Object.fromEntries(
-  calendarKinds.map((kind) => {
-    const entity = calendarSourceEntity(kind);
-    const primary = entitySummary[entity].primarySearch;
-    const specs: readonly FilterSpec[] = [
-      ...(primary
-        ? [
-            {
-              columnId: primary.key,
-              kind: "text" as const,
-              placeholder: primary.placeholder,
-              label: "Search",
-            },
-          ]
-        : []),
-      ...getEntityFilters(entity),
-    ];
-    return [kind, specs];
-  }),
-);
+export function calendarEntityFilterSpecs(
+  queryClient: QueryClient,
+  kind: CalendarSourceKind,
+): readonly FilterSpec[] {
+  const entity = calendarSourceEntity(kind);
+  const primary = entityMetadata(queryClient, entity).summary.primarySearch;
+  return [
+    ...(primary
+      ? [
+          {
+            columnId: primary.key,
+            kind: "text" as const,
+            placeholder: primary.placeholder,
+            label: "Search",
+          },
+        ]
+      : []),
+    ...getEntityFilters(queryClient, entity),
+  ];
+}
 
 /** Namespacing changes addresses and labels, never the source's filter rules. */
-export const calendarFilterSpecs: readonly FilterSpec[] = [
+const calendarFilterSpecs = (
+  queryClient: QueryClient,
+): readonly FilterSpec[] => [
   {
     columnId: "kinds",
     kind: "multiselect",
@@ -51,11 +59,12 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
       label:
         kind === "spending"
           ? "Spending"
-          : entitySummary[calendarSourceEntity(kind)].plural,
+          : entityMetadata(queryClient, calendarSourceEntity(kind)).summary
+              .plural,
     })),
   },
   ...calendarKinds.flatMap((kind) =>
-    calendarEntityFilterSpecs[kind]!.map((spec) => ({
+    calendarEntityFilterSpecs(queryClient, kind).map((spec) => ({
       ...spec,
       columnId: calendarFilterKey(kind, spec.columnId),
       urlKey: calendarFilterKey(kind, spec.urlKey ?? spec.columnId),
@@ -72,24 +81,54 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
       group:
         kind === "spending"
           ? "Spending"
-          : entitySummary[calendarSourceEntity(kind)].plural,
-      label: `${kind === "spending" ? "Spending" : entitySummary[calendarSourceEntity(kind)].singular} ${filterSpecLabel(spec).toLowerCase()}`,
+          : entityMetadata(queryClient, calendarSourceEntity(kind)).summary
+              .plural,
+      label: `${kind === "spending" ? "Spending" : entityMetadata(queryClient, calendarSourceEntity(kind)).summary.singular} ${filterSpecLabel(spec).toLowerCase()}`,
     })),
   ),
 ];
 
-export const calendarScheduleFilterSpecs = calendarFilterSpecs.map((spec) => ({
-  ...spec,
-  unsupportedReason:
-    spec.columnId === "kinds" ||
-    spec.columnId.startsWith("task.") ||
-    spec.columnId.startsWith("planting.")
-      ? undefined
-      : "Schedule shows only Tasks and Plantings.",
-  options:
-    spec.columnId === "kinds"
-      ? spec.options?.filter(
-          (option) => option.value === "task" || option.value === "planting",
-        )
-      : spec.options,
-}));
+export const calendarScheduleFilterSpecs = (specs: readonly FilterSpec[]) =>
+  specs.map((spec) => ({
+    ...spec,
+    unsupportedReason:
+      spec.columnId === "kinds" ||
+      spec.columnId.startsWith("task.") ||
+      spec.columnId.startsWith("planting.")
+        ? undefined
+        : "Schedule shows only Tasks and Plantings.",
+    options:
+      spec.columnId === "kinds"
+        ? spec.options?.filter(
+            (option) => option.value === "task" || option.value === "planting",
+          )
+        : spec.options,
+  }));
+
+const calendarMetadataResults = (
+  results: readonly { isPending: boolean; error: Error | null }[],
+) => ({
+  pending: results.some((result) => result.isPending),
+  error: results.find((result) => result.error)?.error,
+});
+
+/** Non-entity Calendar admits just its declared source slices before compiling filters. */
+export function useCalendarMetadata() {
+  const state = useQueries({
+    queries: calendarKinds.map((kind) =>
+      entityMetadataQueryOptions(calendarSourceEntity(kind)),
+    ),
+    combine: calendarMetadataResults,
+  });
+  if (state.error) throw state.error;
+  return !state.pending;
+}
+
+export function useCalendarFilterSpecs() {
+  const queryClient = useQueryClient();
+  const ready = useCalendarMetadata();
+  return useMemo(
+    () => (ready ? calendarFilterSpecs(queryClient) : undefined),
+    [queryClient, ready],
+  );
+}

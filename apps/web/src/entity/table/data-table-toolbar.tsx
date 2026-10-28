@@ -8,6 +8,7 @@ import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import { RowsIcon } from "@phosphor-icons/react/dist/csr/Rows";
 import { SortAscendingIcon } from "@phosphor-icons/react/dist/csr/SortAscending";
 import { SortDescendingIcon } from "@phosphor-icons/react/dist/csr/SortDescending";
+import { useQueryClient } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
 import { type ReactNode, useState } from "react";
 import { createPortal } from "react-dom";
@@ -90,7 +91,7 @@ function SavedViewsSubmenu<TData extends RowData>({
   table: Table<TData>;
   entity?: Entity;
 }) {
-  if (viewsForEntity(entity).length === 0) return null;
+  if (viewsForEntity(useQueryClient(), entity).length === 0) return null;
   return (
     <DropdownMenuSubmenu>
       <DropdownMenuSubmenuTrigger>
@@ -128,7 +129,7 @@ function ActionsMenu<TData extends RowData>({
     table.state,
     table.options.meta?.defaultLayout,
   );
-  const hasViews = viewsForEntity(entity).length > 0;
+  const hasViews = viewsForEntity(useQueryClient(), entity).length > 0;
 
   return (
     <>

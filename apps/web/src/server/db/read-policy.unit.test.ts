@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { mutationChangesHouseholdData, readPolicyFor } from "./read-policy";
 
 describe("shared read policy", () => {
-  it("uses authoritative reads for representative interactive workflows", () => {
+  it("allows bounded-stale reads for ordinary display workflows", () => {
     for (const operation of [
       "ai.usageRecent",
       "meal.getShoppingList",
@@ -20,11 +20,11 @@ describe("shared read policy", () => {
       "suggestions.automaticDecisions",
       "recipe.getDependencyGraph",
     ] as const) {
-      expect(readPolicyFor(operation, "query")).toBe("strong");
+      expect(readPolicyFor(operation, "query")).toBe("context");
     }
   });
 
-  it("reads the bounded Home summaries without a freshness RPC", () => {
+  it("allows bounded-stale Home summaries", () => {
     for (const operation of [
       "expense.monthlySummary",
       "location.valuationSummary",
@@ -32,8 +32,38 @@ describe("shared read policy", () => {
       "meal.upcomingSummary",
       "entityReport.get",
     ] as const) {
-      expect(readPolicyFor(operation, "query")).toBe("strong");
+      expect(readPolicyFor(operation, "query")).toBe("context");
     }
+  });
+
+  it("keeps money entry and reconciliation authoritative, including generic entity reads", () => {
+    for (const operation of [
+      "financialTransaction.previewBooking",
+      "purchase.settlementCandidates",
+      "purchase.checkSplit",
+      "expense.chargeContext",
+      "inventory.receivingContext",
+    ])
+      expect(readPolicyFor(operation, "query")).toBe("strong");
+    for (const entity of [
+      "expense",
+      "purchase",
+      "financialTransaction",
+      "transactionImport",
+    ])
+      expect(readPolicyFor("entity.detail", "query", entity)).toBe("strong");
+    expect(readPolicyFor("entity.detail", "query", "product")).toBe("context");
+    expect(
+      readPolicyFor("entityReport.get", "query", undefined, [
+        "purchase.reconciliation",
+      ]),
+    ).toBe("strong");
+    expect(
+      readPolicyFor("entityReport.getMany", "query", undefined, [
+        "product.pricing",
+        "purchase.financial-settlement",
+      ]),
+    ).toBe("strong");
   });
 
   it("makes every mutation strong regardless of its operation family", () => {

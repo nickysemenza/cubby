@@ -1,13 +1,21 @@
+import { entitySchema } from "@cubby/schemas/entity";
 import nativeVectors from "@cubby/shared/golden-vectors/structured-roundtrip.json";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { type FieldValues, FormProvider, useForm } from "react-hook-form";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+
+import {
+  renderWithEditorMetadata as render,
+  createEditorTestQueryClient,
+} from "#web/tests/editor-metadata.fixtures.ts";
 
 import { collectionDraft, type CollectionDescriptor } from "./collection-edit";
 import { structuredSchemaFor } from "./structured-schema";
 import { StructuredValueField } from "./structured-value-field";
 import webVectors from "./structured-value.fixtures.json";
+
+const queryClient = createEditorTestQueryClient();
 
 const inputOf = (entity: string, field: string) =>
   z
@@ -35,7 +43,11 @@ function Harness({
   refreshed?: z.core.util.JSONType;
   onSubmit: (value: z.core.util.JSONType) => void;
 }) {
-  const schema = structuredSchemaFor(entity, field);
+  const schema = structuredSchemaFor(
+    queryClient,
+    entitySchema.parse(entity),
+    field,
+  );
   if (schema === undefined) throw new Error(`no schema for ${entity}.${field}`);
   const form = useForm<FieldValues>({ defaultValues: { [field]: initial } });
   return (

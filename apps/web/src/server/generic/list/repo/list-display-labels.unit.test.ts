@@ -80,16 +80,21 @@ describe("listTotalLabels", () => {
     expect(
       listTotalLabels("inventory", { valuation: 0 }, ["valuation"]),
     ).toEqual({ valuation: "Incomplete · $0.00 known" });
+    expect(listTotalLabels("inventory", { valuation: 0 })).toEqual({
+      valuation: "Incomplete · $0.00 known",
+    });
   });
   it("words full-filter zero and signed totals, including a complete range", () => {
     expect(
-      listTotalLabels("vendor", { spend: -12.5, purchaseCount: 1234 }),
+      listTotalLabels("vendor", { spend: -12.5, purchaseCount: 1234 }, []),
     ).toEqual({ spend: "-$12.50", purchaseCount: "1,234" });
-    expect(listTotalLabels("wish", { priceLow: 0, priceHigh: 42 })).toEqual({
-      priceRange: "$0.00–$42.00",
-    });
+    expect(listTotalLabels("wish", { priceLow: 0, priceHigh: 42 }, [])).toEqual(
+      {
+        priceRange: "$0.00–$42.00",
+      },
+    );
     // Equal ends collapse to one value.
-    expect(listTotalLabels("wish", { priceLow: 3, priceHigh: 3 })).toEqual({
+    expect(listTotalLabels("wish", { priceLow: 3, priceHigh: 3 }, [])).toEqual({
       priceRange: "$3.00",
     });
   });

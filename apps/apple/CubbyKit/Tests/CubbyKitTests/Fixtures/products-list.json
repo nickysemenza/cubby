@@ -74,6 +74,7 @@
   "meta": {
     "pageIndex": 0,
     "pageSize": 20,
-    "totalCount": 1
+    "totalCount": 1,
+    "hasNextPage": false
   }
 }

@@ -19,8 +19,6 @@ import {
   classificationFieldDisplayRefusal,
 } from "@cubby/schemas/classification-field-policy";
 import type { Entity } from "@cubby/schemas/entity";
-import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
@@ -35,6 +33,7 @@ import {
 import { parseShortcode } from "@cubby/shared";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import type { QueryClient } from "@tanstack/react-query";
 import {
   useQueries,
   useQueryClient,
@@ -73,6 +72,7 @@ import { entityDetailFor } from "~/entity/entity-detail";
 import { readReferenceField } from "~/entity/entity-references";
 import { NotApplicableField } from "~/entity/fields/field-applicability";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { CorrectionAuthorityEvidence } from "~/entity/suggestions/correction-authority-evidence";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
@@ -81,6 +81,7 @@ import { suggestions } from "~/integrations/tanstack-query/generated/catalog/sug
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { operationCachePolicy } from "~/integrations/tanstack-query/query-policy";
 import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
+import type { StartCallOptions } from "~/integrations/tanstack-query/start-transport";
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { CellFrame } from "~/ui/data-table/cell-frame";
 import { WhyValueContents } from "~/ui/derived/why-value";
@@ -248,11 +249,14 @@ const RecordSuggestionsContext = createContext<{
 } | null>(null);
 
 export interface StoredSuggestionOperations {
-  list: (input: {
-    entity: StandardEntity;
-    recordIds: string[];
-    fields: string[];
-  }) => Promise<SuggestionReviewRow[]>;
+  list: (
+    input: {
+      entity: StandardEntity;
+      recordIds: string[];
+      fields: string[];
+    },
+    options?: StartCallOptions,
+  ) => Promise<SuggestionReviewRow[]>;
   review: (input: {
     assessmentId: string;
     operationId: string;
@@ -269,10 +273,12 @@ export interface StoredSuggestionOperations {
   /** Remembered declines for a page batch, positional with `questions`. */
   settled: (
     input: SettledSuggestionQuestionsInput,
+    options?: StartCallOptions,
   ) => Promise<BatchOut<SettledSuggestionAnswer>>;
   /** Saved-record answer previews for a page batch; omitted shows none. */
   previews?: (
     input: Omit<SettledSuggestionQuestionsInput, "read">,
+    options?: StartCallOptions,
   ) => Promise<BatchOut<SettledSuggestionAnswer>>;
 }
 
@@ -291,9 +297,13 @@ export const everyPendingSuggestion =
   (
     read: (
       input: PendingPageInput & { cursor?: string; limit: number },
+      options?: StartCallOptions,
     ) => Promise<PendingPage>,
   ) =>
-  async (input: PendingPageInput): Promise<SuggestionReviewRow[]> => {
+  async (
+    input: PendingPageInput,
+    options?: StartCallOptions,
+  ): Promise<SuggestionReviewRow[]> => {
     const rosters: string[][] = [];
     for (
       let start = 0;
@@ -308,12 +318,15 @@ export const everyPendingSuggestion =
         const rows: SuggestionReviewRow[] = [];
         let cursor: string | undefined;
         do {
-          const page = await read({
-            ...input,
-            recordIds,
-            limit: SUGGESTION_LIST_PAGE_MAX,
-            ...(cursor ? { cursor } : {}),
-          });
+          const page = await read(
+            {
+              ...input,
+              recordIds,
+              limit: SUGGESTION_LIST_PAGE_MAX,
+              ...(cursor ? { cursor } : {}),
+            },
+            options,
+          );
           rows.push(...page.items);
           cursor = page.next ?? undefined;
         } while (cursor);
@@ -325,15 +338,18 @@ export const everyPendingSuggestion =
 
 const productionStoredSuggestionOperations: StoredSuggestionOperations = {
   list: everyPendingSuggestion(
-    async ({ entity, recordIds, fields, cursor, limit }) => {
-      const page = await suggestions.list.call({
-        family: "field",
-        recordEntity: entity,
-        recordIds,
-        field: fields,
-        limit,
-        ...(cursor ? { cursor } : {}),
-      });
+    async ({ entity, recordIds, fields, cursor, limit }, options) => {
+      const page = await suggestions.list.call(
+        {
+          family: "field",
+          recordEntity: entity,
+          recordIds,
+          field: fields,
+          limit,
+          ...(cursor ? { cursor } : {}),
+        },
+        options,
+      );
       return {
         items: page.items.flatMap((row) =>
           row.family === "field" ? [row.evidence] : [],
@@ -344,9 +360,10 @@ const productionStoredSuggestionOperations: StoredSuggestionOperations = {
   ),
   review: (input) => assessment.review.call(input),
   reviewBatch: (input) => assessment.reviewBatch.call(input),
-  settled: (input) => ai.settledSuggestionQuestions.call(input),
-  previews: (input) =>
-    ai.settledSuggestionQuestions.call({ ...input, read: "preview" }),
+  settled: (input, options) =>
+    ai.settledSuggestionQuestions.call(input, options),
+  previews: (input, options) =>
+    ai.settledSuggestionQuestions.call({ ...input, read: "preview" }, options),
 };
 
 const recordIdentitySchema = z.object({ id: z.string() });
@@ -396,13 +413,14 @@ function basisForFingerprint(
  * the field's current entries and only patches when every proposed removal
  * is still present. */
 function removeFieldPatch(
+  queryClient: QueryClient,
   entity: StandardEntity,
   field: string,
   suggestion: FieldSuggestion,
   freshRecord: SuggestionRecord,
 ): z.output<typeof mutationPatchSchema> {
   const current = textArraySchema.safeParse(
-    suggestionRecordFieldValue(entity, freshRecord, field),
+    suggestionRecordFieldValue(queryClient, entity, freshRecord, field),
   );
   const removedValues = new Set(
     suggestion.removals.map((removal) => removal.value),
@@ -419,6 +437,7 @@ function removeFieldPatch(
 }
 
 function setFieldPatch(
+  queryClient: QueryClient,
   entity: StandardEntity,
   field: string,
   suggestion: FieldSuggestion,
@@ -428,14 +447,16 @@ function setFieldPatch(
   const value = suggestion.value;
   if (
     !value ||
-    recordValue(entity, freshRecord, field).value !== expectedCurrent
+    recordValue(queryClient, entity, freshRecord, field).value !==
+      expectedCurrent
   ) {
     throw new Error("Suggestion inputs changed");
   }
   const resolution = recordFieldResolutions(freshRecord)[field];
-  const resolutionPolicy = entityFieldModels[entity].fields.find(
-    (candidate) => candidate.key === field,
-  )?.resolution;
+  const resolutionPolicy = entityMetadata(
+    queryClient,
+    entity,
+  ).fields.fields.find((candidate) => candidate.key === field)?.resolution;
   const usesInheritedValue =
     resolution?.current.controls.kind === "editable" &&
     resolution.current.controls.reset.kind === "available" &&
@@ -452,11 +473,12 @@ function setFieldPatch(
 export const RecordSuggestionScope = createContext<SuggestionRow | null>(null);
 
 function recordValue(
+  queryClient: QueryClient,
   entity: ShortcodeEntity,
   record: SuggestionRecord,
   key: string,
 ) {
-  const field = entityFieldModels[entity].fields.find(
+  const field = entityMetadata(queryClient, entity).fields.fields.find(
     (candidate) => candidate.key === key,
   );
   if (!field) return { value: null, label: null };
@@ -464,10 +486,15 @@ function recordValue(
     const item = readReferenceField(record, field)?.items[0];
     return { value: item?.id ?? null, label: item?.name ?? item?.id ?? null };
   }
-  const value = basisValueOf(suggestionRecordFieldValue(entity, record, key));
+  const value = basisValueOf(
+    suggestionRecordFieldValue(queryClient, entity, record, key),
+  );
   return {
     value,
-    label: field.kind === "enum" ? enumFieldLabel(entity, key, value) : value,
+    label:
+      field.kind === "enum"
+        ? enumFieldLabel(queryClient, entity, key, value)
+        : value,
   };
 }
 
@@ -496,13 +523,19 @@ const basisFingerprint = (basis: Record<string, string | null>) =>
  * `save`'s re-check so both sides agree on what "the same inputs" means for
  * a given key set. */
 function recordSuggestionBasis(
+  queryClient: QueryClient,
   entity: StandardEntity,
   targets: SuggestTargets,
   record: SuggestionRecord,
 ) {
-  const basis = fieldSuggestionBasisFromRecord(entity, targets, record);
+  const basis = fieldSuggestionBasisFromRecord(
+    queryClient,
+    entity,
+    targets,
+    record,
+  );
   for (const key of suggestionContextKeys(entity, targets)) {
-    const value = suggestionRecordFieldValue(entity, record, key);
+    const value = suggestionRecordFieldValue(queryClient, entity, record, key);
     if (value === undefined) continue;
     const parsed = nullableBasisValueSchema.safeParse(basisValueOf(value));
     if (parsed.success) basis[key] = parsed.data;
@@ -517,11 +550,12 @@ function recordSuggestionBasis(
 /** The record-independent part of each target's request, derived once for a
  * page of records rather than once per record. */
 function suggestionTargetPlans(
+  queryClient: QueryClient,
   entity: StandardEntity,
   targets: SuggestTargets,
 ) {
   return targets.targets.map((target) => {
-    const ownTargets = suggestTargetsFor(entity, [target.key]);
+    const ownTargets = suggestTargetsFor(queryClient, entity, [target.key]);
     return {
       target,
       ownTargets,
@@ -529,7 +563,7 @@ function suggestionTargetPlans(
         ...ownTargets,
         basisKeys: [...new Set([...ownTargets.basisKeys, target.key])],
       },
-      field: entityFieldModels[entity].fields.find(
+      field: entityMetadata(queryClient, entity).fields.fields.find(
         (entry) => entry.key === target.key,
       ),
     };
@@ -539,6 +573,7 @@ function suggestionTargetPlans(
 /** Each target owns its question: deferred sibling projections and accepted
  * sibling assignments cannot replace an unchanged field's query observer. */
 function suggestionRequestsForRecord(
+  queryClient: QueryClient,
   entity: StandardEntity,
   record: SuggestionRecord,
   plans: ReturnType<typeof suggestionTargetPlans>,
@@ -546,23 +581,41 @@ function suggestionRequestsForRecord(
 ) {
   const resolutions = recordFieldResolutions(record);
   return plans.flatMap(({ target, ownTargets, basisTargets, field }) => {
-    const basis = recordSuggestionBasis(entity, basisTargets, record);
-    const currentValue = recordValue(entity, record, target.key).value;
+    const basis = recordSuggestionBasis(
+      queryClient,
+      entity,
+      basisTargets,
+      record,
+    );
+    const currentValue = recordValue(
+      queryClient,
+      entity,
+      record,
+      target.key,
+    ).value;
     const readKey = field?.readKey ?? target.key;
     const loaded =
       field?.readKey === null ||
-      Object.hasOwn(entityFieldEnvelopeFields[entity], readKey)
-        ? suggestionRecordFieldValue(entity, record, target.key) !== undefined
+      entityMetadata(queryClient, entity).envelopeFields.some(
+        (key) => key === readKey,
+      )
+        ? suggestionRecordFieldValue(
+            queryClient,
+            entity,
+            record,
+            target.key,
+          ) !== undefined
         : record[readKey] !== undefined ||
           (field?.reference != null &&
             record[target.key.replace(/Ids?$/u, "")] !== undefined) ||
           currentValue !== null;
     if (
       !loaded ||
-      !isBasisSufficient(entity, ownTargets, basis) ||
+      !isBasisSufficient(queryClient, entity, ownTargets, basis) ||
       (entity === "expense" &&
         target.key === "projectId" &&
-        suggestionRecordFieldValue(entity, record, "lineKind") !== "principal")
+        suggestionRecordFieldValue(queryClient, entity, record, "lineKind") !==
+          "principal")
     )
       return [];
     const resolution = resolutions[target.key];
@@ -604,12 +657,13 @@ type AcceptedSuggestion = {
 /** Acceptance changes its own assignment; only dependencies can revoke the
  * retained choice. The authoritative write still checks the full request basis. */
 function acceptedBasis(
+  queryClient: QueryClient,
   entity: StandardEntity,
   record: SuggestionRecord,
   field: string,
 ) {
-  const targets = suggestTargetsFor(entity, [field]);
-  const definition = entityFieldModels[entity].fields.find(
+  const targets = suggestTargetsFor(queryClient, entity, [field]);
+  const definition = entityMetadata(queryClient, entity).fields.fields.find(
     (candidate) => candidate.key === field,
   );
   const ownKeys = new Set([
@@ -620,7 +674,12 @@ function acceptedBasis(
     ...targets,
     basisKeys: targets.basisKeys.filter((key) => !ownKeys.has(key)),
   };
-  const basis = recordSuggestionBasis(entity, dependencies, record);
+  const basis = recordSuggestionBasis(
+    queryClient,
+    entity,
+    dependencies,
+    record,
+  );
   for (const key of ownKeys) delete basis[key];
   basis.__resolutionContext = resolutionContext(
     record,
@@ -635,6 +694,7 @@ function acceptedBasis(
 }
 
 function activeAcceptedSuggestions(
+  queryClient: QueryClient,
   entity: StandardEntity,
   records: readonly unknown[],
   accepted: ReadonlyMap<string, AcceptedSuggestion>,
@@ -648,9 +708,12 @@ function activeAcceptedSuggestions(
   const active = new Map<string, AcceptedSuggestion>();
   for (const [key, entry] of accepted) {
     const record = byId.get(entry.recordId);
-    if (!record || entry.basis !== acceptedBasis(entity, record, entry.field))
+    if (
+      !record ||
+      entry.basis !== acceptedBasis(queryClient, entity, record, entry.field)
+    )
       continue;
-    const current = recordValue(entity, record, entry.field).value;
+    const current = recordValue(queryClient, entity, record, entry.field).value;
     const confirmed = current === basisValueOf(entry.value);
     if (confirmed || (!entry.confirmed && current === entry.previousValue)) {
       active.set(
@@ -715,12 +778,13 @@ export function RecordSuggestionsProvider({
  * declares — what the "Not checked — add a `name` first" status line names
  * as the thing to fill in before the decision model has anything to evaluate. */
 function firstBasisFieldLabel(
+  queryClient: QueryClient,
   entity: StandardEntity,
   targets: SuggestTargets,
 ): string | null {
   for (const key of targets.basisKeys) {
     if (key.startsWith("__")) continue;
-    const field = entityFieldModels[entity].fields.find(
+    const field = entityMetadata(queryClient, entity).fields.fields.find(
       (candidate) => candidate.key === key,
     );
     if (field && !field.reference) return field.label.toLowerCase();
@@ -729,22 +793,30 @@ function firstBasisFieldLabel(
 }
 
 function requestsForRecords(
+  queryClient: QueryClient,
   entity: StandardEntity,
   records: readonly unknown[],
   targets: SuggestTargets,
   runKey: string,
 ) {
   if (targets.targets.length === 0) return [];
-  const plans = suggestionTargetPlans(entity, targets);
+  const plans = suggestionTargetPlans(queryClient, entity, targets);
   return records.flatMap((raw) => {
     const parsed = recordSchema.safeParse(raw);
     if (!parsed.success || parseShortcode(parsed.data.id)?.type !== entity)
       return [];
-    return suggestionRequestsForRecord(entity, parsed.data, plans, runKey);
+    return suggestionRequestsForRecord(
+      queryClient,
+      entity,
+      parsed.data,
+      plans,
+      runKey,
+    );
   });
 }
 
 function storedSuggestionIndex(
+  queryClient: QueryClient,
   rows: readonly SuggestionReviewRow[] | undefined,
   entity: StandardEntity,
   records: readonly unknown[],
@@ -760,8 +832,12 @@ function storedSuggestionIndex(
         .safeParse(record);
       if (
         parsed.success &&
-        suggestionRecordFieldValue(entity, parsed.data, "categoryId") ===
-          parsed.data.category.id
+        suggestionRecordFieldValue(
+          queryClient,
+          entity,
+          parsed.data,
+          "categoryId",
+        ) === parsed.data.category.id
       )
         categories.set(parsed.data.id, parsed.data.category);
     }
@@ -800,6 +876,7 @@ function storedSuggestionIndex(
 }
 
 function actionableRowSuggestionCount(
+  queryClient: QueryClient,
   entity: StandardEntity,
   rows: ReadonlyMap<string, SuggestionRow>,
   dismissed: ReadonlySet<string> | undefined,
@@ -808,7 +885,7 @@ function actionableRowSuggestionCount(
   for (const row of rows.values()) {
     for (const [key, suggestion] of Object.entries(row.suggestions)) {
       if (row.previewByField.get(key)) continue;
-      const current = recordValue(entity, row.record, key).value;
+      const current = recordValue(queryClient, entity, row.record, key).value;
       const question = JSON.stringify([
         entity,
         row.record.id,
@@ -834,6 +911,7 @@ function actionableRowSuggestionCount(
  * returned yet (no `outcomes[field]` entry) is left out; `checking` already
  * covers that state. */
 function statusFieldsForRows(
+  queryClient: QueryClient,
   entity: StandardEntity,
   rows: ReadonlyMap<string, SuggestionRow>,
 ): SuggestionStatusField[] {
@@ -842,10 +920,10 @@ function statusFieldsForRows(
     for (const field of row.sourceByField.keys()) {
       const outcome = row.outcomes[field];
       if (!outcome) continue;
-      const model = entityFieldModels[entity].fields.find(
+      const model = entityMetadata(queryClient, entity).fields.fields.find(
         (candidate) => candidate.key === field,
       );
-      const value = recordValue(entity, row.record, field);
+      const value = recordValue(queryClient, entity, row.record, field);
       fields.push({
         label: model?.label ?? field,
         outcome,
@@ -886,10 +964,11 @@ function settledQuestionOf(
  * to any of them rechecks the question; other writes leave it alone.
  */
 function settledQuestionTags(
+  queryClient: QueryClient,
   entity: StandardEntity,
   question: SettledSuggestionQuestion,
 ): CacheTag[] {
-  const fields = entityFieldModels[entity].fields;
+  const fields = entityMetadata(queryClient, entity).fields.fields;
   const kinds = new Set<string>([entity]);
   for (const key of [question.field, ...Object.keys(question.basis)]) {
     const reference = fields.find((field) => field.key === key)?.reference;
@@ -966,11 +1045,27 @@ function useSettledQuestions(
   operations: StoredSuggestionOperations,
   scheduler: ReturnType<typeof createConcurrencyLimiter>,
 ) {
+  const queryClient = useQueryClient();
   const latest = useRef({ operations, scheduler });
   latest.current = { operations, scheduler };
   const [batcher] = useState(() =>
-    createRequestBatcher<SettledSuggestionQuestion, SettledSuggestionAnswer>(
-      (questions) => latest.current.operations.settled({ entity, questions }),
+    createRequestBatcher<
+      {
+        question: SettledSuggestionQuestion;
+        consistency?: StartCallOptions["consistency"];
+      },
+      SettledSuggestionAnswer
+    >(
+      (items, signal) =>
+        latest.current.operations.settled(
+          { entity, questions: items.map(({ question }) => question) },
+          {
+            signal,
+            consistency: items.some((item) => item.consistency === "strong")
+              ? "strong"
+              : undefined,
+          },
+        ),
       {
         max: SETTLED_SUGGESTION_QUESTION_MAX,
         concurrency: 1,
@@ -989,12 +1084,20 @@ function useSettledQuestions(
       const question = questions.get(id)!;
       return {
         queryKey: ["ai", "settled-suggestion-question", entity, id] as const,
-        queryFn: ({ signal }: { signal: AbortSignal }) =>
-          batcher.load(question, signal),
+        queryFn: ({ signal, client, queryKey }) =>
+          batcher.load(
+            {
+              question,
+              consistency: client.getQueryState(queryKey)?.isInvalidated
+                ? "strong"
+                : undefined,
+            },
+            signal,
+          ),
         ...SETTLED_FRESHNESS,
         retry: false,
         meta: {
-          cacheTags: settledQuestionTags(entity, question),
+          cacheTags: settledQuestionTags(queryClient, entity, question),
           silentErrors: true,
         },
       };
@@ -1069,13 +1172,28 @@ function useSavedAnswerPreviews(
   requests: readonly PageRequest[],
   operations: StoredSuggestionOperations,
 ) {
+  const queryClient = useQueryClient();
   const latest = useRef(operations);
   latest.current = operations;
   const [batcher] = useState(() =>
-    createRequestBatcher<SettledSuggestionQuestion, SettledSuggestionAnswer>(
-      async (questions) =>
-        (await latest.current.previews?.({ entity, questions })) ?? {
-          results: questions.map(() => ({
+    createRequestBatcher<
+      {
+        question: SettledSuggestionQuestion;
+        consistency?: StartCallOptions["consistency"];
+      },
+      SettledSuggestionAnswer
+    >(
+      async (items, signal) =>
+        (await latest.current.previews?.(
+          { entity, questions: items.map(({ question }) => question) },
+          {
+            signal,
+            consistency: items.some((item) => item.consistency === "strong")
+              ? "strong"
+              : undefined,
+          },
+        )) ?? {
+          results: items.map(() => ({
             ok: true as const,
             value: { outcome: null, revision: null, preview: null },
           })),
@@ -1095,12 +1213,20 @@ function useSavedAnswerPreviews(
       const question = questions.get(id)!;
       return {
         queryKey: ["ai", "settled-suggestion-preview", entity, id] as const,
-        queryFn: ({ signal }: { signal: AbortSignal }) =>
-          batcher.load(question, signal),
+        queryFn: ({ signal, client, queryKey }) =>
+          batcher.load(
+            {
+              question,
+              consistency: client.getQueryState(queryKey)?.isInvalidated
+                ? "strong"
+                : undefined,
+            },
+            signal,
+          ),
         ...SETTLED_FRESHNESS,
         retry: false,
         meta: {
-          cacheTags: settledQuestionTags(entity, question),
+          cacheTags: settledQuestionTags(queryClient, entity, question),
           silentErrors: true,
         },
       };
@@ -1157,6 +1283,8 @@ function BoundRecordSuggestions({
   ) => Promise<SuggestionRecord | null>;
   storedSuggestionOperations?: StoredSuggestionOperations;
 }) {
+  useEntityMetadata(entity);
+  const queryClient = useQueryClient();
   const visit = useSuggestionVisit();
   const [activeRecordIds, setActiveRecordIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -1195,12 +1323,15 @@ function BoundRecordSuggestions({
   const loadLiveSuggestion = (
     source: FieldSuggestionSource,
     signal: AbortSignal,
+    consistency?: StartCallOptions["consistency"],
   ) => {
     liveBatcher.current ??= import("./record-suggestion-batch").then(
       ({ createRecordSuggestionBatch }) =>
         createRecordSuggestionBatch(() => latestBatch.current),
     );
-    return liveBatcher.current.then((batcher) => batcher.load(source, signal));
+    return liveBatcher.current.then((batcher) =>
+      batcher.load(source, signal, consistency),
+    );
   };
   const financeApply = useFinanceCategoryApply(operations);
   const update = useEntityCommands(entity, { mutationPort });
@@ -1215,14 +1346,14 @@ function BoundRecordSuggestions({
   // and the first client render identical.
   const hydrated = useHydrated();
   const records = hydrated ? allRecords : NO_RECORDS;
-  const targets = visibleSuggestTargets(entity, fieldKeys);
+  const targets = visibleSuggestTargets(queryClient, entity, fieldKeys);
   const pageRecordIds = [
     ...new Set(
       records.map(recordPublicId).filter((id): id is string => id !== null),
     ),
   ];
-  const pageFields = entityFieldModels[entity].fields
-    .filter((field) => field.control?.suggest)
+  const pageFields = entityMetadata(queryClient, entity)
+    .fields.fields.filter((field) => field.control?.suggest)
     .map((field) => field.key);
   const storedQueryKey = [
     "ai",
@@ -1236,13 +1367,25 @@ function BoundRecordSuggestions({
       ? [
           {
             queryKey: storedQueryKey,
-            queryFn: async (): Promise<StoredPageRead> => ({
+            queryFn: async ({
+              signal,
+              client,
+              queryKey,
+            }): Promise<StoredPageRead> => ({
               recordIds: pageRecordIds,
-              rows: await storedSuggestionOperations.list({
-                entity,
-                recordIds: pageRecordIds,
-                fields: pageFields,
-              }),
+              rows: await storedSuggestionOperations.list(
+                {
+                  entity,
+                  recordIds: pageRecordIds,
+                  fields: pageFields,
+                },
+                {
+                  signal,
+                  consistency: client.getQueryState(queryKey)?.isInvalidated
+                    ? "strong"
+                    : undefined,
+                },
+              ),
             }),
             retry: false,
             meta: { cacheTags: [[entity]] },
@@ -1260,20 +1403,29 @@ function BoundRecordSuggestions({
     completedStoredRead.current = storedQuery.data;
   const storedData = storedQuery?.data ?? completedStoredRead.current;
   const knownRecordIds = new Set(storedData?.recordIds);
-  const queryClient = useQueryClient();
   const [acceptedValues, setAcceptedValues] = useState<
     ReadonlyMap<string, AcceptedSuggestion>
   >(new Map());
-  const accepted = activeAcceptedSuggestions(entity, records, acceptedValues);
+  const accepted = activeAcceptedSuggestions(
+    queryClient,
+    entity,
+    records,
+    acceptedValues,
+  );
   useEffect(() => {
     setAcceptedValues((previous) => {
-      const active = activeAcceptedSuggestions(entity, records, previous);
+      const active = activeAcceptedSuggestions(
+        queryClient,
+        entity,
+        records,
+        previous,
+      );
       return active.size === previous.size &&
         [...active].every(([key, entry]) => previous.get(key) === entry)
         ? previous
         : active;
     });
-  }, [entity, records]);
+  }, [queryClient, entity, records]);
   const afterStoredReview = (...ids: string[]) => {
     if (ids.length === 0) return;
     const settled = new Set(ids);
@@ -1308,11 +1460,22 @@ function BoundRecordSuggestions({
     afterStoredReview(id);
     return result;
   };
-  const stored = storedSuggestionIndex(storedData?.rows, entity, records);
+  const stored = storedSuggestionIndex(
+    queryClient,
+    storedData?.rows,
+    entity,
+    records,
+  );
   for (const key of accepted.keys()) stored.delete(key);
   // Every target is its own request; settled questions are read only for
   // requests the stored read leaves uncovered.
-  const pageRequests = requestsForRecords(entity, records, targets, runKey);
+  const pageRequests = requestsForRecords(
+    queryClient,
+    entity,
+    records,
+    targets,
+    runKey,
+  );
   const recordReady = (id: string) =>
     pageFields.length === 0 || knownRecordIds.has(id);
   const readyRecords = records.filter((record) =>
@@ -1351,13 +1514,18 @@ function BoundRecordSuggestions({
     combine: combineFieldQueries,
     queries: sources.map((source) => ({
       ...operations.suggestFields.queryOptions(source),
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        operations.suggestFieldsBatch
-          ? loadLiveSuggestion(source, signal)
+      queryFn: ({ signal, client, queryKey }) => {
+        const consistency = client.getQueryState(queryKey)?.isInvalidated
+          ? "strong"
+          : undefined;
+        return operations.suggestFieldsBatch
+          ? loadLiveSuggestion(source, signal, consistency)
           : scheduler.run(
-              () => operations.suggestFields.call(source, { signal }),
+              () =>
+                operations.suggestFields.call(source, { signal, consistency }),
               signal,
-            ),
+            );
+      },
       retry: false,
       meta: {
         ...operations.suggestFields.queryOptions(source).meta,
@@ -1447,11 +1615,11 @@ function BoundRecordSuggestions({
       const key = storedSuggestionKey(record.id, field);
       const entry: AcceptedSuggestion = {
         actionKey: crypto.randomUUID(),
-        previousValue: recordValue(entity, record, field).value,
+        previousValue: recordValue(queryClient, entity, record, field).value,
         confirmed: false,
         recordId: record.id,
         field,
-        basis: acceptedBasis(entity, record, field),
+        basis: acceptedBasis(queryClient, entity, record, field),
         value,
         label,
         pending: true,
@@ -1581,7 +1749,11 @@ function BoundRecordSuggestions({
       const fresh = await readRecord(entity, id);
       if (!fresh) throw new Error("Suggestion inputs changed");
       const freshRecord = recordSchema.parse(fresh);
-      const declaredTargets = suggestTargetsFor(entity, source.targets);
+      const declaredTargets = suggestTargetsFor(
+        queryClient,
+        entity,
+        source.targets,
+      );
       const freshTargets: SuggestTargets = {
         ...declaredTargets,
         // Context values are added separately; treating them as declared basis
@@ -1591,6 +1763,7 @@ function BoundRecordSuggestions({
         ],
       };
       const freshBasis = recordSuggestionBasis(
+        queryClient,
         entity,
         freshTargets,
         freshRecord,
@@ -1603,8 +1776,9 @@ function BoundRecordSuggestions({
         throw new Error("Suggestion inputs changed");
       }
       const patch = isRemove
-        ? removeFieldPatch(entity, field, suggestion, freshRecord)
+        ? removeFieldPatch(queryClient, entity, field, suggestion, freshRecord)
         : setFieldPatch(
+            queryClient,
             entity,
             field,
             suggestion,
@@ -1616,7 +1790,7 @@ function BoundRecordSuggestions({
           operation: "update",
           intent: "full",
           id,
-          data: parseEntityEditUpdateInput(entity, patch),
+          data: await parseEntityEditUpdateInput(entity, patch),
         });
       } catch (error) {
         // A dependent required field can invalidate an otherwise sound
@@ -1634,7 +1808,10 @@ function BoundRecordSuggestions({
       const expectedSaved = isRemove
         ? basisValueOf(patch[field])
         : suggestion.value;
-      if (recordValue(entity, savedRecord, field).value !== expectedSaved)
+      if (
+        recordValue(queryClient, entity, savedRecord, field).value !==
+        expectedSaved
+      )
         throw new Error("The saved field changed from the reviewed value");
       const assessmentId = suggestion.assessmentId;
       if (!assessmentId) throw new Error("Suggestion assessment is missing.");
@@ -1652,7 +1829,12 @@ function BoundRecordSuggestions({
         throw new Error("Saved suggestion feedback was not recorded.");
     },
   };
-  const count = actionableRowSuggestionCount(entity, rows, visit?.dismissed);
+  const count = actionableRowSuggestionCount(
+    queryClient,
+    entity,
+    rows,
+    visit?.dismissed,
+  );
   // Before hydration no query exists yet, but checking is about to start;
   // saying so keeps the status line (and the table below it) where it lands.
   const checking =
@@ -1675,7 +1857,7 @@ function BoundRecordSuggestions({
     stored.size === 0 &&
     accepted.size === 0 &&
     !storedQuery?.isFetching
-      ? firstBasisFieldLabel(entity, targets)
+      ? firstBasisFieldLabel(queryClient, entity, targets)
       : null;
   const status = (
     <>
@@ -1683,7 +1865,7 @@ function BoundRecordSuggestions({
         checking={checking}
         failures={failures}
         count={count}
-        fields={statusFieldsForRows(entity, rows)}
+        fields={statusFieldsForRows(queryClient, entity, rows)}
         unasked={unasked}
       />
       {storedQuery?.error ? (
@@ -1718,6 +1900,7 @@ function BoundRecordSuggestions({
                   // SAFETY: StandardEntity is the generated browser-editable
                   // roster, and correctionRecord is its freshly read projection.
                   detailEditRequest(
+                    queryClient,
                     entity,
                     correctionRecord as never,
                   ) as EntityEditDialogRequest<EditableEntity>
@@ -1757,8 +1940,12 @@ export function RecordSuggestionBoundary({
 }
 
 /** Wraps existing cells without changing their accessor, sorting, clipboard, or normal editor. */
-function findEntityField(entity: StandardEntity, column: string) {
-  return entityFieldModels[entity].fields.find(
+function findEntityField(
+  queryClient: QueryClient,
+  entity: StandardEntity,
+  column: string,
+) {
+  return entityMetadata(queryClient, entity).fields.fields.find(
     (candidate) =>
       candidate.key === column ||
       candidate.display.columnId === column ||
@@ -1772,6 +1959,7 @@ function findEntityField(entity: StandardEntity, column: string) {
  * field's source, its current value, or the suggestion itself) has moved
  * since render, so a stale click can't silently write the wrong patch. */
 function suggestionWentStale(
+  queryClient: QueryClient,
   entity: StandardEntity,
   latest: { row: SuggestionRow | undefined; field: string | undefined },
   expected: {
@@ -1792,7 +1980,7 @@ function suggestionWentStale(
   )
     return true;
   if (
-    recordValue(entity, row.record, expected.field).value !==
+    recordValue(queryClient, entity, row.record, expected.field).value !==
     expected.currentValue
   )
     return true;
@@ -1830,10 +2018,11 @@ function ResolvedFieldSuggestion({
   renderValue?: (value: JsonValue) => ReactNode;
   children: ReactNode;
 }) {
+  const queryClient = useQueryClient();
   const snapshot = useRef({ row, field });
   snapshot.current = { row, field };
   const [editOpen, setEditOpen] = useState(false);
-  const current = recordValue(context.entity, row.record, field);
+  const current = recordValue(queryClient, context.entity, row.record, field);
   const suggestion = row.suggestions[field] ?? null;
   const preview = row.previewByField.get(field) ?? false;
   const questionKey = JSON.stringify([
@@ -1843,9 +2032,10 @@ function ResolvedFieldSuggestion({
     source,
   ]);
   const resolution = recordFieldResolutions(row.record)[field];
-  const definition = entityFieldModels[context.entity].fields.find(
-    (candidate) => candidate.key === field,
-  );
+  const definition = entityMetadata(
+    queryClient,
+    context.entity,
+  ).fields.fields.find((candidate) => candidate.key === field);
   const resolutionPolicy = definition?.resolution;
   const usesInheritedValue =
     resolution?.current.controls.kind === "editable" &&
@@ -1861,7 +2051,7 @@ function ResolvedFieldSuggestion({
       throw new Error("Suggestion is still being checked");
     if (
       !suggestion?.value ||
-      suggestionWentStale(context.entity, snapshot.current, {
+      suggestionWentStale(queryClient, context.entity, snapshot.current, {
         recordId: row.record.id,
         field,
         source,
@@ -1960,13 +2150,14 @@ function ResolvedFieldSuggestion({
             ? undefined
             : () => setEditOpen(true)
         }
-        basis={suggestionBasisLabels(context.entity, field)}
+        basis={suggestionBasisLabels(queryClient, context.entity, field)}
         notice={usesInheritedValue ? "Uses the inherited value" : undefined}
         alternative={source.basisMode === "provided"}
         outcome={row.outcomes[field]}
         renderValue={(value, label) =>
           renderValue?.(value) ??
           renderSuggestedListFieldValue(
+            queryClient,
             context.entity,
             row.record,
             field,
@@ -2004,6 +2195,7 @@ type RecordFieldSuggestionProps = {
 };
 
 export function RecordFieldSuggestion(props: RecordFieldSuggestionProps) {
+  const queryClient = useQueryClient();
   const scope = useContext(RecordSuggestionFieldsContext);
   const refusal =
     scope && props.record !== null && typeof props.record === "object"
@@ -2023,7 +2215,7 @@ export function RecordFieldSuggestion(props: RecordFieldSuggestionProps) {
       <NotApplicableField reason={refusal} />
     );
   const field = scope
-    ? findEntityField(scope.entity, props.field)?.key
+    ? findEntityField(queryClient, scope.entity, props.field)?.key
     : undefined;
   // Retained proposals may outlive automatic admission for their field.
   // Only cells outside both current admission and retained state can opt out.
@@ -2038,11 +2230,12 @@ function BoundRecordFieldSuggestion({
   surface = "inline",
   renderValue,
 }: RecordFieldSuggestionProps) {
+  const queryClient = useQueryClient();
   const context = useContext(RecordSuggestionsContext);
   const parsed = recordSchema.safeParse(record);
   const row = parsed.success ? context?.rows.get(parsed.data.id) : undefined;
   const fieldModel = context
-    ? findEntityField(context.entity, column)
+    ? findEntityField(queryClient, context.entity, column)
     : undefined;
   const field = fieldModel?.key;
   if (!context || !field) return children;
@@ -2054,6 +2247,7 @@ function BoundRecordFieldSuggestion({
     const value =
       renderValue?.(accepted.value) ??
       renderSuggestedListFieldValue(
+        queryClient,
         context.entity,
         parsed.data,
         field,
@@ -2101,21 +2295,27 @@ function BoundRecordFieldSuggestion({
     if (
       !fieldModel?.control?.suggest ||
       !parsed.success ||
-      recordValue(context.entity, parsed.data, field).value?.trim()
+      recordValue(queryClient, context.entity, parsed.data, field).value?.trim()
     )
       return children;
-    const targets = suggestTargetsFor(context.entity, [field]);
-    const basis = recordSuggestionBasis(context.entity, targets, parsed.data);
+    const targets = suggestTargetsFor(queryClient, context.entity, [field]);
+    const basis = recordSuggestionBasis(
+      queryClient,
+      context.entity,
+      targets,
+      parsed.data,
+    );
     const resolutions = recordFieldResolutions(parsed.data);
     const basisLoaded = targets.basisKeys.every((key) => {
-      const basisField = findEntityField(context.entity, key);
+      const basisField = findEntityField(queryClient, context.entity, key);
       return (
         parsed.data[basisField?.readKey ?? key] !== undefined ||
         resolutions[key] !== undefined
       );
     });
     const outcome: FieldSuggestionOutcome | null =
-      basisLoaded && !isBasisSufficient(context.entity, targets, basis)
+      basisLoaded &&
+      !isBasisSufficient(queryClient, context.entity, targets, basis)
         ? { kind: "skipped", reason: "no_signal" }
         : null;
     const mark = <SuggestionOutcomeMark surface={surface} outcome={outcome} />;
@@ -2160,6 +2360,7 @@ function StoredSuggestionField({
   surface: "inline" | "cell";
   children: ReactNode;
 }) {
+  const queryClient = useQueryClient();
   if (suggestion.correctionAuthority) {
     const mark = (
       <SuggestionOutcomeMark
@@ -2176,6 +2377,7 @@ function StoredSuggestionField({
             renderValue={(value) =>
               renderValue?.(value) ??
               renderSuggestedListFieldValue(
+                queryClient,
                 context.entity,
                 record,
                 field,
@@ -2213,6 +2415,7 @@ function StoredSuggestionField({
               label:
                 renderValue?.(runnerUp) ??
                 renderSuggestedListFieldValue(
+                  queryClient,
                   context.entity,
                   record,
                   field,
@@ -2265,6 +2468,7 @@ function LiveSuggestionCell({
   renderValue?: (value: JsonValue) => ReactNode;
   children: ReactNode;
 }) {
+  const queryClient = useQueryClient();
   const actions = useSuggestionActions(
     suggestionReviewKey(questionKey, currentValue, suggestion),
     apply,
@@ -2306,6 +2510,7 @@ function LiveSuggestionCell({
               label:
                 renderValue?.(runnerUp.value) ??
                 renderSuggestedListFieldValue(
+                  queryClient,
                   context.entity,
                   record,
                   field,
@@ -2348,6 +2553,7 @@ function DifferentValueDialog({
   onSubmitted?: () => void;
   onSubmitOverride?: (values: EntityEditValueBag) => Promise<void>;
 }) {
+  const queryClient = useQueryClient();
   return (
     <EntityEditDialog<EditableEntity>
       open={open}
@@ -2356,6 +2562,7 @@ function DifferentValueDialog({
         // SAFETY: BoundRecordSuggestions only mounts for generated CRUD
         // entities, and detailEditRequest builds that entity's update:full request.
         detailEditRequest(
+          queryClient,
           entity,
           record as never,
           field,
@@ -2439,6 +2646,7 @@ function GhostSuggestionCell({
   onCorrected?: () => Promise<void>;
   children: ReactNode;
 }) {
+  const queryClient = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
   const [bodyOpen, setBodyOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2463,7 +2671,14 @@ function GhostSuggestionCell({
   const valueText = useRenderedText();
   const proposed =
     renderValue?.(value) ??
-    renderSuggestedListFieldValue(context.entity, record, field, value, label);
+    renderSuggestedListFieldValue(
+      queryClient,
+      context.entity,
+      record,
+      field,
+      value,
+      label,
+    );
   // Inert: a reference value renders as a navigating link, which would
   // swallow the click meant to accept it (and nest a link in a button).
   // Inert content leaves the accessibility tree, so the button's name
@@ -2492,7 +2707,7 @@ function GhostSuggestionCell({
           probability={probability}
           runnerUp={runnerUp}
           reasoning={reasoning}
-          basis={suggestionBasisLabels(context.entity, field)}
+          basis={suggestionBasisLabels(queryClient, context.entity, field)}
           provenance={provenance}
           saving={busy}
           onAccept={() => void run(acceptImmediately)}
@@ -2549,7 +2764,11 @@ function GhostSuggestionCell({
                 probability={probability}
                 runnerUp={runnerUp}
                 reasoning={reasoning}
-                basis={suggestionBasisLabels(context.entity, field)}
+                basis={suggestionBasisLabels(
+                  queryClient,
+                  context.entity,
+                  field,
+                )}
                 provenance={provenance}
                 saving={busy}
                 onAccept={() => void run(acceptImmediately)}
@@ -2640,6 +2859,7 @@ export function RecordSuggestionsBulkAction({
 
 /** Phone summaries truncate ordinary facts; proposals get their own full-width rows. */
 export function RecordRowSuggestions({ record }: { record: unknown }) {
+  const queryClient = useQueryClient();
   const context = useContext(RecordSuggestionsContext);
   const visit = useSuggestionVisit();
   const parsed = recordSchema.safeParse(record);
@@ -2654,7 +2874,12 @@ export function RecordRowSuggestions({ record }: { record: unknown }) {
     if (context.stored.has(storedSuggestionKey(parsed.data.id, field)))
       return true;
     if (!row) return false;
-    const current = recordValue(context.entity, row.record, field).value;
+    const current = recordValue(
+      queryClient,
+      context.entity,
+      row.record,
+      field,
+    ).value;
     const suggestion = row.suggestions[field] ?? null;
     const question = JSON.stringify([
       context.entity,
@@ -2678,12 +2903,17 @@ export function RecordRowSuggestions({ record }: { record: unknown }) {
         const stored = context.stored.get(
           storedSuggestionKey(parsed.data.id, field),
         );
-        const current = recordValue(context.entity, parsed.data, field);
+        const current = recordValue(
+          queryClient,
+          context.entity,
+          parsed.data,
+          field,
+        );
         return (
           <Stack key={field} gap="xs">
             <Description size="xs">
               {
-                entityFieldModels[context.entity].fields.find(
+                entityMetadata(queryClient, context.entity).fields.fields.find(
                   (candidate) => candidate.key === field,
                 )?.label
               }
@@ -2691,6 +2921,7 @@ export function RecordRowSuggestions({ record }: { record: unknown }) {
             <RecordFieldSuggestion record={record} field={field}>
               {stored?.kind === "correction"
                 ? renderSuggestedListFieldValue(
+                    queryClient,
                     context.entity,
                     parsed.data,
                     field,

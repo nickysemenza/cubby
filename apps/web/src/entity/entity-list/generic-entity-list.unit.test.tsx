@@ -13,29 +13,33 @@ import {
 import { categoryReadFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  createEditorBrowserTestHarness as createBrowserTestHarness,
+  createEditorTestQueryClient,
+} from "#web/tests/editor-metadata.fixtures.ts";
 import { entities } from "~/entity/entities";
 import { EmbeddedEntityList } from "~/entity/entity-list/generic-entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
-import {
-  ledgerPartyListItem,
-  mealListItem,
-  parseEntityListInput,
-  productListItem,
-} from "~/entity/generated/entity-lists.gen";
+import { parseEntityListInput } from "~/entity/generated/entity-lists.gen";
 import { listOverrides } from "~/entity/list-columns/list-overrides.fixtures";
 import { categoryText } from "~/entity/presentation/category-text";
 import { listPage } from "~/entity/routing/list-page";
 import { mealNameUpdate } from "~/features/meal/list-columns";
 import { installFeatures } from "~/features/registry";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
+import {
+  ledgerPartyListItem,
+  mealListItem,
+  productListItem,
+} from "~/server/generated/entity-lists.server.gen";
 import type {
   ListQueryOptionsFn,
   ListQueryResponse,
 } from "~/ui/hooks/use-paginated-table-core";
 
 installFeatures();
+const queryClient = createEditorTestQueryClient();
 
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
 
@@ -61,7 +65,12 @@ function listOperation<TRow extends { id: string }>(
 ): ListQueryOptionsFn<object, TRow> {
   const response: ListQueryResponse<TRow> = {
     items: rows,
-    meta: { pageIndex: 0, pageSize: 100, totalCount: rows.length },
+    meta: {
+      hasNextPage: false,
+      pageIndex: 0,
+      pageSize: 100,
+      totalCount: rows.length,
+    },
   };
   return (params) => ({
     queryKey: ["browser-test", "generic-list", params],
@@ -108,6 +117,7 @@ describe("listPage", () => {
       execute: async () => ({
         items: params.resultMembership === "unresolved" ? [party] : [],
         meta: {
+          hasNextPage: false,
           pageIndex: 0,
           pageSize: 100,
           totalCount: params.resultMembership === "unresolved" ? 1 : 0,
@@ -304,7 +314,10 @@ describe("GenericEntityList", () => {
   ])(
     "$label: derives identity editing only for a flat readable/updateable title field",
     ({ entity, generatedCrud, flatRows, titleField, canAutoEdit }) => {
-      const config = identityListConfig(entity, { generatedCrud, flatRows });
+      const config = identityListConfig(queryClient, entity, {
+        generatedCrud,
+        flatRows,
+      });
       expect(config.titleField).toBe(titleField);
       expect(config.canAutoEdit).toBe(canAutoEdit);
     },
@@ -472,7 +485,12 @@ it("embeds a fixed saved view without inheriting its host URL and links the whol
       reads.push(params);
       return {
         items: [],
-        meta: { pageIndex: 0, pageSize: 10, totalCount: 37 },
+        meta: {
+          hasNextPage: false,
+          pageIndex: 0,
+          pageSize: 10,
+          totalCount: 37,
+        },
       };
     },
   });

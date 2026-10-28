@@ -3,6 +3,7 @@ import {
   rawTaskOut,
   type RawTaskTimelineOut,
 } from "@cubby/schemas/work-raw-read";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { listAll } from "~/server/generic/list/repo/list-all";
@@ -39,6 +40,6 @@ export async function getTaskTimeline(
   const [dated, undated] = await Promise.all([datedPromise, undatedPromise]);
   return {
     tasks: dated.data.map((row) => rawTaskOut.parse(row)),
-    undatedCount: undated.count,
+    undatedCount: z.number().parse(undated.count),
   };
 }

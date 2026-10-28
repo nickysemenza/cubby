@@ -11,7 +11,7 @@ import {
   productShortcode,
   purchaseShortcode,
 } from "./identifiers";
-import { duplicateProductIdentitySchema } from "./problems";
+import { duplicateProductIdentitySchema } from "./problem-identities";
 import { embeddingReadinessSchema, relatednessOutSchema } from "./relatedness";
 import { productVariantComparison } from "./product-variant-comparison";
 

@@ -28,6 +28,7 @@ import {
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -989,7 +990,8 @@ export const locationSearch = async (
       orderBy: buildOrderBy(location, sorts, [...locationPickerSortableFields]),
     },
   );
-  if (!page.data.length) return { ...page, data: [] };
+  const count = z.number().parse(page.count);
+  if (!page.data.length) return { ...page, count, data: [] };
   const rows = page.data;
 
   const ids = rows.map((row) => row.id);
@@ -1037,6 +1039,7 @@ export const locationSearch = async (
   let offset = rows.length;
   return {
     ...page,
+    count,
     data: rows.map((row, index) => {
       const count = ancestorsById.get(row.id)?.length ?? 0;
       const ancestors = references.slice(offset, offset + count);

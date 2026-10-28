@@ -1,11 +1,11 @@
 import { entityImageOf, type ImageEntity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   publicImageUrl,
   publicImageUrlSummary,
 } from "@cubby/schemas/image-summary";
 import { getErrorMessage } from "@cubby/shared";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { isEqual } from "es-toolkit";
 import {
   type ReactNode,
@@ -24,6 +24,7 @@ import {
   type PendingImage,
 } from "~/entity/entity-media/pending-image-upload";
 import { readRecordField } from "~/entity/entity-references";
+import { entityMetadata } from "~/entity/metadata";
 import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
@@ -33,7 +34,6 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { FormWrapper } from "~/ui/forms/form-utils";
 import { Overlay } from "~/ui/overlays/overlay";
 
-import { entityEditRegistry } from "./definitions";
 import {
   type EntityEditorPresentation,
   getEntityEditorPresentation,
@@ -256,17 +256,19 @@ export function EntityEditorImages<E extends EditableEntity>({
  * when every basis key is a rendered field (the provider watches them all).
  */
 export function staticSuggestionBasisFor(
+  queryClient: QueryClient,
   entity: ShortcodeEntity,
   intentFields: readonly string[],
   record: EntityEditRecord | undefined,
 ): Readonly<Record<string, string | null>> | undefined {
   if (!record) return undefined;
-  const targets = suggestTargetsFor(entity, intentFields);
+  const targets = suggestTargetsFor(queryClient, entity, intentFields);
   const outside = targets.basisKeys.filter(
     (key) => !intentFields.includes(key),
   );
   if (outside.length === 0) return undefined;
   return fieldSuggestionBasisFromRecord(
+    queryClient,
     entity,
     { targets: targets.targets, basisKeys: outside },
     record,
@@ -275,6 +277,7 @@ export function staticSuggestionBasisFor(
 
 /** The record's own title — which record an update dialog edits. */
 function recordIdentityLine(
+  queryClient: QueryClient,
   entity: EditableEntity,
   record: EntityEditRecord | undefined,
 ): string {
@@ -282,7 +285,7 @@ function recordIdentityLine(
   return (
     readRecordField(
       record,
-      entitySummary[entity].titleField,
+      entityMetadata(queryClient, entity).summary.titleField,
       z.string().nullish().catch(null),
     ) ?? ""
   );
@@ -311,20 +314,34 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   evidence,
   baseline,
 }: EntityEditDialogProps<E> & { baseline?: EntityEditRecord }) {
-  const sessionRequest: RuntimeEntityEditRequest<E> = {
-    ...request,
-    record: baseline ?? request.record,
-    surface: "dialog",
-  };
+  const queryClient = useQueryClient();
+  const sessionRequest = useMemo<RuntimeEntityEditRequest<E>>(
+    () => ({
+      ...request,
+      record: baseline ?? request.record,
+      surface: "dialog",
+    }),
+    [request, baseline],
+  );
   const session = useEntityEditSession(sessionRequest, { mutationPort });
   const resetSession = session.reset;
-  const presentation = getEntityEditorPresentation<E>(request);
+  const presentation = useMemo(
+    () => getEntityEditorPresentation<E>(queryClient, request),
+    [queryClient, request],
+  );
   const context = request.context ?? {};
   const record = baseline ?? request.record;
-  const resolved = resolveEntityEdit(entityEditRegistry, sessionRequest);
-  const intentFields = isResolvedEntityEdit(resolved)
-    ? resolved.fields.map((field) => field.id)
-    : NO_FIELDS;
+  const resolved = useMemo(
+    () => resolveEntityEdit(queryClient, sessionRequest),
+    [queryClient, sessionRequest],
+  );
+  const intentFields = useMemo(
+    () =>
+      isResolvedEntityEdit(resolved)
+        ? resolved.fields.map((field) => field.id)
+        : NO_FIELDS,
+    [resolved],
+  );
   // An intent whose active field roster includes `pendingImageIds` gets the
   // generic photo-capture field below the presentation's own fields; no
   // per-entity Fields component knows about images. An update roster that
@@ -344,8 +361,14 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   // create/update editing surface carries a shortcode prefix.
   const suggestionEntity = request.entity as ShortcodeEntity;
   const staticBasis = useMemo(
-    () => staticSuggestionBasisFor(suggestionEntity, intentFields, record),
-    [suggestionEntity, intentFields, record],
+    () =>
+      staticSuggestionBasisFor(
+        queryClient,
+        suggestionEntity,
+        intentFields,
+        record,
+      ),
+    [queryClient, suggestionEntity, intentFields, record],
   );
   // A failure after the submit itself succeeded (the shell's own invariant,
   // a caller's `onSuccess`) still has to be seen; it joins the banner.
@@ -387,7 +410,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
       title={presentation.title({ context, record })}
       description={dialogDescription(
         request.operation === "update"
-          ? recordIdentityLine(request.entity, record)
+          ? recordIdentityLine(queryClient, request.entity, record)
           : "",
         presentation.description({ context, record }),
       )}

@@ -10,12 +10,14 @@ const staleWhileRevalidateSeconds = positiveSeconds(15);
 
 /**
  * Desired account-level policy for HYPERDRIVE_CACHED and its browser guard.
- * Hyperdrive itself must still be updated through Wrangler; keeping the
- * timings together makes the application-side safety window one policy edit.
+ * Normal GitHub deployment applies this policy before publishing the Worker;
+ * the member marker covers the entire bounded-stale window.
  */
 export const HYPERDRIVE_CACHE_POLICY = {
   maxAgeSeconds,
   staleWhileRevalidateSeconds,
+  // API clients may retain a verified old marker after the browser guard ends.
+  markerValiditySeconds: 24 * 60 * 60,
   freshReadSeconds:
     maxAgeSeconds + staleWhileRevalidateSeconds + staleWhileRevalidateSeconds,
 } as const;

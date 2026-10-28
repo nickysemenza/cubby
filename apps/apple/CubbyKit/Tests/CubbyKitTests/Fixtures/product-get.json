@@ -8,12 +8,6 @@
   "notes": null,
   "expectedQuantity": null,
   "externalIds": [],
-  "pricing": {
-    "knownExpenseCount": 0,
-    "unknownExpenseCount": 0,
-    "knownUnitCount": 0,
-    "partial": false
-  },
   "usdaUnavailable": null,
   "kind": null,
   "commodity": false,
@@ -653,9 +647,21 @@
       "work": {
         "kind": "idle"
       }
+    },
+    "pricing": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
     }
-  },
-  "servingAsLocations": [],
-  "componentCount": 0,
-  "food": null
+  }
 }

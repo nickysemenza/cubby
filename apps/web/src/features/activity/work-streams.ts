@@ -1,26 +1,15 @@
+import { jobKindDeclaration } from "@cubby/schemas/job";
+
 import type { WorkStream } from "~/contracts/job.contract";
 
-/** Plain names for the work a Job kind (or AI feature) does. */
-const KIND_LABEL = new Map<string, string>(
-  Object.entries({
-    "embedding.refresh": "Search embeddings",
-    "embedding.cleanup": "Embedding cleanup",
-    "image.device": "Photo processing on Apple devices",
-    "image.cloud": "Photo processing in the cloud",
-    "discovery.connections": "Connection discovery",
-    "assessment.correction": "Suggestion corrections",
-    "purchase.dispatch": "Purchase import",
-    "run.execute": "Runs",
-    "ai.evaluation": "AI evaluations",
-  }),
-);
 const sentence = (value: string) => {
   const words = value.replace(/[._:-]+/g, " ").trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
 export function workStreamLabel(stream: Pick<WorkStream, "kind">) {
-  return KIND_LABEL.get(stream.kind) ?? sentence(stream.kind);
+  const kind = jobKindDeclaration(stream.kind);
+  return kind?.activityLabel ?? kind?.label ?? sentence(stream.kind);
 }
 
 export type WorkStreamStatus =

@@ -14,11 +14,12 @@ const input = {
 
 /** A complete shared vocabulary: later pages must remain selectable, including
  * broad parents that a relevance-ranked first page might omit. */
-export function useProductCategories() {
-  const query = useInfiniteQuery(
-    entityListFor("productCategory").infiniteQueryOptions(input),
-  );
-  useLoadAllPages(query);
+export function useProductCategories(enabled = true) {
+  const query = useInfiniteQuery({
+    ...entityListFor("productCategory").infiniteQueryOptions(input),
+    enabled,
+  });
+  useLoadAllPages(query, enabled);
   const categories = useMemo(
     () => flattenUniquePageItems(query.data?.pages),
     [query.data],

@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { shortcodeEntities } from "@cubby/schemas/entity-roster";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import type { ReactNode } from "react";
 import {
@@ -13,6 +12,7 @@ import {
 } from "react";
 
 import { featureRegistry } from "~/entity/feature-registry";
+import { useEntityMetadata } from "~/entity/metadata";
 import { copyIdentifiers, copyShortcodes } from "~/lib/clipboard";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -505,6 +505,7 @@ export function useEntityActions<TRow extends EntityActionRow>(
   /** Surface-owned lifecycle adapters, such as optimistic list deletion. */
   additionalDefinitions: readonly EntityActionDefinition[] = NO_ADDITIONAL_ACTIONS,
 ): UseEntityActionsReturn<TRow> {
+  const metadata = useEntityMetadata(entity);
   const firstEntityRef = useRef(entity);
   if (firstEntityRef.current !== entity) {
     throw new Error(
@@ -591,7 +592,7 @@ export function useEntityActions<TRow extends EntityActionRow>(
   const selectionActions = selectionActionItems.map(entityActionBulkAction);
 
   // The declared `list.quickActions` lead the row menu, in declared order.
-  const quickVerbs: readonly string[] = entitySummary[entity].list.quickActions;
+  const quickVerbs: readonly string[] = metadata.summary.list.quickActions;
   const quickRank = (verb: string) => {
     const index = quickVerbs.indexOf(verb);
     return index === -1 ? quickVerbs.length : index;

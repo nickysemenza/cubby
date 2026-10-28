@@ -4,15 +4,20 @@ import {
 } from "@cubby/schemas/calendar";
 import { describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
+
 import { buildCalendarFilters } from "./calendar-filters";
 import {
   calendarSearchDefaults,
   calendarSearchSchema,
 } from "./calendar-search";
 
+const queryClient = await metadataQueryClient();
+
 describe("calendar search params", () => {
   it("preserves source exclusions and exact scope through the route codec", () => {
     const filters = buildCalendarFilters(
+      queryClient,
       calendarSearchSchema.parse({
         "task.projectIdExclude": "PRJ-2345",
         "task.includeSubProjects": "false",

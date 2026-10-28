@@ -14,8 +14,8 @@ import {
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { PortionSheet } from "./portion-sheet";
 import type { PreparationTargetOption } from "./types";

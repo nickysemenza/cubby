@@ -3,28 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 
-import {
-  readDatabaseFreshness,
-  recordDatabaseWrite,
-  notifyDatabaseChanges,
-} from "./client";
-import { databaseFreshness } from "./state";
+import { notifyDatabaseChanges } from "./client";
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.unstubAllGlobals();
   setCfEnv(undefined);
 });
-describe("freshness RPC failure policy", () => {
-  it("fails reads closed and never rejects a committed write notification", async () => {
-    const port = {
-      readFreshness: vi.fn().mockRejectedValue(new Error("offline")),
-      recordWrite: vi.fn().mockRejectedValue(new Error("offline")),
-    };
-    expect(await readDatabaseFreshness(port)).toBeNull();
-    await expect(
-      recordDatabaseWrite("test.mutation", port),
-    ).resolves.toBeUndefined();
+describe("change notification failure policy", () => {
+  it("never rejects an already committed write when its notification fails", async () => {
     setCfEnv(
       fromPartial<Env>({
         DB_FRESHNESS: {
@@ -40,15 +26,19 @@ describe("freshness RPC failure policy", () => {
       notifyDatabaseChanges({ task: null }),
     ).resolves.toBeUndefined();
   });
-  it("bounds an unresponsive RPC to five seconds", async () => {
+  it("bounds an unresponsive notification without a per-read RPC", async () => {
     vi.useFakeTimers();
-    const port = {
-      readFreshness: () =>
-        new Promise<ReturnType<typeof databaseFreshness>>(() => {}),
-      recordWrite: async () => databaseFreshness(0),
-    };
-    const read = readDatabaseFreshness(port);
+    setCfEnv(
+      fromPartial<Env>({
+        DB_FRESHNESS: {
+          getByName: () => ({
+            publishChanges: () => new Promise<void>(() => {}),
+          }),
+        },
+      }),
+    );
+    const pending = notifyDatabaseChanges({ task: null });
     await vi.advanceTimersByTimeAsync(5000);
-    expect(await read).toBeNull();
+    await expect(pending).resolves.toBeUndefined();
   });
 });

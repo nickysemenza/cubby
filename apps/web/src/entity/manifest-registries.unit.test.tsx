@@ -2,6 +2,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { actionVerbs } from "~/entity/actions/action-verbs";
 import { entityActionCatalogDescriptors } from "~/entity/actions/entity-actions";
 import type { GenericDetailEntity } from "~/entity/entity-detail/detail-record";
@@ -15,6 +16,8 @@ import {
   detailRendererCoverage,
 } from "./display/detail-field-renderers";
 import { listRendererCoverage } from "./display/list-field-renderers";
+
+const queryClient = await metadataQueryClient();
 import { controlRendererCoverage } from "./editing/entity-primitive-fields";
 
 installFeatures();
@@ -198,7 +201,8 @@ describe("manifest registries", () => {
             field.display.format === null &&
             !("detailLabelPath" in field.display) &&
             !("itemsPath" in field.display) &&
-            detailFieldRenderersFor(entity)?.[field.key] === undefined,
+            detailFieldRenderersFor(queryClient, entity)?.[field.key] ===
+              undefined,
         )
         .map((field) => `${entity}.${field.key}`);
     });

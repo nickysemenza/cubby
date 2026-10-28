@@ -23,9 +23,13 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
   );
   await gotoAuthenticatedPage(
     page,
-    `/locations/${location.id}`,
-    page.getByRole("columnheader", { name: /ownerLedgerPartyId column Owner/ }),
+    `/locations/${location.id}#inventory`,
+    page.locator("#inventory"),
   );
+  await page.locator("#inventory").scrollIntoViewIfNeeded();
+  await expect(
+    page.getByRole("columnheader", { name: /ownerLedgerPartyId column Owner/ }),
+  ).toBeVisible();
   await expect(
     page
       .getByRole("row")

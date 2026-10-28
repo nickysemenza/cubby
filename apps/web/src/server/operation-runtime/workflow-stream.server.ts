@@ -2,7 +2,11 @@ import type { z } from "zod";
 
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
-import { recordDatabaseWrite } from "~/server/db/freshness/client";
+import {
+  recordDatabaseWrite,
+  registerFreshnessMember,
+  memberWriteCookie,
+} from "~/server/db/freshness/member-marker";
 import { withErrorReporting } from "~/server/errors/report-error";
 import {
   authenticate,
@@ -105,6 +109,7 @@ export async function workflowStream<InputSchema extends z.ZodType, Event>(
               // A fresh request context has one database handle, the
               // authoritative one, so a stream needs no read-policy selection.
               const { context } = principal;
+              registerFreshnessMember(context.auth);
               span.setAttributes({
                 "cubby.authenticated": true,
                 ...actorSpanAttributes(
@@ -129,6 +134,7 @@ export async function workflowStream<InputSchema extends z.ZodType, Event>(
                 controller.enqueue({
                   ok: true,
                   data: unparsedStartOperationDataSchema.parse(parsed),
+                  readMarker: await memberWriteCookie(),
                 });
                 stage = "run";
               }
@@ -146,11 +152,25 @@ export async function workflowStream<InputSchema extends z.ZodType, Event>(
                 headers: options.request.headers,
               },
             );
-            controller.enqueue({ ok: false, error: normalized.publicError });
+            if (mutationStarted) {
+              await runtime.recordDatabaseWrite(options.operation);
+              mutationStarted = false;
+            }
+            controller.enqueue({
+              ok: false,
+              error: normalized.publicError,
+              readMarker: await memberWriteCookie(),
+            });
           }
         } finally {
-          if (mutationStarted)
+          if (mutationStarted) {
             await runtime.recordDatabaseWrite(options.operation);
+            const readMarker = await memberWriteCookie();
+            // A generator may commit after its last progress event. Deliver the
+            // final marker without inventing a domain progress event.
+            if (readMarker && !signal.aborted)
+              controller.enqueue({ ok: true, data: undefined, readMarker });
+          }
           if (!abortController.signal.aborted) controller.close();
         }
       });

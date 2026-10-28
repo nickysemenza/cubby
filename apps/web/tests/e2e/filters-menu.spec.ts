@@ -187,6 +187,7 @@ test("Linked transactions reference pickers load their rosters", async ({
   });
 
   await gotoAuthenticatedPage(page, `/purchases/${purchaseId}`);
+  await page.locator("#financial-settlement").scrollIntoViewIfNeeded();
   const linked = page.getByLabel("Linked transactions", { exact: true });
   await expect(linked).toBeVisible();
   const workbench = page

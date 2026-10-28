@@ -20,6 +20,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { photoImportContract } from "~/contracts/photo-import.contract";
 import type { RunDetail } from "~/contracts/run.contract";
 import { installFeatures } from "~/features/registry";
@@ -28,7 +29,6 @@ import { photoImport } from "~/integrations/tanstack-query/generated/catalog/pho
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
 

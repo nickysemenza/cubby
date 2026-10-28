@@ -7,35 +7,78 @@ import {
 } from "./mutation-data";
 
 describe("entity editing mutation data", () => {
-  it("applies the owner create and update schemas", () => {
+  it("applies the owner create and update schemas", async () => {
     expect(
-      parseEntityEditCreateInput("task", {
+      await parseEntityEditCreateInput("task", {
         name: "Wire shelves",
         trade: "building",
       }),
     ).toMatchObject({ name: "Wire shelves", status: "not_started" });
-    expect(parseEntityEditUpdateInput("task", { status: "done" })).toEqual({
+    expect(
+      await parseEntityEditUpdateInput("task", { status: "done" }),
+    ).toEqual({
       status: "done",
+    });
+    const transaction = {
+      accountId: "FAC-4K7M",
+      kind: "purchase",
+      status: "pending",
+      amount: 12,
+    };
+    await expect(
+      parseEntityEditCreateInput("financialTransaction", {
+        ...transaction,
+        amount: 0,
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          path: ["amount"],
+          message: "amount must be non-zero",
+        }),
+      ]),
+    });
+    await expect(
+      parseEntityEditCreateInput("financialTransaction", {
+        ...transaction,
+        status: "posted",
+        postedDate: null,
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: ["postedDate"] }),
+      ]),
+    });
+    await expect(
+      parseEntityEditUpdateInput("financialTransaction", {
+        amount: 0,
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: ["amount"] }),
+      ]),
     });
   });
 
-  it("uses the derived bulk-update schema and excludes identity fields", () => {
-    expect(parseEntityEditBulkUpdateInput("task", { status: "done" })).toEqual({
+  it("uses the derived bulk-update schema and excludes identity fields", async () => {
+    expect(
+      await parseEntityEditBulkUpdateInput("task", { status: "done" }),
+    ).toEqual({
       status: "done",
     });
-    expect(() =>
+    await expect(
       parseEntityEditBulkUpdateInput("ingredient", { name: "Flour" }),
-    ).toThrow(/Unrecognized key/);
+    ).rejects.toThrow(/Unrecognized key/);
     for (const usuallyOnHand of [true, false]) {
       expect(
-        parseEntityEditBulkUpdateInput("ingredient", { usuallyOnHand }),
+        await parseEntityEditBulkUpdateInput("ingredient", { usuallyOnHand }),
       ).toEqual({ usuallyOnHand });
     }
-    expect(() =>
+    await expect(
       parseEntityEditBulkUpdateInput("recipe", { name: "Soup" }),
-    ).toThrow(/Unrecognized key/);
+    ).rejects.toThrow(/Unrecognized key/);
     expect(
-      parseEntityEditBulkUpdateInput("recipe", {
+      await parseEntityEditBulkUpdateInput("recipe", {
         notes: "Synthetic shared note",
       }),
     ).toEqual({ notes: "Synthetic shared note" });

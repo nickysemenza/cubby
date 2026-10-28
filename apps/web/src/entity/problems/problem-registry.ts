@@ -1,6 +1,6 @@
 import { PROBLEM_CLASS, type ProblemKey } from "@cubby/schemas/problems";
 
-import { entityProblemDeclarations } from "~/entity/model/view-manifest";
+import { entityProblemDeclarations } from "~/entity/model/view-problems";
 import {
   type ProblemQuery,
   validateProblemQueries,

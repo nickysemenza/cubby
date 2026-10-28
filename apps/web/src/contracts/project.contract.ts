@@ -1,4 +1,5 @@
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { projectFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/project";
+import { taskFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/task";
 import { projectShortcode } from "@cubby/schemas/identifiers";
 import { createPaginatedResponseSchemaWithContext } from "@cubby/schemas/pagination";
 import { projectResourceFeatureLabels } from "@cubby/schemas/product-category-relations";
@@ -13,7 +14,7 @@ import { defineContract, mutation, query } from "~/contracts/define";
 // through without an MCP-side edit.
 
 /** Project row minus the notes, id arrays and timestamps an entity get returns in full. */
-const houseStatusProject = entityFieldEnvelopeSchemas.project.detail.omit({
+const houseStatusProject = projectFieldEnvelopeSchemas.detail.omit({
   notes: true,
   googleDriveFolderUrl: true,
   notionPageUrl: true,
@@ -25,7 +26,7 @@ const houseStatusProject = entityFieldEnvelopeSchemas.project.detail.omit({
 });
 
 /** Enough to name and schedule an upcoming task; the blocking graph lives elsewhere. */
-const houseStatusTask = entityFieldEnvelopeSchemas.task.detail
+const houseStatusTask = taskFieldEnvelopeSchemas.detail
   .pick({
     id: true,
     name: true,
@@ -35,7 +36,7 @@ const houseStatusTask = entityFieldEnvelopeSchemas.task.detail
     due: true,
   })
   .extend({
-    fields: entityFieldEnvelopeSchemas.task.detail.shape.fields.pick({
+    fields: taskFieldEnvelopeSchemas.detail.shape.fields.pick({
       projectId: true,
       subjectProductId: true,
       trade: true,
@@ -43,8 +44,8 @@ const houseStatusTask = entityFieldEnvelopeSchemas.task.detail
   });
 
 const projectDashboardRead = schemas.projectDashboardSummaryOut.extend({
-  projects: z.array(entityFieldEnvelopeSchemas.project.detail),
-  nextTasks: z.array(entityFieldEnvelopeSchemas.task.detail),
+  projects: z.array(projectFieldEnvelopeSchemas.detail),
+  nextTasks: z.array(taskFieldEnvelopeSchemas.detail),
 });
 
 /** `dashboardSummary` minus `filterOptions` (UI select options only). */
@@ -113,7 +114,7 @@ export const projectContract = defineContract(
     tree: query({
       input: schemas.projectTreeInput,
       output: createPaginatedResponseSchemaWithContext(
-        entityFieldEnvelopeSchemas.project.list,
+        projectFieldEnvelopeSchemas.list,
         "project",
       ),
     }),
@@ -127,8 +128,8 @@ export const projectContract = defineContract(
       command: { label: "Create project from tasks", confirmation: null },
       input: schemas.createProjectFromTasksInput,
       output: z.object({
-        project: entityFieldEnvelopeSchemas.project.output,
-        tasks: z.array(entityFieldEnvelopeSchemas.task.output),
+        project: projectFieldEnvelopeSchemas.output,
+        tasks: z.array(taskFieldEnvelopeSchemas.output),
       }),
       invalidates: ["taskProject"],
     }),

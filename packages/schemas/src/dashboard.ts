@@ -1,6 +1,6 @@
 import { mapRecord } from "@cubby/shared";
 import { z } from "zod";
-import { countableEntities } from "./entity-manifest";
+import { countableEntities } from "./generated/entity-roster.gen";
 
 export const dashboardCountsOut = z.object({
   ...mapRecord(countableEntities, () => z.number().int()),

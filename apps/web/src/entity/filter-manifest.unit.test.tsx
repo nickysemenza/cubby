@@ -4,6 +4,8 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { parseNumberBound } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
+
 import {
   filterSpecLabel,
   getEntityFilters,
@@ -27,6 +29,8 @@ import {
 import { entitySearch } from "./generated/entity-search.gen";
 import { recordSource } from "./picker/picker";
 
+const queryClient = await metadataQueryClient();
+
 const VENDOR_ONE = testShortcode("vendor", "VEN-4K7M");
 const VENDOR_TWO = testShortcode("vendor", "VEN-9Q2X");
 const PRODUCT_ID = testShortcode("product", "PRD-4K7M");
@@ -42,9 +46,9 @@ describe("manifestFilterConfig", () => {
     ["expense", "costType"],
     ["purchase", "vendorId"],
   ] as const)("%s.%s is multiselect", (entity, columnId) => {
-    expect(manifestFilterConfig(entity, columnId)?.filterType).toBe(
-      "multiselect",
-    );
+    expect(
+      manifestFilterConfig(queryClient, entity, columnId)?.filterType,
+    ).toBe("multiselect");
   });
 
   it.each([
@@ -69,11 +73,13 @@ describe("manifestFilterConfig", () => {
     ["expense", "productQuantity"],
     ["purchase", "date"],
   ] as const)("%s.%s stays single-select", (entity, columnId) => {
-    expect(manifestFilterConfig(entity, columnId)?.filterType).toBe("select");
+    expect(
+      manifestFilterConfig(queryClient, entity, columnId)?.filterType,
+    ).toBe("select");
   });
 
   it("carries the options the control renders", () => {
-    const config = manifestFilterConfig("expense", "trade");
+    const config = manifestFilterConfig(queryClient, "expense", "trade");
     expect(config?.options?.some((o) => o.value === "drywall")).toBe(true);
   });
 
@@ -84,21 +90,22 @@ describe("manifestFilterConfig", () => {
     ];
     const injected = [{ value: "p1", label: "Kitchen" }];
     expect(
-      manifestFilterConfig("expense", "projectId", { project: injected })
-        ?.options,
+      manifestFilterConfig(queryClient, "expense", "projectId", {
+        project: injected,
+      })?.options,
     ).toEqual([...sentinels, ...injected]);
-    expect(manifestFilterConfig("expense", "projectId")?.options).toEqual(
-      sentinels,
-    );
+    expect(
+      manifestFilterConfig(queryClient, "expense", "projectId")?.options,
+    ).toEqual(sentinels);
   });
 
   it("does not prepend sentinels to a non-nullable multiselect", () => {
-    const options = manifestFilterConfig("task", "trade")?.options;
+    const options = manifestFilterConfig(queryClient, "task", "trade")?.options;
     expect(options?.some((o) => o.meta)).toBe(false);
   });
 
   it("maps Inventory's product cohort and location filters to their request fields", () => {
-    const filters = getEntityFilters("inventory");
+    const filters = getEntityFilters(queryClient, "inventory");
 
     expect(
       filters.find((filter) => filter.columnId === "productId"),
@@ -120,7 +127,7 @@ describe("manifestFilterConfig", () => {
   });
 
   it("picks a run reference as records even though runs have no assignment picker", () => {
-    expect(manifestFilterConfig("image", "runId")?.records).toBe(
+    expect(manifestFilterConfig(queryClient, "image", "runId")?.records).toBe(
       recordSource("run"),
     );
   });
@@ -128,7 +135,7 @@ describe("manifestFilterConfig", () => {
   it("puts the Product Vendors roster on its related preview column", () => {
     const vendors = [{ value: "VEN-4K7M", label: "Hardware Store" }];
     expect(
-      manifestFilterConfig("product", "related:product.vendors", {
+      manifestFilterConfig(queryClient, "product", "related:product.vendors", {
         productVendors: vendors,
       }),
     ).toEqual({
@@ -152,7 +159,7 @@ describe("manifestFilterConfig", () => {
   it("puts the Product Projects roster and presence sentinels on its related column", () => {
     const projects = [{ value: "PRJ-4K7M", label: "Kitchen" }];
     expect(
-      manifestFilterConfig("product", "related:product.projects", {
+      manifestFilterConfig(queryClient, "product", "related:product.projects", {
         project: projects,
       }),
     ).toMatchObject({
@@ -171,14 +178,18 @@ describe("manifestFilterConfig", () => {
     ["recipe", "source"],
     ["location", "parent"],
   ] as const)("%s.%s prepends Any value / No value", (entity, columnId) => {
-    expect(manifestFilterConfig(entity, columnId)?.options).toEqual([
+    expect(
+      manifestFilterConfig(queryClient, entity, columnId)?.options,
+    ).toEqual([
       { value: FILTER_ANY, label: "Any value", meta: true },
       { value: FILTER_NONE, label: "No value", meta: true },
     ]);
   });
 
   it("returns undefined for a column with no declared filter", () => {
-    expect(manifestFilterConfig("expense", "updatedBy")).toBeUndefined();
+    expect(
+      manifestFilterConfig(queryClient, "expense", "updatedBy"),
+    ).toBeUndefined();
   });
 
   // Failure mode: a number range without declared limits let the editor send
@@ -199,7 +210,7 @@ describe("manifestFilterConfig", () => {
     const violations: string[] = [];
     let checked = 0;
     for (const entity of browserRoutedEntities) {
-      for (const spec of getEntityFilters(entity)) {
+      for (const spec of getEntityFilters(queryClient, entity)) {
         const number = spec.range?.number;
         if (!spec.range || !number) continue;
         for (const key of [spec.range.from, spec.range.to]) {
@@ -228,7 +239,7 @@ describe("manifestFilterConfig", () => {
     // with no options and no runtime roster would be an empty dropdown.
     const violations: string[] = [];
     for (const entity of browserRoutedEntities) {
-      const specs = getEntityFilters(entity);
+      const specs = getEntityFilters(queryClient, entity);
       for (const field of manifestFilterFields(specs)) {
         if (
           field.type === "text" ||
@@ -246,7 +257,7 @@ describe("manifestFilterConfig", () => {
   });
 
   it("labels a column-less relation filter by the noun it names", () => {
-    const vendorAccount = getEntityFilters("vendorAccount");
+    const vendorAccount = getEntityFilters(queryClient, "vendorAccount");
     const label = (columnId: string) => {
       const spec = vendorAccount.find((s) => s.columnId === columnId);
       return spec && filterSpecLabel(spec);
@@ -257,7 +268,7 @@ describe("manifestFilterConfig", () => {
 
   it("offers Yes / No for a presence filter that declares no options", () => {
     const presence = manifestFilterFields(
-      getEntityFilters("vendorAccount"),
+      getEntityFilters(queryClient, "vendorAccount"),
     ).find((field) => field.key === "purchasePresenceFilter");
     expect(
       presence?.options?.map(({ value, label }) => [value, label]),
@@ -273,7 +284,7 @@ describe("manifestFilterConfig", () => {
     const duplicates: string[] = [];
     const none = new Set<string>();
     for (const entity of browserRoutedEntities) {
-      const specs = getEntityFilters(entity);
+      const specs = getEntityFilters(queryClient, entity);
       const menu = new Set(
         menuOnlyFilterSpecs(specs, {
           hostedIds: none,
@@ -294,7 +305,7 @@ describe("manifestFilterConfig", () => {
   it("reads Task's parent deep-link alias into the Parent task filter", () => {
     // Landing on the alias then picking another parent once kept both
     // states, and the alias's stale value overwrote the request field.
-    const task = getEntityFilters("task");
+    const task = getEntityFilters(queryClient, "task");
     const alias = task.find((spec) => spec.columnId === "relatedParentTaskId");
     expect(alias?.aliasOf).toBe("parentTaskId");
     const landed = decodeFilters(task, {
@@ -315,27 +326,28 @@ describe("manifestFilterConfig", () => {
   });
 
   it("names a related view's text search for the search", () => {
-    const product = getEntityFilters("product");
+    const product = getEntityFilters(queryClient, "product");
     const search = product.find(
       (spec) => spec.columnId === "related:product.expenses",
     );
     expect(search?.label).toBe("Expense search");
     expect(
-      manifestFilterConfig("product", "related:product.expenses")?.label,
+      manifestFilterConfig(queryClient, "product", "related:product.expenses")
+        ?.label,
     ).toBe("Expense search");
   });
 
   it("types a rosterless multiselect's values instead of offering an empty picker", () => {
     const externalId = manifestFilterFields(
-      getEntityFilters("financialTransaction"),
+      getEntityFilters(queryClient, "financialTransaction"),
     ).find((field) => field.key === "externalId");
     expect(externalId).toMatchObject({ type: "multiselect", freeText: true });
   });
 
   it("marks Email's scopes as one shared value that replaces the others", () => {
-    const scopes = manifestFilterFields(getEntityFilters("email")).filter(
-      (field) => field.exclusiveGroup !== undefined,
-    );
+    const scopes = manifestFilterFields(
+      getEntityFilters(queryClient, "email"),
+    ).filter((field) => field.exclusiveGroup !== undefined);
     expect(
       scopes.map(({ key, exclusiveGroup, description }) => [
         key,
@@ -351,7 +363,7 @@ describe("manifestFilterConfig", () => {
 
   it("makes a single-value scope a one-record picker", () => {
     expect(
-      manifestFilterFields(getEntityFilters("email")).find(
+      manifestFilterFields(getEntityFilters(queryClient, "email")).find(
         (field) => field.key === "vendorAccountId",
       )?.type,
     ).toBe("select");
@@ -361,7 +373,7 @@ describe("manifestFilterConfig", () => {
 describe("declared filter specs", () => {
   it("gives every entity unique URL keys and shortcode-branded reference filters", () => {
     for (const entity of entitySchema.options) {
-      const specs = getEntityFilters(entity);
+      const specs = getEntityFilters(queryClient, entity);
       const urlKeys = specs.map((spec) => spec.urlKey ?? spec.columnId);
       expect(new Set(urlKeys).size).toBe(urlKeys.length);
       for (const spec of specs) {
@@ -389,7 +401,7 @@ describe("declared filter specs", () => {
 
 describe("public entity-reference filters", () => {
   it("parses a planting plant shortcode and never widens invalid URLs", () => {
-    const specs = getEntityFilters("planting");
+    const specs = getEntityFilters(queryClient, "planting");
     const build = (plantId: string) =>
       buildFiltersFromManifest(
         specs,
@@ -406,7 +418,7 @@ describe("public entity-reference filters", () => {
 describe("expense order-id filters", () => {
   type SearchInput = Record<string, string | string[] | undefined>;
   const build = (search: SearchInput) => {
-    const specs = getEntityFilters("expense");
+    const specs = getEntityFilters(queryClient, "expense");
     return buildFiltersFromManifest(
       specs,
       filterGetterFromSearch(specs, search),
@@ -442,7 +454,7 @@ describe("expense order-id filters", () => {
 describe("expense vendor filter", () => {
   type SearchInput = Record<string, string | string[] | undefined>;
   const build = (search: SearchInput) => {
-    const specs = getEntityFilters("expense");
+    const specs = getEntityFilters(queryClient, "expense");
     return buildFiltersFromManifest(
       specs,
       filterGetterFromSearch(specs, search),
@@ -467,7 +479,7 @@ describe("expense vendor filter", () => {
 
   it("is a multiselect whose runtime roster resolves under the `vendor` key", () => {
     const injected = [{ value: VENDOR_ONE, label: "Home Depot" }];
-    const config = manifestFilterConfig("expense", "purchaseId", {
+    const config = manifestFilterConfig(queryClient, "expense", "purchaseId", {
       vendor: injected,
     });
     expect(config?.filterType).toBe("multiselect");
@@ -482,7 +494,7 @@ describe("expense vendor filter", () => {
 describe("purchase filters", () => {
   type SearchInput = Record<string, string | string[] | undefined>;
   const build = (search: SearchInput) => {
-    const specs = getEntityFilters("purchase");
+    const specs = getEntityFilters(queryClient, "purchase");
     return buildFiltersFromManifest(
       specs,
       filterGetterFromSearch(specs, search),
@@ -494,7 +506,9 @@ describe("purchase filters", () => {
     expect(build({ label: "pocket hole" })).toEqual({
       displayLabelSearch: "pocket hole",
     });
-    expect(manifestFilterConfig("purchase", "displayLabel")).toMatchObject({
+    expect(
+      manifestFilterConfig(queryClient, "purchase", "displayLabel"),
+    ).toMatchObject({
       filterType: "text",
       placeholder: "Search display label...",
     });
@@ -508,12 +522,12 @@ describe("purchase filters", () => {
   });
 
   it("offers no vendor sentinels — Purchase.vendorId is NOT NULL", () => {
-    const spec = getEntityFilters("purchase").find(
+    const spec = getEntityFilters(queryClient, "purchase").find(
       (s) => s.columnId === "vendorId",
     );
     expect(spec?.nullable).toBeUndefined();
     const injected = [{ value: VENDOR_ONE, label: "Home Depot" }];
-    const config = manifestFilterConfig("purchase", "vendorId", {
+    const config = manifestFilterConfig(queryClient, "purchase", "vendorId", {
       vendor: injected,
     });
     expect(config?.filterType).toBe("multiselect");
@@ -525,7 +539,9 @@ describe("purchase filters", () => {
       orderIdPresenceFilter: "none",
       statedTotalPresenceFilter: "none",
     });
-    expect(manifestFilterConfig("purchase", "orderId")?.options).toEqual([
+    expect(
+      manifestFilterConfig(queryClient, "purchase", "orderId")?.options,
+    ).toEqual([
       { value: "has", label: "Has order id", meta: true },
       { value: "none", label: "(none)", meta: true },
     ]);
@@ -568,7 +584,7 @@ describe("purchase filters", () => {
   });
 
   it("round-trips a ?vendor= scope through the URL", () => {
-    const specs = getEntityFilters("purchase");
+    const specs = getEntityFilters(queryClient, "purchase");
     const url = entitySearch.purchase.schema.parse({
       vendor: "VEN-4K7M,VEN-2ABC",
     });
@@ -601,7 +617,7 @@ describe("purchase filters", () => {
 
 describe("expense deep-link scopes", () => {
   it("routes the Cost column's preset to either presence or a bound", () => {
-    const specs = getEntityFilters("expense");
+    const specs = getEntityFilters(queryClient, "expense");
     expect(
       buildFiltersFromManifest(
         specs,
@@ -617,7 +633,7 @@ describe("expense deep-link scopes", () => {
   });
 
   it("passes exact ?costMin=/?costMax= through for the server to coerce", () => {
-    const specs = getEntityFilters("expense");
+    const specs = getEntityFilters(queryClient, "expense");
     expect(
       buildFiltersFromManifest(
         specs,
@@ -627,7 +643,7 @@ describe("expense deep-link scopes", () => {
   });
 
   it("routes Quantity presets and passes exact bounds through for server coercion", () => {
-    const specs = getEntityFilters("expense");
+    const specs = getEntityFilters(queryClient, "expense");
     expect(
       buildFiltersFromManifest(
         specs,
@@ -646,7 +662,7 @@ describe("expense deep-link scopes", () => {
   });
 
   it("still routes ?productId= to the server filter", () => {
-    const specs = getEntityFilters("expense");
+    const specs = getEntityFilters(queryClient, "expense");
     expect(
       buildFiltersFromManifest(
         specs,
@@ -656,7 +672,7 @@ describe("expense deep-link scopes", () => {
   });
 
   it("still routes ?purchaseId= to the server filter", () => {
-    const specs = getEntityFilters("expense");
+    const specs = getEntityFilters(queryClient, "expense");
     expect(
       buildFiltersFromManifest(
         specs,
@@ -678,7 +694,7 @@ describe("expense deep-link scopes", () => {
   });
 
   it("routes the subtree deep-link scope to the server filter", () => {
-    const specs = getEntityFilters("expense");
+    const specs = getEntityFilters(queryClient, "expense");
     expect(
       buildFiltersFromManifest(
         specs,
@@ -693,8 +709,9 @@ describe("one-parameter range bindings", () => {
   // value must reach the request, or the picker scope matches every planting.
   it("passes the URL value through to the parameter", () => {
     expect(
-      buildFiltersFromManifest(getEntityFilters("planting"), (columnId) =>
-        columnId === "activeOn" ? "@today" : undefined,
+      buildFiltersFromManifest(
+        getEntityFilters(queryClient, "planting"),
+        (columnId) => (columnId === "activeOn" ? "@today" : undefined),
       ),
     ).toEqual({ activeOn: "@today" });
   });

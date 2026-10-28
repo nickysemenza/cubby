@@ -1,10 +1,11 @@
+import { purchaseFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/purchase";
+import { vendorFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/vendor";
 import type { Entity } from "@cubby/schemas/entity";
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import type {
   BrowserRoutedEntity,
   ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import { displayGtin } from "@cubby/schemas/external-id";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { productShortcode } from "@cubby/schemas/identifiers";
@@ -38,6 +39,7 @@ import { StorefrontIcon } from "@phosphor-icons/react/dist/csr/Storefront";
 import { TagIcon } from "@phosphor-icons/react/dist/csr/Tag";
 import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import type { Icon, IconProps } from "@phosphor-icons/react/lib";
+import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { entityListFor } from "~/entity/entity-list";
@@ -76,16 +78,16 @@ const productMergeRowSchema = z.union([
 ]);
 type ProductMergeRow = z.output<typeof productMergeRowSchema>;
 
-const vendorMergeRowSchema = entityFieldEnvelopeSchemas.vendor.list
+const vendorMergeRowSchema = vendorFieldEnvelopeSchemas.list
   .pick({ id: true, name: true })
   .extend({
-    fields: entityFieldEnvelopeSchemas.vendor.list.shape.fields.pick({
+    fields: vendorFieldEnvelopeSchemas.list.shape.fields.pick({
       purchaseCount: true,
       spend: true,
     }),
   });
 type VendorMergeRow = z.output<typeof vendorMergeRowSchema>;
-const purchaseMergeRowSchema = entityFieldEnvelopeSchemas.purchase.list
+const purchaseMergeRowSchema = purchaseFieldEnvelopeSchemas.list
   .pick({
     id: true,
     date: true,
@@ -94,7 +96,7 @@ const purchaseMergeRowSchema = entityFieldEnvelopeSchemas.purchase.list
     vendorName: true,
   })
   .extend({
-    fields: entityFieldEnvelopeSchemas.purchase.list.shape.fields.pick({
+    fields: purchaseFieldEnvelopeSchemas.list.shape.fields.pick({
       expenseCount: true,
       expenseTotal: true,
       vendorId: true,
@@ -158,7 +160,7 @@ const INK = {
  * Stamps every definition with the display names its own key already implies.
  *
  * Both come straight from the entity's manifest literal (`names` in
- * `packages/schemas/src/entity-definitions/*.entity.ts`, surfaced as `entitySummary`),
+ * `packages/schemas/src/entity-definitions/*.entity.ts`, surfaced as `entityRoster`),
  * so neither is spelled here and neither can disagree with the key it sits
  * under — `wish: { label: ... }` naming a vendor is no longer expressible.
  *
@@ -187,7 +189,7 @@ type EntityDefinitionSeed = Pick<
  * only these glyphs.
  */
 type DeclaredPhosphorIcon =
-  (typeof entitySummary)[BrowserRoutedEntity]["icons"]["phosphor"];
+  (typeof entityRoster)[BrowserRoutedEntity]["icons"]["phosphor"];
 const PHOSPHOR_ICONS = {
   BowlFood: BowlFoodIcon,
   ArrowsLeftRight: ArrowsLeftRightIcon,
@@ -217,7 +219,7 @@ const PHOSPHOR_ICONS = {
   Users: UsersIcon,
 } satisfies Record<DeclaredPhosphorIcon, Icon>;
 const isBrowserEntityKey = (value: string): value is BrowserRoutedEntity =>
-  Object.hasOwn(entitySummary, value);
+  Object.hasOwn(entityRoster, value);
 
 const withEntityNames = <
   const Definitions extends Record<BrowserRoutedEntity, EntityDefinitionSeed>,
@@ -225,8 +227,8 @@ const withEntityNames = <
   definitions: Definitions,
 ): {
   [Entity in keyof Definitions & BrowserRoutedEntity]: {
-    label: (typeof entitySummary)[Entity]["singular"];
-    pluralLabel: (typeof entitySummary)[Entity]["plural"];
+    label: (typeof entityRoster)[Entity]["singular"];
+    pluralLabel: (typeof entityRoster)[Entity]["plural"];
     phosphorIcon: Icon;
   } & Definitions[Entity];
 } =>
@@ -239,9 +241,9 @@ const withEntityNames = <
       return [
         entity,
         {
-          label: entitySummary[entity].singular,
-          pluralLabel: entitySummary[entity].plural,
-          phosphorIcon: PHOSPHOR_ICONS[entitySummary[entity].icons.phosphor],
+          label: entityRoster[entity].singular,
+          pluralLabel: entityRoster[entity].plural,
+          phosphorIcon: PHOSPHOR_ICONS[entityRoster[entity].icons.phosphor],
           ...definition,
         },
       ];
@@ -574,13 +576,13 @@ export const mergeConfigFor = (
   const definition = entities[entity];
   if ("mergeable" in definition && definition.mergeable)
     return definition.mergeable;
-  if (!entitySummary[entity].merge) return null;
+  if (!entityRoster[entity].merge) return null;
   return defineMergeableConfig({
     keeperMode: "ranked",
     isRow: isNamedMergeRow,
     rowLabel: (row) => <span className="truncate">{row.name}</span>,
     copy: {
-      title: `Merge ${entitySummary[entity].plural.toLowerCase()}?`,
+      title: `Merge ${entityRoster[entity].plural.toLowerCase()}?`,
     },
   });
 };
@@ -602,17 +604,14 @@ export const browserEntityDefinition = (
  * `isBrowserRoutedEntity` exists to guard; a bare index would silently regress
  * if one reappears.
  *
- * Reads `generatedEntitySort` (`@cubby/schemas/entity-sort`) instead of a
- * hand-listed array on the definition: that generated module's only import is
- * `import type { Entity }`, so it carries zero runtime schema dependencies —
- * pulling it into this route-loaded file does not drag Zod validation graphs
- * into the eager client bundle the way importing an entity's own schema
- * module would. Every browser-routed entity, `usda-food` included, now has a
- * generated roster, so no per-entity special case remains here.
+ * Sort capabilities come from the current route's scoped metadata slice.
  */
-export const getSortableFields = (entity: Entity): readonly string[] => {
+export const getSortableFields = (
+  queryClient: QueryClient,
+  entity: Entity,
+): readonly string[] => {
   if (!isBrowserRoutedEntity(entity)) return [];
-  return generatedSortRoster(entity)?.fields ?? [];
+  return generatedSortRoster(queryClient, entity)?.fields ?? [];
 };
 
 /**

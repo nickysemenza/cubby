@@ -23,7 +23,7 @@ interface UseTableConfigOptions<TData extends RowData> {
   data: TData[];
   columns: CubbyColumnCollection<TData>;
   tableState: TableStateReturn;
-  totalCount: number;
+  totalCount?: number;
   manualPagination?: boolean;
   manualSorting?: boolean;
   manualFiltering?: boolean;

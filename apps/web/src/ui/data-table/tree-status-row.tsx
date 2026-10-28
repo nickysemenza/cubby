@@ -73,7 +73,9 @@ export function TreeStatusRow({ status }: { status: ServerTreeChildStatus }) {
         Load more
       </Button>
       <span className="text-xs text-muted-foreground">
-        {status.remaining} more
+        {status.remaining === undefined
+          ? "Load more"
+          : `${status.remaining} more`}
       </span>
     </span>
   );

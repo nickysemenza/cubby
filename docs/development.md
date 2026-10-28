@@ -113,7 +113,12 @@ Start streams   →  cancellable workflow streams
   describe the browser build; `@cubby/recipebridge/worker` exposes the full
   interface and is restricted to `src/server`. Package conditions select the
   browser build or the shared `packages/wasm/workerd.js` initializer; both
-  workerd subpaths resolve to that one module. Node tests use the full build.
+  workerd subpaths resolve to that one module. It instantiates WASM lazily on
+  the first call. Page reads batch Product conversion displays in one call;
+  conversion outputs remain transient. Request telemetry records one aggregate
+  WASM span, including streamed rendering, rather than a span per call. Primitive
+  arguments use compact cache keys; object inputs are batched instead of serialized
+  into cache keys. Node tests use the full build.
   `check-client-bundle.ts` checks each package lands in the right bundle.
   Cookbook EPUB estimates and extraction use the same deployment options:
   Sonnet 5 first, Haiku 4.5 for the second opinion, then Luna. Anthropic calls
@@ -199,7 +204,10 @@ loads itself into its Durable Object:
 5. Once ready, `POST` to the same route: Product links to superseded food
    revisions advance to the current revision, and the response lists each
    advance. A `POST` on a failed load resumes it instead; on a loading one it
-   returns the progress. Re-running it advances nothing new.
+   returns the progress. It also marks stored Product food summaries dirty,
+   including stable food IDs and UPC matches; the existing derived drain refreshes
+   them from the active release. Re-running it advances no additional links and
+   requests another food refresh.
 
 The dev Worker seeds its `USDA_RELEASES` bucket on its first request with the
 synthetic release `2000-01` (`apps/web/tooling/dev/usda-synthetic-release.ts`):
@@ -448,11 +456,11 @@ native PostgreSQL installation remain owned by their existing runners.
 | [packages/wasm/workerd.js](../packages/wasm/workerd.js)           | Shared WASM initialization for production and test Workers    |
 | [apps/web/cloudflare.config.ts](../apps/web/cloudflare.config.ts) | Bindings, vars, compat flags, secret names                    |
 
-- **Hyperdrive.** Both bindings use one Neon origin. Account-side configuration
+- **Hyperdrive.** Strong, cached and background bindings use one Neon origin. Account-side configuration
   and reconstruction live in [infrastructure](infrastructure.md#postgresql-and-hyperdrive);
   application read/freshness timing is owned by
-  `apps/web/src/server/db/freshness/hyperdrive-cache-policy.ts`. Missing freshness state or a
-  timeout falls back to strong reads.
+  `apps/web/src/server/db/read-policy.ts`. Signed member-scoped write markers
+  preserve browser read-your-writes; clients without a marker read strong.
 - **Worker invocation ownership.** `server/worker/http.ts` owns explicit protocol
   dispatch, lazy request DB scope and response-body observation; `queue.ts` owns
   known-queue selection and awaited consumer completion; `scheduled.ts` owns cron
@@ -475,8 +483,8 @@ native PostgreSQL installation remain owned by their existing runners.
 - **Background queue messages wake durable Jobs** on `cubby-background`. The minute
   recovery cron repairs missed wakes; domain consumers retain per-message ack/retry.
   Unknown transport queues are rejected before message parsing or DB access.
-  - Daily maintenance is a `maintenance` Run (cron `scheduled`, the Problems
-    card's Run now `manual`; one active pass at a time) whose steps
+  - Daily maintenance is a `maintenance` Run (cron `scheduled`, Activity's
+    Advanced maintenance Run now `manual`; one active pass at a time) whose steps
     (`domains/maintenance/service/maintenance-run.ts`) drain every backlog page
     by page: image-processing repair, EXIF/GPS, embeddings, stale recipe
     totals, abandoned uploads, Run housekeeping, original disposal, vector
@@ -503,7 +511,7 @@ native PostgreSQL installation remain owned by their existing runners.
   - Image processing always accepts uploads and queued work; historical
     enabled/paused settings are ignored. Device availability and capability
     still determine which companion work can execute. Exceptional repair tools
-    live on Problems; Settings contains connection diagnostics. The read-only
+    live in Activity's Advanced maintenance view; Settings contains connection diagnostics. The read-only
     `/api/debug/timing` endpoint requires a member session in every environment
     and returns private, non-cacheable timings and individual errors for the
     database, active USDA release, and UPCitemdb. The UPC probe uses a synthetic

@@ -61,6 +61,7 @@ const KEYS = {
       entity: "product",
       input: {
         entity: "product",
+        includeCount: true,
         filters: { nameFilter: "bolt", brandId: "VEN-TEST" },
         sort: [{ orderBy: "name", direction: "asc" }],
         pagination: { pageIndex: 0, pageSize: 25 },
@@ -70,7 +71,10 @@ const KEYS = {
   listSparse: [
     "operation",
     "entity.list",
-    { entity: "product", input: { entity: "product", filters: {} } },
+    {
+      entity: "product",
+      input: { entity: "product", includeCount: true, filters: {} },
+    },
   ],
   listGroupBy: [
     "operation",
@@ -79,6 +83,7 @@ const KEYS = {
       entity: "expense",
       input: {
         entity: "expense",
+        includeCount: true,
         filters: {},
         sort: [{ orderBy: "transactionDate", direction: "desc" }],
         pagination: { pageIndex: 0, pageSize: 50 },
@@ -93,6 +98,7 @@ const KEYS = {
       entity: "product",
       input: {
         entity: "product",
+        includeCount: true,
         filters: { nameFilter: "bolt", brandId: "VEN-TEST" },
         sort: [],
         pagination: { pageIndex: 0, pageSize: 25 },
@@ -107,6 +113,7 @@ const KEYS = {
       entity: "product",
       input: {
         entity: "product",
+        includeCount: true,
         filters: { nameFilter: "bolt", brandId: "VEN-TEST" },
         sort: [{ orderBy: "name", direction: "asc" }],
         pagination: { pageIndex: 0, pageSize: 25 },
@@ -299,18 +306,18 @@ describe("entity list query keys", () => {
     ).toEqual(KEYS.listInfinite);
   });
 
-  it("pages until the reported total is covered", () => {
+  it("pages until the server reports there is no next page", () => {
     const options =
       entityListFor("product").infiniteQueryOptions(PRODUCT_LIST_INPUT);
-    const page = (pageIndex: number, totalCount: number) =>
+    const page = (pageIndex: number, hasNextPage: boolean) =>
       ({
         items: [],
-        meta: { pageIndex, pageSize: 25, totalCount },
+        meta: { pageIndex, pageSize: 25, hasNextPage },
       }) satisfies EntityListResultByEntity["product"];
     expect(options.initialPageParam).toBe(0);
-    expect(options.getNextPageParam(page(0, 60), [], 0, [])).toBe(1);
-    expect(options.getNextPageParam(page(2, 60), [], 2, [])).toBeUndefined();
-    expect(options.getNextPageParam(page(0, 25), [], 0, [])).toBeUndefined();
+    expect(options.getNextPageParam(page(0, true), [], 0, [])).toBe(1);
+    expect(options.getNextPageParam(page(2, false), [], 2, [])).toBeUndefined();
+    expect(options.getNextPageParam(page(0, false), [], 0, [])).toBeUndefined();
   });
 
   it("carries the freshness policy of the entity", () => {
@@ -393,9 +400,5 @@ describe("scoped entity descriptors", () => {
     expectTypeOf<
       QueryData<ReturnType<EntityListScoped<"recipe">["queryOptions"]>>
     >().toEqualTypeOf<EntityListResultByEntity["recipe"]>();
-    entityListFor("recipe").queryOptions({
-      // @ts-expect-error a product-only filter does not belong to recipe
-      filters: { brandId: "VEN-TEST" },
-    });
   });
 });

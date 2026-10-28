@@ -3,10 +3,11 @@ import type { RequestDbRole } from "./db-pg-tracing";
 
 /**
  * Sockets one Worker request may open, inside the Worker connection ceiling:
- * five strong plus one bounded-stale, six total.
+ * three strong plus one bounded-stale, four total. Two slots remain for
+ * subrequests (providers, Durable Objects, storage and telemetry).
  */
 const WORKER_REQUEST_CONNECTIONS = {
-  strong: 5,
+  strong: 3,
   "bounded-stale": 1,
 } as const satisfies Record<RequestDbRole, number>;
 

@@ -7,7 +7,7 @@ import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { viewManifest } from "./model/view-manifest";
+import { viewManifest } from "./model/view-problems";
 import { problemQueryDeclarations } from "./problems/problem-registry";
 
 /**

@@ -1,6 +1,6 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { MEAL_TYPE_LABELS } from "@cubby/schemas/meal-classification";
-import { useQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 
@@ -13,6 +13,7 @@ import { DenseCellContext } from "~/ui/common/stacked-value";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { QuerySection } from "~/ui/feedback/query-section";
 import { Section } from "~/ui/layout";
 
 import type { HomeAsOfWindow } from "./home-as-of-window";
@@ -34,7 +35,28 @@ const mealActions = actionsForSurface("home-quick");
  * The date window is computed once in the household timezone by the route
  * loader, so SSR and hydration use the same query key and the same "today".
  */
-export function TodayMeals({
+export function TodayMeals(props: Parameters<typeof TodayMealsContent>[0]) {
+  return (
+    <QuerySection
+      title="meals"
+      resetKey={props.asOf.meals.from}
+      fallback={
+        <Section
+          title="Meals"
+          headingAs="h2"
+          ruled
+          actions={<Link to="/meals">Plan</Link>}
+        >
+          <HomeRowsLoading label="Loading meals" rows={2} />
+        </Section>
+      }
+    >
+      <TodayMealsContent {...props} />
+    </QuerySection>
+  );
+}
+
+function TodayMealsContent({
   asOf,
   operations,
 }: {
@@ -43,7 +65,7 @@ export function TodayMeals({
   operations?: TodayMealsOperations;
 }) {
   const upcomingSummary = operations?.upcomingSummary ?? meal.upcomingSummary;
-  const mealsQuery = useQuery(upcomingSummary.queryOptions(asOf.meals));
+  const mealsQuery = useSuspenseQuery(upcomingSummary.queryOptions(asOf.meals));
   const meals = mealsQuery.data ?? [];
   const later = meals.length - MEAL_ROWS;
   return (

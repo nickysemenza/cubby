@@ -1,8 +1,6 @@
-import {
-  entityFieldModels,
-  type EntityFieldModel,
-} from "@cubby/schemas/entity-fields";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import { getErrorMessage } from "@cubby/shared";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { detailFieldRenderersFor } from "~/entity/display/detail-field-renderers";
@@ -16,6 +14,7 @@ import {
   isGeneratedBrowserCrudEntity,
 } from "~/entity/entity-contracts";
 import { useEntityActionMutation } from "~/entity/hooks/use-action-mutation";
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 
@@ -38,11 +37,12 @@ const INLINE_EDITABLE_CONTROLS = new Set([
  * Structured and multiple-reference values use the complete editor.
  */
 function inlineEditableKeys(
+  queryClient: QueryClient,
   entity: GenericDetailEntity,
   fields: readonly string[],
 ): string[] {
   if (!isGeneratedBrowserCrudEntity(entity)) return [];
-  const model: EntityFieldModel = entityFieldModels[entity];
+  const model: EntityFieldModel = entityMetadata(queryClient, entity).fields;
   const updateRoster: readonly string[] = model.update;
   const editable = new Set<string>(
     model.fields
@@ -69,6 +69,8 @@ function useInlineFieldOverrides(
   record: { id: string },
   fields: readonly string[],
 ): Record<string, DetailFieldRenderer<{ id: string }>> {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
   const crud = isGeneratedBrowserCrudEntity(entity) ? entity : null;
   const mutation = useEntityActionMutation({
     // A non-CRUD entity (image, cookbook) never edits inline; the hook still
@@ -82,13 +84,13 @@ function useInlineFieldOverrides(
     error: (error) => getErrorMessage(error) || "Failed to save",
   });
   const keys = useMemo(
-    () => inlineEditableKeys(entity, fields),
-    [entity, fields],
+    () => inlineEditableKeys(queryClient, entity, fields),
+    [queryClient, entity, fields],
   );
   if (crud === null || keys.length === 0) return {};
   // SAFETY: `keys` names fields of `crud`'s own update contract; the wire
   // variables are parsed by that contract before the mutation executes.
-  return editableFieldOverrides(crud, record, keys, (variables) =>
+  return editableFieldOverrides(queryClient, crud, record, keys, (variables) =>
     mutation.mutateAsync(variables as never),
   );
 }
@@ -103,16 +105,17 @@ export function useDetailFieldOverrides<E extends GenericDetailEntity>(
   record: DetailRecordOf<E>,
   fields: readonly string[],
 ) {
+  const queryClient = useQueryClient();
   const inline = useInlineFieldOverrides(entity, record, fields);
   // A domain renderer for a structured field wins over the generic cell; the
   // inline editor covers the plain scalars a renderer never claims.
-  const renderers = detailFieldRenderersFor(entity) ?? {};
+  const renderers = detailFieldRenderersFor(queryClient, entity) ?? {};
   const overrides = { ...inline };
   for (const [key, render] of Object.entries(renderers)) {
     if (!fields.includes(key)) continue;
     // SAFETY: `detailFieldRenderersFor` hands back this entity's own
     // renderers, each typed against the record this page received.
-    overrides[key] = () => render(record as never);
+    overrides[key] = () => render(record as never, queryClient);
   }
   return overrides;
 }

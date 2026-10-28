@@ -16,7 +16,11 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQueries,
+} from "@tanstack/react-query";
 import {
   useCallback,
   useMemo,
@@ -28,6 +32,7 @@ import { z } from "zod";
 
 import { useDeferredEntityRosters } from "~/entity/hooks/use-deferred-reference-filter-options";
 import { useInfiniteTableListScope } from "~/entity/hooks/use-infinite-table-list";
+import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { Page, usePageCount } from "~/entity/page/page";
 import { FindSuggestionsDialog } from "~/entity/suggestions/find-suggestions-dialog";
 import { ListWorkbench } from "~/entity/table/list-workbench";
@@ -173,8 +178,11 @@ const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionTablePage> = ({
   return {
     queryKey: options.queryKey,
     meta: options.meta,
-    execute: async (signal) => {
-      const result = await suggestions.list.call(input, { signal });
+    execute: async (signal, consistency) => {
+      const result = await suggestions.list.call(input, {
+        signal,
+        consistency,
+      });
       const grouping = result.meta.groups
         ? countedGroupPage({
             groups: result.meta.groups,
@@ -186,7 +194,12 @@ const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionTablePage> = ({
       return {
         ...result,
         statementGroups: result.meta.groups,
-        meta: { ...result.meta, groups: undefined, ...grouping },
+        meta: {
+          ...result.meta,
+          hasNextPage: result.next !== null,
+          groups: undefined,
+          ...grouping,
+        },
       };
     },
   };
@@ -544,12 +557,21 @@ function SuggestionsTableBody({
   tableState: TableStateReturn;
   cleanFilters: NonNullable<CleanTarget["filters"]>;
 }) {
+  const queryClient = useQueryClient();
+  const metadataQueries = useMemo(
+    () =>
+      view === "statement_transaction"
+        ? [entityMetadataQueryOptions("financialTransaction")]
+        : [],
+    [view],
+  );
+  useSuspenseQueries({ queries: metadataQueries });
   const review = useSuggestionReview();
   const rosters = useDeferredEntityRosters(REFERENCE_ROSTERS);
   const providerCategoryLabel = "Provider category";
   const columns = useMemo(
-    () => viewColumns(view, rosters, providerCategoryLabel),
-    [view, rosters, providerCategoryLabel],
+    () => viewColumns(queryClient, view, rosters, providerCategoryLabel),
+    [queryClient, view, rosters, providerCategoryLabel],
   );
   const bulk: BulkActionsConfig<Row> = {
     actions: [

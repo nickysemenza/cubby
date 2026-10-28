@@ -14,7 +14,7 @@ it("loads complete expanded children in one request", async () => {
     queryKey: ["synthetic-tree-children"],
     execute: async () => ({
       items: [{ ...child, unitPrice: null }],
-      meta: { pageIndex: 0, pageSize: 25, totalCount: 1 },
+      meta: { hasNextPage: false, pageIndex: 0, pageSize: 25, totalCount: 1 },
     }),
   };
   const client = new QueryClient({

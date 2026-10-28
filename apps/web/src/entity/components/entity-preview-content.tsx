@@ -1,8 +1,7 @@
 import { entitySchema } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { dataTypeLabel } from "@cubby/usda";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { z } from "zod";
@@ -24,6 +23,7 @@ import {
   readRecordField,
 } from "~/entity/entity-references";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog/usdaFood.gen";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 
@@ -87,12 +87,13 @@ const recordId = z.string();
 const displayImageUrls = z.array(z.looseObject({ url: z.string() })).nullish();
 
 export function manifestPreviewCard<E extends ManifestPreviewEntity>(
+  queryClient: QueryClient,
   entity: E,
   data: EntityDetailByEntity[E],
 ): ManifestCardProps {
-  const presentation = entitySummary[entity];
+  const presentation = entityMetadata(queryClient, entity).summary;
   const { hero } = presentation.detail;
-  const fields = entityFieldModels[entity].fields;
+  const fields = entityMetadata(queryClient, entity).fields.fields;
   const field = (key: string | null) =>
     key === null
       ? undefined
@@ -106,7 +107,7 @@ export function manifestPreviewCard<E extends ManifestPreviewEntity>(
   const thumbUrl = hero.images
     ? readRecordField(data, "displayImages", displayImageUrls)?.[0]?.url
     : undefined;
-  const stats = entityPreviewFacts(entity, data);
+  const stats = entityPreviewFacts(queryClient, entity, data);
 
   const body: BodyBlock[] = [];
   if (thumbUrl) body.push({ kind: "thumb", url: thumbUrl });
@@ -126,7 +127,7 @@ export function manifestPreviewCard<E extends ManifestPreviewEntity>(
     name: readRecordField(data, presentation.titleField, titleValue) ?? id,
     tag: entity,
     identity: chipField
-      ? (heroChipLabel(entity, data, chipField) ?? undefined)
+      ? (heroChipLabel(queryClient, entity, data, chipField) ?? undefined)
       : undefined,
     crossLinks:
       breadcrumb && target && isBrowserRoutedEntity(target)
@@ -226,16 +227,18 @@ function ManifestPreviewContent<E extends ManifestPreviewEntity>({
   onNameResolved,
   onRecordResolved,
 }: { entity: E; id: string } & StandardPreviewPresentation) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
   const query = useQuery(entityDetailFor(entity).queryOptions(id));
   return (
     <PreviewQuery
       query={query}
-      label={entitySummary[entity].singular}
+      label={entityMetadata(queryClient, entity).summary.singular}
       onUnavailable={onRecordResolved}
     >
       {(data) => (
         <ResolvedManifestCard
-          card={manifestPreviewCard(entity, data)}
+          card={manifestPreviewCard(queryClient, entity, data)}
           record={data}
           showOpenAction={showOpenAction}
           showIdentityHeader={showIdentityHeader}

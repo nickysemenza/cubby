@@ -4,7 +4,7 @@ import { FormProvider, useForm } from "react-hook-form";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 
 import { EntityPrimitiveFields } from "./entity-primitive-fields";
 

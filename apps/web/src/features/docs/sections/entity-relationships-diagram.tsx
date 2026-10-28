@@ -5,27 +5,44 @@
  * second set of nodes, edges, or coordinates.
  */
 
-import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createServerFn } from "@tanstack/react-start";
 
 const ROW_HEIGHT = 34;
 const HEADER_HEIGHT = 38;
 
-const LOGICAL_EDGES = allEntities.flatMap((source) =>
-  entityManifest[source].relationships.map((relation) => ({
-    source,
-    relation,
-  })),
-);
+const readLogicalEdges = createServerFn({ method: "GET" }).handler(async () => {
+  const { allEntities, entityManifest } =
+    await import("@cubby/schemas/entity-manifest");
+  return allEntities.flatMap((source) =>
+    entityManifest[source].relationships.map((relation) => ({
+      source,
+      relation: {
+        key: relation.key,
+        label: relation.label,
+        target: relation.target,
+        cardinality: relation.cardinality,
+        sourceKey: relation.sourceKey,
+        sources: relation.sources.map(({ key }) => ({ key })),
+      },
+    })),
+  );
+});
 
 const provenanceLabel = (
-  relation: (typeof LOGICAL_EDGES)[number]["relation"],
+  relation: Awaited<ReturnType<typeof readLogicalEdges>>[number]["relation"],
 ) =>
   [relation.sourceKey, ...relation.sources.map((source) => source.key)].join(
     " + ",
   );
 
 export function EntityRelationshipsDiagram() {
+  const { data: LOGICAL_EDGES } = useSuspenseQuery({
+    queryKey: ["schema", "logical-relationships"],
+    queryFn: () => readLogicalEdges(),
+    staleTime: Infinity,
+  });
   const height = HEADER_HEIGHT + LOGICAL_EDGES.length * ROW_HEIGHT;
   return (
     <svg
@@ -58,7 +75,7 @@ export function EntityRelationshipsDiagram() {
               fillOpacity={0.28}
             />
             <text x={16} y={y + 21} fontSize={12} fill="var(--foreground)">
-              {entitySummary[source].singular}
+              {entityRoster[source].singular}
             </text>
             <text x={220} y={y + 21} fontSize={12} fill="var(--foreground)">
               {relation.label} · {relation.cardinality} ·{" "}
@@ -76,7 +93,7 @@ export function EntityRelationshipsDiagram() {
               strokeWidth={1.25}
             />
             <text x={790} y={y + 21} fontSize={12} fill="var(--foreground)">
-              {entitySummary[relation.target].singular}
+              {entityRoster[relation.target].singular}
             </text>
           </g>
         );

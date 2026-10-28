@@ -8,6 +8,12 @@ counts and paging. Its All, Automatic, Agent, Review, Waiting and Problems views
 share that one server read with record work sections, including Runs. GitHub
 Issues owns delivery and remaining domain coverage.
 
+Statement review work probes current eligibility only for the admitted financial
+accounts, stopping after the first eligible proposal per account. Record work
+for another entity never prepares statement suggestions. These reads retain
+source withdrawals, ignores, supersessions and settlement references as the
+eligibility authority; a stored pending proposal alone does not establish work.
+
 The Runs header links to **Run types** (`/runs/types`), a catalog of every
 declared Run kind. Its indexed sections expose purpose keys, execution owners,
 progress sources, AI ownership and ordered steps (purpose, action, input mode,
@@ -209,3 +215,16 @@ may change; the shared UI presents their verdicts.
 Resolved work leaves actionable views. Its evidence, decisions, receipts and
 outcomes remain in the owning record and Run history, without introducing a
 second completed-task ledger.
+
+### Activity entry point
+
+Activity’s Needs you view embeds the existing human-review and Problems
+queues with their canonical queries, group actions and affected-record
+navigation. Its Now view retains automatic recovery and ordinary waits;
+persistent Run stalls and Job failure attention follow existing policies.
+All Work queue executor views remain available at `/work-queue`.
+Activity History opens retained Runs and audit changes; it is not a second
+completed-task ledger. Advanced maintenance holds the nightly pass and
+one-off repairs formerly in Settings. Recipe re-parsing previews a bounded
+Current/Proposed sample before application; the server recomputes eligibility
+at execution, so preview is not a record lock or a frozen write promise.

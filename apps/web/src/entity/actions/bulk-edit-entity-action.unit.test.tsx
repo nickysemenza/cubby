@@ -11,9 +11,9 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import type { SearchProviderProps } from "~/entity/picker/with-search-hook";
 import { installFeatures } from "~/features/registry";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
   BulkEditDialogBody,

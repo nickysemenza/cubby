@@ -4,6 +4,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import {
   entityReadFixture,
   fieldValueFixture,
@@ -12,7 +13,6 @@ import { useProductCategories } from "~/entity/hooks/use-product-categories";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { CategoryLabelById } from "./category-label";
 
@@ -129,7 +129,12 @@ describe("CategoryLabelById", () => {
           data: {
             entity: "productCategory",
             items: [root],
-            meta: { pageIndex: 0, pageSize: 500, totalCount: 1 },
+            meta: {
+              pageIndex: 0,
+              pageSize: 500,
+              totalCount: 1,
+              hasNextPage: false,
+            },
           },
         };
       throw new Error(`Unexpected category operation: ${operation}`);
@@ -189,7 +194,12 @@ describe("CategoryLabelById", () => {
         data: {
           entity: "productCategory",
           items: firstPage,
-          meta: { pageIndex: 0, pageSize: 500, totalCount: 501 },
+          meta: {
+            pageIndex: 0,
+            pageSize: 500,
+            totalCount: 501,
+            hasNextPage: true,
+          },
         },
       };
     });
@@ -236,6 +246,7 @@ describe("CategoryLabelById", () => {
             pageIndex: pagination.pageIndex,
             pageSize: 500,
             totalCount: 501,
+            hasNextPage: pagination.pageIndex === 0,
           },
         },
       };

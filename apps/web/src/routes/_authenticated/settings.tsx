@@ -2,20 +2,20 @@ import { purchaseAgentConnectionStatus } from "@cubby/schemas/purchase-import-de
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
-import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { CoinsIcon } from "@phosphor-icons/react/dist/csr/Coins";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { EnvelopeIcon } from "@phosphor-icons/react/dist/csr/Envelope";
 import { PlugsIcon } from "@phosphor-icons/react/dist/csr/Plugs";
 import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { useEntityMetadata } from "~/entity/metadata";
 import { Page } from "~/entity/page/page";
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { Picker } from "~/entity/picker/picker";
@@ -24,8 +24,6 @@ import { ChatGptPlanSettings } from "~/features/account/chatgpt-plan-card";
 import { PurchaseImportAgentConnection } from "~/features/activity/purchase-import-agent-connection";
 import { CalendarConnectDialog } from "~/features/calendar/calendar-connect-dialog";
 import { MailImportSettings } from "~/features/email/mail-import-card";
-import { MaintenanceRunCard } from "~/features/maintenance/maintenance-run-card";
-import { MaintenanceTools } from "~/features/maintenance/maintenance-tools";
 import { calendar } from "~/integrations/tanstack-query/generated/catalog/calendar.gen";
 import { ledgerParty } from "~/integrations/tanstack-query/generated/catalog/ledgerParty.gen";
 import { authClient } from "~/lib/auth-client";
@@ -140,19 +138,17 @@ function SettingsPage() {
             sections: [
               {
                 id: "maintenance",
-                title: "Nightly maintenance",
-                description:
-                  "The nightly pass drains every backlog as one Run; Run now starts one.",
-                icon: ClockIcon,
-                content: <MaintenanceRunCard />,
-              },
-              {
-                id: "repair-tools",
-                title: "Repair tools",
-                description:
-                  "Rebuilds derived data on demand. Routine upkeep happens at write time; these are one-off tools.",
+                title: "Work and maintenance",
                 icon: WrenchIcon,
-                content: <MaintenanceTools />,
+                content: (
+                  <Link
+                    to="/activity"
+                    search={{ tab: "maintenance" }}
+                    className="text-link hover:underline"
+                  >
+                    Open Advanced maintenance in Activity
+                  </Link>
+                ),
               },
               {
                 id: "diagnostics",
@@ -253,13 +249,15 @@ function MemberLoginPicker({
   disabled: boolean;
   onChange: (ledgerParty: string | null) => void;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("ledgerParty");
   // "" is the unlinked sentinel: not a ledger-party code, so the record
   // picker holds it as-is.
   const items = useMemo(
     (): ComboboxItem[] => [
       { id: "", name: "Not linked" },
       ...parties.map((party) => {
-        const item = buildRecordComboboxItem("ledgerParty", {
+        const item = buildRecordComboboxItem(queryClient, "ledgerParty", {
           id: party.shortcode,
           name: party.name,
         });
@@ -274,7 +272,7 @@ function MemberLoginPicker({
           : item;
       }),
     ],
-    [parties, userId],
+    [parties, userId, queryClient],
   );
   return (
     <Picker

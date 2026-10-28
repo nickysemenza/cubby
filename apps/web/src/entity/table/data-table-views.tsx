@@ -4,9 +4,10 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { BookmarkIcon } from "@phosphor-icons/react/dist/csr/Bookmark";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 
 import type { ListSearch } from "~/entity/entity-list/list-slot-types";
 import {
@@ -108,7 +109,7 @@ export function TableSavedViewsMenuItems<TData extends RowData>({
   entity,
 }: DataTableViewsProps<TData>) {
   const appliers = useTableViewAppliers(table);
-  const views = viewsForEntity(entity);
+  const views = viewsForEntity(useQueryClient(), entity);
   if (views.length === 0) return null;
 
   const { columnFilters, sorting } = table.state;
@@ -196,13 +197,18 @@ export interface ViewTab {
 export function ViewTabs({
   tabs,
   label = "Saved views",
+  onRequestCounts,
 }: {
   tabs: readonly ViewTab[];
   label?: string;
+  onRequestCounts?: () => void;
 }) {
   return (
     <nav
       aria-label={label}
+      onPointerEnter={onRequestCounts}
+      onPointerDown={onRequestCounts}
+      onFocusCapture={onRequestCounts}
       className="flex min-w-0 [scrollbar-width:none] items-end gap-0.5 overflow-x-auto overscroll-x-contain"
     >
       {tabs.map((tab) => (
@@ -261,9 +267,11 @@ export function SavedViewTabs<TData extends RowData>({
   entity,
 }: DataTableViewsProps<TData>) {
   const appliers = useTableViewAppliers(table);
-  const views = viewsForEntity(entity);
+  const views = viewsForEntity(useQueryClient(), entity);
+  const [countsRequested, setCountsRequested] = useState(false);
   const { total, counts, unresolvedCounts } = useViewCounts(
     isListEntity(entity) ? entity : undefined,
+    countsRequested && views.length > 0,
   );
   if (views.length === 0) return null;
   const { columnFilters, sorting } = table.state;
@@ -273,6 +281,7 @@ export function SavedViewTabs<TData extends RowData>({
   );
   return (
     <ViewTabs
+      onRequestCounts={() => setCountsRequested(true)}
       tabs={[
         {
           key: "all",
@@ -326,7 +335,7 @@ function SavedViewsMenuItems({
   onApplyLayout,
   onApplyListSearch,
 }: SavedViewsMenuProps) {
-  const views = viewsForEntity(entity);
+  const views = viewsForEntity(useQueryClient(), entity);
   if (views.length === 0) return null;
   const appliers = {
     onApplyFilters,
@@ -374,7 +383,7 @@ function SavedViewsMenuItems({
 
 /** Saved-view chooser decoupled from TanStack so dashboards can share it. */
 export function SavedViewsMenu(props: SavedViewsMenuProps) {
-  if (viewsForEntity(props.entity).length === 0) return null;
+  if (viewsForEntity(useQueryClient(), props.entity).length === 0) return null;
 
   return (
     <DropdownMenu>

@@ -24,6 +24,7 @@ export const QUERY_CLIENT_DEFAULT_OPTIONS = {
     retry: false,
     networkMode: "online",
     refetchOnMount: (query: Query) => query.state.isInvalidated,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   },

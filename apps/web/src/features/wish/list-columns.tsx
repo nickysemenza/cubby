@@ -1,6 +1,7 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { WishFilters, WishListItemOut } from "@cubby/schemas/wish";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
+import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { useMemo } from "react";
@@ -114,6 +115,7 @@ export const wishListOverride = defineListOverride<
   WishListItemOut
 >({
   use() {
+    const queryClient = useQueryClient();
     // The candidate roster comes from the relation itself: only a Product
     // that is somebody's candidate can narrow this list.
     const candidateOptionsQuery = useQuery(
@@ -153,19 +155,19 @@ export const wishListOverride = defineListOverride<
                   if (row.kind === "candidate") {
                     return renderOptionCell(
                       row.candidate.inventoried ? "yes" : "no",
-                      fieldEnumOptions("wish", "candidates"),
+                      fieldEnumOptions(queryClient, "wish", "candidates"),
                     );
                   }
                   return renderOptionCell(
                     row.wish.acquiredAt ? "acquired" : "wanted",
-                    fieldEnumOptions("wish", "acquiredAt"),
+                    fieldEnumOptions(queryClient, "wish", "acquiredAt"),
                   );
                 },
               },
             ),
           );
         }),
-      [],
+      [queryClient],
     );
 
     const compose = useMemo(
@@ -184,7 +186,11 @@ export const wishListOverride = defineListOverride<
               enableSorting: false,
               meta: {
                 entityColumnRole: "image",
-                provenance: relationshipFieldProvenance("wish", "candidates"),
+                provenance: relationshipFieldProvenance(
+                  queryClient,
+                  "wish",
+                  "candidates",
+                ),
                 className: "h-px w-8 overflow-hidden px-0 py-0",
                 mobile: { slot: "image", priority: -10 },
               },
@@ -200,7 +206,11 @@ export const wishListOverride = defineListOverride<
               header: "Make / model",
               meta: {
                 columnGroup: "Options",
-                provenance: relationshipFieldProvenance("wish", "candidates"),
+                provenance: relationshipFieldProvenance(
+                  queryClient,
+                  "wish",
+                  "candidates",
+                ),
                 className: "w-56",
                 mobile: { slot: "subtitle", priority: 15 },
               },
@@ -228,7 +238,11 @@ export const wishListOverride = defineListOverride<
                 header: "Options",
                 meta: attachCubbyColumnMeta<WishRow>({
                   columnGroup: "Options",
-                  provenance: relationshipFieldProvenance("wish", "candidates"),
+                  provenance: relationshipFieldProvenance(
+                    queryClient,
+                    "wish",
+                    "candidates",
+                  ),
                   numeric: true,
                   className: "w-24",
                   mobile: { slot: "meta", priority: 20 },
@@ -267,7 +281,11 @@ export const wishListOverride = defineListOverride<
                 header: "Price range",
                 meta: attachCubbyColumnMeta<WishRow>({
                   columnGroup: "Options",
-                  provenance: relationshipFieldProvenance("wish", "candidates"),
+                  provenance: relationshipFieldProvenance(
+                    queryClient,
+                    "wish",
+                    "candidates",
+                  ),
                   numeric: true,
                   // Wide enough for two five-figure amounts plus the en-dash.
                   className: "w-48",
@@ -331,7 +349,7 @@ export const wishListOverride = defineListOverride<
           );
           rest();
         }),
-      [],
+      [queryClient],
     );
 
     const list = useMemo(

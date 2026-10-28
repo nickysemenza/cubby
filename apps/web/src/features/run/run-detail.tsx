@@ -1,12 +1,14 @@
 import type { AssessmentFamily } from "@cubby/schemas/assessment";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { StackIcon } from "@phosphor-icons/react/dist/csr/Stack";
+import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useSyncExternalStore } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { ReportBlocks } from "~/entity/entity-detail/report-slot";
 import { entityListHref } from "~/entity/entity-list-href";
+import { useEntityMetadata } from "~/entity/metadata";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
 import { formatCount } from "~/lib/number-format";
@@ -30,6 +32,7 @@ import {
   RunStepTimeline,
 } from "./run-step-timeline";
 import { humanizeKey, runOverview, type RunStepView } from "./run-view-model";
+import { RunDefinition } from "./work-definition";
 
 const LIVE_POLL_MS = 3_000;
 // The declared Run slot ids, which the detail page uses as section ids.
@@ -154,6 +157,9 @@ function useRunDetail(record: RunOut) {
  * RunStep timeline. Decisions and Diagnostics are their own declared slots.
  */
 export function RunStepsDetail({ record }: { record: RunOut }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("financialTransaction");
+  useEntityMetadata("sourceTransactionRecord");
   const {
     steps,
     overview,
@@ -275,12 +281,13 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
 
   return (
     <div className="grid gap-4">
+      <RunDefinition purpose={record.purpose} />
       <RunStepStrip overview={overview} figures={figures} />
       <ReportBlocks
         blocks={runPlanBlocks({
           runId: record.id,
           inputHref: (entity, token) =>
-            entityListHref(entity, {
+            entityListHref(queryClient, entity, {
               filters: [{ id: "runStepInput", value: token }],
             }),
           purpose: record.purpose,

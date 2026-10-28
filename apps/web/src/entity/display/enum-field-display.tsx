@@ -1,11 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
-import {
-  entityFieldModels,
-  type EntityFieldModel,
-} from "@cubby/schemas/entity-fields";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
+import { entityMetadata } from "~/entity/metadata";
 import {
   fieldSuggestionBasisFromRecord,
   type FieldSuggestionSource,
@@ -27,52 +26,51 @@ type EnumField = Pick<
 /** A stored value the roster never declared still needs a tint. */
 const UNKNOWN_ENUM_COLOR = "var(--slate)";
 
-const optionsCache = new Map<string, EntitySelectOption[]>();
-
 /**
  * The one option roster every enum surface reads — list cell, detail value,
  * hero chip, inline editor, previews. Declared `control.options` (or, for a
  * value with no select control, `display.valueOptions`) merged with the rich
  * `ENTITY_SELECT_OPTIONS` table, colorized; `"edit"` mode drops
  * create-only sentinels (`expense.lineKind`'s `"auto"`) because a stored
- * value is never one. Cached per field: manifests are static.
+ * value is never one. The caller owns the metadata scope.
  */
 export function enumFieldOptions(
+  _queryClient: QueryClient,
   entity: Entity,
   field: EnumField,
 ): EntitySelectOption[] {
-  const cacheKey = `${entity}.${field.key}`;
-  const cached = optionsCache.get(cacheKey);
-  if (cached) return cached;
   const options = presentEntitySelectOptions(
     entity,
     field.key,
     field.control?.options ?? field.display.valueOptions ?? [],
     "edit",
   );
-  optionsCache.set(cacheKey, options);
   return options;
 }
 
 /** `enumFieldOptions` by field key, for surfaces outside a field model loop
  * (filters, dialogs, calendar chips). */
 export function fieldEnumOptions(
+  queryClient: QueryClient,
   entity: Entity,
   key: string,
 ): EntitySelectOption[] {
-  const field = entityFieldModels[entity].fields.find(
+  const field = entityMetadata(queryClient, entity).fields.fields.find(
     (candidate) => candidate.key === key,
   );
   if (!field) throw new Error(`${entity}.${key} is not a declared field`);
-  return enumFieldOptions(entity, field);
+  return enumFieldOptions(queryClient, entity, field);
 }
 
 function enumFieldOption(
+  queryClient: QueryClient,
   entity: Entity,
   field: EnumField,
   raw: string,
 ): EntitySelectOption | undefined {
-  return enumFieldOptions(entity, field).find((option) => option.value === raw);
+  return enumFieldOptions(queryClient, entity, field).find(
+    (option) => option.value === raw,
+  );
 }
 
 /**
@@ -81,11 +79,12 @@ function enumFieldOption(
  * stored value behind "—" is how it would stay forgotten.
  */
 export function enumDisplayValue(
+  queryClient: QueryClient,
   entity: Entity,
   field: EnumField,
   raw: string,
 ): Extract<ScalarDisplayValue, { kind: "enum" }> {
-  const option = enumFieldOption(entity, field, raw);
+  const option = enumFieldOption(queryClient, entity, field, raw);
   return {
     kind: "enum",
     raw,
@@ -104,16 +103,17 @@ export function enumDisplayValue(
  * stay forgotten. For prose surfaces (previews, search rows, hero chip).
  */
 export function enumFieldLabel(
+  queryClient: QueryClient,
   entity: Entity,
   key: string,
   raw: string | null | undefined,
 ): string | null {
   if (raw == null || raw === "") return null;
-  const field = entityFieldModels[entity].fields.find(
+  const field = entityMetadata(queryClient, entity).fields.fields.find(
     (candidate) => candidate.key === key,
   );
   if (!field) return raw;
-  return enumFieldOption(entity, field, raw)?.label ?? raw;
+  return enumFieldOption(queryClient, entity, field, raw)?.label ?? raw;
 }
 
 const chipValue = z.union([z.string(), z.boolean()]).nullish();
@@ -124,6 +124,7 @@ const chipValue = z.union([z.string(), z.boolean()]).nullish();
  * preview card's identity line.
  */
 export function heroChipLabel<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   record: TRecord,
   field: EnumField & { label: string; readKey: string | null },
@@ -132,7 +133,7 @@ export function heroChipLabel<TRecord extends object>(
   if (value === null || value === undefined) return null;
   if (value === true) return field.label;
   if (value === false) return `Not ${field.label.toLocaleLowerCase()}`;
-  return enumFieldLabel(entity, field.key, value);
+  return enumFieldLabel(queryClient, entity, field.key, value);
 }
 
 /**
@@ -142,6 +143,7 @@ export function heroChipLabel<TRecord extends object>(
  * neither surface forgets it.
  */
 export function enumFieldSuggestSource<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   field: EnumField,
   record: TRecord,
@@ -155,8 +157,9 @@ export function enumFieldSuggestSource<TRecord extends object>(
     entity: shortcodeEntity,
     targets: [field.key],
     basis: fieldSuggestionBasisFromRecord(
+      queryClient,
       shortcodeEntity,
-      suggestTargetsFor(shortcodeEntity, [field.key]),
+      suggestTargetsFor(queryClient, shortcodeEntity, [field.key]),
       record,
     ),
   };

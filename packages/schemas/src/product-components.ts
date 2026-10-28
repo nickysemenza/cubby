@@ -2,6 +2,7 @@ import { z } from "zod";
 import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
 import { productShortcode, purchaseShortcode } from "./identifiers";
 import { moneyNullable } from "./money";
+import { productDisplayFactsState } from "./product-read-fields";
 import { productFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.product.gen";
 
 /**
@@ -46,6 +47,7 @@ export const kitComponentRowsInput = z.object({
 });
 
 export const productComponentOut = z.object({
+  displayFacts: productDisplayFactsState,
   productId: productShortcode,
   productName: z.string(),
   brandName: z.string().nullable(),
@@ -103,6 +105,7 @@ export const kitMembershipPurchaseOut = z.object({
 export type KitMembershipPurchaseOut = z.infer<typeof kitMembershipPurchaseOut>;
 
 export const kitMembershipOut = z.object({
+  displayFacts: productDisplayFactsState,
   parentProductId: productShortcode,
   parentProductName: z.string(),
   brandName: z.string().nullable(),

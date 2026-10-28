@@ -1,3 +1,13 @@
+import {
+  useSuspenseQuery,
+  useSuspenseInfiniteQuery,
+} from "@tanstack/react-query";
+
+import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
+import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
+import { expense } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
+import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
+import { workQueue } from "~/integrations/tanstack-query/generated/catalog/workQueue.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { KeyNumbers, type KeyNumber } from "~/ui/common/key-numbers";
@@ -6,8 +16,8 @@ import { Skeleton } from "~/ui/primitives/skeleton";
 import type { HomeAsOfWindow } from "./home-as-of-window";
 import { useRecordedSpend } from "./home-money";
 import { usePantryValue } from "./home-pantry";
-import { useTaskBriefing } from "./house-card";
-import { useNeedsYou } from "./needs-you";
+import { taskBriefingReportInput, useTaskBriefing } from "./house-card";
+import { NEEDS_YOU_INPUT, useNeedsYou } from "./needs-you";
 
 /** A figure still loading shows a placeholder; a failed read shows a dash
  * (its section below carries the raw error and Retry). */
@@ -26,6 +36,12 @@ function figure<T>(
  * forecast.
  */
 export function HomeKeyNumbers({ asOf }: { asOf: HomeAsOfWindow }) {
+  useSuspenseInfiniteQuery(
+    cursorQueryOptions(entityReport.get, taskBriefingReportInput),
+  );
+  useSuspenseQuery(workQueue.queue.queryOptions(NEEDS_YOU_INPUT));
+  useSuspenseQuery(expense.monthlySummary.queryOptions(asOf.spend.filters));
+  useSuspenseQuery(location.valuationSummary.queryOptions());
   const briefing = useTaskBriefing();
   const needsYou = useNeedsYou();
   const spend = useRecordedSpend(asOf);

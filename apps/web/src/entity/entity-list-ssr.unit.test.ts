@@ -1,6 +1,6 @@
-import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
 import { entityListDefaultSort } from "~/entity/sortable-fields";
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
@@ -10,19 +10,23 @@ import {
   searchWithInitialFilter,
 } from "./entity-list-ssr";
 
+const metadataClient = await metadataQueryClient();
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("entityListDefaultSort", () => {
   it("matches the route-primary table defaults that establish hydration keys", () => {
-    expect(entityListDefaultSort("vendor")).toEqual({
+    expect(entityListDefaultSort(metadataClient, "vendor")).toEqual({
       orderBy: "spend",
       direction: "desc",
     });
-    expect(entityListDefaultSort("financialAccount")).toEqual({
+    expect(entityListDefaultSort(metadataClient, "financialAccount")).toEqual({
       orderBy: "name",
       direction: "asc",
     });
-    expect(entityListDefaultSort("financialTransaction")).toEqual({
+    expect(
+      entityListDefaultSort(metadataClient, "financialTransaction"),
+    ).toEqual({
       orderBy: "transactionDate",
       direction: "desc",
     });
@@ -31,30 +35,38 @@ describe("entityListDefaultSort", () => {
 
 describe("searchWithInitialFilter", () => {
   it("opens the Run list on its declared default until the URL names a filter or clears it", () => {
-    expect(searchWithInitialFilter("run", {})).toMatchObject({
+    expect(searchWithInitialFilter(metadataClient, "run", {})).toMatchObject({
       trigger: "foreground,discovery,manual,backfill,scheduled",
       routine: "false",
     });
-    expect(searchWithInitialFilter("run", { filters: "none" })).toEqual({
+    expect(
+      searchWithInitialFilter(metadataClient, "run", { filters: "none" }),
+    ).toEqual({
       filters: "none",
     });
-    expect(searchWithInitialFilter("run", { trigger: "ephemeral" })).toEqual({
+    expect(
+      searchWithInitialFilter(metadataClient, "run", { trigger: "ephemeral" }),
+    ).toEqual({
       trigger: "ephemeral",
     });
-    expect(searchWithInitialFilter("run", { status: "failed" })).toEqual({
+    expect(
+      searchWithInitialFilter(metadataClient, "run", { status: "failed" }),
+    ).toEqual({
       status: "failed",
     });
   });
 
   it("leaves an entity without a declared default alone", () => {
     const search = { sort: "name" };
-    expect(searchWithInitialFilter("product", search)).toBe(search);
+    expect(searchWithInitialFilter(metadataClient, "product", search)).toBe(
+      search,
+    );
   });
 });
 
 describe("ensureEntityListSsr", () => {
   it("loads by default and skips only an explicitly inactive alternate view", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = await metadataQueryClient();
     const ensure = vi
       .spyOn(queryClient, "ensureInfiniteQueryData")
       .mockResolvedValue({ pages: [], pageParams: [] });
@@ -77,18 +89,20 @@ describe("ensureEntityListSsr", () => {
   it("uses declared sort defaults for secondary lists without route options", () => {
     expect(
       compileEntityListInput(
+        metadataClient,
         "run",
         { purpose: "sweep", status: "running" },
         { pageSize: 1 },
       ).sort,
     ).toEqual([{ orderBy: "startedAt", direction: "desc" }]);
-    expect(compileEntityListInput("financialAccount", {}).sort).toEqual([
-      { orderBy: "name", direction: "asc" },
-    ]);
+    expect(
+      compileEntityListInput(metadataClient, "financialAccount", {}).sort,
+    ).toEqual([{ orderBy: "name", direction: "asc" }]);
   });
 
   it("compiles a route renderer's explicit opening sort", () => {
     const input = compileEntityListInput(
+      metadataClient,
       "project",
       {},
       {
@@ -104,13 +118,15 @@ describe("ensureEntityListSsr", () => {
       { key: "tags" },
       { key: "createdAt", bucket: "month" },
     ] as const;
-    const input = compileEntityListInput("product", { groupBy: [...groupBy] });
+    const input = compileEntityListInput(metadataClient, "product", {
+      groupBy: [...groupBy],
+    });
     expect(input.groupBy).toEqual(groupBy);
     const finite = entityListFor("product").queryOptions(input);
     const ssr = entityListFor("product").infiniteQueryOptions(input);
 
     expect(ssr.queryKey).toEqual(infiniteOperationQueryKey(finite.queryKey));
-    const queryClient = new QueryClient();
+    const queryClient = await metadataQueryClient();
     const ensure = vi
       .spyOn(queryClient, "ensureInfiniteQueryData")
       .mockResolvedValue({ pages: [], pageParams: [] });
@@ -121,9 +137,10 @@ describe("ensureEntityListSsr", () => {
     });
     const ungrouped = entityListFor("task").infiniteQueryOptions(
       compileEntityListInput(
+        metadataClient,
         "task",
         {},
-        { defaultSort: entityListDefaultSort("task") },
+        { defaultSort: entityListDefaultSort(metadataClient, "task") },
       ),
     );
     expect(ensure.mock.calls[0]?.[0].queryKey).toEqual(ungrouped.queryKey);
@@ -140,7 +157,7 @@ describe("ensureEntityListSsr", () => {
   });
 
   it("does not start a route preload that is already abandoned", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = await metadataQueryClient();
     const ensure = vi.spyOn(queryClient, "ensureInfiniteQueryData");
     const abortController = new AbortController();
     abortController.abort();
@@ -156,13 +173,15 @@ describe("ensureEntityListSsr", () => {
   });
 
   it("cancels a route preload abandoned after it starts", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = await metadataQueryClient();
     let finishPreload: (() => void) | undefined;
-    vi.spyOn(queryClient, "ensureInfiniteQueryData").mockReturnValue(
-      new Promise((resolve) => {
-        finishPreload = () => resolve({ pages: [], pageParams: [] });
-      }),
-    );
+    const ensure = vi
+      .spyOn(queryClient, "ensureInfiniteQueryData")
+      .mockReturnValue(
+        new Promise((resolve) => {
+          finishPreload = () => resolve({ pages: [], pageParams: [] });
+        }),
+      );
     const cancel = vi
       .spyOn(queryClient, "cancelQueries")
       .mockResolvedValue(undefined);
@@ -174,6 +193,7 @@ describe("ensureEntityListSsr", () => {
       search: {},
       signal: abortController.signal,
     });
+    await vi.waitFor(() => expect(ensure).toHaveBeenCalledOnce());
     abortController.abort();
     finishPreload?.();
     await preload;

@@ -11,8 +11,8 @@ import {
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { Page } from "~/entity/page/page";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { useSectionEmpty } from "../../ui/data-table/detail-section-state";
 import { type DetailSection, DetailSections } from "./detail-page";

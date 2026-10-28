@@ -29,7 +29,7 @@ export interface ListQueryPlan<
 > {
   queryKey: QueryKey;
   meta?: QueryMeta;
-  execute: (signal: AbortSignal) => Promise<TPage>;
+  execute: (signal: AbortSignal, consistency?: "strong") => Promise<TPage>;
 }
 
 /**
@@ -51,6 +51,7 @@ export type ListQueryOptionsFn<
   /** A declared tree's scope; omitted reads the flat list. */
   nesting?: ListNesting;
   resultMembership?: ListResultMembership;
+  includeCount?: boolean;
 }) => ListQueryPlan<TData, TPage>;
 
 interface UsePaginatedTableCoreOptions<
@@ -62,6 +63,7 @@ interface UsePaginatedTableCoreOptions<
   buildFilters: (tableState: TableStateReturn) => TFilters;
   tableState: TableStateReturn;
   groupBy?: ListGroupBy[];
+  includeCount?: boolean;
 }
 
 export function usePaginatedTableCore<
@@ -73,6 +75,7 @@ export function usePaginatedTableCore<
   buildFilters,
   tableState,
   groupBy,
+  includeCount,
 }: UsePaginatedTableCoreOptions<TFilters, TData, TPage>) {
   const filters = useMemo(
     () => buildFilters(tableState),
@@ -90,6 +93,7 @@ export function usePaginatedTableCore<
       pagination,
       filters,
     };
+    if (includeCount !== undefined) params.includeCount = includeCount;
     if (!searching || tableState.hasExplicitSort) params.sort = sortParams;
     if (groupBy) params.groupBy = groupBy;
     return params;
@@ -98,6 +102,7 @@ export function usePaginatedTableCore<
     pagination,
     filters,
     groupBy,
+    includeCount,
     searching,
     tableState.hasExplicitSort,
   ]);

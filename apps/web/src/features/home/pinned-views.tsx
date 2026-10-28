@@ -1,4 +1,6 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { homePinnedViews } from "@cubby/schemas/entity-roster";
+import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
@@ -9,11 +11,13 @@ import {
   type ListEntity,
   listEntities,
 } from "~/entity/generated/entity-lists.gen";
+import { useEntityMetadata } from "~/entity/metadata";
 import {
   type ViewDefinition,
-  viewManifest,
+  toViewDefinition,
 } from "~/entity/model/view-manifest";
 import { formatCount } from "~/lib/number-format";
+import { QuerySection } from "~/ui/feedback/query-section";
 import { Section } from "~/ui/layout";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -28,12 +32,10 @@ const isListEntity = (entity: string): entity is ListEntity =>
   listEntities.some((candidate) => candidate === entity);
 
 /** Saved views declared `pin: { surface: "home" }`, in declared order. */
-const pinnedViews: PinnedView[] = Object.entries(viewManifest)
-  .flatMap(([entity, views]) =>
+const pinnedViews: PinnedView[] = homePinnedViews
+  .flatMap(({ entity, view }) =>
     isListEntity(entity) && isBrowserRoutedEntity(entity)
-      ? (views ?? [])
-          .filter((view) => view.pin?.surface === "home")
-          .map((view) => ({ entity, view }))
+      ? [{ entity, view: toViewDefinition(view) }]
       : [],
   )
   .sort((a, b) => (a.view.pin?.order ?? 0) - (b.view.pin?.order ?? 0));
@@ -49,7 +51,17 @@ export function PinnedViews() {
     <Section title="Your views" headingAs="h2" ruled>
       <HomeList label="Your views">
         {pinnedViews.map((pin) => (
-          <PinnedViewRow key={`${pin.entity}:${pin.view.id}`} {...pin} />
+          <QuerySection
+            key={`${pin.entity}:${pin.view.id}`}
+            title={pin.view.label}
+            fallback={
+              <HomeRow>
+                <Skeleton className="h-4 w-24" />
+              </HomeRow>
+            }
+          >
+            <PinnedViewRow {...pin} />
+          </QuerySection>
         ))}
       </HomeList>
     </Section>
@@ -57,10 +69,15 @@ export function PinnedViews() {
 }
 
 function PinnedViewRow({ entity, view }: PinnedView) {
-  const search = entityListSearch(entity, view);
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
+  const search = entityListSearch(queryClient, entity, view);
   const { data, isLoading } = useQuery(
     entityListFor(entity).queryOptions(
-      compileEntityListInput(entity, search, { pageSize: 1 }),
+      compileEntityListInput(queryClient, entity, search, {
+        pageSize: 1,
+        includeCount: true,
+      }),
     ),
   );
   const total = data?.meta.totalCount;
@@ -82,7 +99,7 @@ function PinnedViewRow({ entity, view }: PinnedView) {
         className="size-3.5 shrink-0 text-muted-foreground"
       />
       <Link
-        to={entityListHref(entity, view)}
+        to={entityListHref(queryClient, entity, view)}
         aria-label={`${view.label}${total === undefined ? "" : `, ${total}`}`}
         className="truncate underline-offset-2 outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
       >

@@ -218,7 +218,9 @@ struct EntityPickerSheet: View {
         let searchRPC = usesSearchRPC
         let searchKey = searchKey
         let emptyPage: @Sendable (Int) -> ListPage<EntityRow> = { page in
-            ListPage(items: [], meta: ListPageMeta(pageIndex: page, pageSize: 25, totalCount: 0))
+            ListPage(
+                items: [],
+                meta: ListPageMeta(pageIndex: page, pageSize: 25, totalCount: 0, hasNextPage: false))
         }
         return EntityListPageSource(
             id: scope,
@@ -238,7 +240,8 @@ struct EntityPickerSheet: View {
                         }
                         return ListPage(
                             items: page == 1 ? rows : [],
-                            meta: ListPageMeta(pageIndex: page, pageSize: 25, totalCount: rows.count))
+                            meta: ListPageMeta(
+                                pageIndex: page, pageSize: 25, totalCount: rows.count, hasNextPage: false))
                     } catch {
                         await MainActor.run { Diagnostics.report(error, context: "picker.search") }
                         throw error

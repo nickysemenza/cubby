@@ -1,7 +1,6 @@
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { slotActionsOf } from "@cubby/schemas/entity-report";
 import type { ReportSlot } from "@cubby/schemas/entity-report";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   createContext,
   useContext,
@@ -11,6 +10,7 @@ import {
 } from "react";
 
 import { featureRegistry } from "~/entity/feature-registry";
+import { useEntityMetadata } from "~/entity/metadata";
 
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import type { DetailSlotComponent } from "./detail-slots";
@@ -73,7 +73,8 @@ function ReportCollectionActions<E extends GenericDetailEntity>({
   entity: E;
   record: DetailRecordOf<E>;
 }) {
-  const presentation: CompiledEntityPresentation = entitySummary[entity];
+  const presentation: CompiledEntityPresentation =
+    useEntityMetadata(entity).summary;
   const actions = new Set(
     presentation.detail.sections.flatMap((section) =>
       section.kind === "slot" ? slotActionsOf(`${entity}.${section.id}`) : [],

@@ -86,6 +86,7 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
           pageIndex: input.pageIndex,
           pageSize: input.pageSize,
           totalCount: slice.total,
+          hasNextPage: (input.pageIndex + 1) * input.pageSize < slice.total,
         },
       };
     }

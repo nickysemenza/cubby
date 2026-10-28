@@ -1,7 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import type {
   ListGroupBy,
   ListGroupSummary,
@@ -9,6 +7,7 @@ import type {
   ListResultMembership,
 } from "@cubby/schemas/pagination";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
 import { constructRow } from "@tanstack/react-table";
 import type { ReactNode } from "react";
@@ -33,6 +32,8 @@ import { listEntities } from "~/entity/generated/entity-lists.gen";
 import { loadSelectionRecords } from "~/entity/hooks/selection-records";
 import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
 import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
+import { useEntityMetadata } from "~/entity/metadata";
+import { useProblemContinuation } from "~/entity/problems/problem-continuation";
 import type { RowLinkResolver } from "~/entity/table/column-helpers";
 import type { ServerListWorkbenchModel } from "~/entity/table/list-workbench";
 import { problemWorklistState } from "~/entity/table/problem-worklist";
@@ -273,6 +274,7 @@ type TreeEntityListOptions<
 };
 
 function entityListDocumentTitle(
+  queryClient: QueryClient,
   entity: BrowserRoutedEntity,
   routeSearch: z.infer<typeof routeSearchSchema>,
   syncsUrl: boolean,
@@ -280,7 +282,7 @@ function entityListDocumentTitle(
   if (!syncsUrl) return undefined;
   return [
     entities[entity].pluralLabel,
-    summarizeListState(getEntityFilters(entity), routeSearch),
+    summarizeListState(getEntityFilters(queryClient, entity), routeSearch),
   ]
     .filter(Boolean)
     .join(": ");
@@ -373,16 +375,18 @@ export function useEntityList<
   TFilters,
   TRow
 > {
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(entity);
   const routeSearch = routeSearchSchema.parse(useSearch({ strict: false }));
   const groupChoice = groupBy
-    ? generatedEntityListFields[entity].grouping.find(
+    ? metadata.listFields.grouping.find(
         (choice) => choice.key === groupBy[0]?.key && choice.reason === null,
       )
     : undefined;
   const tableGrouping = useMemo(
     () =>
       onGroupByChange && {
-        choices: generatedEntityListFields[entity].grouping.flatMap((choice) =>
+        choices: metadata.listFields.grouping.flatMap((choice) =>
           choice.reason === null && choice.filter
             ? [
                 {
@@ -396,7 +400,7 @@ export function useEntityList<
         active: groupChoice?.key ?? null,
         onChange: onGroupByChange,
       },
-    [entity, groupChoice?.key, onGroupByChange],
+    [metadata, groupChoice?.key, onGroupByChange],
   );
   const inspection = useEntityPreview(
     fixedPreviewEntity(entity, previewOptions),
@@ -427,7 +431,7 @@ export function useEntityList<
     (ts: TableStateReturn) => {
       const resolvedFilters = {
         ...buildFiltersFromManifest(
-          getEntityFilters(entity),
+          getEntityFilters(queryClient, entity),
           // Reads raw state rather than `getColumnFilter`, which deliberately
           // throws on an array — the builder is the one caller that handles
           // both shapes, per each spec's `kind`.
@@ -435,7 +439,7 @@ export function useEntityList<
         ),
         ...scopeFilters,
       };
-      const primarySearch = entitySummary[entity].primarySearch;
+      const primarySearch = metadata.summary.primarySearch;
       if (primarySearch) {
         const primaryValue = ts.getColumnFilter(primarySearch.key);
         if (primaryValue !== undefined) {
@@ -448,7 +452,7 @@ export function useEntityList<
       // caller-owned scope filters are the three declared pieces of TFilters.
       return resolvedFilters as TFilters;
     },
-    [entity, scopeFilters],
+    [entity, queryClient, metadata, scopeFilters],
   );
 
   const effectiveBuildFilters = buildFilters ?? manifestBuildFilters;
@@ -480,12 +484,17 @@ export function useEntityList<
     .safeParse(routeSearch.worklist).data;
   const worklist = problemWorklistState(
     entity,
-    worklistKey,
+    useProblemContinuation(worklistKey),
     tableState.columnFilters,
     tableState.sorting,
   );
   useDocumentTitle(
-    entityListDocumentTitle(entity, routeSearch, presentationState.urlSync),
+    entityListDocumentTitle(
+      queryClient,
+      entity,
+      routeSearch,
+      presentationState.urlSync,
+    ),
   );
 
   const [resultMembership, setResultMembership] =
@@ -497,6 +506,7 @@ export function useEntityList<
     groupBy,
     nesting: serverTree ? ROOTS_SCOPE : undefined,
     resultMembership,
+    includeCount: Boolean(subject || scopeFilters),
   });
 
   const {
@@ -515,13 +525,13 @@ export function useEntityList<
   );
   const groupConfig = useMemo((): GroupConfig | undefined => {
     if (!groupChoice || !groups) return undefined;
-    const fields = getEntityFilters(entity);
+    const fields = getEntityFilters(queryClient, entity);
     const sectionFilter = (
       group: ListGroupSummary,
       depth = group.path.length - 1,
     ) => {
       const dimension = groupBy?.[depth];
-      const choice = generatedEntityListFields[entity].grouping.find(
+      const choice = metadata.listFields.grouping.find(
         (entry) => entry.key === dimension?.key,
       );
       const filter = dimension?.bucket ? null : choice?.filter;
@@ -629,7 +639,7 @@ export function useEntityList<
                 {Math.round(group.fraction * 100)}% of records
               </span>
             )}
-            {generatedEntityListFields[entity].metrics.map((metric) => {
+            {metadata.listFields.metrics.map((metric) => {
               const value = group.metrics?.[metric.key];
               if (!value) return null;
               return (
@@ -669,6 +679,8 @@ export function useEntityList<
     collapsedGroups,
     groupBy,
     infiniteResult.memberships,
+    queryClient,
+    metadata,
   ]);
 
   const serverTotals = useMemo(
@@ -740,14 +752,14 @@ export function useEntityList<
     .map((filter) => filter.id)
     .join("|");
   const filterFields = useMemo(() => {
-    const specs = getEntityFilters(entity);
+    const specs = getEntityFilters(queryClient, entity);
     const menu = new Set(
       menuOnlyFilterSpecs(specs, {
         hostedIds: new Set(allColumns.visit(listReadColumnId)),
         excludedKeys: new Set([
           ...scopeKeys.split("|"),
           ...hiddenFilterKey.split("|"),
-          entitySummary[entity].primarySearch?.key,
+          metadata.summary.primarySearch?.key,
         ]),
         activeIds: new Set(activeKey.split("|")),
       }),
@@ -762,6 +774,8 @@ export function useEntityList<
     hiddenFilterKey,
     resolvedFilterOptions,
     scopeKeys,
+    queryClient,
+    metadata,
   ]);
 
   // Row identity is independent of whether selection happens to be enabled.
@@ -1002,6 +1016,7 @@ export function useEntityList<
         selectionEntity && !tree && !subject && !rowActionsGuard
           ? {
               totalCount,
+              hasNextPage: infiniteResult.infiniteScroll.hasNextPage,
               loadedCount: data.length,
               onSelectAll: handleSelectAllMatching,
               isSelectingAll,

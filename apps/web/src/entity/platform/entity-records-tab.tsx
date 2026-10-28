@@ -1,5 +1,7 @@
-import { scoredEntities } from "@cubby/schemas/data-quality";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import {
+  scoredEntities,
+  shortcodeEntities,
+} from "@cubby/schemas/entity-roster";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   functionalUpdate,

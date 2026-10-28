@@ -1,6 +1,7 @@
 import { storedDateRangeSchema } from "@cubby/schemas/date-range";
 import type { Entity } from "@cubby/schemas/entity";
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
+import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { dateSpanParts } from "~/lib/date-span";
@@ -37,6 +38,7 @@ const isMoneyField = (field: DisplayField) =>
  * display, which imports the picker stack.
  */
 export function compactFieldText<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   record: TRecord,
   field: DisplayField,
@@ -72,7 +74,7 @@ export function compactFieldText<TRecord extends object>(
   if (field.kind === "timestamp") return new Date(value).toLocaleDateString();
   if (field.kind === "date") return value;
   if (field.kind === "enum" || field.display.valueOptions)
-    return enumFieldLabel(entity, field.key, value);
+    return enumFieldLabel(queryClient, entity, field.key, value);
   // A plain identifier field is a code; only its reference names display.
   if (field.kind === "identifier") return null;
   return value;

@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
+import { isAuditableEntity } from "@cubby/schemas/entity-roster";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { type FC, type ReactNode, useEffect, useMemo } from "react";

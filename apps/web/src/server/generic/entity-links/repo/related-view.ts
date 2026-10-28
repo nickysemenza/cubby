@@ -16,9 +16,11 @@ import type {
 import {
   relatedFilterPrefix,
   relatedViewKeySchema,
+} from "@cubby/schemas/related-view";
+import {
   relatedViewPaths,
   relatedViewRegistry,
-} from "@cubby/schemas/related-view";
+} from "@cubby/schemas/related-view-registry";
 import { parseShortcode } from "@cubby/shared";
 import { and, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";

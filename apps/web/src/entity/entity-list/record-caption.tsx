@@ -1,10 +1,10 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { type QueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { renderCompactFieldValue } from "~/entity/display/entity-display";
+import { entityMetadata } from "~/entity/metadata";
 import { readPathValue } from "~/entity/read-path";
 
 /** A list row as a caption reads it: its id and whichever fields it names. */
@@ -17,11 +17,13 @@ const captionRowSchema = z.looseObject({ id: z.string() });
  * as its label.
  */
 export function recordCaption(
+  queryClient: QueryClient,
   entity: BrowserRoutedEntity,
   row: z.infer<typeof captionRowSchema>,
 ): ReactNode {
-  const subtitle = entitySummary[entity].list.shelf?.subtitle ?? [];
-  const fields = entityFieldModels[entity].fields;
+  const subtitle =
+    entityMetadata(queryClient, entity).summary.list.shelf?.subtitle ?? [];
+  const fields = entityMetadata(queryClient, entity).fields.fields;
   for (const key of subtitle) {
     const field = fields.find((candidate) => candidate.key === key);
     if (!field) continue;
@@ -32,7 +34,7 @@ export function recordCaption(
       (Array.isArray(value) && value.length === 0)
     )
       continue;
-    return renderCompactFieldValue(entity, row, field);
+    return renderCompactFieldValue(queryClient, entity, row, field);
   }
   return undefined;
 }

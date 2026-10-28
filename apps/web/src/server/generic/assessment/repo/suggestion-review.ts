@@ -13,10 +13,8 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
-import {
-  basisValueOf,
-  requiresSuggestionReview,
-} from "@cubby/schemas/field-suggestion";
+import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
 import { suggestionFieldCount } from "@cubby/schemas/suggestion-list";

@@ -6,17 +6,21 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { createEditorTestQueryClient } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
+import { generatedEditableEntities } from "~/entity/generated/entity-edit-validation-types.gen";
 import { householdLocalDate } from "~/lib/household-date";
 import { mock } from "~/lib/test/mock-schema";
 
-import { entityEditRegistry } from "./definitions";
+import { getEntityEditDefinition } from "./definitions";
 import {
   buildEntityEdit,
   initialEntityEditValues,
   resolveEntityEdit,
 } from "./kernel";
 import type { EditableEntity } from "./types";
+
+const queryClient = createEditorTestQueryClient();
 
 const explicitNoneResolution = () => ({
   current: {
@@ -51,7 +55,7 @@ const explicitNoneResolution = () => ({
 });
 
 describe("entity edit definitions", () => {
-  it("edits a card scalar without resending its identity siblings", () => {
+  it("edits a card scalar without resending its identity siblings", async () => {
     const record = mock(financialAccountOut, {
       overrides: {
         identity: {
@@ -78,11 +82,11 @@ describe("entity edit definitions", () => {
       surface: "dialog",
       record,
     } as const;
-    const resolved = resolveEntityEdit(entityEditRegistry, request);
+    const resolved = resolveEntityEdit(queryClient, request);
     if (!("definition" in resolved))
       throw new Error("Account editor must resolve");
     const values = initialEntityEditValues(resolved, request);
-    const result = buildEntityEdit(resolved, request, {
+    const result = await buildEntityEdit(resolved, request, {
       ...values,
       providerVendorId: testShortcode("vendor", "UNION"),
     });
@@ -94,17 +98,17 @@ describe("entity edit definitions", () => {
   });
   it.each(["task", "expense"] as const)(
     "leaves %s capture trade unresolved until chosen or inherited",
-    (entity) => {
+    async (entity) => {
       const request = {
         entity,
         operation: "create" as const,
         intent: "capture" as const,
         surface: "dialog" as const,
       };
-      const resolved = resolveEntityEdit(entityEditRegistry, request);
+      const resolved = resolveEntityEdit(queryClient, request);
       if (!("definition" in resolved)) throw new Error("Capture must resolve");
       const values = initialEntityEditValues(resolved, request);
-      const result = buildEntityEdit(resolved, request, {
+      const result = await buildEntityEdit(resolved, request, {
         ...values,
         name: "Synthetic work",
       });
@@ -130,17 +134,14 @@ describe("entity edit definitions", () => {
     },
   ])(
     "preserves $entity assignment intent through ordinary form saves",
-    ({ entity, modes, resolutionField }) => {
+    async ({ entity, modes, resolutionField }) => {
       const createRequest = {
         entity,
         operation: "create" as const,
         intent: "full" as const,
         surface: "dialog" as const,
       };
-      const createResolved = resolveEntityEdit(
-        entityEditRegistry,
-        createRequest,
-      );
+      const createResolved = resolveEntityEdit(queryClient, createRequest);
       if (!("definition" in createResolved))
         throw new Error("Create must resolve");
       const createValues = initialEntityEditValues(
@@ -149,10 +150,12 @@ describe("entity edit definitions", () => {
       );
       for (const mode of modes) expect(createValues[mode]).toBe("inherit");
       expect(
-        buildEntityEdit(createResolved, createRequest, {
-          ...createValues,
-          name: "Synthetic work",
-        }).ok,
+        (
+          await buildEntityEdit(createResolved, createRequest, {
+            ...createValues,
+            name: "Synthetic work",
+          })
+        ).ok,
       ).toBe(true);
 
       const record = {
@@ -168,13 +171,13 @@ describe("entity edit definitions", () => {
         surface: "dialog" as const,
         record,
       };
-      const resolved = resolveEntityEdit(entityEditRegistry, updateRequest);
+      const resolved = resolveEntityEdit(queryClient, updateRequest);
       if (!("definition" in resolved)) throw new Error("Update must resolve");
       const values = initialEntityEditValues(resolved, updateRequest);
       expect(values[modes[0]!]).toBe("explicit");
       // An unrelated edit must not emit a hidden mode and suppress the server's
       // detach-preservation behavior.
-      const result = buildEntityEdit(resolved, updateRequest, {
+      const result = await buildEntityEdit(resolved, updateRequest, {
         ...values,
         name: "Renamed work",
       });
@@ -190,8 +193,9 @@ describe("entity edit definitions", () => {
     },
   );
 
-  it("keeps semantic intent field selections local, valid, and non-empty", () => {
-    for (const [entity, definition] of Object.entries(entityEditRegistry)) {
+  it("keeps semantic intent field selections local, valid, and non-empty", async () => {
+    for (const entity of generatedEditableEntities) {
+      const definition = getEntityEditDefinition(queryClient, entity);
       const fieldIds = definition.fields.map((field) => field.id);
       expect(new Set(fieldIds).size, `${entity} field ids`).toBe(
         fieldIds.length,
@@ -224,7 +228,7 @@ describe("entity edit definitions", () => {
     }
   });
 
-  it("keeps the full update intent compatible with ordinary inline editors", () => {
+  it("keeps the full update intent compatible with ordinary inline editors", async () => {
     const inlineFields: readonly [EditableEntity, readonly string[]][] = [
       ["product", ["ingredientId", "barcode", "fdc_id", "unitMappings"]],
       [
@@ -245,7 +249,8 @@ describe("entity edit definitions", () => {
     ];
 
     for (const [entity, fields] of inlineFields) {
-      const full = entityEditRegistry[entity].operations.update?.intents.full;
+      const full = getEntityEditDefinition(queryClient, entity).operations
+        .update?.intents.full;
       expect(full, `${entity} full update intent`).toBeDefined();
       for (const fieldId of fields) {
         expect(full?.fields, `${entity} inline field ${fieldId}`).toContain(
@@ -255,7 +260,7 @@ describe("entity edit definitions", () => {
     }
   });
 
-  it("keeps finance update payloads minimal when replacement arrays are unchanged", () => {
+  it("keeps finance update payloads minimal when replacement arrays are unchanged", async () => {
     const record = {
       id: "FTX-TEST",
       accountId: testShortcode("financialAccount", "FAC-TEST"),
@@ -278,13 +283,13 @@ describe("entity edit definitions", () => {
       surface: "dialog" as const,
       record,
     };
-    const resolved = resolveEntityEdit(entityEditRegistry, request);
+    const resolved = resolveEntityEdit(queryClient, request);
     if (!("definition" in resolved)) {
       throw new Error("financial transaction full update must resolve");
     }
 
     expect(
-      buildEntityEdit(resolved, request, {
+      await buildEntityEdit(resolved, request, {
         ...record,
         merchant: "New merchant",
         sourceRefs: [{ source: "statement", externalId: "row-1" }],
@@ -300,7 +305,7 @@ describe("entity edit definitions", () => {
   // `providerId` it was made from. The form holds the read clipped to the input schema, so an
   // untouched claim is not a patch and an edited one goes back under the identity it was read
   // with instead of being rehashed from its evidence.
-  it("edits a source claim under the identity key it was read with", () => {
+  it("edits a source claim under the identity key it was read with", async () => {
     const claim = {
       source: "synthetic-provider",
       normalizedEvidence: {
@@ -333,11 +338,11 @@ describe("entity edit definitions", () => {
       surface: "dialog" as const,
       record,
     };
-    const resolved = resolveEntityEdit(entityEditRegistry, request);
+    const resolved = resolveEntityEdit(queryClient, request);
     if (!("definition" in resolved)) throw new Error("transfer must resolve");
     const values = initialEntityEditValues(resolved, request);
 
-    const untouched = buildEntityEdit(resolved, request, values);
+    const untouched = await buildEntityEdit(resolved, request, values);
     if (!untouched.ok) throw new Error(JSON.stringify(untouched.issues));
     expect(untouched).toMatchObject({ ok: true, changed: false });
     const [held] = z
@@ -346,7 +351,7 @@ describe("entity edit definitions", () => {
     expect(held).toMatchObject({ sourceKey: claim.sourceKey });
     expect(held).not.toHaveProperty("sourceKeyVersion");
 
-    const reviewed = buildEntityEdit(resolved, request, {
+    const reviewed = await buildEntityEdit(resolved, request, {
       ...values,
       sourceClaims: [
         {
@@ -377,7 +382,7 @@ describe("entity edit definitions", () => {
   // injects a fixed key can make an otherwise-untouched edit submit — the
   // mechanism `expense`'s `settle` intent relies on for a no-touch "Mark
   // purchased" (`future: false` is unconditional in its `buildData`).
-  it("submits an otherwise-empty edit when buildData injects a fixed key (kernel)", () => {
+  it("submits an otherwise-empty edit when buildData injects a fixed key (kernel)", async () => {
     const today = householdLocalDate();
     // A minimal record — only the settle roster's own keys — rather than a
     // full `mock(expenseOut)`; this kernel-level test has no use for the rest.
@@ -401,12 +406,12 @@ describe("entity edit definitions", () => {
       surface: "dialog" as const,
       record,
     };
-    const resolved = resolveEntityEdit(entityEditRegistry, request);
+    const resolved = resolveEntityEdit(queryClient, request);
     if (!("definition" in resolved))
       throw new Error("expense settle must resolve");
     // Every seeded value matches the record: an untouched dialog.
     const values = initialEntityEditValues(resolved, request);
-    const result = buildEntityEdit(resolved, request, values);
+    const result = await buildEntityEdit(resolved, request, values);
     if (!result.ok || result.command.operation !== "update") {
       throw new Error("settle must build an update");
     }
@@ -440,7 +445,7 @@ describe("entity edit definitions", () => {
     },
   ])(
     "opens a record with nested Dates and keeps untouched nutrition and write-only fields empty",
-    (labelNutrition) => {
+    async (labelNutrition) => {
       const record = mock(productWithMappingsAndFoodOut, {
         seed: 5,
         overrides: {
@@ -478,7 +483,7 @@ describe("entity edit definitions", () => {
         surface: "dialog" as const,
         record,
       };
-      const resolved = resolveEntityEdit(entityEditRegistry, request);
+      const resolved = resolveEntityEdit(queryClient, request);
       if (!("definition" in resolved)) throw new Error("product must resolve");
       const values = initialEntityEditValues(resolved, request);
       expect(values.unitMappings).toEqual([
@@ -490,7 +495,7 @@ describe("entity edit definitions", () => {
         },
       ]);
       expect(values.barcode).toBeUndefined();
-      const untouched = buildEntityEdit(resolved, request, values);
+      const untouched = await buildEntityEdit(resolved, request, values);
       expect(untouched.ok ? [] : untouched.issues).toEqual([]);
       expect(untouched).toMatchObject({ ok: true, changed: false });
       if (!untouched.ok || untouched.command.operation !== "update")
@@ -498,7 +503,7 @@ describe("entity edit definitions", () => {
       expect(untouched.command.data).toEqual({});
 
       // An explicitly cleared nullable *read* field is a real change.
-      const cleared = buildEntityEdit(resolved, request, {
+      const cleared = await buildEntityEdit(resolved, request, {
         ...values,
         notes: null,
       });
@@ -507,7 +512,7 @@ describe("entity edit definitions", () => {
         throw new Error("cleared edit must build an update");
       expect(cleared.command.data).toEqual({ notes: null });
 
-      const clearedLabel = buildEntityEdit(resolved, request, {
+      const clearedLabel = await buildEntityEdit(resolved, request, {
         ...values,
         labelNutrition: { servingGrams: null },
       });
@@ -518,7 +523,7 @@ describe("entity edit definitions", () => {
     },
   );
 
-  it("still emits null for a nullable read field cleared against a partial record", () => {
+  it("still emits null for a nullable read field cleared against a partial record", async () => {
     const request = {
       entity: "expense" as const,
       operation: "update" as const,
@@ -537,10 +542,10 @@ describe("entity edit definitions", () => {
         projectId: null,
       },
     };
-    const resolved = resolveEntityEdit(entityEditRegistry, request);
+    const resolved = resolveEntityEdit(queryClient, request);
     if (!("definition" in resolved)) throw new Error("expense must resolve");
     const values = initialEntityEditValues(resolved, request);
-    const result = buildEntityEdit(resolved, request, {
+    const result = await buildEntityEdit(resolved, request, {
       ...values,
       notes: null,
     });
@@ -550,7 +555,7 @@ describe("entity edit definitions", () => {
     });
   });
 
-  it("defaults pendingImageIds to an empty array off the field roster, not a per-entity literal (G5)", () => {
+  it("defaults pendingImageIds to an empty array off the field roster, not a per-entity literal (G5)", async () => {
     const cases = [
       ["gardenEntry", "full"],
       ["gardenEntry", "capture"],
@@ -564,7 +569,7 @@ describe("entity edit definitions", () => {
         intent,
         surface: "dialog" as const,
       };
-      const resolved = resolveEntityEdit(entityEditRegistry, request);
+      const resolved = resolveEntityEdit(queryClient, request);
       if (!("definition" in resolved)) {
         throw new Error(`${entity} ${intent} create must resolve`);
       }
@@ -579,8 +584,8 @@ describe("entity edit definitions", () => {
     }
   });
 
-  it("keeps the calendar's semantic rules out of its presentation adapter", () => {
-    const task = resolveEntityEdit(entityEditRegistry, {
+  it("keeps the calendar's semantic rules out of its presentation adapter", async () => {
+    const task = resolveEntityEdit(queryClient, {
       entity: "task",
       operation: "update",
       intent: "schedule",
@@ -589,7 +594,7 @@ describe("entity edit definitions", () => {
     });
     if (!("definition" in task)) throw new Error("task schedule must resolve");
     expect(
-      buildEntityEdit(
+      await buildEntityEdit(
         task,
         {
           entity: "task",
@@ -607,7 +612,7 @@ describe("entity edit definitions", () => {
     ).toMatchObject({ ok: false, issues: [{ field: "due" }] });
 
     expect(
-      buildEntityEdit(
+      await buildEntityEdit(
         task,
         {
           entity: "task",
@@ -627,7 +632,7 @@ describe("entity edit definitions", () => {
       issues: [{ field: "due", message: "This field is required." }],
     });
 
-    const actualExpense = resolveEntityEdit(entityEditRegistry, {
+    const actualExpense = resolveEntityEdit(queryClient, {
       entity: "expense",
       operation: "update",
       intent: "planned",
@@ -638,7 +643,7 @@ describe("entity edit definitions", () => {
       throw new Error("planned expense must resolve");
     }
     expect(
-      buildEntityEdit(
+      await buildEntityEdit(
         actualExpense,
         {
           entity: "expense",
@@ -651,7 +656,7 @@ describe("entity edit definitions", () => {
       ),
     ).toMatchObject({ ok: false, issues: [{ source: "client" }] });
 
-    const plannedExpense = resolveEntityEdit(entityEditRegistry, {
+    const plannedExpense = resolveEntityEdit(queryClient, {
       entity: "expense",
       operation: "update",
       intent: "planned",
@@ -662,7 +667,7 @@ describe("entity edit definitions", () => {
       throw new Error("planned expense must resolve");
     }
     expect(
-      buildEntityEdit(
+      await buildEntityEdit(
         plannedExpense,
         {
           entity: "expense",
@@ -679,7 +684,7 @@ describe("entity edit definitions", () => {
     });
     // Unknown cost (a historical acquisition) may keep an unknown date.
     expect(
-      buildEntityEdit(
+      await buildEntityEdit(
         plannedExpense,
         {
           entity: "expense",

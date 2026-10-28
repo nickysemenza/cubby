@@ -1,6 +1,7 @@
 import type { UsdaFoodListRow, USDAFoodSortField } from "@cubby/schemas/usda";
 import { usdaListInput } from "@cubby/schemas/usda";
 import { type DataType, dataTypeLabel } from "@cubby/usda";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
 
 import { EntityRouteLink } from "~/entity/components/entity-ref-link";
@@ -16,6 +17,7 @@ import {
   filterGetterFromColumnFilters,
 } from "~/entity/filters";
 import { useEntityList } from "~/entity/hooks/use-entity-list";
+import { useEntityMetadata } from "~/entity/metadata";
 import { DataTableToolbar } from "~/entity/table/data-table-toolbar";
 import { TableEmptyState } from "~/entity/table/entity-empty-states";
 import { ListWorkbench } from "~/entity/table/list-workbench";
@@ -58,10 +60,13 @@ export interface USDAFoodListOperations {
 
 const productionOperations: USDAFoodListOperations = { list: usdaFood.list };
 
-const buildUSDAFilters = (tableState: TableStateReturn): USDAListFilters => {
+const buildUSDAFilters = (
+  queryClient: QueryClient,
+  tableState: TableStateReturn,
+): USDAListFilters => {
   const declared = usdaListInput.shape.filters.parse(
     buildFiltersFromManifest(
-      getEntityFilters("usda-food"),
+      getEntityFilters(queryClient, "usda-food"),
       filterGetterFromColumnFilters(tableState.columnFilters),
     ),
   );
@@ -99,8 +104,14 @@ export function USDAFoodList({
   operations?: USDAFoodListOperations;
 }) {
   const { search } = useListSearch();
-  const { view } = resolveListView("usda-food", search);
+  const { view } = resolveListView(useQueryClient(), "usda-food", search);
   const { density } = useEntityListCardDensity();
+  const queryClient = useQueryClient();
+  useEntityMetadata("usda-food");
+  const buildFilters = useCallback(
+    (state: TableStateReturn) => buildUSDAFilters(queryClient, state),
+    [queryClient],
+  );
   const queryOptions = useCallback<
     ListQueryOptionsFn<USDAListFilters, USDAListRow>
   >(
@@ -125,8 +136,11 @@ export function USDAFoodList({
       return {
         queryKey: operations.list.queryKey(input),
         meta: policy.meta,
-        execute: async (signal) => {
-          const page = await operations.list.call(input, { signal });
+        execute: async (signal, consistency) => {
+          const page = await operations.list.call(input, {
+            signal,
+            consistency,
+          });
           return {
             ...page,
             items: page.items.map(withUSDAListIdentity),
@@ -312,7 +326,7 @@ export function USDAFoodList({
       entity: "usda-food",
       preview: { idField: "fdc_id", responsiveInspector: true },
       queryOptions,
-      buildFilters: buildUSDAFilters,
+      buildFilters,
       columns,
       tableStateOptions: USDA_TABLE_STATE,
     },

@@ -20,7 +20,9 @@ enum PhotoRecordSearch {
         let rows = start < matches.count ? Array(matches.dropFirst(start).prefix(pageSize)).map(\.row) : []
         return ListPage(
             items: rows,
-            meta: ListPageMeta(pageIndex: page, pageSize: pageSize, totalCount: matches.count))
+            meta: ListPageMeta(
+                pageIndex: page, pageSize: pageSize, totalCount: matches.count,
+                hasNextPage: start + rows.count < matches.count))
     }
 
     static func matches(

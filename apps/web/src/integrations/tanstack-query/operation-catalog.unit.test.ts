@@ -4,12 +4,13 @@ import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-import { calendarHouseholdRipple } from "./cache-tags";
+import { calendarHouseholdRipple, exactRippleTags } from "./cache-tags";
 import { invalidateOperationTags } from "./operation-cache";
 import {
   defineOperationDomain,
   isOperationQueryKey,
 } from "./operation-catalog";
+import { overrideStartDispatch } from "./start-transport";
 
 const calendarContract = defineContract("calendar", {
   range: query({
@@ -29,6 +30,33 @@ const calendar = defineOperationDomain(calendarContract, {
 });
 
 describe("operation catalog", () => {
+  it("reads current data when an invalidated inactive baseline is fetched later", async () => {
+    const restore = overrideStartDispatch(
+      async (_operation, _input, { headers }) => ({
+        ok: true,
+        data: {
+          items: [
+            new Headers(headers).get("x-cubby-read-consistency") === "strong"
+              ? "fresh"
+              : "cached",
+          ],
+        },
+      }),
+    );
+    const client = new QueryClient();
+    try {
+      const options = calendar.range.queryOptions({ start: "2026-10-27" });
+      expect(await client.fetchQuery(options)).toEqual({ items: ["cached"] });
+      await invalidateOperationTags(
+        client,
+        exactRippleTags([["calendar", "range"]]),
+      );
+      expect(await client.fetchQuery(options)).toEqual({ items: ["fresh"] });
+    } finally {
+      client.clear();
+      restore();
+    }
+  });
   it("recognizes only complete registered finite operation keys", () => {
     expect(
       isOperationQueryKey(calendar.range.queryKey({ start: "2026-08-25" })),

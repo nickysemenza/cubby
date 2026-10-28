@@ -14,7 +14,11 @@ import {
   startOperationDefinitionFor,
 } from "~/lib/start-operation-observability";
 import { noteRequestOperation } from "~/server/db/db-observability";
-import { recordDatabaseWrite } from "~/server/db/freshness/client";
+import {
+  recordDatabaseWrite,
+  registerFreshnessMember,
+  memberWriteCookie,
+} from "~/server/db/freshness/member-marker";
 import { runAfterCommit } from "~/server/db/helpers";
 import {
   type ReadPolicy,
@@ -460,6 +464,8 @@ function isOutputSchemaResolver<
 }
 
 const operationEntityInputSchema = z.object({ entity: z.string() });
+const reportSlotInputSchema = z.object({ slot: z.string() });
+const reportSlotsInputSchema = z.object({ slots: z.array(z.string()) });
 
 /**
  * An operation outside the generated registry that still runs the whole
@@ -540,6 +546,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
         // deadline still parses its output and schedules its side effects.
         throwIfStartOperationAborted(options.request.signal);
         const authenticated = principal.context;
+        registerFreshnessMember(authenticated.auth);
         span.setAttributes({
           "cubby.authenticated": true,
           ...actorSpanAttributes(
@@ -548,10 +555,32 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
           ),
         });
         if (options.type !== "query") assertClientMayWrite(principal);
+        state.stage = "input";
+        const input = options.inputSchema.parse(options.input);
+        const entityInput = operationEntityInputSchema.safeParse(input);
+        state.entity =
+          entityInput.success &&
+          (!definition.registered ||
+            isStartOperationEntity(
+              definition.registered,
+              entityInput.data.entity,
+            ))
+            ? entityInput.data.entity
+            : undefined;
+        if (state.entity) span.setAttribute("cubby.entity", state.entity);
+        const reportSlot = reportSlotInputSchema.safeParse(input);
+        const reportSlots = reportSlotsInputSchema.safeParse(input);
+        const slots = reportSlot.success
+          ? [reportSlot.data.slot]
+          : reportSlots.success
+            ? reportSlots.data.slots
+            : [];
         const readPolicy =
           options.type !== "query"
             ? "strong"
-            : (options.readPolicy ?? readPolicyFor(definition.id, "query"));
+            : options.readPolicy === "strong"
+              ? "strong"
+              : readPolicyFor(definition.id, "query", state.entity, slots);
         const context = await selectOperationContext(authenticated, readPolicy);
         span.setAttributes({
           "cubby.request_origin": context.requestOrigin,
@@ -567,19 +596,6 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
               : context.readConsistency.reason,
         });
 
-        state.stage = "input";
-        const input = options.inputSchema.parse(options.input);
-        const entityInput = operationEntityInputSchema.safeParse(input);
-        state.entity =
-          entityInput.success &&
-          (!definition.registered ||
-            isStartOperationEntity(
-              definition.registered,
-              entityInput.data.entity,
-            ))
-            ? entityInput.data.entity
-            : undefined;
-        if (state.entity) span.setAttribute("cubby.entity", state.entity);
         noteRequestOperation(definition.id, state.entity);
         throwIfStartOperationAborted(options.request.signal);
 
@@ -636,6 +652,13 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
           requestId,
           failureContext(),
         );
+        // Keep public failure classification outside the native error object,
+        // whose boolean error flag can obscure nested diagnostic attributes.
+        span.setAttributes({
+          "cubby.failure.stage": state.stage,
+          "cubby.failure.code": normalized.publicError.code,
+          "cubby.failure.reason": normalized.publicError.reason,
+        });
         if (normalized.publicError.code === "INTERNAL_SERVER_ERROR") {
           log.error("failure", {
             operation: definition.id,
@@ -690,7 +713,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             budgetMs,
             requestId,
           });
-          // The work may commit after this answer: keep every client strong
+          // The work may commit after this answer: keep this member strong
           // for that possible write now; the work records again when it ends.
           if (state.mutationStarted) await recordWrite(definition.id);
           return {
@@ -706,6 +729,8 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
           };
         },
       );
+      const readMarker = await memberWriteCookie();
+      if (readMarker) observed.result.readMarker = readMarker;
       return observed.result;
     });
   };

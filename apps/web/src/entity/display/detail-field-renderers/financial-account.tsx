@@ -10,10 +10,10 @@ import type { EntityDetailFieldRenderers } from "./index";
  * composed (`display.detailLabelPath`).
  */
 export const financialAccountDetailFields = {
-  "financial-account-identity": (account) => ({
+  "financial-account-identity": (account, queryClient) => ({
     value: renderOptionCell(
       account.identity.kind,
-      fieldEnumOptions("financialAccount", "identity"),
+      fieldEnumOptions(queryClient, "financialAccount", "identity"),
     ),
     filterAction: (
       <EntityFilterLink

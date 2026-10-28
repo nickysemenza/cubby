@@ -3,7 +3,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 
 import { HouseholdContributionLedgerReport } from "./household-contribution-ledger";
 

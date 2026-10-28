@@ -1,3 +1,5 @@
+import { calendarSourceEntity } from "@cubby/schemas/calendar";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
   stripSearchParams,
@@ -5,9 +7,14 @@ import {
 } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
 
+import { ensureEntityMetadata } from "~/entity/metadata";
 import { listChromePage } from "~/entity/routing/list-page";
 import { CalendarConnectDialog } from "~/features/calendar/calendar-connect-dialog";
 import { CalendarFilterBar } from "~/features/calendar/calendar-filter-bar";
+import {
+  calendarKinds,
+  useCalendarMetadata,
+} from "~/features/calendar/calendar-filter-specs";
 import { buildCalendarFilters } from "~/features/calendar/calendar-filters";
 import {
   calendarSearchDefaults,
@@ -27,6 +34,13 @@ const CalendarRoute = listChromePage({
 });
 
 export const Route = createFileRoute("/_authenticated/calendar")({
+  beforeLoad: async ({ context }) => {
+    await Promise.all(
+      calendarKinds.map((kind) =>
+        ensureEntityMetadata(context.queryClient, calendarSourceEntity(kind)),
+      ),
+    );
+  },
   validateSearch: calendarSearchSchema,
   search: { middlewares: [stripSearchParams(calendarSearchDefaults)] },
   component: CalendarRoute,
@@ -34,12 +48,21 @@ export const Route = createFileRoute("/_authenticated/calendar")({
 });
 
 function CalendarBody() {
+  const ready = useCalendarMetadata();
+  return ready ? <ReadyCalendarBody /> : null;
+}
+
+function ReadyCalendarBody() {
+  const queryClient = useQueryClient();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   // `search` is referentially stable per navigation, and `filters` is a
   // `useMemo` dependency of the query range downstream — building it inline
   // would allocate a fresh object every render and churn the range.
-  const filters = useMemo(() => buildCalendarFilters(search), [search]);
+  const filters = useMemo(
+    () => buildCalendarFilters(queryClient, search),
+    [queryClient, search],
+  );
   const filterBarSearch = useMemo(() => {
     if (search.period !== "schedule") return search;
     const kinds = filters.kinds

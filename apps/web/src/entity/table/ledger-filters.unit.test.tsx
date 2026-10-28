@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import {
   act,
@@ -9,6 +9,8 @@ import {
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { createEditorTestQueryClient } from "#web/tests/editor-metadata.fixtures.ts";
 
 import type { FilterFieldConfig } from "../../ui/data-table/filter-bar-core";
 import {
@@ -96,7 +98,7 @@ function PrimarySearchHarness() {
 // Facet and view-count queries are disabled outside a page list, but their
 // hooks still need a client.
 const wrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={new QueryClient()}>
+  <QueryClientProvider client={createEditorTestQueryClient()}>
     {children}
   </QueryClientProvider>
 );

@@ -24,6 +24,7 @@ import { PendingButton } from "./pending-button";
 type BackfillToast = { tone: "success" | "info"; message: ReactNode };
 
 export type BackfillButtonProps<TResult> = {
+  disabled?: boolean;
   /** Opens the streaming workflow and forwards cancellation from the UI. */
   run: (
     signal: AbortSignal,
@@ -88,6 +89,7 @@ export function BackfillButton<TResult>(
     <Stack gap="xs">
       <PendingButton
         onClick={start}
+        disabled={props.disabled}
         isPending={running}
         idleLabel={props.idleLabel}
         pendingLabel={props.pendingLabel}

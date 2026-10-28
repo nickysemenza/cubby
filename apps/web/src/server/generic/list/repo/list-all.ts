@@ -19,20 +19,22 @@ const LIST_ALL_MAX_ROWS = 100_000;
  * Every row of a list, read page by page: the explicit form of "fetch all".
  * `readPage` must be a repository list with a deterministic order (every
  * scaffold list ends on the public shortcode), so the pages tile the result.
- * `count` is the first page's total.
+ * A counted page supplies its population; otherwise the completed walk counts
+ * its actual rows.
  */
 export async function listAll<T>(
   readPage: (
     pagination: PaginationParams,
-  ) => Promise<{ data: T[]; count: number }>,
+  ) => Promise<{ data: T[]; count?: number }>,
 ): Promise<{ data: T[]; count: number }> {
   const data: T[] = [];
-  let count = 0;
+  let count: number | undefined;
   for (let pageIndex = 0; ; pageIndex += 1) {
     const page = await readPage({ pageIndex, pageSize: LIST_ALL_PAGE_SIZE });
     if (pageIndex === 0) count = page.count;
     data.push(...page.data);
-    if (page.data.length < LIST_ALL_PAGE_SIZE) return { data, count };
+    if (page.data.length < LIST_ALL_PAGE_SIZE)
+      return { data, count: count ?? data.length };
     if (data.length >= LIST_ALL_MAX_ROWS) {
       throw new Error(
         `listAll read ${data.length} rows without reaching the end; narrow the filters instead of reading the whole list.`,

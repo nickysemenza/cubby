@@ -1,4 +1,5 @@
 import { parseShortcode } from "@cubby/shared";
+import { useQueryClient } from "@tanstack/react-query";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 
@@ -105,25 +106,25 @@ export function withFacets(
 }
 
 /** Each declared saved view's count and the unfiltered total ("All"). */
-export function useViewCounts(entity: ListEntity | undefined) {
+export function useViewCounts(entity: ListEntity | undefined, enabled = false) {
+  const queryClient = useQueryClient();
   const views = useMemo(() => {
     if (!entity) return [];
-    const specs = getEntityFilters(entity);
-    return viewsForEntity(entity).map((view) => {
+    const specs = getEntityFilters(queryClient, entity);
+    return viewsForEntity(queryClient, entity).map((view) => {
       const values = new Map(view.filters.map(({ id, value }) => [id, value]));
       return {
         id: view.id,
         filters: buildFiltersFromManifest(specs, (id) => values.get(id)),
       };
     });
-  }, [entity]);
+  }, [entity, queryClient]);
   const result = useQuery({
     ...entityList.viewCounts.queryOptions({
       entity: entity ?? "product",
       views,
     }),
-    enabled: entity !== undefined,
-    placeholderData: keepPreviousData,
+    enabled: enabled && entity !== undefined,
   });
   return useMemo(
     () => ({

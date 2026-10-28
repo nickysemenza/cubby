@@ -27,6 +27,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
   makeExpenseInput,
@@ -464,10 +465,11 @@ describe("applyUpcDataWithSideEffects", () => {
     const lookup = upcLookupClient(async () =>
       upcResponse({ upc, priceDollars: 9.99 }),
     );
+    const productActions = createProductWriteActions(ctx.db, usdaClient());
     const result = await applyUpcDataWithSideEffects(
       {
         db: ctx.db,
-        product: createProductWriteActions(ctx.db, usdaClient()),
+        product: productActions,
         recipeCosting: new RecipeCostingService(ctx.db, usdaClient()),
         upcLookupClient: lookup,
       },
@@ -476,7 +478,9 @@ describe("applyUpcDataWithSideEffects", () => {
     );
 
     expect(result.price).toBeNull();
-    expect(result.pricing).toMatchObject({
+    await drainStoredDerived(ctx.db);
+    const published = await productActions.getProductByID(product.entityId);
+    expect(published.pricing).toMatchObject({
       derivedPrice: 6,
       effectivePrice: 6,
       source: "derived",

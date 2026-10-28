@@ -1,6 +1,5 @@
 import { formatConfidence } from "@cubby/schemas/ai";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { shortcodeEntities, entityRoster } from "@cubby/schemas/entity-roster";
 import {
   type SuggestionListFamily,
   type SuggestionListRow,
@@ -10,6 +9,7 @@ import {
   suggestionRelationLists,
 } from "@cubby/schemas/suggestion-list-declarations";
 import { humanize } from "@cubby/shared";
+import type { QueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
@@ -56,7 +56,7 @@ import {
   StrengthMark,
   SuggestionRecord,
   WhatChanges,
-  fieldLabel,
+  FieldSummary,
 } from "./suggestion-values";
 
 /**
@@ -108,12 +108,17 @@ const declaredOptions = (
 const STRENGTH_OPTIONS = declaredOptions("all", "strength");
 const CLEAN_OPTIONS = declaredOptions("all", "clean");
 const ACTION_OPTIONS = declaredOptions("statement_transaction", "action");
-const KIND_OPTIONS = declaredOptions("statement_transaction", "kind").map(
-  (option) =>
-    fieldEnumOptions("financialTransaction", "kind").find(
-      (presented) => presented.value === option.value,
-    ) ?? option,
-);
+const kindOptions = (queryClient: QueryClient) => {
+  const presented = fieldEnumOptions(
+    queryClient,
+    "financialTransaction",
+    "kind",
+  );
+  return declaredOptions("statement_transaction", "kind").map(
+    (option) =>
+      presented.find((candidate) => candidate.value === option.value) ?? option,
+  );
+};
 const KIND_SOURCE_OPTIONS = declaredOptions(
   "statement_transaction",
   "kindSource",
@@ -128,7 +133,7 @@ const ENTITY_OPTIONS = shortcodeEntities.map((entity) => ({
   value: entity,
   label:
     declaredOptions("field", "entity").find((option) => option.value === entity)
-      ?.label ?? entitySummary[entity].singular,
+      ?.label ?? entityRoster[entity].singular,
   icon: <EntityIcon entity={entity} />,
 }));
 
@@ -481,9 +486,9 @@ function fieldColumns() {
         }),
         cell: ({ row }) => {
           const value = evidence(row.original);
-          return value
-            ? `${entitySummary[value.entity].singular} · ${fieldLabel(value.entity, value.field)}`
-            : null;
+          return value ? (
+            <FieldSummary entity={value.entity} field={value.field} />
+          ) : null;
         },
       }),
     );
@@ -497,7 +502,7 @@ function fieldColumns() {
         }),
         cell: ({ row }) => {
           const value = evidence(row.original);
-          return value ? entitySummary[value.entity].singular : null;
+          return value ? entityRoster[value.entity].singular : null;
         },
       }),
     );
@@ -637,9 +642,11 @@ function rosterFilterConfig(
 }
 
 function statementColumns(
+  queryClient: QueryClient,
   rosters: RuntimeFilterOptions,
   providerCategoryLabel: string,
 ) {
+  const KIND_OPTIONS = kindOptions(queryClient);
   const evidence = (row: Row) =>
     row.family === "statement_transaction" ? row.evidence : null;
   const rosterFilter = (
@@ -777,7 +784,7 @@ function statementColumns(
           const create = evidence(row.original)?.create;
           return create ? (
             <span className="truncate text-muted-foreground">
-              {kindAgreement(create).reason}
+              {kindAgreement(queryClient, create).reason}
             </span>
           ) : (
             <NoneValue />
@@ -911,7 +918,7 @@ function recommendationColumns() {
         cell: ({ row }) => {
           const value = evidence(row.original);
           if (!value) return null;
-          return `${entitySummary[value.source.entityKind].singular} → ${entitySummary[value.target.entityKind].singular}`;
+          return `${entityRoster[value.source.entityKind].singular} → ${entityRoster[value.target.entityKind].singular}`;
         },
       }),
     );
@@ -951,6 +958,7 @@ export const REFERENCE_ROSTERS = suggestionFilterDeclaration.filters.flatMap(
 );
 
 export function viewColumns(
+  queryClient: QueryClient,
   view: SuggestionView,
   rosters: RuntimeFilterOptions,
   providerCategoryLabel: string,
@@ -959,7 +967,7 @@ export function viewColumns(
     case "field":
       return fieldColumns();
     case "statement_transaction":
-      return statementColumns(rosters, providerCategoryLabel);
+      return statementColumns(queryClient, rosters, providerCategoryLabel);
     case "recommendation":
       return recommendationColumns();
     case "transfer_pair":

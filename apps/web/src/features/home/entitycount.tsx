@@ -1,7 +1,5 @@
-import {
-  type CountableEntity,
-  countableEntities,
-} from "@cubby/schemas/entity-manifest";
+import { type CountableEntity } from "@cubby/schemas/entity-manifest";
+import { countableEntities } from "@cubby/schemas/entity-roster";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 

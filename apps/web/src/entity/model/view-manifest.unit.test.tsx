@@ -4,6 +4,8 @@ import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { recipeSourceValues } from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
+
 import { getEntityFilters } from "../filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -16,7 +18,10 @@ import {
   findUnexpandedRangeFilter,
   problemFilterPatch,
 } from "../problems/problem-filter-semantics";
-import { isViewActive, viewManifest, viewsForEntity } from "./view-manifest";
+import { isViewActive, viewsForEntity } from "./view-manifest";
+import { viewManifest } from "./view-problems";
+
+const queryClient = await metadataQueryClient();
 
 type ViewFilterish = { id: string; value: string | string[] };
 const entityFromKey = (value: string): Entity | undefined =>
@@ -25,7 +30,7 @@ const entityFromKey = (value: string): Entity | undefined =>
 // A `.tsx` test, so it runs under the `ui` vitest project: cross-checking a
 // view's filter ids against the manifest means importing `filter-manifest.tsx`,
 // which the alias-free `unit` project can't load. `view-manifest.ts` itself
-// stays alias-free regardless — that's a property of the module, not the test.
+// uses the explicit metadata scope installed above.
 
 describe("view manifest", () => {
   // Filter ids, static range presets, value kinds, ids and
@@ -39,7 +44,7 @@ describe("view manifest", () => {
     for (const [entity, views] of Object.entries(viewManifest)) {
       const parsedEntity = entityFromKey(entity);
       if (!parsedEntity) continue;
-      const specs = getEntityFilters(parsedEntity);
+      const specs = getEntityFilters(queryClient, parsedEntity);
       for (const view of views ?? []) {
         const unexpanded = findUnexpandedRangeFilter(specs, view.filters);
         // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
@@ -53,15 +58,17 @@ describe("view manifest", () => {
   });
 
   it("returns no views for an entity that declares none", () => {
-    expect(viewsForEntity("device")).toEqual([]);
-    expect(viewsForEntity(undefined)).toEqual([]);
+    expect(viewsForEntity(queryClient, "device")).toEqual([]);
+    expect(viewsForEntity(queryClient, undefined)).toEqual([]);
   });
 });
 
 describe("expense views produce the filters their old tabs pinned", () => {
-  const specs = getEntityFilters("expense");
+  const specs = getEntityFilters(queryClient, "expense");
   const build = (viewId: string) => {
-    const view = viewsForEntity("expense").find((v) => v.id === viewId);
+    const view = viewsForEntity(queryClient, "expense").find(
+      (v) => v.id === viewId,
+    );
     if (!view) throw new Error(`no such view: ${viewId}`);
     const byId = new Map(view.filters.map((f) => [f.id, f.value]));
     return buildFiltersFromManifest(specs, (columnId) => byId.get(columnId));
@@ -91,13 +98,17 @@ describe("expense views produce the filters their old tabs pinned", () => {
   });
 
   it("sends the sentinel through as a sentinel, never as an id", () => {
-    const view = viewsForEntity("expense").find((v) => v.id === "unassigned");
+    const view = viewsForEntity(queryClient, "expense").find(
+      (v) => v.id === "unassigned",
+    );
     expect(view?.filters).toEqual([{ id: "projectId", value: [FILTER_NONE] }]);
   });
 
   it("unattached pins the existing no-purchase vendor predicate", () => {
     expect(build("unattached")).toEqual({ purchaseIdPresenceFilter: "none" });
-    const view = viewsForEntity("expense").find((v) => v.id === "unattached");
+    const view = viewsForEntity(queryClient, "expense").find(
+      (v) => v.id === "unattached",
+    );
     expect(view?.filters).toEqual([{ id: "purchaseId", value: [FILTER_NONE] }]);
   });
 
@@ -117,7 +128,7 @@ describe("expense views produce the filters their old tabs pinned", () => {
     // the lineKind/lineBasis/costType trio redundant here. If a non-principal
     // line ever becomes able to carry a product, this view starts selecting
     // rows a quantity can't describe — and this assertion is the note saying so.
-    const view = viewsForEntity("expense").find(
+    const view = viewsForEntity(queryClient, "expense").find(
       (candidate) => candidate.id === "unknown-quantities",
     );
     const ids = (view?.filters ?? []).map((filter) => filter.id);
@@ -125,7 +136,7 @@ describe("expense views produce the filters their old tabs pinned", () => {
   });
 
   it("reveals the column it exists to have you edit", () => {
-    const view = viewsForEntity("expense").find(
+    const view = viewsForEntity(queryClient, "expense").find(
       (candidate) => candidate.id === "unknown-quantities",
     );
     expect(view?.layout?.columnVisibility).toEqual({ productQuantity: true });
@@ -134,15 +145,16 @@ describe("expense views produce the filters their old tabs pinned", () => {
 
 describe("project and task saved views use ordinary server filters", () => {
   const build = (entity: "project" | "task", viewId: string) => {
-    const view = viewsForEntity(entity).find(
+    const view = viewsForEntity(queryClient, entity).find(
       (candidate) => candidate.id === viewId,
     );
     if (!view) throw new Error(`no such view: ${entity}/${viewId}`);
     const values = new Map(
       view.filters.map((filter) => [filter.id, filter.value]),
     );
-    return buildFiltersFromManifest(getEntityFilters(entity), (columnId) =>
-      values.get(columnId),
+    return buildFiltersFromManifest(
+      getEntityFilters(queryClient, entity),
+      (columnId) => values.get(columnId),
     );
   };
 
@@ -168,15 +180,16 @@ describe("settlement worklist views", () => {
     entity: "purchase" | "financialTransaction",
     viewId: string,
   ) => {
-    const view = viewsForEntity(entity).find(
+    const view = viewsForEntity(queryClient, entity).find(
       (candidate) => candidate.id === viewId,
     );
     if (!view) throw new Error(`no such view: ${entity}/${viewId}`);
     const values = new Map(
       view.filters.map((filter) => [filter.id, filter.value]),
     );
-    return buildFiltersFromManifest(getEntityFilters(entity), (columnId) =>
-      values.get(columnId),
+    return buildFiltersFromManifest(
+      getEntityFilters(queryClient, entity),
+      (columnId) => values.get(columnId),
     );
   };
 
@@ -289,7 +302,7 @@ describe("view filter values match the shape decodeFilters produces", () => {
   )("%s / %s — %o", (entity, _viewId, filter) => {
     const parsedEntity = entityFromKey(entity);
     if (!parsedEntity) return;
-    const spec = getEntityFilters(parsedEntity).find(
+    const spec = getEntityFilters(queryClient, parsedEntity).find(
       (candidate) => candidate.columnId === filter.id,
     );
     expect(spec, `no filter spec for ${filter.id}`).toBeDefined();
@@ -397,8 +410,10 @@ describe("the unlocated views stay one question at three widths", () => {
       value: [FILTER_ANY],
     });
     expect(
-      buildFiltersFromManifest(getEntityFilters("product"), (columnId) =>
-        columnId === "related:product.projects" ? [FILTER_ANY] : undefined,
+      buildFiltersFromManifest(
+        getEntityFilters(queryClient, "product"),
+        (columnId) =>
+          columnId === "related:product.projects" ? [FILTER_ANY] : undefined,
       ),
     ).toEqual({ projectPresenceFilter: "has" });
   });
@@ -447,8 +462,9 @@ describe("problem-backed views", () => {
       // second `serverFilters` declaration that could drift.
       const values = new Map(view.filters.map((f) => [f.id, f.value]));
       expect(
-        buildFiltersFromManifest(getEntityFilters(entity), (columnId) =>
-          values.get(columnId),
+        buildFiltersFromManifest(
+          getEntityFilters(queryClient, entity),
+          (columnId) => values.get(columnId),
         ),
       ).toEqual(problemFilterPatch(entity, view.filters));
     },
@@ -485,7 +501,7 @@ describe("recipe/no-instructions names the source complement", () => {
     // column. That is equivalent TODAY and silently stops being equivalent the
     // moment a fifth source is added — the new one would be excluded from the
     // worklist without anything failing. This is the thing that fails.
-    const view = viewsForEntity("recipe").find(
+    const view = viewsForEntity(queryClient, "recipe").find(
       (candidate) => candidate.id === "no-instructions",
     );
     const named = view?.filters.find((f) => f.id === "sourceType")?.value;
@@ -513,7 +529,7 @@ describe("optional scratch views", () => {
   ] as const)(
     "keeps $entity/$id without a Problem or count",
     ({ entity, id, key }) => {
-      const view = viewsForEntity(entity).find(
+      const view = viewsForEntity(queryClient, entity).find(
         (candidate) => candidate.id === id,
       );
       expect(view).toBeDefined();

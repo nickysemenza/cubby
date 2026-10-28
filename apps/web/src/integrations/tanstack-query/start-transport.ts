@@ -1,4 +1,9 @@
 import {
+  acceptMemberWriteCookie,
+  beginMemberWrite,
+  STRONG_READ_HEADER,
+} from "~/lib/read-consistency";
+import {
   isStartOperationEntity,
   registeredStartOperationKind,
   type StartOperationId,
@@ -40,6 +45,7 @@ export function unwrapStartOperationResult<T>(
   createError: (error: PublicStartOperationError) => Error = (error) =>
     new StartOperationError(error),
 ): T {
+  acceptMemberWriteCookie(result.readMarker);
   if (!result.ok) throw createError(result.error);
   if (result.data === undefined) {
     throw createError({
@@ -57,7 +63,7 @@ async function observedStartCall<T>(options: {
   entity?: string;
   speculative?: boolean;
   input: unknown;
-  call: (headers: HeadersInit) => Promise<T>;
+  call: (headers: Headers) => Promise<T>;
 }): Promise<T> {
   const registeredKind = registeredStartOperationKind(options.operation);
   if (registeredKind === "subscription") {
@@ -79,10 +85,12 @@ async function observedStartCall<T>(options: {
     input: options.input,
   });
   try {
+    if (registeredKind === "mutation") beginMemberWrite();
     const result = await options.call(new Headers(operationHeaders(observed)));
     finishObservedOperation(observed, { result });
     return result;
   } catch (error) {
+    if (registeredKind === "mutation") beginMemberWrite();
     finishObservedOperation(observed, { error });
     throw error;
   }
@@ -93,6 +101,7 @@ export type StartCallOptions = {
   batch?: boolean;
   signal?: AbortSignal;
   speculative?: boolean;
+  consistency?: "strong";
 };
 
 /** Explicit adapter shape used by focused tests and in-process callers. */
@@ -226,8 +235,10 @@ export function startOperation<Input, Output>(
           entity,
           speculative: options?.speculative,
           input,
-          call: async (headers) =>
-            config.parse(
+          call: async (headers) => {
+            if (options?.consistency === "strong")
+              headers.set(STRONG_READ_HEADER, "strong");
+            return config.parse(
               unwrapStartOperationResult(
                 config.operation,
                 unparsedStartOperationResultSchema.parse(
@@ -248,7 +259,8 @@ export function startOperation<Input, Output>(
                 config.createError,
               ),
               input,
-            ),
+            );
+          },
         }),
       forEntity: (next) => {
         if (!isStartOperationEntity(config.operation, next)) {

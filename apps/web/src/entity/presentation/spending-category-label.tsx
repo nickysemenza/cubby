@@ -1,17 +1,21 @@
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { EntityPill } from "~/entity/components/entity-pill";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { compileEntityListInput } from "~/entity/entity-list";
 import { useServerTree } from "~/entity/hooks/use-server-tree";
+import { useEntityMetadata } from "~/entity/metadata";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 // One cached hierarchy read shared by every pill on the page.
-const SPENDING_CATEGORY_TREE_INPUT = compileEntityListInput(
-  "spendingCategory",
-  {},
-  { defaultSort: { orderBy: "name", direction: "asc" } },
-);
+const spendingCategoryTreeInput = (queryClient: QueryClient) =>
+  compileEntityListInput(
+    queryClient,
+    "spendingCategory",
+    {},
+    { defaultSort: { orderBy: "name", direction: "asc" } },
+  );
 
 type SpendingCategoryTreeRow = {
   id: string;
@@ -57,10 +61,13 @@ export function SpendingCategoryLabel({
   name?: string | null;
   emoji?: string | null;
 }) {
-  const { tree } = useServerTree(
-    "spendingCategory",
-    SPENDING_CATEGORY_TREE_INPUT,
+  const queryClient = useQueryClient();
+  useEntityMetadata("spendingCategory");
+  const input = useMemo(
+    () => spendingCategoryTreeInput(queryClient),
+    [queryClient],
   );
+  const { tree } = useServerTree("spendingCategory", input);
   const resolved = useMemo(
     () => (id && tree ? findSpendingCategory(tree, id) : null),
     [tree, id],

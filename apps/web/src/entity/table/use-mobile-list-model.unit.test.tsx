@@ -1,11 +1,20 @@
 import { displayImagesField } from "@cubby/schemas/display-images";
 import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { publicImageUrlSummary } from "@cubby/schemas/image-summary";
-import { render, renderHook, screen } from "@testing-library/react";
+import { renderHook, screen } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { describe, expect, it } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+} from "vitest";
 import { z } from "zod";
 
+import { renderWithEditorMetadata as render } from "#web/tests/editor-metadata.fixtures.ts";
+import { createEditorBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import type { CubbyTable as Table } from "../../ui/data-table/table-features";
@@ -18,6 +27,13 @@ interface TestRow {
 }
 
 describe("useMobileListModel", () => {
+  let harness: ReturnType<typeof createEditorBrowserTestHarness>;
+  beforeEach(() => {
+    harness = createEditorBrowserTestHarness();
+  });
+  afterEach(() => {
+    harness.dispose();
+  });
   it("rebuilds pre-rendered cells when external row content changes", () => {
     let preview = "…";
     const column = {
@@ -59,7 +75,10 @@ describe("useMobileListModel", () => {
     const { result, rerender } = renderHook(
       ({ rowContentVersion }) =>
         useMobileListModel({ table, rowContentVersion }),
-      { initialProps: { rowContentVersion: firstVersion } },
+      {
+        initialProps: { rowContentVersion: firstVersion },
+        wrapper: harness.wrapper,
+      },
     );
 
     const { rerender: rerenderCell } = render(
@@ -98,12 +117,14 @@ describe("useMobileListModel", () => {
       }),
     });
 
-    const { result } = renderHook(() =>
-      useMobileListModel({
-        table,
-        entity: "wish",
-        getDetailsHref: (row) => `/products/${row.previewId}`,
-      }),
+    const { result } = renderHook(
+      () =>
+        useMobileListModel({
+          table,
+          entity: "wish",
+          getDetailsHref: (row) => `/products/${row.previewId}`,
+        }),
+      { wrapper: harness.wrapper },
     );
 
     expect(result.current[0]?.detailsHref).toBe("/products/PRD-TWO");
@@ -128,13 +149,15 @@ describe("useMobileListModel", () => {
       }),
     });
 
-    const { result } = renderHook(() =>
-      useMobileListModel({
-        table,
-        entity: "ingredient",
-        getDetailsHref: () => "/ingredients/ING-ONE",
-        disableDetailsHref: true,
-      }),
+    const { result } = renderHook(
+      () =>
+        useMobileListModel({
+          table,
+          entity: "ingredient",
+          getDetailsHref: () => "/ingredients/ING-ONE",
+          disableDetailsHref: true,
+        }),
+      { wrapper: harness.wrapper },
     );
 
     expect(result.current[0]?.detailsHref).toBeUndefined();
@@ -142,6 +165,8 @@ describe("useMobileListModel", () => {
 });
 
 it("reserves mobile image slots for canonical covers and bounded specialist inputs", () => {
+  const harness = createEditorBrowserTestHarness();
+  onTestFinished(() => harness.dispose());
   const cover = computedFieldEnvelope(displayImagesField);
   const image = {
     fields: {
@@ -209,7 +234,10 @@ it("reserves mobile image slots for canonical covers and bounded specialist inpu
         ],
       }),
     });
-    const { result, unmount } = renderHook(() => useMobileListModel({ table }));
+    const { result, unmount } = renderHook(
+      () => useMobileListModel({ table }),
+      { wrapper: harness.wrapper },
+    );
     expect(Boolean(result.current[0]?.imageSlot)).toBe(expected);
     unmount();
   }

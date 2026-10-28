@@ -27,6 +27,7 @@ it("preserves unresolved membership separately from the known-match count", () =
     pageIndex: 0,
     pageSize: 10,
     totalCount: 0,
+    hasNextPage: false,
     unresolvedCount: 3,
   });
   expect(
@@ -212,7 +213,12 @@ it("preserves paginated transforms once and annotates invalid record errors", ()
     }),
     "fixture",
   );
-  const meta = { pageIndex: 0, pageSize: 10, totalCount: 1 };
+  const meta = {
+    pageIndex: 0,
+    pageSize: 10,
+    totalCount: 1,
+    hasNextPage: false,
+  };
   expect(
     schema.parse({ meta, items: [{ name: "Record", value: 1 }] }).items[0]
       ?.value,

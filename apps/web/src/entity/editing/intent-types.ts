@@ -1,8 +1,7 @@
 import type { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
-import type { z } from "zod";
 
-import type { EntitySchemaBindingMap } from "~/server/generated/entity-bindings.gen";
+import type { EntityEditValidationInputs } from "~/entity/generated/entity-edit-validation-types.gen";
 
 import type { EntityMutationOutputByEntity } from "../generated/entity-mutation-results.gen";
 
@@ -16,24 +15,12 @@ type EntityEditIntentCatalog = {
   };
 };
 
-type SchemaOutput<S> = S extends z.ZodType ? z.infer<S> : never;
-
-/**
- * Create/update input types per editable entity, read off the generated
- * schema bindings — the same `createInput`/`updateInput` schemas
- * `mutation-data.ts` parses with at runtime, so the editor's types and its
- * validation cannot disagree. Type-only: nothing from `~/server` is loaded.
- */
+/** The canonical server parser and browser command types share these generated contracts. */
 type EntityEditCreateInputMap = {
-  [E in TypedEditableEntity]: SchemaOutput<
-    EntitySchemaBindingMap[E]["createInput"]
-  >;
+  [E in TypedEditableEntity]: EntityEditValidationInputs[E]["create"];
 };
-
 type EntityEditUpdateInputMap = {
-  [E in TypedEditableEntity]: SchemaOutput<
-    EntitySchemaBindingMap[E]["updateInput"]
-  >;
+  [E in TypedEditableEntity]: EntityEditValidationInputs[E]["update"];
 };
 
 /** Editor-only draft fields with no counterpart in the entity's schemas. */

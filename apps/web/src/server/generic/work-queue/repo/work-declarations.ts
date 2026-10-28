@@ -5,11 +5,8 @@ import {
 } from "@cubby/schemas/data-quality";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import {
-  workQueueGapChecks,
-  workQueueGapViews,
-  type WorkAction,
-} from "@cubby/schemas/work-queue";
+import { workQueueGapViews, type WorkAction } from "@cubby/schemas/work-queue";
+import { workQueueGapChecks } from "@cubby/schemas/work-queue-policy";
 import { sql, type SQL } from "drizzle-orm";
 
 import { problemActionsFor } from "~/entity/problems/problem-actions";

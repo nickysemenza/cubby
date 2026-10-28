@@ -3,11 +3,12 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { XCircleIcon } from "@phosphor-icons/react/dist/csr/XCircle";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useId, useMemo, useState } from "react";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import { useEntityMetadata } from "~/entity/metadata";
 import { renderOptionCell } from "~/entity/table/column-helpers";
 import { ContributionGapsTable } from "~/features/finance/household-contribution-format";
 import { householdContribution } from "~/integrations/tanstack-query/generated/catalog/householdContribution.gen";
@@ -98,6 +99,12 @@ export function HouseholdContributionLedgerReport({
 }: {
   data: HouseholdContributionLedgerOut;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("ledgerParty");
+  const kindOptions = useMemo(
+    () => fieldEnumOptions(queryClient, "ledgerParty", "kind"),
+    [queryClient],
+  );
   const id = useId();
   const partyHeadingId = `${id}-parties`;
   const checksHeadingId = `${id}-checks`;
@@ -170,10 +177,7 @@ export function HouseholdContributionLedgerReport({
                   <span className="truncate font-medium" title={row.party.name}>
                     {row.party.name}
                   </span>
-                  {renderOptionCell(
-                    row.party.kind,
-                    fieldEnumOptions("ledgerParty", "kind"),
-                  )}
+                  {renderOptionCell(row.party.kind, kindOptions)}
                   {row.internalMoves.count > 0 && (
                     <span className="text-2xs text-muted-foreground tabular-nums">
                       {countLabel(row.internalMoves.count, "internal move")} ·{" "}

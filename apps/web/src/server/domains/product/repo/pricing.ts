@@ -338,19 +338,6 @@ export const loadExactEffectivePrices = async (
   );
 };
 
-export const enrichProductRowsWithPricing = async <
-  T extends { id: ProductId; price: number | null },
->(
-  db: Database | DrizzleTransaction,
-  products: readonly T[],
-): Promise<Array<T & { pricing: ProductPricing }>> => {
-  const pricing = await loadProductPricing(db, products);
-  return products.map((product) => ({
-    ...product,
-    pricing: pricing.get(product.id) ?? resolveProductPricing(product.price),
-  }));
-};
-
 export const loadEffectiveProductPricesById = async (
   db: Database | DrizzleTransaction,
   ids: readonly ProductId[],
@@ -442,7 +429,17 @@ export function storedEffectivePrice(
   row: Pick<typeof product.$inferSelect, "id" | "price"> &
     Pick<RawProductOutput, "category">,
 ): number | null {
-  if (isServiceProductCategory(row.category)) return null;
+  return storedProductPrice(stored, {
+    ...row,
+    service: isServiceProductCategory(row.category),
+  });
+}
+
+export function storedProductPrice(
+  stored: ReadonlyMap<string, ReadonlyMap<string, StoredDerivedRead>>,
+  row: Pick<typeof product.$inferSelect, "id" | "price"> & { service: boolean },
+): number | null {
+  if (row.service) return null;
   if (row.price !== null)
     return resolveProductPricing(row.price).effectivePrice;
   const read = stored.get(row.id)?.get("price");

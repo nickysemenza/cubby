@@ -2,9 +2,9 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 
 import {

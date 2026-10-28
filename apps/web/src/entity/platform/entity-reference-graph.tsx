@@ -1,9 +1,12 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { NetworkChart } from "~/ui/charts/network-chart";
+import { QuerySection } from "~/ui/feedback/query-section";
+
+import { schemaOverviewQueryOptions } from "./schema-presentation";
 
 /** Schema reference coloring or live referential-health findings. */
 export type EntityGraphLens = "logical" | "health";
@@ -22,20 +25,23 @@ interface EntityReferenceGraphProps {
   unhealthyEntities?: ReadonlySet<Entity>;
 }
 
-export function EntityReferenceGraph({
+function ReferenceGraph({
   selected = null,
   onSelect,
   lens = "logical",
   unhealthyEntities = EMPTY_UNHEALTHY,
 }: EntityReferenceGraphProps = {}) {
+  const {
+    data: { graph },
+  } = useSuspenseQuery(schemaOverviewQueryOptions());
   const data = useMemo(() => {
-    const links = allEntities.flatMap((from) =>
-      entityManifest[from].relationships
+    const links = graph.flatMap(({ entity: from, relationships }) =>
+      relationships
         .filter(({ target }) => target !== from)
         .map((relation) => ({ source: from, target: relation.target })),
     );
     return {
-      nodes: allEntities.map((id) => ({
+      nodes: graph.map(({ entity: id }) => ({
         id,
         label: id,
         size:
@@ -54,8 +60,10 @@ export function EntityReferenceGraph({
       })),
       links,
     };
-  }, [selected, onSelect, lens, unhealthyEntities]);
-  const shown = selected ? [selected] : allEntities;
+  }, [graph, selected, onSelect, lens, unhealthyEntities]);
+  const shown = selected
+    ? graph.filter(({ entity }) => entity === selected)
+    : graph;
   return (
     <div>
       <NetworkChart
@@ -74,7 +82,7 @@ export function EntityReferenceGraph({
             : "Reference directions and self-references"}
         </summary>
         <ul className="max-h-64 space-y-2 overflow-auto py-2">
-          {shown.map((from) => (
+          {shown.map(({ entity: from, relationships }) => (
             <li key={from}>
               {onSelect ? (
                 <button
@@ -88,7 +96,7 @@ export function EntityReferenceGraph({
                 <span className="font-medium">{from}</span>
               )}
               <ul className="pl-3">
-                {entityManifest[from].relationships.map((relation) => (
+                {relationships.map((relation) => (
                   <li key={relation.key}>
                     {relation.key} → {relation.target} ({relation.cardinality})
                     {relation.target === from ? " · self-reference" : ""}
@@ -100,5 +108,13 @@ export function EntityReferenceGraph({
         </ul>
       </details>
     </div>
+  );
+}
+
+export function EntityReferenceGraph(props: EntityReferenceGraphProps = {}) {
+  return (
+    <QuerySection title="Entity references" fallback={null}>
+      <ReferenceGraph {...props} />
+    </QuerySection>
   );
 }

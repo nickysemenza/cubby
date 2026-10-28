@@ -1,4 +1,5 @@
 import { getErrorMessage } from "@cubby/shared";
+import { useQueryClient } from "@tanstack/react-query";
 import { isEqual } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
@@ -6,9 +7,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import type { EntityEditValue } from "~/entity/editing/value-schema";
+import { useEntityMetadata } from "~/entity/metadata";
 import type { UnparsedError } from "~/lib/error-utils";
 
-import { entityEditRegistry } from "./definitions";
 import {
   buildEntityEdit,
   initialEntityEditValues,
@@ -98,11 +99,13 @@ export function useEntityEditSession<E extends EditableEntity>(
   request: RuntimeEntityEditRequest<E>,
   options?: EntityEditSessionOptions,
 ): EntityEditSession<E> {
+  const queryClient = useQueryClient();
+  useEntityMetadata(request.entity);
   const stableRequest = useStableEntityEditRequest(request);
   const commands = useEntityCommands(stableRequest.entity, options);
   const resolved = useMemo(
-    () => resolveEntityEdit(entityEditRegistry, stableRequest),
-    [stableRequest],
+    () => resolveEntityEdit(queryClient, stableRequest),
+    [queryClient, stableRequest],
   );
   const initialValues = useMemo(
     () =>
@@ -145,6 +148,7 @@ export function useEntityEditSession<E extends EditableEntity>(
         context: resolved.context,
       })
     : null;
+  const [isBuilding, setIsBuilding] = useState(false);
   const [thrownIssues, setThrownIssues] =
     useState<readonly EntityEditIssue[]>(NO_ISSUES);
   const issues = !isResolvedEntityEdit(resolved)
@@ -191,17 +195,19 @@ export function useEntityEditSession<E extends EditableEntity>(
       return { ok: false, issues: resolved.issues };
     }
     setThrownIssues(NO_ISSUES);
+    setIsBuilding(true);
     let result: EntityEditResult<E>;
     try {
       const values = entityEditValueBagSchema.parse(form.getValues());
       result = await commands.commit(
-        buildEntityEdit(resolved, stableRequest, values),
+        await buildEntityEdit(resolved, stableRequest, values),
       );
     } catch (error) {
       const issues = issuesFromThrown(error);
       setThrownIssues(issues);
       result = { ok: false, issues };
     }
+    setIsBuilding(false);
     if (!result.ok) applyIssues(result.issues);
     else form.clearErrors();
     return result;
@@ -210,7 +216,7 @@ export function useEntityEditSession<E extends EditableEntity>(
   return {
     form,
     access,
-    isPending: commands.isPending,
+    isPending: isBuilding || commands.isPending,
     issues,
     set,
     reset,

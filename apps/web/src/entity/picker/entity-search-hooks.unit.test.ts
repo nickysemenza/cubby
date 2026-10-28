@@ -1,30 +1,34 @@
 import { describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
+
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";
 import {
   resolveBlankFilterKey,
   stabilizeGroupOrder,
 } from "./entity-search-hooks";
 
+const queryClient = await metadataQueryClient();
+
 describe("resolveBlankFilterKey", () => {
   it("resolves ingredient's name filter to nameFilter", () => {
     // ingredient's `name` column filter descriptor declares `field: "nameFilter"`
     // (see entity-filter-bindings.gen.ts) — the blank-query list request keys
     // on that field, not a hand-listed default.
-    expect(resolveBlankFilterKey("ingredient")).toBe("nameFilter");
+    expect(resolveBlankFilterKey(queryClient, "ingredient")).toBe("nameFilter");
   });
 
   it("resolves task's name filter to search", () => {
     // task's `name` column filter descriptor declares `field: "search"` — the
     // one place the manifest-resolved key diverges from `nameFilter`.
-    expect(resolveBlankFilterKey("task")).toBe("search");
+    expect(resolveBlankFilterKey(queryClient, "task")).toBe("search");
   });
 
   it("resolves recipe, location, and product to nameFilter, project to search", () => {
-    expect(resolveBlankFilterKey("recipe")).toBe("nameFilter");
-    expect(resolveBlankFilterKey("location")).toBe("nameFilter");
-    expect(resolveBlankFilterKey("product")).toBe("nameFilter");
-    expect(resolveBlankFilterKey("project")).toBe("search");
+    expect(resolveBlankFilterKey(queryClient, "recipe")).toBe("nameFilter");
+    expect(resolveBlankFilterKey(queryClient, "location")).toBe("nameFilter");
+    expect(resolveBlankFilterKey(queryClient, "product")).toBe("nameFilter");
+    expect(resolveBlankFilterKey(queryClient, "project")).toBe("search");
   });
 });
 

@@ -20,11 +20,11 @@ import {
 import type * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { project } from "~/integrations/tanstack-query/generated/catalog/project.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
   ToolCard,
@@ -93,7 +93,7 @@ const item: ToolGalleryItemOut = {
 };
 
 const response: ToolGalleryOut = {
-  meta: { pageIndex: 0, pageSize: 60, totalCount: 1 },
+  meta: { hasNextPage: false, pageIndex: 0, pageSize: 60, totalCount: 1 },
   items: [item],
   groups: [
     {
@@ -260,7 +260,7 @@ describe("Tools gallery", () => {
       { key: "late", label: "Late group", itemCount: 1, startIndex: 61 },
     ];
     const firstPage: ToolGalleryOut = {
-      meta: { pageIndex: 0, pageSize: 60, totalCount: 62 },
+      meta: { hasNextPage: true, pageIndex: 0, pageSize: 60, totalCount: 62 },
       items: [
         flowItem("ALPHA", "alpha", "Alpha"),
         flowItem("SPLIT1", "split", "Split group"),
@@ -270,7 +270,7 @@ describe("Tools gallery", () => {
     };
     const secondPage: ToolGalleryOut = {
       ...firstPage,
-      meta: { ...firstPage.meta, pageIndex: 1 },
+      meta: { ...firstPage.meta, hasNextPage: false, pageIndex: 1 },
       items: [
         flowItem("SPLIT2", "split", "Split group"),
         flowItem("LATE", "late", "Late group"),

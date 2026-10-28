@@ -81,6 +81,7 @@ test("taxonomy edits keep product classification paths and labels separate from 
   await expect(
     page.getByText(`${destinationRoot} / ${renamedType}`, { exact: true }),
   ).toBeVisible();
+  await page.locator("#images").scrollIntoViewIfNeeded();
   await expect(
     page.locator("#images").getByRole("img", { name: `${itemImageName}.png` }),
   ).toBeVisible();
@@ -114,6 +115,7 @@ test("taxonomy edits keep product classification paths and labels separate from 
     )
     .toBe(true);
   const labels = page.locator("#labels");
+  await labels.scrollIntoViewIfNeeded();
   await expect(
     labels.getByRole("img", { name: `${labelImageName}.png` }),
   ).toBeVisible();

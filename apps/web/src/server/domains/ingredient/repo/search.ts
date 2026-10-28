@@ -357,9 +357,10 @@ const loadIngredientProducts = async (
   db: Database | DrizzleTransaction,
   ids: readonly string[],
 ) => {
-  const { kernelScaffold } = await import("~/server/entity-kernel/scaffolds");
-  const productScaffold = kernelScaffold("product");
-  if (!productScaffold) throw new Error("Product scaffold was not found");
+  // The kernel registry imports every repository. Costing needs only Product;
+  // retain lazy loading here to avoid the Ingredient/Product initialization cycle.
+  const { productScaffold } =
+    await import("~/server/domains/product/repo/crud");
   const links = await unwrapDb(db)
     .select({
       id: product.id,

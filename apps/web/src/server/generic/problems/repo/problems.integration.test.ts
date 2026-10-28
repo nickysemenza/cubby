@@ -5,6 +5,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { buildNutrition } from "@cubby/schemas/nutrition";
+import { dryRunPruneAliasesOut } from "@cubby/schemas/problems";
 import { problemsFastSchema } from "@cubby/schemas/problems";
 import { type ExpenseCreateInput } from "@cubby/schemas/project";
 import { eq, sql } from "drizzle-orm";
@@ -41,7 +42,7 @@ import {
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
 
-import { viewProblemDeclarations } from "~/entity/model/view-manifest";
+import { viewProblemDeclarations } from "~/entity/model/view-problems";
 import { householdDaysAgo } from "~/lib/household-date";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -88,6 +89,7 @@ import { runDiagnostic } from "../service/problem-diagnostics.service";
 import { findViewProblems } from "../service/problem-views.service";
 import {
   findFastProblems,
+  dryRunPruneAliases,
   findTrackerProblems,
 } from "../service/problems.service";
 
@@ -1381,6 +1383,14 @@ describe("Problems maintenance coordinator", () => {
     const aliases = () =>
       getDb(ctx.db).select({ aliases: ingredient.aliases }).from(ingredient);
     const before = await aliases();
+    const preview = dryRunPruneAliasesOut.parse(
+      await dryRunPruneAliases(ctx.db),
+    );
+    expect(preview).toMatchObject({ wouldPrune: 2, ingredients: 2 });
+    expect(preview.sample.flatMap((item) => item.unusedAliases).sort()).toEqual(
+      ["Batch pepper alias", "Batch salt alias"],
+    );
+    expect(await aliases()).toEqual(before);
     const stream = pruneAllUnusedAliasesWorkflow(context());
     expect(await stream.next()).toEqual({
       done: false,

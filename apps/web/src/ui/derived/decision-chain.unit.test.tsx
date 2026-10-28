@@ -1,9 +1,12 @@
 import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
-import { render, screen, cleanup, within } from "@testing-library/react";
+import { screen, cleanup, within } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import {
+  createEditorBrowserTestHarness as createBrowserTestHarness,
+  renderWithEditorMetadata as render,
+} from "#web/tests/editor-metadata.fixtures.ts";
 
 import { DecisionChain, DecisionValue } from "./decision-chain";
 

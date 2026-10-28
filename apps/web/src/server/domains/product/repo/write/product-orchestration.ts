@@ -49,6 +49,7 @@ import {
   updateProduct,
 } from "~/server/domains/product/repo/crud";
 import { findProductByGtin } from "~/server/domains/product/repo/lookup";
+import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
 import { readCachedUpcLookups } from "~/server/domains/product/repo/upc-lookup-cache";
 import {
   type ResolvedProductCode,
@@ -255,8 +256,13 @@ export async function applyUpcDataWithSideEffects(
   // Product.price is an intentional replacement-price override. A known
   // Expense-derived price is the household's actual purchase history, so a
   // provider's advisory current offer must not displace it.
-  if (current.pricing.effectivePrice == null && lookup?.priceDollars != null) {
-    data.price = lookup.priceDollars;
+  if (lookup?.priceDollars != null) {
+    // A pending display publication is not proof that purchase history has no
+    // price. This write decision compares authoritative inputs instead.
+    const prices = await loadEffectiveProductPricesById(services.db, [
+      input.id,
+    ]);
+    if (prices.get(input.id) == null) data.price = lookup.priceDollars;
   }
 
   const priceChanged = data.price !== undefined;

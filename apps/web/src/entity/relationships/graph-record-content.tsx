@@ -1,6 +1,5 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { EntityGraphNode } from "@cubby/schemas/entity-graph";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
@@ -8,6 +7,8 @@ import {
   renderCompactFieldValue,
 } from "~/entity/display/entity-display";
 import { isBrowserRoutedEntity } from "~/entity/entities";
+import { useEntityMetadata } from "~/entity/metadata";
+import { QuerySection } from "~/ui/feedback/query-section";
 import { Image } from "~/ui/primitives/image";
 
 /** All graph links use already hydrated identity and cover; hover resolves detail on demand. */
@@ -30,17 +31,25 @@ export function GraphRecordLink({
   );
 }
 
-export function GraphRecordFacts({
+function LoadedGraphRecordFacts({
   node,
   limit = 8,
 }: {
   node: EntityGraphNode;
   limit?: number;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(node.entityKind);
   const record = node.preview ?? {};
-  const facts = entityPreviewFacts(node.entityKind, record, limit, {
-    singleLine: true,
-  });
+  const facts = entityPreviewFacts(
+    queryClient,
+    node.entityKind,
+    record,
+    limit,
+    {
+      singleLine: true,
+    },
+  );
   return facts.length ? (
     <dl className="graph-record-facts nodrag nopan">
       {facts.slice(0, limit).map((fact) => (
@@ -53,15 +62,17 @@ export function GraphRecordFacts({
   ) : null;
 }
 
-export function GraphRecordContent({
+function LoadedGraphRecordContent({
   node,
   compact = false,
 }: {
   node: EntityGraphNode;
   compact?: boolean;
 }) {
-  const chip = entityFieldModels[node.entityKind].fields.find(
-    (field) => field.key === entitySummary[node.entityKind].detail.hero.chip,
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(node.entityKind);
+  const chip = metadata.fields.fields.find(
+    (field) => field.key === metadata.summary.detail.hero.chip,
   );
   return (
     <>
@@ -87,12 +98,45 @@ export function GraphRecordContent({
           </div>
           <div className="mt-1 text-2xs text-muted-foreground">
             {chip && node.preview
-              ? renderCompactFieldValue(node.entityKind, node.preview, chip)
+              ? renderCompactFieldValue(
+                  queryClient,
+                  node.entityKind,
+                  node.preview,
+                  chip,
+                )
               : node.entityId}
           </div>
         </div>
       </div>
       <GraphRecordFacts node={node} limit={compact ? 2 : 8} />
     </>
+  );
+}
+
+export function GraphRecordFacts(
+  props: Parameters<typeof LoadedGraphRecordFacts>[0],
+) {
+  return (
+    <QuerySection
+      title="Record facts"
+      resetKey={props.node.entityId}
+      fallback={null}
+    >
+      <LoadedGraphRecordFacts {...props} />
+    </QuerySection>
+  );
+}
+
+export function GraphRecordContent(
+  props: Parameters<typeof LoadedGraphRecordContent>[0],
+) {
+  return (
+    <QuerySection
+      title="Record"
+      resetKey={props.node.entityId}
+      fallback={<GraphRecordLink node={props.node} />}
+    >
+      <LoadedGraphRecordContent {...props} />
+    </QuerySection>
   );
 }

@@ -4,6 +4,7 @@ import {
 } from "@cubby/schemas/ai";
 
 import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
+import type { StartCallOptions } from "~/integrations/tanstack-query/start-transport";
 import type { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 
 import type {
@@ -18,15 +19,30 @@ export function createRecordSuggestionBatch(
     scheduler: ReturnType<typeof createConcurrencyLimiter>;
   },
 ) {
-  return createRequestBatcher<FieldSuggestionSource, FieldSuggestionsOut>(
+  const batcher = createRequestBatcher<
+    {
+      source: FieldSuggestionSource;
+      consistency?: StartCallOptions["consistency"];
+    },
+    FieldSuggestionsOut
+  >(
     async (items, signal) => {
       const batch = current().operations.suggestFieldsBatch;
       if (!batch) throw new Error("Suggestion batch transport unavailable");
       return batch.call(
         {
-          items: items.map((item) => ({ ...item, targets: [...item.targets] })),
+          items: items.map(({ source }) => ({
+            ...source,
+            targets: [...source.targets],
+          })),
         },
-        { signal, batch: false },
+        {
+          signal,
+          batch: false,
+          consistency: items.some((item) => item.consistency === "strong")
+            ? "strong"
+            : undefined,
+        },
       );
     },
     {
@@ -35,4 +51,13 @@ export function createRecordSuggestionBatch(
       admit: (work, signal) => current().scheduler.run(work, signal),
     },
   );
+  return {
+    load(
+      source: FieldSuggestionSource,
+      signal: AbortSignal,
+      consistency?: StartCallOptions["consistency"],
+    ) {
+      return batcher.load({ source, consistency }, signal);
+    },
+  };
 }

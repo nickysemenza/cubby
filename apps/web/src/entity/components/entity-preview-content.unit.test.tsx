@@ -1,12 +1,20 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 const infLocation = entityFieldEnvelopeSchemas.location.detail;
 const plantingOut = entityFieldEnvelopeSchemas.planting.detail;
 const projectOut = entityFieldEnvelopeSchemas.project.detail;
 
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render as testingRender,
+  screen,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
@@ -15,6 +23,36 @@ import { mock } from "~/lib/test/mock-schema";
 
 import { PreviewQuery } from "../preview/preview-query";
 import { manifestPreviewCard } from "./entity-preview-content";
+
+let queryClient: Awaited<ReturnType<typeof metadataQueryClient>>;
+beforeEach(async () => {
+  queryClient = await metadataQueryClient();
+});
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
+
+function MetadataProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+function render(ui: ReactNode, options?: Parameters<typeof testingRender>[1]) {
+  const BrowserWrapper = options?.wrapper;
+  return testingRender(ui, {
+    ...options,
+    wrapper: ({ children }) =>
+      BrowserWrapper ? (
+        <BrowserWrapper>
+          <MetadataProvider>{children}</MetadataProvider>
+        </BrowserWrapper>
+      ) : (
+        <MetadataProvider>{children}</MetadataProvider>
+      ),
+  });
+}
 
 const withMedia = <T extends { fields: { displayImages: unknown } }>(
   value: T,
@@ -157,7 +195,11 @@ describe("manifestPreviewCard", () => {
       },
     });
 
-    const card = manifestPreviewCard("planting", withMedia(tomato));
+    const card = manifestPreviewCard(
+      queryClient,
+      "planting",
+      withMedia(tomato),
+    );
 
     expect(card.name).toBe("Tomato · Cherokee Purple");
     expect(card.identity).toBe("Growing");
@@ -187,11 +229,15 @@ describe("manifestPreviewCard", () => {
       },
     });
 
-    harness.queryClient.setQueryData(
+    queryClient.setQueryData(
       entityPreviewQueryOptions("location", "LOC-4K7M").queryKey,
       { id: "LOC-4K7M", name: "Synthetic resolved bed", displayImages: [] },
     );
-    const card = manifestPreviewCard("planting", withMedia(tomato));
+    const card = manifestPreviewCard(
+      queryClient,
+      "planting",
+      withMedia(tomato),
+    );
     const stats = card.body?.find((block) => block.kind === "stats");
     if (stats?.kind !== "stats") throw new Error("expected a stats block");
     const location = stats.stats.find((stat) => stat.label === "Location");
@@ -222,7 +268,11 @@ describe("manifestPreviewCard", () => {
       },
     });
 
-    const card = manifestPreviewCard("project", withMedia(project));
+    const card = manifestPreviewCard(
+      queryClient,
+      "project",
+      withMedia(project),
+    );
     const stats = card.body?.find((block) => block.kind === "stats");
     if (stats?.kind !== "stats") throw new Error("expected a stats block");
     expect(stats.stats.map((stat) => stat.label)).toEqual([
@@ -277,6 +327,7 @@ describe("manifestPreviewCard", () => {
     });
 
     const card = manifestPreviewCard(
+      queryClient,
       "location",
       withMedia(bin, "https://example.com/bin.jpg"),
     );

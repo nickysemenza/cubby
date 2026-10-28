@@ -1,13 +1,13 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { allEntities } from "@cubby/schemas/entity-manifest";
 import {
   WAYFINDING_DOMAINS,
-  entitySummary,
   type WayfindingDomain,
   WAYFINDING_DOMAIN_PRESENTATION,
-} from "@cubby/schemas/entity-summary";
+} from "@cubby/schemas/entity-definitions/definition";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import { SIDEBAR_SECTIONS } from "@cubby/schemas/sidebar-manifest";
 import { mapRecord } from "@cubby/shared";
+import { ENTITY_KEYS } from "@cubby/shared/entity-keys";
 
 /** Shared identity hues also tint sidebar current rows. */
 const DOMAIN_ICON_CLASSES = {
@@ -74,7 +74,7 @@ export type { WayfindingDomain };
  * workbench routes (`/calendar`) that belong to no entity.
  */
 const entitiesOn = (domain: WayfindingDomain): readonly Entity[] =>
-  allEntities.filter((entity) => entitySummary[entity].domain === domain);
+  ENTITY_KEYS.filter((entity) => entityRoster[entity].domain === domain);
 
 export type DomainWayfinding = {
   id: WayfindingDomain;
@@ -126,7 +126,7 @@ export function domainForRoute(pathname: string): WayfindingDomain | null {
 
 /** Product classification intentionally resolves to Pantry. */
 export function domainForEntity(entity: Entity): WayfindingDomain | null {
-  return entitySummary[entity].domain;
+  return entityRoster[entity].domain;
 }
 
 export function domainWayfinding(domain: WayfindingDomain): DomainWayfinding {

@@ -1,9 +1,6 @@
 import type { Entity } from "./entity";
-import {
-  allEntities,
-  entityManifest,
-  entityInspectorMetadata,
-} from "./entity-manifest";
+import { entityManifest, entityInspectorMetadata } from "./entity-manifest";
+import { allEntities } from "./generated/entity-roster.gen";
 import type {
   RelationshipPathStep,
   RelationshipWitness,

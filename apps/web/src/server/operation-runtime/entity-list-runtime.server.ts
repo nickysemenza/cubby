@@ -1,10 +1,9 @@
 import { entityListContract } from "~/contracts/entity-list.contract";
-import {
-  entityListInputSchema,
-  getEntityListOutputSchema,
-} from "~/entity/generated/entity-lists.gen";
+import { entityListInputSchema } from "~/entity/generated/entity-lists.gen";
 import { executeEntitySelectionIds } from "~/server/entity-kernel";
+import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
 import { listOperations } from "~/server/entity-kernel/list-operations";
+import { loadEntityListSchemas } from "~/server/generated/entity-read-loaders.gen";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 /**
@@ -20,11 +19,17 @@ export const entityListHandlers = implementOperationDomain(entityListContract, {
     listOperations(input.entity).viewCounts(context, input),
   list: {
     input: entityListInputSchema,
-    output: (input) => getEntityListOutputSchema(input.entity),
     run: async (context, input) => {
       const { executeEntityAs } = await import("~/server/entity-kernel");
-      const result = await executeEntityAs(context, "list", input);
-      return getEntityListOutputSchema(input.entity).parse({
+      const schemas = await loadEntityListSchemas(input.entity);
+      const parsed = schemas.listInput.parse(input);
+      const resolved = await resolveFilterTokens(
+        context,
+        schemas.listInput,
+        parsed,
+      );
+      const result = await executeEntityAs(context, "list", resolved);
+      return schemas.listOutput.parse({
         items: result.items,
         meta: result.meta,
       });

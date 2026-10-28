@@ -1,6 +1,7 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { diagnosticModules } from "~/server/generic/problems/service/problem-diagnostics.service";
 
 import { getEntityFilters } from "../filter-manifest";
@@ -23,6 +24,8 @@ import {
   completeProblemQueryDeclarations,
   validateCompleteProblemRegistry,
 } from "./problem-registry-validation";
+
+const queryClient = await metadataQueryClient();
 
 describe("Problem Query registry", () => {
   it("validates every declared Problem against its runtime capabilities", () => {
@@ -117,7 +120,7 @@ describe("Problem Query registry", () => {
         throw new Error(`Unknown Problem filter entity: ${entity}`);
       }
       const uiSpecs = new Map(
-        getEntityFilters(parsedEntity.data).map((spec) => [
+        getEntityFilters(queryClient, parsedEntity.data).map((spec) => [
           spec.columnId,
           spec,
         ]),
@@ -163,7 +166,7 @@ describe("Problem Query registry", () => {
     for (const definition of problemQueryDeclarations()) {
       if (definition.source.kind !== "entity") continue;
       const { entity, filters } = definition.source;
-      const specs = getEntityFilters(entity);
+      const specs = getEntityFilters(queryClient, entity);
       const values = new Map(filters.map(({ id, value }) => [id, value]));
       const encoded = encodeFilters(specs, (columnId) => values.get(columnId));
       const decoded = new Map(

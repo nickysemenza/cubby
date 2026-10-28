@@ -1,13 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import {
-  shortcodeEntities,
-  type ShortcodeEntity,
-} from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { type ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { canClearExpenseDate } from "@cubby/schemas/expense-fields";
 import type { StructuredValueSchema } from "@cubby/schemas/structured-value-schema";
 import { countLabel } from "@cubby/shared/pluralize";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   FormProvider,
@@ -30,6 +26,8 @@ import { StructuredValueField } from "~/entity/editing/structured-value-field";
 import { entityLabel } from "~/entity/entities";
 import { bulkUpdateMutationOptionsFactory } from "~/entity/entity-contracts";
 import { PickerField } from "~/entity/forms/picker-field";
+import { generatedBulkEditEntities } from "~/entity/generated/entity-edit-validation-types.gen";
+import { ensureEntityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
@@ -47,9 +45,7 @@ import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
 /** The same compiler-derived normal-update roster served by MCP. */
 export const bulkEditEntities: readonly ShortcodeEntity[] =
-  shortcodeEntities.filter(
-    (entity) => entitySummary[entity].bulkUpdate !== null,
-  );
+  generatedBulkEditEntities;
 
 /**
  * What a bulk-edit form field actually produces: select and reference
@@ -146,7 +142,8 @@ function BulkEditFields({
   onModeChange: (field: PrimitiveFieldModel, mode: BulkFieldMode) => void;
   clearCost: number | null;
 }) {
-  const model = entityFieldModels[entity];
+  const queryClient = useQueryClient();
+  const model = useEntityMetadata(entity).fields;
   const assignment = { clearCost, searchProviderFor };
   return (
     <>
@@ -172,7 +169,7 @@ function BulkEditFields({
             `Bulk-edit field ${entity}.${key} has no normal editor control.`,
           );
         }
-        const structured = structuredSchemaFor(entity, key);
+        const structured = structuredSchemaFor(queryClient, entity, key);
         const structuredList =
           structured &&
           "array" in structured.node &&
@@ -288,6 +285,7 @@ function BulkEditFields({
                 </>
               ) : (
                 renderIntentField({
+                  queryClient,
                   entity,
                   field,
                   form,
@@ -342,7 +340,7 @@ function formatBulkEditValue(
 export function BulkEditDialogBody({
   entity,
   items,
-  fieldKeys,
+  fieldKeys: requestedFields,
   onOpenChange,
   onSubmit,
   isPending,
@@ -350,7 +348,7 @@ export function BulkEditDialogBody({
 }: {
   entity: Entity;
   items: readonly BulkEditRow[];
-  fieldKeys: readonly string[];
+  fieldKeys?: readonly string[];
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: Readonly<BulkEditDraft>) => Promise<void>;
   isPending: boolean;
@@ -358,7 +356,11 @@ export function BulkEditDialogBody({
    * `requireReferenceEntitySearch` lookup — see {@link SearchProviderFor}. */
   searchProviderFor?: SearchProviderFor;
 }) {
-  const model = entityFieldModels[entity];
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(entity);
+  const model = metadata.fields;
+  const fieldKeys =
+    requestedFields ?? metadata.summary.bulkUpdate?.fields ?? [];
   // Match nullable controls' empty value so another field's dirty-state
   // recalculation never turns their initial null into a pending clear.
   const form = useForm<FieldValues>({
@@ -447,12 +449,13 @@ export function BulkEditDialogBody({
     // carry a shortcode prefix (the generic browser CRUD roster).
     const shortcodeEntity = entity as ShortcodeEntity;
     return fieldSuggestionBasisFromRecord(
+      queryClient,
       shortcodeEntity,
-      suggestTargetsFor(shortcodeEntity, fieldKeys),
+      suggestTargetsFor(queryClient, shortcodeEntity, fieldKeys),
       singleItem,
     );
     // oxlint-disable-next-line react/exhaustive-deps -- `fieldKeys` is a stable per-entity roster; `entity` is a stable prop.
-  }, [singleItem]);
+  }, [queryClient, singleItem]);
 
   const handleSubmit = form.handleSubmit(async (values) => {
     const data: BulkEditDraft = {};
@@ -467,7 +470,7 @@ export function BulkEditDialogBody({
           })
           .parse(value ?? {});
         const identity = collectionIdentity(field);
-        const structured = structuredSchemaFor(entity, key);
+        const structured = structuredSchemaFor(queryClient, entity, key);
         const normalized = (operation: "add" | "remove") => {
           const items = z
             .json()
@@ -646,20 +649,20 @@ export function useBulkEditEntityAction(
     fields?: readonly string[];
   } = {},
 ): EntityActionHandles {
+  const queryClient = useQueryClient();
   const [items, setItems] = useState<BulkEditRow[]>([]);
   const mutation = useActionMutation({
     mutationFn: bulkUpdateMutationOptionsFactory(entity),
     success: (data) =>
       `Updated ${countLabel(data.updated, entityLabel(entity).toLowerCase())}`,
   });
-  // Invariant: `entity` is only ever one of `bulkEditEntities`, all of which
-  // carry a non-null compiled `bulkUpdate` — the `?? []` is a defensive
-  // fallback, not an expected path.
-  const fieldKeys = fields ?? entitySummary[entity].bulkUpdate?.fields ?? [];
-
-  const stage = useCallback((rows: readonly EntityActionRow[]) => {
-    setItems(rows.map(asBulkEditRow));
-  }, []);
+  const stage = useCallback(
+    async (rows: readonly EntityActionRow[]) => {
+      await ensureEntityMetadata(queryClient, entity);
+      setItems(rows.map(asBulkEditRow));
+    },
+    [entity, queryClient],
+  );
 
   const submit = useCallback(
     async (data: Readonly<BulkEditDraft>) => {
@@ -675,7 +678,7 @@ export function useBulkEditEntityAction(
 
   return {
     run: async (rows) => {
-      stage(rows);
+      await stage(rows);
       return { success: true };
     },
     rowMenuItem: (row) => (
@@ -683,7 +686,7 @@ export function useBulkEditEntityAction(
         verb={verb}
         onSelect={(event) => {
           event.stopPropagation();
-          stage([row]);
+          void stage([row]).catch((error) => showErrorToast(error));
         }}
       />
     ),
@@ -691,7 +694,7 @@ export function useBulkEditEntityAction(
       <BulkEditDialogBody
         entity={entity}
         items={items}
-        fieldKeys={fieldKeys}
+        fieldKeys={fields}
         onOpenChange={(open) => {
           if (!open) setItems([]);
         }}

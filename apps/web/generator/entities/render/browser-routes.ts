@@ -58,6 +58,7 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
         ]
       : []),
     'import { listPage } from "~/entity/routing/list-page";',
+    'import { ensureEntityMetadata } from "~/entity/metadata";',
     ...(entity.route.listColumns ? [importLine(entity.route.listColumns)] : []),
     ...(entity.route.create === "page"
       ? ['import { Button } from "~/ui/primitives/button";']
@@ -83,6 +84,7 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
     (createAction === null ? "" : `  actions: () => ${createAction},\n`) +
     "});\n\n" +
     `export const Route = createFileRoute(${JSON.stringify(`/_authenticated/${basePath}/`)})({\n` +
+    `  beforeLoad: ({ context }) => ensureEntityMetadata(context.queryClient, ${JSON.stringify(entity.key)}).then(() => undefined),\n` +
     `  validateSearch: entitySearch.${entity.key}.schema,\n` +
     `  search: { middlewares: [stripSearchParams(entitySearch.${entity.key}.defaults)] },\n` +
     // The eager first-page loader exists only for an entity with a generated
@@ -124,6 +126,7 @@ const renderDetailRoute = (entity: RoutedEntity): string => {
     'import { createFileRoute } from "@tanstack/react-router";',
     "",
     importLine(GENERIC_DETAIL),
+    'import { ensureEntityMetadata } from "~/entity/metadata";',
     'import { ensureDetailRecord } from "~/entity/routing/detail-loader";',
     'import { detailPage, notFoundPage } from "~/entity/routing/detail-page";',
     'import { RouteErrorComponent } from "~/ui/feedback/route-error";',
@@ -142,6 +145,7 @@ const renderDetailRoute = (entity: RoutedEntity): string => {
     "});\n\n" +
     `const ${name}NotFound = notFoundPage(${JSON.stringify(entity.key)});\n\n` +
     `export const Route = createFileRoute(${JSON.stringify(`/_authenticated/${basePath}/$${detailParam}`)})({\n` +
+    `  beforeLoad: ({ context }) => ensureEntityMetadata(context.queryClient, ${JSON.stringify(entity.key)}).then(() => undefined),\n` +
     "  loader: ({ params, context, location }) =>\n" +
     `    ensureDetailRecord(context.queryClient, ${query(`params.${detailParam}`)}, {\n` +
     `      shortcode: params.${detailParam},\n` +

@@ -24,7 +24,7 @@ import {
   entityGraphPathsInputSchema,
   entityGraphPathsOutputSchema,
 } from "@cubby/schemas/entity-graph";
-import { allEntities } from "@cubby/schemas/entity-manifest";
+import { allEntities } from "@cubby/schemas/entity-roster";
 import { z } from "zod";
 
 import { ENTITY_ROOT_TAGS } from "~/contracts/cache-policy";

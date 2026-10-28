@@ -1,5 +1,8 @@
 import type { EntityReportOut } from "@cubby/schemas/entity-report";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useSuspenseInfiniteQuery,
+} from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -13,12 +16,13 @@ import { DateDisplay } from "~/ui/common/date-display";
 import { DenseCellContext } from "~/ui/common/stacked-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { QuerySection } from "~/ui/feedback/query-section";
 import { Section } from "~/ui/layout";
 
 import { HomeList, HomeRowsLoading } from "./home-list";
 
 /** Home's preloaded task briefing: the generic `task.briefing` collection report. */
-const taskBriefingReportInput = {
+export const taskBriefingReportInput = {
   slot: "task.briefing",
   scope: { kind: "list", entity: "task", filters: {} },
 } as const;
@@ -70,6 +74,33 @@ function taskBriefingSecondary(briefing: {
 }
 
 export function TodayAttention() {
+  return (
+    <QuerySection
+      title="the next tasks"
+      fallback={
+        <Section
+          title="Today"
+          headingAs="h2"
+          ruled
+          actions={
+            <Link to="/tasks" search={{ view: "agenda" }}>
+              All tasks
+            </Link>
+          }
+        >
+          <HomeRowsLoading label="Loading next tasks" />
+        </Section>
+      }
+    >
+      <TodayAttentionContent />
+    </QuerySection>
+  );
+}
+
+function TodayAttentionContent() {
+  useSuspenseInfiniteQuery(
+    cursorQueryOptions(entityReport.get, taskBriefingReportInput),
+  );
   const { query: briefing, count, rows } = useTaskBriefing();
   const commands = useReportCommands();
   const secondary = rows

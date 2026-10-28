@@ -9,7 +9,7 @@ import {
 } from "../declarations.ts";
 
 /** The declaration owns whether a field needs assignment or derivation facts. */
-const governedFields = (entity: CompiledEntity) =>
+export const governedFields = (entity: CompiledEntity) =>
   entity.fieldModel.fields.filter(
     (field) =>
       field.resolution !== null ||

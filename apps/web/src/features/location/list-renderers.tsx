@@ -8,14 +8,20 @@ import type { ListRenderer } from "../../entity/display/list-renderer-types";
 
 // The Product a location IS ("Is a"): a bin or fixture that is itself a
 // catalogued Product.
-const productLink: ListRenderer<"location"> = (helper) =>
+const productLink: ListRenderer<"location"> = (helper, queryClient) =>
   createCubbyColumnCollection((add) => {
     add(
-      createSingleEntityInlineLinkColumn(helper, "product", "product", {
-        header: "Is a",
-        className: "w-56",
-        mobile: { slot: "meta", priority: 40 },
-      }),
+      createSingleEntityInlineLinkColumn(
+        queryClient,
+        helper,
+        "product",
+        "product",
+        {
+          header: "Is a",
+          className: "w-56",
+          mobile: { slot: "meta", priority: 40 },
+        },
+      ),
     );
   });
 

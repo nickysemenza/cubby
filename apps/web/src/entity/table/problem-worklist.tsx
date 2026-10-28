@@ -3,7 +3,10 @@ import { useSearch } from "@tanstack/react-router";
 import type { ColumnFiltersState, SortingState } from "@tanstack/react-table";
 import { z } from "zod";
 
-import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
+import {
+  type ProblemContinuation,
+  useProblemContinuation,
+} from "~/entity/problems/problem-continuation";
 import { Badge } from "~/ui/primitives/badge";
 
 const filterValueSchema = z.union([z.string(), z.array(z.string())]);
@@ -21,14 +24,11 @@ const sameValue = (
 /** Whether visible URL state still exactly represents the originating Problem. */
 export function problemWorklistState(
   entity: Entity,
-  worklist: string | undefined,
+  query: ProblemContinuation | undefined,
   filters: ColumnFiltersState,
   sorting: SortingState,
 ) {
-  if (!worklist) return undefined;
-  const query = problemQueryDeclarations().find(
-    (candidate) => candidate.key === worklist,
-  );
+  if (!query) return undefined;
   if (query?.source.kind !== "entity" || query.source.entity !== entity) {
     return undefined;
   }
@@ -69,7 +69,12 @@ export function ProblemWorklistStatus({
     select: (search) =>
       z.object({ worklist: z.string().optional() }).parse(search).worklist,
   });
-  const state = problemWorklistState(entity, worklist, filters, sorting);
+  const state = problemWorklistState(
+    entity,
+    useProblemContinuation(worklist),
+    filters,
+    sorting,
+  );
   if (!state) return null;
   return (
     <Badge variant={state.exact ? "secondary" : "outline"} className="shrink-0">

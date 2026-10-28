@@ -3,6 +3,7 @@ import type {
   PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 
 import { entityListFor } from "~/entity/entity-list";
@@ -16,6 +17,7 @@ import {
   entityListParamsFromParsed,
   parseEntityListInput,
 } from "~/entity/generated/entity-lists.gen";
+import { ensureEntityMetadata } from "~/entity/metadata";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 
 /**
@@ -23,14 +25,20 @@ import { viewsForEntity } from "~/entity/model/view-manifest";
  * send it — the view manifest is the one statement of the predicate, so a
  * worklist that runs it here cannot drift from what the view shows.
  */
-function productViewFilters(viewId: string): FilterPatch {
-  const view = viewsForEntity("product").find((v) => v.id === viewId);
+function productViewFilters(
+  queryClient: QueryClient,
+  viewId: string,
+): FilterPatch {
+  const view = viewsForEntity(queryClient, "product").find(
+    (v) => v.id === viewId,
+  );
   if (!view) throw new Error(`Unknown product view: ${viewId}`);
   const values = new Map<string, FilterValue>(
     view.filters.map(({ id, value }) => [id, value]),
   );
-  return buildFiltersFromManifest(getEntityFilters("product"), (columnId) =>
-    values.get(columnId),
+  return buildFiltersFromManifest(
+    getEntityFilters(queryClient, "product"),
+    (columnId) => values.get(columnId),
   );
 }
 
@@ -59,6 +67,7 @@ export function useProductViewSnapshot({
   categoryId?: ProductCategoryShortcode;
   enabled?: boolean;
 }) {
+  const queryClient = useQueryClient();
   const list = entityListFor("product");
   return useQuery({
     queryKey: [
@@ -77,11 +86,12 @@ export function useProductViewSnapshot({
       // An empty id list is "no purchases", not "no constraint": the filter
       // builder collapses `[]` to absent, which would select every product.
       if (purchaseIds?.length === 0) return [];
-      const filters = productViewFilters(viewId);
+      await ensureEntityMetadata(queryClient, "product");
+      const filters = productViewFilters(queryClient, viewId);
       if (purchaseIds) filters.purchaseId = [...purchaseIds];
       if (minSpend !== undefined) filters.expenseTotalMin = minSpend;
       if (categoryId) filters.categoryFilter = [categoryId];
-      const sort = viewsForEntity("product")
+      const sort = viewsForEntity(queryClient, "product")
         .find((v) => v.id === viewId)
         ?.sort?.map((term) => ({
           orderBy: term.id,
@@ -93,6 +103,7 @@ export function useProductViewSnapshot({
           "product",
           parseEntityListInput("product", {
             entity: "product",
+            includeCount: true,
             filters,
             sort: sort ?? [{ orderBy: "createdAt", direction: "desc" }],
             pagination: { pageIndex, pageSize: MAX_PAGE_SIZE },
@@ -100,7 +111,7 @@ export function useProductViewSnapshot({
         );
         const page = await list.listQueryPlan(params).execute(signal);
         rows.push(...page.items);
-        if ((pageIndex + 1) * page.meta.pageSize >= page.meta.totalCount) {
+        if (!page.meta.hasNextPage) {
           return rows;
         }
       }

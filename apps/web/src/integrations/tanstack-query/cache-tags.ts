@@ -1,7 +1,4 @@
-import {
-  entityKeys,
-  entityReadDependents,
-} from "@cubby/schemas/entity-summary";
+import { entityKeys, entityReadDependents } from "@cubby/schemas/entity-roster";
 import { imagePolicyCatalog } from "@cubby/schemas/image-policy";
 
 import type { RippleKey } from "~/contracts/cache-policy";

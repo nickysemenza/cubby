@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-import { compileFilterCodec } from "~/entity/filters";
 import { urlStringParam } from "~/lib/search-params";
-
-import { calendarFilterSpecs } from "./calendar-filter-specs";
 
 export const calendarDateParam = z
   .string()
@@ -30,17 +27,13 @@ const calendarViewPeriodParam = z
   .catch(undefined);
 
 /** Filter URL keys follow their source declarations. */
-export const calendarSearchSchema = z.object({
-  period: calendarViewPeriodParam,
-  date: calendarDateParam,
-  day: calendarDateParam,
-  ...Object.fromEntries(
-    compileFilterCodec(calendarFilterSpecs).keys.map((key) => [
-      key,
-      urlStringParam,
-    ]),
-  ),
-});
+export const calendarSearchSchema = z
+  .object({
+    period: calendarViewPeriodParam,
+    date: calendarDateParam,
+    day: calendarDateParam,
+  })
+  .catchall(z.preprocess((value) => value, urlStringParam));
 export const calendarSearchDefaults = Object.fromEntries(
   Object.keys(calendarSearchSchema.shape).map((key) => [key, undefined]),
 );

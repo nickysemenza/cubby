@@ -334,8 +334,10 @@ export const listChildCountSchema = z.number().int().nonnegative().optional();
 export function buildPaginatedResponse<T>(
   pagination: PaginationParams,
   data: T[],
-  count: number,
+  count: number | undefined,
   aggregates: {
+    /** Required for an uncounted page; determined by selecting one extra row. */
+    hasNextPage?: boolean;
     /** Additional candidates whose filter membership awaits a derived result. */
     unresolvedCount?: number;
     /** Sum keys with unpublished required contributors; numeric subtotals are withheld. */
@@ -354,11 +356,20 @@ export function buildPaginatedResponse<T>(
   } = {},
 ) {
   type PaginatedMeta = z.infer<typeof paginatedMetaSchema>;
+  let hasNextPage = aggregates.hasNextPage;
+  if (hasNextPage === undefined) {
+    if (count === undefined)
+      throw new Error("An uncounted page must supply hasNextPage");
+    hasNextPage =
+      (pagination.pageIndex + 1) * pagination.pageSize <
+      (aggregates.membershipCount ?? count);
+  }
   const meta: PaginatedMeta = {
     pageIndex: pagination.pageIndex,
     pageSize: pagination.pageSize,
-    totalCount: count,
+    hasNextPage,
   };
+  if (count !== undefined) meta.totalCount = count;
   if (aggregates.sums)
     meta.sums = Object.fromEntries(
       Object.entries(aggregates.sums).filter(
@@ -385,7 +396,8 @@ export const paginatedMetaSchema = z
   .object({
     pageIndex: z.number().int().nonnegative(),
     pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
-    totalCount: z.number().int().nonnegative(),
+    totalCount: z.number().int().nonnegative().optional(),
+    hasNextPage: z.boolean(),
     unresolvedCount: z.number().int().nonnegative().optional(),
     incompleteSums: z.array(z.string()).optional(),
     sums: z.record(z.string(), z.number()).optional(),

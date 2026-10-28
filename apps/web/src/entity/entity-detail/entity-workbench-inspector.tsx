@@ -1,6 +1,6 @@
 import { displayImagesField } from "@cubby/schemas/display-images";
 import type { Entity } from "@cubby/schemas/entity";
-import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
+import { isAuditableEntity } from "@cubby/schemas/entity-roster";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { type ReactNode, useCallback, useState } from "react";
 
@@ -15,6 +15,7 @@ import {
   type DetailEntity,
 } from "~/entity/generated/entity-details.gen";
 import { CellSelectionContext } from "~/ui/data-table/cell-selection-context";
+import { QuerySection } from "~/ui/feedback/query-section";
 
 import { EntityPreviewContent } from "../components/entity-preview-content";
 import {
@@ -51,13 +52,19 @@ export function EntityWorkbenchInspector({
 }: EntityWorkbenchInspectorProps) {
   return (
     <CellSelectionContext value={false}>
-      <EntityWorkbenchInspectorContent
-        key={`${entity}:${id}`}
-        entity={entity}
-        id={id}
-        onClose={onClose}
-        overviewSupplement={overviewSupplement}
-      />
+      <QuerySection
+        title="record inspector"
+        resetKey={`${entity}:${id}`}
+        fallback={<output>Loading record…</output>}
+      >
+        <EntityWorkbenchInspectorContent
+          key={`${entity}:${id}`}
+          entity={entity}
+          id={id}
+          onClose={onClose}
+          overviewSupplement={overviewSupplement}
+        />
+      </QuerySection>
     </CellSelectionContext>
   );
 }

@@ -1,4 +1,3 @@
-import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   ImageShortcode,
@@ -36,6 +35,7 @@ import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { MinusCircleIcon } from "@phosphor-icons/react/dist/csr/MinusCircle";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import type { QueryClient } from "@tanstack/react-query";
 import {
   skipToken,
   useMutation,
@@ -69,6 +69,7 @@ import { PhotoGrid } from "~/entity/entity-media/photo-grid";
 import { PhotoViewer } from "~/entity/entity-media/photo-viewer";
 import { compactFieldText } from "~/entity/fields/field-text";
 import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
@@ -1460,19 +1461,20 @@ function FieldChangeToggle({
   );
 }
 
-const productReviewFields = (
-  ["name", "brandId", "model", "notes", "tags"] as const
-)
-  .map((key) => ({
-    key,
-    presentation: entityFieldPresentation("product", key, "edit"),
-  }))
-  .filter(({ presentation }) => presentation.editable);
-const productCategoryField = entityFieldPresentation(
-  "product",
-  "categoryId",
-  "edit",
-);
+const productReviewFieldsFor = (queryClient: QueryClient) =>
+  (["name", "brandId", "model", "notes", "tags"] as const)
+    .map((key) => ({
+      key,
+      presentation: entityFieldPresentation(
+        queryClient,
+        "product",
+        key,
+        "edit",
+      ),
+    }))
+    .filter(({ presentation }) => presentation.editable);
+const productCategoryPresentation = (queryClient: QueryClient) =>
+  entityFieldPresentation(queryClient, "product", "categoryId", "edit");
 
 // A new Brand name and its empty reference describe one Product field change.
 function photoProductChangeCount(
@@ -1496,6 +1498,10 @@ function ExistingProductChanges({
   save: SaveGroup;
   busy: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata("product");
+  const productReviewFields = productReviewFieldsFor(queryClient);
+  const productCategoryField = productCategoryPresentation(queryClient);
   const review = reviewDecision(proposal);
   const changes = review.productChanges ?? {};
   const [selectedBrand] = useSelectedPickerItems(
@@ -1613,7 +1619,9 @@ function ExistingProductChanges({
                       <CommitInput
                         label={`New ${presentation.label.toLocaleLowerCase()}`}
                         required={
-                          entityFieldByKey("product", field)?.requiredOnCreate
+                          metadata.fields.fields.find(
+                            (item) => item.key === field,
+                          )?.requiredOnCreate
                         }
                         value={after}
                         disabled={busy}
@@ -2077,6 +2085,7 @@ function ProductPanel({
       : check,
   );
   const queryClient = useQueryClient();
+  useEntityMetadata("product");
   const saveProduct = (
     next: PhotoGroupProposalGroup["product"],
     onSaved?: () => void,
@@ -2095,7 +2104,12 @@ function ProductPanel({
           busy={busy}
         />
       );
-    const presentation = entityFieldPresentation("product", field, "create");
+    const presentation = entityFieldPresentation(
+      queryClient,
+      "product",
+      field,
+      "create",
+    );
     if (!presentation.editable) return null;
     const value = product.create[field];
     return (
@@ -2232,7 +2246,11 @@ function ProductPanel({
           <Stack gap="sm">
             <CommitInput
               label="New product name"
-              required={entityFieldByKey("product", "name")?.requiredOnCreate}
+              required={
+                entityMetadata(queryClient, "product").fields.fields.find(
+                  (item) => item.key === "name",
+                )?.requiredOnCreate
+              }
               crossCheck={checks.find((check) => check.field === "name")}
               actions={[
                 ...new Set(
@@ -2631,6 +2649,8 @@ function InventoryFields({
   busy: boolean;
   runLocation: RunLocation | null;
 }) {
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata("inventory");
   const inventory = proposal.inventory;
   const quantity = inventory?.quantity ?? 1;
   const { session, state } = usePhotoDraft();
@@ -2642,7 +2662,9 @@ function InventoryFields({
       { enabled: Boolean(inventory?.existingEntryId) },
     ),
   );
-  const ownerField = entityFieldByKey("inventory", "ownerLedgerPartyId");
+  const ownerField = metadata.fields.fields.find(
+    (field) => field.key === "ownerLedgerPartyId",
+  );
   const existingAmount = existingEntry.data
     ? fieldValueOf(existingEntry.data.fields.amount)
     : null;
@@ -2881,6 +2903,7 @@ function InventoryFields({
                   : inventory.ownershipMode === "inherit"
                     ? existingEntry.data && ownerField
                       ? (compactFieldText(
+                          queryClient,
                           "inventory",
                           existingEntry.data,
                           ownerField,
@@ -3556,6 +3579,10 @@ function SettledGroup({
   proposal: PhotoGroupProposal;
   imagesById: ImagesById;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("product");
+  const productReviewFields = productReviewFieldsFor(queryClient);
+  const productCategoryField = productCategoryPresentation(queryClient);
   const committed = proposal.state === "committed";
   return (
     <Stack gap="sm" className="mt-2">

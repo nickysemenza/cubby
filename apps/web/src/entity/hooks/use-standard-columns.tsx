@@ -1,9 +1,8 @@
 import { displayImagesField } from "@cubby/schemas/display-images";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import { useQueryClient } from "@tanstack/react-query";
 import type { CellData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef } from "react";
@@ -16,6 +15,7 @@ import { identityWidthClassName } from "~/entity/entity-list/identity-list-confi
 import { readRecordField } from "~/entity/entity-references";
 import { featureRegistry } from "~/entity/feature-registry";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
+import { useEntityMetadata } from "~/entity/metadata";
 import {
   createActionsColumn,
   createImageColumn,
@@ -174,6 +174,8 @@ export function useStandardColumns<TData extends BaseListRow>({
 }: UseStandardColumnsOptions<TData>): CubbyColumnCollection<TData> {
   // Stabilize filters array - only update when serialized content changes
   // This prevents re-renders when consumer passes new array literal each render
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(entity);
   const filtersKey = JSON.stringify(filters);
   const stableFilters = useMemo(
     () => filters,
@@ -192,8 +194,8 @@ export function useStandardColumns<TData extends BaseListRow>({
   // Memoize entity config to prevent re-renders when entity doesn't change
   const { standardColumns, shouldUseMappings, titleField } = useMemo(() => {
     const listConfig = browserEntityDefinition(entity).list;
-    const resolvedTitleField = entitySummary[entity].titleField;
-    const standardColumns = entityFieldModels[entity].fields.filter(
+    const resolvedTitleField = metadata.summary.titleField;
+    const standardColumns = metadata.fields.fields.filter(
       (field) => field.display.list && field.display.standard,
     );
     const listHasUnitMappings = listConfig?.hasUnitMappings ?? false;
@@ -202,13 +204,13 @@ export function useStandardColumns<TData extends BaseListRow>({
       shouldUseMappings: listHasUnitMappings && hasUnitMappings,
       titleField: resolvedTitleField,
     };
-  }, [entity, hasUnitMappings]);
+  }, [entity, hasUnitMappings, metadata]);
   const identityWidth = useMemo(() => {
-    const titleFieldModel = entityFieldModels[entity].fields.find(
+    const titleFieldModel = metadata.fields.fields.find(
       (field) => field.key === titleField,
     );
     return identityWidthClassName(titleFieldModel?.display.width ?? null);
-  }, [entity, titleField]);
+  }, [titleField, metadata]);
 
   // Build columns array with standard columns - memoized to prevent infinite re-renders
   // The map grows with every page and enrichment arrival; keying columns on
@@ -232,6 +234,9 @@ export function useStandardColumns<TData extends BaseListRow>({
     return {
       image: createImageColumn(columnHelper, {
         entity,
+        explanation: imageField?.explanation
+          ? { entity, field: imageField.key, label: imageField.label }
+          : undefined,
         getImages: (row) => {
           const envelope = fieldEnvelopeFor(row, "displayImages");
           return envelope
@@ -243,8 +248,10 @@ export function useStandardColumns<TData extends BaseListRow>({
       }),
       identity: createNameColumn(columnHelper, entity, undefined, {
         id: titleField,
-        header: entitySummary[entity].singular,
-        enableSorting: getSortableFields(entity).includes(titleField),
+        header: metadata.summary.singular,
+        enableSorting: getSortableFields(queryClient, entity).includes(
+          titleField,
+        ),
         className: nameClassName ?? identityWidth,
         // Computed titles stay read-only unless an explicit adapter maps the
         // edit gesture to an underlying stored field (for example, Meal name).
@@ -256,9 +263,15 @@ export function useStandardColumns<TData extends BaseListRow>({
         getValue: (row: TData) =>
           readRecordField(row, titleField, titleValueSchema) ?? null,
       }),
-      quality: createEntityDisplayColumns(entity, columnHelper, undefined, {
-        only: ["dataQuality"],
-      }),
+      quality: createEntityDisplayColumns(
+        queryClient,
+        entity,
+        columnHelper,
+        undefined,
+        {
+          only: ["dataQuality"],
+        },
+      ),
       mappings:
         shouldUseMappings && hasMappings
           ? featureRegistry().components.createUnitMappingsColumn(
@@ -295,6 +308,8 @@ export function useStandardColumns<TData extends BaseListRow>({
     nameSuffix,
     namePrefix,
     expandable,
+    queryClient,
+    metadata,
   ]);
   const baseColumns = useMemo(
     () =>
@@ -307,7 +322,11 @@ export function useStandardColumns<TData extends BaseListRow>({
         ): FilterConfig | undefined => {
           if (hiddenFilterColumnSet.has(columnId)) return undefined;
 
-          const fromManifest = manifestFilterConfig(entity, columnId);
+          const fromManifest = manifestFilterConfig(
+            queryClient,
+            entity,
+            columnId,
+          );
           if (fromManifest) return fromManifest;
 
           const filterDef = stableFilters.find((filter) =>
@@ -367,7 +386,7 @@ export function useStandardColumns<TData extends BaseListRow>({
 
         // Custom columns get two things applied from the registries: sorting from
         // `sortableFields`, and their filter control from the manifest.
-        const sortableFields = getSortableFields(entity);
+        const sortableFields = getSortableFields(queryClient, entity);
         if (
           !customColumns
             .visit((column) => columnIdentifier(column) === "dataQuality")
@@ -441,6 +460,7 @@ export function useStandardColumns<TData extends BaseListRow>({
       stableFilters,
       enableRowSelection,
       hiddenFilterColumnSet,
+      queryClient,
     ],
   );
 
@@ -453,7 +473,7 @@ export function useStandardColumns<TData extends BaseListRow>({
           const id = columnIdentifier(column);
           const filterConfig =
             id && !hiddenFilterColumnSet.has(id)
-              ? manifestFilterConfig(entity, id, filterOptions)
+              ? manifestFilterConfig(queryClient, entity, id, filterOptions)
               : undefined;
           add(
             filterConfig
@@ -462,6 +482,6 @@ export function useStandardColumns<TData extends BaseListRow>({
           );
         });
       }),
-    [baseColumns, entity, filterOptions, hiddenFilterColumnSet],
+    [baseColumns, entity, filterOptions, hiddenFilterColumnSet, queryClient],
   );
 }

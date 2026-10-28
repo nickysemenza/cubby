@@ -65,7 +65,7 @@ const productionMutationSuccessRuntime: RootMutationSuccessRuntime = {
   afterSuccess: async ({ queryClient, result, invalidations }) => {
     // Retire reads begun before the receipt before publishing confirmed values.
     await cancelQueriesByTags(queryClient, invalidations);
-    reconcileMutationReceipt(queryClient, mutationReceipt(result));
+    await reconcileMutationReceipt(queryClient, mutationReceipt(result));
     void invalidateOperationTags(queryClient, invalidations, {
       removeInactive: true,
     });

@@ -23,7 +23,7 @@ private final class FilterStub: URLProtocol, @unchecked Sendable {
 @Suite("Entity filters on the wire", .serialized)
 struct EntityFilterTests {
     private static let emptyPage = Data(
-        #"{"items":[],"meta":{"pageIndex":0,"pageSize":50,"totalCount":0}}"#.utf8)
+        #"{"items":[],"meta":{"pageIndex":0,"pageSize":50,"totalCount":0,"hasNextPage":false}}"#.utf8)
 
     private func makeClient() throws -> CubbyClient {
         let store = InMemorySessionTokenStore()
@@ -189,7 +189,7 @@ struct EntityFilterTests {
     @Test func timelineTakesIdsAndOrderBesideTheListFilters() async throws {
         let response =
             #"{"groups":[],"stats":[],"notes":[],"#
-            + #""meta":{"totalCount":0,"pageIndex":0,"pageSize":200}}"#
+            + #""meta":{"totalCount":0,"pageIndex":0,"pageSize":200,"hasNextPage":false}}"#
         let filters = EntityFilterState([
             "ids": ["PRD-2345"], "order": ["desc"], "tagFilters": ["a"],
         ])

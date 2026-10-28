@@ -2,7 +2,7 @@ import { statementSuggestionRow } from "@cubby/schemas/suggestion-list";
 import { render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { mock } from "~/lib/test/mock-schema";
 
 import { SuggestionEvidence } from "./suggestion-evidence";

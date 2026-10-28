@@ -1,6 +1,6 @@
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 
+import { useEntityMetadata } from "~/entity/metadata";
 import { TableEmptyState } from "~/entity/table/entity-empty-states";
 import type { ListWorkbenchModel } from "~/entity/table/list-workbench";
 import {
@@ -149,6 +149,7 @@ export function useClientEntityList<TData extends BaseListRow>({
   deleteEmptyLabel,
   subject,
 }: UseClientEntityListOptions<TData>): UseClientEntityListReturn<TData> {
+  const metadata = useEntityMetadata(entity);
   const inspection = useEntityPreview(
     preview
       ? preview.entity === null
@@ -179,7 +180,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     selectionScope: (state) => state.columnFilters,
   });
   const { tableState } = presentationState;
-  const primarySearchKey = entitySummary[entity].primarySearch?.key;
+  const primarySearchKey = metadata.summary.primarySearch?.key;
   const primarySearchQuery = primarySearchKey
     ? tableState.getColumnFilter(primarySearchKey)
     : undefined;

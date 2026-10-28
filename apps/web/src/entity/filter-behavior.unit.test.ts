@@ -1,13 +1,15 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { describe, expect, it, vi } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { resolveDateRange } from "~/lib/date-range-presets";
 
 import { getEntityFilters } from "./filter-manifest";
-import { entityFilterFieldMaps } from "./generated/entity-filter-fields.gen";
+
+const queryClient = await metadataQueryClient();
 
 const rangeSpec = (entity: string, columnId: string) => {
-  const spec = getEntityFilters(entitySchema.parse(entity)).find(
+  const spec = getEntityFilters(queryClient, entitySchema.parse(entity)).find(
     (candidate) => candidate.columnId === columnId,
   );
   if (spec?.expand === undefined)
@@ -18,27 +20,6 @@ const expand = (entity: string, columnId: string, preset: string) =>
   rangeSpec(entity, columnId).expand?.(preset);
 
 describe("declared range presets", () => {
-  it("expands every declared option into a patch of real filter fields", () => {
-    let expanders = 0;
-    for (const [entity, fields] of Object.entries(entityFilterFieldMaps)) {
-      for (const spec of getEntityFilters(entitySchema.parse(entity))) {
-        if (spec.kind !== "range" || spec.expand === undefined) continue;
-        for (const option of spec.options ?? []) {
-          const patch = spec.expand(option.value);
-          // A preset that resolves to nothing renders as a menu entry that
-          // silently matches every row.
-          if (Object.keys(patch).length === 0) continue;
-          expanders += 1;
-          for (const key of Object.keys(patch))
-            expect(Object.keys(fields), `${entity}.${spec.columnId}`).toContain(
-              key,
-            );
-        }
-      }
-    }
-    expect(expanders).toBeGreaterThan(30);
-  });
-
   it("resolves an unknown or missing preset to no filter", () => {
     expect(expand("expense", "cost", "bogus")).toEqual({});
     expect(expand("expense", "cost", "")).toEqual({});

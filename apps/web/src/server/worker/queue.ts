@@ -31,37 +31,40 @@ export async function handleQueueInvocation(
 
         // A task can launch independent maintenance transactions concurrently.
         // Lease separate clients and close the bounded pools after the batch.
-        await withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
-          if (batch.queue === QUEUE_NAMES.telemetry) {
-            const { processTelemetryQueueBatch } =
-              await import("~/server/observability/telemetry-queue");
-            await processTelemetryQueueBatch(db, {
-              ...batch,
-              queue: QUEUE_NAMES.telemetry,
-            });
-            return;
-          }
+        await withInvocationDb(
+          env.HYPERDRIVE_BACKGROUND.connectionString,
+          async () => {
+            if (batch.queue === QUEUE_NAMES.telemetry) {
+              const { processTelemetryQueueBatch } =
+                await import("~/server/observability/telemetry-queue");
+              await processTelemetryQueueBatch(db, {
+                ...batch,
+                queue: QUEUE_NAMES.telemetry,
+              });
+              return;
+            }
 
-          // Defer domain consumer evaluation until this transport is selected.
-          const { handleBackgroundQueueBatch } =
-            await import("~/server/workflows/background-tasks/consume");
-          await handleBackgroundQueueBatch(
-            db,
-            { ...batch, queue: QUEUE_NAMES.background },
-            {
-              captureException: (error) => {
-                Sentry.captureException(error);
+            // Defer domain consumer evaluation until this transport is selected.
+            const { handleBackgroundQueueBatch } =
+              await import("~/server/workflows/background-tasks/consume");
+            await handleBackgroundQueueBatch(
+              db,
+              { ...batch, queue: QUEUE_NAMES.background },
+              {
+                captureException: (error) => {
+                  Sentry.captureException(error);
+                },
+                // The calendar projection reads only meal/task rows
+                // (`repo/calendar-caldav`), which no background task kind
+                // writes — marking it dirty here scheduled a full re-projection
+                // after every batch (~1,000 during one backfill).
+                afterSuccess: async () => {
+                  await recordDatabaseWrite("background-job");
+                },
               },
-              // The calendar projection reads only meal/task rows
-              // (`repo/calendar-caldav`), which no background task kind
-              // writes — marking it dirty here scheduled a full re-projection
-              // after every batch (~1,000 during one backfill).
-              afterSuccess: async () => {
-                await recordDatabaseWrite("background-job");
-              },
-            },
-          );
-        });
+            );
+          },
+        );
       },
       {
         "cubby.workload": "queue",

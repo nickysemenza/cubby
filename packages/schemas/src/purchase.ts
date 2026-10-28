@@ -3,6 +3,7 @@ import {
   expensePublicReadFields,
 } from "./generated/entity-field-envelope-fields.expense.gen";
 import { withFieldEnvelopes } from "./field-envelope";
+import { productDisplayFactsState } from "./product-read-fields";
 import {
   productFieldEnvelopeFields,
   productPublicReadFields,
@@ -687,6 +688,7 @@ export type PurchaseProductSource = z.infer<typeof purchaseProductSource>;
 const linkAttachedAt = z.date().nullable();
 
 export const purchaseProductOut = z.object({
+  displayFacts: productDisplayFactsState,
   productId: productShortcode,
   productName: z.string(),
   brandName: z.string().nullable(),

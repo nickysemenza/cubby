@@ -74,10 +74,18 @@ export type PublicStartOperationError = z.infer<
   typeof publicStartOperationErrorSchema
 >;
 export type StartOperationResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: PublicStartOperationError };
+  | { ok: true; data: T; readMarker?: string }
+  | { ok: false; error: PublicStartOperationError; readMarker?: string };
 
 export const unparsedStartOperationResultSchema = z.discriminatedUnion("ok", [
-  z.object({ ok: z.literal(true), data: unparsedStartOperationDataSchema }),
-  z.object({ ok: z.literal(false), error: publicStartOperationErrorSchema }),
+  z.object({
+    ok: z.literal(true),
+    data: unparsedStartOperationDataSchema,
+    readMarker: z.string().max(4096).optional(),
+  }),
+  z.object({
+    ok: z.literal(false),
+    error: publicStartOperationErrorSchema,
+    readMarker: z.string().max(4096).optional(),
+  }),
 ]);

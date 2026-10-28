@@ -8,6 +8,10 @@ import {
 import { unwrapStartOperationResult } from "~/integrations/tanstack-query/start-transport";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import {
+  acceptMemberWriteCookie,
+  beginMemberWrite,
+} from "~/lib/read-consistency";
+import {
   unparsedStartOperationDataSchema,
   unparsedStartOperationResultSchema,
 } from "~/server/operation-runtime/start-operation.contract";
@@ -47,6 +51,7 @@ export async function openWorkflowStream<
     }, 0);
   };
   try {
+    beginMemberWrite();
     const { callWorkflowStream } = await import("~/lib/workflow-stream-call");
     const stream = await callWorkflowStream({
       data: {
@@ -106,6 +111,10 @@ export async function openWorkflowStream<
           signal.throwIfAborted();
           if (done) break;
           const result = unparsedStartOperationResultSchema.parse(value);
+          if (result.ok && result.data === undefined && result.readMarker) {
+            acceptMemberWriteCookie(result.readMarker);
+            continue;
+          }
           yield options.eventSchema.parse(
             unwrapStartOperationResult(options.operation, result),
           );
@@ -113,6 +122,7 @@ export async function openWorkflowStream<
         finished = true;
         finishObservedOperation(observed, { result: "stream-complete" });
       } catch (error) {
+        beginMemberWrite();
         finished = true;
         finishObservedOperation(observed, { error });
         throw error;
@@ -126,11 +136,13 @@ export async function openWorkflowStream<
           // SILENT: an already-aborted transport must not replace the stream's error.
         }
         reader.releaseLock();
+        if (!finished) beginMemberWrite();
         if (!finished)
           finishObservedOperation(observed, { result: "stream-cancelled" });
       }
     })();
   } catch (error) {
+    beginMemberWrite();
     controller.abort();
     finishObservedOperation(observed, { error });
     throw error;

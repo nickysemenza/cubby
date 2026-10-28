@@ -16,10 +16,11 @@ test("reviews an Email's Purchase link from the Purchase's Emails section", asyn
   );
   await gotoAuthenticatedPage(
     page,
-    `/purchases/${seed.purchase.shortcode}`,
-    page.getByText("Synthetic order receipt"),
+    `/purchases/${seed.purchase.shortcode}#emails`,
+    page.locator("#emails"),
   );
   const emails = page.locator("#emails");
+  await emails.scrollIntoViewIfNeeded();
   const row = emails
     .getByRole("row")
     .filter({ has: page.getByText("Synthetic order receipt") });
@@ -32,6 +33,7 @@ test("reviews an Email's Purchase link from the Purchase's Emails section", asyn
   await choose("Dismiss for this Purchase");
   await expect(row.getByText("Dismissed", { exact: true })).toBeVisible();
   await page.reload();
+  await emails.scrollIntoViewIfNeeded();
   await expect(row.getByText("Dismissed", { exact: true })).toBeVisible();
   await choose("Link to this Purchase");
   await expect(row.getByText("Linked", { exact: true })).toBeVisible();

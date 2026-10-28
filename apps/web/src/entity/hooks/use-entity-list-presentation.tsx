@@ -1,12 +1,12 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
-import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnVisibilityState } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getEntityFilters } from "~/entity/filter-manifest";
+import { useEntityMetadata } from "~/entity/metadata";
 import {
   defaultSortDirectionFor,
   defaultSortFor,
@@ -67,6 +67,8 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
   deleteEmptyLabel?: (row: TData) => string;
   selectionScope: (tableState: TableStateReturn) => SelectionScope;
 }) {
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(entity);
   const {
     combinedExtraActions,
     deleteActionDefinition,
@@ -88,28 +90,36 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
     includeCatalogActions,
     selectable,
   });
-  const defaultSort = defaultSortFor(entity);
+  const defaultSort = defaultSortFor(queryClient, entity);
   // The manifest declares direction alongside the field, so a name-sorted
   // roster opens A→Z instead of the table's blanket descending default.
-  const defaultSortDesc = defaultSortDirectionFor(entity) !== "asc";
+  const defaultSortDesc =
+    defaultSortDirectionFor(queryClient, entity) !== "asc";
   const mergedTableStateOptions = useMemo(() => {
     const options = {
       initialSort: defaultSort,
       initialSortDesc: defaultSortDesc,
       urlSync: true,
-      filterSpecs: getEntityFilters(entity),
-      primarySearch: entitySummary[entity].primarySearch,
+      filterSpecs: getEntityFilters(queryClient, entity),
+      primarySearch: metadata.summary.primarySearch,
       ...tableStateOptions,
     };
     // The declared default filter belongs to the route's own list; a table
     // embedded beside it (no URL sync) shows what its scope names.
     return options.urlSync
       ? {
-          initialFilter: entitySummary[entity].list.initialFilter,
+          initialFilter: metadata.summary.list.initialFilter,
           ...options,
         }
       : options;
-  }, [defaultSort, defaultSortDesc, entity, tableStateOptions]);
+  }, [
+    defaultSort,
+    defaultSortDesc,
+    entity,
+    metadata,
+    queryClient,
+    tableStateOptions,
+  ]);
   const tableState = useTableState(mergedTableStateOptions);
   const currentSelectionScope = selectionScope(tableState);
   const selectionScopeKey = useMemo(
@@ -190,7 +200,7 @@ export function useEntityListPresentation<TData extends BaseListRow>({
   subject?: (row: TData) => EntityActionSubject | null;
 }) {
   const columnHelper = useMemo(() => createCubbyColumnHelper<TData>(), []);
-  const relatedViews = useMemo(() => relatedViewsFor(entity), [entity]);
+  const relatedViews = useEntityMetadata(entity).relatedViews;
   const relatedInitialVisibility = useMemo(
     () =>
       Object.fromEntries(

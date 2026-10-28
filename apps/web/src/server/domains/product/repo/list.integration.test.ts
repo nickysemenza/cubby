@@ -1,6 +1,5 @@
 import { shortcode } from "@cubby/schemas/identifiers";
 import type { LocationCreateInput } from "@cubby/schemas/location";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import {
@@ -10,7 +9,6 @@ import {
 } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import type { USDAClient } from "~/server/clients/usda";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { location, product } from "~/server/db/schema";
 import { createIngredient } from "~/server/domains/ingredient/repo/crud";
@@ -309,7 +307,7 @@ describe("product list price footer", () => {
 describe("product list staged projections", () => {
   const ctx = withTestDb();
 
-  it("enriches USDA, pricing and placement across a page", async () => {
+  it("reads published pricing and placement across a page", async () => {
     const products = await Promise.all(
       [1, 2, 3].map((index) =>
         createProductIdentityFixture(
@@ -339,11 +337,7 @@ describe("product list staged projections", () => {
         ctx.actor,
       );
     }
-    const usda = fromPartial<USDAClient>({
-      findFoodsBatch: async (
-        inputs: Parameters<USDAClient["findFoodsBatch"]>[0],
-      ) => inputs.map(() => null),
-    });
+    await drainStoredDerived(ctx.db);
     const page = await productScaffold.read(ctx.db, {
       filters: { ids: products.map((row) => row.id) },
       sorts: [{ orderBy: "name", direction: "asc" }],
@@ -354,54 +348,12 @@ describe("product list staged projections", () => {
         "primaryPlacement",
       ]),
       readIntent: "page",
-      reader: { usdaClient: usda },
     });
     expect(page.data).toHaveLength(3);
     expect(page.data.every((row) => row.primaryPlacement != null)).toBe(true);
     expect(page.data.map((row) => row.id)).toEqual(
       products.map((row) => row.id),
     );
-  });
-
-  // A shared relations loader must not admit external work for an unused food binding.
-  it("does not prefetch USDA for selected stock fields, but joins food reads", async () => {
-    const item = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Selected food admission", fdc_id: 123456 }),
-      ctx.actor,
-    );
-    let lookups = 0;
-    const usda = fromPartial<USDAClient>({
-      findFoodsBatch: async (
-        inputs: Parameters<USDAClient["findFoodsBatch"]>[0],
-      ) => {
-        lookups += inputs.length;
-        return inputs.map(() => null);
-      },
-    });
-    const filters = { ids: [item.id] };
-    const pagination = { pageIndex: 0, pageSize: 10 };
-    const stock = await productScaffold.read(ctx.db, {
-      filters: filters,
-      sorts: [],
-      pagination: pagination,
-      projection: selectedListProjection("product", ["pricing", "stockStatus"]),
-      readIntent: "page",
-      reader: { usdaClient: usda },
-    });
-    expect(stock.data[0]).toHaveProperty("pricing");
-    expect(stock.data[0]).not.toHaveProperty("food");
-    expect(lookups).toBe(0);
-    const food = await productScaffold.read(ctx.db, {
-      filters: filters,
-      sorts: [],
-      pagination: pagination,
-      projection: selectedListProjection("product", ["food"]),
-      readIntent: "page",
-      reader: { usdaClient: usda },
-    });
-    expect(food.data[0]).toHaveProperty("food");
-    expect(lookups).toBeGreaterThan(0);
   });
 
   it("reads the same filtered base page with no deferred or private fields", async () => {
@@ -503,6 +455,7 @@ describe("product list staged projections", () => {
     );
     const filters = { ids: [included.id, excluded.id], nameFilter: "Staged" };
     const pagination = { pageIndex: 0, pageSize: 50 };
+    await drainStoredDerived(ctx.db);
     const full = await listProductsFixture(ctx.db, filters, [], pagination);
     const enrichment = await productScaffold.read(ctx.db, {
       filters,
@@ -526,6 +479,16 @@ describe("product list staged projections", () => {
       onHandUnits: full.data[0]!.onHandUnits,
       quantityVariance: full.data[0]!.quantityVariance,
       expenseTotal: 20,
+    });
+    expect(enrichment.data[0]?.pricing).toMatchObject({
+      effectivePrice: 17,
+      derivedPrice: 10,
+      knownUnitCount: 3,
+    });
+    expect(enrichment.data[0]?.quantityLedger).toMatchObject({
+      acquiredUnits: 3,
+      exitedUnits: 1,
+      expectedQuantity: 2,
     });
     expect(enrichment.data[0]).not.toHaveProperty("displayImages");
     expect(enrichment.data[0]).not.toHaveProperty("dataQuality");
@@ -736,6 +699,7 @@ describe("product list display labels", () => {
         productQuantity: null,
       }),
     );
+    await drainStoredDerived(ctx.db);
     const { data } = await listProductsFixture(
       ctx.db,
       { ids: [product.id] },

@@ -193,7 +193,8 @@ const listTotalLabel = (
 /**
  * The declared list totals as text, keyed by total id, over the server's
  * full-filter sums. A total whose sums are missing or non-finite is absent, so
- * a client shows "Unavailable" rather than a zero.
+ * a client shows "Unavailable" rather than a zero. An absent completeness
+ * result cannot establish a complete total.
  */
 export const listTotalLabels = (
   entity: keyof typeof entitySummary,
@@ -205,9 +206,11 @@ export const listTotalLabels = (
   for (const total of entitySummary[entity].list.totals) {
     const label = listTotalLabel(total, sums);
     if (label !== null)
-      labels[total.id] = total.keys.some((key) => incompleteSums?.includes(key))
-        ? `Incomplete · ${label} known`
-        : label;
+      labels[total.id] =
+        incompleteSums === undefined ||
+        total.keys.some((key) => incompleteSums.includes(key))
+          ? `Incomplete · ${label} known`
+          : label;
   }
   return labels;
 };

@@ -5,7 +5,7 @@ import {
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
 } from "@cubby/schemas/background-tasks";
-import { jobWaitReason } from "@cubby/schemas/job";
+import { jobWaitReason, type JOB_KIND_POLICY } from "@cubby/schemas/job";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
@@ -117,7 +117,10 @@ export const productionJobHandlers: JobHandlers = {
       return { page: { done: true } };
     },
   ),
-};
+} satisfies Record<
+  Exclude<keyof typeof JOB_KIND_POLICY, "image.device">,
+  JobHandler
+>;
 export async function drainProductionJobs(
   db: Database,
   limit = JOB_DRAIN.pageLimit,

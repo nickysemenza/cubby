@@ -8,12 +8,12 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import {
   createEntityDisplayColumns,
   entityListHiddenColumns,
 } from "~/entity/display/entity-display";
 import { installFeatures } from "~/features/registry";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type {
   ListQueryOptionsFn,
   ListQueryResponse,
@@ -180,7 +180,7 @@ describe("child workbench selection scopes", () => {
               items: [
                 { id: "00000000-0000-4000-8000-000000000001", name: "Hammer" },
               ],
-              meta: { ...pagination, totalCount: 1 },
+              meta: { ...pagination, hasNextPage: false, totalCount: 1 },
             }
           : nextPage.promise,
     });
@@ -225,7 +225,12 @@ describe("child workbench selection scopes", () => {
               name: "Hammer, new scope",
             },
           ],
-          meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
+          meta: {
+            hasNextPage: false,
+            pageIndex: 0,
+            pageSize: 100,
+            totalCount: 1,
+          },
         }),
       );
       await waitFor(() =>
@@ -291,15 +296,26 @@ describe("child workbench selection scopes", () => {
 // no separate default-column list to drift from them.
 describe("declared default columns", () => {
   it("starts near-constant columns hidden and leads with the informative ones", () => {
+    const browser = createBrowserTestHarness();
+    browserHarnesses.push(browser);
     const inventoryHelper = createCubbyColumnHelper<{ id: string }>();
-    const { result } = renderHook(() =>
-      useBoundedListWorkbench({
-        entity: "inventory",
-        data: [],
-        columns: createEntityDisplayColumns("inventory", inventoryHelper),
-        initialColumnVisibility: entityListHiddenColumns("inventory"),
-        getRowId: (row) => row.id,
-      }),
+    const { result } = renderHook(
+      () =>
+        useBoundedListWorkbench({
+          entity: "inventory",
+          data: [],
+          columns: createEntityDisplayColumns(
+            browser.queryClient,
+            "inventory",
+            inventoryHelper,
+          ),
+          initialColumnVisibility: entityListHiddenColumns(
+            browser.queryClient,
+            "inventory",
+          ),
+          getRowId: (row) => row.id,
+        }),
+      { wrapper: browser.wrapper },
     );
     const visible = result.current.table
       .getVisibleLeafColumns()

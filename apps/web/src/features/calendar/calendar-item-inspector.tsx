@@ -1,7 +1,8 @@
 import { calendarItemKey, type CalendarItem } from "@cubby/schemas/calendar";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useId, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 
 import { EntityQualityFact } from "~/entity/display/data-quality-value";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
@@ -173,6 +174,7 @@ function EditableCalendarItem({
   operations?: CalendarItemInspectorOperations;
   overlay?: { open: boolean; onOpenChange: (open: boolean) => void };
 }) {
+  const queryClient = useQueryClient();
   const session = useEntityEditSession(
     {
       entity: edit.entity,
@@ -183,6 +185,24 @@ function EditableCalendarItem({
     },
     operations,
   );
+  // The edit session admits this item's entity before enum compilation.
+  const options = useMemo(() => {
+    switch (item.kind) {
+      case "meal":
+        return {
+          kind: item.kind,
+          mealType: fieldEnumOptions(queryClient, "meal", "mealType"),
+          mealKind: fieldEnumOptions(queryClient, "meal", "mealKind"),
+        };
+      case "task":
+        return {
+          kind: item.kind,
+          status: fieldEnumOptions(queryClient, "task", "status"),
+        };
+      default:
+        return { kind: item.kind };
+    }
+  }, [queryClient, item.kind]);
   const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
     null,
   );
@@ -244,7 +264,7 @@ function EditableCalendarItem({
           )}
         />
       )}
-      {item.kind === "meal" && (
+      {options.kind === "meal" && (
         <FieldSuggestionProvider
           entity="meal"
           mode="edit"
@@ -256,7 +276,7 @@ function EditableCalendarItem({
             form={session.form}
             name="mealType"
             label="Meal type"
-            options={fieldEnumOptions("meal", "mealType")}
+            options={options.mealType}
             nullable
             suggestField="mealType"
           />
@@ -265,19 +285,19 @@ function EditableCalendarItem({
             form={session.form}
             name="mealKind"
             label="Kind"
-            options={fieldEnumOptions("meal", "mealKind")}
+            options={options.mealKind}
             suggestField="mealKind"
           />
         </FieldSuggestionProvider>
       )}
-      {item.kind === "task" && (
+      {options.kind === "task" && (
         <>
           <PickerField
             store="option"
             form={session.form}
             name="status"
             label="Status"
-            options={fieldEnumOptions("task", "status")}
+            options={options.status}
           />
         </>
       )}

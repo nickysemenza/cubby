@@ -653,8 +653,9 @@ export function defineRepository<
     projection,
     readIntent = "page",
     preparation,
+    includeCount = true,
   ) => {
-    const [page, sums] = await Promise.all([
+    const [page, summary] = await Promise.all([
       scaffold.read(ctx.db, {
         filters,
         sorts,
@@ -662,13 +663,14 @@ export function defineRepository<
         projection,
         readIntent,
         preparation,
+        includeCount,
         reader: readerOf(ctx),
       }),
       readIntent === "page" && projection !== undefined
-        ? scaffold.totals(ctx.db, filters)
+        ? scaffold.totalSummary(ctx.db, filters)
         : undefined,
     ]);
-    return sums === undefined ? page : { ...page, sums };
+    return summary === undefined ? page : { ...page, ...summary };
   };
   const read: EntityRepository<E, SchemasFor<E>>["read"] = (
     ctx,

@@ -1,7 +1,6 @@
-import {
-  calendarFiltersInput,
-  type CalendarFiltersInput,
-} from "@cubby/schemas/calendar";
+import { type CalendarFiltersInput } from "@cubby/schemas/calendar";
+import type { QueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 
 import {
   buildFiltersFromManifest,
@@ -18,11 +17,12 @@ import {
 export type CalendarFilters = CalendarFiltersInput;
 
 export function buildCalendarFilters(
+  queryClient: QueryClient,
   search: import("~/entity/entity-list/list-slot-types").ListSearch,
 ): CalendarFilters {
   const filters = Object.fromEntries(
     calendarKinds.flatMap((kind) => {
-      const specs = calendarEntityFilterSpecs[kind]!;
+      const specs = calendarEntityFilterSpecs(queryClient, kind);
       const sourceSearch = Object.fromEntries(
         compileFilterCodec(specs).keys.map((key) => [
           key,
@@ -38,11 +38,11 @@ export function buildCalendarFilters(
         : [];
     }),
   );
-  return calendarFiltersInput.parse({
+  return {
     kinds:
       typeof search.kinds === "string" && search.kinds
-        ? search.kinds.split(",")
+        ? z.array(z.enum(calendarKinds)).parse(search.kinds.split(","))
         : undefined,
     filters,
-  });
+  };
 }

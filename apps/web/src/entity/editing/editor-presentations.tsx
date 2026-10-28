@@ -1,8 +1,11 @@
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import { EXPENSE_DISPOSITION_EDITOR } from "@cubby/schemas/expense-fields";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { useDebouncedValue } from "@tanstack/react-pacer";
-import { useQuery } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useQueryClient,
+  useQuery,
+} from "@tanstack/react-query";
 import {
   type ComponentProps,
   type ComponentType,
@@ -23,6 +26,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import type { PendingImage } from "~/entity/entity-media/pending-image-upload";
 import { featureRegistry } from "~/entity/feature-registry";
+import { entityMetadata } from "~/entity/metadata";
 import type { FinancialTransactionFormValues } from "~/features/finance/financial-transaction-form";
 import { formatDateSpan } from "~/lib/date-span";
 import { Row, Stack } from "~/ui/layout";
@@ -235,20 +239,33 @@ function ProductFields({ record }: EntityEditorFieldsProps) {
   );
 }
 
-const financialAccountFieldModels = {
-  network: requiredFieldModel("financialAccount", "network"),
-  identity: requiredFieldModel("financialAccount", "identity"),
-  cardNumbers: requiredFieldModel("financialAccount", "cardNumbers"),
-  providerVendorId: requiredFieldModel("financialAccount", "providerVendorId"),
-  sourceAliases: requiredFieldModel("financialAccount", "sourceAliases"),
-};
-
 /**
  * The account's identity (an explicit kind, no default) and dated card numbers are the generic
  * structured-value editor over their declared schemas. The provider organization and
  * evidence aliases keep their own fields for every account kind.
  */
 function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
+  const queryClient = useQueryClient();
+  const financialAccountFieldModels = {
+    network: requiredFieldModel(queryClient, "financialAccount", "network"),
+    identity: requiredFieldModel(queryClient, "financialAccount", "identity"),
+    cardNumbers: requiredFieldModel(
+      queryClient,
+      "financialAccount",
+      "cardNumbers",
+    ),
+    providerVendorId: requiredFieldModel(
+      queryClient,
+      "financialAccount",
+      "providerVendorId",
+    ),
+    sourceAliases: requiredFieldModel(
+      queryClient,
+      "financialAccount",
+      "sourceAliases",
+    ),
+  };
+
   const mode = record ? "edit" : "create";
   const idPrefix = useId();
   const kind = z
@@ -258,6 +275,7 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
     .parse(form.watch("identity.kind"));
   const render = (field: PrimitiveFieldModel) =>
     renderIntentField({
+      queryClient,
       entity: "financialAccount",
       field,
       form,
@@ -699,12 +717,15 @@ const presentations = {
  * the manifest singular. A bespoke entry above wins when it exists — it
  * carries copy or a field layout the declaration cannot express.
  */
-function genericPresentation<E extends EditableEntity>(input: {
-  entity: E;
-  operation: EntityEditOperation;
-  intent: string;
-}): EntityEditorPresentation<E> {
-  const { singular } = entitySummary[input.entity];
+function genericPresentation<E extends EditableEntity>(
+  queryClient: QueryClient,
+  input: {
+    entity: E;
+    operation: EntityEditOperation;
+    intent: string;
+  },
+): EntityEditorPresentation<E> {
+  const { singular } = entityMetadata(queryClient, input.entity).summary;
   const isUpdate = input.operation === "update";
   const Fields = ({ record }: EntityEditorFieldsProps) => (
     <EntityIntentFields
@@ -726,31 +747,20 @@ function genericPresentation<E extends EditableEntity>(input: {
   };
 }
 
-// One generic presentation per key: the dialog resolves its presentation on
-// every render, and a fresh `Fields` component identity would remount the
-// whole form on each value change — dropping focus mid-click and the
-// keystrokes that follow (a date commit on blur showed exactly that).
-const genericPresentations = new Map<string, EntityEditorPresentation<never>>();
-
-export function getEntityEditorPresentation<E extends EditableEntity>(input: {
-  entity: E;
-  operation: EntityEditOperation;
-  intent: string;
-}): EntityEditorPresentation<E> {
+export function getEntityEditorPresentation<E extends EditableEntity>(
+  queryClient: QueryClient,
+  input: {
+    entity: E;
+    operation: EntityEditOperation;
+    intent: string;
+  },
+): EntityEditorPresentation<E> {
   const key = `${input.entity}:${input.operation}:${input.intent}`;
   const presentation = Object.entries(presentations).find(
     ([candidate]) => candidate === key,
   )?.[1];
   if (presentation === undefined) {
-    const cached = genericPresentations.get(key);
-    if (cached !== undefined) {
-      // SAFETY: the cache is keyed by entity, so the entry is this entity's.
-      return cached as EntityEditorPresentation<E>;
-    }
-    const generic = genericPresentation(input);
-    // SAFETY: stored under this entity's key; read back only for that key.
-    genericPresentations.set(key, generic as EntityEditorPresentation<never>);
-    return generic;
+    return genericPresentation(queryClient, input);
   }
   // SAFETY: `presentations` is keyed `${entity}:${operation}:${intent}` and
   // each value is typed against that key's entity; the string match above

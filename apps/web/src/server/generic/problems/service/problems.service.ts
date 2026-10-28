@@ -16,6 +16,10 @@ import {
 import { measureEstimate, estimateCoverage } from "@cubby/schemas/nutrition";
 import {
   allProblemsSchema,
+  dryRunReparseOut,
+  dryRunPruneAliasesOut,
+  ingredientWithUnusedAliasesSchema,
+  staleIngredientParseSchema,
   AUTO_FIX_PROBLEM_KEYS,
   type CoverageTotals,
   ingredientWithPartialCoverageSchema,
@@ -466,21 +470,30 @@ export const findMaintenanceCounts = async (
 // Parse sweeps are maintenance-only; never add them to the Problems hot path.
 export const dryRunReparse = async (
   db: Database,
-): Promise<{ wouldChange: number; total: number }> => {
+): Promise<z.infer<typeof dryRunReparseOut>> => {
   const [stale, total] = await Promise.all([
     findStaleIngredientParses(db),
     countReparseableLines(db),
   ]);
-  return { wouldChange: stale.length, total };
+  return {
+    wouldChange: stale.length,
+    total,
+    sample: stale
+      .slice(0, 20)
+      .map((row) => staleIngredientParseSchema.parse(row)),
+  };
 };
 
 export const dryRunPruneAliases = async (
   db: Database,
-): Promise<{ wouldPrune: number; ingredients: number }> => {
+): Promise<z.infer<typeof dryRunPruneAliasesOut>> => {
   const rows = await findIngredientsWithUnusedAliases(db);
   return {
     wouldPrune: sum(rows.map((r) => r.unusedAliases.length)),
     ingredients: rows.length,
+    sample: rows
+      .slice(0, 20)
+      .map((row) => ingredientWithUnusedAliasesSchema.parse(row)),
   };
 };
 

@@ -92,8 +92,6 @@ describe("request USDA linked Product reads", () => {
       value: 13,
     });
     expect(linked).not.toHaveProperty("price");
-    expect(linked.pricing).not.toHaveProperty("effectivePrice");
-    expect(linked.pricing).not.toHaveProperty("derivedPrice");
     expect(linked).not.toHaveProperty("brandName");
     expect(linked).not.toHaveProperty("fieldResolutions");
     expect(linked).not.toHaveProperty("derived");

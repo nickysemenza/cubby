@@ -1,6 +1,6 @@
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
@@ -14,7 +14,7 @@ import { CurrencyValue } from "~/ui/common/currency-value";
 import { DenseCellContext } from "~/ui/common/stacked-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useHydrated } from "~/ui/hooks/use-hydrated";
+import { QuerySection } from "~/ui/feedback/query-section";
 import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
@@ -24,7 +24,7 @@ import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
  * Work a member must decide (the queue's Review view) that I own, shared
  * work included. The strip's count and the list share this one read.
  */
-const NEEDS_YOU_INPUT = workQueueInput.parse({
+export const NEEDS_YOU_INPUT = workQueueInput.parse({
   view: "human",
   owner: CURRENT_MEMBER_FILTER,
   familyExclude: "suggestion",
@@ -37,17 +37,41 @@ const NEEDS_YOU_SEARCH = {
   familyExclude: "suggestion",
 } as const;
 
-/** The queue read is client-only so Home's first paint never waits on it. */
+/** The key-number strip shares the streamed section's query. */
 export function useNeedsYou() {
-  const hydrated = useHydrated();
   return useQuery({
     ...workQueue.queue.queryOptions(NEEDS_YOU_INPUT),
-    enabled: hydrated,
   });
 }
 
 export function NeedsYou() {
-  const needsYou = useNeedsYou();
+  return (
+    <QuerySection
+      title="work that needs you"
+      fallback={
+        <Section
+          title="Needs you"
+          headingAs="h2"
+          ruled
+          actions={
+            <Link to="/work-queue" search={NEEDS_YOU_SEARCH}>
+              Work queue
+            </Link>
+          }
+        >
+          <HomeRowsLoading label="Loading work that needs you" />
+        </Section>
+      }
+    >
+      <NeedsYouContent />
+    </QuerySection>
+  );
+}
+
+function NeedsYouContent() {
+  const needsYou = useSuspenseQuery(
+    workQueue.queue.queryOptions(NEEDS_YOU_INPUT),
+  );
   const rows = needsYou.data?.items ?? [];
   const total = needsYou.data?.meta.totalCount;
   return (

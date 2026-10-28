@@ -5,7 +5,11 @@ import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
@@ -21,6 +25,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import type { FilterPatch } from "~/entity/filters";
 import { useLoadAllPages } from "~/entity/hooks/use-all-entity-records";
+import { useEntityMetadata } from "~/entity/metadata";
 import {
   ScheduleGrid,
   type ScheduleRow,
@@ -240,6 +245,8 @@ function ProjectScheduleSurface({
 }
 
 export function ProjectScheduleListSlot({ search }: ListSlotProps) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("project");
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const input = useMemo(() => {
     const routeFilters: FilterPatch = {};
@@ -247,15 +254,20 @@ export function ProjectScheduleListSlot({ search }: ListSlotProps) {
       const parsed = z.string().safeParse(value);
       if (parsed.success) routeFilters[key] = parsed.data;
     }
-    const listInput = compileEntityListInput("project", routeFilters, {
-      pageSize: MAX_PAGE_SIZE,
-    });
+    const listInput = compileEntityListInput(
+      queryClient,
+      "project",
+      routeFilters,
+      {
+        pageSize: MAX_PAGE_SIZE,
+      },
+    );
     return {
       filters: listInput.filters,
       sort: listInput.sort,
       pagination: { pageIndex: 0, pageSize: MAX_PAGE_SIZE },
     };
-  }, [search]);
+  }, [queryClient, search]);
   const query = useInfiniteQuery(
     project.tree.infiniteQueryOptions(input, {
       pageParamSchema: z.number().int().nonnegative(),
@@ -265,10 +277,8 @@ export function ProjectScheduleListSlot({ search }: ListSlotProps) {
         pagination: { ...first.pagination, pageIndex },
       }),
       getNextPageParam: (page) => {
-        const { pageIndex, pageSize, totalCount } = page.meta;
-        return (pageIndex + 1) * pageSize < totalCount
-          ? pageIndex + 1
-          : undefined;
+        const { pageIndex, hasNextPage } = page.meta;
+        return hasNextPage ? pageIndex + 1 : undefined;
       },
     }),
   );
