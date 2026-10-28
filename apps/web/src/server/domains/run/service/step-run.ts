@@ -84,6 +84,31 @@ export type StepPage =
       reasons?: Tallies;
     };
 
+type StepProgress = Extract<StepPage, { kind: "progress" }>;
+
+/**
+ * "Retry failed" pages a step's re-admitted refs in bounded slices, never
+ * touching its population cursor; the step ends once every ref is consumed.
+ * Undefined when the step has no retry to page.
+ */
+export async function pageRetryRefs(
+  context: StepContext,
+  limit: number,
+  retry: (
+    refs: readonly string[],
+  ) => Promise<Omit<StepProgress, "kind" | "cursor" | "meta" | "done">>,
+): Promise<StepPage | undefined> {
+  const refs = context.step.meta?.retryRefs ?? [];
+  if (!context.retrying && !refs.length) return undefined;
+  const slice = refs.slice(0, limit);
+  return {
+    kind: "progress",
+    ...(slice.length ? await retry(slice) : {}),
+    meta: { retryRefs: refs.slice(slice.length) },
+    done: slice.length === refs.length,
+  };
+}
+
 export type StepContext = {
   db: Database;
   run: RunRow;

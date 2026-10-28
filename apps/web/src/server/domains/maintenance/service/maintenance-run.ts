@@ -23,9 +23,10 @@ import {
   type ExtractImageMetadataPorts,
 } from "~/server/domains/image/service/image-metadata-extraction.service";
 import type { StepDriversFor } from "~/server/domains/run/service/run-step-registry";
-import type {
-  StepContext,
-  StepDriver,
+import {
+  pageRetryRefs,
+  type StepContext,
+  type StepDriver,
 } from "~/server/domains/run/service/step-run";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
@@ -55,15 +56,6 @@ const failuresOf = (error: unknown): RunStepError[] =>
   error instanceof AggregateError
     ? error.errors.flatMap(failuresOf)
     : [failure(failureText(error))];
-
-/** The refs a "Retry failed" re-admitted on this step, by prefix. */
-const retryRefs = (context: StepContext, prefix: string) =>
-  (context.step.meta?.retryRefs ?? []).flatMap((ref) =>
-    ref.startsWith(prefix) ? [ref.slice(prefix.length)] : [],
-  );
-
-/** Consumed retry refs, so a later page drains normally. */
-const RETRY_CONSUMED: RunStepMeta = { retryRefs: [] };
 
 const detail = (values: Record<string, number | string | boolean>) => ({
   detail: values,
@@ -185,24 +177,19 @@ function exifStep(
     },
     page: async (context) => {
       const { db, step } = context;
-      const retried = retryRefs(context, "image:").map((id) =>
-        imageId.parse(id),
-      );
-      const readmitted = retried.length
-        ? await clearImageMetadataOutcomes(db, retried)
-        : [];
-      if (retried.length) {
+      const retried = await pageRetryRefs(context, pageSize, async (refs) => {
+        const ids = refs.flatMap((ref) =>
+          ref.startsWith("image:")
+            ? [imageId.parse(ref.slice("image:".length))]
+            : [],
+        );
+        const readmitted = await clearImageMetadataOutcomes(db, ids);
         const counts = await extractImages(db, readmitted, ports);
         // A ref someone else already re-admitted or fixed is not retried.
-        counts.delta.skipped += retried.length - readmitted.length;
-        return {
-          kind: "progress",
-          delta: counts.delta,
-          errors: counts.errors,
-          meta: RETRY_CONSUMED,
-          done: true,
-        };
-      }
+        counts.delta.skipped += refs.length - readmitted.length;
+        return counts;
+      });
+      if (retried) return retried;
       const cursor = z
         .object({ createdAt: z.string(), id: z.string() })
         .nullable()

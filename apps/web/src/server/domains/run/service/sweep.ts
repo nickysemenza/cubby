@@ -51,7 +51,12 @@ import {
 import { ensureRun, systemActor } from "../repo/ensure-run";
 import { activeSweepFor, type StepRunOwner } from "../repo/run-step";
 import type { StepDriversFor } from "./run-step-registry";
-import type { StepContext, StepCounter, StepPage } from "./step-run";
+import {
+  pageRetryRefs,
+  type StepContext,
+  type StepCounter,
+  type StepPage,
+} from "./step-run";
 
 /**
  * Starts a Sweep: the declared steps of each family in scope, run by the
@@ -209,20 +214,22 @@ const transferPairScan: StepDriversFor<"sweep">["transfer_pair_scan"] = {
   page: async (context) => {
     const { db, run, step } = context;
     const scope = scopeOf(run, "transfer_pair");
-    if (context.retrying) {
-      const retried = await retryTransferPairRefs(db, {
-        runId: run.id,
-        scope,
-        refs: step.meta?.retryRefs ?? [],
-      });
-      return {
-        kind: "progress",
-        delta: { done: retried.done, failed: retried.failed.length },
-        errors: retried.failed,
-        meta: { retryRefs: [] },
-        done: true,
-      };
-    }
+    const retried = await pageRetryRefs(
+      context,
+      JOB_PAGE_LIMITS.suggestionsPerPage,
+      async (refs) => {
+        const outcome = await retryTransferPairRefs(db, {
+          runId: run.id,
+          scope,
+          refs,
+        });
+        return {
+          delta: { done: outcome.done, failed: outcome.failed.length },
+          errors: outcome.failed,
+        };
+      },
+    );
+    if (retried) return retried;
     const page = await generateTransferPairSuggestionsPage(db, {
       runId: run.id,
       scope,
@@ -344,37 +351,38 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
     ),
     boundary: null,
   }),
-  page: async ({ db, run, step, work, retrying }) => {
+  page: async (context) => {
+    const { db, run, step, work } = context;
     const scope = scopeOf(run, "statement_transaction");
-    const retryRefs = step.meta?.retryRefs;
-    if (retryRefs && (retrying || retryRefs.length > 0)) {
-      const refs = retryRefs.slice(0, JOB_PAGE_LIMITS.suggestionsPerPage);
-      const retried = await retryStatementGenerationRefs(db, {
-        runId: run.id,
-        scope,
-        refs,
-        work,
-      });
-      return {
-        kind: "progress",
-        delta: {
-          done: retried.done,
-          skipped: retried.skipped,
-          failed: retried.failed.length,
-        },
-        errors: retried.failed,
-        tallies: {
-          published: retried.published,
-          labelsReused: retried.labelsReused,
-        },
-        reasons: {
-          unchanged: retried.unchanged,
-          out_of_scope: retried.skipped,
-        },
-        meta: { retryRefs: retryRefs.slice(refs.length) },
-        done: refs.length === retryRefs.length,
-      };
-    }
+    const retried = await pageRetryRefs(
+      context,
+      JOB_PAGE_LIMITS.suggestionsPerPage,
+      async (refs) => {
+        const outcome = await retryStatementGenerationRefs(db, {
+          runId: run.id,
+          scope,
+          refs,
+          work,
+        });
+        return {
+          delta: {
+            done: outcome.done,
+            skipped: outcome.skipped,
+            failed: outcome.failed.length,
+          },
+          errors: outcome.failed,
+          tallies: {
+            published: outcome.published,
+            labelsReused: outcome.labelsReused,
+          },
+          reasons: {
+            unchanged: outcome.unchanged,
+            out_of_scope: outcome.skipped,
+          },
+        };
+      },
+    );
+    if (retried) return retried;
     const cursor = statementCursor.parse(step.cursor ?? null) ?? {
       after: null,
     };
