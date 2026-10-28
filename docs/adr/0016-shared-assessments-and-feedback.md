@@ -383,3 +383,42 @@ statement backlog manual indefinitely, and confidence thresholds per family,
 which let a model's self-report authorize writes. Measured precision on the
 household's own reviews, a member-owned switch and a standing audit sample keep
 authority with the household while it scales.
+
+## Amendment (2026-10): one Suggestion publication module
+
+Status: Accepted.
+
+Statement and transfer-pair publication each carried its own copy of the
+slot lock, suppression check, unchanged match, retirement and batch fallback.
+`generic/assessment/repo/suggestion-publication.ts` now owns that sequence for
+Suggestion families published by Sweep Run steps, behind a `SuggestionFamily`
+declaration:
+
+- `slot(candidate)` names the advisory lock key and the `data` fields that
+  select the slot's AssessmentState history. Publication takes every lock in
+  key order, then reads the history `FOR UPDATE`.
+- Any suppression in the slot, active or not, blocks every write. A family
+  `precheck` then resolves the candidate, retires its active pending rows
+  under a family cause, or continues; statement settled and already-booked
+  checks and the complete-label evidence fence live there.
+- An active row with an equal fingerprint, or under a rule producer an equal
+  evidence fingerprint, is unchanged; `obsolete` rows (a statement model row
+  from a stale label revision) never match. `onUnchanged: reconfirm` moves
+  unchanged rows to the producer's Run (`transfer_pair_reconfirmed`).
+- A `prepare` hook runs the family steps between the match and publication
+  (statement rule-label reuse, spending preparation and retained
+  checkpoints); `publication` builds the Assessment, active rows retire under
+  `superseded_by_publication`, and `afterPublish` registers the family's
+  after-commit checks. Every publication transaction still begins with the Run
+  workflow effect fence.
+- Generation pages publish in batches of 32. A batch may defer a candidate,
+  and a failed batch rolls back; deferred, unbatchable and rolled-back
+  candidates publish one at a time, isolating the failing item.
+- `labelBacklog` is the predicate a label pass and its Sweep count read.
+
+Discovery, generation cursors, retry refs, the transfer-pair out-of-scope
+retire pass, the complete-label receipt recovery and
+`refreshTransferPairStatements` stay family code: their cursors, receipts and
+scope rules differ, and a shared page would only forward to them. Suppression,
+fingerprint and reconfirm behavior are unchanged. Suggestions still publish in
+Run steps; moving them onto drains comes later, with #3142.

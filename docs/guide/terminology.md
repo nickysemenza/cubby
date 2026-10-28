@@ -795,6 +795,19 @@ that pair. Clean, cash-leg and overlap policy lives in
 [ADR 0016](../adr/0016-shared-assessments-and-feedback.md#transfer-pair-suggestions-2026-10-19).
 _Avoid_: transfer match, auto-pair
 
+**Suggestion family**:
+One kind of Suggestion with its own Assessment family, evidence and review
+apply, such as Transaction suggestions or Transfer pair suggestions. A family
+a Sweep publishes declares how its candidates map to slots, fingerprints and
+the checks it runs before publication.
+_Avoid_: suggestion type, generator
+
+**Slot**:
+The place one subject's Suggestions occupy within a Suggestion family: one
+statement charge, or one transfer pair key. Publication locks the slot, and a
+dismissal anywhere in its history keeps later publications out of it.
+_Avoid_: bucket, key (alone)
+
 **Decision model**:
 The closed-set classifier behind every Suggestion and Mail triage: Jev or
 Clef, chosen by the trial split (unpinned field decisions hash their input, so a
