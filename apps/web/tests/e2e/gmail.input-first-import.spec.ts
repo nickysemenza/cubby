@@ -7,6 +7,8 @@ import { getDb, notDeleted } from "~/server/db/helpers";
 import { setMemberLoginParty } from "~/server/http/member-login";
 import { account as googleAccount } from "~/server/db/auth.schema";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
+import { householdLocalDate } from "~/lib/household-date";
+import { formatCalendarDay } from "~/lib/date-format";
 import { createGmailApiClient } from "~/server/domains/purchase-import/repo/gmail/client";
 import { ingestGmailMessages } from "~/server/domains/purchase-import/service/gmail/ingest";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
@@ -212,5 +214,36 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     page.getByRole("button", { name: "Start controlled import", exact: true }),
   ).toBeEnabled();
   await expect(page.getByLabel("From", { exact: true })).toHaveValue("");
-  await expect(page.getByLabel("Through", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Through", { exact: true })).toHaveValue(
+    formatCalendarDay(householdLocalDate(), "dateShort"),
+  );
+  const from = page.getByLabel("From", { exact: true });
+  await from.fill("1 year ago");
+  await from.press("Enter");
+  await expect(from).not.toHaveValue("1 year ago");
+  await expect(from).not.toHaveValue("");
+  await page
+    .getByRole("button", { name: "Check Gmail matches", exact: true })
+    .click();
+  await expect(
+    page.getByText("1 matching message", { exact: true }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const previewRequests = provider
+    .events()
+    .filter((event) => event === "GET /gmail/v1/users/me/messages").length;
+  await from.fill("2 years ago");
+  await from.press("Enter");
+  await expect
+    .poll(
+      () =>
+        provider
+          .events()
+          .filter((event) => event === "GET /gmail/v1/users/me/messages")
+          .length,
+    )
+    .toBe(previewRequests + 1);
+  await expect(
+    page.getByText("1 matching message", { exact: true }),
+  ).toBeVisible();
 });

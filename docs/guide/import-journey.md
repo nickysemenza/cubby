@@ -70,7 +70,14 @@ Vendor with no searches; the Vendor's Mail search section lists each search
 per mailbox.
 
 Choose a coverage row to import only that Vendor's mail from the selected
-mailbox. Optional received-date bounds default to all history. The request
+mailbox. The shared date picker accepts dates such as `1 year ago`. From is
+unbounded and Through defaults to household today; clear both for all history.
+Check Gmail matches reads the same union of sender/domain queries and date
+bounds without importing or pausing anything. After the first check, committed
+date changes refresh it. A complete first page is an exact message count;
+larger results use Gmail's estimate, labeled About, and an unavailable estimate
+stays unknown. Overlapping sender/domain results are never added together.
+The request
 pauses other automatic imports for that mailbox, lets active work finish and
 runs the selected scope next. Automatic imports stay paused after completion
 until explicitly resumed. The selected scope covers both search and import;

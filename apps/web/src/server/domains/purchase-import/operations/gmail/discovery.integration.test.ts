@@ -189,6 +189,74 @@ describe("scheduled Gmail discovery", () => {
     },
     research: async () => [],
   });
+  it("previews one union of Gmail matches without importing or changing the mailbox queue", async () => {
+    await seed();
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic Preview Vendor",
+      website: "https://preview.example.test",
+      orderEmailSenders: ["orders@preview.example.test"],
+    });
+    const { previewControlledMailMatches } =
+      await import("./controlled-import");
+    const providers =
+      await import("~/server/domains/purchase-import/repo/gmail/provider");
+    const listMessages = vi
+      .fn<GmailProvider["listMessages"]>()
+      .mockResolvedValueOnce({ messages: [{ id: "one" }, { id: "two" }] })
+      .mockResolvedValueOnce({
+        messages: [{ id: "one" }],
+        nextPageToken: "more",
+        resultSizeEstimate: 105,
+      })
+      .mockResolvedValueOnce({
+        messages: [{ id: "one" }, { id: "two" }],
+        nextPageToken: "more",
+        resultSizeEstimate: 1,
+      })
+      .mockResolvedValueOnce({ nextPageToken: "more" })
+      .mockResolvedValueOnce({});
+    const provider = vi
+      .spyOn(providers, "gmailProviderForUser")
+      .mockResolvedValue(gmail({ listMessages }));
+    const input = {
+      mailboxId: "synthetic-google-subject",
+      vendorId: vendorShortcode.parse(seller.shortcode),
+      from: "2026-03-08",
+      to: "2026-03-08",
+    };
+    const preview = await previewControlledMailMatches(
+      ctx.db,
+      ctx.actor,
+      input,
+    );
+    expect(preview).toMatchObject({ matchedMessages: 2, approximate: false });
+    expect(listMessages).toHaveBeenCalledWith({
+      query: `((("example.test") OR (from:orders@preview.example.test)) after:${Date.parse("2026-03-08T08:00:00Z") / 1000 - 1} before:${Date.parse("2026-03-09T07:00:00Z") / 1000}) -in:spam -in:trash`,
+      maxResults: 100,
+    });
+    expect(
+      await previewControlledMailMatches(ctx.db, ctx.actor, input),
+    ).toMatchObject({ matchedMessages: 105, approximate: true });
+    expect(
+      await previewControlledMailMatches(ctx.db, ctx.actor, input),
+    ).toMatchObject({ matchedMessages: 2, approximate: true });
+    expect(
+      await previewControlledMailMatches(ctx.db, ctx.actor, input),
+    ).toMatchObject({ matchedMessages: null, approximate: true });
+    expect(
+      await previewControlledMailMatches(ctx.db, ctx.actor, input),
+    ).toMatchObject({ matchedMessages: 0, approximate: false });
+    await expect(
+      previewControlledMailMatches(ctx.db, ctx.actor, {
+        ...input,
+        mailboxId: "another-member-mailbox",
+      }),
+    ).rejects.toThrow("not connected to this member");
+    expect(provider).toHaveBeenCalledTimes(5);
+    expect(await created()).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(emailTable)).toEqual([]);
+    provider.mockRestore();
+  });
   it("finishes active discovery before the selected Vendor, keeps other cursors, and never lists mailbox history for the control", async () => {
     const state = await seed();
     const seller = await insertWithShortcode(ctx.db, "vendor", {

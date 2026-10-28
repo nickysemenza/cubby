@@ -13,6 +13,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import RTable from "~/entity/table/table";
 import { run } from "~/integrations/tanstack-query/generated/catalog/run.gen";
+import { householdLocalDate } from "~/lib/household-date";
 import { DateDisplay } from "~/ui/common/date-display";
 import {
   createCubbyColumnCollection,
@@ -20,12 +21,12 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useLocalTable } from "~/ui/data-table/use-local-table";
+import { DatePickerInput } from "~/ui/date-picker-input";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
 import { StatusText } from "~/ui/primitives/status-text";
 
 const activeRunStatuses = new Set<string>(ACTIVE_RUN_STATUSES);
@@ -97,16 +98,35 @@ function ControlledRunStatus({ row }: { row: MailCoverageRow }) {
   );
 }
 
+function initialControlledMailDraft() {
+  return { from: "", to: householdLocalDate(), previewEnabled: false };
+}
+
 function ControlledMailImport({
   row,
   mailbox,
+  draft,
+  onDraftChange,
 }: {
   row: MailCoverageRow;
   mailbox: MailCoverage["mailboxes"][number];
+  draft: ReturnType<typeof initialControlledMailDraft>;
+  onDraftChange: (draft: ReturnType<typeof initialControlledMailDraft>) => void;
 }) {
   const formId = useId();
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const { from, to, previewEnabled } = draft;
+  const canPreview = mailbox.canControl && row.searchesTotal > 0;
+  const preview = useQuery({
+    ...run.mailMatchPreview.queryOptions({
+      mailboxId: row.mailboxId,
+      vendorId: row.vendorId,
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+    }),
+    enabled: previewEnabled && canPreview,
+    staleTime: 30_000,
+    retry: false,
+  });
   const control = useActionMutation({
     mutationFn: () => run.controlledMailImport.mutationOptions(),
     error: "Couldn't start controlled import",
@@ -144,7 +164,8 @@ function ControlledMailImport({
       <p className="max-w-prose text-xs text-muted-foreground">
         Pauses other automatic imports for this mailbox until you resume them.
         Active work finishes first, then this Vendor is searched and imported.
-        Paid AI may run within the household budget. Blank dates include all
+        Paid AI may run within the household budget. From includes all earlier
+        history by default; Through starts at today. Clear both dates for all
         history.
       </p>
       {!mailbox.canControl ? (
@@ -168,6 +189,7 @@ function ControlledMailImport({
         </output>
       ) : null}
       <form
+        id={`${formId}-range`}
         className="flex flex-wrap items-end gap-3"
         onSubmit={(event) => {
           event.preventDefault();
@@ -180,29 +202,89 @@ function ControlledMailImport({
           });
         }}
       >
-        <label htmlFor={`${formId}-from`} className="space-y-1 text-xs">
-          From
-          <Input
+        <div className="space-y-1 text-xs max-sm:w-full">
+          <label htmlFor={`${formId}-from`}>From</label>
+          <DatePickerInput
             id={`${formId}-from`}
-            type="date"
-            value={from}
+            value={from || null}
             max={to || undefined}
-            disabled={!canControl || control.isPending}
-            onChange={(event) => setFrom(event.target.value)}
+            placeholder="Beginning of history"
+            aria-describedby={`${formId}-date-hint`}
+            clearable
+            className="w-48 max-sm:w-full"
+            disabled={!canPreview || control.isPending}
+            onChange={(value) => onDraftChange({ ...draft, from: value ?? "" })}
           />
-        </label>
-        <label htmlFor={`${formId}-to`} className="space-y-1 text-xs">
-          Through
-          <Input
+        </div>
+        <div className="space-y-1 text-xs max-sm:w-full">
+          <label htmlFor={`${formId}-to`}>Through</label>
+          <DatePickerInput
             id={`${formId}-to`}
-            type="date"
-            value={to}
+            value={to || null}
             min={from || undefined}
-            disabled={!canControl || control.isPending}
-            onChange={(event) => setTo(event.target.value)}
+            placeholder="No end date"
+            aria-describedby={`${formId}-date-hint`}
+            clearable
+            className="w-48 max-sm:w-full"
+            disabled={!canPreview || control.isPending}
+            onChange={(value) => onDraftChange({ ...draft, to: value ?? "" })}
           />
-        </label>
-        <Button type="submit" disabled={!canControl || control.isPending}>
+        </div>
+      </form>
+      <p id={`${formId}-date-hint`} className="text-xs text-muted-foreground">
+        Type dates naturally, such as “1 year ago” or “today”, then press Enter
+        or leave the field.
+      </p>
+      <div className="space-y-2">
+        <Button
+          type="button"
+          form={`${formId}-range`}
+          variant="outline"
+          disabled={!canPreview || preview.isFetching}
+          onClick={(event) => {
+            if (!event.currentTarget.form?.reportValidity()) return;
+            if (previewEnabled) void preview.refetch();
+            else onDraftChange({ ...draft, previewEnabled: true });
+          }}
+        >
+          {preview.isFetching
+            ? "Checking Gmail…"
+            : previewEnabled
+              ? "Refresh Gmail matches"
+              : "Check Gmail matches"}
+        </Button>
+        <div aria-live="polite" className="text-sm">
+          {preview.isFetching ? (
+            <StatusText>Checking the selected dates in Gmail…</StatusText>
+          ) : previewEnabled && preview.data ? (
+            <div className="space-y-1">
+              <p>
+                {preview.data.matchedMessages === null
+                  ? "Gmail did not provide a match count."
+                  : `${preview.data.approximate ? "About " : ""}${countLabel(preview.data.matchedMessages, "matching message")}`}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Candidate matches in Gmail; import rules still apply. Updates
+                when you choose new dates.
+              </p>
+              <DateDisplay timestamp={preview.data.checkedAt} />
+              <details className="text-xs">
+                <summary>Gmail search</summary>
+                <p className="mt-1 break-words">{preview.data.query}</p>
+              </details>
+            </div>
+          ) : null}
+        </div>
+        {previewEnabled && preview.error ? (
+          <ErrorDisplay error={preview.error} />
+        ) : null}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="submit"
+          form={`${formId}-range`}
+          disabled={!canControl || control.isPending}
+        >
           {control.isPending ? "Starting import…" : "Start controlled import"}
         </Button>
         {mailbox.resumeEnabled !== null ? (
@@ -221,7 +303,7 @@ function ControlledMailImport({
                 : "Resume queued imports; keep automatic off"}
           </Button>
         ) : null}
-      </form>
+      </div>
       {control.error ? <ErrorDisplay error={control.error} /> : null}
       {resume.error ? <ErrorDisplay error={resume.error} /> : null}
       {control.data && row.controlledRun?.id !== control.data.run ? (
@@ -250,6 +332,8 @@ function CoverageTable({
   accountId?: string;
 }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // Responsive inspectors move between containers; the selection owner retains its draft.
+  const [draft, setDraft] = useState(initialControlledMailDraft);
   const rows = useMemo(
     () =>
       coverage.rows.filter(
@@ -476,7 +560,11 @@ function CoverageTable({
         embedded
         withoutImages="Coverage rows use canonical Vendor links."
         currentRowId={selectedKey ?? undefined}
-        onRowClick={(row) => setSelectedKey(row.original.key)}
+        onRowClick={(row) => {
+          if (row.original.key !== selectedKey)
+            setDraft(initialControlledMailDraft());
+          setSelectedKey(row.original.key);
+        }}
         disableMobileDetailsHref
         inspector={{
           title: "Controlled mail import",
@@ -487,6 +575,8 @@ function CoverageTable({
                 key={selected.key}
                 row={selected}
                 mailbox={mailbox}
+                draft={draft}
+                onDraftChange={setDraft}
               />
             ) : null,
         }}

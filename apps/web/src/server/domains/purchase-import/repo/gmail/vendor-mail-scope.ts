@@ -6,7 +6,34 @@
  * message and attribution still gates its import.
  */
 import type { VendorId } from "@cubby/schemas/identifiers";
+import type { ControlledMailImportInput } from "@cubby/schemas/mail-coverage-control";
 import type { MailboxScopedQuery } from "@cubby/schemas/mailbox-research";
+
+import { householdDateTime, shiftPlainDate } from "~/lib/household-date";
+
+/** Candidate retrieval never includes Spam or Trash, in previews or discovery. */
+export function eligibleMailSearchQuery(query: string): string {
+  return `(${query}) -in:spam -in:trash`;
+}
+
+/** Preview and import use the same inclusive household days, including DST. */
+export function mailSearchDateRange(
+  query: string,
+  range: Pick<ControlledMailImportInput, "from" | "to">,
+): string {
+  if (!range.from && !range.to) return query;
+  return [
+    `(${query})`,
+    range.from
+      ? `after:${Math.floor(householdDateTime(range.from).getTime() / 1000) - 1}`
+      : null,
+    range.to
+      ? `before:${Math.floor(householdDateTime(shiftPlainDate(range.to, 1)).getTime() / 1000)}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
 
 // Gmail operators, quotes or spaces in a stored sender would widen `from:`.
 const LITERAL_SENDER =

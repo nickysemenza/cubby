@@ -18,6 +18,14 @@ export type ControlledMailImportInput = z.infer<
   typeof controlledMailImportInput
 >;
 
+export const mailMatchPreview = z.object({
+  query: z.string(),
+  matchedMessages: z.number().int().nonnegative().nullable(),
+  approximate: z.boolean(),
+  checkedAt: z.iso.datetime(),
+});
+export type MailMatchPreview = z.infer<typeof mailMatchPreview>;
+
 export const controlledMailImportOutput = z.object({
   run: runShortcode,
   state: z.enum(["queued", "running"]),

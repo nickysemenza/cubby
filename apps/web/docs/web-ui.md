@@ -1,5 +1,14 @@
 # Web UI contracts
 
+Plain-date editors use `DatePickerInput`: typed calendar dates and English
+expressions such as `1 year ago`, with a calendar alternative. Relative days,
+months and years resolve at commit time in local calendar time; month ends and
+leap days clamp to a valid day. Invalid or out-of-bound drafts remain visible
+without replacing the committed value.
+Keep selected inspector values with the page's selection owner when responsive
+layouts move an editor between a sidebar and sheet; the layout change must not
+reset action parameters.
+
 All human record dates, timestamps, and declared date ranges render through
 `DateDisplay` (`ui/common/date-display.tsx`): outside tables the absolute date
 includes the year and, for an instant, its clock time, followed by a muted
