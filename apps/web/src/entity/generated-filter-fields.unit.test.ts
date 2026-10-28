@@ -21,7 +21,8 @@ const cases = Object.entries(generatedModules).flatMap(([path, module]) => {
   );
   if (!entity || !exported) return [];
   const fields = filterFieldMap.safeParse(exported[1]);
-  return fields.success
+  // Tableless entities can publish an empty field projection without a kernel binding.
+  return fields.success && Object.keys(fields.data).length > 0
     ? [{ entity, exportName: exported[0], fields: fields.data }]
     : [];
 });

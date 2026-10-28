@@ -20,7 +20,8 @@ const text = (key: string) =>
     validation: { read: z.string(), create: z.string(), update: z.string() },
   }) as const;
 
-const date = (key: string) => ({ key, kind: "date", nullable: true }) as const;
+const date = (key: string) =>
+  ({ key, kind: "date", nullable: true, output: false }) as const;
 const range = (start: string, end: string) =>
   ({
     key: "window",
@@ -75,10 +76,6 @@ const declarationWithRange = (start: string, end: string) => ({
       range(start, end),
     ],
     storage: ["subject", "startsOn", "endsOn", "note"],
-    create: ["subject", "window", "note"],
-    update: ["subject", "window", "note"],
-    output: ["subject", "window", "note"],
-    audit: [],
   },
 });
 
