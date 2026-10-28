@@ -1052,8 +1052,17 @@ not as a repository secret. Required repository or environment secrets are:
 
 The Cloudflare token should be scoped to the checked-in account and only the
 resource types the deployment workflow manages. Production deploys always
-build before invoking `cf deploy --prebuilt --mode production`. Preview deploys are not supported; production
-is the only deployed environment.
+build before invoking `cf deploy --prebuilt --mode production`.
+The deploy command tags versions with the full commit SHA and supplies the commit
+subject plus Actions run URL as the message. The token remains the Cloudflare
+authenticated actor; version metadata identifies the code and deployment run.
+
+GitHub Actions is the sole production build/deployment owner. The main Worker's
+Cloudflare Git build connection is disconnected: disabling production builds
+alone leaves the independent preview-branch build trigger enabled. Do not
+reconnect it just for attribution. WASM is restored or built through the existing
+Nx target in Actions, which installs `wasm-pack`; Cloudflare-hosted WASM builds
+and preview infrastructure are deferred. Production is the only deployed environment.
 
 ## Apple platform
 
