@@ -161,9 +161,9 @@ not performed; migration success alone is not deployment verification.
 
 ## Derived values cutover
 
-### Product facts and prefix index (0053)
+### Product facts and prefix index (0054)
 
-0053 adds the WorkItem prefix index, Product fact/food invalidation and initial
+0054 adds the WorkItem prefix index, Product fact/food invalidation and initial
 work for every live Product. It preserves member assignments and retained
 evidence. Its predecessor can discard unfamiliar derived targets, so this
 authorized release uses the exclusive-operator cutover from the laptop before
@@ -174,7 +174,7 @@ main. With no Deploy queued/running and no other main merge in flight, run
 `pnpm --filter @cubby/web run deploy:cf` and verify the live Worker. Obtain a
 direct connection with `neon connection-string --project-id purple-wildflower-50486824`
 and pass it only as `PRODUCTION_DIRECT_DATABASE_URL` to
-`pnpm --filter @cubby/web db:migrate --target=production --through=0053_work_item_prefix_and_product_facts`.
+`pnpm --filter @cubby/web db:migrate --target=production --through=0054_work_item_prefix_and_product_facts`.
 Read back schema, retained populations and successful `product.readFacts` /
 `product.food` publication coverage. Valid null food publications count;
 missing results do not. A zero backlog alone is insufficient.
