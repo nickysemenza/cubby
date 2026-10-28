@@ -38,6 +38,7 @@ const computeServiceCost: DerivedCompute = async (db, ids) => {
       ${productCost.options[1].keyof().enum.kind}::text, ${productCost.options[1].shape.kind.value}::text,
       'amount', round(avg(e."cost")::numeric, 2)::double precision,
       'chargeCount', count(*)::int,
+      'chargeTotal', sum(e."cost"::double precision),
       'latestCharge', (array_agg(e."cost" ORDER BY e."date" DESC, e."id" DESC)
         FILTER (WHERE e."date" IS NOT NULL))[1]::double precision) END
       FROM "Expense" e WHERE e."productId" = ${outer(product.id)}

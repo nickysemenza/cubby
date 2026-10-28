@@ -2863,6 +2863,12 @@ recipes through one shared costing context; the drain preserves tickets written
 during that preparation. WorkItem fanout lookup uses an indexed `COLLATE "C"`
 prefix range, including correlated target lookups.
 
+Service Cost captures the positive actual charge total beside its average, count
+and latest dated charge. The explanation reads those operands from the same
+publication, including while refresh is pending or failed. Retained publications
+without the total remain visible with unavailable additional evidence until the
+existing drain backfills them; opening the explanation never computes that total.
+
 A stored result may declare `resultSchema` and supply several scalar fields through
 `model.derived.<field>.fromResult: { key, path }`. Generation checks each path and
 scalar type against that schema. These fields share the result's publication,

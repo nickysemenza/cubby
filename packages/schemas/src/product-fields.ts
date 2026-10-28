@@ -33,6 +33,8 @@ export const productCost = z.discriminatedUnion("kind", [
     amount: z.number(),
     chargeCount: z.number().int().positive(),
     latestCharge: moneyNullable,
+    /** Absent on retained publications until their evidence is backfilled. */
+    chargeTotal: z.number().optional(),
   }),
 ]);
 

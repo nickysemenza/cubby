@@ -1333,6 +1333,20 @@ Rules:
             ruleId: "product.descriptive-cost",
             description:
               "Physical Cost follows the selected valuation price. Service Cost is the published average of positive actual charges, with its matching count and latest dated charge; it is not a monthly rate.",
+            sourceDependencies: [
+              {
+                path: "storedResult.chargeTotal",
+                label: "Positive charge total",
+              },
+              {
+                path: "storedResult.chargeCount",
+                label: "Positive charge count",
+              },
+              {
+                path: "storedResult.latestCharge",
+                label: "Latest dated charge",
+              },
+            ],
           },
         },
         {

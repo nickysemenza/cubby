@@ -160,6 +160,15 @@ not performed; migration success alone is not deployment verification.
 
 ## Derived values cutover
 
+### Service Cost evidence (0057)
+
+`0057_service_cost_evidence` queues only retained service Cost publications missing
+their positive charge total. It leaves stored values, publication timestamps,
+existing tickets, member-edit priority and retry state untouched. After deployment,
+verify that pending refreshes retain their old Cost and that a completed refresh
+publishes its charge total with the average and count. Legacy evidence remains
+explicitly unavailable until that publication; opening a popover is never a repair.
+
 ### Recipe publication identity (0056)
 
 `0056_recipe_publication` adds a retained publication timestamp independently of
