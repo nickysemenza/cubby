@@ -1,8 +1,8 @@
 import { scoredEntities } from "@cubby/schemas/data-quality";
 import { dataQuality } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
-import { allEntities } from "@cubby/schemas/entity-manifest";
 import type { ListRendererId } from "@cubby/schemas/entity-manifest";
+import { entityKeys } from "@cubby/schemas/entity-roster";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
@@ -279,7 +279,7 @@ const buildListRendererCoverage = () => {
 const buildEffectiveListRendererCoverage = () => {
   const custom = buildListRendererCoverage();
   const scored = new Set<string>(scoredEntities);
-  return mapRecord(allEntities, (entity) => ({
+  return mapRecord(entityKeys, (entity) => ({
     "data-quality": implemented((helper: CubbyColumnHelper<object>) =>
       createDataQualityColumn(helper, scored.has(entity)),
     ),

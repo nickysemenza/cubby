@@ -74,6 +74,7 @@
     "./sidebar-manifest": "./src/sidebar-manifest.ts",
     "./entity-manifest": "./src/entity-manifest.ts",
     "./entity-roster": "./src/generated/entity-roster.gen.ts",
+    "./entity-metadata/*": "./src/generated/entity-metadata.*.gen.ts",
     "./compiler/generated/entity-metadata/*": "./src/generated/entity-metadata.*.gen.ts",
     "./compiler/generated/entity-field-envelopes/*": "./src/generated/entity-field-envelopes.*.gen.ts",
     "./entity-section-actions": "./src/entity-section-actions.ts",

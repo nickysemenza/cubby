@@ -1,36 +1,37 @@
-import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import type { Entity } from "@cubby/schemas/entity";
 import {
   queryOptions,
   type QueryClient,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { createServerFn } from "@tanstack/react-start";
+import { createIsomorphicFn } from "@tanstack/react-start";
 
 import type {
   EntityMetadataSlice,
   EntityMetadataByEntity,
 } from "~/entity/generated/entity-metadata-types.gen";
+import { loadBrowserEntityMetadata } from "~/entity/metadata-loader";
 
-const readEntityMetadata = createServerFn({ method: "GET" })
-  .validator(entitySchema)
-  .handler(async ({ data }) => {
+const readEntityMetadata = createIsomorphicFn()
+  .server(async (entity: Entity) => {
     const { loadEntityMetadata } =
       await import("~/server/entity-metadata/read.boundary");
-    return loadEntityMetadata(data);
-  });
+    return loadEntityMetadata(entity);
+  })
+  .client(loadBrowserEntityMetadata);
 
 const metadataKey = (entity: Entity) => ["entity-metadata", entity] as const;
 export type EntityMetadataFor<E extends Entity> = EntityMetadataByEntity[E];
 type MetadataBundle = Awaited<ReturnType<typeof readEntityMetadata>>;
 
 /** Metadata belongs to this document's QueryClient, just like its SSR data.
- * The complete bundle must be query data: SSR does not transport cache writes
- * performed as side effects inside another query's function. */
+ * Complete bundles stay query data; the router transports only their admission
+ * identities and restores the same bundles from immutable public chunks. */
 export const entityMetadataQueryOptions = (entity: Entity) =>
   queryOptions({
     queryKey: metadataKey(entity),
-    queryFn: () => readEntityMetadata({ data: entity }),
+    queryFn: () => readEntityMetadata(entity),
     staleTime: Infinity,
     gcTime: Infinity,
   });
