@@ -12,7 +12,6 @@ import {
 } from "../filters";
 import type { FilterSpecCore } from "../filters";
 import { entityFilterUrlKeys } from "../generated/entity-search.gen";
-import { problemActionsFor } from "./problem-actions";
 import {
   compileProblemFilters,
   problemFilterPatch,
@@ -20,10 +19,7 @@ import {
 } from "./problem-filter-semantics";
 import type { DiagnosticKey } from "./problem-query";
 import { problemQuery, problemQueryDeclarations } from "./problem-registry";
-import {
-  completeProblemQueryDeclarations,
-  validateCompleteProblemRegistry,
-} from "./problem-registry-validation";
+import { validateCompleteProblemRegistry } from "./problem-registry-validation";
 
 const queryClient = await metadataQueryClient();
 
@@ -41,41 +37,6 @@ describe("Problem Query registry", () => {
         definition.source.kind === "entity" ? "entity-list" : "none",
       );
     }
-  });
-
-  it("attaches only the Problems UI's real action capabilities", () => {
-    const definitions = completeProblemQueryDeclarations();
-    for (const definition of definitions) {
-      expect(definition.actions).toEqual(problemActionsFor(definition.key));
-      for (const action of definition.actions) {
-        if (action.scope === "item") {
-          // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
-          expect(["item", "guided-flow"]).toContain(action.target);
-        } else {
-          // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
-          expect(["canonical-query", "global-backfill"]).toContain(
-            action.target,
-          );
-        }
-      }
-    }
-
-    // The two destructive "Delete all" controls resolve their full server
-    // populations through findAllViewProblemIds; cards themselves are samples.
-    expect(
-      definitions
-        .flatMap((definition) =>
-          definition.actions
-            .filter((action) => action.target === "canonical-query")
-            .map(() => definition.key),
-        )
-        .sort(),
-    ).toEqual(
-      [
-        "unusedIngredientsWithProduct",
-        "unusedIngredientsWithoutProduct",
-      ].sort(),
-    );
   });
 
   it("keeps every derived diagnostic explicit about its result contract", () => {
@@ -97,9 +58,6 @@ describe("Problem Query registry", () => {
         freshness: definition.freshness,
         quality: { scoring: "unscored", exceptions: "forbidden" },
       });
-      expect(module?.definition.actions).toEqual(
-        problemActionsFor(definition.key),
-      );
     }
   });
 

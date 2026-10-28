@@ -83,7 +83,7 @@ export function DuplicateVendorMergeFix({
 }
 
 /** `duplicateVendors:merge`: each duplicate spelling's merge. */
-export function DuplicateVendorMergeAction(props: WorkActionProps) {
+export function DuplicateVendorMergeAction(props: WorkActionProps<"item">) {
   return (
     <ProblemItemsAction {...props} problemKey="duplicateVendors">
       {(variant, close) => (
@@ -94,9 +94,9 @@ export function DuplicateVendorMergeAction(props: WorkActionProps) {
 }
 
 /** `vendorsWithoutLogos:fetch-logo`: fetch the row's Vendor logo. */
-export function VendorLogoFetchWorkAction(props: WorkActionProps) {
+export function VendorLogoFetchWorkAction(props: WorkActionProps<"item">) {
   const fetchLogo = useFetchVendorLogo(productionLogoOperations);
-  const id = props.target.scope === "item" ? props.target.row.id : null;
+  const id = props.target.row.id;
   if (!id) return null;
   return (
     <WorkActionTrigger

@@ -34,8 +34,10 @@ the generic engine into every domain.
   with single-pass counts, paging and hydration.
 - Problems is the Work queue's saved view of the `problem` family. Each
   Problems declaration is a Work source; its remediations are declared
-  actions on rows and reason-group headers, performed by the web client's
-  `workActions` feature table. The `/problems` page, lanes and coverage
+  actions on rows and reason-group headers. The web client's `workActions`
+  feature table performs them: its Problem half is typed from the action
+  declarations (`ProblemActionHandlers`), so a missing, extra or renamed
+  action fails to compile. The `/problems` page, lanes and coverage
   meters are deleted; maintenance tools move to Settings → Maintenance.
 - Saved views are `{key, label, filters}` over declared filters (ADR 0022);
   the Executor views (Automatic, Agent, Review, Waiting) and Problems are

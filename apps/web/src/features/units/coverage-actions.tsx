@@ -7,7 +7,7 @@ import { Button } from "~/ui/primitives/button";
 import { UnitCoverageInlineFix } from "./unit-coverage-fix";
 
 /** `productsWithIslandedMappings:add-conversion`: bridge the row's islands. */
-export function IslandedMappingsAction(props: WorkActionProps) {
+export function IslandedMappingsAction(props: WorkActionProps<"item">) {
   return (
     <ProblemItemsAction
       {...props}
@@ -26,7 +26,7 @@ export function IslandedMappingsAction(props: WorkActionProps) {
 
 /** `ingredientsWithPartialCoverage:repair-coverage`: the workbench is the one
  * editor for ingredient enrichment, so the flow hands off to it. */
-export function PartialCoverageAction(props: WorkActionProps) {
+export function PartialCoverageAction(props: WorkActionProps<"item">) {
   return (
     <ProblemItemsAction
       {...props}

@@ -121,7 +121,7 @@ export function DuplicateProductMergeFix({
 }
 
 /** `orphanedProducts:delete`: each orphan the detector lists, with Delete. */
-export function OrphanedProductDeleteAction(props: WorkActionProps) {
+export function OrphanedProductDeleteAction(props: WorkActionProps<"item">) {
   return (
     <ProblemItemsAction {...props} problemKey="orphanedProducts">
       {(item, close) => (
@@ -132,7 +132,7 @@ export function OrphanedProductDeleteAction(props: WorkActionProps) {
 }
 
 /** `duplicateProductIdentities:merge`: each duplicate cluster's merge. */
-export function DuplicateProductMergeAction(props: WorkActionProps) {
+export function DuplicateProductMergeAction(props: WorkActionProps<"item">) {
   return (
     <ProblemItemsAction {...props} problemKey="duplicateProductIdentities">
       {(variant, close) => (

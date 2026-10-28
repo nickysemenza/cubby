@@ -128,7 +128,8 @@ queue to its reason group. A source declares its remediations as actions: an
 item action on each row, and a group action on its reason group's header
 (Group by Reason) that re-reads the source's own query rather than trusting
 loaded rows. Guided flows open their domain's dialog; the web client's
-`workActions` feature table performs each declared action by id. Maintenance
+`workActions` feature table performs each declared action, typed from the
+declarations so a missing or renamed handler fails to compile. Maintenance
 tools that are not a Problem's remediation live in Settings → Maintenance.
 
 ## Choose the executor

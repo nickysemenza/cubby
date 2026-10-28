@@ -16,7 +16,7 @@ import {
 import type { ProjectAttentionReport } from "@cubby/schemas/project";
 
 import type { DiagnosticKey } from "~/entity/problems/problem-query";
-import { completeProblemQueryDeclarations } from "~/entity/problems/problem-registry-validation";
+import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import type { UpcLookupService } from "~/server/clients/upc";
 import type { Database } from "~/server/db";
@@ -475,7 +475,7 @@ export const diagnosticAdapters = {
 
 /** Membership, grain, freshness and remediation policy share one registered declaration. */
 export const diagnosticModules = new Map(
-  completeProblemQueryDeclarations().flatMap((definition) =>
+  problemQueryDeclarations().flatMap((definition) =>
     definition.source.kind === "derived"
       ? [
           [

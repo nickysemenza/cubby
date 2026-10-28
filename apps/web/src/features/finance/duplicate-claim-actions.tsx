@@ -186,7 +186,7 @@ export function DuplicateAccountAliasFix({
 }
 
 /** `duplicateFinancialTransactionSourceRefs:choose-keeper`. */
-export function DuplicateTransactionRefAction(props: WorkActionProps) {
+export function DuplicateTransactionRefAction(props: WorkActionProps<"item">) {
   return (
     <ProblemItemsAction
       {...props}
@@ -200,7 +200,7 @@ export function DuplicateTransactionRefAction(props: WorkActionProps) {
 }
 
 /** `duplicateFinancialAccountSourceAliases:choose-keeper`. */
-export function DuplicateAccountAliasAction(props: WorkActionProps) {
+export function DuplicateAccountAliasAction(props: WorkActionProps<"item">) {
   return (
     <ProblemItemsAction
       {...props}
