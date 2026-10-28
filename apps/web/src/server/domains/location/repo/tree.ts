@@ -97,7 +97,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
         l.*,
         0 as depth
       FROM ${location} l
-      WHERE ${baseCondition()} AND l."deletedAt" IS NULL
+      WHERE ${baseCondition()} AND ${notDeleted("l")}
 
       UNION ALL
 
@@ -107,7 +107,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
         lt.depth + 1 as depth
       FROM ${location} l
       INNER JOIN location_tree lt ON l."parentId" = lt.id
-      WHERE lt.depth < ${MAX_TREE_DEPTH} AND l."deletedAt" IS NULL
+      WHERE lt.depth < ${MAX_TREE_DEPTH} AND ${notDeleted("l")}
     )
     SELECT lt.*, ${locationAiDescriptionSql(sql`lt."id"`)} AS "aiDescription"
     FROM location_tree lt
@@ -265,14 +265,14 @@ export const getLocationInventoryBreakdown = async (
     WITH RECURSIVE location_tree AS (
       SELECT l."id", l."parentId", l."shortcode", l."name", 0 AS depth
       FROM ${location} l
-      WHERE l."id" = ${rootId} AND l."deletedAt" IS NULL
+      WHERE l."id" = ${rootId} AND ${notDeleted("l")}
 
       UNION ALL
 
       SELECT l."id", l."parentId", l."shortcode", l."name", lt.depth + 1
       FROM ${location} l
       INNER JOIN location_tree lt ON l."parentId" = lt."id"
-      WHERE l."deletedAt" IS NULL AND lt.depth < ${MAX_TREE_DEPTH}
+      WHERE ${notDeleted("l")} AND lt.depth < ${MAX_TREE_DEPTH}
     )
     SELECT "id", "parentId", "shortcode", "name"
     FROM location_tree

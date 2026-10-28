@@ -135,11 +135,11 @@ const readHistory = async (
         e."productId"
       FROM "Expense" e
       LEFT JOIN "Purchase" live_purchase
-        ON live_purchase.id = e."purchaseId" AND live_purchase."deletedAt" IS NULL
+        ON live_purchase.id = e."purchaseId" AND ${notDeleted("live_purchase")}
       ${inherited.joins}
       JOIN "Project" assigned
-        ON assigned.id = ${inherited.projectId} AND assigned."deletedAt" IS NULL
-      WHERE e."deletedAt" IS NULL AND e."lineKind" = ${expenseLineKindSchema.enum.principal}
+        ON assigned.id = ${inherited.projectId} AND ${notDeleted("assigned")}
+      WHERE ${notDeleted("e")} AND e."lineKind" = ${expenseLineKindSchema.enum.principal}
     ) history
     WHERE history.trade IN (${sql.join(
       trades.map((trade) => sql`${trade}`),

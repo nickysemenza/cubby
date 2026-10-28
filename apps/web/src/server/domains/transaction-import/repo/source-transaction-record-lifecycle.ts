@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { createAppError } from "~/server/errors/app-error";
 
 /** Settlement references are strings; a row FK cannot protect the charge's aliases. */
@@ -23,7 +24,7 @@ export async function assertSourceTransactionRecordDeletionAllowed(
     SELECT
       EXISTS (SELECT 1 FROM "SourceTransactionRecord" predecessor
         WHERE predecessor."supersededByRowId" IN (${selected}) AND predecessor.id NOT IN (${selected})
-          AND predecessor."deletedAt" IS NULL) AS predecessor,
+          AND ${notDeleted("predecessor")}) AS predecessor,
       -- includes-deleted: accepted charge aliases survive historical observation deletion.
       EXISTS (
         SELECT 1 FROM "SourceTransactionRecord" target
@@ -31,10 +32,10 @@ export async function assertSourceTransactionRecordDeletionAllowed(
         JOIN "SourceTransactionRecord" observation ON observation.source = target.source
           AND observation."chargeKey" = target."chargeKey"
         JOIN "EntityExternalId" ref ON ref.source = target.source AND ref.kind = 'settlement_ref'
-          AND ref."deletedAt" IS NULL AND ref."entityKind" = ${entitySchema.enum.financialTransaction}
+          AND ${notDeleted("ref")} AND ref."entityKind" = ${entitySchema.enum.financialTransaction}
           AND ref."externalId" IN (observation."externalId", observation."legacyReference")
-        JOIN "FinancialTransaction" ft ON ft.id = ref."entityId" AND ft."deletedAt" IS NULL
-        WHERE target.id IN (${selected}) AND target."deletedAt" IS NULL
+        JOIN "FinancialTransaction" ft ON ft.id = ref."entityId" AND ${notDeleted("ft")}
+        WHERE target.id IN (${selected}) AND ${notDeleted("target")}
       ) AS settlement
   `);
   if (rows[0]?.predecessor)
@@ -61,11 +62,11 @@ export async function assertSourceTransactionRecordSupersessionAllowed(
   }>(sql`
     WITH RECURSIVE chain AS (
       SELECT r.id, r.source, r."supersededByRowId", ARRAY[r.id] AS path
-      FROM "SourceTransactionRecord" r WHERE r.id = ${successorId}::uuid AND r."deletedAt" IS NULL
+      FROM "SourceTransactionRecord" r WHERE r.id = ${successorId}::uuid AND ${notDeleted("r")}
       UNION ALL
       SELECT r.id, r.source, r."supersededByRowId", chain.path || r.id
       FROM chain JOIN "SourceTransactionRecord" r ON r.id = chain."supersededByRowId"
-      WHERE r."deletedAt" IS NULL AND NOT r.id = ANY(chain.path)
+      WHERE ${notDeleted("r")} AND NOT r.id = ANY(chain.path)
     )
     SELECT EXISTS (SELECT 1 FROM chain WHERE id = ${successorId}::uuid AND source = ${predecessor.source}) AS "sameSource",
       EXISTS (SELECT 1 FROM chain WHERE id = ${predecessor.id}::uuid) AS cycle

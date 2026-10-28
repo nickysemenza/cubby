@@ -36,6 +36,7 @@ import {
   serviceProductSqlText,
 } from "~/server/domains/product/repo/service-category";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
+import { liveAliasSqlText } from "~/server/lib/live-row";
 import {
   deriveProductQuantitySummary,
   hasComparableQuantityHistory,
@@ -74,7 +75,7 @@ const QUANTITY_OWN_MEASURES = `COALESCE(sum(GREATEST(${expenseSignedUnitsSql("kq
          count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND (kqe."cost" IS NULL OR kqe."cost" >= 0)) AS "unknownAcquisitionLines",
          count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND kqe."cost" < 0) AS "unknownExitLines",
          count(*) AS "ledgerLines"`;
-const QUANTITY_OWN_PREDICATES = `NOT ${serviceProductSqlText('kqe."productId"')} AND kqe."deletedAt" IS NULL AND ${actualExpenseSql("kqe")}`;
+const QUANTITY_OWN_PREDICATES = `NOT ${serviceProductSqlText('kqe."productId"')} AND ${liveAliasSqlText("kqe")} AND ${actualExpenseSql("kqe")}`;
 const QUANTITY_OWN_AGGREGATE = `SELECT ${QUANTITY_OWN_MEASURES}
     FROM "Expense" kqe
    WHERE kqe."productId" = ka."productId" AND ${QUANTITY_OWN_PREDICATES}`;
@@ -144,11 +145,11 @@ const ON_HAND_INVENTORY = `count(*) AS n,
                    sum(ohu_i."amountValue"::numeric) AS qty
               FROM "InventoryEntry" ohu_i
               JOIN "Location" ohu_l
-                ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
-             WHERE ohu_i."deletedAt" IS NULL`;
+                ON ohu_l."id" = ohu_i."locationId" AND ${liveAliasSqlText("ohu_l")}
+             WHERE ${liveAliasSqlText("ohu_i")}`;
 const ON_HAND_LOCATIONS = `count(*) AS n
               FROM "Location" ohu_ol
-             WHERE ohu_ol."deletedAt" IS NULL`;
+             WHERE ${liveAliasSqlText("ohu_ol")}`;
 
 /** On-hand filters are null wherever the UI shows an unavailable value; include shelf and installed placements consistently. */
 export const onHandUnitsSql = (productAlias = '"product"') =>
@@ -390,7 +391,7 @@ export const loadProductDetailQuantityLedgers = async (
     location_counts AS (
       SELECT l."productId", count(*)::int AS "locationCount"
         FROM "Location" l
-       WHERE l."deletedAt" IS NULL
+       WHERE ${notDeleted("l")}
          AND l."productId" = ANY(${uuidArrayParam(ids)})
        GROUP BY l."productId"
     )

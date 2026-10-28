@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { assessment, type assessmentState } from "~/server/db/schema";
 import { PROVIDER_IDENTITY_REVIEW } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import { createAppError } from "~/server/errors/app-error";
@@ -86,7 +87,7 @@ export async function statementApplicationSelection(
   const { rows: accounts } = await unwrapDb(db).execute<{
     shortcode: string;
   }>(sql`
-    SELECT shortcode FROM "FinancialAccount" WHERE id = ${judgment.accountId}::uuid AND "deletedAt" IS NULL
+    SELECT shortcode FROM "FinancialAccount" WHERE id = ${judgment.accountId}::uuid AND ${notDeleted("FinancialAccount")}
   `);
   const accountCode = accounts[0]?.shortcode;
   if (!accountCode)
@@ -105,7 +106,7 @@ export async function statementApplicationSelection(
       id: string;
       shortcode: string;
     }>(sql`
-      SELECT id, shortcode FROM "FinancialTransaction" WHERE "deletedAt" IS NULL
+      SELECT id, shortcode FROM "FinancialTransaction" WHERE ${notDeleted("FinancialTransaction")}
       AND id IN (${sql.join(
         ids.map((id) => sql`${id}::uuid`),
         sql`, `,

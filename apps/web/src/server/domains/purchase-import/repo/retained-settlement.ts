@@ -334,12 +334,12 @@ async function settleableCharges(
         sql`(NOT EXISTS (
           SELECT 1 FROM "FinancialTransactionAllocation" fta
           WHERE fta."transactionId" = "FinancialTransaction".id
-            AND fta."deletedAt" IS NULL
+            AND ${notDeleted("fta")}
         ) OR (${input.allocatedPurchaseId ?? null}::uuid IS NOT NULL AND (
           SELECT count(*) = 1 AND bool_and(fta."purchaseId" = ${input.allocatedPurchaseId ?? null}::uuid
             AND round(fta.amount * 100) = round("FinancialTransaction".amount * 100))
           FROM "FinancialTransactionAllocation" fta
-          WHERE fta."transactionId" = "FinancialTransaction".id AND fta."deletedAt" IS NULL
+          WHERE fta."transactionId" = "FinancialTransaction".id AND ${notDeleted("fta")}
         )))`,
       ),
     )
@@ -470,7 +470,7 @@ async function competingClaimants(
         sql`abs(coalesce((
           SELECT sum(fta."amount") FROM "FinancialTransactionAllocation" fta
           WHERE fta."purchaseId" = "PurchasePaymentEvidence"."purchaseId"
-            AND fta."deletedAt" IS NULL
+            AND ${notDeleted("fta")}
             AND sign(fta.amount) = sign(${charge.amount}::numeric)
         ), 0)) < abs((
           SELECT sum(ppe."amount") FROM "PurchasePaymentEvidence" ppe
@@ -903,20 +903,20 @@ export async function settleRetainedPaymentEvidence(
         sql`${purchasePaymentEvidence.chargedAt} IS NOT NULL`,
         sql`NOT EXISTS (
           SELECT 1 FROM "FinancialTransactionAllocation" fta
-          WHERE fta."purchaseId" = ${purchase.id} AND fta."deletedAt" IS NULL
+          WHERE fta."purchaseId" = ${purchase.id} AND ${notDeleted("fta")}
         )`,
         sql`EXISTS (
           SELECT 1 FROM "FinancialTransaction" ft
           JOIN "FinancialAccount" fa
-            ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
+            ON fa."id" = ft."accountId" AND ${notDeleted("fa")}
           WHERE fa."ledgerPartyId" = ${importSourceClaim.ledgerPartyId}
-            AND ft."deletedAt" IS NULL
+            AND ${notDeleted("ft")}
             AND ft."status" IN (${financialTransactionStatus.enum.observed}, ${financialTransactionStatus.enum.pending}, ${financialTransactionStatus.enum.posted})
             AND round(ft."amount" * 100) = round(${purchasePaymentEvidence.amount} * 100)
             AND abs(coalesce(ft."transactionDate", ft."postedDate") - (${purchasePaymentEvidence.chargedAt})::date) <= ${POSTING_WINDOW_DAYS}
             AND NOT EXISTS (
               SELECT 1 FROM "FinancialTransactionAllocation" ofta
-              WHERE ofta."transactionId" = ft."id" AND ofta."deletedAt" IS NULL
+              WHERE ofta."transactionId" = ft."id" AND ${notDeleted("ofta")}
             )
         )`,
       ),

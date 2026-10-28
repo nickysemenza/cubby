@@ -36,6 +36,7 @@ import {
   storedDerivedSql,
   type StoredDerivedRead,
 } from "~/server/generic/derived/repo/read";
+import { liveAliasSqlText } from "~/server/lib/live-row";
 
 export type ProductPricing = RawProductOutput["pricing"];
 
@@ -165,7 +166,7 @@ const PRICING_OWN_MEASURES = `sum(kpe."cost") FILTER (WHERE kpe."productQuantity
          count(*) FILTER (WHERE kpe."productQuantity" IS NULL) AS "unknownExpenseCount"`;
 
 const PRICING_OWN_PREDICATES = `NOT ${serviceProductSqlText('kpe."productId"')}
-     AND kpe."deletedAt" IS NULL
+     AND ${liveAliasSqlText("kpe")}
      AND ${actualExpenseSql("kpe")}
      AND kpe."lineKind" = 'principal'
      AND kpe."cost" > 0`;
@@ -266,7 +267,7 @@ export const loadProductPricing = async (
           FILTER (WHERE e."cost" > 0 AND e."date" IS NOT NULL))[1]::double precision AS latest
       FROM "Product" p
       LEFT JOIN "Expense" e ON e."productId" = p."id"
-        AND e."deletedAt" IS NULL AND ${sql.raw(actualExpenseSql("e"))}
+        AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
       WHERE p."id" = ANY(${uuidArrayParam(ids)})
         AND ${sql.raw(serviceProductSqlText('p."id"'))}
       GROUP BY p."id"

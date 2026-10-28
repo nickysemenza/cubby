@@ -27,6 +27,7 @@ import {
   uuidArrayParam,
   withTransactionOn,
 } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import {
@@ -75,14 +76,14 @@ async function loadDirectImageSearchText(
       ? [
           sql`SELECT 'image'::text AS "entityKind", i.id::text AS "entityId", i.id AS "imageId"
           FROM "Image" i JOIN refs ON refs."entityKind" = 'image' AND refs."entityId" = i.id
-          WHERE i."deletedAt" IS NULL`,
+          WHERE ${notDeleted("i")}`,
         ]
       : []),
     sql`SELECT e."kind" AS "entityKind", attachment."entityId"::text AS "entityId", attachment."imageId" AS "imageId"
         FROM "EntityAttachment" attachment
         JOIN "Entity" e ON e."id" = attachment."entityId"
         JOIN refs ON refs."entityKind" = e."kind" AND refs."entityId" = attachment."entityId"
-        WHERE attachment."deletedAt" IS NULL`,
+        WHERE ${notDeleted("attachment")}`,
   ];
   const result = await unwrapDb(db).execute<{
     entityKind: SearchableEntity;
@@ -93,7 +94,7 @@ async function loadDirectImageSearchText(
     attached AS (${sql.join(branches, sql` UNION ALL `)})
     SELECT attached."entityKind", attached."entityId", image.shortcode
     FROM attached
-    JOIN "Image" image ON image.id = attached."imageId" AND image."deletedAt" IS NULL
+    JOIN "Image" image ON image.id = attached."imageId" AND ${notDeleted("image")}
   `);
   const selected = await loadSelectedDescriptions(db, [
     ...new Set(result.rows.map((row) => row.shortcode)),
@@ -300,7 +301,7 @@ async function getSearchDocumentPage(
   }>(sql`
     SELECT "entityKind", "entityId"::text AS "entityId"
     FROM "SearchDocument"
-    WHERE "deletedAt" IS NULL ${cursor}
+    WHERE ${notDeleted("SearchDocument")} ${cursor}
       ${options.createdBefore ? sql`AND "createdAt" <= ${options.createdBefore}::timestamp` : sql``}
     ORDER BY "entityKind", "entityId"
     LIMIT ${pageSize}
@@ -345,7 +346,7 @@ export async function getSearchDocumentSourceRepairPage(
     }>(sql`
       SELECT "entityKind", "entityId"::text AS "entityId", "sourceHash"
       FROM "SearchDocument"
-      WHERE "deletedAt" IS NULL
+      WHERE ${notDeleted("SearchDocument")}
         AND "entityId" = ANY(${uuidArrayParam(sources.map((source) => source.entityId))})
     `),
   ]);
@@ -489,7 +490,7 @@ async function markSearchDocumentsMissing(
     FROM jsonb_to_recordset(${JSON.stringify(refs)}::jsonb)
       AS wanted("entityKind" text, "entityId" uuid)
     WHERE d."entityKind" = wanted."entityKind" AND d."entityId" = wanted."entityId"
-      AND d."deletedAt" IS NULL
+      AND ${notDeleted("d")}
     RETURNING d."entityId"`);
   if (changed.rows.length)
     await recordChange(db, {
@@ -506,6 +507,7 @@ async function markSearchDocumentsMissing(
  */
 const SEARCH_VECTOR_PART_CHARS = 100_000;
 
+// The partial-index inference predicate stays unqualified to match PostgreSQL index syntax.
 async function upsertSearchDocumentBatch(
   db: Database | DrizzleTransaction,
   entries: ReadonlyArray<{ source: SearchDocumentSource; body: string }>,
@@ -714,7 +716,7 @@ export async function getSearchDocumentEmbeddingText(
     FROM "SearchDocument"
     WHERE "entityKind" = ${entityKind}
       AND "entityId" = ${entityId}::uuid
-      AND "deletedAt" IS NULL
+      AND ${notDeleted("SearchDocument")}
     LIMIT 1
   `);
   return result.rows[0] ?? null;
@@ -753,7 +755,7 @@ export async function getSearchDocumentEmbeddingTexts(
     JOIN "SearchDocument" sd
       ON sd."entityKind" = refs."entityKind"
       AND sd."entityId" = refs."entityId"
-      AND sd."deletedAt" IS NULL
+      AND ${notDeleted("sd")}
     ORDER BY refs.ordinal
   `);
   return result.rows;
@@ -794,10 +796,10 @@ const unembeddedDocumentsSql = (
     AND ee.provider = ${config.provider}
     AND ee.model = ${config.model}
     AND ee.dimensions = ${config.dimensions}
-    AND ee."deletedAt" IS NULL
+    AND ${notDeleted("ee")}
     AND ee."artifactState" = ${embeddingArtifactState.enum.selected} AND ee."artifactHash" IS NOT NULL AND ee."vectorHash" IS NOT NULL
     AND ee."observedAt" IS NOT NULL AND ee."indexedAt" IS NOT NULL
-  WHERE sd."deletedAt" IS NULL
+  WHERE ${notDeleted("sd")}
     AND sd."entityKind" IN (${embeddableEntityKindsSql})
     AND (ee.id IS NULL
       OR ${normalizeSearchTextSql(sql`ee."embeddingText"`)} <> ${normalizeSearchTextSql(sql`sd."semanticText"`)})

@@ -4,6 +4,7 @@ import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transa
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { type SQL, isNull, sql } from "drizzle-orm";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 
 /**
@@ -21,8 +22,8 @@ import { sqlEnumConstant } from "~/server/db/sql-enum";
 export const LIVE_REFS = sql`(
   SELECT fx."source" AS source, fx."externalId" AS "externalId", ft.shortcode
   FROM "EntityExternalId" fx
-  JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ft."deletedAt" IS NULL
-  WHERE fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
+  JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ${notDeleted("ft")}
+  WHERE fx."kind" = 'settlement_ref' AND ${notDeleted("fx")}
 )`;
 
 /**
@@ -47,7 +48,7 @@ export const chargeStateOf = (scope: SQL) => sql`(
     ON own.source = r.source AND own."externalId" = r."externalId"
   LEFT JOIN ${LIVE_REFS} legacy
     ON legacy.source = r.source AND legacy."externalId" = r."legacyReference"
-  WHERE r."deletedAt" IS NULL AND (${scope})
+  WHERE ${notDeleted("r")} AND (${scope})
 
   GROUP BY r.source, ${chargeKeyOf("r")}
 )`;
@@ -103,14 +104,14 @@ export const pendingSuggestion = (
       WHERE head.source=${suggestionField("source", alias)}
         AND head."externalId"=${sql.raw(`"${alias}"`)}.data->>'headRef'
         AND head.current AND (head."withdrawnAt" IS NULL OR ${sql.raw(`"${alias}"`)}.data->>'reviewReason' IS NOT NULL)
-        AND head."deletedAt" IS NULL)`
+        AND ${notDeleted("head")})`
     }
     -- includes-deleted: removed observations invalidate current advice.
     AND NOT EXISTS (
       SELECT 1 FROM jsonb_array_elements_text(${sql.raw(`"${alias}"`)}.data->'refs') ref(value)
       WHERE (
         ${sql.raw(`"${alias}"`)}.data->>'recommended' NOT IN (${statementTransactionAction.enum.void}, ${statementTransactionAction.enum.book})
-        AND EXISTS (SELECT 1 FROM "EntityExternalId" e WHERE e.kind='settlement_ref' AND e."deletedAt" IS NULL
+        AND EXISTS (SELECT 1 FROM "EntityExternalId" e WHERE e.kind='settlement_ref' AND ${notDeleted("e")}
           AND e.source=split_part(ref.value,':',1) AND e."externalId"=substr(ref.value,strpos(ref.value,':')+1))
       )
       -- includes-deleted: removed observations invalidate current advice.

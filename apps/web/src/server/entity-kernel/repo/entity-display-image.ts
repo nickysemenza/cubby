@@ -405,7 +405,7 @@ function compileDisplayBranches(): readonly DisplayBranch[] {
       FROM "SourceTransactionRecord" record
       JOIN source_merchant_vendors merchant
         ON merchant."merchantKey" = btrim(regexp_replace(lower(record.merchant), '\\s+', ' ', 'g'))
-      JOIN "Vendor" seller ON seller.shortcode = merchant."vendorShortcode" AND seller."deletedAt" IS NULL
+      JOIN "Vendor" seller ON seller.shortcode = merchant."vendorShortcode" AND ${notDeleted("seller")}
       JOIN LATERAL (
         SELECT ${entitySchema.enum.vendor}::text AS "entityKind", seller.id AS "entityId"
       ) vendor_ref ON true
@@ -415,7 +415,7 @@ function compileDisplayBranches(): readonly DisplayBranch[] {
         JOIN LATERAL (${directStorageBranch("vendor")}) candidate ON true
       ) candidate ON true
       WHERE refs."entityKind" = ${entitySchema.enum.sourceTransactionRecord}
-        AND record.id = refs."entityId" AND record."deletedAt" IS NULL`,
+        AND record.id = refs."entityId" AND ${notDeleted("record")}`,
     },
   ];
 }
@@ -428,7 +428,7 @@ const sourceMerchantImagesSql = (enabled: boolean): SQL => {
     FROM "SourceTransactionRecord" record
     JOIN refs ON refs."entityId" = record.id
       AND refs."entityKind" = ${entitySchema.enum.sourceTransactionRecord}
-    WHERE record."deletedAt" IS NULL AND record.merchant IS NOT NULL`;
+    WHERE ${notDeleted("record")} AND record.merchant IS NOT NULL`;
   return sql`, source_merchant_vendors AS MATERIALIZED (
     ${suggestedMerchantVendorCandidatesSql(merchantKeys)}
   )`;
@@ -444,7 +444,7 @@ export const entityDisplayImagePresenceSql = (entity: Entity, id: SQL): SQL => {
   )
     ? sql`, "${sql.raw(EXPENSE_PROJECT_RELATION)}" AS (
         SELECT e.*, ${effectiveExpenseProjectSql("e")} AS "effectiveProjectId"
-        FROM "Expense" e WHERE e."deletedAt" IS NULL
+        FROM "Expense" e WHERE ${notDeleted("e")}
           AND e."lineKind" = 'principal' AND e."productId" IS NOT NULL
       )`
     : sql``;
@@ -453,7 +453,7 @@ export const entityDisplayImagePresenceSql = (entity: Entity, id: SQL): SQL => {
   if (entity === "image")
     branches.push(sql`
     SELECT i.key, i.shortcode, 0 AS priority, ${displayGroupColumns([])}, 0 AS "sortOrder", i."createdAt", i.id AS "imageId"
-    FROM "Image" i WHERE i.id = refs."entityId" AND i."deletedAt" IS NULL
+    FROM "Image" i WHERE i.id = refs."entityId" AND ${notDeleted("i")}
       AND ${displayableImageSql("i")}`);
   if (branches.length === 0) return sql`false`;
   return sql`EXISTS (
@@ -581,7 +581,7 @@ async function resolveRankedDisplayImages(
     ? sql`, "${sql.raw(EXPENSE_PROJECT_RELATION)}" AS MATERIALIZED (
         SELECT e.*, ${effectiveExpenseProjectSql("e")} AS "effectiveProjectId"
         FROM "Expense" e
-        WHERE e."deletedAt" IS NULL
+        WHERE ${notDeleted("e")}
           AND e."lineKind" = 'principal'
           AND e."productId" IS NOT NULL
           AND (
@@ -593,14 +593,14 @@ async function resolveRankedDisplayImages(
               FROM "Purchase" purchase
               JOIN refs r ON r."entityId" = purchase."defaultProjectId"
               WHERE r."entityKind" = 'project'
-                AND purchase."deletedAt" IS NULL
+                AND ${notDeleted("purchase")}
             )
             OR EXISTS (
               SELECT 1
               FROM refs r JOIN "Project" household ON household.id = r."entityId"
               WHERE r."entityKind" = 'project'
                 AND household."shortcode" = ${HOUSEHOLD_PROJECT_SHORTCODE}
-                AND household."deletedAt" IS NULL
+                AND ${notDeleted("household")}
             )
           )
       )`
@@ -635,7 +635,7 @@ async function resolveRankedDisplayImages(
         SELECT i.key, i.shortcode, 0 AS priority, ${displayGroupColumns([])}, 0 AS "sortOrder", i."createdAt", i.id AS "imageId"
         FROM "Image" i
         WHERE refs."entityKind" = 'image' AND i.id = refs."entityId"
-          AND i."deletedAt" IS NULL AND ${displayableImageSql("i")}
+          AND ${notDeleted("i")} AND ${displayableImageSql("i")}
         ${borrowedImages}
         ) raw_candidates
         ORDER BY raw_candidates."imageId", raw_candidates.priority,
@@ -649,7 +649,7 @@ async function resolveRankedDisplayImages(
        AND derivative."sourceContentHash" = selected_image.sha256
        AND derivative."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}
        AND derivative.status = 'ready'
-       AND derivative."deletedAt" IS NULL
+       AND ${notDeleted("derivative")}
     ) AS images ${
       includeAttachments
         ? sql`, (
@@ -775,7 +775,7 @@ export async function resolvePublicEntityDisplayImageLists(
           FROM input_refs
           JOIN "Entity" identity ON identity.shortcode = input_refs.shortcode
             AND identity.kind = input_refs."entityKind"
-            AND identity."deletedAt" IS NULL
+            AND ${notDeleted("identity")}
             AND identity."mergedIntoId" IS NULL
         )`,
     new Set(supported.map((ref) => ref.entityKind)),

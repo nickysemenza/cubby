@@ -148,7 +148,7 @@ const expenseAllocationSeedsSql = (
       JOIN ${expenseAttribution} a
         ON a."expenseId" = e."expenseId"
        AND a.role = r.role
-       AND a."deletedAt" IS NULL
+       AND ${notDeleted("a")}
       LEFT JOIN ${ledgerParty} p
         ON p.id = a."ledgerPartyId" AND ${notDeleted(nullableParty)}
 
@@ -169,14 +169,14 @@ const expenseAllocationSeedsSql = (
           FILTER (WHERE fta.amount < 0), 0)::bigint AS inflow_cents
       FROM scoped_expense e
       JOIN ${financialTransactionAllocation} fta
-        ON fta."purchaseId" = e."purchaseId" AND fta."deletedAt" IS NULL
+        ON fta."purchaseId" = e."purchaseId" AND ${notDeleted("fta")}
       JOIN ${financialTransaction} ft
         ON ft.id = fta."transactionId"
-       AND ft."deletedAt" IS NULL
+       AND ${notDeleted("ft")}
        AND ft.kind IN (${settlementKinds})
        AND ft.status <> ${financialTransactionStatus.enum.void}
       JOIN ${financialAccount} fa
-        ON fa.id = ft."accountId" AND fa."deletedAt" IS NULL
+        ON fa.id = ft."accountId" AND ${notDeleted("fa")}
       LEFT JOIN ${ledgerParty} account_owner
         ON account_owner.id = fa."ledgerPartyId" AND ${notDeleted(accountOwner)}
       CROSS JOIN LATERAL (VALUES
@@ -235,7 +235,7 @@ const expenseAllocationSeedsSql = (
           SELECT 1 FROM ${expenseAttribution} a
           WHERE a."expenseId" = e."expenseId"
             AND a.role = ${contributionRole.enum.funder}
-            AND a."deletedAt" IS NULL
+            AND ${notDeleted("a")}
         )
 
     ), beneficiary_payment AS (
@@ -252,7 +252,7 @@ const expenseAllocationSeedsSql = (
         -- Partial payment ownership retains its unknown share. Entirely
         -- unknown payment ownership can use the purchaser/household fallback.
         AND EXISTS (SELECT 1 FROM payment_weight known
-          JOIN ${ledgerParty} owner ON owner.id = known.owner_party_id AND owner."deletedAt" IS NULL
+          JOIN ${ledgerParty} owner ON owner.id = known.owner_party_id AND ${notDeleted("owner")}
           WHERE known."expenseId" = e."expenseId" AND known.role = ${contributionRole.enum.beneficiary} AND known.weight_cents > 0)
     ), beneficiary_purchaser AS (
       SELECT e."expenseId", e."expenseShortcode", e."projectId", e.cost_cents,
@@ -273,7 +273,7 @@ const expenseAllocationSeedsSql = (
     ), household_party AS (
       SELECT id, shortcode
       FROM ${ledgerParty}
-      WHERE kind = ${ledgerPartyKind.enum.household} AND "deletedAt" IS NULL
+      WHERE kind = ${ledgerPartyKind.enum.household} AND ${notDeleted("LedgerParty")}
       ORDER BY shortcode
       LIMIT 1
 
@@ -296,7 +296,7 @@ const expenseAllocationSeedsSql = (
         SELECT 1 FROM ${expenseAttribution} a
         WHERE a."expenseId" = e."expenseId"
           AND a.role = ${contributionRole.enum.beneficiary}
-          AND a."deletedAt" IS NULL
+          AND ${notDeleted("a")}
       )
         AND NOT EXISTS (SELECT 1 FROM beneficiary_payment b WHERE b."expenseId" = e."expenseId")
         AND NOT EXISTS (SELECT 1 FROM beneficiary_purchaser b WHERE b."expenseId" = e."expenseId")
@@ -331,7 +331,7 @@ const expenseAllocationSeedsSql = (
           SELECT 1 FROM ${expenseAttribution} a
           WHERE a."expenseId" = e."expenseId"
             AND a.role = r.role
-            AND a."deletedAt" IS NULL
+            AND ${notDeleted("a")}
         )
         AND (
           (r.role = ${contributionRole.enum.funder} AND NOT EXISTS (

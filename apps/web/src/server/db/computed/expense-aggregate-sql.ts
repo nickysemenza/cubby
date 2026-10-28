@@ -18,7 +18,7 @@
  */
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 
-import { actualExpenseSql } from "~/server/db/helpers/predicates";
+import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { expense } from "~/server/db/schema";
 
 /**
@@ -135,9 +135,9 @@ const acquisitionDateBody = (productRef: SQL): SQL<string | null> => sql`(
   SELECT max(COALESCE(pad_p."date", pad_e."date"))
     FROM "Expense" pad_e
     LEFT JOIN "Purchase" pad_p
-      ON pad_p."id" = pad_e."purchaseId" AND pad_p."deletedAt" IS NULL
+      ON pad_p."id" = pad_e."purchaseId" AND ${notDeleted("pad_p")}
    WHERE pad_e."productId" = ${productRef}
-     AND pad_e."deletedAt" IS NULL
+     AND ${notDeleted("pad_e")}
      AND ${sql.raw(actualExpenseSql("pad_e"))}
      AND ${sql.raw(expenseAcquisitionSql("pad_e"))})`;
 
@@ -170,12 +170,12 @@ export const productAcquisitionDateFilterSql = (
 const expenseCountBody = (productRef: SQL): SQL<number> =>
   sql`(SELECT count(*) FROM "Expense" pec_e
         WHERE pec_e."productId" = ${productRef}
-          AND pec_e."deletedAt" IS NULL)`;
+          AND ${notDeleted("pec_e")})`;
 
 const expenseTotalBody = (productRef: SQL): SQL<number> =>
   sql`(SELECT COALESCE(sum(pet_e."cost"), 0)::double precision FROM "Expense" pet_e
         WHERE pet_e."productId" = ${productRef}
-          AND pet_e."deletedAt" IS NULL)`;
+          AND ${notDeleted("pet_e")})`;
 
 /** Correlated scalar for the list cell and ORDER BY. */
 export const productExpenseCountSql = (

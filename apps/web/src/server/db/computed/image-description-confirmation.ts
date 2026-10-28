@@ -3,6 +3,8 @@ import { SYSTEM_USER_ID } from "@cubby/schemas/context";
 import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
 import { and, or, sql } from "drizzle-orm";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
+
 /** Source proof shared by composable classification SQL and repository readers.
  * Inner columns stay explicitly qualified: relational extras remap column chunks
  * to the outer entity alias, including columns inside nested SQL.
@@ -31,7 +33,7 @@ export function currentImageDescriptionConfirmation() {
     sql`"AssessmentState"."family" = ${"image_description"}`,
     sql`"AssessmentState"."entity" = ${"image"}`,
     sql`"AssessmentState"."active" = true`,
-    sql`"Image"."deletedAt" IS NULL`,
+    sql`${notDeleted("Image")}`,
     sql`"Assessment"."fingerprint" = "Image"."sha256"`,
     sql`"AssessmentState"."fingerprint" = "Image"."sha256"`,
     sql`"Assessment"."subject"->>${assessmentSubjects.image_description.keyof().enum.contentHash} = "Image"."sha256"`,

@@ -17,7 +17,9 @@ for (const viewport of [
       data.world.pickers[viewport.width === 1280 ? "desktop" : "phone"];
     await data.open(`/purchases/${purchase.id}`);
     await expect(
-      screen.getByText(`Synthetic Original Project ${viewport.width}`),
+      screen
+        .getByRole("region", "Classification")
+        .getByRole("link", `Synthetic Original Project ${viewport.width}`),
     ).toBeVisible();
     await screen.getByRole("button", "Edit Purchase").click();
     await expect(
@@ -40,8 +42,8 @@ for (const viewport of [
     await data.open(`/purchases/${purchase.id}`);
     await expect(
       screen
-        .getByText(`Synthetic Replacement Project ${viewport.width}`)
-        .first(),
+        .getByRole("region", "Classification")
+        .getByRole("link", `Synthetic Replacement Project ${viewport.width}`),
     ).toBeVisible();
   });
 }

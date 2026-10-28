@@ -29,7 +29,7 @@ export function categoryMappingSql(id: SQL): SQL {
         FROM ${inheritanceLadderSql("productCategory", "spendingCategoryId", id)} ih_l JOIN "ProductCategory" ih_c ON ih_c.id = ih_l.id))
     FROM (VALUES(1)) ih_seed(n)
     LEFT JOIN "ProductCategory" ih_m ON ih_m.id = (${source}->>'id')::uuid
-    LEFT JOIN "SpendingCategory" ih_sc ON ih_sc.id=ih_m."spendingCategoryId" AND ih_sc."deletedAt" IS NULL AND ih_m."spendingCategoryMode"='mapped')`;
+    LEFT JOIN "SpendingCategory" ih_sc ON ih_sc.id=ih_m."spendingCategoryId" AND ${notDeleted("ih_sc")} AND ih_m."spendingCategoryMode"='mapped')`;
 }
 
 export async function loadCategoryConnections(

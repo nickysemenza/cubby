@@ -512,12 +512,12 @@ export async function startGuardedPhotoCoordinator(
       // Literal qualified names: the correlation must name the outer Run.
       sql`NOT EXISTS (
         SELECT 1 FROM "PhotoRunImage" target
-        JOIN "Image" source ON source."id" = target."imageId" AND source."deletedAt" IS NULL
+        JOIN "Image" source ON source."id" = target."imageId" AND ${notDeleted("source")}
         WHERE target."runId" = "Run"."id"
           AND target."state" = ${runTargetState.enum.pending}
           AND NOT EXISTS (
             SELECT 1 FROM "ImageProcessingJob" job
-            WHERE job."imageId" = target."imageId" AND job."deletedAt" IS NULL
+            WHERE job."imageId" = target."imageId" AND ${notDeleted("job")}
               AND job."kind" = ${imageProcessingJobKind.enum.describe_image}
               AND job."processorRevision" = ${IMAGE_DESCRIPTION_PROCESSOR_REVISION}
               AND job."sourceContentHash" = source."sha256"

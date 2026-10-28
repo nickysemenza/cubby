@@ -127,7 +127,7 @@ const effectiveDate = sql<
 const noLiveAllocations = sql`NOT EXISTS (
   SELECT 1 FROM "FinancialTransactionAllocation" allocation
   WHERE allocation."transactionId" = ${financialTransaction.id}
-    AND allocation."deletedAt" IS NULL
+    AND ${notDeleted("allocation")}
 )`;
 
 const eligibleStatus = inArray(financialTransaction.status, [

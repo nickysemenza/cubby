@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   expenseSpendingCategoryResolutionSql,
   spendingClassificationRevision,
@@ -123,7 +124,7 @@ export async function loadFinanceSuggestionContext(
   const rootRows = z.array(z.object({ data: evidenceRow })).parse(
     (
       await database.execute(sql`
-    SELECT to_jsonb(saved) AS data FROM ${sql.identifier(financeTables[entity])} saved WHERE id = ${id} AND "deletedAt" IS NULL
+    SELECT to_jsonb(saved) AS data FROM ${sql.identifier(financeTables[entity])} saved WHERE id = ${id} AND ${notDeleted("saved")}
   `)
     ).rows,
   );
@@ -141,19 +142,19 @@ export async function loadFinanceSuggestionContext(
   const links =
     entity === "financialTransaction"
       ? sql`
-    SELECT p.id FROM "Purchase" p WHERE p.id = ${row.purchaseId ?? null} AND p."deletedAt" IS NULL
+    SELECT p.id FROM "Purchase" p WHERE p.id = ${row.purchaseId ?? null} AND ${notDeleted("p")}
     UNION SELECT p.id FROM "FinancialTransactionAllocation" a JOIN "Purchase" p ON p.id = a."purchaseId"
-    WHERE a."transactionId" = ${id} AND a."deletedAt" IS NULL AND p."deletedAt" IS NULL
+    WHERE a."transactionId" = ${id} AND ${notDeleted("a")} AND ${notDeleted("p")}
   `
-      : sql`SELECT p.id FROM "Purchase" p WHERE p.id = ${entity === "purchase" ? id : (row.purchaseId ?? null)} AND p."deletedAt" IS NULL`;
+      : sql`SELECT p.id FROM "Purchase" p WHERE p.id = ${entity === "purchase" ? id : (row.purchaseId ?? null)} AND ${notDeleted("p")}`;
   const purchases = rowsSchema.parse(
     (
       await database.execute(sql`
     SELECT p.shortcode, p."displayLabel", p."orderId", p.date, p.notes,
       v.shortcode AS "vendorId", v.name AS vendor, v.notes AS "vendorNotes",
       p."spendingCategoryId" AS "storedSpendingCategoryId", p."spendingCategoryOrigin", c.shortcode AS "spendingCategoryId", c.name AS "spendingCategory"
-    FROM "Purchase" p LEFT JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
-    LEFT JOIN "SpendingCategory" c ON c.id = p."spendingCategoryId" AND c."deletedAt" IS NULL
+    FROM "Purchase" p LEFT JOIN "Vendor" v ON v.id = p."vendorId" AND ${notDeleted("v")}
+    LEFT JOIN "SpendingCategory" c ON c.id = p."spendingCategoryId" AND ${notDeleted("c")}
     WHERE p.id IN (${links}) ORDER BY p.shortcode LIMIT 101
   `)
     ).rows,
@@ -162,15 +163,15 @@ export async function loadFinanceSuggestionContext(
     (
       await database.execute(sql`
     SELECT e.shortcode, e.name, e.cost, e."productQuantity", e.date, e.notes, e."lineKind", e."lineBasis", e."economicRole", e."costType", e.trade,
-      p.shortcode AS purchase, g.shortcode AS product, g.name AS "productName", (SELECT b.name FROM "Vendor" b WHERE b.id=g."brandId" AND b."deletedAt" IS NULL) AS "brandName", g.model, g.notes AS "productNotes",
+      p.shortcode AS purchase, g.shortcode AS product, g.name AS "productName", (SELECT b.name FROM "Vendor" b WHERE b.id=g."brandId" AND ${notDeleted("b")}) AS "brandName", g.model, g.notes AS "productNotes",
       pc.shortcode AS "productCategoryId", pc.name AS "productCategory",
       e."spendingCategoryId" AS "storedSpendingCategoryId", c.shortcode AS "spendingCategoryId", c.name AS "spendingCategory",
       ${expenseSpendingCategoryResolutionSql("e")} AS "classification"
-    FROM "Expense" e LEFT JOIN "Purchase" p ON p.id = e."purchaseId" AND p."deletedAt" IS NULL
-    LEFT JOIN "Product" g ON g.id = e."productId" AND g."deletedAt" IS NULL
-    LEFT JOIN "ProductCategory" pc ON pc.id = g."categoryId" AND pc."deletedAt" IS NULL
-    LEFT JOIN "SpendingCategory" c ON c.id = e."spendingCategoryId" AND c."deletedAt" IS NULL
-    WHERE e."deletedAt" IS NULL AND ${entity === "expense" ? sql`e.id = ${id}` : sql`e."purchaseId" IN (${links})`}
+    FROM "Expense" e LEFT JOIN "Purchase" p ON p.id = e."purchaseId" AND ${notDeleted("p")}
+    LEFT JOIN "Product" g ON g.id = e."productId" AND ${notDeleted("g")}
+    LEFT JOIN "ProductCategory" pc ON pc.id = g."categoryId" AND ${notDeleted("pc")}
+    LEFT JOIN "SpendingCategory" c ON c.id = e."spendingCategoryId" AND ${notDeleted("c")}
+    WHERE ${notDeleted("e")} AND ${entity === "expense" ? sql`e.id = ${id}` : sql`e."purchaseId" IN (${links})`}
     ORDER BY e.shortcode LIMIT 201
   `)
     ).rows,
@@ -181,7 +182,7 @@ export async function loadFinanceSuggestionContext(
           (
             await database.execute(sql`
     SELECT p.shortcode AS purchase, a.amount FROM "FinancialTransactionAllocation" a JOIN "Purchase" p ON p.id = a."purchaseId"
-    WHERE a."transactionId" = ${id} AND a."deletedAt" IS NULL AND p."deletedAt" IS NULL
+    WHERE a."transactionId" = ${id} AND ${notDeleted("a")} AND ${notDeleted("p")}
     ORDER BY p.shortcode LIMIT 101
   `)
           ).rows,
@@ -190,7 +191,7 @@ export async function loadFinanceSuggestionContext(
   const categories = rowsSchema.parse(
     (
       await database.execute(sql`
-    SELECT shortcode, name, "parentId" FROM "SpendingCategory" WHERE "deletedAt" IS NULL ORDER BY shortcode
+    SELECT shortcode, name, "parentId" FROM "SpendingCategory" WHERE ${notDeleted("SpendingCategory")} ORDER BY shortcode
   `)
     ).rows,
   );

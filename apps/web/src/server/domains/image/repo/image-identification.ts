@@ -25,6 +25,11 @@ import {
 import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
+import {
+  type ImageReadScope,
+  imageScopeEmpty,
+  imageScopeSql,
+} from "~/server/db/computed/image-read-scope";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
@@ -52,7 +57,7 @@ type RetainedIdentification = {
   createdAt: Date;
 };
 
-/** Two batched reads; historical suggestions cannot survive replaced sources or deleted targets. */
+/** One set-based read; historical suggestions cannot survive replaced sources or deleted targets. */
 async function loadCurrentIdentifications(
   db: Database | DrizzleTransaction,
   scope: SQL,
@@ -60,6 +65,7 @@ async function loadCurrentIdentifications(
   const rows = await unwrapDb(db)
     .select({
       shortcode: image.shortcode,
+      liveProducts: sql<unknown>`(SELECT coalesce(jsonb_object_agg(p.shortcode, p.name), '{}'::jsonb) FROM "Product" p WHERE ${notDeleted("p")} AND p.shortcode IN (SELECT candidate->>'productId' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(${aiAnalysis.result}->'candidates') = 'array' THEN ${aiAnalysis.result}->'candidates' ELSE '[]'::jsonb END) candidate))`,
       result: aiAnalysis.result,
       fingerprint: aiAnalysis.inputFingerprint,
       hash: image.sha256,
@@ -89,6 +95,7 @@ async function loadCurrentIdentifications(
     )
     .orderBy(desc(aiAnalysis.createdAt));
   const current = new Map<string, RetainedIdentification>();
+  const productsByImage = new Map<string, Map<string, string>>();
   for (const row of rows) {
     if (current.has(row.shortcode)) continue;
     let raw: unknown;
@@ -106,26 +113,21 @@ async function loadCurrentIdentifications(
       !result.success
     )
       continue;
+    productsByImage.set(
+      row.shortcode,
+      new Map(
+        Object.entries(
+          z.record(z.string(), z.string()).parse(row.liveProducts),
+        ),
+      ),
+    );
     current.set(row.shortcode, {
       result: result.data,
       createdAt: row.createdAt,
     });
   }
-  const ids = [
-    ...new Set(
-      [...current.values()].flatMap(({ result }) =>
-        result.candidates.map((candidate) => candidate.productId),
-      ),
-    ),
-  ];
-  const live = ids.length
-    ? await unwrapDb(db)
-        .select({ code: product.shortcode, name: product.name })
-        .from(product)
-        .where(and(inArray(product.shortcode, ids), notDeleted(product)))
-    : [];
-  const byCode = new Map(live.map((entry) => [entry.code, entry.name]));
-  for (const entry of current.values()) {
+  for (const [code, entry] of current) {
+    const byCode = productsByImage.get(code) ?? new Map<string, string>();
     entry.result.candidates = entry.result.candidates.flatMap((candidate) => {
       const name = byCode.get(candidate.productId);
       return name === undefined ? [] : [{ ...candidate, name }];
@@ -149,13 +151,10 @@ export async function readImageIdentification(
 
 export async function loadImageIdentifications(
   db: Database | DrizzleTransaction,
-  imageShortcodes: readonly string[],
+  imageShortcodes: ImageReadScope,
 ): Promise<Map<string, RetainedIdentification>> {
-  if (!imageShortcodes.length) return new Map();
-  return loadCurrentIdentifications(
-    db,
-    inArray(image.shortcode, [...new Set(imageShortcodes)]),
-  );
+  if (imageScopeEmpty(imageShortcodes)) return new Map();
+  return loadCurrentIdentifications(db, imageScopeSql(imageShortcodes));
 }
 
 /** Retrieval is explicit and bounded; only categories with live Products participate. */
@@ -166,7 +165,7 @@ export async function imageIdentificationCategories(db: Database) {
     .where(
       and(
         notDeleted(productCategory),
-        sql`EXISTS (SELECT 1 FROM "Product" p WHERE p."categoryId" = ${productCategory.id} AND p."deletedAt" IS NULL)`,
+        sql`EXISTS (SELECT 1 FROM "Product" p WHERE p."categoryId" = ${productCategory.id} AND ${notDeleted("p")})`,
       ),
     )
     .orderBy(asc(productCategory.name), asc(productCategory.id))

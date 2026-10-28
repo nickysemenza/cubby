@@ -125,7 +125,7 @@ const inScope = (scope: EmailPurchaseScope, purchaseId: SQL): SQL => {
       return sql`EXISTS (
         SELECT 1 FROM ${purchase} scoped
         WHERE scoped."id" = ${purchaseId} AND scoped."vendorId" = ${scope.vendorId}::uuid
-          AND scoped."deletedAt" IS NULL
+          AND ${notDeleted("scoped")}
       )`;
   }
 };
@@ -153,8 +153,8 @@ export const emailInScopeSql = (scope: EmailPurchaseScope): SQL => {
       return sql`CASE WHEN ${emailRelationshipResultExistsSql} THEN ${matches}
         WHEN NOT EXISTS (
           SELECT 1 FROM ${purchase} p
-          LEFT JOIN ${vendorAccount} account ON account.id = p."vendorAccountId" AND account."deletedAt" IS NULL
-          WHERE p.id = ${scope.purchaseId}::uuid AND p."deletedAt" IS NULL
+          LEFT JOIN ${vendorAccount} account ON account.id = p."vendorAccountId" AND ${notDeleted("account")}
+          WHERE p.id = ${scope.purchaseId}::uuid AND ${notDeleted("p")}
             AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
         ) THEN false ELSE NULL::boolean END`;
     case "vendor":

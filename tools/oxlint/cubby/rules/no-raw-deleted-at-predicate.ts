@@ -37,6 +37,8 @@ export const noRawDeletedAtPredicateRule = defineRule({
         'Disallow new hand-written `"deletedAt" IS NULL` predicates; related() and notDeleted() own liveness.',
     },
     messages: {
+      boundTextPredicate:
+        "liveAliasSqlText returns SQL text, which a tagged SQL template binds as a value. Interpolate liveAliasSql or notDeleted instead.",
       rawPredicate:
         'This file spells `"deletedAt" IS NULL` {{actual}} times, above its baseline of {{allowed}}. Read live rows through related() (server/db/helpers/related.ts) or notDeleted() instead.',
       staleBaseline:
@@ -63,6 +65,26 @@ export const noRawDeletedAtPredicateRule = defineRule({
       },
       TemplateElement(node) {
         note(node, node.value.raw);
+      },
+      TaggedTemplateExpression(node) {
+        const sqlTag =
+          (node.tag.type === "Identifier" && node.tag.name === "sql") ||
+          (node.tag.type === "MemberExpression" &&
+            !node.tag.computed &&
+            node.tag.property.type === "Identifier" &&
+            node.tag.property.name === "sql");
+        if (!sqlTag) return;
+        for (const expression of node.quasi.expressions) {
+          if (
+            expression.type === "CallExpression" &&
+            expression.callee.type === "Identifier" &&
+            expression.callee.name === "liveAliasSqlText"
+          )
+            context.report({
+              node: expression,
+              messageId: "boundTextPredicate",
+            });
+        }
       },
       Literal(node) {
         if (typeof node.value === "string") note(node, node.value);

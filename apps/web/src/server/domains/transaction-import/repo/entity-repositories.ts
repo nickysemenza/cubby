@@ -48,7 +48,7 @@ const initialFingerprint = sql`(SELECT i.fingerprint FROM "TransactionImport" i
 const transactionCode = sql`(SELECT cs.shortcode FROM ${CHARGE_STATE} cs
   WHERE cs.source = "SourceTransactionRecord".source AND cs."chargeKey" = "SourceTransactionRecord"."chargeKey")`;
 const storedCount = sql<number>`(SELECT count(*)::int FROM "TransactionImportRecord" m
-  JOIN "SourceTransactionRecord" r ON r.id = m."statementRowId" AND r."deletedAt" IS NULL
+  JOIN "SourceTransactionRecord" r ON r.id = m."statementRowId" AND ${notDeleted("r")}
   WHERE m."importId" = "TransactionImport".id)`;
 const sourceRead = {
   media: true,

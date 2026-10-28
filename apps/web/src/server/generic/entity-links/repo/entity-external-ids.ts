@@ -387,7 +387,7 @@ async function assertExternalIdAvailable(
     .execute<{ shortcode: string | null }>(sql`
     SELECT e."shortcode" FROM "EntityExternalId" x
     JOIN "Entity" e ON e."id" = x."entityId"
-    WHERE x."deletedAt" IS NULL AND x."source" = ${id.source}
+    WHERE ${notDeleted("x")} AND x."source" = ${id.source}
       AND x."kind" = ${id.kind} AND x."externalId" = ${id.externalId}
       AND x."entityId" <> ${ownerEntityId}
     LIMIT 1

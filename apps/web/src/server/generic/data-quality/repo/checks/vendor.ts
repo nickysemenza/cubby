@@ -64,7 +64,7 @@ async function loadVendorQualityRecords(
       hasLivePurchase: sql<boolean>`EXISTS (
         SELECT 1 FROM "Purchase" dq_vendor_purchase
         WHERE dq_vendor_purchase."vendorId" = ${vendorColumn("id")}
-          AND dq_vendor_purchase."deletedAt" IS NULL
+          AND ${notDeleted("dq_vendor_purchase")}
       )`,
       hasDisplayableLogo: sql<boolean>`EXISTS (
         SELECT 1 FROM "EntityAttachment" dq_vendor_attachment
@@ -72,8 +72,8 @@ async function loadVendorQualityRecords(
           ON dq_vendor_image."id" = dq_vendor_attachment."imageId"
         WHERE dq_vendor_attachment."entityId" = ${vendorColumn("id")}
           AND dq_vendor_attachment."role" = 'logo'
-          AND dq_vendor_attachment."deletedAt" IS NULL
-          AND dq_vendor_image."deletedAt" IS NULL
+          AND ${notDeleted("dq_vendor_attachment")}
+          AND ${notDeleted("dq_vendor_image")}
           AND ${displayableImageSql("dq_vendor_image")}
       )`,
       hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql(

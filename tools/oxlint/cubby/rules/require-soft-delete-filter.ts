@@ -315,7 +315,13 @@ function guardedByDeletedAtPredicate(body: string, ref: TableRef): boolean {
   const guard = ref.aliasIsBare
     ? new RegExp(`\\b${ref.alias}\\s*\\.\\s*"deletedAt"\\s+IS\\s+NULL`)
     : new RegExp(`"${ref.alias}"\\s*\\.\\s*"deletedAt"\\s+IS\\s+NULL`);
-  return guard.test(body);
+  // Match only this EXISTS body's own alias; a guard for another relation
+  // cannot make the subquery live. These helpers quote aliases as identifiers.
+  const escaped = ref.alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const helper = new RegExp(
+    `\\b(?:notDeleted|liveAliasSql|liveAliasSqlText)\\(\\s*["']${escaped}["']\\s*\\)`,
+  );
+  return guard.test(body) || helper.test(body);
 }
 
 /** One EXISTS/NOT EXISTS occurrence's own guarded argument body, within its literal. */

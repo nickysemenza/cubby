@@ -344,7 +344,7 @@ export async function transactionIdsAllocatedTo(
 export const solePurchaseForTransaction = sql`(
   SELECT spa."purchaseId" FROM "FinancialTransactionAllocation" spa
   WHERE spa."transactionId" = "FinancialTransaction"."id"
-    AND spa."deletedAt" IS NULL
+    AND ${notDeleted("spa")}
   ORDER BY spa."purchaseId"
   LIMIT 1
 )`;

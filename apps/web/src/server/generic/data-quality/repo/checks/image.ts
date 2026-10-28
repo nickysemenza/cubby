@@ -80,7 +80,7 @@ async function loadImageQualityRecords(
       hasLiveSighting: sql<boolean>`EXISTS (
         SELECT 1 FROM "ImageSighting" dq_image_sighting
         WHERE dq_image_sighting."imageId" = ${imageColumn("id")}
-          AND dq_image_sighting."deletedAt" IS NULL
+          AND ${notDeleted("dq_image_sighting")}
       )`,
       hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql(
         "image",

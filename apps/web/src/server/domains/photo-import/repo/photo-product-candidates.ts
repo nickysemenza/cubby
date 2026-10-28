@@ -60,6 +60,8 @@ import {
 } from "~/server/domains/run/repo/ensure-run";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { liveAliasSqlText } from "~/server/lib/live-row";
+import { textArraySomeSql } from "~/server/lib/name-alias-match";
 
 const CANDIDATE_POOL_LIMIT = 240;
 const SUGGESTION_LIMIT = 20;
@@ -159,31 +161,31 @@ export async function loadPhotoAcceptedSourceLines(
 // hand so an inner table cannot accidentally shadow its id.
 const HAS_OWN_PHOTO = sql.raw(`EXISTS (
   SELECT 1 FROM "EntityAttachment" pc_ea
-  JOIN "Image" pc_i ON pc_i."id" = pc_ea."imageId" AND pc_i."deletedAt" IS NULL
+  JOIN "Image" pc_i ON pc_i."id" = pc_ea."imageId" AND ${liveAliasSqlText("pc_i")}
   WHERE pc_ea."entityId" = "Product"."id"
-    AND pc_ea."deletedAt" IS NULL AND pc_i."source" = 'own'
+    AND ${liveAliasSqlText("pc_ea")} AND pc_i."source" = 'own'
 )`);
 const HAS_PHOTO_IMPORT = sql.raw(`EXISTS (
   SELECT 1 FROM "EntityAttachment" pc_ea
-  JOIN "Image" pc_i ON pc_i."id" = pc_ea."imageId" AND pc_i."deletedAt" IS NULL
+  JOIN "Image" pc_i ON pc_i."id" = pc_ea."imageId" AND ${liveAliasSqlText("pc_i")}
   JOIN "PhotoRunImage" pc_t ON pc_t."imageId" = pc_i."id"
   JOIN "Run" pc_r ON pc_r."id" = pc_t."runId"
   WHERE pc_ea."entityId" = "Product"."id"
-    AND pc_ea."deletedAt" IS NULL AND pc_r."deletedAt" IS NULL
+    AND ${liveAliasSqlText("pc_ea")} AND ${liveAliasSqlText("pc_r")}
     AND pc_r."purpose" = 'photo_inventory'
 )`);
 const HAS_PURCHASE = sql.raw(`EXISTS (
   SELECT 1 FROM "EntityLink" pc_pp
-  JOIN "Purchase" pc_p ON pc_p."id" = pc_pp."fromEntityId" AND pc_p."deletedAt" IS NULL
-  WHERE pc_pp."toEntityId" = "Product"."id" AND pc_pp."deletedAt" IS NULL AND pc_pp."kind" = 'purchaseProduct'
+  JOIN "Purchase" pc_p ON pc_p."id" = pc_pp."fromEntityId" AND ${liveAliasSqlText("pc_p")}
+  WHERE pc_pp."toEntityId" = "Product"."id" AND ${liveAliasSqlText("pc_pp")} AND pc_pp."kind" = 'purchaseProduct'
 ) OR EXISTS (
   SELECT 1 FROM "Expense" pc_e
-  JOIN "Purchase" pc_p ON pc_p."id" = pc_e."purchaseId" AND pc_p."deletedAt" IS NULL
-  WHERE pc_e."productId" = "Product"."id" AND pc_e."deletedAt" IS NULL
+  JOIN "Purchase" pc_p ON pc_p."id" = pc_e."purchaseId" AND ${liveAliasSqlText("pc_p")}
+  WHERE pc_e."productId" = "Product"."id" AND ${liveAliasSqlText("pc_e")}
 )`);
 const HAS_INVENTORY = sql.raw(`EXISTS (
   SELECT 1 FROM "InventoryEntry" pc_inv
-  WHERE pc_inv."productId" = "Product"."id" AND pc_inv."deletedAt" IS NULL
+  WHERE pc_inv."productId" = "Product"."id" AND ${liveAliasSqlText("pc_inv")}
 )`);
 
 type CandidateFact = {
@@ -485,7 +487,7 @@ export async function findPhotoProductCandidates(
       ilike(product.name, pattern),
       ilike(productBrandNameSql(product.brandId), pattern),
       ilike(product.model, pattern),
-      sql`EXISTS (SELECT 1 FROM unnest(${product.aliases}) AS alias WHERE alias ILIKE ${pattern})`,
+      textArraySomeSql(product.aliases, (value) => ilike(value, pattern)),
     );
   };
   const lexical = or(...terms.map(textMatch));
@@ -707,10 +709,10 @@ export async function loadPhotoProductEvidence(
           orderedDate: purchase.date,
           vendor: sql<
             string | null
-          >`(SELECT v.name FROM "Vendor" v WHERE v.id = ${purchase.vendorId} AND v."deletedAt" IS NULL)`,
+          >`(SELECT v.name FROM "Vendor" v WHERE v.id = ${purchase.vendorId} AND ${notDeleted("v")})`,
           vendorCode: sql<
             string | null
-          >`(SELECT v.shortcode FROM "Vendor" v WHERE v.id = ${purchase.vendorId} AND v."deletedAt" IS NULL)`,
+          >`(SELECT v.shortcode FROM "Vendor" v WHERE v.id = ${purchase.vendorId} AND ${notDeleted("v")})`,
           cost: expense.cost,
           productQuantity: expense.productQuantity,
           lineKind: expense.lineKind,

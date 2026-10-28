@@ -16,6 +16,7 @@ import { sql } from "drizzle-orm";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { runAfterCommit, unwrapDb, withTransaction } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { assessmentState } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
@@ -295,7 +296,7 @@ async function applySupersede(
     WHERE id IN (${sql.join(
       supersede.pendingRowIds.map((id) => sql`${id}::uuid`),
       sql`, `,
-    )}) AND "deletedAt" IS NULL
+    )}) AND ${notDeleted("SourceTransactionRecord")}
   `);
   await effects.claimRows();
   for (const source of new Set(pendingRows.map((row) => row.source)))

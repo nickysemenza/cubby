@@ -264,7 +264,7 @@ async function affectedExpenseIds(
       LEFT JOIN "Product" g ON g.id = e."productId"
       LEFT JOIN "Purchase" p ON p.id = e."purchaseId"
       LEFT JOIN "Vendor" v ON v.id = p."vendorId"
-      WHERE e."deletedAt" IS NULL AND (
+      WHERE ${notDeleted("e")} AND (
         e.id = ANY(d.expenses)
         OR e."productId" = ANY(d.products)
         OR g."categoryId" IN (SELECT id FROM touched_category)
@@ -274,7 +274,7 @@ async function affectedExpenseIds(
         OR v."defaultSpendingCategoryId" = ANY(d.merged))
     )
     SELECT e.id FROM "Expense" e
-    WHERE e."deletedAt" IS NULL AND (e.id IN (SELECT id FROM seed)
+    WHERE ${notDeleted("e")} AND (e.id IN (SELECT id FROM seed)
       OR e."purchaseId" IN (SELECT "purchaseId" FROM seed))
     ORDER BY e.id
   `);
@@ -299,7 +299,7 @@ async function householdAllocations(db: Database, scope: readonly ExpenseId[]) {
   const result = await unwrapDb(db).execute(sql`
     WITH a AS (${expenseDerivedReadSql("shares")})
     SELECT
-      (SELECT count(*) FROM "Expense" WHERE "deletedAt" IS NULL) AS "expenseCount",
+      (SELECT count(*) FROM "Expense" WHERE ${notDeleted("Expense")}) AS "expenseCount",
       (SELECT count(DISTINCT "expenseId") FROM a
         WHERE "spendingCategoryId" IS NULL OR "categoryIncomplete") AS "uncategorizedCount",
       (SELECT count(DISTINCT "expenseId") FROM a WHERE "sourceCents" IS NULL) AS "unpricedCount",
@@ -339,9 +339,9 @@ async function scopedFacts(db: Database, expenseIds: readonly ExpenseId[]) {
     WITH f AS (
       SELECT e.id, jsonb_build_object('expense',to_jsonb(e),'product',to_jsonb(g),'purchase',to_jsonb(p)) AS facts
       FROM "Expense" e
-      LEFT JOIN "Product" g ON g.id=e."productId" AND g."deletedAt" IS NULL
-      LEFT JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
-      WHERE e."deletedAt" IS NULL AND e.id = ANY(${uuidArrayParam(expenseIds)})
+      LEFT JOIN "Product" g ON g.id=e."productId" AND ${notDeleted("g")}
+      LEFT JOIN "Purchase" p ON p.id=e."purchaseId" AND ${notDeleted("p")}
+      WHERE ${notDeleted("e")} AND e.id = ANY(${uuidArrayParam(expenseIds)})
     )
     SELECT encode(sha256(convert_to(coalesce(string_agg(
         jsonb_build_array(f.id, f.facts)::text, ${"\n"} ORDER BY f.id), ''), 'UTF8')), 'hex') AS digest

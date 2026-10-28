@@ -16,7 +16,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
-import { actualExpenseSql } from "~/server/db/helpers/predicates";
+import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
@@ -33,7 +33,7 @@ const categoryPolicy = (
   field: "itemizationExpectation" | "productExpectation",
 ) => sql`(
   SELECT ${column("ep_category", field)} FROM "SpendingCategory" ep_category
-  WHERE ep_category.id = ${categoryId} AND ep_category."deletedAt" IS NULL
+  WHERE ep_category.id = ${categoryId} AND ${notDeleted("ep_category")}
 )`;
 
 /** The itemization policy a Vendor's order evidence implies: an online
@@ -54,7 +54,7 @@ export const vendorItemizationPolicySql = (alias: string): SQL =>
 
 const purchaseEvidenceFallbackSql = (alias: string): SQL => sql`COALESCE(
   (SELECT ${vendorItemizationPolicySql("ep_vendor")} FROM "Vendor" ep_vendor
-   WHERE ep_vendor.id = ${column(alias, "vendorId")} AND ep_vendor."deletedAt" IS NULL),
+   WHERE ep_vendor.id = ${column(alias, "vendorId")} AND ${notDeleted("ep_vendor")}),
   ${categoryPolicy(column(alias, "spendingCategoryId"), "itemizationExpectation")},
   'unknown'
 )`;
@@ -72,7 +72,7 @@ const categoryEvidenceSourceSql = (alias: string): SQL => sql`(
   SELECT jsonb_build_object('entityKind','spendingCategory','entityId',ep_source_category.shortcode,'name',ep_source_category.name)
   FROM "SpendingCategory" ep_source_category
   WHERE ep_source_category.id = ${column(alias, "spendingCategoryId")}
-    AND ep_source_category."deletedAt" IS NULL AND ep_source_category."itemizationExpectation" IS NOT NULL
+    AND ${notDeleted("ep_source_category")} AND ep_source_category."itemizationExpectation" IS NOT NULL
 )`;
 
 const evidenceFieldResolutionsSql = (values: {
@@ -118,7 +118,7 @@ export const purchaseEvidenceFieldResolutionsSql = (
 ): SQL<FieldResolutions> => {
   const vendorSource = sql`(SELECT jsonb_build_object('entityKind','vendor','entityId',ep_source_vendor.shortcode,'name',ep_source_vendor.name)
     FROM "Vendor" ep_source_vendor WHERE ep_source_vendor.id = ${column(alias, "vendorId")}
-      AND ep_source_vendor."deletedAt" IS NULL AND ${vendorItemizationPolicySql("ep_source_vendor")} IS NOT NULL)`;
+      AND ${notDeleted("ep_source_vendor")} AND ${vendorItemizationPolicySql("ep_source_vendor")} IS NOT NULL)`;
   const inheritedSource = sql`COALESCE(${vendorSource},${categoryEvidenceSourceSql(alias)})`;
   return evidenceFieldResolutionsSql({
     stored: column(alias, "itemizationExpectation"),
@@ -135,8 +135,8 @@ export const purchaseHasPrimaryDocumentSql = (
   alias: string,
 ): SQL => sql`EXISTS (
   SELECT 1 FROM "EntityAttachment" ep_document
-  JOIN "Image" ep_image ON ep_image.id = ep_document."imageId" AND ep_image."deletedAt" IS NULL
-  WHERE ep_document."entityId" = ${column(alias, "id")} AND ep_document."deletedAt" IS NULL
+  JOIN "Image" ep_image ON ep_image.id = ep_document."imageId" AND ${notDeleted("ep_image")}
+  WHERE ep_document."entityId" = ${column(alias, "id")} AND ${notDeleted("ep_document")}
     AND ep_document."documentKind" IN (${sql.join(
       primaryPurchaseDocumentKinds.map((kind) => sql`${kind}`),
       sql`, `,
@@ -147,7 +147,7 @@ export const purchaseHasPrimaryDocumentSql = (
  * statement booking) rather than as the order's own lines. */
 const purchaseHasAllocationSql = (alias: string): SQL => sql`EXISTS (
   SELECT 1 FROM "Expense" ep_allocation_line
-  WHERE ep_allocation_line."purchaseId" = ${column(alias, "id")} AND ep_allocation_line."deletedAt" IS NULL
+  WHERE ep_allocation_line."purchaseId" = ${column(alias, "id")} AND ${notDeleted("ep_allocation_line")}
     AND ${sql.raw(actualExpenseSql("ep_allocation_line"))} AND ep_allocation_line."economicRole" = 'vendor'
     AND ep_allocation_line."lineBasis" = 'allocation'
 )`;
@@ -160,7 +160,7 @@ const purchaseHasAllocationSql = (alias: string): SQL => sql`EXISTS (
  * per transaction score and broke the planner-memory budget. */
 const purchaseHasItemLinesSql = (alias: string): SQL => sql`(
   EXISTS (SELECT 1 FROM "Expense" ep_line
-    WHERE ep_line."purchaseId" = ${column(alias, "id")} AND ep_line."deletedAt" IS NULL
+    WHERE ep_line."purchaseId" = ${column(alias, "id")} AND ${notDeleted("ep_line")}
       AND ${sql.raw(actualExpenseSql("ep_line"))} AND ep_line."economicRole" = 'vendor'
       AND ep_line."lineKind" = 'principal' AND ep_line."lineBasis" = 'item_line')
   AND NOT ${purchaseHasAllocationSql(alias)}
@@ -172,8 +172,8 @@ const purchaseHasItemLinesSql = (alias: string): SQL => sql`(
 const purchaseHasLinkedGoodsSql = (alias: string): SQL => sql`(
   ${purchaseHasAllocationSql(alias)}
   AND EXISTS (SELECT 1 FROM "EntityLink" ep_linked_goods
-    JOIN "Product" ep_linked_product ON ep_linked_product.id = ep_linked_goods."toEntityId" AND ep_linked_product."deletedAt" IS NULL
-    WHERE ep_linked_goods."fromEntityId" = ${column(alias, "id")} AND ep_linked_goods."deletedAt" IS NULL
+    JOIN "Product" ep_linked_product ON ep_linked_product.id = ep_linked_goods."toEntityId" AND ${notDeleted("ep_linked_product")}
+    WHERE ep_linked_goods."fromEntityId" = ${column(alias, "id")} AND ${notDeleted("ep_linked_goods")}
       AND ep_linked_goods.kind = 'purchaseProduct')
 )`;
 
@@ -203,7 +203,7 @@ export const purchaseHasItemizationSql = (alias: string): SQL => {
   const fact = (name: ItemizationLineFact) =>
     sql`EXISTS (SELECT 1 FROM "Expense" ep_fact_line
     WHERE ep_fact_line."purchaseId" = ${column(alias, "id")}
-      AND ep_fact_line."deletedAt" IS NULL
+      AND ${notDeleted("ep_fact_line")}
       AND ${itemizationLineFacts[name]("ep_fact_line")})`;
   return sql`(
   ${purchaseListsItemsSql(alias)}
@@ -237,7 +237,7 @@ const purchaseBookingSql = (alias: string): SQL => sql`(SELECT CASE
   WHEN count(*) FILTER (WHERE ep_book.cost IS NULL) > 0 THEN 'partial'
   ELSE 'recorded' END
   FROM "Expense" ep_book WHERE ep_book."purchaseId" = ${column(alias, "id")}
-    AND ep_book."deletedAt" IS NULL AND ${sql.raw(actualExpenseSql("ep_book"))}
+    AND ${notDeleted("ep_book")} AND ${sql.raw(actualExpenseSql("ep_book"))}
 )`;
 
 /** No policy requires a document: an attached receipt or invoice is useful
@@ -274,7 +274,7 @@ const purchaseProductsSql = (alias: string): SQL => sql`(SELECT CASE
   FROM "Expense" ep_goods
   CROSS JOIN LATERAL (SELECT ${expenseProductExpectationSql("ep_goods")} AS expectation OFFSET 0) ep_goods_policy
   WHERE ep_goods."purchaseId" = ${column(alias, "id")}
-    AND ep_goods."deletedAt" IS NULL
+    AND ${notDeleted("ep_goods")}
 )`;
 
 export const purchaseCoverageSql = (
@@ -303,7 +303,7 @@ export const financialTransactionRequiresBookingSql = (
   AND (${column(alias, "kind")} IN ('purchase', 'refund', 'adjustment', 'fee', 'interest')
     OR (${column(alias, "kind")} = 'income' AND EXISTS (
       SELECT 1 FROM "FinancialTransactionAllocation" ep_income
-      WHERE ep_income."transactionId" = ${column(alias, "id")} AND ep_income."deletedAt" IS NULL)))
+      WHERE ep_income."transactionId" = ${column(alias, "id")} AND ${notDeleted("ep_income")})))
 )`;
 
 // Reviewed reimbursement ownership, not the sign or provider's income label,
@@ -312,7 +312,7 @@ const financialTransactionIsReimbursementSql = (alias: string): SQL => sql`(
   SELECT count(*) > 0 AND bool_and(ep_reimbursement."economicRole" = 'reimbursement')
   FROM "Expense" ep_reimbursement
   WHERE ep_reimbursement."bookingTransactionCode" = ${column(alias, "shortcode")}
-    AND ep_reimbursement."deletedAt" IS NULL
+    AND ${notDeleted("ep_reimbursement")}
 )`;
 
 export const linkedPurchaseItemizationExpectationSql = (
@@ -320,15 +320,15 @@ export const linkedPurchaseItemizationExpectationSql = (
   purchaseOverride?: SQL,
 ): SQL =>
   purchaseOverride !== undefined
-    ? sql`(SELECT ${purchaseItemizationExpectationSql("ep_linked")} FROM "Purchase" ep_linked WHERE ep_linked.id = ${purchaseOverride} AND ep_linked."deletedAt" IS NULL)`
+    ? sql`(SELECT ${purchaseItemizationExpectationSql("ep_linked")} FROM "Purchase" ep_linked WHERE ep_linked.id = ${purchaseOverride} AND ${notDeleted("ep_linked")})`
     : sql`(SELECT CASE
     WHEN bool_or(ep_linked_policy.expectation = 'required') THEN 'required'
     WHEN bool_or(ep_linked_policy.expectation = 'unknown') THEN 'unknown'
     WHEN count(*) > 0 THEN 'not_expected' ELSE NULL END
    FROM "FinancialTransactionAllocation" ep_allocation
-   JOIN "Purchase" ep_linked ON ep_linked.id = ep_allocation."purchaseId" AND ep_linked."deletedAt" IS NULL
+   JOIN "Purchase" ep_linked ON ep_linked.id = ep_allocation."purchaseId" AND ${notDeleted("ep_linked")}
    CROSS JOIN LATERAL (SELECT ${purchaseItemizationExpectationSql("ep_linked")} AS expectation OFFSET 0) ep_linked_policy
-   WHERE ep_allocation."transactionId" = ${column(alias, "id")} AND ep_allocation."deletedAt" IS NULL)`;
+   WHERE ep_allocation."transactionId" = ${column(alias, "id")} AND ${notDeleted("ep_allocation")})`;
 
 const financialTransactionPolicyExpectationSql = (
   alias: string,
@@ -360,12 +360,12 @@ export const linkedPurchaseItemizationSourceSql = (
   purchaseOverride?: SQL,
 ): SQL =>
   purchaseOverride !== undefined
-    ? sql`(SELECT jsonb_build_object('entityKind','purchase','entityId',ep_source_purchase.shortcode,'name',ep_source_purchase."displayLabel") FROM "Purchase" ep_source_purchase WHERE ep_source_purchase.id = ${purchaseOverride} AND ep_source_purchase."deletedAt" IS NULL)`
+    ? sql`(SELECT jsonb_build_object('entityKind','purchase','entityId',ep_source_purchase.shortcode,'name',ep_source_purchase."displayLabel") FROM "Purchase" ep_source_purchase WHERE ep_source_purchase.id = ${purchaseOverride} AND ${notDeleted("ep_source_purchase")})`
     : sql`(SELECT CASE WHEN count(*) = 1 THEN
     jsonb_build_object('entityKind','purchase','entityId',min(ep_source_purchase.shortcode),'name',min(ep_source_purchase."displayLabel")) ELSE NULL END
     FROM "FinancialTransactionAllocation" ep_source_allocation
-    JOIN "Purchase" ep_source_purchase ON ep_source_purchase.id = ep_source_allocation."purchaseId" AND ep_source_purchase."deletedAt" IS NULL
-    WHERE ep_source_allocation."transactionId" = ${column(alias, "id")} AND ep_source_allocation."deletedAt" IS NULL)`;
+    JOIN "Purchase" ep_source_purchase ON ep_source_purchase.id = ep_source_allocation."purchaseId" AND ${notDeleted("ep_source_purchase")}
+    WHERE ep_source_allocation."transactionId" = ${column(alias, "id")} AND ${notDeleted("ep_source_allocation")})`;
 
 export const financialTransactionEvidenceFieldResolutionsSql = (
   alias: string,
@@ -402,8 +402,8 @@ export const financialTransactionBookingSql = (alias: string): SQL => sql`(CASE
     WHEN bool_and(${purchaseBookingSql("ep_booked")} = 'recorded') THEN 'recorded'
     ELSE 'partial' END
     FROM "FinancialTransactionAllocation" ep_alloc
-    JOIN "Purchase" ep_booked ON ep_booked.id = ep_alloc."purchaseId" AND ep_booked."deletedAt" IS NULL
-    WHERE ep_alloc."transactionId" = ${column(alias, "id")} AND ep_alloc."deletedAt" IS NULL)
+    JOIN "Purchase" ep_booked ON ep_booked.id = ep_alloc."purchaseId" AND ${notDeleted("ep_booked")}
+    WHERE ep_alloc."transactionId" = ${column(alias, "id")} AND ${notDeleted("ep_alloc")})
   END)`;
 
 /** Each allocated Purchase keeps its own policy; one itemized Purchase cannot
@@ -444,9 +444,9 @@ export const financialTransactionCoverageAxisSql = (
     SELECT ${purchaseAxis} AS value
     FROM "FinancialTransactionAllocation" ep_axis_allocation
     JOIN "Purchase" ep_axis_purchase ON ep_axis_purchase.id = ep_axis_allocation."purchaseId"
-      AND ep_axis_purchase."deletedAt" IS NULL
+      AND ${notDeleted("ep_axis_purchase")}
     WHERE ep_axis_allocation."transactionId" = ${column(alias, "id")}
-      AND ep_axis_allocation."deletedAt" IS NULL
+      AND ${notDeleted("ep_axis_allocation")}
   ) ep_axis
 )`;
 };
@@ -505,7 +505,7 @@ export async function resolveDraftEvidenceFields(
   const persisted = id
     ? await unwrapDb(db).execute(sql`SELECT id,shortcode,
     ${purchase ? sql`"vendorId"` : sql`NULL::uuid`} AS "vendorId","spendingCategoryId","itemizationExpectation"
-    FROM ${sql.identifier(table)} WHERE id=${id} AND "deletedAt" IS NULL`)
+    FROM ${sql.identifier(table)} WHERE id=${id} AND ${notDeleted(table)}`)
     : null;
   const baseline = persisted?.rows[0]
     ? draftEvidenceRow.parse(persisted.rows[0])

@@ -166,7 +166,7 @@ export async function selectRecentlySoftDeletedSearchRefs(
         SELECT 1 FROM "SearchDocument" live
         WHERE live."entityKind" = sd."entityKind"
           AND live."entityId" = sd."entityId"
-          AND live."deletedAt" IS NULL
+          AND ${notDeleted("live")}
       )
       ${cursor}
     ORDER BY sd."entityKind", sd."entityId"::text

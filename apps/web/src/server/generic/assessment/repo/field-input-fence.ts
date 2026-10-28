@@ -7,6 +7,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   repositoryQueries as getDb,
@@ -59,7 +60,7 @@ export async function fieldInputFingerprintIfLive(
   if (!table) throw new Error(`No authoritative table: ${entity}`);
   const [source] = (
     await getDb(db).execute<{ value: unknown }>(sql`
-    SELECT to_jsonb(r) AS value FROM ${table} r WHERE r.id=${recordId}::uuid AND r."deletedAt" IS NULL LIMIT 1 ${options.lock ? sql`FOR UPDATE` : sql``}
+    SELECT to_jsonb(r) AS value FROM ${table} r WHERE r.id=${recordId}::uuid AND ${notDeleted("r")} LIMIT 1 ${options.lock ? sql`FOR UPDATE` : sql``}
   `)
   ).rows;
   if (!source) return null;
@@ -90,7 +91,7 @@ export async function fieldInputFingerprintIfLive(
         ? (
             await getDb(db).execute<{ value: unknown }>(sql`
       SELECT to_jsonb(r)-ARRAY['createdAt','updatedAt','verifiedAt','lastVerifiedAt','lastSeenAt']::text[] AS value
-      FROM ${target} r WHERE r.id=${id}::uuid AND r."deletedAt" IS NULL LIMIT 1 ${options.lock ? sql`FOR SHARE` : sql``}
+      FROM ${target} r WHERE r.id=${id}::uuid AND ${notDeleted("r")} LIMIT 1 ${options.lock ? sql`FOR SHARE` : sql``}
     `)
           ).rows
         : [];
@@ -127,7 +128,7 @@ export async function fieldInputFingerprintIfLive(
       ? (
           await getDb(db).execute<{ value: unknown }>(sql`
         SELECT to_jsonb(r)-ARRAY['createdAt','updatedAt','verifiedAt','lastVerifiedAt','lastSeenAt']::text[] AS value
-        FROM ${target} r WHERE r.id=ANY(${uuidArrayParam(ids)}) AND r."deletedAt" IS NULL ORDER BY r.id ${options.lock ? sql`FOR SHARE` : sql``}
+        FROM ${target} r WHERE r.id=ANY(${uuidArrayParam(ids)}) AND ${notDeleted("r")} ORDER BY r.id ${options.lock ? sql`FOR SHARE` : sql``}
       `)
         ).rows
       : [];

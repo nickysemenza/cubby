@@ -156,13 +156,13 @@ const pathsFor = async (
         ids.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
-        AND c."deletedAt" IS NULL
+        AND ${notDeleted("c")}
       UNION ALL
       SELECT a.root, parent."id", parent."parentId", parent."shortcode", parent."name", a.depth + 1,
              a.visited || parent."id"
       FROM ancestors a
       JOIN "ProductCategory" parent ON parent."id" = a."parentId"
-      WHERE parent."deletedAt" IS NULL
+      WHERE ${notDeleted("parent")}
         AND a.depth < ${MAX_PRODUCT_CATEGORY_DEPTH - 1}
         AND NOT parent."id" = ANY(a.visited)
     )
@@ -192,18 +192,18 @@ const productCountsFor = async (
         ids.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
-        AND c."deletedAt" IS NULL
+        AND ${notDeleted("c")}
       UNION ALL
       SELECT d.root, child."id", d.visited || child."id"
       FROM descendants d
       JOIN "ProductCategory" child ON child."parentId" = d."id"
-      WHERE child."deletedAt" IS NULL
+      WHERE ${notDeleted("child")}
         AND array_length(d.visited, 1) < ${MAX_PRODUCT_CATEGORY_DEPTH}
         AND NOT child."id" = ANY(d.visited)
     )
     SELECT d.root, count(p."id")::int AS count
     FROM descendants d
-    JOIN "Product" p ON p."categoryId" = d."id" AND p."deletedAt" IS NULL
+    JOIN "Product" p ON p."categoryId" = d."id" AND ${notDeleted("p")}
     GROUP BY d.root
   `);
   return new Map(rows.rows.map((row) => [row.root, row.count]));
@@ -443,7 +443,7 @@ export const assertValidParent = async (
         UNION ALL
         SELECT child."id", d.visited || child."id"
         FROM descendants d JOIN "ProductCategory" child ON child."parentId" = d."id"
-        WHERE child."deletedAt" IS NULL AND array_length(d.visited, 1) < ${MAX_PRODUCT_CATEGORY_DEPTH}
+        WHERE ${notDeleted("child")} AND array_length(d.visited, 1) < ${MAX_PRODUCT_CATEGORY_DEPTH}
           AND NOT child."id" = ANY(d.visited)
       ) SELECT "id", array_length(visited, 1) AS depth FROM descendants
     `);
@@ -461,7 +461,7 @@ export const assertValidParent = async (
       UNION ALL
       SELECT parent."id", parent."parentId", a.visited || parent."id"
       FROM ancestors a JOIN "ProductCategory" parent ON parent."id" = a."parentId"
-      WHERE parent."deletedAt" IS NULL AND array_length(a.visited, 1) < ${MAX_PRODUCT_CATEGORY_DEPTH}
+      WHERE ${notDeleted("parent")} AND array_length(a.visited, 1) < ${MAX_PRODUCT_CATEGORY_DEPTH}
         AND NOT parent."id" = ANY(a.visited)
     ) SELECT "id" FROM ancestors
   `);
@@ -617,7 +617,7 @@ export const updateProductCategory = defineMutationWriter({
       ) {
         const affected = await unwrapDb(db)
           .execute(sql`SELECT 1 FROM "Expense" e JOIN "Product" p ON p.id=e."productId"
-        WHERE e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND p."categoryId" IN ${hierarchyDescendantsSql("productCategory", [id])} LIMIT 1`);
+        WHERE ${notDeleted("e")} AND ${notDeleted("p")} AND p."categoryId" IN ${hierarchyDescendantsSql("productCategory", [id])} LIMIT 1`);
         if (affected.rows.length) assertReviewedSpendingClassification(db);
       }
     }

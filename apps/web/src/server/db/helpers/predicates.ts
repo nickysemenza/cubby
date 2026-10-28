@@ -1,6 +1,8 @@
 import { type AnyColumn, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { liveAliasSql } from "~/server/lib/live-row";
+
 /** `term` as a LIKE pattern that matches it literally, for case-insensitive equality. */
 export const escapeLike = (term: string): string =>
   term.replace(/[\\%_]/g, "\\$&");
@@ -12,9 +14,19 @@ export const escapeLike = (term: string): string =>
  */
 export const ilikeContains = (term: string): string => `%${escapeLike(term)}%`;
 
-/** Expiring read-only entities have no soft-delete column; every retained row is live. */
-export const notDeleted = (table: PgTable | { deletedAt: AnyColumn }) =>
-  "deletedAt" in table && table.deletedAt ? isNull(table.deletedAt) : sql`true`;
+/**
+ * Qualified SQL aliases let schema-free repository fragments share the live-row
+ * policy. Structured readers pass their declared table; expiring read-only
+ * entities have no soft-delete column and every retained row is live.
+ */
+export const notDeleted = (
+  table: PgTable | { deletedAt: AnyColumn } | string,
+) =>
+  typeof table === "string"
+    ? liveAliasSql(table)
+    : "deletedAt" in table && table.deletedAt
+      ? isNull(table.deletedAt)
+      : sql`true`;
 
 /**
  * Raw-text actual/planned Expense predicates for an aliased `"Expense"` in

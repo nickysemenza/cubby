@@ -219,8 +219,8 @@ async function loadTransfers(
       count(e.id)::int AS "evidenceCount"
     FROM ${ledgerTransfer} t
     LEFT JOIN ${financialTransaction} e
-      ON e."ledgerTransferId" = t.id AND e."deletedAt" IS NULL
-    WHERE t."deletedAt" IS NULL AND t.date <= ${asOf}
+      ON e."ledgerTransferId" = t.id AND ${notDeleted("e")}
+    WHERE ${notDeleted("t")} AND t.date <= ${asOf}
     GROUP BY t.id
     ORDER BY t.date, t.shortcode
   `);

@@ -126,9 +126,9 @@ async function ancestors(
   const shown =
     kind === "productCategory" && chainField === "spendingCategoryId"
       ? // The mapping shows its mode beside the category, so a block reads as one.
-        sql`jsonb_build_object('mode',p."spendingCategoryMode",'category',(SELECT c.shortcode FROM "SpendingCategory" c WHERE c.id=l.value AND c."deletedAt" IS NULL))`
+        sql`jsonb_build_object('mode',p."spendingCategoryMode",'category',(SELECT c.shortcode FROM "SpendingCategory" c WHERE c.id=l.value AND ${notDeleted("c")}))`
       : target?.dbTable
-        ? sql`to_jsonb((SELECT c.shortcode FROM ${sql.identifier(target.dbTable)} c WHERE c.id=l.value${target.softDelete ? sql` AND c."deletedAt" IS NULL` : sql``}))`
+        ? sql`to_jsonb((SELECT c.shortcode FROM ${sql.identifier(target.dbTable)} c WHERE c.id=l.value${target.softDelete ? sql` AND ${notDeleted("c")}` : sql``}))`
         : sql`to_jsonb(l.value)`;
   const rows = await unwrapDb(db).execute(sql`
     SELECT p.shortcode,p.name,${shown} AS value,l.decides AS assigned,l.depth,l.eligible
@@ -294,13 +294,13 @@ async function taskAssigneeSteps(
   const tasks = await ancestors(
     db,
     "task",
-    sql`(SELECT id FROM "Task" WHERE shortcode=${shortcode} AND "deletedAt" IS NULL)`,
+    sql`(SELECT id FROM "Task" WHERE shortcode=${shortcode} AND ${notDeleted("Task")})`,
     field,
   );
   const projects = await ancestors(
     db,
     "project",
-    sql`(SELECT ${effectiveFieldSql("task", "projectId", "t")} FROM "Task" t WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL)`,
+    sql`(SELECT ${effectiveFieldSql("task", "projectId", "t")} FROM "Task" t WHERE t.shortcode=${shortcode} AND ${notDeleted("t")})`,
     field,
   );
   const nobody = (steps: Step[]) =>
@@ -331,11 +331,11 @@ async function expenseProjectSteps(
       SELECT p.shortcode AS "purchaseCode",pc.shortcode AS "purchaseProject",
         hp.shortcode AS "foodProject",hp.name AS "foodName",e."lineKind"
       FROM "Expense" e
-      LEFT JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
-      LEFT JOIN "Project" pc ON pc.id=p."defaultProjectId" AND pc."deletedAt" IS NULL
+      LEFT JOIN "Purchase" p ON p.id=e."purchaseId" AND ${notDeleted("p")}
+      LEFT JOIN "Project" pc ON pc.id=p."defaultProjectId" AND ${notDeleted("pc")}
       CROSS JOIN LATERAL (SELECT e."lineKind",e."productId",NULL::uuid AS "projectId",NULL::uuid AS "purchaseId") food_candidate
-      LEFT JOIN "Project" hp ON hp.id=${effectiveExpenseProjectSql("food_candidate")} AND hp."deletedAt" IS NULL
-      WHERE e.shortcode=${shortcode} AND e."deletedAt" IS NULL`);
+      LEFT JOIN "Project" hp ON hp.id=${effectiveExpenseProjectSql("food_candidate")} AND ${notDeleted("hp")}
+      WHERE e.shortcode=${shortcode} AND ${notDeleted("e")}`);
   const row = z
     .object({
       purchaseCode: z.string().nullable(),
@@ -474,9 +474,9 @@ async function fieldSteps(
     const result = await unwrapDb(db).execute(sql`
       SELECT v.shortcode AS "vendorCode",${vendorItemizationPolicySql("v")} AS "vendorPolicy",
         c.shortcode AS "categoryCode",c."itemizationExpectation" AS "categoryPolicy"
-      FROM "Purchase" p LEFT JOIN "Vendor" v ON v.id=p."vendorId" AND v."deletedAt" IS NULL
-      LEFT JOIN "SpendingCategory" c ON c.id=p."spendingCategoryId" AND c."deletedAt" IS NULL
-      WHERE p.shortcode=${shortcode} AND p."deletedAt" IS NULL`);
+      FROM "Purchase" p LEFT JOIN "Vendor" v ON v.id=p."vendorId" AND ${notDeleted("v")}
+      LEFT JOIN "SpendingCategory" c ON c.id=p."spendingCategoryId" AND ${notDeleted("c")}
+      WHERE p.shortcode=${shortcode} AND ${notDeleted("p")}`);
     const row = z
       .object({
         vendorCode: z.string().nullable(),
@@ -534,12 +534,12 @@ async function fieldSteps(
     const nodes = await ancestors(
       db,
       "project",
-      sql`(SELECT ${effectiveExpenseProjectSql("e")} FROM "Expense" e WHERE e.shortcode=${shortcode} AND e."deletedAt" IS NULL)`,
+      sql`(SELECT ${effectiveExpenseProjectSql("e")} FROM "Expense" e WHERE e.shortcode=${shortcode} AND ${notDeleted("e")})`,
       field,
     );
     const row = (
       await unwrapDb(db).execute(
-        sql`SELECT p.shortcode,p."defaultTrade" AS trade FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL WHERE e.shortcode=${shortcode} AND e."deletedAt" IS NULL AND e."lineKind"=${"principal"}`,
+        sql`SELECT p.shortcode,p."defaultTrade" AS trade FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" AND ${notDeleted("p")} WHERE e.shortcode=${shortcode} AND ${notDeleted("e")} AND e."lineKind"=${"principal"}`,
       )
     ).rows[0];
     const purchase = z
@@ -581,7 +581,7 @@ async function fieldSteps(
     const nodes = await ancestors(
       db,
       "project",
-      sql`(SELECT id FROM "Project" WHERE shortcode=${shortcode} AND "deletedAt" IS NULL)`,
+      sql`(SELECT id FROM "Project" WHERE shortcode=${shortcode} AND ${notDeleted("Project")})`,
       field,
     );
     return {
@@ -599,7 +599,7 @@ async function fieldSteps(
     const nodes = await ancestors(
       db,
       "task",
-      sql`(SELECT id FROM "Task" WHERE shortcode=${shortcode} AND "deletedAt" IS NULL)`,
+      sql`(SELECT id FROM "Task" WHERE shortcode=${shortcode} AND ${notDeleted("Task")})`,
       field,
     );
     let fallbackSource = source(
@@ -618,7 +618,7 @@ async function fieldSteps(
       const projects = await ancestors(
         db,
         "project",
-        sql`(SELECT ${effectiveFieldSql("task", "projectId", "t")} FROM "Task" t WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL)`,
+        sql`(SELECT ${effectiveFieldSql("task", "projectId", "t")} FROM "Task" t WHERE t.shortcode=${shortcode} AND ${notDeleted("t")})`,
         "defaultTrade",
       );
       fallbackSource ??= source(
@@ -638,7 +638,7 @@ async function fieldSteps(
     const nodes = await ancestors(
       db,
       "productCategory",
-      sql`(SELECT id FROM "ProductCategory" WHERE shortcode=${shortcode} AND "deletedAt" IS NULL)`,
+      sql`(SELECT id FROM "ProductCategory" WHERE shortcode=${shortcode} AND ${notDeleted("ProductCategory")})`,
       field === "feature" ? "feature" : "spendingCategoryId",
     );
     return {
@@ -992,7 +992,7 @@ async function allocatedExpenseEvidence(
   field: string,
   resolution: FieldResolution,
 ): Promise<{ evidence: Evidence; truncated: boolean }> {
-  const selection = sql`ARRAY(SELECT id FROM "Expense" WHERE shortcode=${shortcode} AND "deletedAt" IS NULL)`;
+  const selection = sql`ARRAY(SELECT id FROM "Expense" WHERE shortcode=${shortcode} AND ${notDeleted("Expense")})`;
   const value =
     field === "projectId"
       ? sql`to_jsonb(a."projectShortcode")`
@@ -1005,8 +1005,8 @@ async function allocatedExpenseEvidence(
     WITH shares AS (${expenseJointAllocationSql(selection)}), evidence AS (
       SELECT a.*,${value} AS value,e.shortcode,e.name,p.shortcode AS "purchaseCode",
         COALESCE(p."displayLabel",p."orderId") AS "purchaseName"
-      FROM shares a LEFT JOIN "Expense" e ON e.id=a."principalExpenseId" AND e."deletedAt" IS NULL
-      LEFT JOIN "Purchase" p ON p.id=a."purchaseId" AND p."deletedAt" IS NULL
+      FROM shares a LEFT JOIN "Expense" e ON e.id=a."principalExpenseId" AND ${notDeleted("e")}
+      LEFT JOIN "Purchase" p ON p.id=a."purchaseId" AND ${notDeleted("p")}
     ) SELECT shortcode,name,"purchaseCode","purchaseName",value,"attributedCents",basis,incomplete,"categoryIncomplete",
       (SELECT count(*)::int FROM evidence) AS total,
       (SELECT count(DISTINCT value) FILTER (WHERE value <> 'null'::jsonb)::int FROM evidence) AS distinct_values
@@ -1135,12 +1135,12 @@ async function productPriceEvidence(
   resolution: FieldResolution,
 ): Promise<{ evidence: Evidence; truncated: boolean }> {
   const result = await unwrapDb(db).execute(sql`
-    ${kitAncestorCteSql(sql`SELECT p.id,p.id,1::numeric,1::numeric,0 FROM "Product" p WHERE p.shortcode=${shortcode} AND p."deletedAt" IS NULL`)}
+    ${kitAncestorCteSql(sql`SELECT p.id,p.id,1::numeric,1::numeric,0 FROM "Product" p WHERE p.shortcode=${shortcode} AND ${notDeleted("p")}`)}
     SELECT e.shortcode,e.name,e.cost,e."productQuantity",p.shortcode AS "productCode",p.name AS "productName",
       ka."costWeight"::double precision AS "costWeight",ka."unitWeight"::double precision AS "unitWeight",ka.depth,
       count(*) OVER()::int AS total
-    FROM kit_anc ka JOIN "Product" p ON p.id=ka."productId" AND p."deletedAt" IS NULL
-    JOIN "Expense" e ON e."productId"=ka."productId" AND e."deletedAt" IS NULL
+    FROM kit_anc ka JOIN "Product" p ON p.id=ka."productId" AND ${notDeleted("p")}
+    JOIN "Expense" e ON e."productId"=ka."productId" AND ${notDeleted("e")}
       AND ${sql.raw(actualExpenseSql("e"))} AND e."lineKind"=${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)} AND e.cost>0
     ORDER BY ka.depth,e.date DESC NULLS LAST,e.shortcode LIMIT ${CONTRIBUTOR_LIMIT + 1}`);
   const rows = z
@@ -1249,9 +1249,9 @@ async function transactionPolicyEvidence(
       SELECT p.shortcode,COALESCE(p."displayLabel",p."orderId",p.shortcode) AS name,
         ${purchaseEvidenceFieldResolutionsSql("p")}->'itemizationExpectation' AS resolution
       FROM "FinancialTransaction" t
-      JOIN "FinancialTransactionAllocation" a ON a."transactionId"=t.id AND a."deletedAt" IS NULL
-      JOIN "Purchase" p ON p.id=a."purchaseId" AND p."deletedAt" IS NULL
-      WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL
+      JOIN "FinancialTransactionAllocation" a ON a."transactionId"=t.id AND ${notDeleted("a")}
+      JOIN "Purchase" p ON p.id=a."purchaseId" AND ${notDeleted("p")}
+      WHERE t.shortcode=${shortcode} AND ${notDeleted("t")}
     ) SELECT shortcode,name,resolution,count(*) OVER()::int AS total
     FROM policies ORDER BY shortcode LIMIT ${CONTRIBUTOR_LIMIT + 1}`);
   const rows = z
@@ -1269,8 +1269,8 @@ async function transactionPolicyEvidence(
       ${linkedPurchaseItemizationExpectationSql("t")} AS "linkedValue",
       ${linkedPurchaseItemizationSourceSql("t")} AS "linkedSource"
     FROM "FinancialTransaction" t
-    LEFT JOIN "SpendingCategory" c ON c.id=t."spendingCategoryId" AND c."deletedAt" IS NULL
-    WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL`);
+    LEFT JOIN "SpendingCategory" c ON c.id=t."spendingCategoryId" AND ${notDeleted("c")}
+    WHERE t.shortcode=${shortcode} AND ${notDeleted("t")}`);
   const category = z
     .object({
       shortcode: z.string().nullable(),

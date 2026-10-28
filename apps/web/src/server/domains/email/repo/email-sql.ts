@@ -12,6 +12,8 @@ import {
 import { importSourceKind } from "@cubby/schemas/purchase-import";
 import { sql, type SQL } from "drizzle-orm";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
+
 // Leaf module: the quality loader and Email repository share domain evidence
 // without importing the repository/list-scaffold composition.
 
@@ -90,9 +92,9 @@ export const emailAcceptedEvidenceSql = (
         sql`LEFT JOIN "SourceOrderObservation" observation
     ON accepted."purchaseId" IS NULL AND observation."id" = accepted."acceptedObservationId"
   LEFT JOIN "Purchase" p ON p."id" = coalesce(accepted."purchaseId", observation."purchaseId")`
-      : sql`INNER JOIN "Purchase" p ON p."id" = accepted."purchaseId" AND p."deletedAt" IS NULL`
+      : sql`INNER JOIN "Purchase" p ON p."id" = accepted."purchaseId" AND ${notDeleted("p")}`
   }
-  LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
+  LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted("account")}
   WHERE identity."ledgerPartyId" = "Email"."ledgerPartyId"
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
     -- Separate source keys let the composite identity index resolve each arm.
@@ -118,8 +120,8 @@ const emailLinkedDecisionPurchasesSql = (
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
   INNER JOIN "AssessmentEmailLink" decision ON decision."eventId" = event."id"
-  INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND ${includeDeleted ? sql`true` : sql`p."deletedAt" IS NULL`}
-  LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
+  INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND ${includeDeleted ? sql`true` : sql`${notDeleted("p")}`}
+  LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted("account")}
   WHERE original."id" = "Email"."orderMailId"
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
     AND event."supersededAt" IS NULL AND decision."decision" = ${emailPurchaseLinkState.enum.linked}
@@ -160,7 +162,7 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
   ), candidate_ids AS (
     SELECT candidate."id"
     FROM accepted_identities identity
-    JOIN "Email" candidate ON candidate."deletedAt" IS NULL
+    JOIN "Email" candidate ON ${notDeleted("candidate")}
       AND candidate."ledgerPartyId" = identity."ledgerPartyId"
       -- Separate arms: the message key matches "Email_source_key_idx".
       AND identity."kind" = ${importSourceKind.enum.mail_message}
@@ -168,7 +170,7 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
     UNION
     SELECT candidate."id"
     FROM accepted_identities identity
-    JOIN "Email" candidate ON candidate."deletedAt" IS NULL
+    JOIN "Email" candidate ON ${notDeleted("candidate")}
       AND candidate."ledgerPartyId" = identity."ledgerPartyId"
       AND identity."kind" = ${importSourceKind.enum.mail_attachment}
       AND starts_with(identity."externalKey", candidate."provider" || ':' || candidate."mailboxId" || ':' || candidate."messageId" || ':attachment:')
@@ -176,13 +178,13 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
     SELECT candidate."id"
     FROM "AssessmentEmailLink" decision
     JOIN "OrderMailEvent" event ON event."id" = decision."eventId"
-    JOIN "Email" candidate ON candidate."orderMailId" = event."orderMailId" AND candidate."deletedAt" IS NULL
+    JOIN "Email" candidate ON candidate."orderMailId" = event."orderMailId" AND ${notDeleted("candidate")}
     WHERE decision."purchaseId" = ${purchaseId}
   ), eligible AS MATERIALIZED (
     SELECT candidate."id", candidate."shortcode", candidate."subject", candidate."deletedAt",
       candidate."ledgerPartyId", candidate."provider", candidate."mailboxId", candidate."messageId",
       candidate."orderMailId", candidate."checksum"
-    FROM candidate_ids ids JOIN "Email" candidate ON candidate."id" = ids."id" AND candidate."deletedAt" IS NULL
+    FROM candidate_ids ids JOIN "Email" candidate ON candidate."id" = ids."id" AND ${notDeleted("candidate")}
   )
   SELECT "Email".* FROM eligible "Email"
   WHERE EXISTS (SELECT 1 FROM (${emailPurchaseAssociationsSql()}) association
@@ -210,7 +212,7 @@ export const purchaseMailPartiesSql = (purchases: SQL): SQL => {
     JOIN "ImportSourceClaim" root ON root."id" = coalesce(family."canonicalClaimId", family."id")
       AND root."canonicalClaimId" IS NULL
       AND root."ledgerPartyId" = family."ledgerPartyId" AND root."kind" = family."kind"
-    WHERE purchase."deletedAt" IS NULL`;
+    WHERE ${notDeleted("purchase")}`;
   const identities = sql`(
     SELECT "purchaseId", "ledgerPartyId", "kind", "externalKey" FROM (${roots}) roots
     UNION ALL
@@ -221,7 +223,7 @@ export const purchaseMailPartiesSql = (purchases: SQL): SQL => {
   return sql`
   SELECT identity."purchaseId", identity."ledgerPartyId"
   FROM ${identities} identity
-  JOIN "Email" ON "Email"."deletedAt" IS NULL
+  JOIN "Email" ON ${notDeleted("Email")}
     AND "Email"."ledgerPartyId" = identity."ledgerPartyId"
     AND identity."kind" = ${importSourceKind.enum.mail_message}
     AND ${emailSourceKeySql} = identity."externalKey"
@@ -231,7 +233,7 @@ export const purchaseMailPartiesSql = (purchases: SQL): SQL => {
   -- The message key ahead of ":attachment:" under the mail source key grammar
   -- (parseMailSourceKey: the message id holds no colon) reaches
   -- "Email_source_key_idx"; the attachment then matches exactly.
-  JOIN "Email" ON "Email"."deletedAt" IS NULL
+  JOIN "Email" ON ${notDeleted("Email")}
     AND "Email"."ledgerPartyId" = identity."ledgerPartyId"
     AND identity."kind" = ${importSourceKind.enum.mail_attachment}
     AND ${emailSourceKeySql} = substring(identity."externalKey" from '^(.+?:[^:]+):attachment:')
@@ -251,8 +253,8 @@ export const purchaseMailPartiesSql = (purchases: SQL): SQL => {
   JOIN "OrderMailEvent" event ON event."id" = decision."eventId" AND event."supersededAt" IS NULL
   JOIN "OrderMail" original ON original."id" = event."orderMailId"
   JOIN "Email" ON "Email"."orderMailId" = original."id"
-    AND "Email"."ledgerPartyId" = original."ledgerPartyId" AND "Email"."deletedAt" IS NULL
-  WHERE purchase."deletedAt" IS NULL
+    AND "Email"."ledgerPartyId" = original."ledgerPartyId" AND ${notDeleted("Email")}
+  WHERE ${notDeleted("purchase")}
 `;
 };
 

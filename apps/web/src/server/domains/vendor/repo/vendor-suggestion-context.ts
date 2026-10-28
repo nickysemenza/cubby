@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { categoryMappingSql } from "~/server/domains/product-category/repo/category-connections";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -41,24 +42,24 @@ export async function loadVendorSuggestionContext(
   const id = await resolveOrThrow(db, "vendor", code);
   const database = unwrapDb(db);
   const roots = await database.execute(
-    sql`SELECT name, website, notes, "spendingProfile", "defaultSpendingCategoryId" FROM "Vendor" WHERE id=${id} AND "deletedAt" IS NULL`,
+    sql`SELECT name, website, notes, "spendingProfile", "defaultSpendingCategoryId" FROM "Vendor" WHERE id=${id} AND ${notDeleted("Vendor")}`,
   );
   const root = rootSchema.parse(roots.rows[0]);
   const rows =
     await database.execute(sql`SELECT e.shortcode,e.name,e.cost,p.shortcode AS purchase,g.shortcode AS product,g.name AS "productName",pc.shortcode AS "productCategoryId",pc.name AS "productCategory",pc.emoji AS "productCategoryEmoji",
     CASE WHEN pc.id IS NULL THEN NULL ELSE ${categoryMappingSql(sql`pc.id`)} END AS mapping,
     sc.name AS "explicitSpendingCategory",psc.name AS "purchaseSpendingCategory",e."economicRole"
-    FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
-    LEFT JOIN "Product" g ON g.id=e."productId" AND g."deletedAt" IS NULL
-    LEFT JOIN "ProductCategory" pc ON pc.id=g."categoryId" AND pc."deletedAt" IS NULL
-    LEFT JOIN "SpendingCategory" sc ON sc.id=e."spendingCategoryId" AND sc."deletedAt" IS NULL
-    LEFT JOIN "SpendingCategory" psc ON psc.id=p."spendingCategoryId" AND p."spendingCategoryOrigin" <> 'source' AND psc."deletedAt" IS NULL
-    WHERE p."vendorId"=${id} AND e."deletedAt" IS NULL AND e."lineKind"='principal'
+    FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" AND ${notDeleted("p")}
+    LEFT JOIN "Product" g ON g.id=e."productId" AND ${notDeleted("g")}
+    LEFT JOIN "ProductCategory" pc ON pc.id=g."categoryId" AND ${notDeleted("pc")}
+    LEFT JOIN "SpendingCategory" sc ON sc.id=e."spendingCategoryId" AND ${notDeleted("sc")}
+    LEFT JOIN "SpendingCategory" psc ON psc.id=p."spendingCategoryId" AND p."spendingCategoryOrigin" <> 'source' AND ${notDeleted("psc")}
+    WHERE p."vendorId"=${id} AND ${notDeleted("e")} AND e."lineKind"='principal'
     ORDER BY e.shortcode LIMIT 201`);
   const lines = z.array(lineSchema).parse(rows.rows);
   const categories = (
     await database.execute(
-      sql`SELECT shortcode,name,"parentId",emoji FROM "SpendingCategory" WHERE "deletedAt" IS NULL ORDER BY shortcode`,
+      sql`SELECT shortcode,name,"parentId",emoji FROM "SpendingCategory" WHERE ${notDeleted("SpendingCategory")} ORDER BY shortcode`,
     )
   ).rows;
   const truncated = lines.length > 200;
@@ -128,10 +129,10 @@ export async function loadVendorCategoryEvidence(
     .execute(sql`SELECT pc.shortcode AS id,pc.emoji,
     CASE WHEN pc.id IS NULL THEN NULL ELSE ${categoryMappingSql(sql`pc.id`)}->>'path' END AS name,
     count(*)::int AS "principalLineCount",count(DISTINCT p.id)::int AS "distinctPurchaseCount"
-    FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
-    LEFT JOIN "Product" g ON g.id=e."productId" AND g."deletedAt" IS NULL
-    LEFT JOIN "ProductCategory" pc ON pc.id=g."categoryId" AND pc."deletedAt" IS NULL
-    WHERE p."vendorId"=${id} AND e."deletedAt" IS NULL AND e."lineKind"='principal'
+    FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" AND ${notDeleted("p")}
+    LEFT JOIN "Product" g ON g.id=e."productId" AND ${notDeleted("g")}
+    LEFT JOIN "ProductCategory" pc ON pc.id=g."categoryId" AND ${notDeleted("pc")}
+    WHERE p."vendorId"=${id} AND ${notDeleted("e")} AND e."lineKind"='principal'
     GROUP BY pc.id,pc.shortcode,pc.emoji ORDER BY pc.shortcode NULLS LAST`);
   const evidence = z
     .array(

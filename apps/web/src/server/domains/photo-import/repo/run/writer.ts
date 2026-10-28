@@ -26,7 +26,7 @@ import {
   type CommitPhotoGroupOutput,
 } from "@cubby/schemas/photo-import-run";
 import { productCreateInput } from "@cubby/schemas/product";
-import { and, count, eq, inArray, or, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -63,6 +63,7 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
+import { nameOrAliasSql } from "~/server/lib/name-alias-match";
 
 /**
  * Bookkeeping recorded on `PhotoRunImage.commitReceipt` for an attached (or skipped)
@@ -151,10 +152,11 @@ async function findProductNameConflicts(
     .where(
       and(
         notDeleted(product),
-        or(
-          sql`lower(${product.name}) = ${nameKey}`,
-          sql`EXISTS (SELECT 1 FROM unnest(${product.aliases}) AS alias WHERE lower(alias) = ${nameKey})`,
-        ),
+        nameOrAliasSql({
+          name: product.name,
+          aliases: product.aliases,
+          names: [nameKey],
+        }),
       ),
     );
   return matches

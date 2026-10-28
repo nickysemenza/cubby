@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 /**
  * The reconciliation matcher — link vendor-export lines to `Expense` rows.
  *
@@ -60,7 +61,6 @@ import { getDb } from "~/server/db/helpers";
  * query makes it structurally impossible for a grading signal to drift into a
  * filter — which it must never become.
  */
-import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import {
   classifyMatchRatio,
@@ -198,14 +198,14 @@ export const matchExpenses = async (
         pd."name"       AS "productName"
       FROM "Expense" e
       LEFT JOIN "Purchase" p
-        ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
+        ON p."id" = e."purchaseId" AND ${notDeleted("p")}
       LEFT JOIN "Vendor" v
-        ON v."id" = p."vendorId" AND v."deletedAt" IS NULL
+        ON v."id" = p."vendorId" AND ${notDeleted("v")}
       LEFT JOIN "Project" pr
-        ON pr."id" = ${effectiveExpenseProjectSql("e")} AND pr."deletedAt" IS NULL
+        ON pr."id" = ${effectiveExpenseProjectSql("e")} AND ${notDeleted("pr")}
       LEFT JOIN "Product" pd
-        ON pd."id" = e."productId" AND pd."deletedAt" IS NULL
-      WHERE e."deletedAt" IS NULL
+        ON pd."id" = e."productId" AND ${notDeleted("pd")}
+      WHERE ${notDeleted("e")}
     ),
     arms AS (
       -- Arm 1: exact order id. No day window — a charge's lines can sit weeks

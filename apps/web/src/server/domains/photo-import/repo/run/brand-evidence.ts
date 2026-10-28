@@ -9,6 +9,7 @@ import { and, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { vendor } from "~/server/db/schema";
+import { textArraySomeSql } from "~/server/lib/name-alias-match";
 
 /** Only literal retained OCR/label claims support a Brand choice; catalog identity is not evidence. */
 export async function photoBrandEvidence(
@@ -41,13 +42,11 @@ export async function photoBrandEvidence(
     .where(
       and(
         notDeleted(vendor),
-        sql`EXISTS (
-      SELECT 1 FROM unnest(ARRAY[${vendor.name}] || ${vendor.aliases}) AS label(value)
-      WHERE trim(label.value) <> '' AND position(
-        ' ' || trim(regexp_replace(lower(label.value), '[^[:alnum:]]+', ' ', 'g')) || ' '
-        IN ${literal}
-      ) > 0
-    )`,
+        textArraySomeSql(
+          sql`ARRAY[${vendor.name}] || ${vendor.aliases}`,
+          (value) =>
+            sql`trim(${value}) <> '' AND position(' ' || trim(regexp_replace(lower(${value}), '[^[:alnum:]]+', ' ', 'g')) || ' ' IN ${literal}) > 0`,
+        ),
       ),
     );
   const evidence = new Map<

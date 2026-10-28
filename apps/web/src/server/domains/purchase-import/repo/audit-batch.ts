@@ -42,12 +42,12 @@ export async function loadPurchaseAuditBatch(
           sql`(WITH RECURSIVE audit_runs AS (
             SELECT r."id", r."predecessorRunId", r."ledgerPartyId", r."actorUserId",
               r."vendorAccountId", r."vendorId", r."purpose", ARRAY[r."id"] AS visited
-            FROM "Run" r WHERE r."id" = ${runId} AND r."deletedAt" IS NULL
+            FROM "Run" r WHERE r."id" = ${runId} AND ${notDeleted("r")}
             UNION ALL
             SELECT p."id", p."predecessorRunId", p."ledgerPartyId", p."actorUserId",
               p."vendorAccountId", p."vendorId", p."purpose", a.visited || p."id"
             FROM "Run" p JOIN audit_runs a ON p."id" = a."predecessorRunId"
-            WHERE p."deletedAt" IS NULL AND p."auditedAt" IS NULL
+            WHERE ${notDeleted("p")} AND p."auditedAt" IS NULL
               AND p."ledgerPartyId" = a."ledgerPartyId"
               AND p."actorUserId" = a."actorUserId"
               AND p."vendorAccountId" IS NOT DISTINCT FROM a."vendorAccountId"

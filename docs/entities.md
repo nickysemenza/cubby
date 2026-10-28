@@ -2129,6 +2129,11 @@ membership metadata. Governed values live only in each row's typed `fields`
 envelopes, with assignment/control facts, result provenance and background work.
 Stored metadata loads alongside
 page hydration using internal IDs, without resolving public IDs back to storage.
+Image representations, processing issues, import targets, analysis and capture
+parties also prefetch from those page IDs. Identification reads live Product
+labels in the analysis query. Confirmed descriptions join their correction
+receipts and reuse the replay reader's authority validation; invalid duplicate
+receipts remain invalid. These bindings need no row-dependent third phase.
 Public serialization reuses the scaffold's field-read contexts when available;
 otherwise, it batches missing root and nested codes through each entity's scaffold
 get and uses those reads' contexts.
@@ -2313,6 +2318,14 @@ facts. Search rows and typed search pickers consume them directly; no structured
 their own `locationPath` string.
 
 ## Filters and search
+
+Exact name/alias resolution trims lookup input and compares case-insensitively
+through the shared name matcher. Stored names and aliases are not rewritten;
+ordinary exact SQL preserves the indexed `lower(column)` expression. Brand
+claims keep their existing trimmed-stored comparison. Candidate retrieval may
+add punctuation, token, prefix or literal-substring rules, but never establishes
+identity from similarity alone. Search eligibility, ranking and match captions
+share the same array-element predicate owner.
 
 Wish ranges are owned by `apps/web/src/server/domains/wish/price-range.ts`.
 Hydration, sorting and totals use its SQL aggregate over the effective Product

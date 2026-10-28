@@ -4,6 +4,7 @@ import { sql, type SQL } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   effectiveExpenseProjectSql,
@@ -61,7 +62,7 @@ function scopePredicate(
     scope.kind === "product"
       ? roots
       : sql`(SELECT p.id FROM "Product" p
-    WHERE p."categoryId" IN ${hierarchyDescendantsSql("productCategory", roots)} AND p."deletedAt" IS NULL)`;
+    WHERE p."categoryId" IN ${hierarchyDescendantsSql("productCategory", roots)} AND ${notDeleted("p")})`;
   return entity === "task"
     ? sql`${effectiveFieldSql("task", "subjectProductId", "t")} IN ${products}`
     : sql`e."productId" IN ${products}`;
@@ -95,11 +96,11 @@ export async function validateLiveEffectiveTrades(
   }>(sql`
     SELECT 'task' AS entity, t."shortcode", t."name"
     FROM "Task" t
-    WHERE ${scopePredicate(scope, "task")} AND t."deletedAt" IS NULL AND ${effectiveFieldSql("task", "trade", "t")} IS NULL
+    WHERE ${scopePredicate(scope, "task")} AND ${notDeleted("t")} AND ${effectiveFieldSql("task", "trade", "t")} IS NULL
     UNION ALL
     SELECT 'expense', e."shortcode", e."name"
     FROM "Expense" e
-    WHERE ${scopePredicate(scope, "expense")} AND e."deletedAt" IS NULL AND e."lineKind" = 'principal'
+    WHERE ${scopePredicate(scope, "expense")} AND ${notDeleted("e")} AND e."lineKind" = 'principal'
       AND ${effectiveExpenseTradeSql("e")} IS NULL
     LIMIT 51
   `);
@@ -159,8 +160,8 @@ async function validateLiveProductPolicy(
     FROM "Expense" e
     JOIN "SpendingCategory" sc
       ON sc.id = ${effectiveExpenseSpendingCategorySql("e")}
-      AND sc."deletedAt" IS NULL
-    WHERE e."deletedAt" IS NULL
+      AND ${notDeleted("sc")}
+    WHERE ${notDeleted("e")}
       AND e."lineKind" = 'principal'
       AND e."productId" IS NOT NULL
       AND ${classificationPolicySql(

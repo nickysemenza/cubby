@@ -18,6 +18,7 @@ import { z } from "zod";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { assessment, automaticRule } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
@@ -344,7 +345,7 @@ export async function applyAutomaticRules(
           shortcode: string;
         }>(sql`
           SELECT shortcode FROM "FinancialTransaction"
-          WHERE id = ${match.application.transactionId}::uuid AND "deletedAt" IS NULL
+          WHERE id = ${match.application.transactionId}::uuid AND ${notDeleted("FinancialTransaction")}
         `);
         if (!codes[0])
           throw new Error(

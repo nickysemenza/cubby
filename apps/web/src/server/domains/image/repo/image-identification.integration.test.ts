@@ -4,10 +4,12 @@ import {
   IMAGE_IDENTIFICATION_PROMPT_REVISION,
   IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-identification";
-import { eq } from "drizzle-orm";
+import { rawImageDetail } from "@cubby/schemas/image-raw-read";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
+import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { getDb } from "~/server/db/helpers";
 import {
   aiAnalysis,
@@ -18,7 +20,7 @@ import {
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { createUploadedImageRecord } from "./image";
+import { createUploadedImageRecord, imageScaffold } from "./image";
 import {
   loadImageIdentifications,
   readImageIdentification,
@@ -81,6 +83,25 @@ it("batches current observations and removes deleted targets and replaced source
   ).toEqual([
     { productId: target.shortcode, name: target.name, probability: 0.8 },
   ]);
+  // Warm the bounded test pool so connection startup does not split concurrent read intervals.
+  await Promise.all(
+    Array.from({ length: 10 }, () => getDb(ctx.db).execute(sql`SELECT 1`)),
+  );
+  await withDatabaseOperationMetrics(async (metrics) => {
+    const page = await imageScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 25 },
+    });
+    const listed = page.data
+      .map((row) => rawImageDetail.parse(row))
+      .find((row) => row.id === source.shortcode);
+    expect(listed?.analysisSummary?.identification?.candidates).toEqual([
+      { productId: target.shortcode, name: target.name, probability: 0.8 },
+    ]);
+    expect(metrics.queryCount).toBeGreaterThan(0);
+    expect(metrics.queryBusyIntervals).toBeLessThanOrEqual(2);
+  });
   await getDb(ctx.db)
     .update(product)
     .set({ deletedAt: new Date() })

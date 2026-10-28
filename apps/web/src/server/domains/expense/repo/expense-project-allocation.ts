@@ -11,6 +11,7 @@ import { sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   effectiveExpenseSpendingCategoriesSql,
   purchaseDefaultSpendingCategorySql,
@@ -107,7 +108,7 @@ export const expenseJointAllocationSql = (
     expenseIds
       ? sql`selected_expense AS (
     SELECT target."id", target."purchaseId" FROM "Expense" target
-    WHERE target."deletedAt" IS NULL AND ${expenseSelectionConditionSql(sql`target."id"`, expenseIds)}
+    WHERE ${notDeleted("target")} AND ${expenseSelectionConditionSql(sql`target."id"`, expenseIds)}
   ),`
       : sql``
   } principal_input AS (
@@ -117,16 +118,16 @@ export const expenseJointAllocationSql = (
       expenseIds
         ? sql`(
       SELECT sibling.* FROM "Expense" sibling
-      WHERE sibling."deletedAt" IS NULL
+      WHERE ${notDeleted("sibling")}
         AND sibling."purchaseId" IN (SELECT "purchaseId" FROM selected_expense)
       UNION ALL
       SELECT standalone.* FROM "Expense" standalone
-      WHERE standalone."deletedAt" IS NULL AND standalone."purchaseId" IS NULL
+      WHERE ${notDeleted("standalone")} AND standalone."purchaseId" IS NULL
         AND standalone."id" IN (SELECT "id" FROM selected_expense)
     )`
         : sql`"Expense"`
     } e
-    WHERE e."deletedAt" IS NULL AND e."lineKind" = 'principal'
+    WHERE ${notDeleted("e")} AND e."lineKind" = 'principal'
   ), ${
     categories
       ? sql`principal_categories AS (
@@ -149,12 +150,12 @@ export const expenseJointAllocationSql = (
       live_purchase."id" IS NOT NULL AS live_purchase,
       EXISTS (SELECT 1 FROM "Expense" unknown_role
         WHERE unknown_role."purchaseId" = e."purchaseId"
-          AND unknown_role."deletedAt" IS NULL
+          AND ${notDeleted("unknown_role")}
           AND unknown_role."lineKind" = ${expenseLineKindSchema.enum.unclassified}) AS has_unclassified
     FROM principal_input e
     ${categories ? sql`LEFT JOIN principal_categories ON principal_categories."expenseId"=e.id` : sql``}
     LEFT JOIN "Purchase" live_purchase
-      ON live_purchase."id" = e."purchaseId" AND live_purchase."deletedAt" IS NULL
+      ON live_purchase."id" = e."purchaseId" AND ${notDeleted("live_purchase")}
     ${projects || trades ? inherited.joins : sql``}
   ), purchase_direction AS (
     SELECT "purchaseId", coalesce(bool_or(cost_cents > 0), false) AS has_positive,
@@ -196,10 +197,10 @@ export const expenseJointAllocationSql = (
     FROM "Purchase" p ${
       projects
         ? sql`LEFT JOIN "Project" default_project
-      ON default_project."id" = p."defaultProjectId" AND default_project."deletedAt" IS NULL`
+      ON default_project."id" = p."defaultProjectId" AND ${notDeleted("default_project")}`
         : sql``
     }
-    WHERE p."deletedAt" IS NULL
+    WHERE ${notDeleted("p")}
       ${expenseIds ? sql`AND p."id" IN (SELECT "purchaseId" FROM selected_expense)` : sql``}
       AND NOT EXISTS (SELECT 1 FROM principal_weight w WHERE w."purchaseId" = p."id")
   ), weights AS (
@@ -234,16 +235,16 @@ export const expenseJointAllocationSql = (
       coalesce(d.has_unpriced_principal, false) AS has_unpriced_principal,
       coalesce(d.has_unclassified, false) AS has_unclassified
     FROM "Expense" e LEFT JOIN "Purchase" p
-      ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
+      ON p."id" = e."purchaseId" AND ${notDeleted("p")}
     LEFT JOIN weights w ON w."purchaseId" = p."id"
     LEFT JOIN purchase_direction d ON d."purchaseId" = p."id"
     ${
       projects
         ? sql`LEFT JOIN "Project" standalone_project
-      ON standalone_project."id" = e."projectId" AND standalone_project."deletedAt" IS NULL`
+      ON standalone_project."id" = e."projectId" AND ${notDeleted("standalone_project")}`
         : sql``
     }
-    WHERE e."deletedAt" IS NULL AND e."lineKind" NOT IN ('principal', ${expenseLineKindSchema.enum.unclassified})
+    WHERE ${notDeleted("e")} AND e."lineKind" NOT IN ('principal', ${expenseLineKindSchema.enum.unclassified})
       ${expenseIds ? sql`AND e."id" IN (SELECT "id" FROM selected_expense)` : sql``}
   ), adjustment_floor AS (
     SELECT *, CASE WHEN source_cents IS NULL THEN NULL ELSE
@@ -271,7 +272,7 @@ export const expenseJointAllocationSql = (
       round(e."cost"::numeric * 100)::bigint AS attributed_cents,
       ${expenseLineKindSchema.enum.unclassified}::text AS basis, true AS incomplete, true AS category_incomplete
     FROM "Expense" e
-    WHERE e."deletedAt" IS NULL AND e."lineKind" = ${expenseLineKindSchema.enum.unclassified}
+    WHERE ${notDeleted("e")} AND e."lineKind" = ${expenseLineKindSchema.enum.unclassified}
       ${expenseIds ? sql`AND e."id" IN (SELECT "id" FROM selected_expense)` : sql``}
     UNION ALL
     SELECT r."expenseId", r."purchaseId", r."principalExpenseId", r."projectId", r."spendingCategoryId",
@@ -284,7 +285,7 @@ export const expenseJointAllocationSql = (
         -- Unresolved roles are read from principals, so an order with none
         -- checks them directly before its own category counts as complete.
         OR (r.basis = 'default' AND EXISTS (SELECT 1 FROM "Expense" unknown_role
-          WHERE unknown_role."purchaseId" = r."purchaseId" AND unknown_role."deletedAt" IS NULL
+          WHERE unknown_role."purchaseId" = r."purchaseId" AND ${notDeleted("unknown_role")}
             AND unknown_role."lineKind" = ${expenseLineKindSchema.enum.unclassified}))
         AS category_incomplete
     FROM adjustment_ranked r
@@ -296,8 +297,8 @@ export const expenseJointAllocationSql = (
     a.basis, a.incomplete, a.category_incomplete AS "categoryIncomplete",
     a.trade, a."costType"
   FROM allocated a
-  ${projects ? sql`LEFT JOIN "Project" p ON p."id" = a."projectId" AND p."deletedAt" IS NULL` : sql``}
-  LEFT JOIN ${spendingCategoryCatalogSql(draft)} c ON c."id" = a."spendingCategoryId" AND c."deletedAt" IS NULL
+  ${projects ? sql`LEFT JOIN "Project" p ON p."id" = a."projectId" AND ${notDeleted("p")}` : sql``}
+  LEFT JOIN ${spendingCategoryCatalogSql(draft)} c ON c."id" = a."spendingCategoryId" AND ${notDeleted("c")}
   ${expenseIds ? sql`WHERE a."expenseId" IN (SELECT "id" FROM selected_expense)` : sql``}
 `;
 };

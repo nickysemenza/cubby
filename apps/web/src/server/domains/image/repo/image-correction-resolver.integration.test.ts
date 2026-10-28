@@ -1,15 +1,18 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { imageDescriptionCorrectionOwner } from "@cubby/schemas/image-processing";
+import { rawImageDetail } from "@cubby/schemas/image-raw-read";
 import { enrollSuggestionCorrectionsInput } from "@cubby/schemas/suggestion-correction";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
+import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { getDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
 import { image, assessmentState, feedback, job } from "~/server/db/schema";
 import { getImageProcessingReadProjection } from "~/server/domains/image-processing/repo/image-processing";
+import { imageScaffold } from "~/server/domains/image/repo/image";
 import {
   lockImageCorrectionContent,
   lockImageCorrectionRecord,
@@ -293,6 +296,30 @@ describe("image correction authority", () => {
       ).toMatchObject({
         description: "Synthetic corrected image",
         owner: { kind: "correction", sourceFeedbackId: root.result.feedbackId },
+      });
+      const [targetImage] = await getDb(ctx.db)
+        .select({ shortcode: image.shortcode })
+        .from(image)
+        .where(eq(image.id, parseEntityId("image", target.picture.id)));
+      expect(targetImage).toBeDefined();
+      // Warm the bounded test pool so connection startup does not split concurrent read intervals.
+      await Promise.all(
+        Array.from({ length: 10 }, () => getDb(ctx.db).execute(sql`SELECT 1`)),
+      );
+      await withDatabaseOperationMetrics(async (metrics) => {
+        const page = await imageScaffold.read(ctx.db, {
+          filters: {},
+          sorts: [],
+          pagination: { pageIndex: 0, pageSize: 25 },
+        });
+        const listed = page.data
+          .map((row) => rawImageDetail.parse(row))
+          .find((row) => row.id === targetImage?.shortcode);
+        expect(listed?.analysisSummary?.description).toBe(
+          "Synthetic corrected image",
+        );
+        expect(metrics.queryCount).toBeGreaterThan(0);
+        expect(metrics.queryBusyIntervals).toBeLessThanOrEqual(2);
       });
     },
   );

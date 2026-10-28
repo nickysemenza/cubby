@@ -100,7 +100,7 @@ const observedInImport = (fingerprint: string) => sql`EXISTS (
   JOIN "TransactionImport" si ON si.id = member."importId"
   WHERE member."statementRowId" = "SourceTransactionRecord".id
     AND si.fingerprint = ${fingerprint}
-    AND si.source = "SourceTransactionRecord".source AND si."deletedAt" IS NULL
+    AND si.source = "SourceTransactionRecord".source AND ${notDeleted("si")}
 )`;
 
 const buildConditions = (
@@ -120,7 +120,7 @@ const buildConditions = (
     conditions.push(
       sql`${sourceTransactionRecord.accountId} = (
         SELECT fa.id FROM "FinancialAccount" fa
-        WHERE fa.shortcode = ${filters.accountId} AND fa."deletedAt" IS NULL
+        WHERE fa.shortcode = ${filters.accountId} AND ${notDeleted("fa")}
       )`,
     );
   if (filters.sourceCategory)
@@ -221,7 +221,7 @@ const storedRowCount = async (
 ): Promise<number> => {
   const result = await unwrapDb(tx).execute<{ count: number }>(sql`
     SELECT count(*)::int AS count FROM ${transactionImportMembers} member
-    JOIN "SourceTransactionRecord" sr ON sr.id = member."statementRowId" AND sr."deletedAt" IS NULL
+    JOIN "SourceTransactionRecord" sr ON sr.id = member."statementRowId" AND ${notDeleted("sr")}
     WHERE member."importId" = ${batchId}
   `);
   return Number(result.rows[0]?.count ?? 0);

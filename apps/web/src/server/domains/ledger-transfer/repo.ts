@@ -78,12 +78,12 @@ const transferSourceClaimsSql = sql<LedgerSourceClaimRow[]>`COALESCE((
       ELSE jsonb_build_object('decision', c."reconciliationDecision", 'note', c."reconciliationNote") END,
     'targetAmountAtClaim', c."targetAmountAtClaim", 'createdAt', c."createdAt", 'updatedAt', c."updatedAt")) ORDER BY c."createdAt", c.id)
   FROM "LedgerSourceClaim" c
-  WHERE c."ledgerTransferId" = "LedgerTransfer".id AND c."deletedAt" IS NULL
+  WHERE c."ledgerTransferId" = "LedgerTransfer".id AND ${notDeleted("c")}
 ), '[]'::jsonb)`;
 const transferEvidenceIdsSql = sql<string[]>`COALESCE((
   SELECT jsonb_agg(ft.shortcode ORDER BY ft.amount DESC, ft.shortcode)
   FROM "FinancialTransaction" ft
-  WHERE ft."ledgerTransferId" = "LedgerTransfer".id AND ft."deletedAt" IS NULL
+  WHERE ft."ledgerTransferId" = "LedgerTransfer".id AND ${notDeleted("ft")}
 ), '[]'::jsonb)`;
 
 type LedgerSourceClaimRow = Omit<
@@ -243,11 +243,11 @@ export const transferEvidenceLegFields = {
   status: financialTransaction.status,
   accountShortcode: financialAccount.shortcode,
   accountDeletedAt: financialAccount.deletedAt,
-  bookingLineCount: sql<number>`(SELECT count(*)::int FROM "Expense" booked_expense WHERE booked_expense."bookingTransactionCode" = "FinancialTransaction".shortcode AND booked_expense."deletedAt" IS NULL)`,
+  bookingLineCount: sql<number>`(SELECT count(*)::int FROM "Expense" booked_expense WHERE booked_expense."bookingTransactionCode" = "FinancialTransaction".shortcode AND ${notDeleted("booked_expense")})`,
   allocationCount: sql<number>`(
         SELECT count(*)::int FROM "FinancialTransactionAllocation" allocation
         WHERE allocation."transactionId" = "FinancialTransaction".id
-          AND allocation."deletedAt" IS NULL
+          AND ${notDeleted("allocation")}
       )`,
 };
 

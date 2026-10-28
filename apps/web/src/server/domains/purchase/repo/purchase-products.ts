@@ -416,13 +416,13 @@ async function selectPairPage(
   const ownerTable = sql.raw(fromPurchase ? '"Purchase"' : '"Product"');
   const where = and(
     notDeleted(target),
-    sql`EXISTS (SELECT 1 FROM ${ownerTable} owner WHERE owner."id" = ${ownerId} AND owner."deletedAt" IS NULL)`,
+    sql`EXISTS (SELECT 1 FROM ${ownerTable} owner WHERE owner."id" = ${ownerId} AND ${notDeleted("owner")})`,
     sql`${target.id} IN (
       SELECT ${expenseTarget} FROM "Expense"
-        WHERE "deletedAt" IS NULL AND "productId" IS NOT NULL AND ${expenseOwner} = ${ownerId}
+        WHERE ${notDeleted("Expense")} AND "productId" IS NOT NULL AND ${expenseOwner} = ${ownerId}
       UNION
       SELECT ${linkTarget} FROM "EntityLink"
-        WHERE "kind" = 'purchaseProduct' AND "deletedAt" IS NULL AND ${linkOwner} = ${ownerId}
+        WHERE "kind" = 'purchaseProduct' AND ${notDeleted("EntityLink")} AND ${linkOwner} = ${ownerId}
     )`,
     page.targetIds ? inArray(target.shortcode, page.targetIds) : undefined,
   );

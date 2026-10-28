@@ -260,6 +260,10 @@ and bulk-selection scope, without removing the member's filters. Totals over
 known matches use that caption rather than claiming to cover unresolved records.
 
 Batch shared row bindings inside that read and run independent loads concurrently.
+Image bindings start from the scaffold's page-ID prefetch rather than waiting
+for public row codes. Analysis includes live Product labels and verified
+correction receipts without dependent reader queries; embedded-media callers
+can still select the same readers by public Image codes.
 Stored metadata uses internal page IDs. Columns,
 actions, captions and providers consume complete rows; no client field-readiness
 tracking, enrichment patches, generation retries or separate summary requests.

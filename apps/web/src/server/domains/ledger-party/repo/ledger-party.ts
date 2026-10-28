@@ -324,7 +324,7 @@ const assertNoAccountHistory = async (
   const result = await unwrapDb(tx).execute(sql`
     SELECT fa.shortcode FROM "FinancialAccount" fa
     JOIN "LedgerParty" party ON party.id = ANY(${uuidArrayParam(ids)})
-    WHERE fa."deletedAt" IS NULL AND (
+    WHERE ${notDeleted("fa")} AND (
       fa."authorizedUsers" @> jsonb_build_array(jsonb_build_object('ledgerPartyId', party.shortcode)) OR
       fa."fundingPeriods" @> jsonb_build_array(jsonb_build_object('ledgerPartyId', party.shortcode))
     ) LIMIT 1

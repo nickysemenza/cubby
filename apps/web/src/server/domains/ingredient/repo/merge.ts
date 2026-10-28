@@ -111,13 +111,13 @@ export const findFuzzyMergeCandidates = async (
            similarity(s.name, c.name) AS sim,
            EXISTS (
              SELECT 1 FROM "Product" p
-             WHERE p."ingredientId" = c.id AND p."deletedAt" IS NULL
+             WHERE p."ingredientId" = c.id AND ${notDeleted("p")}
            ) AS has_product
     FROM ${ingredient} s
     JOIN ${ingredient} c
-      ON c."deletedAt" IS NULL AND c."recipeId" IS NULL AND c.id <> s.id
+      ON ${notDeleted("c")} AND c."recipeId" IS NULL AND c.id <> s.id
      AND similarity(s.name, c.name) > ${threshold}
-    WHERE s."deletedAt" IS NULL AND s."recipeId" IS NULL
+    WHERE ${notDeleted("s")} AND s."recipeId" IS NULL
     ORDER BY s.id, has_product DESC, sim DESC
   `);
 

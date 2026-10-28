@@ -4,6 +4,7 @@ import {
 } from "@cubby/schemas/image";
 import { and, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { image } from "~/server/db/retained-tables";
 
 /** Keep typed columns for Drizzle's relational-query alias rewriting. */
@@ -42,9 +43,9 @@ export const productHasDisplayableImageSql = (productId: SQLWrapper): SQL =>
   sql`EXISTS (
     SELECT 1 FROM "EntityAttachment" dimg_att
     JOIN "Image" dimg_img
-      ON dimg_img."id" = dimg_att."imageId" AND dimg_img."deletedAt" IS NULL
+      ON dimg_img."id" = dimg_att."imageId" AND ${notDeleted("dimg_img")}
     WHERE dimg_att."entityId" = ${productId}
-      AND dimg_att."deletedAt" IS NULL
+      AND ${notDeleted("dimg_att")}
       AND dimg_att."purpose" IS DISTINCT FROM 'label'
       AND ${displayableImageSql("dimg_img")}
   )`;

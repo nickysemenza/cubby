@@ -25,7 +25,7 @@ const AMAZON_SOURCE = "amazon";
 const hasInventory = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "InventoryEntry" dq_inventory
   WHERE dq_inventory."productId" = ${t.id}
-    AND dq_inventory."deletedAt" IS NULL
+    AND ${notDeleted("dq_inventory")}
 )`;
 
 const stockPlacement: InventoryPlacement = "stock";
@@ -33,7 +33,7 @@ const stockPlacement: InventoryPlacement = "stock";
 const hasStock = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "InventoryEntry" dq_stock
   WHERE dq_stock."productId" = ${t.id}
-    AND dq_stock."deletedAt" IS NULL
+    AND ${notDeleted("dq_stock")}
     AND dq_stock."placement" = ${stockPlacement}
 )`;
 
@@ -45,17 +45,17 @@ const hasDisplayableImage = (t: Product) => productHasDisplayableImageSql(t.id);
 const hasAmazonPurchase = (t: Product) => sql`EXISTS (
   SELECT 1
   FROM "Expense" dq_ae
-  JOIN "Purchase" dq_ap ON dq_ap."id" = dq_ae."purchaseId" AND dq_ap."deletedAt" IS NULL
-  JOIN "Vendor" dq_av ON dq_av."id" = dq_ap."vendorId" AND dq_av."deletedAt" IS NULL
+  JOIN "Purchase" dq_ap ON dq_ap."id" = dq_ae."purchaseId" AND ${notDeleted("dq_ap")}
+  JOIN "Vendor" dq_av ON dq_av."id" = dq_ap."vendorId" AND ${notDeleted("dq_av")}
   WHERE dq_ae."productId" = ${t.id}
-    AND dq_ae."deletedAt" IS NULL
+    AND ${notDeleted("dq_ae")}
     AND lower(dq_av."name") LIKE 'amazon%'
 )`;
 
 const hasAmazonId = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "EntityExternalId" dq_asin
   WHERE dq_asin."entityId" = ${t.id}
-    AND dq_asin."deletedAt" IS NULL
+    AND ${notDeleted("dq_asin")}
     AND dq_asin."source" = ${AMAZON_SOURCE}
     AND dq_asin."kind" = 'asin'
 )`;
@@ -65,7 +65,7 @@ const hasAmazonId = (t: Product) => sql`EXISTS (
 // (`expenseAcquisitionSql`).
 const hasAcquiringExpense = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "Expense" dq_acq
-  WHERE dq_acq."productId" = ${t.id} AND dq_acq."deletedAt" IS NULL
+  WHERE dq_acq."productId" = ${t.id} AND ${notDeleted("dq_acq")}
     AND ${sql.raw(actualExpenseSql("dq_acq"))}
     AND ${sql.raw(expenseAcquisitionSql("dq_acq"))}
 )`;
@@ -74,21 +74,21 @@ const hasAcquiringExpense = (t: Product) => sql`EXISTS (
 // Confirmation requires a live order; it carries no item cost or quantity.
 const hasPurchaseProductLink = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "EntityLink" dq_pp
-  JOIN "Purchase" dq_purchase ON dq_purchase."id" = dq_pp."fromEntityId" AND dq_purchase."deletedAt" IS NULL
-  WHERE dq_pp."toEntityId" = ${t.id} AND dq_pp."deletedAt" IS NULL AND dq_pp."kind" = 'purchaseProduct'
+  JOIN "Purchase" dq_purchase ON dq_purchase."id" = dq_pp."fromEntityId" AND ${notDeleted("dq_purchase")}
+  WHERE dq_pp."toEntityId" = ${t.id} AND ${notDeleted("dq_pp")} AND dq_pp."kind" = 'purchaseProduct'
     AND dq_pp."acquisitionConfirmed" = true
 )`;
 
 const hasExternalId = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "EntityExternalId" dq_xid
-  WHERE dq_xid."entityId" = ${t.id} AND dq_xid."deletedAt" IS NULL
+  WHERE dq_xid."entityId" = ${t.id} AND ${notDeleted("dq_xid")}
     AND ${hasTextSql(sql`dq_xid."externalId"`)}
 )`;
 
 // A soft-deleted category still sits in `categoryId`; it classifies nothing.
 const hasLiveCategory = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "ProductCategory" dq_cat
-  WHERE dq_cat."id" = ${t.categoryId} AND dq_cat."deletedAt" IS NULL
+  WHERE dq_cat."id" = ${t.categoryId} AND ${notDeleted("dq_cat")}
 )`;
 
 /** Bump when the rules or their declared scoring metadata change. */

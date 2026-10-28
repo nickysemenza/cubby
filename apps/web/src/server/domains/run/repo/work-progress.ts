@@ -393,7 +393,7 @@ export async function getRunWorkProgress(
         sql`, `,
       )})), ${photoCountKey.preparing}::text, count(*) FILTER (WHERE p."deviceWorkState" IN (${deviceState.queued}, ${deviceState.running}, ${deviceState.paused}, ${deviceState.failed})) > 0, 'failures', count(*) FILTER (WHERE p."deviceWorkState" = ${deviceState.failed}), 'at', greatest(max(p."completedAt"), max(p."deviceWorkUpdatedAt"))) FROM "PhotoRunImage" p WHERE p."runId" = ${runOwnerId})`,
       operations: sql<unknown>`(SELECT jsonb_build_object('total', count(*), 'processed', count(*) FILTER (WHERE o.state IN (${operationState.completed}, ${operationState.failed})), 'failures', count(*) FILTER (WHERE o.state = ${operationState.failed}), 'at', max(o."completedAt")) FROM "RunOperation" o WHERE o."runId" = ${runOwnerId})`,
-      calls: sql<unknown>`(SELECT jsonb_build_object('total', count(*), 'processed', count(*), 'failures', count(*) FILTER (WHERE u.status = ${aiUsageStatus.enum.failed}), 'at', max(u."createdAt")) FROM "AiUsage" u WHERE u."runId" = ${runOwnerId} AND u."deletedAt" IS NULL)`,
+      calls: sql<unknown>`(SELECT jsonb_build_object('total', count(*), 'processed', count(*), 'failures', count(*) FILTER (WHERE u.status = ${aiUsageStatus.enum.failed}), 'at', max(u."createdAt")) FROM "AiUsage" u WHERE u."runId" = ${runOwnerId} AND ${notDeleted("u")})`,
     })
     .from(run)
     .where(

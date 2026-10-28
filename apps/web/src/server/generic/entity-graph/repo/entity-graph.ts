@@ -21,6 +21,7 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
@@ -180,7 +181,7 @@ export async function readEntityGraph(
         requestedRoots.map((root) => sql`${root.entityId}`),
         sql`, `,
       )})
-        ${entityManifest[rootEntity].softDelete ? sql`AND "deletedAt" IS NULL` : sql``}
+        ${entityManifest[rootEntity].softDelete ? sql`AND ${notDeleted(rootTable)}` : sql``}
     `);
     const liveRoots = z
       .object({
@@ -250,7 +251,7 @@ export async function readEntityGraph(
               liveRoots.map((root) => sql`${root.ref.entityId}`),
               sql`, `,
             )})
-              ${entityManifest[rootEntity].softDelete ? sql`AND s."deletedAt" IS NULL` : sql``}
+              ${entityManifest[rootEntity].softDelete ? sql`AND ${notDeleted("s")}` : sql``}
         `;
     });
     await options.beforeQuery?.();

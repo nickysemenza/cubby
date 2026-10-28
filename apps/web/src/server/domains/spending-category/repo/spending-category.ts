@@ -190,8 +190,8 @@ async function selfAndAncestors(
   id: EntityId<"spendingCategory">,
 ): Promise<Set<string>> {
   const rows = await unwrapDb(db).execute(sql`WITH RECURSIVE parents AS (
-      SELECT id, "parentId", ARRAY[id] AS path FROM "SpendingCategory" WHERE id = ${id} AND "deletedAt" IS NULL
-      UNION ALL SELECT c.id, c."parentId", p.path || c.id FROM "SpendingCategory" c JOIN parents p ON c.id = p."parentId" WHERE c."deletedAt" IS NULL AND NOT c.id = ANY(p.path)
+      SELECT id, "parentId", ARRAY[id] AS path FROM "SpendingCategory" WHERE id = ${id} AND ${notDeleted("SpendingCategory")}
+      UNION ALL SELECT c.id, c."parentId", p.path || c.id FROM "SpendingCategory" c JOIN parents p ON c.id = p."parentId" WHERE ${notDeleted("c")} AND NOT c.id = ANY(p.path)
     ) SELECT id FROM parents`);
   return new Set(
     z
@@ -349,7 +349,7 @@ async function reclassifiesExpenses(
 ): Promise<boolean> {
   const rows = await unwrapDb(tx).execute(sql`
     SELECT 1 FROM "Expense" e
-    WHERE e."deletedAt" IS NULL
+    WHERE ${notDeleted("e")}
       AND ${effectiveExpenseSpendingCategorySql("e")} IN (${sql.join(
         loserIds.map((id) => sql`${id}::uuid`),
         sql`, `,

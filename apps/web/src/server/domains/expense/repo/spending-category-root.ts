@@ -24,7 +24,7 @@ const categoryRootsSql = sql`(SELECT c."id", ${hierarchyAncestorSql(
   "spendingCategory",
   sql`c."id"`,
   1,
-)} AS "rootId" FROM ${spendingCategory} c WHERE c."deletedAt" IS NULL) category_root`;
+)} AS "rootId" FROM ${spendingCategory} c WHERE ${notDeleted("c")}) category_root`;
 
 /** Joins for `rootSpendingCategory` beside an `allocation` share relation. */
 export const rootSpendingCategoryJoins = {

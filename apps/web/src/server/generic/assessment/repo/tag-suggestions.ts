@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { assessment, assessmentState, product } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -149,7 +150,7 @@ async function tagRows(db: Database, ids?: readonly string[]) {
     subject: unknown;
   }>(sql`
     SELECT a.id, a.evidence, a.subject, s.fingerprint, a."createdAt", p.shortcode
-    FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id JOIN "Product" p ON p.id = s."recordId" AND p."deletedAt" IS NULL
+    FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id JOIN "Product" p ON p.id = s."recordId" AND ${notDeleted("p")}
     WHERE a.family = ${assessmentFamily.enum.recommendation} AND ${reviewFamilyDeclarations.recommendation.scopes.tagPropagation} AND a.served AND s.active AND s.status = ${suggestionStatus.enum.pending}
       AND s.suppression IS NULL AND p."updatedAt" <= a."createdAt" AND NOT (a.evidence->>'tag' = ANY(p.tags))
       AND NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active AND suppressed.entity = s.entity AND suppressed."recordId" = s."recordId"

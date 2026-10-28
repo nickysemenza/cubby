@@ -1,19 +1,12 @@
-import { inArray, isNull, or, sql } from "drizzle-orm";
+import { isNull, or } from "drizzle-orm";
 
 import { buildSearchConditions, formatSearchTerm } from "~/server/db/helpers";
 import { ingredient } from "~/server/db/schema";
-
-// Case-insensitive alias match: compare lower(each alias) against the lowercased
-// list. Plain `arrayOverlaps` is case-sensitive, which would disagree with the
-// case-insensitive name match (and the lower(name) unique index) — e.g. an alias
-// "Scallion" wouldn't match a "scallion" lookup.
-const aliasMatchesCaseInsensitive = (list: string[]) => {
-  const lowered = list.map((n) => n.toLowerCase());
-  return sql`EXISTS (SELECT 1 FROM unnest(${ingredient.aliases}) AS t(val) WHERE lower(t.val) IN (${sql.join(
-    lowered.map((v) => sql`${v}`),
-    sql`, `,
-  )}))`;
-};
+import {
+  nameMatchesAnySql,
+  nameOrAliasSql,
+  textArraySomeSql,
+} from "~/server/lib/name-alias-match";
 
 // exact:
 //  true -> case-insensitive match on name or aliases
@@ -30,18 +23,17 @@ export const buildIngredientWhere = (
   // via `extraConditions` instead, alongside notDeleted (which the helper
   // adds itself).
   const nameOrAliasCondition = exact
-    ? // Exact (case-insensitive) match: lower(name) IN list OR any alias matches
-      or(
-        inArray(
-          sql`lower(${ingredient.name})`,
-          list.map((n) => n.toLowerCase()),
-        ),
-        aliasMatchesCaseInsensitive(list),
-      )
+    ? nameOrAliasSql({
+        name: ingredient.name,
+        aliases: ingredient.aliases,
+        names: list,
+      })
     : // Search on name (ilike), case-insensitive match on aliases
       or(
         formatSearchTerm(ingredient.name, name),
-        aliasMatchesCaseInsensitive(list),
+        textArraySomeSql(ingredient.aliases, (value) =>
+          nameMatchesAnySql(value, list),
+        ),
       );
 
   return buildSearchConditions(

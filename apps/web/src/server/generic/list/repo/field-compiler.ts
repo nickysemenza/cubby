@@ -23,6 +23,7 @@ import type {
   PresenceFilter,
   SortParams,
 } from "@cubby/schemas/pagination";
+import { isNull } from "drizzle-orm";
 import { and, type AnyColumn, getTableName, SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -35,6 +36,7 @@ import {
 } from "~/server/db/computed/effective-field";
 import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { householdDaySql, uuidArrayParam } from "~/server/db/helpers/query";
 import { createAppError } from "~/server/errors/app-error";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
@@ -565,7 +567,9 @@ const relatedColumnSql = (
     throw new Error(`${entity} → ${path.target} has no relation step`);
   const firstAlias = sql.raw(first.alias);
   return sql`(SELECT ${terminalSql(path.target, traversal.leafAlias, column)} FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE (${first.condition})${
-    first.softDelete ? sql` AND ${firstAlias}."deletedAt" IS NULL` : sql``
+    first.softDelete
+      ? sql` AND ${isNull(sql`${firstAlias}."deletedAt"`)}`
+      : sql``
   })`;
 };
 
@@ -596,7 +600,9 @@ const rollupSql = (entity: Entity, rollup: Rollup, table: PgTable): SQL => {
   const firstAlias = sql.raw(first.alias);
   const conditions = [
     sql`(${first.condition})`,
-    ...(first.softDelete ? [sql`${firstAlias}."deletedAt" IS NULL`] : []),
+    ...(first.softDelete
+      ? [sql`${isNull(sql`${firstAlias}."deletedAt"`)}`]
+      : []),
     ...rollup.absent.map((column) => sql`${leaf(column)} IS NULL`),
   ];
   const joins = rest.length ? sql` ${renderJoins({ hops: rest })}` : sql``;
@@ -821,7 +827,9 @@ export const rowSetSql = (
   const firstAlias = sql.raw(first.alias);
   const where = and(
     first.condition,
-    first.softDelete ? sql`${firstAlias}."deletedAt" IS NULL` : undefined,
+    first.softDelete
+      ? sql`${isNull(sql`${firstAlias}."deletedAt"`)}`
+      : undefined,
     ...Object.entries(storage.kind === "path" ? storage.where : {}).map(
       ([column, value]) => sql`${leaf(column)} = ${value}`,
     ),
@@ -859,7 +867,7 @@ export const shortcodeIdsSql = (
   if (dbTable === null) throw new Error(`${target} has no table to filter by`);
   return sql`(SELECT ref."id" FROM ${sql.identifier(dbTable)} ref WHERE ${
     condition(sql`ref."shortcode"`) ?? sql`false`
-  }${softDelete ? sql` AND ref."deletedAt" IS NULL` : sql``})`;
+  }${softDelete ? sql` AND ${notDeleted("ref")}` : sql``})`;
 };
 
 /**
@@ -1007,7 +1015,7 @@ export const groupSql = (
           label: sql`null::text`,
           order: ["label", "key"],
           subtree: null,
-          members: sql`SELECT DISTINCT ${at("shortcode")}::text AS "key", ${at(value.titleColumn)}::text AS "label", ${level === undefined ? sql`false` : sql`${hierarchyLevelSql(value.target, leafId)} > ${level}::int`} AS "subtree" FROM ${sql.identifier(first.relation ?? first.table)} ${sql.raw(first.alias)} ${renderJoins({ hops: rest })} WHERE (${first.condition})${first.softDelete ? sql` AND ${sql.raw(first.alias)}."deletedAt" IS NULL` : sql``}`,
+          members: sql`SELECT DISTINCT ${at("shortcode")}::text AS "key", ${at(value.titleColumn)}::text AS "label", ${level === undefined ? sql`false` : sql`${hierarchyLevelSql(value.target, leafId)} > ${level}::int`} AS "subtree" FROM ${sql.identifier(first.relation ?? first.table)} ${sql.raw(first.alias)} ${renderJoins({ hops: rest })} WHERE (${first.condition})${first.softDelete ? sql` AND ${isNull(sql`${sql.raw(first.alias)}."deletedAt"`)}` : sql``}`,
         };
       }
       if (level === undefined)
@@ -1068,7 +1076,7 @@ export const groupSql = (
           label: null,
           order: ["key"],
           subtree: null,
-          members: sql`SELECT DISTINCT ${text} AS "key", null::text AS "label", false AS "subtree" FROM ${sql.identifier(first.relation ?? first.table)} ${sql.raw(first.alias)} ${renderJoins({ hops: rest })}${array ? sql` CROSS JOIN LATERAL unnest(${raw}) group_value` : sql``} WHERE (${first.condition})${first.softDelete ? sql` AND ${sql.raw(first.alias)}."deletedAt" IS NULL` : sql``} AND ${text} IS NOT NULL`,
+          members: sql`SELECT DISTINCT ${text} AS "key", null::text AS "label", false AS "subtree" FROM ${sql.identifier(first.relation ?? first.table)} ${sql.raw(first.alias)} ${renderJoins({ hops: rest })}${array ? sql` CROSS JOIN LATERAL unnest(${raw}) group_value` : sql``} WHERE (${first.condition})${first.softDelete ? sql` AND ${isNull(sql`${sql.raw(first.alias)}."deletedAt"`)}` : sql``} AND ${text} IS NOT NULL`,
         };
       }
       const raw =

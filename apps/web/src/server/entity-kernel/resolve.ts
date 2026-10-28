@@ -20,7 +20,6 @@ import {
   getTableColumns,
   getTableName,
   type InferInsertModel,
-  inArray,
   isNull,
   or,
   type SQL,
@@ -40,6 +39,11 @@ import {
   type ShortcodeTableFor,
 } from "~/server/generic/shortcode/repo/shortcode-tables";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  matchesNameOrAlias,
+  nameMatchesAnySql,
+  textArraySomeSql,
+} from "~/server/lib/name-alias-match";
 
 export type ResolvableEntity = keyof typeof generatedEntityResolveCapabilities;
 
@@ -153,8 +157,8 @@ const exactPredicate = (plan: ResolvePlan, lowered: readonly string[]) =>
   or(
     ...plan.match.map(({ column, array }) =>
       array
-        ? sql`EXISTS (SELECT 1 FROM unnest(${column}) AS value WHERE lower(value) IN (${textList(lowered)}))`
-        : inArray(sql`lower(${column})`, [...lowered]),
+        ? textArraySomeSql(column, (value) => nameMatchesAnySql(value, lowered))
+        : nameMatchesAnySql(column, lowered),
     ),
   );
 
@@ -284,7 +288,10 @@ const candidatesFor = async <E extends ResolvableEntity>(
   const contains = or(
     ...plan.match.map(({ column, array }) =>
       array
-        ? sql`EXISTS (SELECT 1 FROM unnest(${qualified(column)}) AS value WHERE value ILIKE m.pattern)`
+        ? textArraySomeSql(
+            qualified(column),
+            (value) => sql`${value} ILIKE m.pattern`,
+          )
         : sql`${qualified(column)} ILIKE m.pattern`,
     ),
   );
@@ -308,8 +315,8 @@ const candidatesFor = async <E extends ResolvableEntity>(
       LEFT JOIN "SearchDocument" sd
         ON sd."entityId" = t."id"
         AND sd."entityKind" = ${entityKind}
-        AND sd."deletedAt" IS NULL
-      WHERE t."deletedAt" IS NULL${scoped}
+        AND ${notDeleted("sd")}
+      WHERE ${notDeleted("t")}${scoped}
         AND (
           ${contains}
           OR ${contained}
@@ -378,7 +385,11 @@ export async function resolveNames<E extends ResolvableEntity>(
     const lower = request.name.toLowerCase();
     const [first, ...rest] = rows.filter(
       (row) =>
-        row.matchValues.some((value) => value.toLowerCase() === lower) &&
+        matchesNameOrAlias({
+          name: row.name,
+          aliases: row.matchValues,
+          query: lower,
+        }) &&
         Object.entries(request.where ?? {}).every(
           ([column, value]) => row.scope[column] === value,
         ),

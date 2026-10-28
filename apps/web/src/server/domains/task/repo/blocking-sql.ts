@@ -6,30 +6,32 @@
  */
 import { sql } from "drizzle-orm";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
+
 export const openTaskBlockingCtes = sql`
   WITH RECURSIVE project_ancestors AS (
     SELECT p."id" AS "projectId", p."id" AS "ancestorId", 0 AS depth
     FROM "Project" p
-    WHERE p."deletedAt" IS NULL
+    WHERE ${notDeleted("p")}
     UNION ALL
     SELECT pa."projectId", parent."id", pa.depth + 1
     FROM project_ancestors pa
     JOIN "Project" current ON current."id" = pa."ancestorId"
     JOIN "Project" parent
       ON parent."id" = current."parentProjectId"
-     AND parent."deletedAt" IS NULL
+     AND ${notDeleted("parent")}
     WHERE pa.depth < 100
   ), blocked_tasks AS (
     SELECT t."id"
     FROM "Task" t
-    WHERE t."deletedAt" IS NULL AND t."status" = 'blocked'
+    WHERE ${notDeleted("t")} AND t."status" = 'blocked'
     UNION
     SELECT td."fromEntityId"
     FROM "EntityLink" td
     JOIN "Task" blocker
-      ON td."kind" = 'taskDependency' AND td."deletedAt" IS NULL
+      ON td."kind" = 'taskDependency' AND ${notDeleted("td")}
      AND blocker."id" = td."toEntityId"
-     AND blocker."deletedAt" IS NULL
+     AND ${notDeleted("blocker")}
      AND blocker."status" <> 'done'
     UNION
     SELECT t."id"
@@ -37,15 +39,15 @@ export const openTaskBlockingCtes = sql`
     JOIN project_ancestors pa ON pa."projectId" = t."projectId"
     JOIN "Project" owner
       ON owner."id" = pa."ancestorId"
-     AND owner."deletedAt" IS NULL
+     AND ${notDeleted("owner")}
      AND owner."status" <> 'done'
     JOIN "EntityLink" pd
       ON pd."fromEntityId" = owner."id"
-     AND pd."kind" = 'projectDependency' AND pd."deletedAt" IS NULL
+     AND pd."kind" = 'projectDependency' AND ${notDeleted("pd")}
     JOIN "Project" blocker
       ON blocker."id" = pd."toEntityId"
-     AND blocker."deletedAt" IS NULL
+     AND ${notDeleted("blocker")}
      AND blocker."status" <> 'done'
-    WHERE t."deletedAt" IS NULL
+    WHERE ${notDeleted("t")}
   )
 `;

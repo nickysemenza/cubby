@@ -682,7 +682,7 @@ export const findWeightSoldProducts = async (
           2
         ) AS unit_cost
       FROM ${expense} e
-      WHERE e."deletedAt" IS NULL
+      WHERE ${notDeleted("e")}
         AND e."productId" IS NOT NULL
         AND e."lineKind" = 'principal'
         AND e."cost" > 0
@@ -708,16 +708,16 @@ export const findWeightSoldProducts = async (
       s.high_unit_cost::float8 AS "highUnitCost",
       i."shortcode" AS "ingredientId"
     FROM spread s
-    INNER JOIN ${product} p ON p.id = s.product_id AND p."deletedAt" IS NULL
+    INNER JOIN ${product} p ON p.id = s.product_id AND ${notDeleted("p")}
     LEFT JOIN ${ingredient} i
-      ON i.id = p."ingredientId" AND i."deletedAt" IS NULL
+      ON i.id = p."ingredientId" AND ${notDeleted("i")}
     WHERE s.line_count >= 3
       AND s.low_unit_cost > 0
       AND s.high_unit_cost / s.low_unit_cost >= 2
       AND s.distinct_count::numeric / s.line_count >= 0.75
       AND NOT EXISTS (
         SELECT 1 FROM ${productUnitMappings} m
-        WHERE m."productId" = p.id AND m."deletedAt" IS NULL
+        WHERE m."productId" = p.id AND ${notDeleted("m")}
       )
     ORDER BY s.line_count DESC, p."name" ASC
   `);
@@ -757,8 +757,8 @@ export const findProductIdentifiersOutsideIssuer = async (
       array_agg(DISTINCT e.kind ORDER BY e.kind) AS kinds
     FROM "EntityExternalId" e
     JOIN "ExternalSource" s ON s.slug = e.source
-    JOIN "Vendor" v ON v.id = s."vendorId" AND v."deletedAt" IS NULL
-    WHERE e."entityKind" = ${entitySchema.enum.product} AND e."deletedAt" IS NULL AND NOT s.issuer
+    JOIN "Vendor" v ON v.id = s."vendorId" AND ${notDeleted("v")}
+    WHERE e."entityKind" = ${entitySchema.enum.product} AND ${notDeleted("e")} AND NOT s.issuer
     GROUP BY v.id, v.shortcode, v.name, s.slug
     ORDER BY v.name, s.slug
   `);

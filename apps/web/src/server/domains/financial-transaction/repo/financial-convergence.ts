@@ -49,6 +49,10 @@ import { normalizeMerchant } from "~/server/domains/vendor/repo/merchant-vendor-
 import { AppError } from "~/server/errors/app-error";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  nameMatchesAnySql,
+  textArraySomeSql,
+} from "~/server/lib/name-alias-match";
 
 import {
   commitFinancialBooking,
@@ -220,13 +224,14 @@ async function verifyMailPayment(
     return review(
       "Accept the exact current Email-to-transaction and account mapping before automatic booking. Payment ids are scoped to their financial provider; an unqualified id cannot establish identity.",
     );
+  const merchantName = normalizeMerchant(mailEvent.counterpartyLabel) ?? "";
   const vendors = await tx
     .select()
     .from(vendor)
     .where(
       and(
         notDeleted(vendor),
-        sql`lower(btrim(${vendor.name})) = ${normalizeMerchant(mailEvent.counterpartyLabel)} OR (${notDeleted(vendor)} AND EXISTS (SELECT 1 FROM unnest(${vendor.aliases}) label WHERE lower(btrim(label)) = ${normalizeMerchant(mailEvent.counterpartyLabel)}))`,
+        sql`(${nameMatchesAnySql(sql`btrim(${vendor.name})`, [merchantName])} OR ${textArraySomeSql(vendor.aliases, (value) => nameMatchesAnySql(sql`btrim(${value})`, [merchantName]))})`,
       ),
     );
   if (
@@ -248,7 +253,7 @@ async function verifyMailPayment(
     `${eventRef.source}\u0000${eventRef.externalId}`,
   ]);
   const previousIdentity = await tx.execute<{ id: string }>(
-    sql`SELECT x."entityId" AS id FROM "EntityExternalId" x WHERE x.source = ${eventRef.source} AND x.kind = 'settlement_ref' AND x."externalId" = ${eventRef.externalId} AND x."deletedAt" IS NULL`,
+    sql`SELECT x."entityId" AS id FROM "EntityExternalId" x WHERE x.source = ${eventRef.source} AND x.kind = 'settlement_ref' AND x."externalId" = ${eventRef.externalId} AND ${notDeleted("x")}`,
   );
   if (previousIdentity.rows.some((previous) => previous.id !== row.id))
     return review(
@@ -259,7 +264,7 @@ async function verifyMailPayment(
   }>(sql`
   SELECT DISTINCT p.id AS "purchaseId" FROM "Email"
   CROSS JOIN LATERAL (${emailPurchaseEvidenceSql()}) evidence
-  JOIN "Purchase" p ON p.id = evidence."purchaseId" AND p."deletedAt" IS NULL
+  JOIN "Purchase" p ON p.id = evidence."purchaseId" AND ${notDeleted("p")}
   WHERE "Email".id = ${evidence.emailId} AND NOT evidence.changed AND evidence.kind IN (${emailLinkEvidenceKind.enum.accepted}, ${emailLinkEvidenceKind.enum.linked})`);
   if (
     emailPurchases.rows.length > 1 ||
@@ -328,7 +333,7 @@ async function automaticBookingPreview(
         "The Purchase's literal total differs from this payment; reconcile split or installment money before booking.",
       );
     const existingLines = await tx.execute<{ present: boolean }>(
-      sql`SELECT EXISTS (SELECT 1 FROM "Expense" e WHERE e."purchaseId" = ${target.id} AND e."deletedAt" IS NULL) AS present`,
+      sql`SELECT EXISTS (SELECT 1 FROM "Expense" e WHERE e."purchaseId" = ${target.id} AND ${notDeleted("e")}) AS present`,
     );
     if (existingLines.rows[0]?.present)
       return review(
@@ -364,9 +369,9 @@ async function runFinancialConvergence(
       // Match the settlement writer's global lock order: accepted Purchases
       // precede the transaction, including a target proved by the current Email.
       await tx.execute(sql`
-        SELECT p.id FROM "Purchase" p WHERE p."deletedAt" IS NULL AND (
+        SELECT p.id FROM "Purchase" p WHERE ${notDeleted("p")} AND (
           EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" a
-            WHERE a."purchaseId" = p.id AND a."transactionId" = ${id} AND a."deletedAt" IS NULL)
+            WHERE a."purchaseId" = p.id AND a."transactionId" = ${id} AND ${notDeleted("a")})
           OR p.id IN (SELECT association."purchaseId" FROM "Email"
             CROSS JOIN LATERAL (${emailPurchaseEvidenceSql()}) association
             WHERE "Email".id = ${evidence?.emailId ?? null}::uuid AND NOT association.changed
@@ -401,11 +406,11 @@ async function runFinancialConvergence(
       const accountAuthority = await tx.execute<{ authorized: boolean }>(sql`
       SELECT EXISTS (
         SELECT 1 FROM "FinancialAccount" a
-        JOIN "FinancialTransaction" payment ON payment.id = ${row.id} AND payment."deletedAt" IS NULL
-        JOIN "LedgerParty" funder ON funder.id = ${paymentFundingPartySql(sql`a`, sql`payment`)} AND funder."deletedAt" IS NULL
-        LEFT JOIN "LedgerParty" owner ON owner.id = a."ledgerPartyId" AND owner."deletedAt" IS NULL
-        LEFT JOIN "LedgerParty" member ON member."userId" = ${actor.userId} AND member.kind = ${ledgerPartyKind.enum.member} AND member."deletedAt" IS NULL
-        WHERE a.id = ${row.accountId} AND a."deletedAt" IS NULL
+        JOIN "FinancialTransaction" payment ON payment.id = ${row.id} AND ${notDeleted("payment")}
+        JOIN "LedgerParty" funder ON funder.id = ${paymentFundingPartySql(sql`a`, sql`payment`)} AND ${notDeleted("funder")}
+        LEFT JOIN "LedgerParty" owner ON owner.id = a."ledgerPartyId" AND ${notDeleted("owner")}
+        LEFT JOIN "LedgerParty" member ON member."userId" = ${actor.userId} AND member.kind = ${ledgerPartyKind.enum.member} AND ${notDeleted("member")}
+        WHERE a.id = ${row.accountId} AND ${notDeleted("a")}
           AND (funder.kind = ${ledgerPartyKind.enum.household} OR funder.id = member.id)
           AND (
             owner.kind = ${ledgerPartyKind.enum.household}

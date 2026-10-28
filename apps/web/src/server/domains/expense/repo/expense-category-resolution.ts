@@ -24,6 +24,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/helpers/query";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 
@@ -96,10 +97,10 @@ function productCategorySpendingAncestorsSql(
     draft,
   );
   return sql`      SELECT c.id AS "rootId",c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",0 AS depth,ARRAY[c.id] AS visited
-      FROM "ProductCategory" c WHERE c."deletedAt" IS NULL ${categoryId ? sql`AND c.id=${categoryId}` : sql``}
+      FROM "ProductCategory" c WHERE ${notDeleted("c")} ${categoryId ? sql`AND c.id=${categoryId}` : sql``}
       UNION ALL
       SELECT a."rootId",c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",a.depth+1,a.visited||c.id
-      FROM ancestors a JOIN "ProductCategory" c ON c.id=a."parentId" AND c."deletedAt" IS NULL
+      FROM ancestors a JOIN "ProductCategory" c ON c.id=a."parentId" AND ${notDeleted("c")}
       WHERE NOT c.id=ANY(a.visited) AND a.depth<3`;
 }
 
@@ -175,7 +176,7 @@ function expenseSpendingCategoryChoiceSql(
   const food = source
     ? sql`COALESCE(category_feature.feature = ${sqlEnumConstant(productCategoryFeature, productCategoryFeature.enum.food)}, FALSE)`
     : sql`COALESCE((SELECT a.feature = 'food' FROM ancestors a WHERE a.feature IS NOT NULL ORDER BY a.depth LIMIT 1),FALSE)`;
-  const categoryId = sql`(SELECT ${projectedValue("g", "categoryId", draft?.products)} FROM "Product" g WHERE g.id=${productId} AND g."deletedAt" IS NULL)`;
+  const categoryId = sql`(SELECT ${projectedValue("g", "categoryId", draft?.products)} FROM "Product" g WHERE g.id=${productId} AND ${notDeleted("g")})`;
   return sql`WITH RECURSIVE ancestors AS (
       ${productCategorySpendingAncestorsSql(
         source ? undefined : categoryId,
@@ -206,15 +207,15 @@ function expenseSpendingCategoryChoiceSql(
         vendor_category.id AS vendor_category_id,vendor_category.shortcode AS vendor_category_code,
         ${food} AS food
       FROM ${source ? sql`${source} ${sql.identifier(alias)}` : sql`(VALUES (1)) seed(n)`}
-      LEFT JOIN "Product" g ON g.id=${productId} AND g."deletedAt" IS NULL
-      LEFT JOIN "Purchase" p ON p.id=${purchaseId} AND p."deletedAt" IS NULL
-      LEFT JOIN "Vendor" v ON v.id=p."vendorId" AND v."deletedAt" IS NULL
+      LEFT JOIN "Product" g ON g.id=${productId} AND ${notDeleted("g")}
+      LEFT JOIN "Purchase" p ON p.id=${purchaseId} AND ${notDeleted("p")}
+      LEFT JOIN "Vendor" v ON v.id=p."vendorId" AND ${notDeleted("v")}
       LEFT JOIN mapping m ON ${source ? sql`m."rootId"=${productCategory}` : sql`TRUE`}
       ${source ? sql`LEFT JOIN category_feature ON category_feature."rootId"=${productCategory}` : sql``}
-      LEFT JOIN ${categoryCatalog} override_category ON override_category.id=${storedId} AND override_category."deletedAt" IS NULL
+      LEFT JOIN ${categoryCatalog} override_category ON override_category.id=${storedId} AND ${notDeleted("override_category")}
       LEFT JOIN ${categoryCatalog} purchase_category ON ${purchaseCategoryInputSql("p", "purchase_category", draft)}
-      LEFT JOIN ${categoryCatalog} mapped_category ON mapped_category.id=m."spendingCategoryId" AND mapped_category."deletedAt" IS NULL
-      LEFT JOIN ${categoryCatalog} vendor_category ON vendor_category.id=${vendorTarget} AND vendor_category."deletedAt" IS NULL
+      LEFT JOIN ${categoryCatalog} mapped_category ON mapped_category.id=m."spendingCategoryId" AND ${notDeleted("mapped_category")}
+      LEFT JOIN ${categoryCatalog} vendor_category ON vendor_category.id=${vendorTarget} AND ${notDeleted("vendor_category")}
     ), eligibility AS (
       SELECT f.*,
         f.principal AND COALESCE(mapping_mode<>'blocked',TRUE) AND food AND COALESCE(profile IN ('restaurant','coffee_shop'),FALSE) AS context_eligible,
@@ -314,7 +315,7 @@ export async function loadExpenseSpendingCategoryEvidence(
           UNION ALL
           SELECT 1,a.depth,${sqlEnumConstant(categoryEvidenceKind, categoryEvidenceKind.enum.mapping)},${sqlEnumConstant(fieldResolutionSourceSchema.shape.entityKind, fieldResolutionSourceSchema.shape.entityKind.enum.productCategory)},a.shortcode,a.name,
             jsonb_build_object('mode',a."spendingCategoryMode",'category',ac.shortcode),a."spendingCategoryMode"<>${sqlEnumConstant(spendingCategoryMappingMode, spendingCategoryMappingMode.enum.inherit)},f.mapping_eligible
-          FROM ancestors a LEFT JOIN "SpendingCategory" ac ON ac.id=a."spendingCategoryId" AND ac."deletedAt" IS NULL
+          FROM ancestors a LEFT JOIN "SpendingCategory" ac ON ac.id=a."spendingCategoryId" AND ${notDeleted("ac")}
           UNION ALL
           SELECT 2,0,${sqlEnumConstant(categoryEvidenceKind, categoryEvidenceKind.enum.purchase)},${sqlEnumConstant(fieldResolutionSourceSchema.shape.entityKind, fieldResolutionSourceSchema.shape.entityKind.enum.purchase)},f.purchase_code,f.purchase_name,
             to_jsonb(f.purchase_category_code),f.purchase_category_id IS NOT NULL,f.principal
@@ -326,7 +327,7 @@ export async function loadExpenseSpendingCategoryEvidence(
         ) step)
       ) FROM chosen f LEFT JOIN "SpendingCategory" c ON c.id=f.category_id
     ) AS evidence
-    FROM "Expense" e WHERE e.shortcode=${shortcode} AND e."deletedAt" IS NULL`);
+    FROM "Expense" e WHERE e.shortcode=${shortcode} AND ${notDeleted("e")}`);
   return result.rows[0]
     ? categoryEvidenceSchema.parse(result.rows[0].evidence)
     : null;
@@ -357,9 +358,9 @@ export async function spendingClassificationRevision(
 ): Promise<string> {
   const result = await unwrapDb(db).execute(sql`
     SELECT jsonb_build_object(
-      'categories',(SELECT jsonb_agg(jsonb_build_array(id,name,"parentId") ORDER BY id) FROM "SpendingCategory" WHERE "deletedAt" IS NULL),
-      'mappings',(SELECT jsonb_agg(jsonb_build_array(id,"parentId",feature,"spendingCategoryMode","spendingCategoryId") ORDER BY id) FROM "ProductCategory" WHERE "deletedAt" IS NULL),
-      'vendors',(SELECT jsonb_agg(jsonb_build_array(id,"spendingProfile","defaultSpendingCategoryId") ORDER BY id) FROM "Vendor" WHERE "deletedAt" IS NULL)) AS policy
+      'categories',(SELECT jsonb_agg(jsonb_build_array(id,name,"parentId") ORDER BY id) FROM "SpendingCategory" WHERE ${notDeleted("SpendingCategory")}),
+      'mappings',(SELECT jsonb_agg(jsonb_build_array(id,"parentId",feature,"spendingCategoryMode","spendingCategoryId") ORDER BY id) FROM "ProductCategory" WHERE ${notDeleted("ProductCategory")}),
+      'vendors',(SELECT jsonb_agg(jsonb_build_array(id,"spendingProfile","defaultSpendingCategoryId") ORDER BY id) FROM "Vendor" WHERE ${notDeleted("Vendor")})) AS policy
   `);
   const policy = z.object({ policy: z.json() }).parse(result.rows[0]).policy;
   return sha256Hex(JSON.stringify(policy));

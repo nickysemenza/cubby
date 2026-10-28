@@ -4,10 +4,16 @@ import {
   imageProcessingJobKind,
   imageProcessingJobState,
 } from "@cubby/schemas/image-processing";
-import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import {
+  type ImageReadScope,
+  imageScopeEmpty,
+  imageScopeSql,
+} from "~/server/db/computed/image-read-scope";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { image } from "~/server/db/schema";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
@@ -27,19 +33,19 @@ export function imageProcessingIssueExpression(
       OR (j.kind = ${imageProcessingJobKind.enum.identify_image} AND j."processorRevision" = ${IMAGE_IDENTIFICATION_PROCESSOR_REVISION})
       OR (j.kind = ${imageProcessingJobKind.enum.subject_lift} AND j."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}))`;
   return sql`CASE WHEN ${source.status} <> ${ImageStatus.enum.UPLOADED} OR ${source.deletedAt} IS NOT NULL THEN NULL
-    WHEN EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."deletedAt" IS NULL AND ${current} AND ${imageJobDisplayStateSql({ id: sql`j.id`, state: sql`j.state` })} = ${imageProcessingJobState.enum.failed}) THEN ${imageProcessingIssue.enum.failed}
-    WHEN EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."deletedAt" IS NULL AND ${current} AND j.kind = ${imageProcessingJobKind.enum.describe_image}
+    WHEN EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE ${notDeleted("j")} AND ${current} AND ${imageJobDisplayStateSql({ id: sql`j.id`, state: sql`j.state` })} = ${imageProcessingJobState.enum.failed}) THEN ${imageProcessingIssue.enum.failed}
+    WHEN EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE ${notDeleted("j")} AND ${current} AND j.kind = ${imageProcessingJobKind.enum.describe_image}
       AND j.state = ${imageProcessingJobState.enum.ready} AND j.result->'description'->>'cutoutEligibility' = ${imageCutoutEligibility.enum.review})
-      AND NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."deletedAt" IS NULL AND ${current} AND j.kind = ${imageProcessingJobKind.enum.subject_lift}
+      AND NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE ${notDeleted("j")} AND ${current} AND j.kind = ${imageProcessingJobKind.enum.subject_lift}
         AND j.state IN (${imageProcessingJobState.enum.ready}, ${imageProcessingJobState.enum.skipped})) THEN ${imageProcessingIssue.enum.review_needed}
     ELSE NULL END`;
 }
 
 export async function loadImageProcessingIssues(
   db: Database | DrizzleTransaction,
-  shortcodes: readonly string[],
+  shortcodes: ImageReadScope,
 ) {
-  if (!shortcodes.length)
+  if (imageScopeEmpty(shortcodes))
     return new Map<string, "failed" | "review_needed" | null>();
   const rows = await unwrapDb(db)
     .select({
@@ -47,11 +53,6 @@ export async function loadImageProcessingIssues(
       issue: imageProcessingIssueExpression(),
     })
     .from(image)
-    .where(
-      and(
-        inArray(image.shortcode, [...shortcodes]),
-        eq(image.status, "UPLOADED"),
-      ),
-    );
+    .where(and(imageScopeSql(shortcodes), eq(image.status, "UPLOADED")));
   return new Map(rows.map((row) => [row.shortcode, row.issue]));
 }

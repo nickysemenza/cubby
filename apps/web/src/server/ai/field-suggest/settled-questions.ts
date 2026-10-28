@@ -31,6 +31,7 @@ import {
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { aiAnalysis, assessmentState, feedback } from "~/server/db/schema";
 import { fieldCorrectionIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { resolveFieldCorrection } from "~/server/generic/assessment/repo/field-correction-resolver";
@@ -199,7 +200,7 @@ async function rememberRows(
           AND "model" = ${SETTLED_QUESTION.model}
           AND "promptVersion" = ${SETTLED_QUESTION.promptVersion}
           AND "inputFingerprint" = ${key}
-          AND "AiAnalysis"."deletedAt" IS NULL
+          AND ${notDeleted("AiAnalysis")}
         RETURNING 1
       )
       INSERT INTO "AiAnalysis"

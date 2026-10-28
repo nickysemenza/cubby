@@ -44,6 +44,7 @@ import {
   withTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { assessment, assessmentState } from "~/server/db/schema";
 import {
   prepareFinancialStatementPreview,
@@ -212,7 +213,7 @@ async function loadAccounts(db: Database) {
     FROM "FinancialAccount" fa
     -- includes-deleted: a deleted owner is read to exclude its accounts.
     LEFT JOIN "LedgerParty" lp ON lp.id = fa."ledgerPartyId"
-    WHERE fa."deletedAt" IS NULL
+    WHERE ${notDeleted("fa")}
   `);
   const accounts = rows
     .filter((row) => !row.ownerDeleted)
@@ -311,18 +312,18 @@ async function loadTransactionLegs(
     SELECT ft.id, ft.shortcode, ft."accountId", ft.amount, ${day}::text AS date,
       ft.kind, ft.merchant, ft."rawDescription", ft."sourceCategory", ft.notes
     FROM "FinancialTransaction" ft
-    WHERE ft."deletedAt" IS NULL AND ft.status IN (${sql.join(
+    WHERE ${notDeleted("ft")} AND ft.status IN (${sql.join(
       transferEvidenceStatuses.map((status) => sql`${status}`),
       sql`, `,
     )})
       AND ft."ledgerTransferId" IS NULL AND ${day} IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM "FinancialTransactionAllocation" fta
-        WHERE fta."transactionId" = ft.id AND fta."deletedAt" IS NULL
+        WHERE fta."transactionId" = ft.id AND ${notDeleted("fta")}
       )
       AND NOT EXISTS (
         SELECT 1 FROM "Expense" e
-        WHERE e."bookingTransactionCode" = ft.shortcode AND e."deletedAt" IS NULL
+        WHERE e."bookingTransactionCode" = ft.shortcode AND ${notDeleted("e")}
       )
       ${conditions.length ? sql`AND ${sql.join(conditions, sql` AND `)}` : sql``}
   `);
@@ -450,7 +451,7 @@ async function loadStatementLegs(
   const state = conditions.length
     ? chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (
         SELECT seen.source, ${chargeKeyOf("seen")} FROM "SourceTransactionRecord" seen
-        WHERE seen."deletedAt" IS NULL AND ${sql.join(conditions, sql` AND `)}
+        WHERE ${notDeleted("seen")} AND ${sql.join(conditions, sql` AND `)}
       )`)
     : CHARGE_STATE;
   const { rows } = await unwrapDb(db).execute<
@@ -465,7 +466,7 @@ async function loadStatementLegs(
       ARRAY(SELECT m."importId"::text FROM ${transactionImportMembers} m WHERE m."statementRowId" = r.id) AS "importIds"
     FROM ${state} cs
     JOIN "SourceTransactionRecord" r ON r.source = cs.source AND ${chargeKeyOf("r")} = cs."chargeKey"
-      AND r."deletedAt" IS NULL
+      AND ${notDeleted("r")}
     JOIN "TransactionImport" si ON si.id = r."batchId"
     WHERE NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL
     ORDER BY r."createdAt" DESC, r.id
@@ -970,7 +971,7 @@ async function potentialTransferSeeds(db: Database, keys: readonly string[]) {
           sql`SELECT 'ftx:' || ft.shortcode AS key, ft.amount,
           ft.kind AS "recordedKind", ft."sourceCategory"
         FROM "FinancialTransaction" ft
-        WHERE ft."deletedAt" IS NULL AND ft.shortcode IN (${sql.join(
+        WHERE ${notDeleted("ft")} AND ft.shortcode IN (${sql.join(
           codes.map((code) => sql`${code}`),
           sql`, `,
         )})`,
@@ -981,7 +982,7 @@ async function potentialTransferSeeds(db: Database, keys: readonly string[]) {
           sql`SELECT 'stmt:' || r.source || ':' || r."chargeKey" AS key,
           -r."providerAmount" AS amount, NULL::text AS "recordedKind", r."sourceCategory"
         FROM "SourceTransactionRecord" r
-        WHERE r.current AND r."deletedAt" IS NULL
+        WHERE r.current AND ${notDeleted("r")}
           AND (r.source, r."chargeKey") IN (${sql.join(
             charges.map(
               (charge) => sql`(${charge.source}, ${charge.chargeKey})`,
@@ -2113,7 +2114,7 @@ async function currentStatementStatus(db: Database, leg: TransferPairLeg) {
     );
   const { rows } = await unwrapDb(db).execute<{ providerStatus: unknown }>(sql`
     SELECT "providerStatus" FROM "SourceTransactionRecord" WHERE source=${leg.charge.source}
-      AND "chargeKey"=${leg.charge.chargeKey} AND current AND "withdrawnAt" IS NULL AND "deletedAt" IS NULL
+      AND "chargeKey"=${leg.charge.chargeKey} AND current AND "withdrawnAt" IS NULL AND ${notDeleted("SourceTransactionRecord")}
   `);
   if (rows.length !== 1)
     throw createAppError(

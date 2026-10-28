@@ -1,3 +1,8 @@
+import type {
+  ExpenseShortcode,
+  PurchaseShortcode,
+  VendorShortcode,
+} from "@cubby/schemas/identifiers";
 /**
  * Purchase-centric Problems detectors.
  *
@@ -13,12 +18,6 @@
  * mutation, and never back-computes a cost from `statedTotal`. A charge with no
  * stated total is `"unknown"` and is excluded before comparison.
  */
-
-import type {
-  ExpenseShortcode,
-  PurchaseShortcode,
-  VendorShortcode,
-} from "@cubby/schemas/identifiers";
 import {
   DUPLICATE_SPEND_DAY_WINDOW,
   DUPLICATE_SPEND_NAME_SIMILARITY,
@@ -27,7 +26,7 @@ import {
 import { type SQL, sql } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
-import { actualExpenseSql } from "~/server/db/helpers/predicates";
+import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   expense,
@@ -132,7 +131,7 @@ export const findDuplicateSpendCandidates = async (
     WITH orphan AS (
       SELECT e."shortcode", e."name", e."cost", e."date"
       FROM ${expense} e
-      WHERE e."deletedAt" IS NULL
+      WHERE ${notDeleted("e")}
         AND e."purchaseId" IS NULL
         AND ${sql.raw(actualExpenseSql("e"))}
         AND e."cost" IS NOT NULL
@@ -150,10 +149,10 @@ export const findDuplicateSpendCandidates = async (
         count(le."id")::int AS "expenseCount"
       FROM ${purchase} p
       LEFT JOIN ${vendor} v
-        ON v."id" = p."vendorId" AND v."deletedAt" IS NULL
+        ON v."id" = p."vendorId" AND ${notDeleted("v")}
       LEFT JOIN ${expense} le
-        ON le."purchaseId" = p."id" AND le."deletedAt" IS NULL
-      WHERE p."deletedAt" IS NULL
+        ON le."purchaseId" = p."id" AND ${notDeleted("le")}
+      WHERE ${notDeleted("p")}
       GROUP BY
         p."id", p."shortcode", p."date", p."statedTotal", v."name", v."shortcode"
     ),
@@ -187,9 +186,9 @@ export const findDuplicateSpendCandidates = async (
          OR ${cents(sql`o."cost"`)} = ${cents(sql`t."statedTotal"`)}
        )
       JOIN ${expense} le
-        ON le."purchaseId" = t."id" AND le."deletedAt" IS NULL
+        ON le."purchaseId" = t."id" AND ${notDeleted("le")}
       LEFT JOIN ${product} pd
-        ON pd."id" = le."productId" AND pd."deletedAt" IS NULL
+        ON pd."id" = le."productId" AND ${notDeleted("pd")}
       GROUP BY
         o."shortcode", o."name", o."cost", o."date",
         t."shortcode", t."vendorName", t."vendorId", t."date",

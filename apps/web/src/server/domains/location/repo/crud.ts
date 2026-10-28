@@ -103,6 +103,7 @@ import {
   resolveLiveShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { liveAliasSqlText } from "~/server/lib/live-row";
 
 import {
   buildLocationWithChildren,
@@ -747,8 +748,8 @@ export const locationScaffold = listScaffold("location", location, {
     // `hasInventory` reads, so the count filter and the presence agree.
     inventoryEntries: sql.raw(
       `(SELECT count(*) FROM "InventoryEntry" ie ` +
-        `INNER JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL ` +
-        `WHERE ie."locationId" = "Location"."id" AND ie."deletedAt" IS NULL ` +
+        `INNER JOIN "Product" p ON p."id" = ie."productId" AND ${liveAliasSqlText("p")} ` +
+        `WHERE ie."locationId" = "Location"."id" AND ${liveAliasSqlText("ie")} ` +
         `AND ie."placement" = 'stock')`,
     ),
     hasInventory: inArray(location.id, locationIdsWithLiveInventory),

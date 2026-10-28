@@ -94,7 +94,7 @@ const candidateRowsForWishes = async (
       // list recommend re-buying a product already installed in the wall.
       inventoried: sql<boolean>`EXISTS (
         SELECT 1 FROM "InventoryEntry" ie
-        WHERE ie."productId" = ${product.id} AND ie."deletedAt" IS NULL
+        WHERE ie."productId" = ${product.id} AND ${notDeleted("ie")}
       )`.as("inventoried"),
     })
     .from(entityLink)
@@ -190,8 +190,8 @@ const wishRead = {
 const wishPriceRangeProjection = sql`(
     SELECT ${wishPriceRangeSql(sql.raw(effectiveProductPriceSql("p")))}
     FROM "EntityLink" wc
-    JOIN "Product" p ON p."id" = wc."toEntityId" AND p."deletedAt" IS NULL
-    WHERE wc."fromEntityId" = ${wish.id} AND wc."deletedAt" IS NULL AND wc."kind" = 'wishCandidate'
+    JOIN "Product" p ON p."id" = wc."toEntityId" AND ${notDeleted("p")}
+    WHERE wc."fromEntityId" = ${wish.id} AND ${notDeleted("wc")} AND wc."kind" = 'wishCandidate'
   )`;
 const wishPriceLow = sql`(${wishPriceRangeProjection} ->> ${wishPriceRangeOut.keyof().enum.low})::double precision`;
 const wishPriceHigh = sql`(${wishPriceRangeProjection} ->> ${wishPriceRangeOut.keyof().enum.high})::double precision`;

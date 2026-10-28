@@ -48,6 +48,7 @@ import {
   withTransactionDatabase,
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   assessmentState,
   financialTransaction,
@@ -264,7 +265,7 @@ async function loadObservations(
       r."providerNotes", r."withdrawnAt", r."accountId", r."createdAt", si.fingerprint AS "importFingerprint"
     FROM "SourceTransactionRecord" r
     JOIN "TransactionImport" si ON si.id = r."batchId"
-    WHERE r."deletedAt" IS NULL
+    WHERE ${notDeleted("r")}
       AND (r.source, ${chargeKeyOf("r")}) IN (${tuples(charges)})
     ORDER BY r.current DESC, r."lastObservedAt" DESC, r."createdAt" DESC, r.id
   `);
@@ -416,7 +417,7 @@ async function siblingsFor(
         AND o."accountDescriptor" = p.descriptor
         AND o."providerAmount" = p.amount
         AND o."statementDate" BETWEEN p.day - ${SIBLING_WINDOW_DAYS}::int AND p.day + ${SIBLING_WINDOW_DAYS}::int
-        AND o."deletedAt" IS NULL
+        AND ${notDeleted("o")}
         AND ${chargeKeyOf("o")} <> p."chargeKey"
     ),
     cs AS MATERIALIZED ${chargeStateOf(
@@ -472,7 +473,7 @@ async function claimedCandidates(
     refs AS MATERIALIZED (
       SELECT p.key, p.source, p."chargeKey", p."transactionId", fx."externalId"
       FROM p JOIN "EntityExternalId" fx ON fx."entityId" = p."transactionId"
-        AND fx.kind = 'settlement_ref' AND fx."deletedAt" IS NULL
+        AND fx.kind = 'settlement_ref' AND ${notDeleted("fx")}
         AND fx.source = p.source
     ),
     -- Two indexed probes rather than one OR join: a ref is either an
@@ -481,12 +482,12 @@ async function claimedCandidates(
       SELECT refs.key, refs."transactionId", refs."chargeKey" AS own,
         r.source, ${chargeKeyOf("r")} AS "claimKey"
       FROM refs JOIN "SourceTransactionRecord" r ON r.source = refs.source
-        AND r."externalId" = refs."externalId" AND r."deletedAt" IS NULL
+        AND r."externalId" = refs."externalId" AND ${notDeleted("r")}
       UNION
       SELECT refs.key, refs."transactionId", refs."chargeKey",
         r.source, ${chargeKeyOf("r")}
       FROM refs JOIN "SourceTransactionRecord" r ON r.source = refs.source
-        AND r."legacyReference" = refs."externalId" AND r."deletedAt" IS NULL
+        AND r."legacyReference" = refs."externalId" AND ${notDeleted("r")}
     ),
     -- An ignored or superseded charge was set aside by the member, so it no
     -- longer claims the transaction holding its ref.
@@ -566,7 +567,7 @@ async function merchantHistory(
       JOIN "AssessmentState" s ON s.id = a.id AND s.status = ${suggestionStatus.enum.applied}
         AND (${suggestionField("accountId")})::uuid IN (SELECT account FROM p)
       CROSS JOIN LATERAL jsonb_array_elements_text(s.data->'refs') ref(key)
-      JOIN "EntityExternalId" fx ON fx.kind = 'settlement_ref' AND fx."deletedAt" IS NULL
+      JOIN "EntityExternalId" fx ON fx.kind = 'settlement_ref' AND ${notDeleted("fx")}
         AND fx.source = split_part(ref.key, ':', 1)
         AND fx."externalId" = substr(ref.key, length(split_part(ref.key, ':', 1)) + 2)
       WHERE f.intent = ${feedbackEvent.shape.intent.unwrap().enum.apply}
@@ -576,18 +577,18 @@ async function merchantHistory(
     SELECT p.key, array_agg(DISTINCT ft.kind) AS kinds, count(*)::int AS count,
       bool_or(EXISTS (
         SELECT 1 FROM "Expense" e
-        WHERE e."bookingTransactionCode" = ft.shortcode AND e."deletedAt" IS NULL
+        WHERE e."bookingTransactionCode" = ft.shortcode AND ${notDeleted("e")}
           AND e."economicRole" = ${financialBookingInput.shape.economicRole.unwrap().enum.reimbursement}
       )) AS reimbursed,
       bool_or(EXISTS (
         SELECT 1 FROM "FinancialTransactionAllocation" fta
-        JOIN "Purchase" pu ON pu.id = fta."purchaseId" AND pu."deletedAt" IS NULL
+        JOIN "Purchase" pu ON pu.id = fta."purchaseId" AND ${notDeleted("pu")}
           AND pu."vendorId" IS NOT NULL
-        WHERE fta."transactionId" = ft.id AND fta."deletedAt" IS NULL
+        WHERE fta."transactionId" = ft.id AND ${notDeleted("fta")}
       )) AS purchased
     FROM p
     JOIN "FinancialTransaction" ft ON ft."accountId" = p.account
-      AND ft."deletedAt" IS NULL AND ft.status <> ${financialTransactionStatus.enum.void}
+      AND ${notDeleted("ft")} AND ft.status <> ${financialTransactionStatus.enum.void}
       AND ft.merchant IS NOT NULL AND ${merchantKey(sql`ft.merchant`)} = p.merchant
       AND COALESCE(ft."postedDate", ft."transactionDate") < p.day
       AND sign(ft.amount)::int = p.direction
@@ -726,7 +727,7 @@ async function prepareChargePreviews(
         postedDate: string | null;
       }>(sql`
     SELECT ft.shortcode, ft."accountId", ft.amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
-    WHERE ft."deletedAt" IS NULL AND ft.shortcode IN (${sql.join(
+    WHERE ${notDeleted("ft")} AND ft.shortcode IN (${sql.join(
       [...matchedByCharge.values()].map((code) => sql`${code}`),
       sql`,`,
     )})
@@ -1485,7 +1486,7 @@ export async function buildHoldVoidProposals(
     (
       await unwrapDb(db).execute<{ id: string }>(sql`
         SELECT DISTINCT ft."accountId" AS id FROM "FinancialTransaction" ft
-        WHERE ft."deletedAt" IS NULL AND ft.status = ${financialTransactionStatus.enum.pending}
+        WHERE ${notDeleted("ft")} AND ft.status = ${financialTransactionStatus.enum.pending}
       `)
     ).rows.map((row) => String(row.id));
   const holds = await statementPendingTransactions(db, accounts);
@@ -1576,7 +1577,7 @@ async function loadObservationsById(db: Database, rowIds: readonly string[]) {
     WHERE r.id IN (${sql.join(
       rowIds.map((id) => sql`${id}::uuid`),
       sql`, `,
-    )}) AND r."deletedAt" IS NULL
+    )}) AND ${notDeleted("r")}
   `);
   const all = await loadObservations(db, rows);
   return all.filter((row) => rowIds.includes(row.id));
@@ -1597,9 +1598,9 @@ async function laterCoveringImport(
     SELECT DISTINCT si.id FROM "TransactionImport" si
     JOIN "SourceTransactionRecord" head ON head."withdrawalImportId" = si.id
     JOIN "SourceTransactionRecord" held ON held.source=head.source AND held."chargeKey"=head."chargeKey"
-    WHERE si."deletedAt" IS NULL AND si.source=${input.source} AND si."completedAt" IS NOT NULL
+    WHERE ${notDeleted("si")} AND si.source=${input.source} AND si."completedAt" IS NOT NULL
       AND si.coverage->>${"visibility"}=${"all"} AND head.current AND head."withdrawnAt" IS NOT NULL
-      AND head."deletedAt" IS NULL AND held."deletedAt" IS NULL
+      AND ${notDeleted("head")} AND ${notDeleted("held")}
       AND held.id IN (${sql.join(
         input.rowIds.map((id) => sql`${id}::uuid`),
         sql`, `,
@@ -1619,7 +1620,7 @@ async function postedTwinExists(
     statementDate: unknown;
   }>(sql`
     SELECT r.amount, r."statementDate" FROM "SourceTransactionRecord" r
-    WHERE r."deletedAt" IS NULL
+    WHERE ${notDeleted("r")}
       AND r."providerStatus" IS DISTINCT FROM ${sourceTransactionRecordProviderStatus.enum.pending}
       AND r."statementDate" BETWEEN ${date}::date - ${PENDING_POST_WINDOW_DAYS}::int
         AND ${date}::date + ${PENDING_POST_WINDOW_DAYS}::int
@@ -2750,7 +2751,7 @@ async function admitRetriedCharge(
     throw new Error("Retained charge identity was not found");
   if (scope.importId || scope.since) {
     const { rows } = await getDb(db).execute(sql`
-      SELECT 1 FROM "SourceTransactionRecord" r WHERE r."deletedAt" IS NULL
+      SELECT 1 FROM "SourceTransactionRecord" r WHERE ${notDeleted("r")}
         AND r.source = ${charge.source} AND r."chargeKey" = ${charge.chargeKey}
         ${scope.since ? sql`AND r."statementDate" >= ${scope.since}::date` : sql``}
         ${scope.importId ? sql`AND (r.id IN (SELECT m."statementRowId" FROM ${transactionImportMembers} m WHERE m."importId" = ${scope.importId}::uuid) OR r."withdrawalImportId" = ${scope.importId}::uuid)` : sql``}
@@ -3489,7 +3490,7 @@ async function statementLabelScope(
       held."accountId" AS "voidAccountId"
     FROM "AssessmentState" s JOIN "Assessment" a ON a.id=s.id
     LEFT JOIN "FinancialTransaction" held ON held.id=(a.judgment->${statementTransactionAction.enum.void}->>'transactionId')::uuid
-      AND held."deletedAt" IS NULL
+      AND ${notDeleted("held")}
     WHERE ${eligible} AND ${identity} AND ${selected}
   `);
   const admitted: string[] = [];

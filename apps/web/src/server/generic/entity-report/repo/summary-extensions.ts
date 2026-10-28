@@ -10,7 +10,7 @@ import { z } from "zod";
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
-import { actualExpenseSql } from "~/server/db/helpers/predicates";
+import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { readExpense } from "~/server/domains/expense/repo/crud";
 import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { householdContributionLedger } from "~/server/domains/household-contribution/repo/reports";
@@ -42,10 +42,10 @@ export async function ingredientSellersSummary(
     SELECT v."shortcode" AS id, v."name", count(DISTINCT p.id)::int AS count,
       count(*) OVER ()::int AS total, max(p.date)::text AS latest
     FROM "Product" product
-    JOIN "Expense" e ON e."productId" = product.id AND e."deletedAt" IS NULL
-    JOIN "Purchase" p ON p.id = e."purchaseId" AND p."deletedAt" IS NULL
-    JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
-    WHERE product."ingredientId" = ${id} AND product."deletedAt" IS NULL
+    JOIN "Expense" e ON e."productId" = product.id AND ${notDeleted("e")}
+    JOIN "Purchase" p ON p.id = e."purchaseId" AND ${notDeleted("p")}
+    JOIN "Vendor" v ON v.id = p."vendorId" AND ${notDeleted("v")}
+    WHERE product."ingredientId" = ${id} AND ${notDeleted("product")}
       AND ${sql.raw(actualExpenseSql("e"))}
     GROUP BY v.id, v."shortcode", v.name
     ORDER BY count(DISTINCT p.id) DESC, max(p.date) DESC NULLS LAST, v."shortcode"
@@ -90,9 +90,9 @@ export async function vendorFrequentProductsSummary(
       count(DISTINCT p.id)::int AS count, count(*) OVER ()::int AS total,
       max(p.date)::text AS latest
     FROM "Purchase" p
-    JOIN "Expense" e ON e."purchaseId" = p.id AND e."deletedAt" IS NULL
-    JOIN "Product" product ON product.id = e."productId" AND product."deletedAt" IS NULL
-    WHERE p."vendorId" = ${id} AND p."deletedAt" IS NULL
+    JOIN "Expense" e ON e."purchaseId" = p.id AND ${notDeleted("e")}
+    JOIN "Product" product ON product.id = e."productId" AND ${notDeleted("product")}
+    WHERE p."vendorId" = ${id} AND ${notDeleted("p")}
       AND ${sql.raw(actualExpenseSql("e"))}
     GROUP BY product.id, product."shortcode", product.name
     ORDER BY count(DISTINCT p.id) DESC, max(p.date) DESC NULLS LAST, product."shortcode"
@@ -133,9 +133,9 @@ export async function cookbookRecentRecipesSummary(
     SELECT r."shortcode" AS id, r.name, count(DISTINCT m.id)::int AS count,
       count(*) OVER ()::int AS total, max(m.date)::text AS latest
     FROM "Recipe" r
-    JOIN "MealRecipe" mr ON mr."recipeId" = r.id AND mr."deletedAt" IS NULL
-    JOIN "Meal" m ON m.id = mr."mealId" AND m."deletedAt" IS NULL
-    WHERE r."cookbookId" = ${id} AND r."deletedAt" IS NULL
+    JOIN "MealRecipe" mr ON mr."recipeId" = r.id AND ${notDeleted("mr")}
+    JOIN "Meal" m ON m.id = mr."mealId" AND ${notDeleted("m")}
+    WHERE r."cookbookId" = ${id} AND ${notDeleted("r")}
     GROUP BY r.id, r."shortcode", r.name
     ORDER BY max(m.date) DESC NULLS LAST, r."shortcode"
     LIMIT 3
@@ -252,10 +252,10 @@ export async function importReconciliationSummary(
     FROM (
       SELECT ${financialTransactionBookingSql("ft")} AS booking
       FROM "FinancialTransaction" ft
-      WHERE ft."deletedAt" IS NULL AND ft.shortcode IN (
+      WHERE ${notDeleted("ft")} AND ft.shortcode IN (
         SELECT cs.shortcode
         FROM "TransactionImportRecord" member
-        JOIN "SourceTransactionRecord" r ON r.id = member."statementRowId" AND r."deletedAt" IS NULL
+        JOIN "SourceTransactionRecord" r ON r.id = member."statementRowId" AND ${notDeleted("r")}
         JOIN ${CHARGE_STATE} cs ON cs.source = r.source AND cs."chargeKey" = ${chargeKeyOf("r")}
         WHERE member."importId" = ${storedImportId}::uuid
           AND NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NOT NULL
@@ -370,7 +370,7 @@ export async function expenseAttributionSummary(
       WHERE "shortcode" IN (${sql.join(
         codes.map((id) => sql`${id}`),
         sql`, `,
-      )}) AND "deletedAt" IS NULL
+      )}) AND ${notDeleted("LedgerParty")}
     `);
     for (const row of z
       .array(z.object({ id: z.string(), name: z.string() }))

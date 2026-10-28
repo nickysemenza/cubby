@@ -97,7 +97,7 @@ async function loadEmailQualityRecords(
       SELECT 1 FROM "Run" import
       WHERE import.purpose = ${runPurpose.enum.mail_import}
         AND import.status = ${runStatus.enum.completed}
-        AND import."deletedAt" IS NULL
+        AND ${notDeleted("import")}
         AND import."ledgerPartyId" = "Email"."ledgerPartyId"
         AND import.input @> jsonb_build_object('sources', jsonb_build_array(
           jsonb_build_object('orderMailId', "Email"."orderMailId"::text)

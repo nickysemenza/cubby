@@ -24,6 +24,7 @@ import {
   type InternalSearchCandidate,
   type InternalSearchHit,
 } from "~/server/generic/search/service/search.service";
+import { liveAliasSql } from "~/server/lib/live-row";
 
 const MAX_GROUP_CANDIDATES = 200;
 const ACTIVITY_TYPES = new Set(["expense", "purchase", "task"]);
@@ -84,25 +85,25 @@ async function loadCandidateRelations(
         CASE refs."entityKind"
           WHEN 'product' THEN (
             SELECT p.id FROM "Product" p
-            WHERE p.id = refs."entityId" AND p."deletedAt" IS NULL
+            WHERE p.id = refs."entityId" AND ${liveAliasSql("p")}
           )
           WHEN 'inventory' THEN (
             SELECT ie."productId"
             FROM "InventoryEntry" ie
-            JOIN "Product" p ON p.id = ie."productId" AND p."deletedAt" IS NULL
-            WHERE ie.id = refs."entityId" AND ie."deletedAt" IS NULL
+            JOIN "Product" p ON p.id = ie."productId" AND ${liveAliasSql("p")}
+            WHERE ie.id = refs."entityId" AND ${liveAliasSql("ie")}
           )
           WHEN 'expense' THEN (
             SELECT e."productId"
             FROM "Expense" e
-            JOIN "Product" p ON p.id = e."productId" AND p."deletedAt" IS NULL
-            WHERE e.id = refs."entityId" AND e."deletedAt" IS NULL
+            JOIN "Product" p ON p.id = e."productId" AND ${liveAliasSql("p")}
+            WHERE e.id = refs."entityId" AND ${liveAliasSql("e")}
           )
           WHEN 'task' THEN (
             SELECT t."subjectProductId"
             FROM "Task" t
-            JOIN "Product" p ON p.id = t."subjectProductId" AND p."deletedAt" IS NULL
-            WHERE t.id = refs."entityId" AND t."deletedAt" IS NULL
+            JOIN "Product" p ON p.id = t."subjectProductId" AND ${liveAliasSql("p")}
+            WHERE t.id = refs."entityId" AND ${liveAliasSql("t")}
           )
           WHEN 'purchase' THEN (
             SELECT CASE
@@ -111,10 +112,10 @@ async function loadCandidateRelations(
             END
             FROM "Purchase" purchase
             LEFT JOIN "EntityLink" pp
-              ON pp."fromEntityId" = purchase.id AND pp."deletedAt" IS NULL AND pp."kind" = 'purchaseProduct'
+              ON pp."fromEntityId" = purchase.id AND ${liveAliasSql("pp")} AND pp."kind" = 'purchaseProduct'
             LEFT JOIN "Product" p
-              ON p.id = pp."toEntityId" AND p."deletedAt" IS NULL
-            WHERE purchase.id = refs."entityId" AND purchase."deletedAt" IS NULL
+              ON p.id = pp."toEntityId" AND ${liveAliasSql("p")}
+            WHERE purchase.id = refs."entityId" AND ${liveAliasSql("purchase")}
           )
           ELSE NULL
         END::text AS "productId"
@@ -142,18 +143,18 @@ async function loadProductPlacements(db: Database, productIds: string[]) {
           ie.placement
         FROM "InventoryEntry" ie
         JOIN requested r ON r."productId" = ie."productId"
-        JOIN "Product" p ON p.id = ie."productId" AND p."deletedAt" IS NULL
-        WHERE ie."deletedAt" IS NULL
+        JOIN "Product" p ON p.id = ie."productId" AND ${liveAliasSql("p")}
+        WHERE ${liveAliasSql("ie")}
       ),
       location_path AS (
         SELECT lp.id AS "inventoryId", l.id, l."parentId", l.name, 0 AS depth
         FROM live_placements lp
-        JOIN "Location" l ON l.id = lp."locationId" AND l."deletedAt" IS NULL
+        JOIN "Location" l ON l.id = lp."locationId" AND ${liveAliasSql("l")}
         UNION ALL
         SELECT child."inventoryId", parent.id, parent."parentId", parent.name, child.depth + 1
         FROM "Location" parent
         JOIN location_path child ON child."parentId" = parent.id
-        WHERE parent."deletedAt" IS NULL
+        WHERE ${liveAliasSql("parent")}
       )
       SELECT lp."productId"::text AS "productId", lp.shortcode AS id,
         l.shortcode AS "locationId",
@@ -164,7 +165,7 @@ async function loadProductPlacements(db: Database, productIds: string[]) {
         ), l.name) AS "locationPath",
         lp.amount, lp.placement
       FROM live_placements lp
-      JOIN "Location" l ON l.id = lp."locationId" AND l."deletedAt" IS NULL
+      JOIN "Location" l ON l.id = lp."locationId" AND ${liveAliasSql("l")}
       ORDER BY "locationPath", lp.placement, lp.shortcode
     `,
   );
@@ -208,10 +209,10 @@ async function loadComponentPlacements(
       FROM "EntityLink" pc
       JOIN requested r ON r."productId" = pc."fromEntityId"
       JOIN "Product" parent
-        ON parent.id = pc."fromEntityId" AND parent."deletedAt" IS NULL
+        ON parent.id = pc."fromEntityId" AND ${liveAliasSql("parent")}
       JOIN "Product" component
-        ON component.id = pc."toEntityId" AND component."deletedAt" IS NULL
-      WHERE pc."deletedAt" IS NULL AND pc."kind" = 'productComponent'
+        ON component.id = pc."toEntityId" AND ${liveAliasSql("component")}
+      WHERE ${liveAliasSql("pc")} AND pc."kind" = 'productComponent'
       ORDER BY pc."fromEntityId", component.name, pc."toEntityId"
     `,
   );

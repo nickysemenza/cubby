@@ -19,6 +19,7 @@ import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { matchesNameOrAlias } from "~/server/lib/name-alias-match";
 
 type Db = Database | DrizzleTransaction;
 
@@ -80,7 +81,6 @@ export async function importVendorCandidates(
     })
     .from(vendor)
     .where(notDeleted(vendor));
-  const lower = name.toLowerCase();
   return rows
     .map((row) => {
       const site = vendorWebsiteDomain(row.website);
@@ -89,9 +89,11 @@ export async function importVendorCandidates(
         vendorId: parseShortcodeFor("vendor", row.shortcode),
         name: row.name,
         website: row.website,
-        exactNameMatch: known.some(
-          (value) => value.trim().toLowerCase() === lower,
-        ),
+        exactNameMatch: matchesNameOrAlias({
+          name: row.name.trim(),
+          aliases: row.aliases.map((value) => value.trim()),
+          query: name,
+        }),
         websiteDomainMatch:
           domain !== null &&
           site === domain &&
@@ -139,10 +141,7 @@ async function learnSenderAlias(
   actor: ActorContext,
 ) {
   const { name, address } = input;
-  const known = [owner.name, ...owner.aliases].map((value) =>
-    value.toLowerCase(),
-  );
-  if (known.includes(name.toLowerCase())) return owner.id;
+  if (matchesNameOrAlias({ ...owner, query: name })) return owner.id;
   // Sender identity never takes a name another Vendor already answers to: that
   // alias would make the name ambiguous (or misroute it) for every later lookup.
   const [named] = await resolveNames(db, "vendor", [{ name }], {

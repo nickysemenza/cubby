@@ -64,6 +64,7 @@ import {
 import { batchEnrichWithFood } from "~/server/domains/usda-food/repo/usda-helpers";
 import { loadIngredientRecipeEvidence } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import { liveAliasSqlText } from "~/server/lib/live-row";
 
 import { buildIngredientWhere } from "./internal-types";
 
@@ -101,7 +102,7 @@ export const searchIngredientsForMerge = async (
       // documented at length in repo/purchase.ts.
       productCount: sql<number>`(
         SELECT count(*) FROM "Product" p
-        WHERE p."ingredientId" = "Ingredient"."id" AND p."deletedAt" IS NULL
+        WHERE p."ingredientId" = "Ingredient"."id" AND ${notDeleted("p")}
       )`,
     })
     .from(ingredient)
@@ -145,7 +146,7 @@ export const getIngredientMergeCandidatesByIds = async (
       // interpolated `${ingredient.id}` silently self-joins instead.
       productCount: sql<number>`(
         SELECT count(*) FROM "Product" p
-        WHERE p."ingredientId" = "Ingredient"."id" AND p."deletedAt" IS NULL
+        WHERE p."ingredientId" = "Ingredient"."id" AND ${notDeleted("p")}
       )`,
     })
     .from(ingredient)
@@ -466,7 +467,7 @@ export const ingredientScaffold = listScaffold("ingredient", ingredient, {
     ),
     product: sql.raw(
       `(SELECT count(*) FROM "Product" p ` +
-        `WHERE p."ingredientId" = "Ingredient"."id" AND p."deletedAt" IS NULL)`,
+        `WHERE p."ingredientId" = "Ingredient"."id" AND ${liveAliasSqlText("p")})`,
     ),
     hasProduct: inArray(ingredient.id, ingredientIdsWithLiveProducts),
     inRecipes: inArray(ingredient.id, ingredientIdsInLiveRecipes(false)),

@@ -945,7 +945,7 @@ export const upsertNotionRecipe = (
         SELECT 1 FROM "EntityExternalId" np
         WHERE np."entityId" = ${recipe.id} AND np."source" = ${NOTION_SOURCE}
           AND np."kind" = 'page' AND np."externalId" = ${pageId}
-          AND np."deletedAt" IS NULL
+          AND ${notDeleted("np")}
       )`,
     ),
     {

@@ -52,6 +52,10 @@ import {
 } from "~/server/clients/s3";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  type ImageReadScope,
+  imageScopeEmpty,
+} from "~/server/db/computed/image-read-scope";
+import {
   getDb,
   isTransaction,
   unwrapDb,
@@ -1894,9 +1898,9 @@ export async function saveImageDescriptionAnalysis(
  */
 export async function loadImageRepresentations(
   db: Database | DrizzleTransaction,
-  shortcodes: readonly string[],
+  shortcodes: ImageReadScope,
 ): Promise<Map<string, ImageRepresentations>> {
-  if (!shortcodes.length) return new Map();
+  if (imageScopeEmpty(shortcodes)) return new Map();
   const result = await unwrapDb(db).execute(
     imageRepresentationRowsSql(shortcodes, compatibleSubjectLiftOutputs),
   );

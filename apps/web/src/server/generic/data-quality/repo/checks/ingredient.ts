@@ -49,23 +49,23 @@ async function loadIngredientQualityRecords(
         SELECT 1 FROM "RecipeSectionIngredient" dq_ingredient_line
         JOIN "RecipeSection" dq_ingredient_section
           ON dq_ingredient_section."id" = dq_ingredient_line."recipeSectionId"
-          AND dq_ingredient_section."deletedAt" IS NULL
+          AND ${notDeleted("dq_ingredient_section")}
         JOIN "Recipe" dq_ingredient_recipe
           ON dq_ingredient_recipe."id" = dq_ingredient_section."recipeId"
-          AND dq_ingredient_recipe."deletedAt" IS NULL
+          AND ${notDeleted("dq_ingredient_recipe")}
           AND dq_ingredient_recipe."cookbookId" IS NULL
         WHERE dq_ingredient_line."ingredientId" = ${ingredientColumn("id")}
-          AND dq_ingredient_line."deletedAt" IS NULL
+          AND ${notDeleted("dq_ingredient_line")}
       )`,
       hasProduct: sql<boolean>`EXISTS (
         SELECT 1 FROM "Product" dq_ingredient_product
         WHERE dq_ingredient_product."ingredientId" = ${ingredientColumn("id")}
-          AND dq_ingredient_product."deletedAt" IS NULL
+          AND ${notDeleted("dq_ingredient_product")}
       )`,
       hasLiveRecipe: sql<boolean>`EXISTS (
         SELECT 1 FROM "Recipe" dq_ingredient_recipe
         WHERE dq_ingredient_recipe."id" = ${ingredientColumn("recipeId")}
-          AND dq_ingredient_recipe."deletedAt" IS NULL
+          AND ${notDeleted("dq_ingredient_recipe")}
       )`,
       hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql(
         "ingredient",

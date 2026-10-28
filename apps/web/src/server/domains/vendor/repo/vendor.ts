@@ -335,11 +335,11 @@ const vendorBrandSpend = vendorBrandedProducts()
   .sum((e) => e.cost);
 
 const vendorDocumentedPurchaseCount = sql<number>`(SELECT count(*)::int FROM "Purchase" vp
-  WHERE vp."vendorId"=${outer(vendor.id)} AND vp."deletedAt" IS NULL
+  WHERE vp."vendorId"=${outer(vendor.id)} AND ${notDeleted("vp")}
     AND ${purchaseHasPrimaryDocumentSql("vp")})`;
 
 const vendorMissingItemizationCount = sql<number>`(SELECT count(*)::int FROM "Purchase" vp
-  WHERE vp."vendorId"=${outer(vendor.id)} AND vp."deletedAt" IS NULL
+  WHERE vp."vendorId"=${outer(vendor.id)} AND ${notDeleted("vp")}
     AND ${effectivePurchaseItemizationExpectationSql("vp")}=${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)}
     AND NOT ${purchaseHasItemizationSql("vp")})`;
 
@@ -456,8 +456,8 @@ const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
   JOIN "Image" logo ON logo."id" = logo_att."imageId"
   WHERE logo_att."entityId" = ${sql.raw('"Vendor"."id"')}
     AND logo_att."role" = 'logo'
-    AND logo_att."deletedAt" IS NULL
-    AND logo."deletedAt" IS NULL
+    AND ${notDeleted("logo_att")}
+    AND ${notDeleted("logo")}
     AND ${displayableImageSql("logo")}
 )`;
 
@@ -713,7 +713,7 @@ export const updateVendor = defineMutationWriter({
           : defaultSpendingCategoryId) !== current.target
       ) {
         const affected = await getDb(db).execute(
-          sql`SELECT 1 FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" WHERE e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND p."vendorId"=${id}::uuid LIMIT 1`,
+          sql`SELECT 1 FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" WHERE ${notDeleted("e")} AND ${notDeleted("p")} AND p."vendorId"=${id}::uuid LIMIT 1`,
         );
         if (affected.rows.length) {
           assertReviewedSpendingClassification(db);

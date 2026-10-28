@@ -35,6 +35,7 @@ import {
   withTransactionDatabase,
   uuidArrayParam,
 } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   run as runTable,
   assessmentState as suggestionTable,
@@ -74,7 +75,7 @@ const requestedSuggestionRun = (code: string) => sql`(
   ${runTable.shortcode} = ${code} OR EXISTS (
     SELECT 1 FROM "AiEvaluationRequest" AS demand JOIN "Run" AS requester ON requester.id = demand."runId"
     WHERE demand."evaluationId" = ${suggestionTable.evaluationId} AND demand."cancelledAt" IS NULL
-      AND requester.shortcode = ${code} AND requester."deletedAt" IS NULL
+      AND requester.shortcode = ${code} AND ${notDeleted("requester")}
   )
 )`;
 
