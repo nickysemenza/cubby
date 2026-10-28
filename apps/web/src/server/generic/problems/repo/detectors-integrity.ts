@@ -1,3 +1,4 @@
+import { entityRefKey, type Entity } from "@cubby/schemas/entity";
 /**
  * Referential-liveness audit: finds every LIVE row whose foreign key points at
  * a SOFT-DELETED target, for every incoming edge whose `liveness` rule in
@@ -50,8 +51,6 @@
  * routed through `sql.identifier()`, values always bound parameters — sidesteps
  * both problems and keeps every branch visually inspectable.
  */
-
-import { entityRefKey, type Entity } from "@cubby/schemas/entity";
 import type {
   EdgeRole,
   EdgeSemantics,
@@ -69,6 +68,7 @@ import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { getDb } from "~/server/db/helpers";
 import { findDirectedDependencyCycles } from "~/server/db/helpers/dependency-graph";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { entityLink } from "~/server/db/schema";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -211,7 +211,7 @@ function detailBranch(spec: EdgeAuditSpec): SQL {
     JOIN ${sql.identifier(spec.targetTableName)} t
       ON t.id = s.${sql.identifier(spec.sourceColumnName)}
     WHERE t."deletedAt" IS NOT NULL
-    ${spec.sourceSoftDeletable ? sql`AND s."deletedAt" IS NULL` : sql``}
+    ${spec.sourceSoftDeletable ? sql`AND ${notDeleted("s")}` : sql``}
     ${scopeFilter(spec)}
     LIMIT ${ROW_CAP}
   )`;
@@ -226,7 +226,7 @@ function countBranch(spec: EdgeAuditSpec): SQL {
     JOIN ${sql.identifier(spec.targetTableName)} t
       ON t.id = s.${sql.identifier(spec.sourceColumnName)}
     WHERE t."deletedAt" IS NOT NULL
-    ${spec.sourceSoftDeletable ? sql`AND s."deletedAt" IS NULL` : sql``}
+    ${spec.sourceSoftDeletable ? sql`AND ${notDeleted("s")}` : sql``}
     ${scopeFilter(spec)}
   `;
 }

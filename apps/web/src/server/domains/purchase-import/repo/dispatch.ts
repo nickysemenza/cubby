@@ -10,6 +10,7 @@ import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { wakeJobs } from "~/server/workflows/background-tasks/publish";
@@ -52,5 +53,5 @@ export async function reconcilePurchaseDispatches(db: Database) {
     "dispatchError"=j.error, "endedAt"=now(), "updatedAt"=now()
     FROM "Job" j WHERE j.kind='purchase.dispatch' AND j.state=${jobState.enum.failed} AND j."runId"=r.id
       AND j.input->>'type'='start_or_resume' AND j.input->>'eventId'=r."dispatchEventId"
-      AND r.status=${runStatus.enum.running} AND r."coordinatorStartedAt" IS NULL AND r."retiredAt" IS NULL AND r."deletedAt" IS NULL`);
+      AND r.status=${runStatus.enum.running} AND r."coordinatorStartedAt" IS NULL AND r."retiredAt" IS NULL AND ${notDeleted("r")}`);
 }

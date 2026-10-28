@@ -49,11 +49,11 @@ export async function reconcileRecordedFinancialEvidence(
       accountId: string;
     }>(sql`
       SELECT DISTINCT ft.shortcode, ft."accountId" FROM "FinancialTransaction" ft
-      JOIN "EntityExternalId" ref ON ref."entityId" = ft.id AND ref.kind = 'settlement_ref' AND ref."deletedAt" IS NULL
-      JOIN "SourceTransactionRecord" observed ON observed.source = ref.source AND observed."deletedAt" IS NULL
+      JOIN "EntityExternalId" ref ON ref."entityId" = ft.id AND ref.kind = 'settlement_ref' AND ${notDeleted("ref")}
+      JOIN "SourceTransactionRecord" observed ON observed.source = ref.source AND ${notDeleted("observed")}
         AND (observed."externalId" = ref."externalId" OR
           observed."legacyReference" = ref."externalId")
-      WHERE observed.source = ${source} AND observed."chargeKey" = ${head.chargeKey} AND ft."deletedAt" IS NULL
+      WHERE observed.source = ${source} AND observed."chargeKey" = ${head.chargeKey} AND ${notDeleted("ft")}
     `);
     if (linked.length !== 1) continue;
     const target = linked[0]!;
@@ -108,7 +108,7 @@ export async function reconcileRecordedFinancialEvidence(
               count: number;
             }>(sql`
             SELECT count(*)::int AS count FROM "TransactionImportRecord" m
-            JOIN "SourceTransactionRecord" r ON r.id=m."statementRowId" AND r."deletedAt" IS NULL
+            JOIN "SourceTransactionRecord" r ON r.id=m."statementRowId" AND ${notDeleted("r")}
             WHERE m."importId"=${observation.withdrawalImportId}::uuid
           `);
             const parsed = transactionImportInput.shape.coverage.safeParse(
@@ -140,11 +140,11 @@ export async function reconcileRecordedFinancialEvidence(
           SELECT DISTINCT latest.amount, latest."withdrawnAt" IS NOT NULL AS withdrawn,
             latest.source = ${source} AND latest."chargeKey" = ${head.chargeKey} AS own
           FROM "FinancialTransaction" ft
-          JOIN "EntityExternalId" ref ON ref."entityId" = ft.id AND ref.kind='settlement_ref' AND ref."deletedAt" IS NULL
-          LEFT JOIN "SourceTransactionRecord" observed ON observed.source=ref.source AND observed."deletedAt" IS NULL
+          JOIN "EntityExternalId" ref ON ref."entityId" = ft.id AND ref.kind='settlement_ref' AND ${notDeleted("ref")}
+          LEFT JOIN "SourceTransactionRecord" observed ON observed.source=ref.source AND ${notDeleted("observed")}
             AND (observed."externalId"=ref."externalId" OR observed."legacyReference"=ref."externalId")
           LEFT JOIN "SourceTransactionRecord" latest ON latest.source=observed.source AND latest."chargeKey"=observed."chargeKey"
-            AND latest.current AND latest."deletedAt" IS NULL
+            AND latest.current AND ${notDeleted("latest")}
           WHERE ft.shortcode=${transactionId}
             -- A set-aside charge is not independent corroboration. Keep unresolved
             -- references in the result so they still require review.
@@ -152,7 +152,7 @@ export async function reconcileRecordedFinancialEvidence(
               SELECT 1 FROM "SourceTransactionRecord" predecessor
               WHERE predecessor.source=observed.source
                 AND predecessor."chargeKey"=observed."chargeKey"
-                AND predecessor."deletedAt" IS NULL
+                AND ${notDeleted("predecessor")}
                 AND predecessor."supersededByRowId" IS NOT NULL
             )
         `);

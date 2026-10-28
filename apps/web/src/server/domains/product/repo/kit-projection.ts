@@ -1,3 +1,4 @@
+import type { ProductId } from "@cubby/schemas/identifiers";
 /**
  * Projecting a kit's ledger down into the parts it contains.
  *
@@ -40,12 +41,11 @@
  *  - **Depth is capped, and exceeding the cap stops projecting rather than
  *    erroring.** See {@link MAX_KIT_PROJECTION_DEPTH}.
  */
-
-import type { ProductId } from "@cubby/schemas/identifiers";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { uuidArrayParam } from "~/server/db/helpers/query";
+import { liveAliasSqlText } from "~/server/lib/live-row";
 
 /**
  * How many kit hops a projection will walk before it stops.
@@ -79,8 +79,8 @@ const liveSiblingRows = (parentPredicate = "") =>
   `FROM "EntityLink" ksib
       JOIN "Product" ksibp
         ON ksibp."id" = ksib."toEntityId"
-       AND ksibp."deletedAt" IS NULL
-     WHERE ksib."deletedAt" IS NULL AND ksib."kind" = 'productComponent'
+       AND ${liveAliasSqlText("ksibp")}
+     WHERE ${liveAliasSqlText("ksib")} AND ksib."kind" = 'productComponent'
        ${parentPredicate}`;
 
 const liveSiblingQuantitySum = (parentExpr: string) =>
@@ -103,10 +103,10 @@ const kitAncestorStep = (
       FROM kit_anc ka
       JOIN "EntityLink" kpc
         ON kpc."toEntityId" = ka."productId"
-       AND kpc."deletedAt" IS NULL AND kpc."kind" = 'productComponent'
+       AND ${liveAliasSqlText("kpc")} AND kpc."kind" = 'productComponent'
       JOIN "Product" kparent
         ON kparent."id" = kpc."fromEntityId"
-       AND kparent."deletedAt" IS NULL
+       AND ${liveAliasSqlText("kparent")}
       ${groupedSiblingQuantities ? 'LEFT JOIN kit_sibling_qty ksq ON ksq."fromEntityId" = kpc."fromEntityId"' : ""}
      WHERE ka.depth < ${MAX_KIT_PROJECTION_DEPTH}`;
 

@@ -98,7 +98,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 
 const accountName = sql<string | null>`(
   SELECT fa.name FROM "FinancialAccount" fa
-  WHERE fa.id = "FinancialTransaction"."accountId" AND fa."deletedAt" IS NULL
+  WHERE fa.id = "FinancialTransaction"."accountId" AND ${notDeleted("fa")}
 )`;
 
 // Mirrors `parseBankDescriptor`: the same POSIX patterns, first match wins.
@@ -136,7 +136,7 @@ export const financialTransactionScaffold = listScaffold(
       columns: {
         spendingCategoryName: sql<
           string | null
-        >`(SELECT name FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND "deletedAt" IS NULL)`,
+        >`(SELECT name FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND ${notDeleted("SpendingCategory")})`,
         fieldResolutions: financialTransactionEvidenceFieldResolutionsSql(
           "FinancialTransaction",
         ),
@@ -149,7 +149,7 @@ export const financialTransactionScaffold = listScaffold(
         >`(SELECT shortcode FROM "LedgerTransfer" WHERE id = "FinancialTransaction"."ledgerTransferId")`,
         spendingCategoryShortcode: sql<
           string | null
-        >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND "deletedAt" IS NULL)`,
+        >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND ${notDeleted("SpendingCategory")})`,
         accountShortcode: sql<string>`(SELECT fa.shortcode FROM "FinancialAccount" fa WHERE fa.id = "FinancialTransaction"."accountId")`,
         // Ordered by shortcode so the field is stable across reads rather than
         // following whatever order the planner happens to produce.
@@ -157,7 +157,7 @@ export const financialTransactionScaffold = listScaffold(
           SELECT jsonb_agg(jsonb_build_object('purchaseId', ap.shortcode, 'amount', aa."amount") ORDER BY ap.shortcode)
           FROM "FinancialTransactionAllocation" aa
           JOIN "Purchase" ap ON ap."id" = aa."purchaseId"
-          WHERE aa."transactionId" = "FinancialTransaction"."id" AND aa."deletedAt" IS NULL
+          WHERE aa."transactionId" = "FinancialTransaction"."id" AND ${notDeleted("aa")}
         ), '[]'::jsonb)`,
       },
       bindings: (bind) => {
@@ -875,8 +875,8 @@ export async function financialTransactionSourceOptions(
   const rows = await getDb(db).execute<{ source: string; count: number }>(sql`
     SELECT fx."source" AS source, count(DISTINCT fx."entityId")::int AS count
     FROM "EntityExternalId" fx
-    JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ft."deletedAt" IS NULL
-    WHERE fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
+    JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ${notDeleted("ft")}
+    WHERE fx."kind" = 'settlement_ref' AND ${notDeleted("fx")}
     GROUP BY 1
     ORDER BY count(DISTINCT fx."entityId") DESC, 1 ASC
   `);

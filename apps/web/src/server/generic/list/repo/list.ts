@@ -983,7 +983,7 @@ const suggestionPredicate = (
     WHERE s."entity" = ${entity}
       AND s."recordId" = ${sql.identifier(getTableName(table))}."id"
       AND s."status" = ${suggestionStatus.enum.pending}
-      AND r."deletedAt" IS NULL
+      AND ${notDeleted("r")}
       AND COALESCE((s.data->>'served')::boolean, true)
       ${kind}
   )`;
@@ -2871,7 +2871,7 @@ const facetValueSql = (
         );
       return sql`(SELECT ref."shortcode" FROM ${sql.identifier(dbTable)} ref WHERE ref."id" = ${value}${
         entityManifest[target].softDelete
-          ? sql` AND ref."deletedAt" IS NULL`
+          ? sql` AND ${notDeleted("ref")}`
           : sql``
       })`;
     }

@@ -1,3 +1,10 @@
+import { financialAccountIdentityKind } from "@cubby/schemas/financial-account-fields";
+import {
+  financialTransactionKind,
+  type FinancialTransactionKind,
+  financialTransactionStatus,
+  purchaseSettlementKinds,
+} from "@cubby/schemas/financial-transaction";
 /**
  * Whether a settling transaction's account could have paid a Purchase.
  *
@@ -20,14 +27,6 @@
  *
  * Builders take hand-qualified alias strings, like `financial-reconciliation`.
  */
-
-import { financialAccountIdentityKind } from "@cubby/schemas/financial-account-fields";
-import {
-  financialTransactionKind,
-  type FinancialTransactionKind,
-  financialTransactionStatus,
-  purchaseSettlementKinds,
-} from "@cubby/schemas/financial-transaction";
 import type {
   FinancialAccountId,
   FinancialTransactionId,
@@ -39,9 +38,11 @@ import {
   type SettlementConflictKind,
 } from "@cubby/schemas/purchase";
 import { paymentTender } from "@cubby/schemas/purchase-import";
+import { isNull } from "drizzle-orm";
 import { eq, inArray, type SQL, sql } from "drizzle-orm";
 
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import type {
   RepositoryQueryClient as DrizzleClient,
   RepositoryQueryTransaction as DrizzleTransaction,
@@ -61,7 +62,7 @@ const settlementKindList = sql.raw(
 const periodPartiesSql = (periods: SQL, date: SQL) => sql`(
   SELECT party.id FROM jsonb_array_elements(${periods}) period
   JOIN "LedgerParty" party
-    ON party.shortcode = period->>'ledgerPartyId' AND party."deletedAt" IS NULL
+    ON party.shortcode = period->>'ledgerPartyId' AND ${notDeleted("party")}
   WHERE ${date} IS NOT NULL
     AND (period->>'validFrom' IS NULL OR (period->>'validFrom')::date <= ${date})
     AND (period->>'validTo' IS NULL OR ${date} <= (period->>'validTo')::date)
@@ -92,7 +93,7 @@ const accountAdmitsPartySql = (account: SQL, date: SQL, party: SQL) => sql`(
     OR coalesce(bool_or(person.id = admitted.id OR person.kind = ${ledgerPartyKind.enum.household}), false)
   FROM admitted
   CROSS JOIN ${accountPeopleSql(account, date)} people(id)
-  LEFT JOIN "LedgerParty" person ON person.id = people.id AND person."deletedAt" IS NULL
+  LEFT JOIN "LedgerParty" person ON person.id = people.id AND ${notDeleted("person")}
   GROUP BY admitted.id
 )`;
 
@@ -105,7 +106,7 @@ export const purchaseMailMembersSql = (purchases: SQL) => sql`
   SELECT mail."purchaseId", mail_party.id, mail_party.shortcode
   FROM (${purchaseMailPartiesSql(purchases)}) mail
   JOIN "LedgerParty" mail_party ON mail_party.id = mail."ledgerPartyId"
-    AND mail_party."deletedAt" IS NULL
+    AND ${notDeleted("mail_party")}
     AND mail_party.kind = ${ledgerPartyKind.enum.member}
 `;
 
@@ -144,9 +145,9 @@ export const purchaseMembersSql = (purchases: SQL, mailMembers?: SQL) => sql`
     } END
   ) AS member
   FROM (${purchases}) member_purchase
-  LEFT JOIN "VendorAccount" va ON va.id = member_purchase."vendorAccountId" AND va."deletedAt" IS NULL
+  LEFT JOIN "VendorAccount" va ON va.id = member_purchase."vendorAccountId" AND ${notDeleted("va")}
   LEFT JOIN "LedgerParty" override_party ON override_party.id = member_purchase."purchaserOverrideId"
-    AND override_party."deletedAt" IS NULL
+    AND ${notDeleted("override_party")}
     AND override_party.kind = ${ledgerPartyKind.enum.member}
   ${
     mailMembers === undefined
@@ -170,7 +171,7 @@ const purchaseMemberSql = (purchase: SQL) =>
 const evidenceAccountSql = (evidence: SQL, purchase: SQL) => sql`(
   SELECT CASE WHEN count(*) = 1 THEN (array_agg(fa.id))[1] END
   FROM "FinancialAccount" fa
-  WHERE fa."deletedAt" IS NULL AND (
+  WHERE ${notDeleted("fa")} AND (
     (${evidence}.tender = ${paymentTender.enum.stored_value}
       AND fa.identity->>'kind' = ${financialAccountIdentityKind.enum.stored_value}
       AND fa."providerVendorId" = ${purchase}."vendorId"
@@ -204,14 +205,14 @@ export const purchasePayingAccountIdsSql = (purchaseAlias: string) => {
       SELECT 1 FROM "EntityLink" pay_link
       WHERE pay_link."fromEntityId" = ${purchase}.id
         AND pay_link.kind = 'purchasePaymentAccount'
-        AND pay_link."deletedAt" IS NULL
+        AND ${notDeleted("pay_link")}
     ) THEN (
       SELECT array_agg(pay_link."toEntityId") FROM "EntityLink" pay_link
       JOIN "FinancialAccount" linked_fa
-        ON linked_fa.id = pay_link."toEntityId" AND linked_fa."deletedAt" IS NULL
+        ON linked_fa.id = pay_link."toEntityId" AND ${notDeleted("linked_fa")}
       WHERE pay_link."fromEntityId" = ${purchase}.id
         AND pay_link.kind = 'purchasePaymentAccount'
-        AND pay_link."deletedAt" IS NULL
+        AND ${notDeleted("pay_link")}
     )
     ELSE (
       SELECT array_agg(DISTINCT resolved.account_id)
@@ -247,7 +248,7 @@ export const purchaseRefundAccountIdsSql = (purchaseAlias: string) => {
 
 /** A live settling transaction: what every settlement read allocates from. */
 export const settlementTransactionSql = (transaction: SQL) => sql`(
-  ${transaction}."deletedAt" IS NULL
+  ${isNull(sql`${transaction}."deletedAt"`)}
   AND ${transaction}.status <> ${financialTransactionStatus.enum.void}
   AND ${transaction}.kind IN (${settlementKindList})
 )`;

@@ -38,6 +38,8 @@ import {
   exactCodeMatch,
   searchTerms,
 } from "~/server/generic/search/repo/search-lexical";
+import { liveAliasSql } from "~/server/lib/live-row";
+import { textArrayMatchSql } from "~/server/lib/name-alias-match";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const log = createLogger("search");
@@ -217,7 +219,7 @@ export async function findLexicalSearchCandidates(
     fuzzy AS (
       SELECT sd.id
       FROM "SearchDocument" sd
-      WHERE sd."deletedAt" IS NULL
+      WHERE ${liveAliasSql("sd")}
         AND char_length(${normalized}) >= 3
         AND sd."entityKind" IN (${sql.join(
           entityKinds.map((type) => sql`${type}`),
@@ -230,7 +232,7 @@ export async function findLexicalSearchCandidates(
     candidates AS (
       SELECT sd.id
       FROM "SearchDocument" sd CROSS JOIN q
-      WHERE sd."deletedAt" IS NULL
+      WHERE ${liveAliasSql("sd")}
         AND sd."entityKind" IN (${sql.join(
           entityKinds.map((type) => sql`${type}`),
           sql`, `,
@@ -239,7 +241,7 @@ export async function findLexicalSearchCandidates(
           ${exactCodeMatch(normalized)}
           OR lower(sd.title) = ${normalized}
           OR lower(sd.title) LIKE ${`${normalized}%`}
-          OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) = ${normalized} OR lower(term) LIKE ${`${normalized}%`})
+          OR ${textArrayMatchSql({ values: sql`sd.aliases || sd.keywords`, query: normalized, match: "prefix" })}
           OR sd."searchVector" @@ q.query
         )
       UNION
@@ -248,16 +250,16 @@ export async function findLexicalSearchCandidates(
     SELECT sd."entityId"::text AS "entityId", e."shortcode" AS id, sd."entityKind", sd.title, sd.subtitle, sd."typeHint",
       CASE
         WHEN ${exactCodeMatch(normalized)} OR lower(sd.title) = ${normalized}
-          OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) = ${normalized}) THEN 'exact'
-        WHEN lower(sd.title) LIKE ${`${normalized}%`} OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) LIKE ${`${normalized}%`}) THEN 'prefix'
+          OR ${textArrayMatchSql({ values: sql`sd.aliases || sd.keywords`, query: normalized, match: "exact" })} THEN 'exact'
+        WHEN lower(sd.title) LIKE ${`${normalized}%`} OR ${textArrayMatchSql({ values: sql`sd.aliases || sd.keywords`, query: normalized, match: "prefix" })} THEN 'prefix'
         WHEN sd."searchVector" @@ q.query THEN 'text'
         ELSE 'fuzzy'
       END AS "matchKind",
       CASE
         WHEN ${exactCodeMatch(normalized)} THEN 'shortcode'
         WHEN lower(sd.title) = ${normalized} OR lower(sd.title) LIKE ${`${normalized}%`} THEN 'title'
-        WHEN EXISTS (SELECT 1 FROM unnest(sd.aliases) term WHERE lower(term) = ${normalized} OR lower(term) LIKE ${`${normalized}%`}) THEN 'alias'
-        WHEN EXISTS (SELECT 1 FROM unnest(sd.keywords) term WHERE lower(term) = ${normalized} OR lower(term) LIKE ${`${normalized}%`}) THEN 'keyword'
+        WHEN ${textArrayMatchSql({ values: sql`sd.aliases`, query: normalized, match: "prefix" })} THEN 'alias'
+        WHEN ${textArrayMatchSql({ values: sql`sd.keywords`, query: normalized, match: "prefix" })} THEN 'keyword'
         WHEN to_tsvector('simple', sd.title) @@ q.query THEN 'title'
         WHEN to_tsvector('simple', array_to_string(sd.aliases, ' ')) @@ q.query THEN 'alias'
         WHEN to_tsvector('simple', array_to_string(sd.keywords, ' ')) @@ q.query THEN 'keyword'
@@ -267,11 +269,11 @@ export async function findLexicalSearchCandidates(
       CASE
         WHEN ${exactCodeMatch(normalized)} THEN 'Exact shortcode match'
         WHEN lower(sd.title) = ${normalized} THEN 'Exact title match'
-        WHEN EXISTS (SELECT 1 FROM unnest(sd.aliases) term WHERE lower(term) = ${normalized}) THEN 'Exact alias match'
-        WHEN EXISTS (SELECT 1 FROM unnest(sd.keywords) term WHERE lower(term) = ${normalized}) THEN 'Exact identifier match'
+        WHEN ${textArrayMatchSql({ values: sql`sd.aliases`, query: normalized, match: "exact" })} THEN 'Exact alias match'
+        WHEN ${textArrayMatchSql({ values: sql`sd.keywords`, query: normalized, match: "exact" })} THEN 'Exact identifier match'
         WHEN lower(sd.title) LIKE ${`${normalized}%`} THEN 'Title prefix match'
-        WHEN EXISTS (SELECT 1 FROM unnest(sd.aliases) term WHERE lower(term) LIKE ${`${normalized}%`}) THEN 'Alias prefix match'
-        WHEN EXISTS (SELECT 1 FROM unnest(sd.keywords) term WHERE lower(term) LIKE ${`${normalized}%`}) THEN 'Identifier prefix match'
+        WHEN ${textArrayMatchSql({ values: sql`sd.aliases`, query: normalized, match: "prefix" })} THEN 'Alias prefix match'
+        WHEN ${textArrayMatchSql({ values: sql`sd.keywords`, query: normalized, match: "prefix" })} THEN 'Identifier prefix match'
         WHEN to_tsvector('simple', sd.title) @@ q.query THEN 'Title text match'
         WHEN to_tsvector('simple', array_to_string(sd.aliases, ' ')) @@ q.query THEN 'Alias text match'
         WHEN to_tsvector('simple', array_to_string(sd.keywords, ' ')) @@ q.query THEN 'Identifier text match'
@@ -286,8 +288,8 @@ export async function findLexicalSearchCandidates(
     ORDER BY
       CASE WHEN ${exactCodeMatch(normalized)} THEN 0
            WHEN lower(sd.title) = ${normalized} THEN 1
-           WHEN EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) = ${normalized}) THEN 2
-           WHEN lower(sd.title) LIKE ${`${normalized}%`} OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) LIKE ${`${normalized}%`}) THEN 3
+           WHEN ${textArrayMatchSql({ values: sql`sd.aliases || sd.keywords`, query: normalized, match: "exact" })} THEN 2
+           WHEN lower(sd.title) LIKE ${`${normalized}%`} OR ${textArrayMatchSql({ values: sql`sd.aliases || sd.keywords`, query: normalized, match: "prefix" })} THEN 3
            WHEN sd."searchVector" @@ q.query THEN 4 ELSE 5 END,
       ts_rank_cd(sd."searchVector", q.query) DESC,
       similarity(sd."normalizedText", ${normalized}) DESC,
@@ -420,7 +422,7 @@ export async function hydrateSearchHitRefs(
       JOIN "SearchDocument" sd
         ON sd."entityKind" = refs."entityKind"
         AND sd."entityId" = refs."entityId"
-        AND sd."deletedAt" IS NULL
+        AND ${liveAliasSql("sd")}
       JOIN "Entity" e ON e."id" = sd."entityId"
       ORDER BY refs.ordinal
     `,

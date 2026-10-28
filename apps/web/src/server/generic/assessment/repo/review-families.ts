@@ -42,6 +42,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { hasTextSql } from "~/server/db/computed/text-whitespace";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { assessment, assessmentState, feedback, run } from "~/server/db/schema";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
@@ -63,7 +64,7 @@ const primary = ref(sql`s.entity`, sql`s."recordId"::text`);
 const one = sql`jsonb_build_array(${primary})`;
 const linkedPurchases = sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.purchase}`, sql`link.data->>'purchaseId'`)}) FROM "AssessmentState" link JOIN "Assessment" publication ON publication.id = link.id
   WHERE link.family = ${assessmentFamily.enum.email_link} AND link.active AND link.data->>${assessmentJudgments.email_link.keyof().enum.decision} = ${assessmentJudgments.email_link.shape.decision.enum.linked}
-    AND EXISTS (SELECT 1 FROM "Email" mail WHERE mail.id = s."recordId" AND mail."deletedAt" IS NULL AND (publication.subject->>'recordId' = mail.id::text OR publication.subject->>'originalId' = mail."orderMailId"::text))), '[]'::jsonb)`;
+    AND EXISTS (SELECT 1 FROM "Email" mail WHERE mail.id = s."recordId" AND ${notDeleted("mail")} AND (publication.subject->>'recordId' = mail.id::text OR publication.subject->>'originalId' = mail."orderMailId"::text))), '[]'::jsonb)`;
 const receipt = alias(feedback, "receipt");
 const reviewQueryBuilder = new QueryBuilder();
 const receiptKind = sql<string>`${receipt.metadata}->>${assessmentProducer.keyof().enum.kind}`;
@@ -127,7 +128,7 @@ const emailLinkRecords = (requested?: readonly string[]) => {
   const parts: SQL[] = [];
   if (!requested || requested.includes(entities.email))
     parts.push(
-      sql`jsonb_build_array(${ref(sql`${entities.email}`, sql`COALESCE(a.subject->>'recordId', (SELECT mail.id::text FROM "Email" mail WHERE mail."orderMailId"::text = a.subject->>'originalId' AND mail."deletedAt" IS NULL))`)})`,
+      sql`jsonb_build_array(${ref(sql`${entities.email}`, sql`COALESCE(a.subject->>'recordId', (SELECT mail.id::text FROM "Email" mail WHERE mail."orderMailId"::text = a.subject->>'originalId' AND ${notDeleted("mail")}))`)})`,
     );
   if (!requested || requested.includes(entities.purchase))
     parts.push(
@@ -165,7 +166,7 @@ function statementRecords(requested?: readonly string[]) {
   };
   // A proposal belongs to the charge, including retained predecessors and later memberships.
   const sourceScope = sql`observed.source = s.data->>${financialTransactionSourceRef.keyof().enum.source}
-    AND ${chargeKeyOf("observed")} = s.data->>'chargeKey' AND observed."deletedAt" IS NULL`;
+    AND ${chargeKeyOf("observed")} = s.data->>'chargeKey' AND ${notDeleted("observed")}`;
   if (includes(entities.sourceTransactionRecord))
     parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.sourceTransactionRecord}`, sql`observed.id::text`)})
       FROM "SourceTransactionRecord" observed WHERE ${sourceScope}), '[]'::jsonb)`);
@@ -186,11 +187,11 @@ function statementRecords(requested?: readonly string[]) {
   add(entities.financialTransaction, sql`a.judgment->>'matchedTransactionId'`);
   add(
     entities.vendor,
-    sql`(SELECT v.id::text FROM "Vendor" v WHERE v.shortcode=a.judgment->${statementTransactionJudgment.keyof().enum.spending}->>'vendorId' AND v."deletedAt" IS NULL)`,
+    sql`(SELECT v.id::text FROM "Vendor" v WHERE v.shortcode=a.judgment->${statementTransactionJudgment.keyof().enum.spending}->>'vendorId' AND ${notDeleted("v")})`,
   );
   add(
     entities.spendingCategory,
-    sql`(SELECT category.id::text FROM "SpendingCategory" category WHERE category.shortcode=a.judgment->${statementTransactionJudgment.keyof().enum.spending}->>'spendingCategoryId' AND category."deletedAt" IS NULL)`,
+    sql`(SELECT category.id::text FROM "SpendingCategory" category WHERE category.shortcode=a.judgment->${statementTransactionJudgment.keyof().enum.spending}->>'spendingCategoryId' AND ${notDeleted("category")})`,
   );
   const related = [
     { entity: entities.financialTransaction, id: sql`settled.id::text` },
@@ -202,23 +203,23 @@ function statementRecords(requested?: readonly string[]) {
   if (related.length)
     parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
         FROM "EntityExternalId" evidence
-        JOIN "FinancialTransaction" settled ON settled.id=evidence."entityId" AND settled."deletedAt" IS NULL
+        JOIN "FinancialTransaction" settled ON settled.id=evidence."entityId" AND ${notDeleted("settled")}
         JOIN "FinancialAccount" account ON account.id=settled."accountId"
-        LEFT JOIN "FinancialTransactionAllocation" allocation ON allocation."transactionId"=settled.id AND allocation."deletedAt" IS NULL
-        LEFT JOIN "Purchase" booked ON booked.id=allocation."purchaseId" AND booked."deletedAt" IS NULL
-        LEFT JOIN "Expense" line ON line."purchaseId"=booked.id AND line."deletedAt" IS NULL
+        LEFT JOIN "FinancialTransactionAllocation" allocation ON allocation."transactionId"=settled.id AND ${notDeleted("allocation")}
+        LEFT JOIN "Purchase" booked ON booked.id=allocation."purchaseId" AND ${notDeleted("booked")}
+        LEFT JOIN "Expense" line ON line."purchaseId"=booked.id AND ${notDeleted("line")}
         CROSS JOIN LATERAL (VALUES ${sql.join(
           related.map(({ entity, id }) => sql`(${entity},${id})`),
           sql`, `,
         )}) related(kind,id)
-        WHERE evidence.kind=${entityExternalIdKind.enum.settlement_ref} AND evidence."deletedAt" IS NULL
+        WHERE evidence.kind=${entityExternalIdKind.enum.settlement_ref} AND ${notDeleted("evidence")}
           AND evidence.source=a.judgment->${statementTransactionAction.enum.create}->'sourceRef'->>${financialTransactionSourceRef.keyof().enum.source}
           AND evidence."externalId"=a.judgment->${statementTransactionAction.enum.create}->'sourceRef'->>'externalId'
           AND related.id IS NOT NULL), '[]'::jsonb)`);
   if (includes(entities.purchase))
     parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.purchase}`, sql`p.id::text`)})
         FROM jsonb_array_elements(COALESCE(a.judgment->${statementTransactionJudgment.keyof().enum.spending}->'candidates','[]'::jsonb)) candidate
-        JOIN "Purchase" p ON p.shortcode=candidate->>'purchaseId' AND p."deletedAt" IS NULL), '[]'::jsonb)`);
+        JOIN "Purchase" p ON p.shortcode=candidate->>'purchaseId' AND ${notDeleted("p")}), '[]'::jsonb)`);
   if (includes(entities.financialTransaction))
     parts.push(
       sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.financialTransaction}`, sql`c->>'transactionId'`)}) FROM jsonb_array_elements(a.judgment->'candidates') c), '[]'::jsonb)`,
@@ -722,5 +723,5 @@ export function pendingImageDescriptionEligibility() {
   return sql`a.family = ${assessmentFamily.enum.image_description} AND a.served
     AND s.active AND s.status = ${suggestionStatus.enum.pending}
     AND s.suppression IS NULL AND ${reviewFamilyDeclarations.image_description.actionable}
-    AND EXISTS (SELECT 1 FROM "Image" i WHERE i.id = s."recordId" AND i."deletedAt" IS NULL)`;
+    AND EXISTS (SELECT 1 FROM "Image" i WHERE i.id = s."recordId" AND ${notDeleted("i")})`;
 }

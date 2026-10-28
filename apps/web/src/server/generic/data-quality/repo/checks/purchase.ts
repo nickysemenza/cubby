@@ -44,7 +44,7 @@ export const purchaseChecks = defineStoredEntityChecks({
       SELECT 1 FROM "Expense" dq_pe
       WHERE dq_pe."purchaseId" = ${t.id}
         AND dq_pe."productId" = ${productId}
-        AND dq_pe."deletedAt" IS NULL
+        AND ${notDeleted("dq_pe")}
     )`,
   },
   checks: {
@@ -113,7 +113,7 @@ async function loadPurchaseQualityRecords(
     count(*) FILTER (WHERE qe."economicRole" = ${vendorRole})::int AS "vendorCount",
     count(*) FILTER (WHERE qe."economicRole" = ${vendorRole} AND qe."cost" IS NULL)::int AS "vendorUnpricedCount"
     FROM "Expense" qe
-    WHERE qe."deletedAt" IS NULL AND qe."purchaseId" = ANY(${uuidArrayParam(ids)})
+    WHERE ${notDeleted("qe")} AND qe."purchaseId" = ANY(${uuidArrayParam(ids)})
     GROUP BY qe."purchaseId") quality_expenses`;
   const kinds = sql.join(
     purchaseSettlementKinds.map((kind) => sql`${kind}`),
@@ -132,11 +132,11 @@ async function loadPurchaseQualityRecords(
     coalesce(bool_or(${settlementConflictSql("party", aliases)}) FILTER (WHERE ${settles}), false) AS "partyConflict",
     coalesce(bool_or(${settlementConflictSql("tender", aliases)}) FILTER (WHERE ${settles}), false) AS "tenderConflict"
     FROM "FinancialTransactionAllocation" qa
-    JOIN "FinancialTransaction" qft ON qft.id = qa."transactionId" AND qft."deletedAt" IS NULL
-    JOIN "Purchase" qp ON qp.id = qa."purchaseId" AND qp."deletedAt" IS NULL
+    JOIN "FinancialTransaction" qft ON qft.id = qa."transactionId" AND ${notDeleted("qft")}
+    JOIN "Purchase" qp ON qp.id = qa."purchaseId" AND ${notDeleted("qp")}
     -- includes-deleted: conflict evidence retains the allocated account; reference coverage requires liveness.
     LEFT JOIN "FinancialAccount" qfa ON qfa.id = qft."accountId"
-    WHERE qa."deletedAt" IS NULL AND qa."purchaseId" = ANY(${uuidArrayParam(ids)})
+    WHERE ${notDeleted("qa")} AND qa."purchaseId" = ANY(${uuidArrayParam(ids)})
     GROUP BY qa."purchaseId") quality_settlements`;
   return unwrapDb(db)
     .select({

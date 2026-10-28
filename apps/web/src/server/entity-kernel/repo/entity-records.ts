@@ -89,7 +89,7 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
         identity.kind, identity."createdAt", ${payload}."updatedAt"
         ${sql.join(early, sql``)}
       FROM "Entity" identity JOIN ${payload} ON ${id} = identity.id
-      WHERE identity.kind = ${kind} AND identity."deletedAt" IS NULL
+      WHERE identity.kind = ${kind} AND ${notDeleted("identity")}
         AND identity."mergedIntoId" IS NULL AND ${notDeleted(SHORTCODE_TABLE[kind])}
     `;
   });

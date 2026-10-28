@@ -157,6 +157,17 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - SQL predicates: use Drizzle `or(...)` for disjunctions. Parenthesize a raw
   SQL `OR` before composing it with `and(...)`; otherwise an update can escape
   its identity predicate through SQL operator precedence.
+  `notDeleted(table)` owns declared-table liveness; `notDeleted(alias)` and
+  schema-free `liveAliasSql` (`server/lib/live-row.ts`) cover SQL relation
+  aliases. Existing SQL-text composers use `liveAliasSqlText` with internal,
+  already declared aliases. The raw-predicate baseline retains only that text
+  owner and SearchDocument's unqualified partial-index inference predicate.
+- Name/alias retrieval: `server/lib/name-alias-match.ts` owns exact keys,
+  array-element predicates and set-based identity keys. `resolveNames` uses
+  those primitives over declared match columns. Trim lookup input and preserve
+  stored names and `lower(column)` indexes. Brand readers retain their existing
+  trimmed-stored-value comparison; punctuation/token/substring candidate rules
+  remain explicit retrieval policies rather than identity decisions.
 - Logging and tracing: `createLogger`, `withSpan`/span core
   (`@cubby/worker-tracing`); no raw `console.*` in server or Worker code.
   The logger serializes native Error messages, stacks, causes, and diagnostic

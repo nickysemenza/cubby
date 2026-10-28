@@ -57,15 +57,15 @@ async function loadLocationQualityRecords(
         SELECT 1 FROM "EntityAttachment" dq_location_attachment
         JOIN "Image" dq_location_image
           ON dq_location_image."id" = dq_location_attachment."imageId"
-          AND dq_location_image."deletedAt" IS NULL
+          AND ${notDeleted("dq_location_image")}
         WHERE dq_location_attachment."entityId" = ${locationColumn("id")}
-          AND dq_location_attachment."deletedAt" IS NULL
+          AND ${notDeleted("dq_location_attachment")}
           AND ${displayableImageSql("dq_location_image")}
       )`,
       hasInventoryForProduct: sql<boolean>`EXISTS (
         SELECT 1 FROM "InventoryEntry" dq_location_inventory
         WHERE dq_location_inventory."productId" = ${locationColumn("productId")}
-          AND dq_location_inventory."deletedAt" IS NULL
+          AND ${notDeleted("dq_location_inventory")}
       )`,
       hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql(
         "location",

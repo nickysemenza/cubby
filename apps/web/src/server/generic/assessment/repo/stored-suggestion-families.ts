@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { currentProductPairPolicySql } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
 import { readCorrectionOutcomes } from "~/server/generic/assessment/repo/correction-outcomes";
@@ -77,8 +78,8 @@ async function storedKeys(
       ${query.filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${query.filters.runId})` : sql``}
       ${
         family === "product_pair"
-          ? sql`AND ${currentProductPairPolicySql(sql`a.producer`)} AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id = s."recordId" AND p."deletedAt" IS NULL)
-        AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id::text = s.data->>'otherId' AND p."deletedAt" IS NULL)`
+          ? sql`AND ${currentProductPairPolicySql(sql`a.producer`)} AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id = s."recordId" AND ${notDeleted("p")})
+        AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id::text = s.data->>'otherId' AND ${notDeleted("p")})`
           : sql``
       }`);
   return rows.map((row) => ({
@@ -184,7 +185,7 @@ export const imageDescriptionFamily: SuggestionFamilyPresentation<"image_descrip
         id: string;
         judgment: unknown;
       }>(sql`SELECT a.id, a.judgment FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
-      JOIN "Image" i ON i.id = s."recordId" AND i."deletedAt" IS NULL
+      JOIN "Image" i ON i.id = s."recordId" AND ${notDeleted("i")}
       WHERE a.id IN (${sql.join(
         keys.map((key) => sql`${key.assessmentId}::uuid`),
         sql`, `,

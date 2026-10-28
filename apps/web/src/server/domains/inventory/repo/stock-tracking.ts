@@ -72,17 +72,17 @@ const undecidedArrivalQuietSql = (purchaseId: PurchaseId): SQL => sql`(
     WHERE arrival_line."purchaseId" = ${purchaseId}
       AND arrival_line."productId" = ${product.id}
       AND arrival_line."lineKind" = ${principalLine}
-      AND arrival_line."deletedAt" IS NULL
+      AND ${notDeleted("arrival_line")}
   ) AND NOT EXISTS (
     SELECT 1 FROM "Expense" arrival_line
     JOIN "Purchase" arrival_purchase ON arrival_purchase.id = arrival_line."purchaseId"
     LEFT JOIN "Vendor" arrival_vendor ON arrival_vendor.id = arrival_purchase."vendorId"
-      AND arrival_vendor."deletedAt" IS NULL
+      AND ${notDeleted("arrival_vendor")}
     WHERE arrival_line."purchaseId" = ${purchaseId}
       AND arrival_line."productId" = ${product.id}
       AND arrival_line."lineKind" = ${principalLine}
-      AND arrival_line."deletedAt" IS NULL
-      AND arrival_purchase."deletedAt" IS NULL
+      AND ${notDeleted("arrival_line")}
+      AND ${notDeleted("arrival_purchase")}
       AND COALESCE(
         ${effectiveFieldSql("spendingCategory", "stockTracked", { id: effectiveExpenseSpendingCategorySql("arrival_line") })},
         CASE WHEN arrival_vendor."spendingProfile" = ${foodRetail} THEN false END

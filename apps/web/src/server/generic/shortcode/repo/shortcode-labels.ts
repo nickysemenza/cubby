@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 
 /**
@@ -37,7 +38,7 @@ export async function shortcodeLabels(
         WHERE t."shortcode" IN (${sql.join(
           [...set].map((code) => sql`${code}`),
           sql`, `,
-        )})${softDelete ? sql` AND t."deletedAt" IS NULL` : sql``}`);
+        )})${softDelete ? sql` AND ${notDeleted("t")}` : sql``}`);
       for (const row of z
         .array(z.object({ code: z.string(), label: z.string() }))
         .parse(rows.rows))

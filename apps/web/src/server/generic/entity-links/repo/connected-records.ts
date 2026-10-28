@@ -18,6 +18,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
 
@@ -134,7 +135,7 @@ function prepareConnectedPage(input: ConnectedRecordsInput) {
   const rootTable = entityManifest[source.entityKind].dbTable;
   if (!rootTable) throw new Error(`No local table for ${source.entityKind}`);
   const rootLiveness = entityManifest[source.entityKind].softDelete
-    ? sql`AND s."deletedAt" IS NULL`
+    ? sql`AND ${notDeleted("s")}`
     : sql``;
   const targetFilter = input.targetIds
     ? sql`AND t."shortcode" IN (${sql.join(

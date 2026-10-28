@@ -5,6 +5,7 @@ import {
 import { sql, type SQL } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { householdDaySql } from "~/server/db/helpers/query";
 
 /** Two complete Monday-Friday days after the evidence date. The second
@@ -31,8 +32,8 @@ export const transactionPostingStartSql = (alias: string): SQL => sql`coalesce(
 export const purchasePostingStartSql = (alias: string): SQL => sql`coalesce((
   SELECT max(coalesce(ft."transactionDate", ft."postedDate", ${householdDaySql(sql`ft."createdAt"`)}))
   FROM "FinancialTransactionAllocation" allocation JOIN "FinancialTransaction" ft ON ft.id = allocation."transactionId"
-  WHERE allocation."purchaseId" = ${sql.raw(`${alias}.id`)} AND allocation."deletedAt" IS NULL
-    AND ft."deletedAt" IS NULL AND ft.status <> ${financialTransactionStatus.enum.void}
+  WHERE allocation."purchaseId" = ${sql.raw(`${alias}.id`)} AND ${notDeleted("allocation")}
+    AND ${notDeleted("ft")} AND ft.status <> ${financialTransactionStatus.enum.void}
     AND ft.kind IN (${sql.join(
       purchaseSettlementKinds.map((kind) => sql`${kind}`),
       sql`, `,

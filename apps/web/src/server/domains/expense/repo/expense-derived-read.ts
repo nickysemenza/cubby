@@ -6,6 +6,7 @@ import type { SelectedFields } from "drizzle-orm/pg-core";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { expenseAggregateFields } from "~/server/db/computed/expense-aggregate-sql";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { expense } from "~/server/db/schema";
 import type { ExpenseSpendingCategoryResolutionDraft } from "~/server/domains/expense/repo/expense-category-resolution";
 
@@ -52,7 +53,7 @@ export function expenseDerivedReadSql(
   if (read === "costs" && !scope)
     return sql`SELECT source."id" AS "expenseId", source."cost" AS cost,
       round(source."cost"::numeric * 100)::bigint AS "costCents", source."projectId"
-      FROM "Expense" source WHERE source."deletedAt" IS NULL
+      FROM "Expense" source WHERE ${notDeleted("source")}
       ${expenseIds ? sql`AND ${expenseSelectionConditionSql(sql`source."id"`, expenseIds)}` : sql``}`;
   const categories =
     derivedReads[read].categories ||

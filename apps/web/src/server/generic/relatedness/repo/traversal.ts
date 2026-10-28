@@ -12,6 +12,7 @@ import {
   inheritedFieldOfColumn,
 } from "~/server/db/computed/effective-field";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import * as schema from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import {
@@ -268,9 +269,9 @@ function edgeCondition(
         FROM "Expense" related_expense
         LEFT JOIN "Purchase" related_purchase
           ON related_purchase."id" = related_expense."purchaseId"
-          AND related_purchase."deletedAt" IS NULL
+          AND ${notDeleted("related_purchase")}
         ${inherited.joins}
-        WHERE related_expense."deletedAt" IS NULL
+        WHERE ${notDeleted("related_expense")}
           AND related_expense."lineKind" = ${expenseLineKindSchema.enum.principal}
           AND related_expense."productId" IS NOT NULL
       )

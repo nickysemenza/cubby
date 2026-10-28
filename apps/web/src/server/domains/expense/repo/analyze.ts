@@ -756,8 +756,8 @@ function entityFacetQuery(
  */
 const hasLiveVendor = sql`EXISTS (
   SELECT 1 FROM "Purchase" p
-  JOIN "Vendor" v ON v."id" = p."vendorId" AND v."deletedAt" IS NULL
-  WHERE p."id" = ${expense.purchaseId} AND p."deletedAt" IS NULL
+  JOIN "Vendor" v ON v."id" = p."vendorId" AND ${notDeleted("v")}
+  WHERE p."id" = ${expense.purchaseId} AND ${notDeleted("p")}
 )`;
 
 function vendorPresenceFacetQuery(

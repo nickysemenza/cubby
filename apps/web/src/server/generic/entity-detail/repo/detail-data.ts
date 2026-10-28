@@ -20,7 +20,7 @@ import { z } from "zod";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
-import { actualExpenseSql } from "~/server/db/helpers/predicates";
+import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { compiledConnectedRoutes } from "~/server/generic/entity-links/repo/connected-records";
 
@@ -44,7 +44,7 @@ function root(entity: Entity, shortcode: string) {
   if (!table) throw new Error(`No local table for ${entity}`);
   return {
     from: sql`${sql.identifier(table)} s`,
-    where: sql`s."shortcode" = ${shortcode} ${entityManifest[entity].softDelete ? sql`AND s."deletedAt" IS NULL` : sql``}`,
+    where: sql`s."shortcode" = ${shortcode} ${entityManifest[entity].softDelete ? sql`AND ${notDeleted("s")}` : sql``}`,
   };
 }
 

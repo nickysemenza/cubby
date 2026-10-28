@@ -7,6 +7,8 @@ import {
   type ImageProcessingJobKind,
 } from "@cubby/schemas/image-processing";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
+
 const JOB = imageProcessingJobState.enum;
 import { imageProcessingMaintenanceCounts } from "@cubby/schemas/maintenance";
 import { sql } from "drizzle-orm";
@@ -46,9 +48,9 @@ export async function imageProcessingMaintenanceSummary(db: Database) {
           CASE WHEN j.id IS NULL THEN NULL ELSE ${imageJobDisplayStateSql({ id: sql`j.id`, state: sql`j.state` })} END AS state,
           j.result
         FROM "Image" i
-        LEFT JOIN "ImageProcessingJob" j ON j."imageId" = i.id AND j."deletedAt" IS NULL
+        LEFT JOIN "ImageProcessingJob" j ON j."imageId" = i.id AND ${notDeleted("j")}
           AND j.kind = ${kind} AND j."sourceContentHash" = i.sha256 AND j."processorRevision" = ${revision}
-        WHERE i."deletedAt" IS NULL AND i.status = ${ImageStatus.enum.UPLOADED} AND i.sha256 IS NOT NULL
+        WHERE ${notDeleted("i")} AND i.status = ${ImageStatus.enum.UPLOADED} AND i.sha256 IS NOT NULL
           AND i."contentType" LIKE 'image/%'
       )
       SELECT count(*) FILTER (WHERE state = ${JOB.ready})::int AS current,
@@ -79,15 +81,15 @@ const missingCurrentProcessingWhere = (
   const missing = kinds.map(
     (
       kind,
-    ) => sql`NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id AND j."deletedAt" IS NULL
+    ) => sql`NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id AND ${notDeleted("j")}
           AND j.kind = ${kind} AND j."sourceContentHash" = i.sha256 AND j."processorRevision" = ${REVISION_BY_KIND[kind]})`,
   );
   if (kinds.includes("describe_image"))
     missing.push(sql`NOT EXISTS (
-    SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id AND j."deletedAt" IS NULL
+    SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id AND ${notDeleted("j")}
       AND j.kind = ${imageProcessingJobKind.enum.describe_image} AND j."sourceContentHash" = i.sha256
       AND j."processorRevision" = ${IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION})`);
-  return sql`i."deletedAt" IS NULL AND i.status = ${ImageStatus.enum.UPLOADED}
+  return sql`${notDeleted("i")} AND i.status = ${ImageStatus.enum.UPLOADED}
       AND i.sha256 IS NOT NULL AND i."contentType" LIKE 'image/%'
       AND (${sql.join(missing, sql` OR `)})`;
 };

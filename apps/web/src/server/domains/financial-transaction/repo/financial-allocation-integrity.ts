@@ -4,6 +4,8 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import { sql } from "drizzle-orm";
 
+import { liveAliasSqlText } from "~/server/lib/live-row";
+
 /**
  * Correlated predicate shared by the financial-transaction list and the
  * allocation detector. Keeping it in SQL makes page/count membership exact.
@@ -20,7 +22,7 @@ export const allocationIntegrityDefectSql = (transactionAlias: string) => {
     SELECT 1
     FROM "FinancialTransactionAllocation" a
     WHERE a."transactionId" = ${transactionAlias}."id"
-      AND a."deletedAt" IS NULL
+      AND ${liveAliasSqlText("a")}
     GROUP BY a."transactionId"
     HAVING
       (round((sum(a."amount") * 100)::numeric) IS DISTINCT FROM round((${transactionAlias}."amount" * 100)::numeric))

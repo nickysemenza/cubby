@@ -47,22 +47,22 @@ async function loadMealQualityRecords(
         SELECT 1 FROM "MealRecipe" dq_meal_recipe
         JOIN "Recipe" dq_meal_live_recipe
           ON dq_meal_live_recipe."id" = dq_meal_recipe."recipeId"
-          AND dq_meal_live_recipe."deletedAt" IS NULL
+          AND ${notDeleted("dq_meal_live_recipe")}
         WHERE dq_meal_recipe."mealId" = ${mealColumn("id")}
-          AND dq_meal_recipe."deletedAt" IS NULL
+          AND ${notDeleted("dq_meal_recipe")}
       )`,
       hasFoodEntry: sql<boolean>`EXISTS (
         SELECT 1 FROM "MealFoodEntry" dq_meal_food
         WHERE dq_meal_food."mealId" = ${mealColumn("id")}
-          AND dq_meal_food."deletedAt" IS NULL
+          AND ${notDeleted("dq_meal_food")}
       )`,
       hasIncompleteRecipeCost: sql<boolean>`EXISTS (
         SELECT 1 FROM "MealRecipe" dq_meal_cost
         JOIN "Recipe" dq_recipe_cost
           ON dq_recipe_cost."id" = dq_meal_cost."recipeId"
         WHERE dq_meal_cost."mealId" = ${mealColumn("id")}
-          AND dq_meal_cost."deletedAt" IS NULL
-          AND dq_recipe_cost."deletedAt" IS NULL
+          AND ${notDeleted("dq_meal_cost")}
+          AND ${notDeleted("dq_recipe_cost")}
           AND (
             dq_recipe_cost."totals" -> 'cost' ->> 'status' = 'partial'
             OR (

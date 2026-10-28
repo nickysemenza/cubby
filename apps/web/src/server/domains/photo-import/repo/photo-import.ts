@@ -463,7 +463,7 @@ export async function photoImportRelationExists(
     return sql`SELECT 1 FROM ${sql.raw(`"${traversal.rootTable}"`)} s
       ${traversal.joins}
       WHERE s."shortcode" = ${sourceCode}
-        AND s."deletedAt" IS NULL
+        AND ${notDeleted("s")}
         AND t."shortcode" = ${targetCode}`;
   });
   const result = await getDb(db).execute(sql`

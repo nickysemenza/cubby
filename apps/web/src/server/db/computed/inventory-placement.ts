@@ -1,6 +1,7 @@
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import { and, eq, type SQL, sql } from "drizzle-orm";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { inventoryEntry } from "~/server/db/schema";
 
 /**
@@ -85,8 +86,8 @@ export const liveProductAndLocation = (): SQL =>
   and(
     sql`EXISTS (SELECT 1 FROM "Product" lpl_p
                  WHERE lpl_p."id" = ${inventoryEntry.productId}
-                   AND lpl_p."deletedAt" IS NULL)`,
+                   AND ${notDeleted("lpl_p")})`,
     sql`EXISTS (SELECT 1 FROM "Location" lpl_l
                  WHERE lpl_l."id" = ${inventoryEntry.locationId}
-                   AND lpl_l."deletedAt" IS NULL)`,
+                   AND ${notDeleted("lpl_l")})`,
   )!;

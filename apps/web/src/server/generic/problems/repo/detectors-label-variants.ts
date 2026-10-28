@@ -5,6 +5,7 @@ import { type Column, type SQL, sql } from "drizzle-orm";
 
 import { hasTextSql } from "~/server/db/computed/text-whitespace";
 import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { purchase, vendor } from "~/server/db/retained-tables";
 import { canonicalLabelKey } from "~/server/generic/list/repo/label-canonical";
@@ -61,7 +62,7 @@ const findSpellingVariants = async (
              (array_agg(shortcode ORDER BY id::text))[1] AS "sampleId",
              ${canonicalLabelKey(column)} AS key
       FROM ${table}
-      WHERE "deletedAt" IS NULL
+      WHERE ${notDeleted(table)}
         AND ${column} IS NOT NULL
         AND ${hasTextSql(column)}
         AND ${extraWhere}

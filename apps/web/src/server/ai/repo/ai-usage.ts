@@ -223,9 +223,9 @@ export async function listAiUsageForRun(
   const cursor = options.cursor ? decodeRunUsageCursor(options.cursor) : null;
   const database = getDb(db);
   const scope = sql`WITH RECURSIVE run_scope(id) AS (
-    SELECT id FROM "Run" WHERE id = ${runId} AND "deletedAt" IS NULL
+    SELECT id FROM "Run" WHERE id = ${runId} AND ${notDeleted("Run")}
     UNION SELECT child.id FROM "Run" child JOIN run_scope parent ON child."parentRunId" = parent.id
-      WHERE child."deletedAt" IS NULL
+      WHERE ${notDeleted("child")}
   ) SELECT id FROM run_scope`;
   // Resolve once: recursive row-count estimates can otherwise turn even the
   // independent membership union into scans of unrelated household history.
@@ -237,32 +237,32 @@ export async function listAiUsageForRun(
   const attributed = sql`${aiUsage.id} IN (
     WITH scoped_jobs AS (
       SELECT j.id, j.kind FROM "ImageProcessingJob" j
-      WHERE j."runId" = ANY(${uuidArrayParam(runIds)}) AND j."deletedAt" IS NULL
+      WHERE j."runId" = ANY(${uuidArrayParam(runIds)}) AND ${notDeleted("j")}
     )
     SELECT u.id FROM "AiUsage" u
-      WHERE u."runId" = ANY(${uuidArrayParam(runIds)}) AND u."deletedAt" IS NULL
+      WHERE u."runId" = ANY(${uuidArrayParam(runIds)}) AND ${notDeleted("u")}
     UNION
     SELECT u.id FROM scoped_jobs j JOIN "AiUsage" u
       ON u."jobKind" = j.kind AND u."jobId" = j.id::text
-      WHERE u."deletedAt" IS NULL
+      WHERE ${notDeleted("u")}
     UNION
     SELECT u.id FROM scoped_jobs j
       JOIN "ImageProcessingAttempt" a ON a."jobId" = j.id
       JOIN "AiUsage" u ON u."jobKind" = 'image_processing_attempt'
         AND u."jobId" = a.id::text
-      WHERE u."deletedAt" IS NULL
+      WHERE ${notDeleted("u")}
   )`;
   const externalCoverage = sql`EXISTS (SELECT 1 FROM "Run" r
-    WHERE r.id = ANY(${uuidArrayParam(runIds)}) AND r."deletedAt" IS NULL AND r.input->>${"processor"} = ${photoRunProcessor.enum.external})`;
+    WHERE r.id = ANY(${uuidArrayParam(runIds)}) AND ${notDeleted("r")} AND r.input->>${"processor"} = ${photoRunProcessor.enum.external})`;
   const missingImageCoverage = (allowDeviceCharge: boolean) => sql`EXISTS (
     SELECT 1 FROM "ImageProcessingJob" j
-    WHERE j."deletedAt" IS NULL AND j."runId" = ANY(${uuidArrayParam(runIds)}) AND (
+    WHERE ${notDeleted("j")} AND j."runId" = ANY(${uuidArrayParam(runIds)}) AND (
       (NOT EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id)
-        AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE u."deletedAt" IS NULL
+        AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE ${notDeleted("u")}
           AND u."jobKind" = j.kind AND u."jobId" = j.id::text))
       OR EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
         AND NOT coalesce(${allowDeviceCharge} AND a.executor->>${"kind"} = ${"device"} AND a.state IN (${imageProcessingAttemptState.enum.ready}, ${imageProcessingAttemptState.enum.skipped}), false)
-        AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE u."deletedAt" IS NULL AND (
+        AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE ${notDeleted("u")} AND (
           (u."jobKind" = 'image_processing_attempt' AND u."jobId" = a.id::text)
           OR (u."jobKind" = j.kind AND u."jobId" = j.id::text AND u.attempt = a.number)))))
   )`;

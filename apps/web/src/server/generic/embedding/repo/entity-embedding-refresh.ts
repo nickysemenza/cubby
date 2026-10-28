@@ -13,6 +13,7 @@ import {
   withTransactionDatabase,
   databaseForTransaction,
 } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
 import type { SearchableEntityText } from "~/server/generic/search/repo/search-read-port";
 export type { SearchableEntityText } from "~/server/generic/search/repo/search-read-port";
@@ -46,7 +47,7 @@ export async function getStoredEmbeddingHashes(
       AND ee.provider = ${config.provider}::text
       AND ee.model = ${config.model}::text
       AND ee.dimensions = ${config.dimensions}::integer
-      AND ee."deletedAt" IS NULL
+      AND ${notDeleted("ee")}
       AND ee."artifactState" = ${embeddingArtifactState.enum.selected} AND ee."artifactHash" IS NOT NULL
   `);
   return new Map(
@@ -78,7 +79,7 @@ export async function seedEntityEmbedding(
       const live = await unwrapDb(tx)
         .execute(sql`SELECT id FROM "SearchDocument"
       WHERE "entityKind"=${input.entityKind} AND "entityId"=${input.entityId}::uuid
-        AND "semanticText"=${input.embeddingText} AND "deletedAt" IS NULL LIMIT 1 FOR UPDATE`);
+        AND "semanticText"=${input.embeddingText} AND ${notDeleted("SearchDocument")} LIMIT 1 FOR UPDATE`);
       if (!live.rows.length)
         throw new Error(
           "Synthetic embedding needs a matching live search document",

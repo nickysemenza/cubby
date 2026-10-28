@@ -192,8 +192,8 @@ export async function loadAggregateReplacementSnapshot(
     }),
   );
   const labels = await tx.execute(sql`SELECT
-    (SELECT p.name FROM "Project" p WHERE p.id = COALESCE(${row.projectId}::uuid, ${parent.defaultProjectId}::uuid) AND p."deletedAt" IS NULL) AS "projectName",
-    (SELECT c.name FROM "SpendingCategory" c WHERE c.id = COALESCE(${row.spendingCategoryId}::uuid, ${parent.spendingCategoryId}::uuid) AND c."deletedAt" IS NULL) AS "categoryName"
+    (SELECT p.name FROM "Project" p WHERE p.id = COALESCE(${row.projectId}::uuid, ${parent.defaultProjectId}::uuid) AND ${notDeleted("p")}) AS "projectName",
+    (SELECT c.name FROM "SpendingCategory" c WHERE c.id = COALESCE(${row.spendingCategoryId}::uuid, ${parent.spendingCategoryId}::uuid) AND ${notDeleted("c")}) AS "categoryName"
   `);
   const label = z
     .object({

@@ -247,21 +247,21 @@ export const recipeTreeLeafIngredientIds = async (
       SELECT i."recipeId"
       FROM recipe_tree rt
       INNER JOIN ${recipeSection} rs
-        ON rs."recipeId" = rt."recipeId" AND rs."deletedAt" IS NULL
+        ON rs."recipeId" = rt."recipeId" AND ${notDeleted("rs")}
       INNER JOIN ${recipeSectionIngredient} rsi
-        ON rsi."recipeSectionId" = rs.id AND rsi."deletedAt" IS NULL
+        ON rsi."recipeSectionId" = rs.id AND ${notDeleted("rsi")}
       INNER JOIN ${ingredient} i
-        ON i.id = rsi."ingredientId" AND i."deletedAt" IS NULL
+        ON i.id = rsi."ingredientId" AND ${notDeleted("i")}
       WHERE i."recipeId" IS NOT NULL
     )
     SELECT DISTINCT i.id
     FROM recipe_tree rt
     INNER JOIN ${recipeSection} rs
-      ON rs."recipeId" = rt."recipeId" AND rs."deletedAt" IS NULL
+      ON rs."recipeId" = rt."recipeId" AND ${notDeleted("rs")}
     INNER JOIN ${recipeSectionIngredient} rsi
-      ON rsi."recipeSectionId" = rs.id AND rsi."deletedAt" IS NULL
+      ON rsi."recipeSectionId" = rs.id AND ${notDeleted("rsi")}
     INNER JOIN ${ingredient} i
-      ON i.id = rsi."ingredientId" AND i."deletedAt" IS NULL
+      ON i.id = rsi."ingredientId" AND ${notDeleted("i")}
     WHERE i."recipeId" IS NULL
   `);
   return res.rows.map((r) => r.id);

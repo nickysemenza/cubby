@@ -45,7 +45,7 @@ async function loadCookbookQualityRecords(
       liveRecipeCount: sql<number>`(
         SELECT count(*)::int FROM "Recipe" dq_cookbook_recipe
         WHERE dq_cookbook_recipe."cookbookId" = ${cookbookColumn("id")}
-          AND dq_cookbook_recipe."deletedAt" IS NULL
+          AND ${notDeleted("dq_cookbook_recipe")}
       )`,
       hasDisplayableCover: sql<boolean>`EXISTS (
         SELECT 1 FROM "EntityAttachment" dq_cookbook_attachment
@@ -53,8 +53,8 @@ async function loadCookbookQualityRecords(
           ON dq_cookbook_image."id" = dq_cookbook_attachment."imageId"
         WHERE dq_cookbook_attachment."entityId" = ${cookbookColumn("id")}
           AND dq_cookbook_attachment."role" = 'cover'
-          AND dq_cookbook_attachment."deletedAt" IS NULL
-          AND dq_cookbook_image."deletedAt" IS NULL
+          AND ${notDeleted("dq_cookbook_attachment")}
+          AND ${notDeleted("dq_cookbook_image")}
           AND ${displayableImageSql("dq_cookbook_image")}
       )`,
       hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql(

@@ -1,12 +1,18 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   imageDescriptionResult,
   selectImageDescriptionEvidence,
   type selectedImageDescriptionEvidence,
 } from "@cubby/schemas/image-processing";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import {
+  type ImageReadScope,
+  imageScopeEmpty,
+  imageScopeSql,
+} from "~/server/db/computed/image-read-scope";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { aiAnalysis, image } from "~/server/db/schema";
 import {
@@ -18,38 +24,47 @@ import { readImageDescriptionConfirmations } from "~/server/generic/assessment/r
 /** Source-fenced descriptions and confirmed corrections are loaded in batches. */
 export async function loadSelectedDescriptionEvidence(
   db: Database | DrizzleTransaction,
-  shortcodes: string[],
+  shortcodes: ImageReadScope,
 ) {
-  if (!shortcodes.length)
+  if (imageScopeEmpty(shortcodes))
     return new Map<string, z.infer<typeof selectedImageDescriptionEvidence>>();
-  const rows = await unwrapDb(db)
-    .select({
-      analysisId: aiAnalysis.id,
-      createdAt: aiAnalysis.createdAt,
-      shortcode: image.shortcode,
-      hash: image.sha256,
-      result: aiAnalysis.result,
-      inputFingerprint: aiAnalysis.inputFingerprint,
-      provider: aiAnalysis.provider,
-      model: aiAnalysis.model,
-      promptRevision: aiAnalysis.promptVersion,
-      resultSchemaRevision: aiAnalysis.resultSchemaRevision,
-    })
-    .from(aiAnalysis)
-    .innerJoin(image, eq(image.id, aiAnalysis.entityId))
-    .where(
-      and(
-        inArray(image.shortcode, shortcodes),
-        notDeleted(image),
-        notDeleted(aiAnalysis),
-        eq(aiAnalysis.entityKind, "image"),
-        eq(aiAnalysis.feature, "image-description"),
-      ),
-    )
-    .orderBy(desc(aiAnalysis.createdAt));
-  const corrections = await readImageDescriptionConfirmations(db, {
-    shortcodes,
-  });
+  const [rows, corrections] = await Promise.all([
+    unwrapDb(db)
+      .select({
+        analysisId: aiAnalysis.id,
+        createdAt: aiAnalysis.createdAt,
+        shortcode: image.shortcode,
+        hash: image.sha256,
+        result: aiAnalysis.result,
+        inputFingerprint: aiAnalysis.inputFingerprint,
+        provider: aiAnalysis.provider,
+        model: aiAnalysis.model,
+        promptRevision: aiAnalysis.promptVersion,
+        resultSchemaRevision: aiAnalysis.resultSchemaRevision,
+      })
+      .from(aiAnalysis)
+      .innerJoin(image, eq(image.id, aiAnalysis.entityId))
+      .where(
+        and(
+          imageScopeSql(shortcodes),
+          notDeleted(image),
+          notDeleted(aiAnalysis),
+          eq(aiAnalysis.entityKind, "image"),
+          eq(aiAnalysis.feature, "image-description"),
+        ),
+      )
+      .orderBy(desc(aiAnalysis.createdAt)),
+    readImageDescriptionConfirmations(
+      db,
+      "imageIds" in shortcodes
+        ? {
+            imageIds: shortcodes.imageIds.map((id) =>
+              parseEntityId("image", id),
+            ),
+          }
+        : { shortcodes },
+    ),
+  ]);
   const correctionsByImage = new Map(
     corrections.map((entry) => [entry.shortcode, entry]),
   );
@@ -109,7 +124,7 @@ export async function loadSelectedDescriptionEvidence(
 /** Existing prose-only consumers project from the same authority selection. */
 export async function loadSelectedDescriptions(
   db: Database | DrizzleTransaction,
-  shortcodes: string[],
+  shortcodes: ImageReadScope,
 ) {
   const evidence = await loadSelectedDescriptionEvidence(db, shortcodes);
   return new Map(

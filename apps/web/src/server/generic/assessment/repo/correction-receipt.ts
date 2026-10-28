@@ -92,6 +92,21 @@ export async function readCorrectionReceipts(
     .select()
     .from(feedback)
     .where(inArray(feedback.operationId, [...expected.keys()]));
+  return indexCorrectionReceipts(targets, rows);
+}
+
+/** Joined readers use exactly the replay reader's validation and invalid-duplicate precedence. */
+export function indexCorrectionReceipts(
+  targets: readonly { sourceFeedbackId: string; targetAssessmentId: string }[],
+  rows: readonly (typeof feedback.$inferSelect)[],
+): Map<string, CorrectionReceipt> {
+  const expected = new Map(
+    targets.map((target) => [
+      correctionOperationId(target.sourceFeedbackId, target.targetAssessmentId),
+      target,
+    ]),
+  );
+  const receipts = new Map<string, CorrectionReceipt>();
   for (const row of rows) {
     const target = expected.get(row.operationId);
     const metadata = z

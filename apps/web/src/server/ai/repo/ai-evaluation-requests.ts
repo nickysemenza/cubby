@@ -17,6 +17,7 @@ import {
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   repositoryQueries as getDb,
   repositoryTransactionDatabase as withTransactionDatabase,
@@ -251,7 +252,7 @@ export async function evaluationIsExecutable(
         sql`EXISTS (
         SELECT 1 FROM "AiEvaluationRequest" AS demand JOIN "Run" AS requester ON requester.id = demand."runId"
         WHERE demand."evaluationId" = ${aiEvaluation.id} AND demand."cancelledAt" IS NULL
-          AND requester.status = ${runStatus.enum.running} AND requester."deletedAt" IS NULL AND requester."retiredAt" IS NULL
+          AND requester.status = ${runStatus.enum.running} AND ${notDeleted("requester")} AND requester."retiredAt" IS NULL
       )`,
       ),
     );
@@ -288,7 +289,7 @@ export async function cancelAiEvaluationRequests(db: Database, runId: RunId) {
         sql`NOT EXISTS (
       SELECT 1 FROM "AiEvaluationRequest" demand JOIN "Run" requester ON requester.id = demand."runId"
       WHERE demand."evaluationId" = ${aiEvaluation.id} AND demand."cancelledAt" IS NULL
-        AND requester.status IN (${runStatus.enum.running}, ${runStatus.enum.paused}, ${runStatus.enum.paused_auth}) AND requester."deletedAt" IS NULL
+        AND requester.status IN (${runStatus.enum.running}, ${runStatus.enum.paused}, ${runStatus.enum.paused_auth}) AND ${notDeleted("requester")}
     )`,
       ),
     );

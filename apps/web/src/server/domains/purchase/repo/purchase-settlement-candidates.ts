@@ -68,7 +68,7 @@ export async function listPurchasesSettlementCandidates(
           date: purchaseTable.date,
           statedTotal: purchaseTable.statedTotal,
           vendorName: sql<string | null>`(SELECT v."name" FROM "Vendor" v
-            WHERE v."id" = ${purchaseTable.vendorId} AND v."deletedAt" IS NULL)`,
+            WHERE v."id" = ${purchaseTable.vendorId} AND ${notDeleted("v")})`,
         })
         .from(purchaseTable)
         .where(
@@ -103,12 +103,12 @@ export async function listPurchasesSettlementCandidates(
   const days = sql`abs(${effectiveDate} - subject.date)`;
   const residual = sql`("FinancialTransaction".amount - (
     SELECT coalesce(sum(a.amount), 0) FROM "FinancialTransactionAllocation" a
-    WHERE a."transactionId" = "FinancialTransaction".id AND a."deletedAt" IS NULL
+    WHERE a."transactionId" = "FinancialTransaction".id AND ${notDeleted("a")}
   ))`;
   const targetAllocation = sql`EXISTS (
     SELECT 1 FROM "FinancialTransactionAllocation" a
-    JOIN "Purchase" p ON p.id = a."purchaseId" AND p."deletedAt" IS NULL
-    WHERE a."transactionId" = "FinancialTransaction".id AND a."deletedAt" IS NULL
+    JOIN "Purchase" p ON p.id = a."purchaseId" AND ${notDeleted("p")}
+    WHERE a."transactionId" = "FinancialTransaction".id AND ${notDeleted("a")}
       AND p.shortcode = subject.code
   )`;
   // POSITION treats source merchant text literally, including '%' and '_'.
@@ -129,7 +129,7 @@ export async function listPurchasesSettlementCandidates(
   const conflictWith = (kind: SettlementConflictKind) => sql`EXISTS (
     SELECT 1 FROM "Purchase" settle_target
     WHERE settle_target.shortcode = subject.code
-      AND settle_target."deletedAt" IS NULL
+      AND ${notDeleted("settle_target")}
       AND ${settlementConflictSql(kind, {
         purchase: "settle_target",
         account: '"FinancialAccount"',
@@ -155,8 +155,8 @@ export async function listPurchasesSettlementCandidates(
           ${conflictWith("tender")} AS "tenderConflict"
         FROM "FinancialTransaction"
         JOIN "FinancialAccount" ON "FinancialAccount".id = "FinancialTransaction"."accountId"
-        WHERE "FinancialTransaction"."deletedAt" IS NULL
-          AND "FinancialAccount"."deletedAt" IS NULL
+        WHERE ${notDeleted("FinancialTransaction")}
+          AND ${notDeleted("FinancialAccount")}
           AND "FinancialTransaction".status <> 'void'
           AND "FinancialTransaction"."ledgerTransferId" IS NULL
           AND "FinancialTransaction".kind IN ('purchase', 'refund')

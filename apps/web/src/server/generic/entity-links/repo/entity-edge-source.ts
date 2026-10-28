@@ -1,3 +1,4 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 /**
  * The physical entity graph as one read-only edge source (ADR 0006):
  * `(edgeKey, sourceKind, sourceId, targetKind, targetId)` for every declared
@@ -8,8 +9,6 @@
  * the typed tables; nothing here is mutable. Edge columns on join or child
  * rows name their source through `ENTITY_EDGE_OWNERS`.
  */
-
-import { entityRefKey } from "@cubby/schemas/entity";
 import type {
   EntityConnectionGroup,
   EntityConnectionItem,
@@ -50,6 +49,7 @@ import {
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   describeUnresolvableCode,
   isShortcodeEntity,
@@ -235,7 +235,7 @@ const branchSql = (spec: EntityEdgeSpec, filter: EdgeFilter): SQL => {
     sql`s.${ident(spec.column)} IS NOT NULL`,
     sql`${sourceId} IS NOT NULL`,
   ];
-  if (spec.softDeletable) conditions.push(sql`s."deletedAt" IS NULL`);
+  if (spec.softDeletable) conditions.push(sql`${notDeleted("s")}`);
   if (spec.scope)
     conditions.push(sql`s.${ident(spec.scope.column)} = ${spec.scope.value}`);
   if (filter?.side === "target")
@@ -246,7 +246,7 @@ const branchSql = (spec: EntityEdgeSpec, filter: EdgeFilter): SQL => {
   if (spec.source.kind === "via") {
     joins.push(
       sql`JOIN ${ident(spec.source.viaTable)} v ON v."id" = s.${ident(spec.source.column)}${
-        spec.source.viaSoftDeletable ? sql` AND v."deletedAt" IS NULL` : sql``
+        spec.source.viaSoftDeletable ? sql` AND ${notDeleted("v")}` : sql``
       }`,
     );
   }
@@ -285,10 +285,10 @@ const entityEdgeSourceSql = (
     target_entity."shortcode" AS "targetCode"
   FROM (${edgeArmsSql(specs, filter)}) edge
   JOIN "Entity" source_entity ON source_entity."id" = edge."sourceId"
-    AND source_entity."deletedAt" IS NULL
+    AND ${notDeleted("source_entity")}
   JOIN "Entity" target_entity ON target_entity."id" = edge."targetId"
     AND target_entity."kind" = edge."targetKind"
-    AND target_entity."deletedAt" IS NULL`;
+    AND ${notDeleted("target_entity")}`;
 
 const edgeRow = z.object({
   edgeKey: z.string(),
@@ -366,11 +366,11 @@ const readRepositoryConnections = async (
               FROM (${relation}) row_set
               JOIN "Entity" source_entity ON source_entity."id" = row_set."owner"
                 AND source_entity."kind" = ${sourceKind}
-                AND source_entity."deletedAt" IS NULL
+                AND ${notDeleted("source_entity")}
                 AND source_entity."shortcode" IS NOT NULL
               JOIN "Entity" target_entity ON target_entity."id" = row_set.${ident(column)}
                 AND target_entity."kind" = ${targetKind}
-                AND target_entity."deletedAt" IS NULL
+                AND ${notDeleted("target_entity")}
                 AND target_entity."shortcode" IS NOT NULL
               WHERE row_set.${subjectColumn} = ${subject.id}::uuid
             )
@@ -575,14 +575,14 @@ export async function findOrphanEntities(
     candidate AS MATERIALIZED (
       SELECT e."id", e."kind", e."shortcode", e."createdAt"
       FROM "Entity" e
-      WHERE e."kind" IN (${kinds}) AND e."deletedAt" IS NULL
+      WHERE e."kind" IN (${kinds}) AND ${notDeleted("e")}
         AND e."shortcode" IS NOT NULL
     ),
     connected AS (
       SELECT edge."targetId" AS id FROM edge
       JOIN candidate c ON c."id" = edge."targetId" AND c."kind" = edge."targetKind"
       WHERE EXISTS (SELECT 1 FROM "Entity" source_entity
-        WHERE source_entity."id" = edge."sourceId" AND source_entity."deletedAt" IS NULL)
+        WHERE source_entity."id" = edge."sourceId" AND ${notDeleted("source_entity")})
       UNION
       -- A same-kind edge (a location's parent) counts only for its target: a
       -- location that merely sits in the tree is still empty.
@@ -592,7 +592,7 @@ export async function findOrphanEntities(
         AND EXISTS (SELECT 1 FROM "Entity" target_entity
           WHERE target_entity."id" = edge."targetId"
             AND target_entity."kind" = edge."targetKind"
-            AND target_entity."deletedAt" IS NULL)
+            AND ${notDeleted("target_entity")})
     ),
     orphan AS (
       SELECT c.* FROM candidate c

@@ -88,18 +88,18 @@ const attentionFilterOf = (type: string) =>
 export const projectStartDateSql = sql`(
       WITH RECURSIVE date_tree AS (
         SELECT p."id", p."startDate", 0 AS depth
-        FROM "Project" p WHERE p."id" = "Project"."id" AND p."deletedAt" IS NULL
+        FROM "Project" p WHERE p."id" = "Project"."id" AND ${notDeleted("p")}
         UNION ALL
         SELECT child."id", child."startDate", parent.depth + 1
         FROM "Project" child JOIN date_tree parent ON child."parentProjectId" = parent."id"
-        WHERE child."deletedAt" IS NULL AND parent."startDate" IS NULL
+        WHERE ${notDeleted("child")} AND parent."startDate" IS NULL
           AND parent.depth < ${MAX_PROJECT_TREE_DEPTH}
       ), allocations AS (${expenseDerivedReadSql("projects")})
       SELECT min(coalesce(node."startDate", LEAST(
         (SELECT min(${effectiveTaskDueDateSql("t")}) FROM "Task" t
-         WHERE ${effectiveFieldSql("task", "projectId", "t")} = node."id" AND t."deletedAt" IS NULL),
+         WHERE ${effectiveFieldSql("task", "projectId", "t")} = node."id" AND ${notDeleted("t")}),
         (SELECT min(e."date") FROM "Expense" e JOIN allocations a ON a."expenseId" = e."id"
-         WHERE a."projectId" = node."id" AND e."deletedAt" IS NULL)
+         WHERE a."projectId" = node."id" AND ${notDeleted("e")})
       ))) FROM date_tree node
     )`;
 

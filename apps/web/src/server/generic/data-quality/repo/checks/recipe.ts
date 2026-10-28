@@ -68,12 +68,12 @@ async function loadRecipeQualityRecords(
         SELECT 1 FROM "RecipeSection" dq_recipe_section
         JOIN "RecipeSectionIngredient" dq_recipe_line
           ON dq_recipe_line."recipeSectionId" = dq_recipe_section."id"
-          AND dq_recipe_line."deletedAt" IS NULL
+          AND ${notDeleted("dq_recipe_line")}
         JOIN "Ingredient" dq_recipe_ingredient
           ON dq_recipe_ingredient."id" = dq_recipe_line."ingredientId"
-          AND dq_recipe_ingredient."deletedAt" IS NULL
+          AND ${notDeleted("dq_recipe_ingredient")}
         WHERE dq_recipe_section."recipeId" = ${recipeColumn("id")}
-          AND dq_recipe_section."deletedAt" IS NULL
+          AND ${notDeleted("dq_recipe_section")}
       )`,
       hasInstructions: sql<boolean>`EXISTS (
         SELECT 1 FROM "RecipeSection" dq_recipe_instructions
@@ -82,7 +82,7 @@ async function loadRecipeQualityRecords(
             THEN dq_recipe_instructions."instructions" ELSE '[]'::jsonb END
         ) dq_recipe_step(step)
         WHERE dq_recipe_instructions."recipeId" = ${recipeColumn("id")}
-          AND dq_recipe_instructions."deletedAt" IS NULL
+          AND ${notDeleted("dq_recipe_instructions")}
           AND ${hasTextSql(sql`COALESCE(
             CASE WHEN jsonb_typeof(dq_recipe_step.step) = 'string'
               THEN dq_recipe_step.step #>> '{}' END,

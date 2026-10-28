@@ -853,7 +853,7 @@ export const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry, {
      */
     journalPlantings: sql`SELECT journal_link."fromEntityId" AS "owner", journal_link."toEntityId" AS "planting"
       FROM "EntityLink" journal_link
-      WHERE journal_link."kind" = ${JOURNAL_LINK} AND journal_link."deletedAt" IS NULL
+      WHERE journal_link."kind" = ${JOURNAL_LINK} AND ${notDeleted("journal_link")}
       UNION ALL
       SELECT entry."id", journal_planting."id"
       FROM "GardenEntry" entry
@@ -864,7 +864,7 @@ export const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry, {
         SELECT 1 FROM "EntityLink" whole_area_link
         WHERE whole_area_link."fromEntityId" = entry."id"
           AND whole_area_link."kind" = ${JOURNAL_LINK}
-          AND whole_area_link."deletedAt" IS NULL
+          AND ${notDeleted("whole_area_link")}
       )`,
   },
   read: {

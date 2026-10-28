@@ -14,6 +14,7 @@ import { sql } from "drizzle-orm";
 
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 
@@ -50,7 +51,7 @@ export async function getTaskSummary(db: Database): Promise<TaskSummaryOut> {
       COUNT(*) FILTER (WHERE bt."id" IS NOT NULL)::int AS "blocked"
     FROM "Task" t
     LEFT JOIN blocked_tasks bt ON bt."id" = t."id"
-    WHERE t."deletedAt" IS NULL
+    WHERE ${notDeleted("t")}
       AND t."status" <> 'done'
       AND t."parentTaskId" IS NULL
   `);

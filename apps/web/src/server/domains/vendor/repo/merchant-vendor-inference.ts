@@ -10,6 +10,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sql, type SQL } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { possibleVendorLabel } from "~/server/entity-kernel/repo/detail-display-labels";
@@ -74,12 +75,12 @@ function merchantVendorCandidatesSql(keys: SQL): SQL {
         max(COALESCE(ft."postedDate", ft."transactionDate")) AS "lastSeenDate"
       FROM "FinancialTransaction" ft
       JOIN "FinancialTransactionAllocation" fta
-        ON fta."transactionId" = ft.id AND fta."deletedAt" IS NULL
+        ON fta."transactionId" = ft.id AND ${notDeleted("fta")}
       JOIN "Purchase" p
-        ON p.id = fta."purchaseId" AND p."deletedAt" IS NULL
+        ON p.id = fta."purchaseId" AND ${notDeleted("p")}
       JOIN "Vendor" v
-        ON v.id = p."vendorId" AND v."deletedAt" IS NULL
-      WHERE ft."deletedAt" IS NULL
+        ON v.id = p."vendorId" AND ${notDeleted("v")}
+      WHERE ${notDeleted("ft")}
         AND ft.status <> 'void'
         AND ft."ledgerTransferId" IS NULL
         AND ft.kind IN (${settlementKinds})

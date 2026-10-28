@@ -38,8 +38,8 @@ export async function retrieveEmailConnectionCandidates(
     SELECT DISTINCT "Email"."shortcode" AS "emailCode", p."shortcode" AS "purchaseCode"
     FROM "Email"
     CROSS JOIN LATERAL (${emailPurchaseEvidenceSql()}) evidence
-    INNER JOIN "Purchase" p ON p."id" = evidence."purchaseId" AND p."deletedAt" IS NULL
-    WHERE "Email"."deletedAt" IS NULL AND evidence."kind" = ${emailLinkEvidenceKind.enum.suggested}
+    INNER JOIN "Purchase" p ON p."id" = evidence."purchaseId" AND ${notDeleted("p")}
+    WHERE ${notDeleted("Email")} AND evidence."kind" = ${emailLinkEvidenceKind.enum.suggested}
       AND ${source.entityKind === "email" ? sql`"Email"."id"=${id}::uuid` : sql`p."id"=${id}::uuid`}
     ORDER BY "emailCode", "purchaseCode" LIMIT 20
   `);

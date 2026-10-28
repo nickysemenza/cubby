@@ -1,6 +1,8 @@
 import type { DisplayItem } from "@cubby/schemas/entity-definitions/label-field";
 import { sql, type SQL } from "drizzle-orm";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
+
 /**
  * The party whose funding period covers every day from `from` through `to`.
  * Nonempty history replaces the undated fallback; a gap remains unknown.
@@ -8,7 +10,7 @@ import { sql, type SQL } from "drizzle-orm";
 const fundingPartyCoveringSql = (account: SQL, from: SQL, to: SQL) => sql`(
   CASE WHEN jsonb_array_length(${account}."fundingPeriods") = 0 THEN ${account}."ledgerPartyId"
   ELSE (SELECT party.id FROM jsonb_array_elements(${account}."fundingPeriods") period
-    JOIN "LedgerParty" party ON party.shortcode = period->>'ledgerPartyId' AND party."deletedAt" IS NULL
+    JOIN "LedgerParty" party ON party.shortcode = period->>'ledgerPartyId' AND ${notDeleted("party")}
     WHERE ${from} IS NOT NULL AND ${to} IS NOT NULL
       AND (period->>'validFrom' IS NULL OR (period->>'validFrom')::date <= ${from})
       AND (period->>'validTo' IS NULL OR ${to} <= (period->>'validTo')::date)
@@ -51,5 +53,5 @@ export const accountPartyPeriodItemsSql = (periods: SQL) => sql<DisplayItem[]>`(
     'trailing', NULL
   ) ORDER BY ordinal), '[]'::jsonb)
   FROM jsonb_array_elements(${periods}) WITH ORDINALITY history(period, ordinal)
-  LEFT JOIN "LedgerParty" party ON party.shortcode = period->>'ledgerPartyId' AND party."deletedAt" IS NULL
+  LEFT JOIN "LedgerParty" party ON party.shortcode = period->>'ledgerPartyId' AND ${notDeleted("party")}
 )`;

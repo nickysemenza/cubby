@@ -2,6 +2,8 @@ import type { SearchableEntity } from "@cubby/schemas/search";
 import { type AnyColumn, sql, type SQL } from "drizzle-orm";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayMatchSql } from "~/server/lib/name-alias-match";
 
 /**
  * `SearchDocument` does not store the public code: an exact code hit is the
@@ -52,15 +54,15 @@ export const lexicalEligibility = (
   return sql`EXISTS (
     SELECT 1
     FROM "SearchDocument" sd
-    WHERE sd."deletedAt" IS NULL
+    WHERE ${notDeleted("sd")}
       AND sd."entityKind" = ${entity}
       AND sd."entityId" = ${entityId}
       AND (
         ${exactCodeMatch(normalized)}
         OR lower(sd.title) = ${normalized}
-        OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) = ${normalized})
+        OR ${textArrayMatchSql({ values: sql`sd.aliases || sd.keywords`, query: normalized, match: "exact" })}
         OR lower(sd.title) LIKE ${`${normalized}%`}
-        OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) LIKE ${`${normalized}%`})
+        OR ${textArrayMatchSql({ values: sql`sd.aliases || sd.keywords`, query: normalized, match: "prefix" })}
         OR sd."searchVector" @@ to_tsquery('simple', ${tsQuery})
         OR (char_length(${normalized}) >= 3 AND sd."normalizedText" % ${normalized})
       )
@@ -79,14 +81,14 @@ export const lexicalRelevance = (
     SELECT
       CASE WHEN ${exactCodeMatch(normalized)} THEN 0
            WHEN lower(sd.title) = ${normalized} THEN 1
-           WHEN EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) = ${normalized}) THEN 2
-           WHEN lower(sd.title) LIKE ${`${normalized}%`} OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) LIKE ${`${normalized}%`}) THEN 3
+           WHEN ${textArrayMatchSql({ values: sql`sd.aliases || sd.keywords`, query: normalized, match: "exact" })} THEN 2
+           WHEN lower(sd.title) LIKE ${`${normalized}%`} OR ${textArrayMatchSql({ values: sql`sd.aliases || sd.keywords`, query: normalized, match: "prefix" })} THEN 3
            WHEN sd."searchVector" @@ to_tsquery('simple', ${tsQuery}) THEN 4
            ELSE 5 END * 1000000
       - ts_rank_cd(sd."searchVector", to_tsquery('simple', ${tsQuery})) * 1000
       - similarity(sd."normalizedText", ${normalized})
     FROM "SearchDocument" sd
-    WHERE sd."deletedAt" IS NULL
+    WHERE ${notDeleted("sd")}
       AND sd."entityKind" = ${entity}
       AND sd."entityId" = ${entityId}
     LIMIT 1

@@ -15,6 +15,7 @@ import {
   type recipeSection,
   type recipeSectionIngredient,
 } from "~/server/db/retained-tables";
+import { liveAliasSqlText } from "~/server/lib/live-row";
 
 import type {
   RecipeDeepDB,
@@ -30,18 +31,18 @@ type RecipeSelect = typeof recipe.$inferSelect;
 // Uses cookbookId, not SourceType; ingredientRef must be a trusted SQL expression.
 export const ownRecipeCountForIngredientSql = (ingredientRef: string): string =>
   `(SELECT count(DISTINCT rs."recipeId") FROM "RecipeSectionIngredient" rsi ` +
-  `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND rs."deletedAt" IS NULL ` +
-  `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL AND r."cookbookId" IS NULL ` +
-  `WHERE rsi."ingredientId" = ${ingredientRef} AND rsi."deletedAt" IS NULL)`;
+  `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND ${liveAliasSqlText("rs")} ` +
+  `JOIN "Recipe" r ON r."id" = rs."recipeId" AND ${liveAliasSqlText("r")} AND r."cookbookId" IS NULL ` +
+  `WHERE rsi."ingredientId" = ${ingredientRef} AND ${liveAliasSqlText("rsi")})`;
 
 // Keep every join's soft-delete guard; ingredientRef is trusted SQL, never input.
 export const liveRecipeCountForIngredientSql = (
   ingredientRef: string,
 ): string =>
   `(SELECT count(DISTINCT rs."recipeId") FROM "RecipeSectionIngredient" rsi ` +
-  `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND rs."deletedAt" IS NULL ` +
-  `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL ` +
-  `WHERE rsi."ingredientId" = ${ingredientRef} AND rsi."deletedAt" IS NULL)`;
+  `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND ${liveAliasSqlText("rs")} ` +
+  `JOIN "Recipe" r ON r."id" = rs."recipeId" AND ${liveAliasSqlText("r")} ` +
+  `WHERE rsi."ingredientId" = ${ingredientRef} AND ${liveAliasSqlText("rsi")})`;
 
 // Coalesce to [] so unused ingredients satisfy the API contract.
 export const appearsInRecipesRefsForIngredientSql = (
@@ -50,27 +51,27 @@ export const appearsInRecipesRefsForIngredientSql = (
   `(SELECT coalesce(jsonb_agg(rec ORDER BY rec->>'name'), '[]'::jsonb) FROM (` +
   `SELECT DISTINCT jsonb_build_object('id', r."shortcode", 'name', r."name") AS rec ` +
   `FROM "RecipeSectionIngredient" rsi ` +
-  `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND rs."deletedAt" IS NULL ` +
-  `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL ` +
-  `WHERE rsi."ingredientId" = ${ingredientRef} AND rsi."deletedAt" IS NULL) sub)`;
+  `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND ${liveAliasSqlText("rs")} ` +
+  `JOIN "Recipe" r ON r."id" = rs."recipeId" AND ${liveAliasSqlText("r")} ` +
+  `WHERE rsi."ingredientId" = ${ingredientRef} AND ${liveAliasSqlText("rsi")}) sub)`;
 
 export const cookbookOnlyForIngredientSql = (ingredientRef: string): string =>
   `(SELECT count(DISTINCT rs."recipeId") > 0 ` +
   `AND bool_and(r."sourceType" = 'Book' AND (r."cookbookId" IS NOT NULL OR coalesce(r."sourceLabel", '') <> '')) ` +
   `FROM "RecipeSectionIngredient" rsi ` +
-  `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND rs."deletedAt" IS NULL ` +
-  `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL ` +
-  `WHERE rsi."ingredientId" = ${ingredientRef} AND rsi."deletedAt" IS NULL)`;
+  `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND ${liveAliasSqlText("rs")} ` +
+  `JOIN "Recipe" r ON r."id" = rs."recipeId" AND ${liveAliasSqlText("r")} ` +
+  `WHERE rsi."ingredientId" = ${ingredientRef} AND ${liveAliasSqlText("rsi")})`;
 
 // Guard both MealRecipe and Meal liveness; recipeRef is trusted SQL, never input.
 export const liveSectionCountForRecipeSql = (recipeRef: string): string =>
   `(SELECT count(*) FROM "RecipeSection" rsc ` +
-  `WHERE rsc."recipeId" = ${recipeRef} AND rsc."deletedAt" IS NULL)`;
+  `WHERE rsc."recipeId" = ${recipeRef} AND ${liveAliasSqlText("rsc")})`;
 
 export const liveMealCountForRecipeSql = (recipeRef: string): string =>
   `(SELECT count(*) FROM "MealRecipe" mr ` +
-  `JOIN "Meal" m ON m."id" = mr."mealId" AND m."deletedAt" IS NULL ` +
-  `WHERE mr."recipeId" = ${recipeRef} AND mr."deletedAt" IS NULL)`;
+  `JOIN "Meal" m ON m."id" = mr."mealId" AND ${liveAliasSqlText("m")} ` +
+  `WHERE mr."recipeId" = ${recipeRef} AND ${liveAliasSqlText("mr")})`;
 
 type RecipeSectionIngredientWithRecipe =
   typeof recipeSectionIngredient.$inferSelect & {

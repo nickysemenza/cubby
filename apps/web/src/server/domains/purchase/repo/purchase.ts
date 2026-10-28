@@ -495,12 +495,12 @@ export const purchaseScaffold = listScaffold("purchase", purchase, {
       fieldResolutions: purchaseEvidenceFieldResolutionsSql("Purchase"),
       spendingCategoryName: sql<
         string | null
-      >`(SELECT name FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND "deletedAt" IS NULL)`,
+      >`(SELECT name FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND ${notDeleted("SpendingCategory")})`,
       unpricedExpenseCount: purchaseUnpricedExpenseCount,
       liveVendorName: purchaseVendorName,
       spendingCategoryShortcode: sql<
         string | null
-      >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND "deletedAt" IS NULL)`,
+      >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND ${notDeleted("SpendingCategory")})`,
       defaultProjectShortcode: purchaseDefaultProjectShortcode,
       vendorShortcode: purchaseVendorShortcode,
       vendorAccountShortcode: purchaseVendorAccountShortcode,

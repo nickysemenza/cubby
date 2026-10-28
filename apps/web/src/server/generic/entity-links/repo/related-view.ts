@@ -27,12 +27,13 @@ import { z } from "zod";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database } from "~/server/db";
 import { getDb, householdDaySqlText, ilikeContains } from "~/server/db/helpers";
-import { actualExpenseSql } from "~/server/db/helpers/predicates";
+import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { createAppError } from "~/server/errors/app-error";
 import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
+import { liveAliasSqlText } from "~/server/lib/live-row";
 
 interface RelatedViewSqlPresentation {
   label: string;
@@ -377,7 +378,7 @@ async function loadOneRows(
         ${sql.raw(view.sort)} AS "sortValue"
       FROM ${sql.raw(`"${view.sourceTable}"`)} s
       ${compiledRelatedJoins(relationKey)}
-      WHERE s."shortcode" IN (${ids}) AND s."deletedAt" IS NULL
+      WHERE s."shortcode" IN (${ids}) AND ${notDeleted("s")}
         ${viewWhere(view)}
     ), ranked AS (
       SELECT *,
@@ -469,7 +470,7 @@ export async function loadRelatedBranch(
         ${sql.raw(view.sort)} AS "sortValue"
       FROM ${sql.raw(`"${view.sourceTable}"`)} s
       ${compiledRelatedJoins(input.relationKey)}
-      WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
+      WHERE s."shortcode" = ${input.sourceId} AND ${notDeleted("s")}
         ${viewWhere(view)}
     ), ranked AS (
       SELECT *, count(*) OVER ()::int AS "totalCount"
@@ -546,7 +547,7 @@ export const relatedSortExpression = (
   return sql`(SELECT ${sql.raw(aggregate)}(${sql.raw(view.sort)})
     FROM ${sql.raw(`"${view.sourceTable}"`)} s
     ${compiledRelatedJoins(parsed.data)}
-    WHERE s."id" = ${sql.raw(rootIdRef)} AND s."deletedAt" IS NULL
+    WHERE s."id" = ${sql.raw(rootIdRef)} AND ${notDeleted("s")}
       ${viewWhere(view)})`;
 };
 
@@ -563,7 +564,7 @@ export async function loadRelatedOptions(
       count(DISTINCT s."id")::int AS "count"
     FROM ${sql.raw(`"${view.sourceTable}"`)} s
     ${compiledRelatedJoins(input.relationKey)}
-    WHERE s."deletedAt" IS NULL
+    WHERE ${notDeleted("s")}
       ${viewWhere(view)}
       ${search ? sql`AND ${sql.raw(view.label)} ILIKE ${ilikeContains(search)}` : sql``}
     GROUP BY t."shortcode", ${sql.raw(view.label)}
@@ -591,37 +592,37 @@ type SummaryDefinition = {
 const SUMMARY_DEFINITIONS = {
   "vendor.products": {
     targetEntity: "product",
-    targetJoin: `JOIN "Product" t ON t."id" = se."productId" AND t."deletedAt" IS NULL`,
+    targetJoin: `JOIN "Product" t ON t."id" = se."productId" AND ${liveAliasSqlText("t")}`,
     targetPresence: "required",
     imageTarget: "product",
   },
   "vendor.projects": {
     targetEntity: "project",
-    targetJoin: `LEFT JOIN "Project" t ON t."id" = se."projectId" AND t."deletedAt" IS NULL`,
+    targetJoin: `LEFT JOIN "Project" t ON t."id" = se."projectId" AND ${liveAliasSqlText("t")}`,
     targetPresence: "optional",
     imageTarget: "project",
   },
   "purchase.projects": {
     targetEntity: "project",
-    targetJoin: `LEFT JOIN "Project" t ON t."id" = se."projectId" AND t."deletedAt" IS NULL`,
+    targetJoin: `LEFT JOIN "Project" t ON t."id" = se."projectId" AND ${liveAliasSqlText("t")}`,
     targetPresence: "optional",
     imageTarget: "project",
   },
   "project.vendors": {
     targetEntity: "vendor",
-    targetJoin: `LEFT JOIN "Vendor" t ON t."id" = se."vendorId" AND t."deletedAt" IS NULL`,
+    targetJoin: `LEFT JOIN "Vendor" t ON t."id" = se."vendorId" AND ${liveAliasSqlText("t")}`,
     targetPresence: "optional",
     imageTarget: "vendor",
   },
   "project.purchasedProducts": {
     targetEntity: "product",
-    targetJoin: `JOIN "Product" t ON t."id" = se."productId" AND t."deletedAt" IS NULL`,
+    targetJoin: `JOIN "Product" t ON t."id" = se."productId" AND ${liveAliasSqlText("t")}`,
     targetPresence: "required",
     imageTarget: "product",
   },
   "product.vendors": {
     targetEntity: "vendor",
-    targetJoin: `LEFT JOIN "Vendor" t ON t."id" = se."vendorId" AND t."deletedAt" IS NULL`,
+    targetJoin: `LEFT JOIN "Vendor" t ON t."id" = se."vendorId" AND ${liveAliasSqlText("t")}`,
     targetPresence: "optional",
     imageTarget: "vendor",
   },
@@ -650,11 +651,11 @@ export async function loadRelatedSummary(
             e."purchaseId", allocation."projectId", e."productId",
             p."date" AS "purchaseDate", p."vendorId"
           FROM "Vendor" s
-          JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL
-          JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL
+          JOIN "Purchase" p ON p."vendorId" = s."id" AND ${notDeleted("p")}
+          JOIN "Expense" e ON e."purchaseId" = p."id" AND ${notDeleted("e")}
           JOIN (${expenseDerivedReadSql("projects")}) allocation
             ON allocation."expenseId" = e."id"
-          WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
+          WHERE s."shortcode" = ${input.sourceId} AND ${notDeleted("s")}
         )`;
       }
       return sql`scoped_expenses AS (
@@ -664,9 +665,9 @@ export async function loadRelatedSummary(
           e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
           p."date" AS "purchaseDate", p."vendorId"
         FROM "Vendor" s
-        JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL
-        JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL
-        WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
+        JOIN "Purchase" p ON p."vendorId" = s."id" AND ${notDeleted("p")}
+        JOIN "Expense" e ON e."purchaseId" = p."id" AND ${notDeleted("e")}
+        WHERE s."shortcode" = ${input.sourceId} AND ${notDeleted("s")}
       )`;
     }
     if (input.relationKey.startsWith("purchase.")) {
@@ -680,10 +681,10 @@ export async function loadRelatedSummary(
             e."purchaseId", allocation."projectId", e."productId",
             p."date" AS "purchaseDate", p."vendorId"
           FROM "Purchase" p
-          JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL
+          JOIN "Expense" e ON e."purchaseId" = p."id" AND ${notDeleted("e")}
           JOIN (${expenseDerivedReadSql("projects")}) allocation
             ON allocation."expenseId" = e."id"
-          WHERE p."shortcode" = ${input.sourceId} AND p."deletedAt" IS NULL
+          WHERE p."shortcode" = ${input.sourceId} AND ${notDeleted("p")}
         )`;
       }
       return sql`scoped_expenses AS (
@@ -693,8 +694,8 @@ export async function loadRelatedSummary(
           e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
           p."date" AS "purchaseDate", p."vendorId"
         FROM "Purchase" p
-        JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL
-        WHERE p."shortcode" = ${input.sourceId} AND p."deletedAt" IS NULL
+        JOIN "Expense" e ON e."purchaseId" = p."id" AND ${notDeleted("e")}
+        WHERE p."shortcode" = ${input.sourceId} AND ${notDeleted("p")}
       )`;
     }
     if (input.relationKey.startsWith("product.")) {
@@ -705,20 +706,20 @@ export async function loadRelatedSummary(
           e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
           p."date" AS "purchaseDate", p."vendorId"
         FROM "Product" s
-        JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL
-        LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
-        WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
+        JOIN "Expense" e ON e."productId" = s."id" AND ${notDeleted("e")}
+        LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND ${notDeleted("p")}
+        WHERE s."shortcode" = ${input.sourceId} AND ${notDeleted("s")}
           AND (e."purchaseId" IS NULL OR p."id" IS NOT NULL)
       )`;
     }
     if (input.includeSubProjects) {
       return sql`project_scope AS (
         SELECT "id" FROM "Project"
-        WHERE "shortcode" = ${input.sourceId} AND "deletedAt" IS NULL
+        WHERE "shortcode" = ${input.sourceId} AND ${notDeleted("Project")}
         UNION ALL
         SELECT child."id" FROM "Project" child
         JOIN project_scope parent ON child."parentProjectId" = parent."id"
-        WHERE child."deletedAt" IS NULL
+        WHERE ${notDeleted("child")}
       ), scoped_expenses AS (
         SELECT e."id" AS "expenseId",
           (allocation."attributedCents"::bigint / 100.0) AS "cost",
@@ -730,8 +731,8 @@ export async function loadRelatedSummary(
         FROM project_scope scope
         JOIN (${expenseDerivedReadSql("projects")}) allocation
           ON allocation."projectId" = scope."id"
-        JOIN "Expense" e ON e."id" = allocation."expenseId" AND e."deletedAt" IS NULL
-        LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
+        JOIN "Expense" e ON e."id" = allocation."expenseId" AND ${notDeleted("e")}
+        LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND ${notDeleted("p")}
         WHERE e."purchaseId" IS NULL OR p."id" IS NOT NULL
       )`;
     }
@@ -746,9 +747,9 @@ export async function loadRelatedSummary(
       FROM "Project" s
       JOIN (${expenseDerivedReadSql("projects")}) allocation
         ON allocation."projectId" = s."id"
-      JOIN "Expense" e ON e."id" = allocation."expenseId" AND e."deletedAt" IS NULL
-      LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
-      WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
+      JOIN "Expense" e ON e."id" = allocation."expenseId" AND ${notDeleted("e")}
+      LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND ${notDeleted("p")}
+      WHERE s."shortcode" = ${input.sourceId} AND ${notDeleted("s")}
         AND (e."purchaseId" IS NULL OR p."id" IS NOT NULL)
     )`;
   })();
@@ -757,9 +758,9 @@ export async function loadRelatedSummary(
     ? sql`LEFT JOIN LATERAL (
         SELECT i."id", i."key", i."filename", i."contentType"
         FROM "EntityAttachment" ti
-        JOIN "Image" i ON i."id" = ti."imageId" AND i."deletedAt" IS NULL
+        JOIN "Image" i ON i."id" = ti."imageId" AND ${notDeleted("i")}
         WHERE ti."entityId" = t."id"
-          AND ti."deletedAt" IS NULL
+          AND ${notDeleted("ti")}
           AND ${displayableImageSql("i")}
         ORDER BY ti."sortOrder", ti."createdAt", ti."id"
         LIMIT 1
@@ -942,7 +943,7 @@ export function relatedWhereConditions<TFilters extends object>(
         FROM ${sql.raw(`"${view.sourceTable}"`)} s
         ${compiledRelatedJoins(definition.key, "filter")}
         WHERE s."id" = ${sourceId}
-          AND s."deletedAt" IS NULL
+          AND ${notDeleted("s")}
           ${viewWhere(view)}
           ${extra ? sql`AND ${extra}` : sql``}
       )`;

@@ -2,10 +2,15 @@ import { imageAnalysisSummarySchema } from "@cubby/schemas/image";
 import type { ImageAnalysisSummary } from "@cubby/schemas/image";
 import type { ImageIdentificationResult } from "@cubby/schemas/image-identification";
 import { imageDescriptionResult } from "@cubby/schemas/image-processing";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import {
+  type ImageReadScope,
+  imageScopeEmpty,
+  imageScopeSql,
+} from "~/server/db/computed/image-read-scope";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { aiAnalysis, image } from "~/server/db/schema";
 import { loadImageIdentifications } from "~/server/domains/image/repo/image-identification";
@@ -65,7 +70,7 @@ export function composeImageAnalysisSummary(
  */
 async function loadNewestLocalAnalysisByImage(
   db: Database | DrizzleTransaction,
-  imageShortcodes: readonly string[],
+  imageShortcodes: ImageReadScope,
 ): Promise<Map<string, unknown>> {
   const latest = unwrapDb(db)
     .selectDistinctOn([image.shortcode], {
@@ -77,7 +82,7 @@ async function loadNewestLocalAnalysisByImage(
     .where(
       and(
         eq(aiAnalysis.entityKind, "image"),
-        inArray(image.shortcode, [...imageShortcodes]),
+        imageScopeSql(imageShortcodes),
         eq(aiAnalysis.feature, "photo-local-analysis"),
         notDeleted(aiAnalysis),
       ),
@@ -118,10 +123,10 @@ async function loadNewestLocalAnalysisByImage(
  */
 export async function loadImageAnalysisEvidence(
   db: Database | DrizzleTransaction,
-  imageShortcodes: readonly string[],
+  imageShortcodes: ImageReadScope,
 ) {
-  const shortcodes = [...new Set(imageShortcodes)];
-  if (shortcodes.length === 0)
+  const shortcodes = imageShortcodes;
+  if (imageScopeEmpty(shortcodes))
     return {
       summaries: new Map<string, ImageAnalysisSummary>(),
       descriptionEvidence: await loadSelectedDescriptionEvidence(
@@ -138,7 +143,11 @@ export async function loadImageAnalysisEvidence(
     ]);
 
   const summaries = new Map<string, ImageAnalysisSummary>();
-  for (const shortcode of shortcodes) {
+  for (const shortcode of new Set([
+    ...localByImage.keys(),
+    ...descriptionEvidence.keys(),
+    ...identificationByImage.keys(),
+  ])) {
     const description = descriptionEvidence.get(shortcode)?.description;
     const summary = composeImageAnalysisSummary(
       localByImage.get(shortcode),
@@ -159,7 +168,7 @@ export async function loadImageAnalysisEvidence(
 /** Summary-only consumers project from the same selected evidence. */
 export async function loadImageAnalysisSummaries(
   db: Database | DrizzleTransaction,
-  imageShortcodes: readonly string[],
+  imageShortcodes: ImageReadScope,
 ): Promise<Map<string, ImageAnalysisSummary>> {
   return (await loadImageAnalysisEvidence(db, imageShortcodes)).summaries;
 }

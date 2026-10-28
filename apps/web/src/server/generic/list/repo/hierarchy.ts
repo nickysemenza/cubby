@@ -5,6 +5,7 @@ import {
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import type { EntityId } from "@cubby/schemas/identifiers";
+import { isNull } from "drizzle-orm";
 import { type SQL, sql } from "drizzle-orm";
 
 type ListFields = typeof generatedEntityListFields;
@@ -52,7 +53,9 @@ export const hierarchyDescendantsSql = <E extends HierarchyEntity>(
   const name = sql.identifier(table);
   const parent = sql.identifier(column);
   const live = (alias: string) =>
-    softDelete ? sql` AND ${sql.raw(alias)}."deletedAt" IS NULL` : sql``;
+    softDelete
+      ? sql` AND ${isNull(sql`${sql.raw(alias)}."deletedAt"`)}`
+      : sql``;
   return sql<EntityId<E>>`(
       WITH RECURSIVE descendants AS (
         SELECT h."id", 0 AS depth, ARRAY[h."id"] AS visited
@@ -79,7 +82,9 @@ const ancestorWalkSql = (entity: Entity, id: SQL, select: SQL): SQL => {
   const name = sql.identifier(table);
   const parent = sql.identifier(column);
   const live = (alias: string) =>
-    softDelete ? sql` AND ${sql.raw(alias)}."deletedAt" IS NULL` : sql``;
+    softDelete
+      ? sql` AND ${isNull(sql`${sql.raw(alias)}."deletedAt"`)}`
+      : sql``;
   return sql`(
       WITH RECURSIVE up AS (
         SELECT h."id", h.${parent} AS parent, 1 AS step, ARRAY[h."id"] AS visited

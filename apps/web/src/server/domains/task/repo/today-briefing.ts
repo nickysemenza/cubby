@@ -11,6 +11,7 @@ import { sql } from "drizzle-orm";
 
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 
@@ -55,8 +56,8 @@ export async function getTaskTodayBriefing(
       LEFT JOIN blocked_tasks bt ON bt."id" = t."id"
       LEFT JOIN "Project" live_project
         ON live_project."id" = t."projectId"
-       AND live_project."deletedAt" IS NULL
-      WHERE t."deletedAt" IS NULL
+       AND ${notDeleted("live_project")}
+      WHERE ${notDeleted("t")}
         AND t."status" <> 'done'
         AND t."parentTaskId" IS NULL
     ), summary AS (

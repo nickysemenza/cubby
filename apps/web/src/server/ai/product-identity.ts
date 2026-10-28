@@ -61,6 +61,7 @@ import {
   prepareSearchDocuments,
   searchCoverageIncomplete,
 } from "~/server/generic/search/repo/search-document";
+import { nameAliasKeysSql } from "~/server/lib/name-alias-match";
 
 export const productIdentityPrompt = (subject: string) => ({
   subject,
@@ -131,8 +132,8 @@ async function retrieveProductIdentityCandidatePage(
         [...new Set(sourceIds)].map((id) => sql`${id}::uuid`),
         sql`, `,
       )}) AND ${notDeleted(product)}),
-      names AS MATERIALIZED (SELECT p.id, lower(n.name) AS name FROM "Product" p CROSS JOIN LATERAL unnest(ARRAY[p.name] || p.aliases) n(name) WHERE ${notDeleted(namedProduct)}),
-      source_names AS (SELECT s.id, lower(n.name) AS name FROM sources s CROSS JOIN LATERAL unnest(ARRAY[s.name] || s.aliases) n(name)),
+      names AS MATERIALIZED (SELECT p.id, n.name AS name FROM "Product" p CROSS JOIN LATERAL (${nameAliasKeysSql(sql`p.name`, sql`p.aliases`)}) n WHERE ${notDeleted(namedProduct)}),
+      source_names AS (SELECT s.id, n.name AS name FROM sources s CROSS JOIN LATERAL (${nameAliasKeysSql(sql`s.name`, sql`s.aliases`)}) n),
       edges AS (
         SELECT s.id AS source, c.id AS candidate FROM source_names s JOIN names c ON c.name = s.name
         UNION SELECT s.id, c.id FROM sources s JOIN "Product" c ON c."brandId" = s."brandId" AND c.model = coalesce(s.model, '') WHERE s."brandId" IS NOT NULL AND ${notDeleted(candidateProduct)}

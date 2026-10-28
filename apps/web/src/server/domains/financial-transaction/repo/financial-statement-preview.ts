@@ -329,7 +329,7 @@ export async function previewFinancialTransactionImport(
           )}) AS requested(source, "externalId")
           JOIN "EntityExternalId" px ON px.source = requested.source
             AND px."externalId" = requested."externalId"
-          WHERE px.kind = 'settlement_ref' AND px."deletedAt" IS NULL
+          WHERE px.kind = 'settlement_ref' AND ${notDeleted("px")}
         )`;
   const [preparation, transactions] = await Promise.all([
     options.preparation ?? prepareFinancialStatementPreview(db),

@@ -89,11 +89,11 @@ const loadFacts = async (
           FROM "ImageProcessingAttempt" a
           JOIN "AiUsage" u ON u."jobKind" = ${"image_processing_attempt"}
             AND u."jobId" = a.id::text
-          WHERE a."jobId" = j.id AND u."deletedAt" IS NULL
+          WHERE a."jobId" = j.id AND ${notDeleted("u")}
         UNION ALL
         SELECT u."chargedCost", u."standardCost" FROM "AiUsage" u
           WHERE u."jobKind" = j.kind AND u."jobId" = j.id::text
-            AND u."deletedAt" IS NULL
+            AND ${notDeleted("u")}
       ) u
     ) cost
     WHERE j.id IN (${sql.join(

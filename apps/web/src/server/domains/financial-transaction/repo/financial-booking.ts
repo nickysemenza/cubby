@@ -210,7 +210,7 @@ async function bookingAction(
           sql`"FinancialTransactionAllocation" a JOIN "FinancialTransaction" f ON f.id = a."transactionId"`,
         )
         .where(
-          sql`a."purchaseId" = ${graph.target.id} AND a."deletedAt" IS NULL AND f."deletedAt" IS NULL AND f.status <> 'void' AND f."ledgerTransferId" IS NULL AND f.kind <> 'income' AND f.id <> ${row.id} AND SIGN(a.amount) = SIGN(${row.amount}::numeric) AND NOT EXISTS (SELECT 1 FROM "Expense" e WHERE e."bookingTransactionCode" = f.shortcode AND e."deletedAt" IS NULL AND e."economicRole" = 'reimbursement')`,
+          sql`a."purchaseId" = ${graph.target.id} AND ${notDeleted("a")} AND ${notDeleted("f")} AND f.status <> 'void' AND f."ledgerTransferId" IS NULL AND f.kind <> 'income' AND f.id <> ${row.id} AND SIGN(a.amount) = SIGN(${row.amount}::numeric) AND NOT EXISTS (SELECT 1 FROM "Expense" e WHERE e."bookingTransactionCode" = f.shortcode AND ${notDeleted("e")} AND e."economicRole" = 'reimbursement')`,
         )
     : [];
   const settledCents = cents(previous[0]?.amount ?? 0);

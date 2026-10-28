@@ -188,6 +188,7 @@ import {
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { liveAliasSqlText } from "~/server/lib/live-row";
 import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summary";
 
 import { assertProductCategoryChange } from "./classification";
@@ -270,9 +271,9 @@ const productIdsWithExpenses = qb
 const partsAccountedKitsSql = sql`(SELECT min(floor(COALESCE(${sql.raw(onHandUnitsSql("kac_p"))}, 0) / kac."quantity"))
        FROM "EntityLink" kac
        JOIN "Product" kac_p
-         ON kac_p."id" = kac."toEntityId" AND kac_p."deletedAt" IS NULL
+         ON kac_p."id" = kac."toEntityId" AND ${notDeleted("kac_p")}
       WHERE kac."fromEntityId" = ${product.id}
-        AND kac."deletedAt" IS NULL AND kac."kind" = 'productComponent')`;
+        AND ${notDeleted("kac")} AND kac."kind" = 'productComponent')`;
 
 // The entity-list form of the sold-but-still-stocked diagnostic. The quantity
 // ledger remains the authority for expected quantity and unknown acquisition
@@ -307,7 +308,7 @@ const productHasUsdaKey = sql`(${product.fdc_id} IS NOT NULL OR ${product.labelN
     SELECT 1 FROM "EntityExternalId" pei
     WHERE pei."entityId" = ${product.id}
       AND pei."source" = ${GTIN_SOURCE}
-      AND pei."deletedAt" IS NULL))`;
+      AND ${notDeleted("pei")}))`;
 
 /** The declared read's row: stored columns plus the helper columns bindings read. */
 // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- matches listScaffold's default Row; bindings read declared keys by name.
@@ -332,8 +333,8 @@ export const productScaffold = listScaffold<
   derived: {
     location: sql.raw(
       `(SELECT min(l."name") FROM "InventoryEntry" ie ` +
-        `JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL ` +
-        `WHERE ie."productId" = "Product"."id" AND ie."deletedAt" IS NULL)`,
+        `JOIN "Location" l ON l."id" = ie."locationId" AND ${liveAliasSqlText("l")} ` +
+        `WHERE ie."productId" = "Product"."id" AND ${liveAliasSqlText("ie")})`,
     ),
     brandId: productBrandNameSql(product.brandId),
     // Ranked once over categories: the path summary per Product was ~600 ms.
@@ -347,7 +348,7 @@ export const productScaffold = listScaffold<
     cost: productReadCostSql,
     primaryGtin: sql.raw(
       `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +
-        `WHERE pei."entityId" = "Product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
+        `WHERE pei."entityId" = "Product"."id" AND pei."source" = 'gtin' AND ${liveAliasSqlText("pei")} ` +
         `ORDER BY pei."isPrimary" DESC, pei."createdAt", pei."id" LIMIT 1)`,
     ),
     expenseTotal: productExpenseTotalFilterSql(product.id),

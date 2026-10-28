@@ -100,7 +100,7 @@ export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
 const cardholderCode = (expression: ReturnType<typeof effectiveFieldSql>) =>
   sql<
     string | null
-  >`(SELECT shortcode FROM "LedgerParty" WHERE id = ${expression} AND "deletedAt" IS NULL)`;
+  >`(SELECT shortcode FROM "LedgerParty" WHERE id = ${expression} AND ${notDeleted("LedgerParty")})`;
 const cardholderResolution = (row: {
   primaryCardholderMode: string;
   storedCardholder: string | null;
@@ -280,7 +280,7 @@ async function assertAliasesAvailable(
       SELECT fa.id::text AS id
       FROM "FinancialAccount" fa
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(fa."sourceAliases") = 'array' THEN fa."sourceAliases" ELSE '[]'::jsonb END) a
-      WHERE fa."deletedAt" IS NULL
+      WHERE ${notDeleted("fa")}
         AND a->>${"source"} = ${alias.source}
         AND a->>'externalAccountId' = ${alias.externalAccountId}
         ${exceptId ? sql`AND fa.id <> ${exceptId}` : sql``}

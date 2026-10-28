@@ -10,6 +10,7 @@
  */
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { location } from "~/server/db/retained-tables";
 
 /** The analysis feature id `describeLocation` writes under. */
@@ -21,7 +22,7 @@ export const locationAiDescriptionSql = (
 ): SQL<string | null> => sql<string | null>`(
   SELECT a."result"->>'description' FROM "AiAnalysis" a
   WHERE a."entityKind" = 'location' AND a."entityId" = ${locationId}
-    AND a."feature" = ${LOCATION_DESCRIPTION_FEATURE_ID} AND a."deletedAt" IS NULL
+    AND a."feature" = ${LOCATION_DESCRIPTION_FEATURE_ID} AND ${notDeleted("a")}
   ORDER BY a."updatedAt" DESC, a."id" DESC
   LIMIT 1
 )`;

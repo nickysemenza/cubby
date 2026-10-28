@@ -21,6 +21,7 @@ import { sql, type SQL } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { unwrapDb, sqlEnumConstant } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   effectiveExpenseSpendingCategorySql,
   fallbackExpenseSpendingCategorySql,
@@ -61,15 +62,15 @@ export const effectiveExpenseProjectSql = (
     ELSE COALESCE(
       CASE WHEN ${storedProjectId} IS NOT NULL THEN (
         SELECT ${storedProjectId}
-        WHERE ${storedProjectId} IN (SELECT id FROM "Project" WHERE "deletedAt" IS NULL)
+        WHERE ${storedProjectId} IN (SELECT id FROM "Project" WHERE ${notDeleted("Project")})
       ) END,
       (SELECT CASE WHEN inherited_purchase."defaultProjectId" IS NOT NULL THEN (
          SELECT inherited_purchase."defaultProjectId"
-         WHERE inherited_purchase."defaultProjectId" IN (SELECT id FROM "Project" WHERE "deletedAt" IS NULL)
+         WHERE inherited_purchase."defaultProjectId" IN (SELECT id FROM "Project" WHERE ${notDeleted("Project")})
        ) END
        FROM "Purchase" inherited_purchase
        WHERE inherited_purchase."id" = ${purchaseId}
-         AND inherited_purchase."deletedAt" IS NULL),
+         AND ${notDeleted("inherited_purchase")}),
       ${householdFoodProjectSql(productId, householdTarget)}
     )
   END`;
@@ -83,13 +84,13 @@ const householdFoodProjectSql = (
 ): SQL<ProjectId | null> => sql<ProjectId | null>`CASE WHEN ${householdTarget} AND EXISTS (
         SELECT 1 FROM "Product" food_product
         WHERE food_product."id" = ${productId}
-          AND food_product."deletedAt" IS NULL
+          AND ${notDeleted("food_product")}
           AND ${categoryFeatureSql(column("food_product", "categoryId"), "food")}
       ) THEN (
         SELECT household_project."id"
         FROM "Project" household_project
         WHERE household_project."shortcode" = 'PRJ-HSHD'
-          AND household_project."deletedAt" IS NULL
+          AND ${notDeleted("household_project")}
         LIMIT 1
       ) END`;
 
@@ -117,10 +118,10 @@ export const principalExpenseInheritanceSql = (
   return {
     joins: sql`LEFT JOIN "Project" inherited_explicit_project
       ON inherited_explicit_project."id" = ${column(alias, "projectId")}
-        AND inherited_explicit_project."deletedAt" IS NULL
+        AND ${notDeleted("inherited_explicit_project")}
     LEFT JOIN "Project" inherited_purchase_project
       ON inherited_purchase_project."id" = ${column(purchaseAlias, "defaultProjectId")}
-        AND inherited_purchase_project."deletedAt" IS NULL`,
+        AND ${notDeleted("inherited_purchase_project")}`,
     projectId,
     trade: principalTradeSql(
       column(alias, "trade"),
@@ -146,7 +147,7 @@ export const effectiveExpenseTradeSql = (
       sql`(SELECT inherited_purchase."defaultTrade"
        FROM "Purchase" inherited_purchase
        WHERE inherited_purchase."id" = ${purchaseId}
-         AND inherited_purchase."deletedAt" IS NULL)`,
+         AND ${notDeleted("inherited_purchase")})`,
       effectiveExpenseProjectSql(alias),
     )}
   END`;
@@ -166,9 +167,9 @@ export const expenseInheritanceReadExtras = (alias = "expense") => {
       (SELECT purchase_project."id" FROM "Purchase" inherited_purchase
        JOIN "Project" purchase_project
          ON purchase_project."id" = inherited_purchase."defaultProjectId"
-        AND purchase_project."deletedAt" IS NULL
+        AND ${notDeleted("purchase_project")}
        WHERE inherited_purchase."id" = ${purchaseId}
-         AND inherited_purchase."deletedAt" IS NULL),
+         AND ${notDeleted("inherited_purchase")}),
       ${householdFoodProjectSql(productId)}
     ) END`;
   const fallbackTrade = sql<Trade | null>`CASE
@@ -176,7 +177,7 @@ export const expenseInheritanceReadExtras = (alias = "expense") => {
     ELSE COALESCE(
       (SELECT inherited_purchase."defaultTrade" FROM "Purchase" inherited_purchase
        WHERE inherited_purchase."id" = ${purchaseId}
-         AND inherited_purchase."deletedAt" IS NULL),
+         AND ${notDeleted("inherited_purchase")}),
       ${effectiveProjectTradeSql(projectId)}
     ) END`;
   const projectSource = sql<string>`CASE
@@ -187,9 +188,9 @@ export const expenseInheritanceReadExtras = (alias = "expense") => {
       SELECT 1 FROM "Purchase" inherited_purchase
       JOIN "Project" purchase_project
         ON purchase_project."id" = inherited_purchase."defaultProjectId"
-       AND purchase_project."deletedAt" IS NULL
+       AND ${notDeleted("purchase_project")}
       WHERE inherited_purchase."id" = ${purchaseId}
-        AND inherited_purchase."deletedAt" IS NULL
+        AND ${notDeleted("inherited_purchase")}
     ) THEN 'purchase default'
     WHEN ${projectId} IS NOT NULL THEN 'household food default'
     ELSE 'none'
@@ -200,7 +201,7 @@ export const expenseInheritanceReadExtras = (alias = "expense") => {
     WHEN EXISTS (
       SELECT 1 FROM "Purchase" inherited_purchase
       WHERE inherited_purchase."id" = ${purchaseId}
-        AND inherited_purchase."deletedAt" IS NULL
+        AND ${notDeleted("inherited_purchase")}
         AND inherited_purchase."defaultTrade" IS NOT NULL
     ) THEN 'purchase default'
     WHEN ${effectiveExpenseTradeSql(alias)} IS NOT NULL THEN 'project default'
@@ -212,39 +213,39 @@ export const expenseInheritanceReadExtras = (alias = "expense") => {
     ),
     spendingCategoryShortcode: sql<
       string | null
-    >`(SELECT c."shortcode" FROM "SpendingCategory" c WHERE c."id" = ${spendingCategoryId} AND c."deletedAt" IS NULL)`.as(
+    >`(SELECT c."shortcode" FROM "SpendingCategory" c WHERE c."id" = ${spendingCategoryId} AND ${notDeleted("c")})`.as(
       "spendingCategoryShortcode",
     ),
     spendingCategoryName: sql<
       string | null
-    >`(SELECT c.name FROM "SpendingCategory" c WHERE c.id = ${spendingCategoryId} AND c."deletedAt" IS NULL)`.as(
+    >`(SELECT c.name FROM "SpendingCategory" c WHERE c.id = ${spendingCategoryId} AND ${notDeleted("c")})`.as(
       "spendingCategoryName",
     ),
     storedSpendingCategoryShortcode: sql<
       string | null
-    >`(SELECT c.shortcode FROM "SpendingCategory" c WHERE c.id = ${column(alias, "spendingCategoryId")} AND c."deletedAt" IS NULL)`.as(
+    >`(SELECT c.shortcode FROM "SpendingCategory" c WHERE c.id = ${column(alias, "spendingCategoryId")} AND ${notDeleted("c")})`.as(
       "storedSpendingCategoryShortcode",
     ),
     fallbackSpendingCategoryShortcode: sql<
       string | null
-    >`(SELECT c.shortcode FROM "SpendingCategory" c WHERE c.id = ${fallbackSpendingCategoryId} AND c."deletedAt" IS NULL)`.as(
+    >`(SELECT c.shortcode FROM "SpendingCategory" c WHERE c.id = ${fallbackSpendingCategoryId} AND ${notDeleted("c")})`.as(
       "fallbackSpendingCategoryShortcode",
     ),
     effectiveProjectId: projectId.as("effectiveProjectId"),
     effectiveProjectShortcode: sql<
       string | null
-    >`(SELECT p."shortcode" FROM "Project" p WHERE p."id" = ${projectId} AND p."deletedAt" IS NULL)`.as(
+    >`(SELECT p."shortcode" FROM "Project" p WHERE p."id" = ${projectId} AND ${notDeleted("p")})`.as(
       "effectiveProjectShortcode",
     ),
     effectiveProjectName: sql<
       string | null
-    >`(SELECT p."name" FROM "Project" p WHERE p."id" = ${projectId} AND p."deletedAt" IS NULL)`.as(
+    >`(SELECT p."name" FROM "Project" p WHERE p."id" = ${projectId} AND ${notDeleted("p")})`.as(
       "effectiveProjectName",
     ),
     effectiveTrade: effectiveExpenseTradeSql(alias).as("effectiveTrade"),
     fallbackProjectShortcode: sql<
       string | null
-    >`(SELECT p."shortcode" FROM "Project" p WHERE p."id" = ${fallbackProjectId} AND p."deletedAt" IS NULL)`.as(
+    >`(SELECT p."shortcode" FROM "Project" p WHERE p."id" = ${fallbackProjectId} AND ${notDeleted("p")})`.as(
       "fallbackProjectShortcode",
     ),
     fallbackTrade: fallbackTrade.as("fallbackTrade"),
@@ -482,19 +483,19 @@ export async function resolveDraftExpenseFields(
     FROM resolved
     LEFT JOIN "Project" effective_project
       ON effective_project."id" = resolved.effective_project_id
-     AND effective_project."deletedAt" IS NULL
+     AND ${notDeleted("effective_project")}
     LEFT JOIN "Project" fallback_project
       ON fallback_project."id" = resolved.fallback_project_id
-     AND fallback_project."deletedAt" IS NULL
+     AND ${notDeleted("fallback_project")}
     LEFT JOIN "Purchase" live_purchase
       ON live_purchase."id" = ${purchaseId}::uuid
-     AND live_purchase."deletedAt" IS NULL
+     AND ${notDeleted("live_purchase")}
     LEFT JOIN "Project" purchase_project
       ON purchase_project."id" = live_purchase."defaultProjectId"
-     AND purchase_project."deletedAt" IS NULL
+     AND ${notDeleted("purchase_project")}
     LEFT JOIN "Product" live_product
       ON live_product."id" = ${productId}::uuid
-     AND live_product."deletedAt" IS NULL
+     AND ${notDeleted("live_product")}
   `);
     row = result.rows[0];
   }
@@ -557,7 +558,7 @@ export async function validateExpenseInheritance(
     SELECT
       EXISTS (
         SELECT 1 FROM "Purchase" p
-        WHERE p."id" = candidate."purchaseId" AND p."deletedAt" IS NULL
+        WHERE p."id" = candidate."purchaseId" AND ${notDeleted("p")}
       ) AS "purchaseIsLive",
       ${effectiveExpenseProjectSql("candidate")} AS "effectiveProjectId",
       ${effectiveExpenseTradeSql("candidate")} AS "effectiveTrade"

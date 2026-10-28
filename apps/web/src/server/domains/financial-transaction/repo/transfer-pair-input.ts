@@ -4,6 +4,7 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import { sql } from "drizzle-orm";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 
 /** Kinds that retrieve transfer evidence, without proving a transfer. */
@@ -25,7 +26,7 @@ type SeedBoundary = {
 const seedQueries = (input: SeedBoundary) => ({
   transactions: sql`
       SELECT 'ftx:' || ft.shortcode AS key FROM "FinancialTransaction" ft
-      WHERE ft."deletedAt" IS NULL AND ft.status IN (${sql.join(
+      WHERE ${notDeleted("ft")} AND ft.status IN (${sql.join(
         [
           financialTransactionStatus.enum.observed,
           financialTransactionStatus.enum.pending,
@@ -45,7 +46,7 @@ const seedQueries = (input: SeedBoundary) => ({
   statements: sql`
       SELECT 'stmt:' || r.source || ':' || ${chargeKeyOf("r")} AS key
       FROM "SourceTransactionRecord" r
-      WHERE r."deletedAt" IS NULL AND r."sourceCategory" IS NOT NULL
+      WHERE ${notDeleted("r")} AND r."sourceCategory" IS NOT NULL
         ${input.since ? sql`AND r."statementDate" >= ${input.since}::date` : sql``}
         ${input.createdBefore ? sql`AND r."createdAt" <= ${input.createdBefore}::timestamptz` : sql``}`,
 });

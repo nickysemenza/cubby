@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 
 import { nonColumnMutationScalar } from "./mutation-scalar";
@@ -65,7 +66,7 @@ export async function readMutationReceiptFields(
   ]);
   const result = await getDb(db).execute(sql`SELECT saved.shortcode AS id,
     jsonb_build_object(${sql.join(entries, sql`, `)}) AS values
-    FROM ${table} saved WHERE saved.id=${entityId}::uuid AND saved."deletedAt" IS NULL LIMIT 1`);
+    FROM ${table} saved WHERE saved.id=${entityId}::uuid AND ${notDeleted("saved")} LIMIT 1`);
   const [row] = z.array(rowSchema).parse(result.rows);
   if (!row) throw new Error(`Saved ${entity} is no longer live: ${entityId}`);
   const item: z.infer<typeof entityMutationItem> = {

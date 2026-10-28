@@ -20,6 +20,7 @@ import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fie
 import { inArray, sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { categoryFeatureInSql } from "~/server/domains/product-category/repo/category-feature";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -81,7 +82,7 @@ export const classificationPolicySql = <Id extends ClassificationPolicyId>(
       SELECT 1 FROM ${sql.identifier(columnPolicy.table)} classification_policy
       WHERE classification_policy.id = ${reference}
         AND classification_policy.${sql.identifier(columnPolicy.column)} = ${policy}
-        AND classification_policy."deletedAt" IS NULL
+        AND ${notDeleted("classification_policy")}
     )`;
   }
   // SAFETY: column policies returned above, so both values are a declared id and field.

@@ -3,6 +3,7 @@ import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { type SQL, sql } from "drizzle-orm";
 
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { soleCardAccessSql } from "~/server/domains/financial-account/repo/purchaser";
 import {
   purchaseMailMembersSql,
@@ -38,14 +39,14 @@ const purchasePurchasersSql = (purchases: SQL) => sql`
       ${settlementPartyConflictSql(sql.raw("account"), sql.raw("ft"), sql`order_member.member`)} AS conflict
     FROM purchase
     JOIN "FinancialTransactionAllocation" allocation
-      ON allocation."purchaseId" = purchase.id AND allocation."deletedAt" IS NULL
+      ON allocation."purchaseId" = purchase.id AND ${notDeleted("allocation")}
     JOIN "FinancialTransaction" ft
       ON ft.id = allocation."transactionId" AND ${settlementTransactionSql(sql.raw("ft"))}
     JOIN "FinancialAccount" account ON account.id = ft."accountId"
     JOIN (${purchaseMembersSql(sql`SELECT * FROM purchase`, sql`SELECT * FROM mail`)}) order_member
       ON order_member.id = purchase.id
     LEFT JOIN "LedgerParty" holder ON holder.id = ${effectiveFieldSql("financialAccount", "primaryCardholderId", "account")}
-      AND holder."deletedAt" IS NULL AND holder.kind = ${ledgerPartyKind.enum.member}
+      AND ${notDeleted("holder")} AND holder.kind = ${ledgerPartyKind.enum.member}
   ), paying AS (
     -- A paying card is a live account with a positive allocation; its holder
     -- alone uses it when no authorized user's period covers either date.
@@ -66,9 +67,9 @@ const purchasePurchasersSql = (purchases: SQL) => sql`
     FROM (
       SELECT purchase.id AS "purchaseId", party.shortcode
       FROM purchase
-      JOIN "VendorAccount" account ON account.id = purchase."vendorAccountId" AND account."deletedAt" IS NULL
+      JOIN "VendorAccount" account ON account.id = purchase."vendorAccountId" AND ${notDeleted("account")}
       JOIN "LedgerParty" party ON party.id = account."ledgerPartyId"
-        AND party."deletedAt" IS NULL AND party.kind = ${ledgerPartyKind.enum.member}
+        AND ${notDeleted("party")} AND party.kind = ${ledgerPartyKind.enum.member}
       UNION
       SELECT "purchaseId", shortcode FROM mail
     ) party
@@ -82,7 +83,7 @@ const purchasePurchasersSql = (purchases: SQL) => sql`
   END AS value
   FROM purchase
   LEFT JOIN "LedgerParty" override_party
-    ON override_party.id = purchase."purchaserOverrideId" AND override_party."deletedAt" IS NULL
+    ON override_party.id = purchase."purchaserOverrideId" AND ${notDeleted("override_party")}
   LEFT JOIN cards ON cards."purchaseId" = purchase.id
   LEFT JOIN evidence ON evidence."purchaseId" = purchase.id
 `;

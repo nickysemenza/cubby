@@ -2,6 +2,7 @@ import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   repositoryQueries as getDb,
   repositoryTransactionDatabase,
@@ -29,7 +30,7 @@ async function prepareEmbeddingCleanupPage(
       ))
       AND e."deletionId" IS NULL
       AND e."artifactState" <> ${embeddingArtifactState.enum.selected}
-      AND NOT (e."artifactState" = ${embeddingArtifactState.enum.selected} AND e."deletedAt" IS NULL)
+      AND NOT (e."artifactState" = ${embeddingArtifactState.enum.selected} AND ${notDeleted("e")})
       AND ${after ? sql`e.id > ${after}::uuid` : sql`true`}
       AND NOT EXISTS (
         SELECT 1 FROM "WorkItem" w

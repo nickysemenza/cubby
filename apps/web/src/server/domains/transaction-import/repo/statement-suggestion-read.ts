@@ -12,6 +12,7 @@ import { sql, type SQL } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   pendingSuggestion,
   suggestionField,
@@ -70,7 +71,7 @@ const conditions = (filters: StatementSuggestionScope): SQL => {
 
 const FROM = sql`FROM "AssessmentState" s
   JOIN "Assessment" a ON a.id = s.id
-  JOIN "FinancialAccount" fa ON fa.id = (${suggestionField("accountId")})::uuid AND fa."deletedAt" IS NULL
+  JOIN "FinancialAccount" fa ON fa.id = (${suggestionField("accountId")})::uuid AND ${notDeleted("fa")}
   LEFT JOIN "LedgerParty" account_owner ON account_owner.id = fa."ledgerPartyId"
   JOIN "SourceTransactionRecord" r ON r.id = s."recordId"`;
 
@@ -221,12 +222,12 @@ export async function readStatementSuggestions(
       FROM matched JOIN ${LIVE_REFS} refs ON refs.shortcode = matched.shortcode
       JOIN "SourceTransactionRecord" observed ON observed.source = refs.source
         AND (observed."externalId" = refs."externalId" OR observed."legacyReference" = refs."externalId")
-        AND observed."deletedAt" IS NULL
+        AND ${notDeleted("observed")}
     )
     SELECT DISTINCT members.id, r.source, r."sourceCategory"
     FROM members JOIN "SourceTransactionRecord" r
       ON r.source = members.source AND ${chargeKeyOf("r")} = members."chargeKey"
-    WHERE r."deletedAt" IS NULL
+    WHERE ${notDeleted("r")}
     ORDER BY members.id, r.source, r."sourceCategory" NULLS FIRST
   `);
   const categories = new Map<
@@ -282,7 +283,7 @@ export async function readStatementSuggestions(
       shortcode: string;
     }>(sql`
       SELECT id, shortcode FROM "FinancialAccount"
-      WHERE "deletedAt" IS NULL AND id IN (${sql.join(
+      WHERE ${notDeleted("FinancialAccount")} AND id IN (${sql.join(
         transferAccountIds.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})

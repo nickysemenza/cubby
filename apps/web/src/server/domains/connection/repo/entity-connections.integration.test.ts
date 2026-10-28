@@ -31,6 +31,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
+import { retrieveConnectionCandidates } from "./connection-candidates";
 import { captureConnectionBasis } from "./connection-evidence";
 import {
   publishEntityConnection,
@@ -45,6 +46,34 @@ import { assertConnectionFieldFresh } from "./field-connections";
 // evidence; stale/deleted endpoints apply; mutation escapes the caller rollback.
 describe("stored connection evidence", () => {
   const ctx = withTestDb();
+  it("retrieves Expense names containing a literal Product name", async () => {
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic 50%_tool" }),
+      ctx.actor,
+    );
+    const match = await createRepoEntity(ctx, "expense", {
+      name: "SYNTHETIC 50%_TOOL purchase",
+      cost: 18,
+      trade: "electrical",
+      costType: "tools",
+    });
+    const nonmatch = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic 50XXtool purchase",
+      cost: 18,
+      trade: "electrical",
+      costType: "tools",
+    });
+    const candidates = await retrieveConnectionCandidates(ctx.db, {
+      entityKind: "product",
+      entityId: item.id,
+    });
+    const targets = candidates
+      .filter((candidate) => candidate.relation === "product-expense")
+      .map((candidate) => candidate.target.entityId);
+    expect(targets).toContain(match.output.id);
+    expect(targets).not.toContain(nonmatch.output.id);
+  });
   async function fixture() {
     const item = await createProductFixture(
       ctx.db,

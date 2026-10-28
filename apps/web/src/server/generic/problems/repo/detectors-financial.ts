@@ -13,6 +13,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 
@@ -29,7 +30,7 @@ export async function findInvalidFinancialJson(
     cardNumbers?: unknown;
   }>(sql`
     SELECT ${"financialAccount"}::text AS entity, fa.shortcode AS id, fa.identity, fa."sourceAliases", fa."cardNumbers"
-    FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL
+    FROM "FinancialAccount" fa WHERE ${notDeleted("fa")}
   `);
   // Settlement references are EntityExternalId rows now; only the account's
   // JSON columns can hold malformed JSON.
@@ -65,8 +66,8 @@ export async function findDuplicateFinancialTransactionSourceRefs(
   }>(sql`
     SELECT fx."source" AS source, fx."externalId" AS "externalId", array_agg(ft.shortcode) AS "transactionIds"
     FROM "EntityExternalId" fx
-    JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ft."deletedAt" IS NULL
-    WHERE fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
+    JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ${notDeleted("ft")}
+    WHERE fx."kind" = 'settlement_ref' AND ${notDeleted("fx")}
     GROUP BY fx."source", fx."externalId"
     HAVING count(*) > 1
   `);
@@ -181,9 +182,9 @@ async function queryAllocationDefects(
       ${allocationSignMismatch} AS "allocationSignMismatch"
     FROM "FinancialTransaction" ft
     LEFT JOIN "FinancialTransactionAllocation" a
-      ON a."transactionId" = ft.id AND a."deletedAt" IS NULL
+      ON a."transactionId" = ft.id AND ${notDeleted("a")}
     LEFT JOIN "Purchase" p ON p.id = a."purchaseId"
-    WHERE ft."deletedAt" IS NULL${shortcodeWhere}${diagnosticWhere}
+    WHERE ${notDeleted("ft")}${shortcodeWhere}${diagnosticWhere}
     GROUP BY ft.id
     ORDER BY ft."postedDate" DESC NULLS LAST, ft.shortcode
   `);
@@ -225,7 +226,7 @@ export async function findDuplicateFinancialAccountSourceAliases(
   }>(sql`
     SELECT a->>'source' AS source, a->>'externalAccountId' AS "externalAccountId", array_agg(fa.shortcode) AS "accountIds"
     FROM "FinancialAccount" fa CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(fa."sourceAliases") = 'array' THEN fa."sourceAliases" ELSE '[]'::jsonb END) a
-    WHERE fa."deletedAt" IS NULL AND a->>'externalAccountId' IS NOT NULL
+    WHERE ${notDeleted("fa")} AND a->>'externalAccountId' IS NOT NULL
     GROUP BY a->>'source', a->>'externalAccountId'
     HAVING count(*) > 1
   `);
@@ -261,8 +262,8 @@ export async function findIncompleteTransactionImports(
     FROM "TransactionImport" si
     LEFT JOIN ${transactionImportMembers} member ON member."importId" = si.id
     LEFT JOIN "SourceTransactionRecord" sr
-      ON sr.id = member."statementRowId" AND sr."deletedAt" IS NULL
-    WHERE si."deletedAt" IS NULL AND si."rowCountDeclared" IS NOT NULL
+      ON sr.id = member."statementRowId" AND ${notDeleted("sr")}
+    WHERE ${notDeleted("si")} AND si."rowCountDeclared" IS NOT NULL
     GROUP BY si.id, si.source, si.label, si.fingerprint, si."rowCountDeclared"
     HAVING count(sr.id) < si."rowCountDeclared"
   `);

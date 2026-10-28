@@ -119,7 +119,7 @@ export const productMatchesGtinTerm = (term: string): SQL => {
     SELECT 1 FROM "EntityExternalId" pei
     WHERE pei."entityId" = ${product.id}
       AND pei."source" = ${GTIN_SOURCE}
-      AND pei."deletedAt" IS NULL
+      AND ${notDeleted("pei")}
       AND (${sql.join(
         terms.map(
           (candidate) =>
@@ -133,7 +133,7 @@ export const productHasAnyGtin = (): SQL => sql`EXISTS (
   SELECT 1 FROM "EntityExternalId" pei
   WHERE pei."entityId" = ${product.id}
     AND pei."source" = ${GTIN_SOURCE}
-    AND pei."deletedAt" IS NULL)`;
+    AND ${notDeleted("pei")})`;
 
 export const productHasGtin = (value: string): SQL => {
   const normalized = normalizeGtin(value);
@@ -143,6 +143,6 @@ export const productHasGtin = (value: string): SQL => {
     WHERE pei."entityId" = ${product.id}
       AND pei."source" = ${GTIN_SOURCE}
       AND pei."kind" = ${GTIN_KIND}
-      AND pei."deletedAt" IS NULL
+      AND ${notDeleted("pei")}
       AND pei."externalId" = ${normalized})`;
 };

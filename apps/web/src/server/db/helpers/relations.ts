@@ -66,7 +66,7 @@ import {
  * on the same live-edge predicate — the filter, the cell, and the hero
  * disagreeing is the #428 failure mode.
  */
-const productComponentCount = sql<number>`(SELECT count(*) FROM "EntityLink" pc WHERE pc."fromEntityId" = "product"."id" AND pc."deletedAt" IS NULL AND pc."kind" = 'productComponent')`;
+const productComponentCount = sql<number>`(SELECT count(*) FROM "EntityLink" pc WHERE pc."fromEntityId" = "product"."id" AND ${notDeleted("pc")} AND pc."kind" = 'productComponent')`;
 
 /**
  * An expense's parent `project` plus its optionally-linked `product`, same

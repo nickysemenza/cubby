@@ -43,6 +43,7 @@ import { runEntityTimeline } from "~/server/generic/entity-timeline/service/enti
 import { buildIntegrityCatalog } from "~/server/generic/integrity/repo/entity-integrity";
 import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
 import { executeSearchDocumentSql } from "~/server/generic/search/repo/search-document";
+import { liveAliasSqlText } from "~/server/lib/live-row";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { throwIfStartOperationAborted } from "~/server/operation-runtime/start-operation.server";
 
@@ -172,8 +173,8 @@ export const entityInspectorHealthHandlers = implementOperationDomain(
               LEFT JOIN "EntityEmbedding" ee
                 ON ee."entityKind" = sd."entityKind"
                 AND ee."entityId" = sd."entityId"
-                AND ee."deletedAt" IS NULL
-              WHERE sd."deletedAt" IS NULL
+                AND ${liveAliasSqlText("ee")}
+              WHERE ${liveAliasSqlText("sd")}
               GROUP BY sd."entityKind"
             `,
           ),

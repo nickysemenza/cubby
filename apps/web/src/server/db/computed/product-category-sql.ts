@@ -14,6 +14,7 @@ import {
   inheritedFieldSql,
   inheritedSourceSql,
 } from "~/server/db/computed/effective-field";
+import { notDeleted } from "~/server/db/helpers/predicates";
 
 /** Constants below are inlined with `sql.raw` (not `.inlineParams()`): under the
  * relational `extras` API (`db.query.product.findFirst({ extras: {...} })`),
@@ -31,13 +32,13 @@ export const categorySummarySql = (categoryIdExpr: SQL) =>
       SELECT c."id", c."parentId", c."shortcode", c."name", c."feature", 0 AS depth,
              ARRAY[c."id"] AS visited
       FROM "ProductCategory" c
-      WHERE c."id" = ${categoryIdExpr} AND c."deletedAt" IS NULL
+      WHERE c."id" = ${categoryIdExpr} AND ${notDeleted("c")}
       UNION ALL
       SELECT parent."id", parent."parentId", parent."shortcode", parent."name", parent."feature", a.depth + 1,
              a.visited || parent."id"
       FROM ancestors a
       JOIN "ProductCategory" parent ON parent."id" = a."parentId"
-      WHERE parent."deletedAt" IS NULL AND a.depth < ${MAX_ANCESTOR_DEPTH}
+      WHERE ${notDeleted("parent")} AND a.depth < ${MAX_ANCESTOR_DEPTH}
         AND NOT parent."id" = ANY(a.visited)
     )
     SELECT json_build_object(

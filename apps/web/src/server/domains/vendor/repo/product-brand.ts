@@ -13,6 +13,10 @@ import { vendor } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  nameMatchesAnySql,
+  textArraySomeSql,
+} from "~/server/lib/name-alias-match";
 
 export const GENERIC_BRAND_SYSTEM_KEY = "generic-unbranded";
 
@@ -31,7 +35,7 @@ export const parseBrandClaim = (raw: string | null | undefined) => {
 
 /** A live Vendor's trimmed name or any alias equals `name`, case-insensitively. */
 export const vendorNamedSql = (name: string) =>
-  sql`(lower(${trimTextSql(vendor.name)}) = lower(${name}) OR EXISTS (SELECT 1 FROM unnest(${vendor.aliases}) alias WHERE lower(${trimTextSql(sql`alias`)}) = lower(${name})))`;
+  sql`(${nameMatchesAnySql(trimTextSql(vendor.name), [name])} OR ${textArraySomeSql(vendor.aliases, (value) => nameMatchesAnySql(trimTextSql(value), [name]))})`;
 
 /** External evidence names a marketed brand; ordinary domain writes use its reference. */
 export async function resolveProductBrandName(

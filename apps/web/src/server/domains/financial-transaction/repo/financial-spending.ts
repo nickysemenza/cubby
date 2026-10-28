@@ -245,7 +245,7 @@ export async function prepareFinancialSpendingPage(
           await getDb(db).execute<PaymentCandidate>(sql`
         SELECT p.id,p.shortcode,p."displayLabel",p.date,
           round(payment.amount * 100)::text AS "amountKey", payment."chargedAt"::date::text AS "chargedDate"
-        FROM "PurchasePaymentEvidence" payment JOIN "Purchase" p ON p.id=payment."purchaseId" AND p."deletedAt" IS NULL
+        FROM "PurchasePaymentEvidence" payment JOIN "Purchase" p ON p.id=payment."purchaseId" AND ${notDeleted("p")}
         WHERE round(payment.amount * 100) IN (${sql.join(
           amounts.map((amount) => sql`${amount}`),
           sql`, `,
@@ -322,7 +322,7 @@ export async function prepareFinancialSpendingCandidates(
       SpendingCandidate & { vendorId: string }
     >(sql`
       SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId" FROM "Purchase" p
-      WHERE p."deletedAt" IS NULL AND p."vendorId" IN (${sql.join(
+      WHERE ${notDeleted("p")} AND p."vendorId" IN (${sql.join(
         vendorIds.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
@@ -494,7 +494,7 @@ async function loadSpendingGraphs(
     WHERE e."purchaseId" IN (${sql.join(
       ids.map((id) => sql`${id}::uuid`),
       sql`, `,
-    )}) AND e."deletedAt" IS NULL ORDER BY e.id
+    )}) AND ${notDeleted("e")} ORDER BY e.id
   `)
       ).rows
     : [];
@@ -518,7 +518,7 @@ async function loadSpendingGraphs(
         }>(sql`SELECT a."purchaseId", a."transactionId", f.shortcode AS "transactionCode", a.amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
     f.amount AS "transactionAmount", fa."deletedAt" AS "accountDeletedAt",
     (SELECT sum(coverage.amount) FROM "FinancialTransactionAllocation" coverage
-      WHERE coverage."transactionId" = f.id AND coverage."deletedAt" IS NULL) AS "allocatedAmount",
+      WHERE coverage."transactionId" = f.id AND ${notDeleted("coverage")}) AS "allocatedAmount",
     to_jsonb(f) AS transaction, to_jsonb(fa) AS account, to_jsonb(lp) AS owner
     FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" f ON f.id = a."transactionId"
     JOIN "FinancialAccount" fa ON fa.id = f."accountId"
@@ -526,7 +526,7 @@ async function loadSpendingGraphs(
     WHERE a."purchaseId" IN (${sql.join(
       ids.map((id) => sql`${id}::uuid`),
       sql`, `,
-    )}) AND a."deletedAt" IS NULL ORDER BY a."transactionId", a.id
+    )}) AND ${notDeleted("a")} ORDER BY a."transactionId", a.id
   `)
       ).rows
     : [];
@@ -613,13 +613,13 @@ export async function financialSpendingCategoryHistory(
     WITH selected_expenses AS (
       SELECT e.id, e."purchaseId", e."productId", e."spendingCategoryId", e."lineKind"
       FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId"
-      WHERE p."vendorId"=${vendorId} AND p."deletedAt" IS NULL AND e."deletedAt" IS NULL AND NOT e.future
+      WHERE p."vendorId"=${vendorId} AND ${notDeleted("p")} AND ${notDeleted("e")} AND NOT e.future
     ), resolved AS (
       ${effectiveExpenseSpendingCategoriesSql(sql`selected_expenses`)}
     )
     SELECT r."spendingCategoryId" AS category, c.name, count(*)::int AS lines
     FROM resolved r
-    LEFT JOIN "SpendingCategory" c ON c.id=r."spendingCategoryId" AND c."deletedAt" IS NULL
+    LEFT JOIN "SpendingCategory" c ON c.id=r."spendingCategoryId" AND ${notDeleted("c")}
     GROUP BY r."spendingCategoryId", c.name ORDER BY category NULLS FIRST
   `)
   ).rows;
@@ -702,7 +702,7 @@ async function spendingCandidates(
     return (
       await getDb(db)
         .execute<SpendingCandidate>(sql`SELECT p.id, p.shortcode, p."displayLabel", p.date FROM "Purchase" p
-    WHERE p."deletedAt" IS NULL
+    WHERE ${notDeleted("p")}
       AND (p.shortcode = ${input.purchaseId ?? null} OR (p."vendorId" = ${input.vendorId ?? null}::uuid AND ${!input.refund} AND abs(p.date - ${input.date}::date) <= 14) OR EXISTS (
         SELECT 1 FROM "PurchasePaymentEvidence" payment WHERE payment."purchaseId" = p.id
           AND round(payment.amount * 100) = ${input.amount}
@@ -725,7 +725,7 @@ async function spendingCandidates(
     if (!lookup) {
       lookup = getDb(db)
         .execute<SpendingCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date FROM "Purchase" p
-        WHERE p."deletedAt" IS NULL AND p."vendorId"=${input.vendorId}::uuid
+        WHERE ${notDeleted("p")} AND p."vendorId"=${input.vendorId}::uuid
           AND p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14 ORDER BY p.id`)
         .then((result) => result.rows);
       page.vendorCandidates.set(input.vendorId, lookup);
@@ -739,7 +739,7 @@ async function spendingCandidates(
     if (!lookup) {
       lookup = getDb(db)
         .execute<SpendingCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date FROM "Purchase" p
-        WHERE p."deletedAt" IS NULL AND p.shortcode=${input.purchaseId} ORDER BY p.id`)
+        WHERE ${notDeleted("p")} AND p.shortcode=${input.purchaseId} ORDER BY p.id`)
         .then((result) => result.rows);
       page.explicitCandidates.set(input.purchaseId, lookup);
     }

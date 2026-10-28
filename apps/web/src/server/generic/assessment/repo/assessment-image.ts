@@ -4,6 +4,7 @@ import {
   imageDescriptionCorrectionReceipt,
 } from "@cubby/schemas/image-processing";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
@@ -21,7 +22,7 @@ import {
 } from "~/server/db/retained-tables";
 import {
   correctionOperationId,
-  readCorrectionReceipts,
+  indexCorrectionReceipts,
 } from "~/server/generic/assessment/repo/correction-receipt";
 
 /** Shared direct/batch selection verifies automatic effect receipts once per requested page. */
@@ -31,8 +32,10 @@ export async function readImageDescriptionConfirmations(
 ) {
   const ids = "imageIds" in scope ? scope.imageIds : scope.shortcodes;
   if (!ids.length) return [];
+  const correction = alias(feedback, "description_correction_receipt");
   const rows = await getDb(db)
     .select({
+      correctionReceipt: correction,
       assessmentId: assessmentState.id,
       imageId: image.id,
       shortcode: image.shortcode,
@@ -47,6 +50,13 @@ export async function readImageDescriptionConfirmations(
     .from(assessmentState)
     .innerJoin(assessment, eq(assessment.id, assessmentState.id))
     .innerJoin(image, eq(image.id, assessmentState.recordId))
+    .leftJoin(
+      correction,
+      eq(
+        correction.operationId,
+        sql`'correction:' || (${assessmentState.data}->'confirmationOwner'->>'sourceFeedbackId') || ':' || (${assessmentState.data}->'confirmationOwner'->>'targetAssessmentId')`,
+      ),
+    )
     .where(
       and(
         "imageIds" in scope
@@ -56,7 +66,9 @@ export async function readImageDescriptionConfirmations(
       ),
     )
     .orderBy(desc(assessmentState.updatedAt));
-  const prepared = rows.flatMap((row) => {
+  const prepared = [
+    ...new Map(rows.map((row) => [row.assessmentId, row])).values(),
+  ].flatMap((row) => {
     const ownership = z
       .object({
         confirmationOwner: imageDescriptionConfirmationOwner.optional(),
@@ -76,7 +88,12 @@ export async function readImageDescriptionConfirmations(
         ]
       : [],
   );
-  const receipts = await readCorrectionReceipts(db, automatic);
+  const receipts = indexCorrectionReceipts(
+    automatic,
+    rows.flatMap((row) =>
+      row.correctionReceipt ? [row.correctionReceipt] : [],
+    ),
+  );
   return prepared.filter((row) => {
     if (row.owner?.kind !== "correction") return true;
     const found = receipts.get(

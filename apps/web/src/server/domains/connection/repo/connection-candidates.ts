@@ -2,7 +2,7 @@ import type { EntityRef } from "@cubby/schemas/entity";
 import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { manufacturerSource } from "@cubby/schemas/external-id";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -10,7 +10,7 @@ import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import type { Database } from "~/server/db";
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import { getDb, ilikeContains, notDeleted } from "~/server/db/helpers";
 import { outer, quotedTable, related } from "~/server/db/helpers/related";
 import {
   entityLink,
@@ -95,7 +95,8 @@ export async function retrieveConnectionCandidates(
           eq(expense.lineKind, "principal"),
           expenseAcquisitionPairPredicate(sql`true`),
           sql`NOT ${classificationPolicySql("spendingCategory.productExpectation", "productId", "not_allowed", effectiveExpenseSpendingCategorySql(quotedTable(expense)))}`,
-          sql`${item.name.trim().length >= 4} AND position(lower(${item.name.trim()}) in lower(${expense.name})) > 0`,
+          sql`${item.name.trim().length >= 4}`,
+          ilike(expense.name, ilikeContains(item.name.trim())),
         ),
       )
       .orderBy(expense.date, expense.id)

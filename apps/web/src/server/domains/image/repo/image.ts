@@ -82,6 +82,11 @@ import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { deleteStoredObjects } from "~/server/clients/s3";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
+  type ImageReadScope,
+  imageScopeEmpty,
+  imageScopeSql,
+} from "~/server/db/computed/image-read-scope";
+import {
   edgeScopeWhere,
   INCOMING_EDGES,
   type IncomingEdge,
@@ -713,20 +718,18 @@ function isGardenEntryAssociationKindLabel(
  * for a whole page rather than one join per row. */
 async function loadCapturedByParties(
   db: Database | DrizzleTransaction,
-  partyIds: readonly (LedgerPartyId | null)[],
+  imageIds: readonly string[],
 ): Promise<Map<LedgerPartyId, { shortcode: string; name: string }>> {
-  const ids = [
-    ...new Set(partyIds.filter((id): id is LedgerPartyId => id !== null)),
-  ];
-  if (ids.length === 0) return new Map();
+  if (!imageIds.length) return new Map();
   const rows = await unwrapDb(db)
     .select({
       id: ledgerParty.id,
       shortcode: ledgerParty.shortcode,
       name: ledgerParty.name,
     })
-    .from(ledgerParty)
-    .where(and(inArray(ledgerParty.id, ids), notDeleted(ledgerParty)));
+    .from(image)
+    .innerJoin(ledgerParty, eq(ledgerParty.id, image.capturedByPartyId))
+    .where(and(inArray(image.id, [...imageIds]), notDeleted(ledgerParty)));
   return new Map(rows.map((row) => [row.id, row]));
 }
 
@@ -1313,10 +1316,10 @@ const requestedRunIds = (
  */
 const loadImportTargets = async (
   db: Database | DrizzleTransaction,
-  imageShortcodes: readonly string[],
+  imageShortcodes: ImageReadScope,
 ): Promise<Map<string, ImportTargetSummary>> => {
-  const shortcodes = [...new Set(imageShortcodes)];
-  if (shortcodes.length === 0) return new Map();
+  const shortcodes = imageShortcodes;
+  if (imageScopeEmpty(shortcodes)) return new Map();
   const rows = await unwrapDb(db)
     .select({
       imageShortcode: image.shortcode,
@@ -1328,7 +1331,7 @@ const loadImportTargets = async (
     .from(photoRunImage)
     .innerJoin(runTable, eq(runTable.id, photoRunImage.runId))
     .innerJoin(image, eq(image.id, photoRunImage.imageId))
-    .where(inArray(image.shortcode, shortcodes))
+    .where(imageScopeSql(shortcodes))
     .orderBy(desc(photoRunImage.createdAt));
   const byImage = new Map<string, ImportTargetSummary>();
   for (const row of rows) {
@@ -1374,38 +1377,21 @@ export const imageScaffold = listScaffold("image", image, {
       const attachments = bind.ids(({ db, ids }) =>
         loadImageAttachments(db, ids),
       );
-      const representations = bind.batch(({ db, rows }) =>
-        loadImageRepresentations(
-          db,
-          rows.map((row) => row.shortcode),
-        ),
+      const representations = bind.ids(({ db, ids }) =>
+        loadImageRepresentations(db, { imageIds: ids }),
       );
       // The derived expression qualifies its subqueries by the bare image
       // columns, which a single-table select would bind to the job alias.
-      const issues = bind.batch(({ db, rows }) =>
-        loadImageProcessingIssues(
-          db,
-          rows.map((row) => row.shortcode),
-        ),
+      const issues = bind.ids(({ db, ids }) =>
+        loadImageProcessingIssues(db, { imageIds: ids }),
       );
-      const targets = bind.batch(({ db, rows }) =>
-        loadImportTargets(
-          db,
-          rows.map((row) => row.shortcode),
-        ),
+      const targets = bind.ids(({ db, ids }) =>
+        loadImportTargets(db, { imageIds: ids }),
       );
-      const analyses = bind.batch(({ db, rows }) =>
-        loadImageAnalysisSummaries(
-          db,
-          rows.map((row) => row.shortcode),
-        ),
+      const analyses = bind.ids(({ db, ids }) =>
+        loadImageAnalysisSummaries(db, { imageIds: ids }),
       );
-      const parties = bind.batch(({ db, rows }) =>
-        loadCapturedByParties(
-          db,
-          rows.map((row) => row.capturedByPartyId),
-        ),
-      );
+      const parties = bind.ids(({ db, ids }) => loadCapturedByParties(db, ids));
       const sightings = bind.ids(({ db, ids }) => listImageSightings(db, ids));
       return [
         bind(
@@ -2648,7 +2634,7 @@ const missingSearchDocumentWhere = and(
   sql`NOT EXISTS (
     SELECT 1 FROM "SearchDocument" sd
     WHERE sd."entityKind" = ${searchableEntitySchema.enum.image} AND sd."entityId" = ${sql.raw('"Image"."id"')}
-      AND sd."deletedAt" IS NULL
+      AND ${notDeleted("sd")}
   )`,
 );
 

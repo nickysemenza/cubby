@@ -16,7 +16,7 @@ import { z } from "zod";
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
-import { actualExpenseSql } from "~/server/db/helpers/predicates";
+import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { emailScaffold } from "~/server/domains/email/repo/email";
 import { productScaffold } from "~/server/domains/product/repo/crud";
 import { sourceTransactionRecordScaffold } from "~/server/domains/transaction-import/repo/entity-repositories";
@@ -42,9 +42,9 @@ export async function productSellersReport(
     SELECT v."shortcode" AS id, v."name", count(DISTINCT p."id")::int AS count, count(*) OVER ()::int AS "sellerCount",
       max(p."date")::text AS "lastPurchase"
     FROM "Expense" e
-    JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
-    JOIN "Vendor" v ON v."id" = p."vendorId" AND v."deletedAt" IS NULL
-    WHERE e."productId" = ${productId} AND e."deletedAt" IS NULL AND ${sql.raw(actualExpenseSql("e"))}
+    JOIN "Purchase" p ON p."id" = e."purchaseId" AND ${notDeleted("p")}
+    JOIN "Vendor" v ON v."id" = p."vendorId" AND ${notDeleted("v")}
+    WHERE e."productId" = ${productId} AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
     GROUP BY v."id", v."shortcode", v."name"
     ORDER BY count(DISTINCT p."id") DESC, max(p."date") DESC NULLS LAST, v."shortcode" ASC
     LIMIT 3
@@ -394,19 +394,19 @@ async function serviceChargesSummary(
         sum(e."cost")::double precision AS spent
         , avg(e."cost") FILTER (WHERE e."cost" > 0)::double precision AS average
       FROM "Expense" e
-      WHERE e."productId" = ${productId} AND e."deletedAt" IS NULL AND ${sql.raw(actualExpenseSql("e"))}
+      WHERE e."productId" = ${productId} AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
     `),
     unwrapDb(db).execute(sql`
       SELECT e."shortcode" AS id, e."date"::text AS date, e."cost"::double precision AS cost
       FROM "Expense" e
-      WHERE e."productId" = ${productId} AND e."deletedAt" IS NULL AND ${sql.raw(actualExpenseSql("e"))}
+      WHERE e."productId" = ${productId} AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
       ORDER BY e."date" DESC NULLS LAST, e."id" DESC
       LIMIT 12
     `),
     unwrapDb(db).execute(sql`
       SELECT e."shortcode" AS id, e."date"::text AS date, e."cost"::double precision AS cost
       FROM "Expense" e
-      WHERE e."productId" = ${productId} AND e."deletedAt" IS NULL AND ${sql.raw(actualExpenseSql("e"))}
+      WHERE e."productId" = ${productId} AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
         AND e."date" IS NOT NULL AND e."cost" > 0
       ORDER BY e."date" DESC, e."id" DESC
       LIMIT 1

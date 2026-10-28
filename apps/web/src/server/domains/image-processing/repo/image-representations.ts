@@ -3,6 +3,10 @@ import { and, asc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
+import {
+  type ImageReadScope,
+  imageScopeSql,
+} from "~/server/db/computed/image-read-scope";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   entityAttachment,
@@ -19,7 +23,7 @@ export const imageRepresentationRow = z.object({
 
 /** The same ready/current-hash policy serves standalone and embedded media reads. */
 export function imageRepresentationRowsSql(
-  source: readonly string[] | { attachedTo: SQL },
+  source: ImageReadScope | { attachedTo: SQL },
   revisions: readonly number[],
 ): SQL {
   const matching =
@@ -28,7 +32,7 @@ export function imageRepresentationRowsSql(
         SELECT ${entityAttachment.imageId} FROM ${entityAttachment}
         WHERE ${entityAttachment.entityId} = ${source.attachedTo}
           AND ${notDeleted(entityAttachment)})`
-      : inArray(image.shortcode, [...new Set(source)]);
+      : imageScopeSql(source);
   return sql`
     SELECT ${image.shortcode} AS shortcode, ${image.key} AS key,
       ${image.useOriginal} AS "useOriginal", ${imageDerivative.key} AS "derivativeKey"

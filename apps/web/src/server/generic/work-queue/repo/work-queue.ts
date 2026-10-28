@@ -29,6 +29,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, ilikeContains } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
@@ -285,7 +286,7 @@ async function queryWorkQueue(
     )}
     members AS (
       SELECT id, shortcode, name FROM "LedgerParty"
-      WHERE kind = ${ledgerPartyKind.enum.member} AND "deletedAt" IS NULL
+      WHERE kind = ${ledgerPartyKind.enum.member} AND ${notDeleted("LedgerParty")}
     ),
     work AS MATERIALIZED (${union}),
     routed AS MATERIALIZED (

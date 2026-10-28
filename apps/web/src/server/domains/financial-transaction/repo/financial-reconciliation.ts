@@ -14,6 +14,7 @@ import { cents } from "@cubby/shared";
 import { sql, type SQL } from "drizzle-orm";
 
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { related } from "~/server/db/helpers/related";
 import {
   expense,
@@ -22,6 +23,7 @@ import {
 } from "~/server/db/schema";
 import { purchaseListsItemsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import type { PurchaseFinancialAggregate } from "~/server/domains/purchase/repo/purchase-financial-aggregates";
+import { liveAliasSqlText } from "~/server/lib/live-row";
 
 /**
  * The settlement-side aggregate every caller gets verbatim from
@@ -142,20 +144,20 @@ const purchaseFinancialComparisonTotal = (purchaseId: SQL) =>
     SELECT 1
     FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-    WHERE a."purchaseId" = ${purchaseId} AND a."deletedAt" IS NULL
-      AND ft."deletedAt" IS NULL AND ft."kind" IN (${settlementKindList})
+    WHERE a."purchaseId" = ${purchaseId} AND ${notDeleted("a")}
+      AND ${notDeleted("ft")} AND ft."kind" IN (${settlementKindList})
       AND ft."status" IN (${status.expected}, ${status.pending})
   ) THEN (
     SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-    WHERE a."purchaseId" = ${purchaseId} AND a."deletedAt" IS NULL
-      AND ft."deletedAt" IS NULL AND ft."kind" IN (${settlementKindList})
+    WHERE a."purchaseId" = ${purchaseId} AND ${notDeleted("a")}
+      AND ${notDeleted("ft")} AND ft."kind" IN (${settlementKindList})
       AND ft."status" <> ${status.void}
   ) ELSE (
     SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-    WHERE a."purchaseId" = ${purchaseId} AND a."deletedAt" IS NULL
-      AND ft."deletedAt" IS NULL AND ft."kind" IN (${settlementKindList})
+    WHERE a."purchaseId" = ${purchaseId} AND ${notDeleted("a")}
+      AND ${notDeleted("ft")} AND ft."kind" IN (${settlementKindList})
       AND ft."status" = ${status.posted}
   ) END)`;
 
@@ -172,8 +174,8 @@ const purchaseFinancialMismatchRaw = (purchaseId: SQL) => sql`
     FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
     WHERE a."purchaseId" = ${purchaseId}
-      AND a."deletedAt" IS NULL
-      AND ft."deletedAt" IS NULL
+      AND ${notDeleted("a")}
+      AND ${notDeleted("ft")}
       AND ft."kind" IN (${settlementKindList})
       AND ft."status" <> ${status.void}
   )
@@ -227,17 +229,17 @@ export const financialTransactionItemizationSql = (
           JOIN "FinancialTransaction" iz_ft ON iz_ft."id" = iz_o."transactionId"
           WHERE iz_o."purchaseId" = iz_p."id"
             AND iz_o."transactionId" <> ${sql.raw(transactionIdRef)}
-            AND iz_o."deletedAt" IS NULL
-            AND iz_ft."deletedAt" IS NULL
+            AND ${notDeleted("iz_o")}
+            AND ${notDeleted("iz_ft")}
             AND iz_ft."kind" IN (${sql.raw(purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", "))})
             AND iz_ft."status" <> ${financialTransactionStatus.enum.void}
         ) AS shared,
         ${purchaseListsItemsSql("iz_p")} AS itemized,
         COALESCE(${purchaseFinancialMismatch(sql`iz_p."id"`)}, false) AS mismatch
       FROM "FinancialTransactionAllocation" iz_a
-      JOIN "Purchase" iz_p ON iz_p."id" = iz_a."purchaseId" AND iz_p."deletedAt" IS NULL
+      JOIN "Purchase" iz_p ON iz_p."id" = iz_a."purchaseId" AND ${notDeleted("iz_p")}
       WHERE iz_a."transactionId" = ${sql.raw(transactionIdRef)}
-        AND iz_a."deletedAt" IS NULL
+        AND ${notDeleted("iz_a")}
     ) iz)`;
 };
 
@@ -304,13 +306,13 @@ export const settlementReferencePredicate = (
      AND ${ftxAlias}."kind" IN (${purchaseSettlementKinds
        .map((kind) => `'${kind}'`)
        .join(", ")})
-     AND ${accountAlias}."deletedAt" IS NULL
+     AND ${liveAliasSqlText(accountAlias)}
      AND (
        EXISTS (
          SELECT 1 FROM "EntityExternalId" settlement_ref
          WHERE settlement_ref."entityId" = ${ftxAlias}."id"
            AND settlement_ref."kind" = 'settlement_ref'
-           AND settlement_ref."deletedAt" IS NULL
+           AND ${liveAliasSqlText("settlement_ref")}
        )
        OR ${accountAlias}."identity"->>'kind' = 'cash'
      )`;
