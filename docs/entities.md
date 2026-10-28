@@ -2800,6 +2800,11 @@ never part of public web, Apple or MCP reads. A `storedPath` supplies the defaul
 unscoped live comparison; contextual projections without one report that a
 standalone comparison is unavailable.
 
+Direct nullable stored fields use the generic `storedPath` reader. An explicit
+raw binding replaces that default only when it must supply a required raw shape
+or contextual presentation; two explicit writers still fail admission. Raw
+placeholders never establish publication availability in the public envelope.
+
 Deferred source fanout is real queued work even before its dependent record
 endpoints have been expanded. Page metadata conservatively marks snapshots for
 that declared target stale/pending while such fanout exists. The target lookup

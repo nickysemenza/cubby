@@ -883,11 +883,8 @@ export const productScaffold = listScaffold<
           rawProductList.pick({
             pricing: true,
             fieldResolutions: true,
-            primaryPlacement: true,
             quantityLedger: true,
-            onHandUnits: true,
             quantityVariance: true,
-            stockStatus: true,
             stockStatusItems: true,
             ledgerExpectedQuantityLabel: true,
             quantityVarianceLabel: true,
@@ -914,11 +911,8 @@ export const productScaffold = listScaffold<
             return {
               pricing,
               fieldResolutions,
-              primaryPlacement: snapshot?.primaryPlacement ?? null,
               quantityLedger,
-              onHandUnits: snapshot?.onHandUnits ?? null,
               quantityVariance: snapshot?.quantityVariance ?? null,
-              stockStatus: snapshot?.stockStatus ?? null,
               stockStatusItems: snapshot?.stockStatusItems ?? [],
               ledgerExpectedQuantityLabel:
                 service || !snapshot
