@@ -190,7 +190,8 @@ export function loadPageStoredMeta(
     .filter(
       (declaration) =>
         declaration.entity === entity &&
-        declaration.publishes === "derivedValue",
+        (declaration.publishes === "derivedValue" ||
+          declaration.recordSource !== null),
     )
     .map((declaration) => declaration.key);
   return loadStoredDerived(db, entity, ids, keys);

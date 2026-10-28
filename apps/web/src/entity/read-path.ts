@@ -1,4 +1,8 @@
-import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
+import {
+  fieldEnvelopeFor,
+  fieldValueOf,
+  type ReadableFieldEnvelope,
+} from "@cubby/schemas/field-envelope";
 import { util } from "zod/v4/core";
 
 /**
@@ -60,4 +64,39 @@ function walk(value: unknown, steps: readonly Step[]): unknown {
 // oxlint-disable-next-line anti-slop/no-unknown-parameters, anti-slop/no-unknown-returns -- The projection boundary: rows in, an unparsed value out for the scalar reader to parse.
 export function readPathValue(record: unknown, path: string): unknown {
   return walk(record, parseSteps(path));
+}
+
+/** A child projection retains its parent's publication, never its edit authority. */
+export function fieldEnvelopeAtPath(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Canonical row projection boundary.
+  record: unknown,
+  path: string,
+): ReadableFieldEnvelope | undefined {
+  const direct = fieldEnvelopeFor(record, path);
+  if (direct) return direct;
+  const first = parseSteps(path)[0];
+  const parent =
+    first?.kind === "key" ? fieldEnvelopeFor(record, first.key) : undefined;
+  if (!parent) return undefined;
+  const value = readPathValue(record, path);
+  return {
+    current: {
+      assignment: null,
+      controls: { kind: "readonly", reason: "computed" },
+    },
+    result:
+      parent.result.kind === "missing" || value === undefined
+        ? { kind: "missing" }
+        : {
+            ...parent.result,
+            decision: {
+              provenance: parent.result.decision.provenance,
+              outcome:
+                value === null
+                  ? { kind: "empty", reason: "unset" }
+                  : { kind: "value", value },
+            },
+          },
+    work: parent.work,
+  };
 }

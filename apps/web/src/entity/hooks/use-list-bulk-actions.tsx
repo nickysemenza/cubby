@@ -74,6 +74,7 @@ export function useListBulkActions<TData extends { id: string }>({
         ? verbBulkAction<TData>("inspect", {
             maxSelection: 1,
             preserveSelection: true,
+            recordDemand: "identity",
             onExecute: async (rows) => {
               const selected = rows[0];
               if (!selected) return { success: false };
@@ -221,7 +222,11 @@ export function ListBulkActionBar<TData extends { id: string }>({
       }
       selectionIncomplete={requiresResolution}
       onExecute={async (action, rows) => {
-        if (!requiresResolution) return state.executeAction(action, rows);
+        if (
+          !requiresResolution ||
+          (!incomplete && action.recordDemand === "identity")
+        )
+          return state.executeAction(action, rows);
         if (!resolveSelectedRows) return;
         const snapshot = selectionKey;
         setIsResolving(true);

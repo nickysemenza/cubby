@@ -581,7 +581,7 @@ Rules:
           explanation: {
             ruleId: "location.direct-valuation",
             description:
-              "Location valuation rolls up canonical inventory values; the list shows direct contents and the detail valuation includes descendant locations.",
+              "The published valuation rolls up inventory values; the list shows direct contents and the detail valuation includes descendant locations.",
             resolver: "locationValuation",
             projections: {
               list: "valuation.directValuation",
@@ -589,20 +589,30 @@ Rules:
               summary: "valuation.directValuation",
             },
             sourceDependencies: [
-              { path: "valuation.directItemCount", label: "Direct item count" },
               {
-                path: "valuation.directPricedCount",
+                path: "storedResult.directItemCount",
+                label: "Direct item count",
+              },
+              {
+                path: "storedResult.direct.priced",
                 label: "Priced direct items",
               },
               {
-                path: "valuation.directUnpricedCount",
-                label: "Unpriced direct items",
+                path: "storedResult.direct.missingPricing",
+                label: "Direct items missing pricing",
               },
               {
-                path: "valuation.totalItemCount",
+                path: "storedResult.direct.miscNoPrice",
+                label: "Direct miscellaneous items without price",
+              },
+              {
+                path: "storedResult.totalItemCount",
                 label: "Total rolled-up item count",
               },
-              { path: "valuation.total", label: "Rolled-up pricing coverage" },
+              {
+                path: "storedResult.total",
+                label: "Rolled-up pricing coverage",
+              },
             ],
           },
           validation: {

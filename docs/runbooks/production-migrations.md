@@ -160,6 +160,16 @@ not performed; migration success alone is not deployment verification.
 
 ## Derived values cutover
 
+### Recipe publication identity (0056)
+
+`0056_recipe_publication` adds a retained publication timestamp independently of
+Recipe's null-as-stale nutrition marker. Known fresh timestamps are copied;
+unknown legacy timestamps are never invented. Stored totals remain intact, and
+active Recipes without a publication identity are marked through the existing
+ticketed drain. The Recipe trigger ignores its own publication timestamp.
+After authorized deployment, verify retained totals, pending work, subsequent
+publication, and strict stale-nutrition reads separately.
+
 ### Product facts and prefix index (0054)
 
 0054 adds the WorkItem prefix index, Product fact/food invalidation and initial

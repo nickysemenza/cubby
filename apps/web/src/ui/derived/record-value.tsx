@@ -1,4 +1,8 @@
-import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
+import {
+  fieldEnvelopeFor,
+  fieldValueOf,
+  type ReadableFieldEnvelope,
+} from "@cubby/schemas/field-envelope";
 import { parseShortcode } from "@cubby/shared";
 import { type ReactNode, useContext } from "react";
 
@@ -38,15 +42,19 @@ function semanticChangeValue(value: unknown): ValueChange["value"] {
 export function FieldRecordValue({
   record,
   field,
+  resolution,
   children,
 }: {
   record: unknown;
   field: string;
+  resolution?: ReadableFieldEnvelope | null;
   children: ReactNode;
 }) {
   const scope = useContext(ValueChangeScope);
   const envelope =
-    fieldEnvelopeFor(record, field) ?? fieldEnvelopeFor(record, `${field}Id`);
+    resolution ??
+    fieldEnvelopeFor(record, field) ??
+    fieldEnvelopeFor(record, `${field}Id`);
   const property = (key: string) => {
     if (typeof record !== "object" || record === null || Array.isArray(record))
       return undefined;

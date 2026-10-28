@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { entitySchema, type Entity } from "./entity-core";
+import type { Entity } from "./entity-core";
 import { entityRoster } from "./generated/entity-roster.gen";
 import { ENTITY_KEYS } from "@cubby/shared/entity-keys";
 
@@ -45,16 +45,8 @@ export const entityImageOf = (entity: ImageEntity): EntityImage =>
 export const entityRefKey = (entity: Entity, id: string): string =>
   `${entity}:${id}`;
 
-export const entityRefFields = {
-  entityKind: entitySchema,
-  entityId: z.string(),
-};
-
-/**
- * General/public reference shape. `entityId` is intentionally a string: it can
- * carry a public shortcode and the roster includes non-local `usda-food`.
- * Internal UUID-only references use the correlated `EntityRef` from
- * `@cubby/schemas/identifiers` instead.
- */
-export const entityRefSchema = z.object(entityRefFields);
-export type EntityRef = z.infer<typeof entityRefSchema>;
+export {
+  entityRefFields,
+  entityRefSchema,
+  type EntityRef,
+} from "./entity-core";

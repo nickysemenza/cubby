@@ -326,7 +326,7 @@ export const { definition, readSchemas } = defineEntityModel(
               summary: "totals.cost",
             },
             sourceDependencies: [
-              { path: "totals.cost", label: "Computed cost result" },
+              { path: "storedResult.cost", label: "Published cost result" },
             ],
           },
         },
@@ -355,8 +355,8 @@ export const { definition, readSchemas } = defineEntityModel(
             },
             sourceDependencies: [
               {
-                path: "totals.nutrition.kcal",
-                label: "Computed calorie result",
+                path: "storedResult.nutrition.kcal",
+                label: "Published calorie result",
               },
             ],
           },
@@ -503,6 +503,8 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         {
           key: "totals",
+          storedKey: "totals",
+          storedProjection: true,
           kind: "json",
           nullable: true,
           display: { list: false, detailLabelPath: "totalsLabel" },
@@ -513,7 +515,7 @@ export const { definition, readSchemas } = defineEntityModel(
             resolver: "recipeTotals",
             readPath: "totals",
             sourceDependencies: [
-              { path: "totals", label: "Computed recipe totals" },
+              { path: "storedResult", label: "Published recipe totals" },
             ],
           },
           validation: {
@@ -714,6 +716,12 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         {
           output: false,
+          key: "totalsPublishedAt",
+          kind: "timestamp",
+          nullable: true,
+        },
+        {
+          output: false,
           key: "activeMinutes",
           kind: "number",
           nullable: true,
@@ -806,6 +814,7 @@ export const { definition, readSchemas } = defineEntityModel(
           },
         },
         "totalsComputedAt",
+        "totalsPublishedAt",
         "activeMinutes",
         "totalMinutes",
         {
@@ -822,6 +831,11 @@ export const { definition, readSchemas } = defineEntityModel(
       stored: {
         totals: {
           compute: "recipe.totals",
+          recordSource: {
+            value: "totals",
+            computedAt: "totalsPublishedAt",
+            freshAt: "totalsComputedAt",
+          },
           inputs: [
             {
               table: "EntityExternalId",
@@ -877,7 +891,7 @@ export const { definition, readSchemas } = defineEntityModel(
               table: "Recipe",
               match: { id: "id" },
               // Its own output: publishing totals must not re-mark them.
-              except: ["totals", "totalsComputedAt"],
+              except: ["totals", "totalsComputedAt", "totalsPublishedAt"],
             },
             // A deleted sub-recipe publishes no totals, so mark its parents from the source row.
             {

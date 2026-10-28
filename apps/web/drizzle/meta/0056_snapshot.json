@@ -1,6 +1,6 @@
 {
-  "id": "4055f7fe-1828-4395-b809-7153ce634d96",
-  "prevId": "d787b45b-b3c3-42fa-95c4-10d0c2d83e6c",
+  "id": "b7a73a83-4d22-4cca-8910-eaf13d2a07d7",
+  "prevId": "4055f7fe-1828-4395-b809-7153ce634d96",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -17442,6 +17442,12 @@
         },
         "totalsComputedAt": {
           "name": "totalsComputedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "totalsPublishedAt": {
+          "name": "totalsPublishedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false

@@ -41,6 +41,7 @@ import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
 import { fieldExplanationContract } from "~/contracts/field-explanation.contract";
+import { fieldEnvelopeAtPath } from "~/entity/read-path";
 import { storedDerived } from "~/server/db/derived-declarations";
 import { readCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
@@ -655,6 +656,55 @@ async function loadCurrentQualityControls(
   ).checks;
 }
 
+/** Resolve the publication owner inside the explanation's existing MVCC snapshot. */
+async function loadPublishedExplanationFacts({
+  db,
+  entity,
+  internalId,
+  projection,
+  path,
+  fieldKey,
+  storedKey,
+}: {
+  db: Parameters<typeof loadStoredDerived>[0];
+  entity: Entity;
+  internalId: string | null;
+  projection: JsonRecord;
+  path: string;
+  fieldKey: string;
+  storedKey: string | null | undefined;
+}) {
+  const rootKey = path.split(/[.[]/u, 1)[0];
+  const rootField = entityFieldModels[entity].fields.find(
+    (candidate) => candidate.key === rootKey || candidate.readKey === rootKey,
+  );
+  const key = storedKey ?? rootField?.storedKey ?? fieldKey;
+  const declaration = storedDerived(entity, key);
+  if (declaration?.recordSource) {
+    const root = rootKey ? fieldEnvelopeFor(projection, rootKey) : undefined;
+    return {
+      declaration,
+      storedResult:
+        root?.result.kind === "cached"
+          ? {
+              resultExists: true,
+              value: fieldValueOf(root),
+              computedAt: root.result.computedAt,
+            }
+          : undefined,
+    };
+  }
+  return {
+    declaration,
+    storedResult:
+      internalId && declaration
+        ? (await loadStoredDerived(db, entity, [internalId], [key]))
+            .get(internalId)
+            ?.get(key)
+        : undefined,
+  };
+}
+
 async function loadExplanationSnapshot(
   context: EntityKernelContext,
   input: ExplainFieldInput,
@@ -707,10 +757,17 @@ async function loadExplanationSnapshot(
     const field = entityFieldModels[entity].fields.find(
       (candidate) => candidate.key === fieldKey,
     );
-    const currentEnvelope = fieldEnvelopeFor(
-      projection,
-      field?.readKey ?? fieldKey,
-    );
+    const declaredExplanation = explanationMetadata
+      .nullish()
+      .parse(field?.explanation);
+    const path =
+      field && declaredExplanation
+        ? projectionPath(field, declaredExplanation, input.surface)
+        : (field?.readKey ?? fieldKey);
+    const currentEnvelope =
+      fieldEnvelopeFor(projection, path) ??
+      fieldEnvelopeFor(projection, field?.readKey ?? fieldKey) ??
+      fieldEnvelopeAtPath(projection, path);
     const publicationOnly =
       (currentEnvelope !== undefined &&
         currentEnvelope.result.kind !== "live") ||
@@ -765,20 +822,15 @@ async function loadExplanationSnapshot(
             internalId,
           )
         : null;
-    const storedKey = field?.storedKey ?? fieldKey;
-    const storedResult =
-      internalId && storedDerived(entity, storedKey)
-        ? (
-            await loadStoredDerived(
-              snapshotDb,
-              entity,
-              [internalId],
-              [storedKey],
-            )
-          )
-            .get(internalId)
-            ?.get(storedKey)
-        : undefined;
+    const { declaration, storedResult } = await loadPublishedExplanationFacts({
+      db: snapshotDb,
+      entity,
+      internalId,
+      projection,
+      path,
+      fieldKey,
+      storedKey: field?.storedKey,
+    });
     const resetPreview =
       internalId &&
       currentEnvelope?.current.controls.kind === "editable" &&
@@ -815,7 +867,7 @@ async function loadExplanationSnapshot(
           : {
               ...sourceProjection,
               // A declared snapshot can be unavailable while current live inputs decide a value.
-              ...(field?.storedKey ? { storedResult: null } : {}),
+              ...(declaration ? { storedResult: null } : {}),
             },
       comparison,
       qualityBreakdown:
@@ -1146,7 +1198,8 @@ export async function explainField(
     !z.enum(scoredEntities).safeParse(entity).success;
   const displayedEnvelope =
     fieldEnvelopeFor(projection, path) ??
-    fieldEnvelopeFor(projection, field.readKey ?? field.key);
+    fieldEnvelopeFor(projection, field.readKey ?? field.key) ??
+    fieldEnvelopeAtPath(projection, path);
   if (!resolved.found && !unscoredQuality && !displayedEnvelope)
     throw new Error(`Explanation projection does not expose ${path}`);
   let envelope =

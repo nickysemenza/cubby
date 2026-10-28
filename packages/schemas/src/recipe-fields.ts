@@ -144,6 +144,7 @@ export function recipeReadSchemas<
     protein: z.ZodType;
     carbs: z.ZodType;
     fat: z.ZodType;
+    storedProjectionVersions: z.ZodType;
   },
 >(base: z.ZodObject<S>) {
   const output = base.extend({ sections: recipeSectionsOut });
@@ -157,6 +158,7 @@ export function recipeReadSchemas<
     carbs: field("carbs"),
     fat: field("fat"),
     totals: recipeTotals.nullish(),
+    storedProjectionVersions: field("storedProjectionVersions"),
     // Server-composed text for the computed Cost, Calories and Time columns.
     costTotalLabel: listLabel,
     caloriesTotalLabel: listLabel,

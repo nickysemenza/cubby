@@ -39,6 +39,8 @@ export interface BulkAction<TData extends RowData> {
    * is what makes them re-tick every row to copy a second thing.
    */
   preserveSelection?: boolean;
+  /** Identity-only navigation can use roster rows; mutations default to complete records. */
+  recordDemand?: "identity" | "complete";
   /**
    * Resolve visibility and eligibility against the complete selected row set.
    * A disabled action stays visible with its reason; callers must never narrow

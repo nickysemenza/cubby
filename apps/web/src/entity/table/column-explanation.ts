@@ -1,4 +1,5 @@
 import type { EntityRef } from "@cubby/schemas/entity";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import { parseShortcode } from "@cubby/shared";
 import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
@@ -31,11 +32,23 @@ export const resolveColumnExplanation = <TData>(
   explanation: ColumnExplanation | RowColumnExplanation<TData> | undefined,
   row: TData,
   columnId?: string,
+  surface: "list" | "summary" = "list",
 ): ColumnExplanation | undefined => {
-  if (explanation)
-    return "resolve" in explanation ? explanation.resolve(row) : explanation;
   const identity = rowIdentitySchema.safeParse(row);
   const parsed = identity.success ? parseShortcode(identity.data.id) : null;
-  if (!parsed || !columnId) return undefined;
-  return declaredColumnExplanation(queryClient, parsed.type, columnId);
+  const resolved = explanation
+    ? "resolve" in explanation
+      ? explanation.resolve(row)
+      : explanation
+    : parsed && columnId
+      ? declaredColumnExplanation(queryClient, parsed.type, columnId)
+      : undefined;
+  if (!resolved) return undefined;
+  const field: EntityFieldModel["fields"][number] | undefined = entityMetadata(
+    queryClient,
+    resolved.entity,
+  ).fields.fields.find((candidate) => candidate.key === resolved.field);
+  const path =
+    field?.explanation?.projections?.[surface] ?? field?.explanation?.readPath;
+  return path ? { ...resolved, path } : resolved;
 };

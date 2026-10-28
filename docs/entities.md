@@ -2223,6 +2223,9 @@ An entity route with specialist columns opts in through its declaration's
 pure plan shares the discard, stock and specialist column dependencies with their
 owners. Selection-action validation reloads complete records under the original
 scope before acting. Selecting a nested value retains its canonical nested shape.
+Identity-only navigation declares `recordDemand: "identity"`; loaded roster rows
+can open Inspect without a complete-record request. Eligibility and mutation
+actions retain the complete-record default.
 
 List inputs default `includeCount` to true for API, MCP and native callers.
 Standalone browser rosters send `includeCount: false`: selection fetches at most
@@ -2882,6 +2885,17 @@ never part of public web, Apple or MCP reads. A `storedPath` supplies the defaul
 unscoped live comparison; contextual projections without one report that a
 standalone comparison is unavailable.
 
+An own-table result stored on the entity row declares `recordSource` with its
+payload and publication timestamp columns. The page reader takes both from the
+same base row and combines them with existing pending/error metadata. An optional
+`freshAt` column may independently invalidate decision freshness. Recipe retains
+`totalsPublishedAt` through invalidation while nulling `totalsComputedAt`; ordinary
+browsing keeps the last totals, while strict nutrition consumers still require
+the freshness marker. Nested cost/calorie projections inherit that publication
+identity and status without inheriting edit controls. Legacy totals without a
+trustworthy publication time remain unavailable until the existing drain replaces
+them; the migration preserves their stored payload.
+
 Direct nullable stored fields use the generic `storedPath` reader. An explicit
 raw binding replaces that default only when it must supply a required raw shape
 or contextual presentation; two explicit writers still fail admission. Raw
@@ -2948,6 +2962,12 @@ controls remain explicitly separate from that evidence. Additional evidence not
 captured in the publication is unavailable rather than reconstructed from current
 sources. Expense beneficiary portions use this binding to keep
 contributor references out of ordinary list payloads.
+
+Inventory ownership publications capture their already-resolved precedence steps,
+using public party references. Older publications remain readable without those
+steps until targeted recomputation; explanations never rebuild historical steps
+from current acquisition inputs. Shared evidence schemas are declaration-safe;
+interactive explanation output composes them with reports and controls.
 
 A declaration names its compute adapter and its `inputs`. An input pairs one
 column of a table with the entity column it equals: `{ id: "id" }` is the

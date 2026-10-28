@@ -3,7 +3,7 @@
  * SQL cannot value a row; the drain values changed rows here and lists read
  * the published figure for sort, filter and footer totals.
  */
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { InventoryId } from "@cubby/schemas/identifiers";
 import { OWNER_FILTER_HOUSEHOLD, OWNER_FILTER_UNKNOWN } from "@cubby/shared";
 import { and, inArray } from "drizzle-orm";
@@ -71,6 +71,16 @@ const inventoryOwnershipCompute: DerivedCompute = async (db, ids) => {
       {
         value: {
           ownership: trace.ownership,
+          steps: trace.steps.map((step) => ({
+            ...step,
+            owner: step.owner
+              ? {
+                  id: parseShortcodeFor("ledgerParty", step.owner.shortcode),
+                  name: step.owner.name,
+                  kind: step.owner.kind,
+                }
+              : null,
+          })),
           effectiveOwnerId: trace.ownership.effectiveOwner?.id ?? null,
           ownerFilter:
             trace.ownership.effectiveOwner?.id ??

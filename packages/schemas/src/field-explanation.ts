@@ -1,7 +1,19 @@
 import { z } from "zod";
+import {
+  fieldDecisionStep,
+  fieldExplanationSource,
+  fieldEvidenceCoverage,
+} from "./field-explanation-evidence";
+export {
+  fieldDecisionStep,
+  fieldExplanationSource,
+  fieldDecisionReason,
+  fieldEvidenceCoverage,
+  type FieldDecisionStep,
+} from "./field-explanation-evidence";
 import { fieldEnvelope, fieldResult } from "./field-envelope";
 import { dataExceptionReason, dataQualityStatus } from "./data-quality-shape";
-import { entityRefSchema } from "./entity";
+import { entityRefSchema } from "./entity-core";
 import { reportRecordsBlock } from "./entity-report";
 import { fieldResolutionSourceSchema } from "./field-resolution";
 
@@ -25,14 +37,6 @@ export const fieldExplanationInput = entityRefSchema.extend({
   /** The singular list scope whose contextual value is being explained. */
   scope: entityRefSchema.optional(),
   surface: z.enum(["list", "detail", "summary"]).default("detail"),
-});
-
-export const fieldExplanationSource = z.object({
-  label: z.string(),
-  /** Declared source fields whose own values and controls explain this observation. */
-  fields: z.array(z.string()).optional(),
-  entity: entityRefSchema.nullable(),
-  value: z.json(),
 });
 
 export const qualityBreakdown = z.object({
@@ -88,54 +92,6 @@ export const qualityBreakdown = z.object({
     }),
   ),
 });
-
-export const fieldDecisionReason = z.enum([
-  "assigned",
-  "not_set",
-  "explicit",
-  "household",
-  "inherit",
-  "acquisition_absent",
-  "acquisition_multiple",
-  "acquisition_single",
-  "beneficiary_absent",
-  "beneficiary_unknown",
-  "beneficiary_incomplete",
-  "beneficiary_split",
-  "beneficiary_unresolved",
-  "beneficiary_not_individual",
-  "beneficiary_conflict",
-  "beneficiary_agreement",
-  "vendor_absent",
-  "vendor_disabled",
-  "vendor_unusable",
-  "vendor_enabled",
-  "payment_absent",
-  "payment_disabled",
-  "payment_unresolved",
-  "payment_not_individual",
-  "payment_conflict",
-  "payment_agreement",
-]);
-
-export const fieldEvidenceCoverage = z.object({
-  total: z.number().int().nonnegative(),
-  shown: z.number().int().nonnegative(),
-  omitted: z.number().int().nonnegative(),
-});
-
-/** Observations are current inputs, never a claim about historical intent. */
-export const fieldDecisionStep = z.object({
-  source: z.string(),
-  reason: fieldDecisionReason,
-  effect: z.enum(["used", "blocked", "fallback", "overridden", "context"]),
-  observed: z.array(fieldExplanationSource),
-  /** The matching row in chain.rows, including any branch summary rows. */
-  rowIndex: z.number().int().nonnegative(),
-  branch: entityRefSchema.optional(),
-  coverage: fieldEvidenceCoverage.optional(),
-});
-export type FieldDecisionStep = z.infer<typeof fieldDecisionStep>;
 
 /** A computed empty result is distinct from a comparison that cannot be run. */
 export const fieldLiveComparison = z.discriminatedUnion("kind", [

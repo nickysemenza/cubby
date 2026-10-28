@@ -380,6 +380,8 @@ concerns. Named renderers declare additional canonical envelopes through
 pages may bridge filter changes only when their projection covers the newly
 visible columns. Bulk actions reload complete selected records strongly before
 checking availability, including selections already loaded in the roster.
+Identity-only navigation such as Inspect can open from loaded roster rows;
+it does not evaluate field eligibility or mutate those projections.
 Tree children and selected-record action reads use the complete list contract.
 A detail relation section's count is its own list read's
 `meta.totalCount` ([detail sections](../../../docs/entities.md#one-declaration-several-consumers)),

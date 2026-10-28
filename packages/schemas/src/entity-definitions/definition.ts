@@ -1315,6 +1315,15 @@ const buildMetadataSchemas = () => {
           derivedStoreSchema.extend({
             /** Checked at generation; adapters validate the same payload before publication. */
             resultSchema: declaredZodSchema.optional(),
+            /** A sink publication already stored on the entity's own row. */
+            recordSource: z
+              .object({
+                value: nonEmptyString(),
+                computedAt: nonEmptyString(),
+                freshAt: nonEmptyString().optional(),
+              })
+              .strict()
+              .optional(),
             publishes: z
               .enum(["derivedValue", "ownTable"])
               .optional()

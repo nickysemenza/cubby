@@ -880,6 +880,30 @@ const compileFieldModel = (
   });
   const fieldKeys = fields.map(({ key }) => key);
   const storageKeys = storage.map(({ key }) => key);
+  for (const [key, declaration] of Object.entries(model.stored)) {
+    const source = declaration.recordSource;
+    if (!source) continue;
+    if (declaration.publishes !== "ownTable")
+      throw new EntityDeclarationError(
+        `${context}.stored.${key}.recordSource requires ownTable publication.`,
+      );
+    for (const column of [
+      source.value,
+      source.computedAt,
+      source.freshAt,
+    ].filter((value) => value !== undefined))
+      if (!storageKeys.includes(column))
+        throw new EntityDeclarationError(
+          `${context}.stored.${key}.recordSource names an unstored field: ${column}.`,
+        );
+    for (const column of [source.computedAt, source.freshAt].filter(
+      (value) => value !== undefined,
+    ))
+      if (fields.find((field) => field.key === column)?.kind !== "timestamp")
+        throw new EntityDeclarationError(
+          `${context}.stored.${key}.recordSource requires a timestamp: ${column}.`,
+        );
+  }
   if (new Set(fieldKeys).size !== fieldKeys.length)
     throw new EntityDeclarationError(
       `${context}.fields contains duplicate keys.`,
@@ -907,6 +931,7 @@ const compileFieldModel = (
     const declaration = model.derived[field.storedKey];
     if (
       model.stored[field.storedKey]?.publishes !== "derivedValue" &&
+      !model.stored[field.storedKey]?.recordSource &&
       !(declaration && "stored" in declaration && declaration.stored)
     )
       throw new EntityDeclarationError(

@@ -19,6 +19,7 @@ import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { entityMetadata } from "~/entity/metadata";
+import { fieldEnvelopeAtPath } from "~/entity/read-path";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import { Button } from "~/ui/primitives/button";
@@ -135,10 +136,12 @@ export function fieldResolutionFor(
   // oxlint-disable-next-line anti-slop/no-unknown-parameters -- The canonical field parser owns this generic row boundary.
   record: unknown,
   field: string,
+  path?: string,
 ): ReadableFieldEnvelope | null {
   return (
     fieldEnvelopeFor(record, field) ??
     fieldEnvelopeFor(record, `${field}Id`) ??
+    (path ? fieldEnvelopeAtPath(record, path) : undefined) ??
     null
   );
 }

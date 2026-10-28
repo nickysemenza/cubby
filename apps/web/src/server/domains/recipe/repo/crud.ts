@@ -347,7 +347,7 @@ const recordNotionRecipePage = async (
 
 /** A computed total, absent until the recipe's totals are computed. */
 const recipeTotalSql = (path: string) =>
-  sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN (${recipe.totals} #>> ${sql.raw(`'${path}'`)})::numeric END`;
+  sql`CASE WHEN ${recipe.totalsPublishedAt} IS NOT NULL THEN (${recipe.totals} #>> ${sql.raw(`'${path}'`)})::numeric END`;
 
 const qb = new QueryBuilder();
 
@@ -507,6 +507,7 @@ export const recipeScaffold = listScaffold("recipe", recipe, {
         bind(
           rawRecipeList.pick({
             totals: true,
+            storedProjectionVersions: true,
             cost: true,
             calories: true,
             protein: true,
@@ -520,6 +521,9 @@ export const recipeScaffold = listScaffold("recipe", recipe, {
             const values = recipeTotalsFields(row);
             return {
               ...values,
+              storedProjectionVersions: {
+                totals: row.totalsPublishedAt?.toISOString() ?? null,
+              },
               ...recipeListLabels({
                 totals: values.totals,
                 meta: recipeProvenanceFields(row).meta,

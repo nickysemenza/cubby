@@ -88,6 +88,7 @@ export type ColumnExplanation = {
   entity: EntityRef["entityKind"];
   field: string;
   label: string;
+  path?: string;
 };
 
 export type RowColumnExplanation<TData> = {
