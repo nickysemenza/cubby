@@ -331,7 +331,7 @@ export const photoImportContract = defineContract(
       output: photoRunCandidatesResponse,
       cache: {
         tags: [
-          ["run"],
+          ["recommendations"],
           ["product"],
           ["inventory"],
           ["expense"],
@@ -370,7 +370,7 @@ export const photoImportContract = defineContract(
           ),
       }),
       output: reviewPhotoGroupsOutput,
-      invalidates: ["runOnly"],
+      invalidates: ["runOnly", "recommendations"],
     }),
     linkableExpenses: query({
       exposure: "view",

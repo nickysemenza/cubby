@@ -39,8 +39,10 @@ import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import {
   skipToken,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
+  type UseQueryResult,
 } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -49,6 +51,7 @@ import {
   useSyncExternalStore,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -81,6 +84,7 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { photoImport } from "~/integrations/tanstack-query/generated/catalog/photoImport.gen";
 import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog/purchaseImport.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -160,27 +164,91 @@ function reviewRequest(runId: string, action: ReviewPhotoGroupsAction) {
 function usePhotoRunCandidates(
   runId: string,
   proposals: readonly PhotoGroupProposal[],
+  images: readonly PhotoRunImage[] = NO_IMAGES,
 ) {
-  const options = photoImport.candidatesBatch.queryOptions({ runId });
-  return useQuery({
-    meta: options.meta,
-    ...photoImport.candidatesBatch.policy({ runId }).freshness,
-    queryKey: [
-      ...options.queryKey,
-      proposals.map(({ groupKey, updatedAt }) => ({ groupKey, updatedAt })),
-    ],
-    queryFn: ({ signal }) =>
-      loadPhotoRunCandidateChunks(
-        proposals.map((proposal) => proposal.groupKey),
-        (groupKeys) =>
-          photoImport.candidatesBatch.call(
-            { runId, groupKeys },
-            { signal, batch: false },
-          ),
+  const evidenceById = useMemo(
+    () =>
+      new Map(
+        images.map(({ id, description, recognizedText }) => [
+          id,
+          { id, description, recognizedText },
+        ]),
       ),
-    enabled: proposals.length > 0,
-    staleTime: Infinity,
+    [images],
+  );
+  const loader = useMemo(
+    () =>
+      createRequestBatcher<string, PhotoCandidateGroup>(
+        async (keys, signal) => {
+          const result = await loadPhotoRunCandidateChunks(keys, (groupKeys) =>
+            photoImport.candidatesBatch.call(
+              { runId, groupKeys },
+              { signal, batch: false },
+            ),
+          );
+          return {
+            results: keys.map((key) => {
+              const group = result.groups.find((item) => item.groupKey === key);
+              return group
+                ? { ok: true as const, value: group }
+                : {
+                    ok: false as const,
+                    message: "Photo candidate group was not returned",
+                  };
+            }),
+          };
+        },
+        { max: 6 },
+      ),
+    [runId],
+  );
+  return useQueries({
+    queries: proposals.map((proposal) => {
+      const options = photoImport.candidatesBatch.queryOptions({
+        runId,
+        groupKeys: [proposal.groupKey],
+      });
+      return {
+        ...photoImport.candidatesBatch.policy({ runId }).freshness,
+        meta: options.meta,
+        // Run progress is not candidate input; saved edits and this group's evidence are.
+        queryKey: [
+          ...options.queryKey,
+          proposal.updatedAt,
+          proposal.images.map(({ id }) => evidenceById.get(id) ?? { id }),
+        ],
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
+          loader.load(proposal.groupKey, signal),
+        staleTime: Infinity,
+      };
+    }),
+    combine: combinePhotoCandidates,
   });
+}
+
+type PhotoCandidateGroup = Awaited<
+  ReturnType<typeof loadPhotoRunCandidateChunks>
+>["groups"][number];
+
+function combinePhotoCandidates(
+  results: UseQueryResult<PhotoCandidateGroup>[],
+) {
+  return {
+    data: {
+      groups: results.flatMap((result) => (result.data ? [result.data] : [])),
+    },
+    isError: results.some((result) => result.isError),
+    error: results.find((result) => result.error)?.error,
+    isFetching: results.some((result) => result.isFetching),
+    refetch: (groupKey: string) =>
+      Promise.all(
+        results
+          .filter(
+            (result) => result.data?.groupKey === groupKey || result.isError,
+          )
+          .map((result) => result.refetch()),
+      ),
+  };
 }
 
 const PhotoCandidatesContext = createContext<ReturnType<
@@ -204,6 +272,7 @@ function usePhotoDraft() {
   return { session, state };
 }
 const NO_PROPOSALS: readonly PhotoGroupProposal[] = [];
+const NO_IMAGES: readonly PhotoRunImage[] = [];
 const PhotoProposalsContext = createContext(NO_PROPOSALS);
 
 /**
@@ -2093,6 +2162,7 @@ function ProductPanel({
         },
       });
       void invalidateOperationTags(queryClient, ripple.runOnly);
+      void invalidateOperationTags(queryClient, ripple.recommendations);
     },
     onError: (error) => showErrorToast(error),
   });
@@ -2327,6 +2397,25 @@ function ProductPanel({
   );
 }
 
+function SettledPhotoProductSuggestions({
+  runId,
+  proposal,
+  imagesById,
+}: {
+  runId: string;
+  proposal: PhotoGroupProposal;
+  imagesById: ImagesById;
+}) {
+  const proposals = useMemo(() => [proposal], [proposal]);
+  const images = useMemo(() => [...imagesById.values()], [imagesById]);
+  const candidates = usePhotoRunCandidates(runId, proposals, images);
+  return (
+    <PhotoCandidatesContext.Provider value={candidates}>
+      <PhotoProductSuggestions proposal={proposal} settled />
+    </PhotoCandidatesContext.Provider>
+  );
+}
+
 function PhotoProductSuggestions({
   proposal,
   onPick,
@@ -2356,7 +2445,7 @@ function PhotoProductSuggestions({
             size="sm"
             variant="ghost"
             disabled={suggestions.isFetching}
-            onClick={() => void suggestions.refetch()}
+            onClick={() => void suggestions.refetch(proposal.groupKey)}
           >
             Retry
           </Button>
@@ -3562,7 +3651,11 @@ function SettledGroup({
           className="border-t border-border pt-2"
           title="Review possible matches"
         >
-          <PhotoProductSuggestions proposal={proposal} settled />
+          <SettledPhotoProductSuggestions
+            runId={runId}
+            proposal={proposal}
+            imagesById={imagesById}
+          />
         </Section>
       ) : null}
     </Stack>
@@ -4015,7 +4108,18 @@ export function PhotoGroupReview({
     session.getSnapshot,
   );
   const queryClient = useQueryClient();
-  const candidates = usePhotoRunCandidates(runId, proposals ?? NO_PROPOSALS);
+  const candidateProposals = useMemo(
+    () =>
+      (proposals ?? NO_PROPOSALS).filter(
+        (proposal) => proposal.state === "proposed",
+      ),
+    [proposals],
+  );
+  const candidates = usePhotoRunCandidates(
+    runId,
+    candidateProposals,
+    query.data?.images,
+  );
   const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
   const activeKey = activePhotoKey(visibleProposals, activeGroupKey);
   const action = useReviewAction(runId);

@@ -159,8 +159,16 @@ the original concern, optional reply, resolving member, and time in history.
 The former synthetic identity warning is not a concern. Descriptions
 and recognized label text are available under disclosure rather than filling
 the main review surface.
-The run-wide candidates read checks the full ranked candidate set concurrently
-for every group. Model cache inputs use observed name and extracted identifiers,
+Candidate checks retain each group's saved revision in the browser query cache.
+Only new or revised proposed groups request the full ranked candidate set, in
+batches of at most six; conversation updates and unrelated Run progress reuse
+unchanged results. Product, inventory, purchase, expense and image evidence
+changes still refresh candidates. Not this one refreshes suppression through the
+recommendation cache ripple, and Retry rechecks the failed group.
+Discarded groups do not scan; applied groups check possible duplicates only
+when their Review possible matches disclosure is opened. Each server batch
+shares one image-evidence snapshot with its proposal view.
+Model cache inputs use observed name and extracted identifiers,
 not joined OCR prose. Each group reports ready or failed with raw diagnostics;
 failure supports Retry and never gates apply. Strong duplicate signals require
 an exact identifier or the same manufacturer and matching model/name (at least
