@@ -1,0 +1,19 @@
+apps/web/src/server/operation-runtime/start-operation.contract.ts
+  s_f9b38eae28f662::t_bec8d008449d6a 24-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c0684c843d157da08a68ffae906ff5596a4dbccf",
+  "prompts": {},
+  "sessions": {
+    "s_f9b38eae28f662": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15d31a0c-0fdb-4745-b359-8664bbd5360e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
