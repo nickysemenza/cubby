@@ -55,17 +55,71 @@ export type UnparsedStartOperationData =
   | ReadonlySet<UnparsedStartOperationData>
   | ReadonlyMap<UnparsedStartOperationData, UnparsedStartOperationData>;
 
-/** Runtime mirror of TanStack Start's recursive serializable carrier. */
+/** Validate containers once without allocating failed union branches or cloning DTOs. */
+const isStartOperationData = (input: unknown): boolean => {
+  const ancestors = new WeakSet<object>();
+  const checked = new WeakSet<object>();
+  const visit = (value: unknown): boolean => {
+    if (value === null) return true;
+    switch (typeof value) {
+      case "undefined":
+      case "string":
+      case "boolean":
+      case "bigint":
+        return true;
+      case "number":
+        return Number.isFinite(value);
+      case "object":
+        break;
+      default:
+        return false;
+    }
+    if (value instanceof Date) return Number.isFinite(value.getTime());
+    if (value instanceof Uint8Array) return true;
+    if (checked.has(value)) return true;
+    if (ancestors.has(value)) return false;
+    const array = Array.isArray(value);
+    const set = value instanceof Set;
+    const map = value instanceof Map;
+    const prototype = Object.getPrototypeOf(value);
+    if (
+      !array &&
+      !set &&
+      !map &&
+      prototype !== Object.prototype &&
+      prototype !== null
+    )
+      return false;
+    ancestors.add(value);
+    let valid = true;
+    if (map) {
+      const entries: Iterable<[unknown, unknown]> = value;
+      for (const [key, entry] of entries)
+        if (!visit(key) || !visit(entry)) {
+          valid = false;
+          break;
+        }
+    } else {
+      const children: Iterable<unknown> =
+        array || set ? value : Object.values(value);
+      for (const child of children)
+        if (!visit(child)) {
+          valid = false;
+          break;
+        }
+    }
+    ancestors.delete(value);
+    if (valid) checked.add(value);
+    return valid;
+  };
+  return visit(input);
+};
+
+/** Operation schemas validate domain data; this boundary checks carrier support.
+ * A recursive union generated an error for every rejected branch at every valid
+ * object, dominating 100-row SSR responses. Keep this walk type-directed. */
 export const unparsedStartOperationDataSchema: z.ZodType<UnparsedStartOperationData> =
-  z.lazy(() =>
-    z.union([
-      tanStackSerializableLeafSchema,
-      z.array(unparsedStartOperationDataSchema),
-      z.record(z.string(), unparsedStartOperationDataSchema),
-      z.set(unparsedStartOperationDataSchema),
-      z.map(unparsedStartOperationDataSchema, unparsedStartOperationDataSchema),
-    ]),
-  );
+  z.custom<UnparsedStartOperationData>(isStartOperationData);
 
 export type PublicStartValidationIssue = z.infer<
   typeof publicStartValidationIssueSchema
