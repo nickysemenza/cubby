@@ -183,6 +183,8 @@ metadata-free.
 Browser list/detail contracts validate lightweight wire plans and import output
 types only. The selected server read owner loads the full entity schemas,
 validates exact filters, resolves filter tokens, and validates complete outputs.
+Specialist operation contracts reference their selected per-entity envelope
+schemas directly, so one operation never imports the aggregate schema catalog.
 Keep those schemas and the whole metadata catalogs outside the browser and hot
 Worker ingress. A dynamic import in source is not emitted-bundle evidence.
 

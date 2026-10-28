@@ -1,4 +1,4 @@
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { ingredientFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/ingredient";
 import * as schemas from "@cubby/schemas/ingredient";
 import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";
 import { z } from "zod";
@@ -23,7 +23,7 @@ export const ingredientContract = defineContract(
     getByName: query({
       note: "entity_read.resolve reports ingredientHits by name or alias; entity_read.search on ingredients",
       input: schemas.ingredientNameFilterInput,
-      output: entityFieldEnvelopeSchemas.ingredient.detail.nullable(),
+      output: ingredientFieldEnvelopeSchemas.detail.nullable(),
       cache: { profile: "stable" },
     }),
     matchNames: query({
