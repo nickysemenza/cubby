@@ -83,8 +83,10 @@ for controlled import and date bounds; Settings retains mailbox switches.
 Discovery completion and downstream import outcomes remain distinct.
 
 Mobile discovery rows retain poll/catch-up and historical search summaries;
-shared-sender rows retain search state. Both offer accessible Details disclosures
-for all counts, historical queries and Run links.
+shared-sender rows retain search state. Shared senders use the same search,
+status views, column controls and row inspector as Vendor coverage, with compact
+default columns. The inspector exposes complete, selectable sender addresses,
+queries, counts and Run links. Discovery retains its Details disclosure.
 
 ## Elevation & Depth
 

@@ -31,12 +31,13 @@ import type { ColumnCellData, PasteFieldValues } from "./cell-data";
  *
  * A cell whose column has `cellData` keeps that column's kind even when the row
  * has nothing to copy (null payload → empty text, null json). A column without
- * `cellData` contributes a plain empty text cell.
+ * `cellData` copies its scalar accessor value as read-only text.
  */
 export function buildCopyGrid<TRow>(params: {
   rect: CellRect;
   rows: readonly TRow[];
   columnCellData: readonly (ColumnCellData<TRow> | null)[];
+  getCellText?: (row: number, col: number) => string | null;
 }): CopiedGrid {
   const { rect, rows, columnCellData } = params;
   const grid: CopiedGrid = [];
@@ -46,7 +47,8 @@ export function buildCopyGrid<TRow>(params: {
     for (let c = rect.left; c <= rect.right; c++) {
       const cellData = columnCellData[c] ?? null;
       if (!cellData) {
-        gridRow.push({ kind: "text", text: "", json: null });
+        const text = params.getCellText?.(r, c) ?? "";
+        gridRow.push({ kind: "text", text, json: null });
         continue;
       }
       const payload = row === undefined ? null : cellData.getCopyPayload(row);

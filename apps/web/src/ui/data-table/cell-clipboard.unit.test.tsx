@@ -86,6 +86,18 @@ describe("copy", () => {
     });
     cleanups.push(unregister);
 
+    el.textContent = "Highlighted amount";
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    const nativeClipboard = makeClipboardData();
+    expect(
+      dispatchClipboardEvent("copy", nativeClipboard).defaultPrevented,
+    ).toBe(false);
+    expect(nativeClipboard.setData).not.toHaveBeenCalled();
+    window.getSelection()?.removeAllRanges();
+
     const clipboardData = makeClipboardData();
     const event = dispatchClipboardEvent("copy", clipboardData);
 

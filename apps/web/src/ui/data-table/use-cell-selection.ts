@@ -122,6 +122,8 @@ function handleClipboardKey<TItem extends RowData>(
   }
   const isMod = event.metaKey || event.ctrlKey;
   if (isMod && (event.key === "c" || event.key === "C")) {
+    // Native text selection wins over the table's retained cell selection.
+    if (window.getSelection()?.isCollapsed === false) return true;
     if (!context.getSelection()) return true;
     event.preventDefault();
     context.doCopy(event.currentTarget);
@@ -412,6 +414,17 @@ export function useCellSelection<TItem extends RowData>({
         rect,
         rows: rowsRef.current.map((r) => r.original),
         columnCellData: buildColumnCellData(),
+        getCellText: (row, col) => {
+          const columnId = selectableColumnIdsRef.current[col];
+          const value: unknown = columnId
+            ? rowsRef.current[row]?.getValue(columnId)
+            : undefined;
+          return typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean"
+            ? String(value)
+            : null;
+        },
       });
       const tsv = gridToTsv(grid);
       setCopyBuffer(grid, tsv);

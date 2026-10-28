@@ -106,6 +106,7 @@ function specForActiveElement(): {
 }
 
 function handleCopy(event: ClipboardEvent) {
+  if (window.getSelection()?.isCollapsed === false) return; // native text copy
   // Range copy/paste (useCellSelection) preventDefaults first when it owns the
   // event; bail so a focused trigger doesn't also handle it (coexistence guard).
   if (event.defaultPrevented) return;

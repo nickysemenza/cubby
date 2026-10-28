@@ -27,6 +27,7 @@ import { DateRangeShortcuts } from "~/ui/date-range-shortcuts";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
+import { SidePanel } from "~/ui/overlays/side-panel";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -57,12 +58,14 @@ const unresolvedRowId = (row: MailCoverage["unresolvedEmails"][number]) =>
 function CoverageDetails({
   label,
   facts,
+  open,
 }: {
   label: string;
+  open?: boolean;
   facts: readonly (readonly [string, ReactNode])[];
 }) {
   return (
-    <details className="text-xs">
+    <details className="text-xs" open={open}>
       <summary className="cursor-pointer">{label}</summary>
       <dl className="space-y-1 pt-2">
         {facts.map(([name, value]) => (
@@ -76,6 +79,51 @@ function CoverageDetails({
   );
 }
 
+function SharedSenderDetails({
+  sender,
+  mailboxName,
+}: {
+  sender: MailCoverage["sharedSenders"][number];
+  mailboxName: (id: string) => string;
+}) {
+  return (
+    <CoverageDetails
+      label="Sender details"
+      open
+      facts={[
+        ["Sender", sender.sender],
+        ["Mailbox", mailboxName(sender.mailboxId)],
+        ["Historical search", sender.query],
+        ["Search status", humanize(sender.state)],
+        [
+          "Completed",
+          sender.completedAt ? (
+            <DateDisplay key="completed" timestamp={sender.completedAt} />
+          ) : (
+            "Not recorded"
+          ),
+        ],
+        ["Local Emails", sender.scanned],
+        ["Classified", sender.classified],
+        ["Content saved", sender.retained],
+        ["Related", sender.related],
+        ["Imported Emails", sender.imported],
+        ["Linked Emails", sender.linkedEmails],
+        ["Purchases", sender.linkedPurchases],
+        ["Seller unresolved", sender.sellerUnresolved],
+        [
+          "Search Run",
+          sender.runId ? (
+            <EntityRefLink key="run" entity="run" id={sender.runId} />
+          ) : (
+            "—"
+          ),
+        ],
+      ]}
+    />
+  );
+}
+
 function DiscoveryCoverage({
   coverage,
   mailboxId,
@@ -84,6 +132,8 @@ function DiscoveryCoverage({
   mailboxId?: string;
 }) {
   const [unresolvedOpen, setUnresolvedOpen] = useState(false);
+  const [selectedSender, setSelectedSender] = useState<string | null>(null);
+  const [senderView, setSenderView] = useState("all");
   const mailboxName = useCallback(
     (id: string) =>
       coverage.mailboxes.find((mailbox) => mailbox.mailboxId === id)?.label ??
@@ -277,6 +327,7 @@ function DiscoveryCoverage({
           add(
             senderHelper.accessor("sender", {
               header: "Shared sender",
+              size: 300,
               meta: attachCubbyColumnMeta<
                 MailCoverage["sharedSenders"][number]
               >({ mobile: { slot: "title", priority: 0, renderTitle: true } }),
@@ -295,7 +346,9 @@ function DiscoveryCoverage({
               meta: attachCubbyColumnMeta<
                 MailCoverage["sharedSenders"][number]
               >({ mobile: { slot: "subtitle", priority: 0 } }),
-              cell: ({ getValue }) => humanize(getValue()),
+              cell: ({ getValue }) => (
+                <Badge variant="outline">{humanize(getValue())}</Badge>
+              ),
             }),
           );
           add(
@@ -342,45 +395,13 @@ function DiscoveryCoverage({
                 mobile: { slot: "actions", priority: 0, interactive: true },
               }),
               cell: ({ row }) => (
-                <CoverageDetails
-                  label="Sender details"
-                  facts={[
-                    ["Mailbox", mailboxName(row.original.mailboxId)],
-                    ["Historical search", row.original.query],
-                    ["Search status", humanize(row.original.state)],
-                    [
-                      "Completed",
-                      row.original.completedAt ? (
-                        <DateDisplay
-                          key="completed"
-                          timestamp={row.original.completedAt}
-                        />
-                      ) : (
-                        "Not recorded"
-                      ),
-                    ],
-                    ["Local Emails", row.original.scanned],
-                    ["Classified", row.original.classified],
-                    ["Content saved", row.original.retained],
-                    ["Related", row.original.related],
-                    ["Imported Emails", row.original.imported],
-                    ["Linked Emails", row.original.linkedEmails],
-                    ["Purchases", row.original.linkedPurchases],
-                    ["Seller unresolved", row.original.sellerUnresolved],
-                    [
-                      "Search Run",
-                      row.original.runId ? (
-                        <EntityRefLink
-                          key="run"
-                          entity="run"
-                          id={row.original.runId}
-                        />
-                      ) : (
-                        "—"
-                      ),
-                    ],
-                  ]}
-                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedSender(senderRowId(row.original))}
+                >
+                  Sender details
+                </Button>
               ),
             }),
           );
@@ -432,10 +453,43 @@ function DiscoveryCoverage({
     columns: discoveryColumns,
     getRowId: discoveryRowId,
   });
+  const senderSearch = useMemo(
+    () => ({
+      text: (row: MailCoverage["sharedSenders"][number]) =>
+        `${row.sender} ${mailboxName(row.mailboxId)} ${row.query}`,
+      placeholder: "Search senders, mailboxes, or queries",
+    }),
+    [mailboxName],
+  );
+  const visibleSenders = useMemo(
+    () =>
+      senderRows.filter(
+        (row) =>
+          senderView === "all" ||
+          (senderView === "unresolved"
+            ? row.sellerUnresolved > 0
+            : row.state === senderView),
+      ),
+    [senderRows, senderView],
+  );
+  const inspectedSender = senderRows.find(
+    (row) => senderRowId(row) === selectedSender,
+  );
   const senderTable = useLocalTable({
-    rows: senderRows,
+    rows: visibleSenders,
     columns: senderColumns,
     getRowId: senderRowId,
+    search: senderSearch,
+    initialVisibility: {
+      query: false,
+      completedAt: false,
+      classified: false,
+      retained: false,
+      related: false,
+      imported: false,
+      linkedEmails: false,
+      runId: false,
+    },
   });
   const unresolvedTable = useLocalTable({
     rows: unresolvedRows,
@@ -468,12 +522,73 @@ function DiscoveryCoverage({
           the platform. Local counts overlap Vendor coverage; linked Emails may
           include lifecycle evidence.
         </p>
+        <Tabs value={senderView} onValueChange={setSenderView}>
+          <TabsList
+            className="h-auto flex-wrap"
+            aria-label="Shared sender views"
+          >
+            {[
+              ["all", "All senders", senderRows.length],
+              [
+                "not_started",
+                "Never searched",
+                senderRows.filter((row) => row.state === "not_started").length,
+              ],
+              [
+                "in_progress",
+                "Incomplete",
+                senderRows.filter((row) => row.state === "in_progress").length,
+              ],
+              [
+                "complete",
+                "Search complete",
+                senderRows.filter((row) => row.state === "complete").length,
+              ],
+              [
+                "unresolved",
+                "Seller unresolved",
+                senderRows.filter((row) => row.sellerUnresolved > 0).length,
+              ],
+            ].map(([value, label, count]) => (
+              <TabsTrigger key={value} value={String(value)}>
+                {label}{" "}
+                <span className="font-mono text-muted-foreground">{count}</span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
         <RTable
           table={senderTable}
+          showColumnMenu
+          currentRowId={selectedSender ?? undefined}
+          onRowClick={(row) => setSelectedSender(senderRowId(row.original))}
+          disableMobileDetailsHref
+          inspector={{
+            title: inspectedSender?.sender ?? "Shared sender",
+            onClose: () => setSelectedSender(null),
+            content: inspectedSender ? (
+              <SidePanel
+                label="Shared sender inspector"
+                title={inspectedSender.sender}
+                eyebrow="Shared sender"
+                onClose={() => setSelectedSender(null)}
+                closeLabel="Close inspector"
+              >
+                <div className="p-4">
+                  <SharedSenderDetails
+                    sender={inspectedSender}
+                    mailboxName={mailboxName}
+                  />
+                </div>
+              </SidePanel>
+            ) : null,
+          }}
           ariaLabel="Shared sender search coverage"
           emptyState={
             <p className="text-xs text-muted-foreground">
-              No shared senders recorded in related mail yet.
+              {senderRows.length
+                ? "No shared senders match this view. Clear search or choose All senders."
+                : "No shared senders recorded in related mail yet."}
             </p>
           }
           embedded
