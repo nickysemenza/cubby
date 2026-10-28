@@ -1,0 +1,101 @@
+apps/web/src/contracts/entity-records.schema.ts
+  s_f9b38eae28f662::t_8e4c8bffccedf4 1,42-43
+apps/web/src/server/domains/location/repo/tree.ts
+  s_f9b38eae28f662::t_1ac2d01fd0b27c 1,52-55
+apps/web/src/server/domains/product/repo/match/product-match-candidate.ts
+  s_f9b38eae28f662::t_5cfa51b093d1e4 7,73-74
+apps/web/src/server/generic/derived/repo/read.ts
+  s_f9b38eae28f662::t_ad4b2d5542435b 1,177,181
+apps/web/src/server/generic/problems/service/problem-views.service.ts
+  s_f9b38eae28f662::t_c2dc44a8f16df2 1,262
+apps/web/src/server/generic/problems/service/problems.service.ts
+  s_f9b38eae28f662::t_930807879bb136 1,712
+apps/web/src/server/mcp/entity-field-selection.ts
+  s_f9b38eae28f662::t_521b501ba27d14 1,344
+apps/web/src/server/operation-runtime/operation-handlers.server.ts
+  s_f9b38eae28f662::t_9c067c8c4a119a 1-32
+apps/web/src/server/operation-runtime/start-operation.contract.ts
+  s_f9b38eae28f662::t_e746c5776c5c2c 4-7,10-11,20-43,50,55,60-65,67-72,74,76-77,93,98
+packages/schemas/src/ai.ts
+  s_f9b38eae28f662::t_4088c7cc5bc88d 13,388
+packages/schemas/src/audit.ts
+  s_f9b38eae28f662::t_ce4ae08af9e4c0 2,168
+packages/schemas/src/base-entity.ts
+  s_f9b38eae28f662::t_f2b6b20f4f0b5a 3,18-19
+packages/schemas/src/codec.ts
+  s_f9b38eae28f662::t_6dc587955b5c32 4-11
+packages/schemas/src/entity-definitions/04-location.entity.ts
+  s_f9b38eae28f662::t_69fd5dbca8da43 20,510
+packages/schemas/src/entity-definitions/15-wish.entity.ts
+  s_f9b38eae28f662::t_271c425534c055 11,196
+packages/schemas/src/entity-definitions/18-image.entity.ts
+  s_f9b38eae28f662::t_59bd96cd23e7d7 18,517,530,532
+packages/schemas/src/entity-definitions/21-vendorAccount.entity.ts
+  s_f9b38eae28f662::t_dc047817ba6b9d 3,189,208
+packages/schemas/src/entity-definitions/23-run.entity.ts
+  s_f9b38eae28f662::t_5a4b5792cadcf6 5,700,707,714,856,863
+packages/schemas/src/entity-definitions/24-device.entity.ts
+  s_f9b38eae28f662::t_04fffe0cb8bf89 3,192,194
+packages/schemas/src/entity-definitions/28-email.entity.ts
+  s_f9b38eae28f662::t_0c188153b64602 6,294
+packages/schemas/src/entity-definitions/29-imageJob.entity.ts
+  s_f9b38eae28f662::t_8b9d4e72b1f1e2 4,340,402,409
+packages/schemas/src/entity-definitions/30-sourceTransactionRecord.entity.ts
+  s_f9b38eae28f662::t_9e58942f2514a6 4,278,300,539
+packages/schemas/src/entity-definitions/31-transactionImport.entity.ts
+  s_f9b38eae28f662::t_15f5acb7377b33 4,167,183,204
+packages/schemas/src/entity-definitions/32-job.entity.ts
+  s_f9b38eae28f662::t_bc7b6cf48982f5 4,205
+packages/schemas/src/external-id.ts
+  s_f9b38eae28f662::t_6bcec375203aa5 7,421-422
+packages/schemas/src/image-sighting-fields.ts
+  s_f9b38eae28f662::t_5f8b6e03612ae0 2,44,46,53
+packages/schemas/src/image-sighting.ts
+  s_f9b38eae28f662::t_d1dcbd75df61f8 2,47,49,55
+packages/schemas/src/job.ts
+  s_f9b38eae28f662::t_d7858fbf181868 2,117,127,129
+packages/schemas/src/ledger-transfer-fields.ts
+  s_f9b38eae28f662::t_6e62666bea5d1a 5,79-80
+packages/schemas/src/meal.ts
+  s_f9b38eae28f662::t_3c5479b0f291d9 21,201
+packages/schemas/src/native-coverage.ts
+  s_f9b38eae28f662::t_a24d38f87fbc76 20,203,213
+packages/schemas/src/oauth.ts
+  s_f9b38eae28f662::t_02033d8bc6725e 2,12,21
+packages/schemas/src/problems.ts
+  s_f9b38eae28f662::t_69aa051b36b01e 30,130,229,298-299,680,1210,1233-1234
+packages/schemas/src/product-components.ts
+  s_f9b38eae28f662::t_5de982ab6445f0 2,73,115
+packages/schemas/src/product-read-fields.ts
+  s_f9b38eae28f662::t_619b997ea3145b 15,83
+packages/schemas/src/project.ts
+  s_f9b38eae28f662::t_b881b6ca009d96 40,1084,1151
+packages/schemas/src/purchase.ts
+  s_f9b38eae28f662::t_0f2026d457d5b0 14,683
+packages/schemas/src/recipe-flow.ts
+  s_f9b38eae28f662::t_6306dc3b90e9e0 2,223
+packages/schemas/src/recipe-shared.ts
+  s_f9b38eae28f662::t_1e0f5122b92967 4,134
+packages/schemas/src/source-transaction-record.ts
+  s_f9b38eae28f662::t_4478a99083b04c 2,311
+packages/schemas/src/telemetry.ts
+  s_f9b38eae28f662::t_03dde31daee359 3,241-242,262,315-316
+packages/schemas/src/unitmapping.ts
+  s_f9b38eae28f662::t_259f0fac1b71fa 3,98-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "598d0a988752d112c5c74adfd09c8a09c8f498c4",
+  "prompts": {},
+  "sessions": {
+    "s_f9b38eae28f662": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15d31a0c-0fdb-4745-b359-8664bbd5360e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
