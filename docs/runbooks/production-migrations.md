@@ -84,8 +84,7 @@ wake and WorkItem sources and destinations before copying or retiring work.
 Their table locks remain held through the transaction. Old Worker requests
 may fail until the matching deployment completes.
 
-Before merge, run `coarse-jobs-migration.integration.test.ts` against populated
-predecessor data. After deployment, verify the journal prefix, retained paid
+After deployment, verify the journal prefix, retained paid
 evaluation results, pending work on the feature drains, and embedding cleanup
 work before declaring the cutover complete. Do not reset the migration ledger
 or overlap Actions with a manual migration.
