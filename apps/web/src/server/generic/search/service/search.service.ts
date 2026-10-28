@@ -241,7 +241,7 @@ export async function findLexicalSearchCandidates(
           ${exactCodeMatch(normalized)}
           OR lower(sd.title) = ${normalized}
           OR lower(sd.title) LIKE ${`${normalized}%`}
-          OR ${textArrayMatchSql({ values: sql`sd.aliases || sd.keywords`, query: normalized, match: "prefix" })}
+          OR ${textArrayMatchSql({ values: sql`sd.aliases || sd.keywords`, query: normalized, match: "exact-or-prefix" })}
           OR sd."searchVector" @@ q.query
         )
       UNION
@@ -258,8 +258,8 @@ export async function findLexicalSearchCandidates(
       CASE
         WHEN ${exactCodeMatch(normalized)} THEN 'shortcode'
         WHEN lower(sd.title) = ${normalized} OR lower(sd.title) LIKE ${`${normalized}%`} THEN 'title'
-        WHEN ${textArrayMatchSql({ values: sql`sd.aliases`, query: normalized, match: "prefix" })} THEN 'alias'
-        WHEN ${textArrayMatchSql({ values: sql`sd.keywords`, query: normalized, match: "prefix" })} THEN 'keyword'
+        WHEN ${textArrayMatchSql({ values: sql`sd.aliases`, query: normalized, match: "exact-or-prefix" })} THEN 'alias'
+        WHEN ${textArrayMatchSql({ values: sql`sd.keywords`, query: normalized, match: "exact-or-prefix" })} THEN 'keyword'
         WHEN to_tsvector('simple', sd.title) @@ q.query THEN 'title'
         WHEN to_tsvector('simple', array_to_string(sd.aliases, ' ')) @@ q.query THEN 'alias'
         WHEN to_tsvector('simple', array_to_string(sd.keywords, ' ')) @@ q.query THEN 'keyword'

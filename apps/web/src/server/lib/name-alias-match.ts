@@ -39,13 +39,21 @@ export const nameMatchesAnySql = (
 export const textArrayMatchSql = (input: {
   values: SQLWrapper;
   query: string;
-  match: "exact" | "prefix";
+  match: "exact" | "prefix" | "exact-or-prefix";
 }): SQL =>
-  textArraySomeSql(input.values, (value) =>
-    input.match === "exact"
-      ? nameMatchesAnySql(value, [input.query])
-      : sql`lower(${value}) LIKE ${`${nameMatchKey(input.query)}%`}`,
-  );
+  textArraySomeSql(input.values, (value) => {
+    const exact = nameMatchesAnySql(value, [input.query]);
+    const prefix = sql`lower(${value}) LIKE ${`${nameMatchKey(input.query)}%`}`;
+    switch (input.match) {
+      case "exact":
+        return exact;
+      case "prefix":
+        return prefix;
+      // A trailing backslash escapes LIKE's wildcard; equality remains its own tier.
+      case "exact-or-prefix":
+        return sql`(${exact} OR ${prefix})`;
+    }
+  });
 
 export const nameOrAliasSql = (input: {
   name: SQLWrapper;

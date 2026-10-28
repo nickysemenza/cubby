@@ -1,8 +1,11 @@
+import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { systemPrincipal } from "~/server/http/authenticate";
+import { entityInspectorHealthHandlers } from "~/server/operation-runtime/entity-runtime.server";
 import {
   createLocationFixture,
   createInventoryFixture,
@@ -33,6 +36,21 @@ describe("search labels and location paths", () => {
     expect(hits.find((item) => item.id === entry.shortcode)?.title).toBe(
       "Note · 2026-10-06 · Home",
     );
+    const health =
+      await entityInspectorHealthHandlers.operations.inspectorHealth({
+        data: null,
+        request: {
+          principal: systemPrincipal(
+            buildKernelContext(ctx.db, ctx.actor.userId),
+          ),
+          headers: new Headers(),
+          signal: new AbortController().signal,
+        },
+      });
+    expect(health).toMatchObject({
+      ok: true,
+      data: { search: { gardenEntry: { documents: 1, embeddings: 0 } } },
+    });
   });
 
   it("returns a preformatted root-first path for a typed location hit", async () => {
@@ -46,6 +64,7 @@ describe("search labels and location paths", () => {
       makeLocationInput({
         name: "Synthetic brass shelf",
         parentId: parent.id,
+        aliases: ["Synthetic\\"],
       }),
       ctx.actor,
     );
@@ -60,6 +79,16 @@ describe("search labels and location paths", () => {
     expect(hit?.facts).toEqual([
       "Home › Synthetic instrument room › Synthetic brass shelf",
     ]);
+    const aliasHits = await findSearchHits(ctx.db, {
+      query: "Synthetic\\",
+      entityKinds: ["location"],
+      limit: 10,
+    });
+    expect(aliasHits.find((item) => item.id === child.id)).toMatchObject({
+      matchKind: "exact",
+      matchField: "alias",
+      matchReason: "Exact alias match",
+    });
   });
   it("hydrates Product and inventory facts from current stock rather than indexed subtitles", async () => {
     const prod = await createProductFixture(

@@ -160,7 +160,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `notDeleted(table)` owns declared-table liveness; `notDeleted(alias)` and
   schema-free `liveAliasSql` (`server/lib/live-row.ts`) cover SQL relation
   aliases. Existing SQL-text composers use `liveAliasSqlText` with internal,
-  already declared aliases. The raw-predicate baseline retains only that text
+  already declared aliases; never interpolate its string into `sql` or
+  `drizzle.sql`, which binds it as a value. The liveness lint rule rejects that
+  direct interpolation. The raw-predicate baseline retains only that text
   owner and SearchDocument's unqualified partial-index inference predicate.
 - Name/alias retrieval: `server/lib/name-alias-match.ts` owns exact keys,
   array-element predicates and set-based identity keys. `resolveNames` uses
