@@ -15,6 +15,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import {
   fieldEnvelope,
+  fieldDecision,
   fieldEnvelopeFor,
   fieldDecisionOf,
   fieldValueOf,
@@ -126,6 +127,7 @@ const asJsonRecord = <Projection extends object>(
 ): JsonRecord => jsonRecord.parse(JSON.parse(JSON.stringify(value)));
 
 type ExplanationPathResult = { found: boolean; value: Json };
+const fieldOutcome = fieldDecision(z.json()).shape.outcome;
 
 /** A nullable parent means the projected value is null. An absent key is a
  * declaration/read-projection mismatch and must fail loudly. */
@@ -144,6 +146,13 @@ export function readExplanationPath(
       continue;
     }
     if (!(segment in record.data)) {
+      // An empty field outcome has no `value` member. It is known absence,
+      // rather than a broken declaration path into a populated outcome.
+      if (segment === "value") {
+        const outcome = fieldOutcome.safeParse(record.data);
+        if (outcome.success && outcome.data.kind === "empty")
+          return { found: true, value: null };
+      }
       return { found: false, value: null };
     }
     value = record.data[segment]!;

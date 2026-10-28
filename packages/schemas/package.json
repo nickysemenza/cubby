@@ -29,6 +29,7 @@
     "./mailbox-research": "./src/mailbox-research.ts",
     "./mail-import-outcome": "./src/mail-import-outcome.ts",
     "./ai-cost": "./src/ai-cost.ts",
+    "./ai-analysis-fields": "./src/ai-analysis-fields.ts",
     "./activity": "./src/activity.ts",
     "./agent-conversation": "./src/agent-conversation.ts",
     "./availability": "./src/availability.ts",

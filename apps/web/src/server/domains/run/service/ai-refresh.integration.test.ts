@@ -40,6 +40,7 @@ import {
   product,
   appSettings,
   feedback,
+  workItem,
 } from "~/server/db/schema";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
@@ -1313,7 +1314,7 @@ describe("targeted prompt refresh", () => {
     });
   });
 
-  it("publishes Product connection pairs without certifying an unavailable roster", async () => {
+  it("retains Product connection work without publishing an unavailable roster", async () => {
     const source = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic connection source" }),
@@ -1372,17 +1373,32 @@ describe("targeted prompt refresh", () => {
       .select()
       .from(aiEvaluation)
       .where(eq(aiEvaluation.id, evaluation!.id));
-    // Positive pairs publish without certifying an unavailable semantic roster.
+    // Incomplete coverage retries the whole source; retry evidence belongs to
+    // its WorkItem, while the pending evaluation keeps its queued state.
     expect(savedEvaluation).toMatchObject({
-      state: "retry_wait",
-      error: expect.stringContaining("candidate coverage is unconfirmed"),
+      state: "queued",
+      error: null,
     });
+    const [pending] = await getDb(ctx.db)
+      .select()
+      .from(workItem)
+      .where(
+        and(
+          eq(workItem.target, "ai.evaluation"),
+          eq(workItem.ref, evaluation!.id),
+        ),
+      );
+    expect(pending).toMatchObject({
+      attempts: 1,
+      lastError: expect.stringContaining("candidate coverage is unconfirmed"),
+    });
+    expect(pending?.readyAt.getTime()).toBeGreaterThan(Date.now());
     expect(
       await getDb(ctx.db)
         .select({ id: suggestion.id })
         .from(suggestion)
         .where(eq(suggestion.family, assessmentFamily.enum.product_pair)),
-    ).toHaveLength(4);
+    ).toHaveLength(0);
   });
 
   it("leaves activation unlocked during publication work and fences deactivation before commit", async () => {

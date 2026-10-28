@@ -3,7 +3,10 @@ import { and, getTableName, sql } from "drizzle-orm";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { project as table } from "~/server/db/schema";
-import { projectScaffold } from "~/server/domains/project/repo/lookup";
+import {
+  projectAttention,
+  projectScaffold,
+} from "~/server/domains/project/repo/lookup";
 import type { ProjectWorkContext } from "~/server/domains/project/repo/work-context";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import {
@@ -20,8 +23,9 @@ export const projectWorkSources = (
 ): WorkSource[] => [
   ...entityProblemSources("project", async (db, source, scope, assembly) => {
     const filters = compileProblemFilters("project", assembly);
-    if (assembly.some((filter) => filter.id === "attention"))
-      await context.attentionItems(db, scope);
+    const attention = assembly.some((filter) => filter.id === "attention")
+      ? await context.attentionItems(db, scope)
+      : undefined;
     return {
       query: selectWorkCandidates(db, source, {
         entity: "project",
@@ -38,6 +42,7 @@ export const projectWorkSources = (
             await projectScaffold.prepareWhere(
               db,
               projectFiltersSchema.parse(filters),
+              attention ? [[projectAttention, attention]] : [],
             ),
             recordScope(scope, sql`${table.shortcode}`),
           ),

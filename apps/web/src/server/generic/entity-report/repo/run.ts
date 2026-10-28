@@ -434,9 +434,11 @@ function findingActions(
   ];
 }
 
-const importFindings = (run: RunDetail): ReportBlock[] => [
+export const runFindingBlocks = (
+  findings: RunDetail["findings"],
+): ReportBlock[] => [
   records(
-    run.findings.map((finding) => {
+    findings.map((finding) => {
       const { lines, applyConfirm } =
         finding.status === "open"
           ? findingFix(finding)
@@ -752,7 +754,7 @@ const IMPORT_BUILDERS = {
   "run.import-progress-stopped": (run: RunDetail) =>
     isLiveRunStatus(run.status) ? [] : importProgress(run),
   "run.import-purchases": importPurchases,
-  "run.import-findings": importFindings,
+  "run.import-findings": (run) => runFindingBlocks(run.findings),
   "run.import-targets": importTargets,
   "run.import-prepared-orders": importPreparedOrders,
   "run.import-timeline": runTimelineBlocks,

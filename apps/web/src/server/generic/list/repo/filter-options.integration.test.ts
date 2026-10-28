@@ -29,7 +29,7 @@ describe("entity reference filter options", () => {
 
   // Computed relational titles have no stored label column. Reference rosters
   // must still load, search, and hydrate selections for those entities.
-  it("uses the shortcode when an entity has no stored display column", async () => {
+  it("uses the canonical title when an entity has no stored display column", async () => {
     const item = await createProduct(
       ctx.db,
       makeProductInput({ name: "Synthetic storage bin" }),
@@ -57,7 +57,9 @@ describe("entity reference filter options", () => {
       limit: 25,
       include: [],
     };
-    const expected = [{ id: entry.id, label: entry.id }];
+    const expected = [
+      { id: entry.id, label: "Synthetic storage bin · Synthetic shelf" },
+    ];
     expect(
       await getFilterOptions(ctx.db, {
         ...input,

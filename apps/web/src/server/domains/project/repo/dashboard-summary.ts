@@ -267,7 +267,7 @@ export async function projectDashboardSummary(
                 effectiveFieldSql<ProjectId | null>(
                   "task",
                   "projectId",
-                  "task",
+                  "Task",
                 ),
                 ids,
               ),

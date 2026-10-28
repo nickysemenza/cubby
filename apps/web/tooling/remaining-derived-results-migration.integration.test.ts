@@ -142,6 +142,9 @@ it("preserves populated predecessor decisions and queued work while initially pu
             ref: result.id,
           }),
         );
+      // Runtime readers target the current schema; predecessor assertions above
+      // remain at 0046 before carrying their retained work through later cutovers.
+      await migrateDatabase(runtime);
       await drainStoredDerived(db);
       for (const result of results) {
         const reads = await loadStoredDerived(

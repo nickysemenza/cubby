@@ -389,19 +389,21 @@ const defineImageJoinBinding = <
 /**
  * The gallery binding of an entity whose declaration says `images: "gallery"`.
  * Every binding targets the shared `EntityAttachment` table (ADR 0006); a null
- * Product purpose reads as `item` and a null Purchase document kind as `other`.
+ * Purchase document kind reads as `other`; Product galleries store `item`.
  */
 export const galleryBinding = (entityKind: GalleryEntity) =>
   defineImageJoinBinding({
     table: entityAttachment,
     parentIdColumn: entityAttachment.entityId,
-    insertRow: (entityId, imageId, sortOrder) => ({
-      entityId,
-      entityKind,
-      imageId,
-      sortOrder,
-      role: "attachment" as const,
-    }),
+    insertRow: (entityId, imageId, sortOrder) =>
+      ({
+        entityId,
+        entityKind,
+        imageId,
+        sortOrder,
+        role: "attachment",
+        purpose: entityKind === "product" ? "item" : null,
+      }) satisfies InferInsertModel<typeof entityAttachment>,
     sortOrderUpdate: (sortOrder) => ({ sortOrder }),
   });
 

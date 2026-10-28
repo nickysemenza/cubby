@@ -82,6 +82,7 @@ import {
   shortcodeSetCondition,
   unwrapDb,
 } from "~/server/db/helpers";
+import { registerReadPorts } from "~/server/entity-kernel/repo/read-ports";
 import { createAppError } from "~/server/errors/app-error";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { loadCurrentFieldOwnership } from "~/server/generic/assessment/repo/automatic-fields";
@@ -1770,13 +1771,15 @@ export function listScaffold<
       db: Database | DrizzleTransaction,
       filters: Filters,
       seeded: ReadonlyArray<readonly [ListPrepare<unknown>, unknown]> = [],
+      readContext?: QualityReadContext,
     ): Promise<SQL | undefined> {
+      const context = await scaffold.context(
+        db,
+        { filters, readIntent: "count" },
+        seeded,
+      );
       return scaffold.where(filters, {
-        context: await scaffold.context(
-          db,
-          { filters, readIntent: "count" },
-          seeded,
-        ),
+        context: context.withRead(readContext),
       });
     },
 
@@ -2437,7 +2440,11 @@ export function listScaffold<
     ) {
       if (request.projection && listEntity)
         selectedListProjection(listEntity, request.projection);
-      return scaffold.list(db, request, { ...spec, hydrate: (rows) => rows });
+      return scaffold.list(
+        db,
+        { ...request, projection: request.projection ?? [] },
+        { ...spec, hydrate: (rows) => rows },
+      );
     },
     /**
      * One list read: where → order → page → rows + count → hydrate. A
@@ -2775,7 +2782,7 @@ export function listScaffold<
     },
   };
   const { list: _executeList, ...publicScaffold } = scaffold;
-  return {
+  const result = {
     ...publicScaffold,
     evidence: readDeclaration.evidence,
     optionCount(): SQL | undefined {
@@ -2802,6 +2809,15 @@ export function listScaffold<
       return readPlan().fields;
     },
   };
+  registerReadPorts(entity, {
+    title: result.title,
+    fieldReads: async (db, codes) => {
+      // SAFETY: the query boundary erases the schema, not the native handle.
+      const readDb = db as Database | DrizzleTransaction;
+      return (await result.get(readDb, codes, [])).fieldReads;
+    },
+  });
+  return result;
 }
 
 /** Any entity's scaffold, as the kernel and generic modules receive it. */

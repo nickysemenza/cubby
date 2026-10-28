@@ -40,6 +40,8 @@ const gapSource: WorkSource = {
             await productScaffold.prepareWhere(
               db,
               productFiltersSchema.parse(filters),
+              [],
+              read.context,
             ),
             recordScope(scope, sql`${table.shortcode}`),
           ),
@@ -69,6 +71,8 @@ export const productWorkSources = (): WorkSource[] => [
             await productScaffold.prepareWhere(
               db,
               productFiltersSchema.parse(filters),
+              [],
+              read.context,
             ),
             recordScope(scope, sql`${table.shortcode}`),
           ),

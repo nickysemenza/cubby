@@ -78,6 +78,15 @@ it.each([
 );
 
 describe("field explanation projection", () => {
+  it("reads an empty inherited field outcome as known absence", () => {
+    expect(
+      readExplanationPath(
+        { outcome: { kind: "empty", reason: "unset" } },
+        "outcome.value",
+      ),
+    ).toEqual({ found: true, value: null });
+  });
+
   it("treats a nullable computed parent as a real null value", () => {
     expect(
       readExplanationPath({ totals: null }, "totals.nutrition.kcal"),

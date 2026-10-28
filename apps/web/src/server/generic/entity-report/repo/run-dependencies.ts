@@ -14,6 +14,7 @@ import { and, eq } from "drizzle-orm";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
+import { loadRunFindings } from "~/server/domains/purchase-import/repo/run-finding";
 import {
   loadRunDetail,
   loadRunLog,
@@ -40,6 +41,7 @@ import {
   isLiveRunStatus,
   liveProgressBlocks,
   runDiagnosticsBlocks,
+  runFindingBlocks,
   runLogBlocks,
   runStepsBlocks,
   runTimelineBlocks,
@@ -81,15 +83,18 @@ const runDetail = reportDependency((execution) =>
   loadRunDetail(execution.request.db, execution.request.id),
 );
 
-/** Only applicable import reports need full detail. Other purposes and a
- * standalone timeline use their own evidence projections. */
+/** Only applicable import reports need full detail. Findings and a standalone
+ * timeline use their own evidence projections. */
 const runBase = reportDependency(async (execution) => {
   const code = runShortcode.parse(execution.request.id);
   const header = await execution.read(runHeader);
   const needsDetail =
     hasImportRunReports(header.purpose) &&
     execution.request.slots.some(
-      (slot) => slot !== "run.import-timeline" && isImportReportSlot(slot),
+      (slot) =>
+        slot !== "run.import-findings" &&
+        slot !== "run.import-timeline" &&
+        isImportReportSlot(slot),
     );
   const detail = needsDetail ? await execution.read(runDetail) : undefined;
   return {
@@ -235,7 +240,11 @@ export const RUN_REPORTS = {
   "run.import-progress-live": importSlot("run.import-progress-live"),
   "run.import-progress-stopped": importSlot("run.import-progress-stopped"),
   "run.import-purchases": importSlot("run.import-purchases"),
-  "run.import-findings": importSlot("run.import-findings"),
+  "run.import-findings": runSlot(async (execution) => ({
+    blocks: runFindingBlocks(
+      await loadRunFindings(execution.request.db, await execution.read(runId)),
+    ),
+  })),
   "run.import-targets": importSlot("run.import-targets"),
   "run.import-prepared-orders": importSlot("run.import-prepared-orders"),
   "run.import-timeline": runSlot(async (execution) => ({

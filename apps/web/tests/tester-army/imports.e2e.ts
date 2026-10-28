@@ -324,14 +324,19 @@ test("Run progress is visible and dismissing a finding persists member resolutio
   const { console: run } = data.scenarios();
   await data.open(`/runs/${run.runId}`);
   await expect(screen.getByText("Reading synthetic orders")).toBeVisible();
-  await data.open("/problems#import-findings");
+  await data.open(`/runs/${run.runId}#import-findings`);
   await expect(screen.getByText("Synthetic finding to resolve")).toBeVisible();
   await screen
     .getByRole("listitem")
     .filter({ hasText: "Synthetic finding to resolve" })
     .getByRole("button", "Dismiss")
     .click();
-  await expect(screen.getByText("Synthetic finding to resolve")).toBeHidden();
+  await expect(
+    screen
+      .getByRole("listitem")
+      .filter({ hasText: "Synthetic finding to resolve" })
+      .getByRole("button", "Dismiss"),
+  ).toBeHidden();
   const snapshot = z
     .object({
       findings: z.array(z.object({ id: z.string(), status: z.string() })),

@@ -13,12 +13,12 @@ type ReadPorts = {
 };
 const ports = new Map<Entity, ReadPorts>();
 
-/** Repository declarations publish ports without importing their graph from read compilers. */
+/** Scaffolds publish ports without importing the repository graph from read compilers. */
 export function registerReadPorts(entity: Entity, read: ReadPorts): void {
   ports.set(entity, read);
 }
 
-/** Resolved only while serving a request, after repository initialization. */
+/** A domain's read ports exist as soon as its scaffold has initialized. */
 export function repositoryReadPorts(entity: Entity): ReadPorts | undefined {
   return ports.get(entity);
 }

@@ -412,7 +412,7 @@ function evaluatedFieldSteps(
 async function inventoryOwnershipFieldSteps(
   db: Database,
   shortcode: string,
-  resolution: FieldResolution,
+  resolution: FieldResolution | null,
 ): Promise<FieldSteps> {
   const row = await getDb(db).query.inventoryEntry.findFirst({
     where: and(
@@ -432,6 +432,7 @@ async function inventoryOwnershipFieldSteps(
   const currentResolution = trace
     ? inventoryOwnerResolution(trace.ownership, trace.steps)
     : resolution;
+  if (!currentResolution) return { steps: [], fallbackSource: null };
   return {
     currentResolution,
     steps: [
@@ -1386,6 +1387,13 @@ export async function loadFieldResolutionEvidence(
 ): Promise<{ evidence: Evidence | null; truncated: boolean }> {
   if (entity === "product" && field === "owners")
     return productOwnersEvidence(db, shortcode);
+  // A selected-record explanation can run before the ownership snapshot is
+  // published. Load its exact current ladder here, never on ordinary list reads.
+  const prepared =
+    !resolution && entity === "inventory" && field === "ownerLedgerPartyId"
+      ? await inventoryOwnershipFieldSteps(db, shortcode, null)
+      : undefined;
+  resolution ??= prepared?.currentResolution ?? null;
   if (!resolution) return { evidence: null, truncated: false };
   if (entity === "product" && field === "price")
     return productPriceEvidence(db, shortcode, resolution);
@@ -1397,13 +1405,8 @@ export async function loadFieldResolutionEvidence(
     ["projectId", "trade", "costType", "spendingCategoryId"].includes(field)
   )
     return allocatedExpenseEvidence(db, shortcode, field, resolution);
-  const { steps, fallbackSource, currentResolution } = await fieldSteps(
-    db,
-    entity,
-    shortcode,
-    field,
-    resolution,
-  );
+  const { steps, fallbackSource, currentResolution } =
+    prepared ?? (await fieldSteps(db, entity, shortcode, field, resolution));
   const evidence = await evidenceBlock(
     db,
     entity,

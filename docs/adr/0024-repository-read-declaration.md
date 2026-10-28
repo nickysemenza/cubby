@@ -1,4 +1,4 @@
-# ADR 0023: Repository read declaration
+# ADR 0024: Repository read declaration
 
 Status: Accepted. Amends [ADR 0006](0006-durable-entity-identity-and-attachments.md)
 (reads stop following merge redirects) and builds on
@@ -58,7 +58,17 @@ read fact is stated once:
   aggregate statement. They load only for a full page, or for a projection
   that names a total key.
 - **Population:** `scaffold.where(filters)`. Dashboard counts are
-  `scaffold.where(declared initialFilter)` in a single statement.
+  `scaffold.where` over the declared opening filters in a single statement.
+  Opening filters use column IDs and pass through the shared filter compiler
+  before request validation; column IDs are not wire filter keys. Server reads
+  use generated filter codecs without picker presentation or option renderers.
+
+Scaffold construction publishes its title and field-context read ports. Domain
+operation entry points can therefore use public field envelopes without first
+loading the complete kernel repository graph. Read compilers must not rely on
+`defineRepository` import order to make those ports available.
+Borrowed-image SQL branches compile lazily after the module graph initializes;
+traversal and list-filter imports must not observe a partly initialized roster.
 
 **A projection is a field list.** `ListProjection` is `readonly string[]`, and
 admission is per key; projection groups are gone. The scaffold publishes

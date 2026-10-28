@@ -1,8 +1,10 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { feedbackAuthority, runFindingEntity } from "@cubby/schemas/assessment";
-import { and, eq, sql } from "drizzle-orm";
+import { storedImportFix } from "@cubby/schemas/purchase-import";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import type { RunDetail } from "~/contracts/run.contract";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { databaseForTransaction, getDb } from "~/server/db/helpers";
 import { assessment, assessmentState, ledgerParty } from "~/server/db/schema";
@@ -40,6 +42,34 @@ export type RunFindingPublication = {
   /** The import applied the fix itself; recorded as automatic Feedback. */
   autoApplied?: boolean;
 };
+
+/** Findings are shared by every Run purpose, independently of import detail. */
+export async function loadRunFindings(
+  db: Database,
+  runId: string,
+): Promise<RunDetail["findings"]> {
+  const findings = await getDb(db)
+    .select({
+      id: runFindingColumns.id,
+      kind: runFindingColumns.kind,
+      summary: runFindingColumns.summary,
+      status: runFindingColumns.status,
+      proposedFix: runFindingColumns.proposedFix,
+      autoApplied: runFindingColumns.autoApplied,
+      probability: runFindingColumns.probability,
+      createdAt: runFindingColumns.createdAt,
+      expiresAt: runFindingColumns.expiresAt,
+    })
+    .from(assessmentState)
+    .where(and(isRunFinding, eq(assessmentState.runId, runId)))
+    .orderBy(asc(assessmentState.createdAt), asc(assessmentState.id));
+  return findings.map((finding) => ({
+    ...finding,
+    proposedFix: storedImportFix.parse(finding.proposedFix),
+    createdAt: finding.createdAt.toISOString(),
+    expiresAt: finding.expiresAt?.toISOString() ?? null,
+  }));
+}
 
 const laterDeadline = (current: string | null, next: string | null) =>
   current === null || next === null
