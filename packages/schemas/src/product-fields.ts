@@ -66,6 +66,19 @@ export const productPricingEvidence = productPricingOut.pick({
   partial: true,
 });
 
+/** Private inputs captured with the scalar valuation-price publication. */
+export const productPriceFacts = z.object({
+  value: moneyNullable,
+  evidence: z.object({
+    manualPrice: moneyNullable,
+    service: z.boolean(),
+    knownCost: z.number(),
+    knownUnitCount: z.number(),
+    knownExpenseCount: z.number().int().nonnegative(),
+    unknownExpenseCount: z.number().int().nonnegative(),
+  }),
+});
+
 export { moneyNullable, positiveMoneyNullable };
 
 /**

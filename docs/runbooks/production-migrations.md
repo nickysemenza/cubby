@@ -160,13 +160,16 @@ not performed; migration success alone is not deployment verification.
 
 ## Derived values cutover
 
-### Service Cost evidence (0057)
+### Publication evidence (0057)
 
-`0057_service_cost_evidence` queues only retained service Cost publications missing
-their positive charge total. It leaves stored values, publication timestamps,
+`0057_publication_evidence` queues retained service Cost publications missing
+their positive charge total and scalar Product/Inventory publications missing
+private computation inputs. It leaves stored values, publication timestamps,
 existing tickets, member-edit priority and retry state untouched. After deployment,
 verify that pending refreshes retain their old Cost and that a completed refresh
-publishes its charge total with the average and count. Legacy evidence remains
+publishes its charge total with the average and count. Verify scalar valuation,
+quantity and USDA explanations use their captured inputs while ordinary list
+responses omit that evidence. Legacy evidence remains
 explicitly unavailable until that publication; opening a popover is never a repair.
 
 ### Recipe publication identity (0056)

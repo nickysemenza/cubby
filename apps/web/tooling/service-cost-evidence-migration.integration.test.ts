@@ -38,35 +38,62 @@ it("retains service Cost publications and existing retry tickets during evidence
           }),
         ],
       );
+      await client.query(
+        `INSERT INTO "DerivedValue" ("entityId",kind,key,value,"decidedBy","computedAt")
+        VALUES ($1,'product','price','65',$2,'2026-01-01T12:00:00Z')`,
+        [
+          id,
+          JSON.stringify({
+            outcome: { kind: "value" },
+            provenance: { kind: "computed" },
+            ...(evidence
+              ? { evidence: { knownCost: 130, knownUnitCount: 2 } }
+              : {}),
+          }),
+        ],
+      );
     }
-    await client.query(`DELETE FROM "WorkItem" WHERE target='product.cost'`);
+    await client.query(
+      `DELETE FROM "WorkItem" WHERE target IN ('product.cost','product.price')`,
+    );
     await client.query(
       `INSERT INTO "WorkItem" (drain,target,ref,priority,attempts,"lastError","readyAt")
-      VALUES ('derived:drain','product.cost',$1,0,3,'Synthetic retry',now()+interval '1 hour')`,
+      SELECT 'derived:drain',target,$1,0,3,'Synthetic retry',now()+interval '1 hour'
+      FROM (VALUES ('product.cost'),('product.price')) AS targets(target)`,
       [queued],
     );
     const publications = async () =>
       (
         await client.query(
-          `SELECT * FROM "DerivedValue" WHERE key='cost' ORDER BY "entityId"`,
+          `SELECT * FROM "DerivedValue" WHERE key IN ('cost','price') ORDER BY "entityId",key`,
         )
       ).rows;
     const ticket = async () =>
       (
         await client.query(
-          `SELECT * FROM "WorkItem" WHERE target='product.cost' AND ref=$1`,
+          `SELECT * FROM "WorkItem" WHERE target IN ('product.cost','product.price') AND ref=$1 ORDER BY target`,
           [queued],
         )
       ).rows;
     const beforePublications = await publications();
     const beforeTicket = await ticket();
-    await migrateDatabase(db, { through: "0057_service_cost_evidence" });
+    await migrateDatabase(db, { through: "0057_publication_evidence" });
     expect(await publications()).toEqual(beforePublications);
     expect(await ticket()).toEqual(beforeTicket);
     expect(
       (
         await client.query(
           `SELECT ref,priority FROM "WorkItem" WHERE target='product.cost' ORDER BY ref`,
+        )
+      ).rows,
+    ).toEqual([
+      { ref: queued, priority: 0 },
+      { ref: missing, priority: 2 },
+    ]);
+    expect(
+      (
+        await client.query(
+          `SELECT ref,priority FROM "WorkItem" WHERE target='product.price' ORDER BY ref`,
         )
       ).rows,
     ).toEqual([

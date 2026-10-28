@@ -5,6 +5,7 @@ import {
   productId,
 } from "@cubby/schemas/identifiers";
 import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
+import { productPriceFacts } from "@cubby/schemas/product-fields";
 import type { RawProductOutput } from "@cubby/schemas/product-raw-read";
 import { round2 } from "@cubby/shared";
 import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
@@ -231,6 +232,34 @@ const loadPricingAggregates = async (
     });
   }
   return aggregateById;
+};
+
+/** Capture the same authoritative aggregate used to select the scalar price. */
+export const loadProductPriceFacts = async (
+  db: Database | DrizzleTransaction,
+  products: ReadonlyArray<{ id: ProductId; price: number | null }>,
+): Promise<ReadonlyMap<ProductId, z.output<typeof productPriceFacts>>> => {
+  const aggregates = await loadPricingAggregates(
+    db,
+    products.map((row) => row.id),
+    {},
+  );
+  return new Map(
+    products.map((row) => {
+      const aggregate = aggregates.get(row.id) ?? EMPTY_AGGREGATE;
+      return [
+        row.id,
+        productPriceFacts.parse({
+          value: resolveProductPricing(row.price, aggregate).effectivePrice,
+          evidence: {
+            ...aggregate,
+            service: aggregate.service ?? false,
+            manualPrice: row.price,
+          },
+        }),
+      ];
+    }),
+  );
 };
 
 /**

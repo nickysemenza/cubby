@@ -1,3 +1,4 @@
+import type { StoredFieldDecision } from "@cubby/schemas/derived-value";
 import type {
   fieldAssignmentOwnership,
   ReadableFieldEnvelope,
@@ -7,6 +8,7 @@ import { z } from "zod";
 /** Batch read facts without importing database or hydration implementations. */
 export interface StoredDerivedRead {
   readonly value: unknown;
+  readonly evidence?: StoredFieldDecision["evidence"];
   readonly computedAt: string | null;
   readonly error: string | null;
   readonly decision?: Extract<

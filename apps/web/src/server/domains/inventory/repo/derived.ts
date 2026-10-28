@@ -19,7 +19,7 @@ import {
   computeProductOwners,
   loadInventoryOwnershipTraces,
 } from "./ownership";
-import { loadInventoryValuations } from "./valuation";
+import { loadInventoryValuationFacts } from "./valuation";
 
 const inventoryValuationCompute: DerivedCompute = async (db, ids) => {
   const rows = await unwrapDb(db)
@@ -37,11 +37,24 @@ const inventoryValuationCompute: DerivedCompute = async (db, ids) => {
         notDeleted(inventoryEntry),
       ),
     );
-  const valuations = await loadInventoryValuations(db, rows);
+  const valuations = await loadInventoryValuationFacts(db, rows);
   const out = new Map<string, DerivedComputed>();
   for (const row of rows) {
-    const value = valuations.get(row.id) ?? null;
-    out.set(row.id, { value, sort: value });
+    const facts = valuations.get(row.id);
+    if (!facts) throw new Error("Inventory valuation omitted an admitted row");
+    const value = facts.value;
+    out.set(row.id, {
+      value,
+      sort: value,
+      decision: {
+        outcome:
+          value === null
+            ? { kind: "empty", reason: "unset" }
+            : { kind: "value" },
+        provenance: { kind: "computed" },
+        evidence: facts.evidence,
+      },
+    });
   }
   return out;
 };

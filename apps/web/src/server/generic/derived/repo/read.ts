@@ -207,6 +207,7 @@ export async function loadStoredDerived(
   entity: Entity,
   ids: readonly string[],
   keys: readonly string[],
+  options: { includeEvidence?: boolean } = {},
 ): Promise<Map<string, Map<string, StoredDerivedRead>>> {
   const declarations = keys.map((key) => requireStored(entity, key));
   const out = new Map<string, Map<string, StoredDerivedRead>>();
@@ -220,7 +221,8 @@ export async function loadStoredDerived(
         declarations.map(({ key, target, clock }) => ({ key, target, clock })),
       )}::jsonb) AS declared(key text, target text, clock text)
     )
-    SELECT i.id AS "entityId", k.key, v.value, v."decidedBy", v."computedAt",
+    SELECT i.id AS "entityId", k.key, v.value,
+           ${options.includeEvidence ? sql`v."decidedBy"` : sql`v."decidedBy" - ${storedFieldDecision.keyof().enum.evidence}`} AS "decidedBy", v."computedAt",
            (d.ref IS NOT NULL OR k."fanoutPending") AS pending,
            (d.ref IS NOT NULL OR k."fanoutPending" OR (k.clock = 'householdDay' AND
              ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date)) IS TRUE AS stale,
@@ -245,6 +247,9 @@ export async function loadStoredDerived(
     );
     byKey.set(row.key, {
       value: row.value ?? null,
+      ...(metadata.success && metadata.data.evidence !== undefined
+        ? { evidence: metadata.data.evidence }
+        : {}),
       ...(decision.success ? { decision: decision.data } : {}),
       resultExists: row.computedAt !== null && decision.success,
       stale: row.stale,

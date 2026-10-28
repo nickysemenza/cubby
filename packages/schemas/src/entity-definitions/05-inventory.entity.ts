@@ -506,15 +506,14 @@ export const { definition, readSchemas } = defineEntityModel(
           explanation: {
             ruleId: "inventory.valuation",
             description:
-              "Published in the background from the inventory amount and the product's price and unit mappings. Updating means a new calculation is pending; the explanation compares the published value with a live calculation.",
+              "Published from the inventory amount and its product's conversion graph, including the exact valuation-price edge. The explanation uses that publication's captured inputs; live comparison is an explicit diagnostic.",
             resolver: "productValuation",
             readPath: "valuation",
             sourceDependencies: [
-              { path: "amount", label: "Inventory amount" },
-              { path: "product.unitMappings", label: "Current unit mappings" },
+              { path: "storedEvidence.amount", label: "Inventory amount" },
               {
-                path: "product.price",
-                label: "Current effective product price",
+                path: "storedEvidence.unitMappings",
+                label: "Published conversion and price mappings",
               },
             ],
           },

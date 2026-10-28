@@ -26,6 +26,7 @@ import { expenseSpendingCategoryResolutionSql } from "~/server/domains/expense/r
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { updateProductCategory } from "~/server/domains/product-category/repo/product-category";
+import { updateProduct } from "~/server/domains/product/repo/crud";
 import { loadProductPricing } from "~/server/domains/product/repo/pricing";
 import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -85,6 +86,16 @@ describe("derived field explanations against canonical records", () => {
         (source) => source.label === "Resolved tracking policy",
       )?.value,
     ).toBe(true);
+    const food = await explainField(context(), {
+      entityKind: "product",
+      entityId: product.id,
+      field: "food",
+      surface: "list",
+    });
+    expect(food.publication?.kind).toBe("current");
+    expect(food.sources).toContainEqual(
+      expect.objectContaining({ label: "Published USDA lookup", value: null }),
+    );
     // Historical publications predate optional stock-input capture.
     await unwrapDb(ctx.db)
       .execute(sql`UPDATE "DerivedValue" SET value=value-'stockEvidence'
@@ -1102,6 +1113,70 @@ describe("derived field explanations against canonical records", () => {
         }),
       ]),
     );
+    await updateProduct(ctx.db, product.entityId, { price: null }, ctx.actor);
+    await drainStoredDerived(ctx.db);
+    const derived = await explainField(context(), {
+      entityKind: "product",
+      entityId: product.id,
+      field: "price",
+      surface: "list",
+    });
+    expect(fieldValueOf(derived.envelope)).toBe(6);
+    expect(derived.publication?.kind).toBe("current");
+    expect(derived.sources).toContainEqual(
+      expect.objectContaining({
+        label: "Weighted acquisition cost",
+        value: 12,
+      }),
+    );
+    await updateExpense(ctx.db, expense.output.id, { cost: 24 }, ctx.actor);
+    const stale = await explainField(context(), {
+      entityKind: "product",
+      entityId: product.id,
+      field: "price",
+      surface: "list",
+      displayedResult: derived.envelope.result,
+    });
+    expect(fieldValueOf(stale.envelope)).toBe(6);
+    expect(stale.sources).toContainEqual(
+      expect.objectContaining({
+        label: "Weighted acquisition cost",
+        value: 12,
+      }),
+    );
+    const quantity = await explainField(context(), {
+      entityKind: "product",
+      entityId: product.id,
+      field: "ledgerExpectedQuantity",
+      surface: "list",
+    });
+    expect(quantity.publication?.kind).toBe("current");
+    expect(quantity.sources).toContainEqual(
+      expect.objectContaining({
+        label: "Expense quantity ledger",
+        value: expect.objectContaining({ acquiredUnits: 2 }),
+      }),
+    );
+    const variance = await explainField(context(), {
+      entityKind: "product",
+      entityId: product.id,
+      field: "quantityVariance",
+      surface: "list",
+    });
+    expect(variance.publication?.kind).toBe("current");
+    expect(fieldValueOf(variance.envelope)).toBeNull();
+    await drainStoredDerived(ctx.db);
+    expect(
+      (
+        await explainField(context(), {
+          entityKind: "product",
+          entityId: product.id,
+          field: "price",
+          surface: "list",
+          displayedResult: derived.envelope.result,
+        })
+      ).publication?.kind,
+    ).toBe("superseded");
   });
 
   it("uses the same explicit owner and evidence fingerprint as inventory detail", async () => {

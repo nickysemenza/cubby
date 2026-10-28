@@ -2974,6 +2974,15 @@ controls remain explicitly separate from that evidence. Additional evidence not
 captured in the publication is unavailable rather than reconstructed from current
 sources. Expense beneficiary portions use this binding to keep
 contributor references out of ordinary list payloads.
+Scalar publications retain their numeric/null shape and may capture private
+inputs in their atomic decision metadata. Explanations expose these as
+`storedEvidence` from the same MVCC snapshot and publication timestamp. Ordinary
+stored reads remove that evidence in SQL before transfer and never carry it in
+public field decisions. Inventory valuation captures the actual conversion graph,
+including the unrounded price edge; Product price captures its weighted cost and
+quantity operands, quantities capture their ledger and counted units, and USDA
+food captures its chosen lookup. Missing evidence is unavailable, including for
+a retained successful empty result; it is never reconstructed from current rows.
 An absent optional evidence path in a legacy publication leaves the value and
 available aggregate evidence readable, but reports the explanation unavailable.
 It must not throw, reconstruct the missing inputs live, or certify partial
@@ -3002,6 +3011,9 @@ A fixed dependency marks only those target rows when any upstream publication
 changes; it does not subscribe to every `DerivedValue` write. A unit test checks
 every declared table and column against the Drizzle schema: PL/pgSQL resolves
 trigger columns only when a row fires, so a misspelled column would fail saves.
+Fixed-target inputs queue one constant fanout reference independently of the
+source's matched UUID. A nullable source reference must not silently suppress
+invalidation; only the drain selects the fixed target rows.
 
 Inputs follow the precision and relationships of the compute. Exact valuations
 watch raw pricing inputs rather than a rounded stored price. Kit-link and

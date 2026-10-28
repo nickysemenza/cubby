@@ -160,9 +160,27 @@ export const productFoodCompute =
       usdaClient,
     );
     return new Map(
-      rows.map((row) => [
-        row.id,
-        { value: foodSummary.nullable().parse(row.food) },
-      ]),
+      rows.map((row) => {
+        const value = foodSummary.nullable().parse(row.food);
+        return [
+          row.id,
+          {
+            value,
+            sort: null,
+            decision: {
+              outcome:
+                value === null
+                  ? { kind: "empty" as const, reason: "unset" as const }
+                  : { kind: "value" as const },
+              provenance: { kind: "computed" as const },
+              evidence: {
+                fdcId: row.fdc_id,
+                primaryGtin: row.primaryGtin,
+                lookup: foodLookupParamFromProduct(row),
+              },
+            },
+          },
+        ];
+      }),
     );
   };
