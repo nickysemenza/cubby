@@ -8,7 +8,10 @@ test("connection diagnostics require a member and isolate upstream failures", as
   playwright,
   baseURL,
 }) => {
-  const anonymous = await playwright.request.newContext({ baseURL });
+  const anonymous = await playwright.request.newContext({
+    baseURL,
+    storageState: { cookies: [], origins: [] },
+  });
   try {
     const rejected = await anonymous.get("/api/debug/timing");
     expect(rejected.status()).toBe(401);
