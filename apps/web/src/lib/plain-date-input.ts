@@ -38,6 +38,9 @@ const WEEKDAYS = new Map<string, Weekday>([
 const FROM_WEEKDAY_PATTERN =
   /^(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(days?|weeks?|months?|years?)\s+from\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/i;
 
+const RELATIVE_DURATION_PATTERN =
+  /^(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(days?|weeks?|months?|years?)\s+(ago|from now)$/i;
+
 const TIME_COMPONENTS: readonly Component[] = [
   "hour",
   "minute",
@@ -51,6 +54,29 @@ function parseNumber(value: string): number | null {
   const numeric = Number.parseInt(value, 10);
   if (Number.isFinite(numeric)) return numeric;
   return NUMBER_WORDS.get(value.toLowerCase()) ?? null;
+}
+
+function shiftCalendarDate(base: Date, amount: number, unit: string): Date {
+  if (unit.startsWith("day")) return addDays(base, amount);
+  if (unit.startsWith("week")) return addWeeks(base, amount);
+  if (unit.startsWith("month")) return addMonths(base, amount);
+  return addYears(base, amount);
+}
+
+/** Relative durations are calendar dates, not Chrono's time-of-day results. */
+function parseRelativeDuration(
+  input: string,
+  referenceDate: Date,
+): Date | null {
+  const match = RELATIVE_DURATION_PATTERN.exec(input);
+  const amount = match?.[1] ? parseNumber(match[1]) : null;
+  const unit = match?.[2]?.toLowerCase();
+  if (amount === null || !unit) return null;
+  return shiftCalendarDate(
+    referenceDate,
+    match?.[3]?.toLowerCase() === "ago" ? -amount : amount,
+    unit,
+  );
 }
 
 /**
@@ -76,10 +102,7 @@ function parseDurationFromWeekday(
   if (amount === null || weekday === undefined) return null;
 
   const base = nextDay(referenceDate, weekday);
-  if (unit.startsWith("day")) return addDays(base, amount);
-  if (unit.startsWith("week")) return addWeeks(base, amount);
-  if (unit.startsWith("month")) return addMonths(base, amount);
-  return addYears(base, amount);
+  return shiftCalendarDate(base, amount, unit);
 }
 
 /**
@@ -94,9 +117,11 @@ export function parsePlainDateInput(
   const input = rawInput.trim().replace(/\s+/g, " ");
   if (input === "") return { ok: true, value: null };
 
-  const durationFromWeekday = parseDurationFromWeekday(input, referenceDate);
-  if (durationFromWeekday) {
-    return { ok: true, value: formatPlainDate(durationFromWeekday) };
+  const duration =
+    parseRelativeDuration(input, referenceDate) ??
+    parseDurationFromWeekday(input, referenceDate);
+  if (duration && !Number.isNaN(duration.getTime())) {
+    return { ok: true, value: formatPlainDate(duration) };
   }
 
   const results = casual.parse(input, referenceDate);

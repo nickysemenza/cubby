@@ -11,6 +11,7 @@ import { mailCoverage } from "@cubby/schemas/mail-coverage";
 import {
   controlledMailImportInput,
   controlledMailImportOutput,
+  mailMatchPreview,
 } from "@cubby/schemas/mail-coverage-control";
 import {
   mailImportStatus,
@@ -268,6 +269,12 @@ export const runContract = defineContract(
         tags: [["run"], ["email"], ["vendor"], ["vendorAccount"]],
         profile: "live-status",
       },
+    }),
+    mailMatchPreview: query({
+      description:
+        "Preview matching Gmail message counts for one Vendor and the connected member mailbox, using the same inclusive date bounds and verified sender/domain search as controlled import. Larger results are estimates; no messages are ingested and automation is unchanged.",
+      input: controlledMailImportInput,
+      output: mailMatchPreview,
     }),
     controlledMailImport: mutation({
       description:

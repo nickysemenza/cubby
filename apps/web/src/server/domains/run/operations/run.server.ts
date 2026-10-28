@@ -13,7 +13,10 @@ import { runContract } from "~/contracts/run.contract";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { oauthRefreshToken, run as runTable } from "~/server/db/schema";
-import { startControlledMailImport } from "~/server/domains/purchase-import/operations/gmail/controlled-import";
+import {
+  startControlledMailImport,
+  previewControlledMailMatches,
+} from "~/server/domains/purchase-import/operations/gmail/controlled-import";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { commitPurchaseImport } from "~/server/domains/purchase-import/operations/import-orders";
 import {
@@ -223,6 +226,8 @@ async function changeMailImport(
 export const runHandlers = implementOperationDomain(runContract, {
   mailCoverage: async (context) =>
     readMailCoverage(context.db, context.auth.userId),
+  mailMatchPreview: async (context, input) =>
+    previewControlledMailMatches(context.db, context.actorContext, input),
   controlledMailImport: async (context, input) => {
     await memberParty(context);
     return startControlledMailImport(context.db, context.actorContext, input);

@@ -58,7 +58,11 @@ not retry or restart until imports are resumed. Follow the returned successor;
 the preceding attempt remains immutable.
 
 For a member-requested Vendor-only mailbox import, read
-`run_read.mail_coverage`, then call `run.controlled_mail_import` with the chosen
+`run_read.mail_coverage`. Use `run_read.mail_match_preview` with the chosen
+Vendor, mailbox and date bounds to check Gmail before import: it reads one
+union search without ingesting or pausing. Respect its `approximate` flag and
+unknown count; matches are candidates, not eligible Purchase totals. Then
+call `run.controlled_mail_import` with the chosen
 Vendor, owned mailbox and optional received-date bounds. This pauses other
 automatic imports for that mailbox until the member explicitly resumes them;
 active work finishes before the selected scope runs. Paid AI is allowed within

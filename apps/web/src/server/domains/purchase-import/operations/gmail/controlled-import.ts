@@ -2,13 +2,14 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   controlledMailImportInput,
   controlledMailImportOutput,
+  mailMatchPreview,
+  type MailMatchPreview,
   type ControlledMailImportInput,
   type ControlledMailImportOutput,
 } from "@cubby/schemas/mail-coverage-control";
 import { mailboxDiscoveryProgress } from "@cubby/schemas/mailbox-research";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
-import { householdDateTime, shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -20,9 +21,14 @@ import {
   findControlledMailImport,
   type ControlledMailRequest,
 } from "~/server/domains/purchase-import/repo/controlled-mail-import";
+import { gmailProviderForUser } from "~/server/domains/purchase-import/repo/gmail/provider";
 import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
-import { vendorMailQueries } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
+import {
+  mailSearchDateRange,
+  eligibleMailSearchQuery,
+  vendorMailQueries,
+} from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
@@ -65,12 +71,14 @@ export async function launchQueuedControlledMailImport(
   });
 }
 
-export async function startControlledMailImport(
+async function selectedMailScope(
   db: Database,
   actor: ActorContext,
-  submitted: ControlledMailImportInput,
-): Promise<ControlledMailImportOutput> {
-  const input = controlledMailImportInput.parse(submitted);
+  input: ControlledMailImportInput,
+): Promise<{
+  seller: typeof vendor.$inferSelect;
+  mailbox: Awaited<ReturnType<typeof listMemberMailboxes>>[number];
+}> {
   const mailbox = (await listMemberMailboxes(db)).find(
     (target) =>
       target.userId === actor.userId && target.mailboxId === input.mailboxId,
@@ -91,6 +99,16 @@ export async function startControlledMailImport(
     .limit(1);
   if (!seller)
     throw new Error("Choose a live Vendor with a mail search identity.");
+  return { seller, mailbox };
+}
+
+export async function startControlledMailImport(
+  db: Database,
+  actor: ActorContext,
+  submitted: ControlledMailImportInput,
+): Promise<ControlledMailImportOutput> {
+  const input = controlledMailImportInput.parse(submitted);
+  const { seller, mailbox } = await selectedMailScope(db, actor, input);
   // A new request must find mail received since a prior search completed.
   // Frozen request keys resume on replay without resetting canonical cursors.
   const controlKey = crypto.randomUUID();
@@ -100,21 +118,7 @@ export async function startControlledMailImport(
         input.from || input.to
           ? `${query.key}:range:${input.from ?? ""}:${input.to ?? ""}:controlled:${controlKey}`
           : `${query.key}:controlled:${controlKey}`,
-      // Epoch boundaries preserve inclusive household days across daylight saving changes.
-      query:
-        input.from || input.to
-          ? [
-              `(${query.query})`,
-              input.from
-                ? `after:${Math.floor(householdDateTime(input.from).getTime() / 1000) - 1}`
-                : null,
-              input.to
-                ? `before:${Math.floor(householdDateTime(shiftPlainDate(input.to, 1)).getTime() / 1000)}`
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" ")
-          : query.query,
+      query: mailSearchDateRange(query.query, input),
     }),
   );
   if (!queries.length)
@@ -135,7 +139,7 @@ export async function startControlledMailImport(
       );
     await setMailImport(
       tx,
-      { mailboxId: mailbox.mailboxId, enabled: false },
+      { mailboxId: input.mailboxId, enabled: false },
       { kind: "controlled_pause" },
     );
     // The completed form avoids the active-discovery constraint; this
@@ -151,7 +155,7 @@ export async function startControlledMailImport(
         notes: `Import mail for ${seller.name}`,
         input: {
           emailAuditVersion: 1,
-          mailboxId: mailbox.mailboxId,
+          mailboxId: input.mailboxId,
           executionPolicy: "import",
           scopedQueries: queries,
           controlled: { from: input.from, to: input.to },
@@ -174,10 +178,47 @@ export async function startControlledMailImport(
     // This grant permits paid AI only within the household budget.
     await recordPaidGrant(tx, actor, { runId: id });
   });
-  const control = await launchQueuedControlledMailImport(db, mailbox.mailboxId);
+  const control = await launchQueuedControlledMailImport(db, input.mailboxId);
   if (!control) throw new Error("The controlled import request was not saved.");
   return controlledMailImportOutput.parse({
     run: control.shortcode,
     state: control.status === "running" ? "running" : "queued",
+  });
+}
+
+/** One union search avoids double-counting messages matching several senders. */
+export async function previewControlledMailMatches(
+  db: Database,
+  actor: ActorContext,
+  submitted: ControlledMailImportInput,
+): Promise<MailMatchPreview> {
+  const input = controlledMailImportInput.parse(submitted);
+  const { seller } = await selectedMailScope(db, actor, input);
+  const queries = vendorMailQueries(seller.id, vendorSearchTerms(seller));
+  if (!queries.length)
+    throw new Error(
+      "This Vendor has no verified sender or website domain to search.",
+    );
+  const query = eligibleMailSearchQuery(
+    mailSearchDateRange(
+      queries.map((entry) => `(${entry.query})`).join(" OR "),
+      input,
+    ),
+  );
+  const provider = await gmailProviderForUser(
+    db,
+    actor.userId,
+    input.mailboxId,
+  );
+  const page = await provider.listMessages({ query, maxResults: 100 });
+  return mailMatchPreview.parse({
+    query,
+    matchedMessages: page.nextPageToken
+      ? page.resultSizeEstimate === undefined
+        ? null
+        : Math.max(page.resultSizeEstimate, page.messages?.length ?? 0)
+      : (page.messages?.length ?? 0),
+    approximate: Boolean(page.nextPageToken),
+    checkedAt: new Date().toISOString(),
   });
 }

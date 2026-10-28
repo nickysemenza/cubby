@@ -7,9 +7,9 @@ import {
 
 import { normalizeHistoryPage } from "~/server/domains/purchase-import/repo/gmail/normalize";
 import type { GmailProvider } from "~/server/domains/purchase-import/repo/gmail/types";
+import { eligibleMailSearchQuery } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
 
 export const GMAIL_PAGE_SIZE = 25;
-const ELIGIBLE_MAIL_QUERY = "-in:spam -in:trash";
 
 /** The later of two Gmail history ids; a cursor never moves backwards. */
 export const maxHistoryId = (
@@ -124,7 +124,7 @@ export async function listGmailPage(
     if (!position)
       return { messageIds: [], events: [], startCoverage, nextCoverage };
     const request: Parameters<GmailProvider["listMessages"]>[0] = {
-      query: `(${position.query}) ${ELIGIBLE_MAIL_QUERY}`,
+      query: eligibleMailSearchQuery(position.query),
       maxResults: GMAIL_PAGE_SIZE,
     };
     if (position.pageToken) request.pageToken = position.pageToken;
