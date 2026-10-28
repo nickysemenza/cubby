@@ -326,7 +326,7 @@ Neon owns the PostgreSQL database. Production compute is autoscaling
 an idle gap waits for compute start (about 0.5 s median, 0.9 s p90), visible
 as a long `db.connect.phase.startup` on `db.client.connect`. This range belongs to the production endpoint: changing the project's
 default compute range does not resize an existing endpoint. The Hyperdrive
-desired origin connection caps below are 12 strong + 20 cached + 10 background.
+origin connection caps are 30 strong + 12 cached + 10 background.
 All three configurations share origin
 compute; the cached pool needs headroom for short reads while expensive reads
 are running. Pool caps are soft limits, not interactive connection reservations.
@@ -342,10 +342,10 @@ concurrency remains 1. Purchase dispatch starts coordinator work outside Job del
 queue cap does not bound active coordinator database work. That workload policy
 remains separate.
 
-Normal GitHub deployment applies these origin caps; they are desired policy,
-not evidence that production has adopted them before deployment. The uncached
-pool previously used 30 and the cached pool 12. Neither the old cap increase nor
-this rebalance establishes the cause of the measured multi-second connect
+The background configuration was created as an authorized operator action;
+the existing strong and cached configurations were left unchanged. Builds and
+deployments do not manage these caps. Neither the existing caps nor the separate
+background configuration establishes the cause of the measured multi-second connect
 startup tail; ordinal-1 connects were slow too. Keep measuring connect startup,
 origin admission and SQL execution separately. This change adds no PostgreSQL
 role or `statement_timeout` and preserves Neon's compute bounds.

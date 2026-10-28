@@ -456,11 +456,11 @@ native PostgreSQL installation remain owned by their existing runners.
 | [packages/wasm/workerd.js](../packages/wasm/workerd.js)           | Shared WASM initialization for production and test Workers    |
 | [apps/web/cloudflare.config.ts](../apps/web/cloudflare.config.ts) | Bindings, vars, compat flags, secret names                    |
 
-- **Hyperdrive.** Both bindings use one Neon origin. Account-side configuration
+- **Hyperdrive.** Strong, cached and background bindings use one Neon origin. Account-side configuration
   and reconstruction live in [infrastructure](infrastructure.md#postgresql-and-hyperdrive);
   application read/freshness timing is owned by
-  `apps/web/src/server/db/freshness/hyperdrive-cache-policy.ts`. Missing freshness state or a
-  timeout falls back to strong reads.
+  `apps/web/src/server/db/read-policy.ts`. Signed member-scoped write markers
+  preserve browser read-your-writes; clients without a marker read strong.
 - **Worker invocation ownership.** `server/worker/http.ts` owns explicit protocol
   dispatch, lazy request DB scope and response-body observation; `queue.ts` owns
   known-queue selection and awaited consumer completion; `scheduled.ts` owns cron
