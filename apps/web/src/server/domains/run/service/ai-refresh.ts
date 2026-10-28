@@ -96,6 +96,7 @@ import {
   fieldInputFingerprintIfLive,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { withJobPhase } from "~/server/generic/jobs/context";
 import type { DrainContext } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -1243,7 +1244,9 @@ async function evaluateAiRefreshPage<P, O>(
   const failures = new Map<string, unknown>();
   const oversized = new Map<string, string>();
   const overflowed: string[] = [];
-  const prepared = await adapter.prepare(db, targets);
+  const prepared = await withJobPhase("evaluation.prepare", () =>
+    adapter.prepare(db, targets),
+  );
   if (
     prepared.length !== targets.length ||
     new Set(prepared.map((entry) => entry.target.evaluation.id)).size !==
@@ -1280,7 +1283,9 @@ async function evaluateAiRefreshPage<P, O>(
     ready.push(entry);
   }
   if (stage) {
-    const staged = await stage(db, ready);
+    const staged = await withJobPhase("evaluation.stage", () =>
+      stage(db, ready),
+    );
     ready.length = 0;
     for (const entry of staged) {
       if (entry.kind === "failed")
@@ -1310,15 +1315,17 @@ async function evaluateAiRefreshPage<P, O>(
     return usage;
   };
   const outcomes = new Map<string, EvaluationPageOutcome<O>>();
-  const settled = await settleDecisionWorkItems(
-    ready,
-    (entry) =>
-      inEvaluationContext(db, entry.target, context, async () => ({
-        target: entry.target,
-        evidenceDigest: entry.evidenceDigest,
-        outcome: await adapter.evaluate(db, entry, usageFor(entry.target)),
-      })),
-    adapter.concurrency,
+  const settled = await withJobPhase("evaluation.infer", () =>
+    settleDecisionWorkItems(
+      ready,
+      (entry) =>
+        inEvaluationContext(db, entry.target, context, async () => ({
+          target: entry.target,
+          evidenceDigest: entry.evidenceDigest,
+          outcome: await adapter.evaluate(db, entry, usageFor(entry.target)),
+        })),
+      adapter.concurrency,
+    ),
   );
   settled.forEach((result, index) => {
     const id = ready[index]!.target.evaluation.id;
