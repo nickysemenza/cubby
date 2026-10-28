@@ -8,12 +8,8 @@ export const senderAddress = (sender: string | null): string | null => {
   return address.includes("@") ? address : null;
 };
 
-/**
- * Registrable domains many unrelated merchants send from or are hosted on:
- * free mail, storefront and payment platforms, and mail relays. A match on
- * one of these never identifies a Vendor (terminology "Sender proof").
- */
-export const SHARED_SENDER_DOMAINS: ReadonlySet<string> = new Set([
+/** Delivery and commerce platforms whose addresses can represent unrelated sellers. */
+export const SHARED_PLATFORM_DOMAINS: ReadonlySet<string> = new Set([
   // Mail relays and campaign senders
   "amazonses.com",
   "campaign-archive.com",
@@ -30,6 +26,26 @@ export const SHARED_SENDER_DOMAINS: ReadonlySet<string> = new Set([
   "sendgrid.net",
   "sendinblue.com",
   "sparkpostmail.com",
+  "bigcartel.com",
+  "ecwid.com",
+  "order.online",
+  "paypal.com",
+  "shopify.com",
+  "shopifyemail.com",
+  "square.site",
+  "squarespace.com",
+  "squareup.com",
+  "stripe.com",
+  "wix.com",
+  "wixsite.com",
+]);
+
+/**
+ * Registrable domains many unrelated merchants send from or are hosted on:
+ * free mail, storefront and payment platforms, and mail relays. A match on
+ * one of these never identifies a Vendor (terminology "Sender proof").
+ */
+export const SHARED_SENDER_DOMAINS: ReadonlySet<string> = new Set([
   // Free mail
   "aol.com",
   "fastmail.com",
@@ -44,18 +60,7 @@ export const SHARED_SENDER_DOMAINS: ReadonlySet<string> = new Set([
   "proton.me",
   "protonmail.com",
   "yahoo.com",
-  // Storefront and payment platforms
-  "bigcartel.com",
-  "ecwid.com",
-  "paypal.com",
-  "shopify.com",
-  "shopifyemail.com",
-  "square.site",
-  "squarespace.com",
-  "squareup.com",
-  "stripe.com",
-  "wix.com",
-  "wixsite.com",
+  ...SHARED_PLATFORM_DOMAINS,
 ]);
 
 /** The registrable domain of a sender address, unless it is shared. */

@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { user } from "~/server/db/schema";
+import { retainedMailFixture } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { readMailCoverage } from "~/server/domains/purchase-import/repo/gmail/mail-coverage";
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
@@ -143,6 +144,14 @@ describe("vendor Mail search status", () => {
         ...at(untouched, { pageToken: null, completed: false }),
         ...at(trailingDot, finished),
         ...formerWebsite(),
+        {
+          key: "sender:noreply@order.online",
+          query: 'from:"noreply@order.online"',
+          pageToken: null,
+          completed: true,
+          messageCount: 1,
+          completedAt: "2026-10-01T12:00:00Z",
+        },
         // The Vendor's old website: finished, but no longer one of its searches.
         {
           key: `vendor:${moved.id}:domain:old-home.example.com`,
@@ -219,7 +228,40 @@ describe("vendor Mail search status", () => {
     expect(
       await vendorMailSearchReport(ctx.db, unresearched.shortcode),
     ).toEqual([expect.objectContaining({ kind: "note" })]);
+    await retainedMailFixture(ctx.db, {
+      ledgerPartyId: a.party.id,
+      mailboxId: a.mailboxId,
+      messageId: "synthetic-shared-sender-receipt",
+      checksum: "a".repeat(64),
+      sender: "Synthetic Cafe <noreply@order.online>",
+      subject: "Synthetic Cafe receipt",
+    });
     const report = await readMailCoverage(ctx.db, ctx.actor.userId);
+    expect(report.sharedSenders).toEqual([
+      expect.objectContaining({
+        mailboxId: a.mailboxId,
+        sender: "noreply@order.online",
+        state: "complete",
+        completedAt: "2026-10-01T12:00:00Z",
+        scanned: 1,
+        classified: 1,
+        retained: 1,
+        related: 1,
+        sellerUnresolved: 1,
+        linkedEmails: 0,
+        linkedPurchases: 0,
+        imported: 0,
+      }),
+    ]);
+    expect(
+      report.discovery.find((row) => row.mailboxId === a.mailboxId),
+    ).toMatchObject({ sellerUnresolved: 1 });
+    expect(
+      report.discovery.find((row) => row.mailboxId === b.mailboxId),
+    ).toMatchObject({ sellerUnresolved: 0 });
+    expect(report.unresolvedEmails.map((row) => row.subject)).toEqual([
+      "Synthetic Cafe receipt",
+    ]);
     expect(
       report.rows.filter((row) => row.vendorId === done.shortcode),
     ).toEqual([

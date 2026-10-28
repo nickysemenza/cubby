@@ -10,6 +10,7 @@ import {
   distinctSenderDomain,
   senderAddress,
   SHARED_SENDER_DOMAINS,
+  SHARED_PLATFORM_DOMAINS,
   vendorWebsiteDomain,
 } from "~/lib/vendor/domains";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -179,6 +180,12 @@ async function learnSenderAlias(
 export async function senderProofVendor(db: Db, sender: string | null) {
   const address = senderAddress(sender);
   if (!address) return null;
+  // Platform addresses can represent unrelated sellers even when only one
+  // Vendor currently records the address. Never learn merchant aliases from it.
+  const senderDomain = vendorWebsiteDomain(
+    `https://${address.split("@").at(-1)}`,
+  );
+  if (senderDomain && SHARED_PLATFORM_DOMAINS.has(senderDomain)) return null;
   const columns = {
     id: vendor.id,
     shortcode: vendor.shortcode,
@@ -249,6 +256,24 @@ export async function resolveImportVendor(
       actor,
     );
   const candidates = await importVendorCandidates(db, input);
+  const platformAlias = candidates.find(
+    ({ candidate }) =>
+      candidate.exactNameMatch &&
+      candidate.name.toLowerCase() !== name.toLowerCase() &&
+      SHARED_PLATFORM_DOMAINS.has(vendorWebsiteDomain(candidate.website) ?? ""),
+  );
+  if (platformAlias) {
+    // Retain historical data, but do not let an alias learned by an older
+    // sender-proof policy silently attribute another merchant to a platform.
+    const canonical = candidates.filter(
+      ({ candidate }) => candidate.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (canonical.length === 1 && canonical[0]) return canonical[0].id;
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Seller "${name}" is recorded as an alias of shared platform ${platformAlias.candidate.vendorId}. Correct the historical Vendor alias and name the actual seller by vendorId before importing.`,
+    );
+  }
   if (candidates.some(({ candidate }) => candidate.exactNameMatch))
     return findOrCreateVendor(db, name);
   const cleared = new Set(

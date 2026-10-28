@@ -4,7 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { auditLog, run, user } from "~/server/db/schema";
+import { auditLog, expense, run, user } from "~/server/db/schema";
 import { auditImportBatch } from "~/server/domains/purchase-import/operations/run-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
@@ -38,11 +38,18 @@ describe("purchase audit restart recovery", () => {
       auditLogged: true,
     });
     const successor = await successorFor(f);
-
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ productId: null, productQuantity: null, costType: "services" })
+      .where(eq(expense.purchaseId, f.order.id));
     const batch = await loadPurchaseAuditBatch(ctx.db, successor.id);
     expect(batch.map((row) => row.id)).toEqual([f.order.id]);
     expect(batch[0]?.expenses).toHaveLength(1);
     expect(batch[0]?.expenses[0]?.amount).toBe(24);
+    expect(batch[0]?.expenses[0]).toMatchObject({
+      product: null,
+      costType: "services",
+    });
   });
 
   it("keeps unique stable pages across repeated writes and a malformed retry cycle", async () => {

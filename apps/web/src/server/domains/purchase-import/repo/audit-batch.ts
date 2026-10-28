@@ -72,6 +72,7 @@ export async function loadPurchaseAuditBatch(
         name: expense.name,
         amount: expense.cost,
         lineKind: expense.lineKind,
+        costType: expense.costType,
         quantity: expense.productQuantity,
         productId: product.id,
         productName: product.name,
@@ -107,6 +108,7 @@ export async function loadPurchaseAuditBatch(
         name: expenseRow.name,
         amount: expenseRow.amount,
         lineKind: expenseRow.lineKind,
+        costType: expenseRow.costType,
         quantity: expenseRow.quantity,
         product: expenseRow.productId
           ? {

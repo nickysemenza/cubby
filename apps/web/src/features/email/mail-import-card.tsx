@@ -45,8 +45,8 @@ export function MailImportSettings() {
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
         When on, daily discovery reads new mail and searches the history of
-        known Vendors and unmatched transactions. Unambiguous purchases are
-        imported; anything uncertain waits in the{" "}
+        known Vendors, observed shared senders and unmatched transactions.
+        Unambiguous purchases are imported; anything uncertain waits in the{" "}
         <Link to="/work-queue" className="underline">
           Work queue
         </Link>

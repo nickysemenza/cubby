@@ -7,6 +7,8 @@ import {
 } from "@cubby/schemas/mail-coverage";
 import {
   mailboxCoverage,
+  mailboxClassification,
+  emailStatus,
   mergeMailboxQueries,
   currentScopedPosition,
   mailboxDiscoveryInput,
@@ -14,7 +16,16 @@ import {
 } from "@cubby/schemas/mailbox-research";
 import { runPurpose } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
-import { and, desc, eq, isNotNull, isNull, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  isNotNull,
+  isNull,
+  inArray,
+  sql,
+  or,
+} from "drizzle-orm";
 
 import { distinctSenderDomain, senderAddress } from "~/lib/vendor/domains";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
@@ -39,6 +50,10 @@ import { vendorSearchTerms } from "./vendor-identity";
 import { vendorMailQueries } from "./vendor-mail-scope";
 
 const activeRunStatuses = new Set<string>(ACTIVE_RUN_STATUSES);
+const hasPurchase = sql`EXISTS (SELECT 1 FROM (${emailPurchaseEvidenceSql()}) evidence WHERE evidence.kind IN (${emailLinkEvidenceKind.enum.accepted}, ${emailLinkEvidenceKind.enum.linked}))`;
+const hasImport = sql`EXISTS (SELECT 1 FROM (${emailPurchaseEvidenceSql()}) evidence WHERE evidence.kind = ${emailLinkEvidenceKind.enum.accepted})`;
+// A retained, relevant original without seller proof or accepted Purchase evidence.
+const sellerUnresolved = sql`${email.classification} = ${mailboxClassification.enum.related} AND ${orderMail.id} IS NOT NULL AND ${email.contentClearedAt} IS NULL AND ${orderMail.vendorId} IS NULL AND NOT ${hasPurchase}`;
 
 /** Queue activity and import admission are distinct from historical search coverage. */
 function summarizeQueue({
@@ -153,6 +168,27 @@ export async function readMailCoverage(
         memberId: email.ledgerPartyId,
         sender: email.sender,
         vendorId: orderMail.vendorId,
+        related:
+          sql<number>`count(*) FILTER (WHERE ${email.classification} = ${mailboxClassification.enum.related})`.mapWith(
+            Number,
+          ),
+        pending:
+          sql<number>`count(*) FILTER (WHERE ${email.status} = ${emailStatus.enum.pending})`.mapWith(
+            Number,
+          ),
+        blocked:
+          sql<number>`count(*) FILTER (WHERE ${email.status} = ${emailStatus.enum.blocked})`.mapWith(
+            Number,
+          ),
+        linkedEmails:
+          sql<number>`count(*) FILTER (WHERE ${hasPurchase})`.mapWith(Number),
+        imported: sql<number>`count(*) FILTER (WHERE ${hasImport})`.mapWith(
+          Number,
+        ),
+        sellerUnresolved:
+          sql<number>`count(*) FILTER (WHERE ${sellerUnresolved})`.mapWith(
+            Number,
+          ),
         scanned: sql<number>`count(*)`.mapWith(Number),
         classified:
           sql<number>`count(*) FILTER (WHERE ${email.classification} IS NOT NULL)`.mapWith(
@@ -249,6 +285,7 @@ export async function readMailCoverage(
         memberId: mailboxCursor.ledgerPartyId,
         mailboxId: mailboxCursor.mailboxId,
         coverage: mailboxCursor.coverage,
+        lastPolledAt: mailboxCursor.lastPolledAt,
       })
       .from(mailboxCursor)
       .where(eq(mailboxCursor.provider, "gmail")),
@@ -293,6 +330,40 @@ export async function readMailCoverage(
       .orderBy(desc(run.startedAt), desc(run.id)),
     listGmailSyncTargets(db),
   ]);
+  const unresolvedEmails = members.length
+    ? await getDb(db)
+        .select({
+          id: email.shortcode,
+          mailboxId: email.mailboxId,
+          sender: email.sender,
+          subject: email.subject,
+          receivedAt: email.receivedAt,
+        })
+        .from(email)
+        .leftJoin(
+          orderMail,
+          and(
+            eq(orderMail.id, email.orderMailId),
+            eq(orderMail.ledgerPartyId, email.ledgerPartyId),
+          ),
+        )
+        .where(
+          and(
+            notDeleted(email),
+            sellerUnresolved,
+            or(
+              ...members.map((member) =>
+                and(
+                  eq(email.mailboxId, member.mailboxId),
+                  eq(email.ledgerPartyId, member.ledgerPartyId),
+                ),
+              ),
+            ),
+          ),
+        )
+        .orderBy(desc(email.receivedAt), desc(email.id))
+        .limit(50)
+    : [];
   const terms = new Map(vendors.map((row) => [row.id, vendorSearchTerms(row)]));
   const vendorQueries = new Map(
     vendors.map((row) => [
@@ -609,5 +680,135 @@ export async function readMailCoverage(
       };
     });
   });
-  return mailCoverage.parse({ mailboxes, rows });
+  const discovery = members.map((member) => {
+    const cursor = cursorRows.find(
+      (row) =>
+        row.memberId === member.ledgerPartyId &&
+        row.mailboxId === member.mailboxId,
+    );
+    const coverage = cursor?.coverage
+      ? mailboxCoverage.parse(cursor.coverage)
+      : null;
+    const target = targets.find(
+      (row) =>
+        row.ledgerPartyId === member.ledgerPartyId &&
+        row.mailboxId === member.mailboxId,
+    );
+    const queries = (target?.scopedQueries ?? []).map((query) =>
+      currentScopedPosition(coverage, query),
+    );
+    const active = discoveryRuns.find(
+      (row) =>
+        row.mailboxId === member.mailboxId &&
+        row.failureCode !== "controlled_mail_queued",
+    );
+    const counts = observed.filter(
+      (row) =>
+        row.memberId === member.ledgerPartyId &&
+        row.mailboxId === member.mailboxId,
+    );
+    const sum = (
+      field:
+        | "scanned"
+        | "classified"
+        | "retained"
+        | "pending"
+        | "blocked"
+        | "imported"
+        | "sellerUnresolved",
+    ) => counts.reduce((total, row) => total + row[field], 0);
+    return {
+      mailboxId: member.mailboxId,
+      lastPolledAt: cursor?.lastPolledAt?.toISOString() ?? null,
+      newMailCatchupPending: coverage
+        ? coverage.history.pageToken !== null
+        : null,
+      runId: active?.id ?? null,
+      runStatus: active?.status ?? null,
+      searchesCompleted: queries.filter((query) => query?.completed).length,
+      searchesTotal: queries.length,
+      scanned: sum("scanned"),
+      classified: sum("classified"),
+      retained: sum("retained"),
+      pending: sum("pending"),
+      blocked: sum("blocked"),
+      imported: sum("imported"),
+      sellerUnresolved: sum("sellerUnresolved"),
+    };
+  });
+  const sharedSenders = members.flatMap((member) => {
+    const coverage =
+      cursors.get(`${member.ledgerPartyId}/${member.mailboxId}`) ?? null;
+    const target = targets.find(
+      (row) =>
+        row.ledgerPartyId === member.ledgerPartyId &&
+        row.mailboxId === member.mailboxId,
+    );
+    return (target?.scopedQueries ?? [])
+      .filter((query) => query.key.startsWith("sender:"))
+      .map((query) => {
+        const sender = query.key.slice("sender:".length);
+        const position = currentScopedPosition(coverage, query);
+        const counts = observed.filter(
+          (row) =>
+            row.memberId === member.ledgerPartyId &&
+            row.mailboxId === member.mailboxId &&
+            senderAddress(row.sender) === sender,
+        );
+        const sum = (
+          field:
+            | "scanned"
+            | "classified"
+            | "retained"
+            | "related"
+            | "imported"
+            | "linkedEmails"
+            | "sellerUnresolved",
+        ) => counts.reduce((total, row) => total + row[field], 0);
+        const purchases = new Set(
+          linked
+            .filter(
+              (row) =>
+                row.memberId === member.ledgerPartyId &&
+                row.mailboxId === member.mailboxId &&
+                senderAddress(row.sender) === sender,
+            )
+            .flatMap((row) => row.purchaseIds),
+        );
+        return {
+          mailboxId: member.mailboxId,
+          sender,
+          query: query.query,
+          state: position?.completed
+            ? "complete"
+            : position?.pageToken
+              ? "in_progress"
+              : "not_started",
+          completedAt: position?.completedAt ?? null,
+          runId: position?.runId ?? null,
+          scanned: sum("scanned"),
+          classified: sum("classified"),
+          retained: sum("retained"),
+          related: sum("related"),
+          imported: sum("imported"),
+          linkedEmails: sum("linkedEmails"),
+          linkedPurchases: purchases.size,
+          sellerUnresolved: sum("sellerUnresolved"),
+        };
+      });
+  });
+  return mailCoverage.parse({
+    mailboxes,
+    rows,
+    discovery,
+    sharedSenders,
+    unresolvedEmails: unresolvedEmails
+      .filter((row) =>
+        members.some((member) => member.mailboxId === row.mailboxId),
+      )
+      .map((row) => ({
+        ...row,
+        receivedAt: row.receivedAt?.toISOString() ?? null,
+      })),
+  });
 }

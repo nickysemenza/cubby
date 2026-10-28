@@ -250,6 +250,10 @@ describe("Email Purchase links", () => {
       });
       const coverage = await readMailCoverage(ctx.db, ctx.actor.userId);
       expect(
+        coverage.discovery.find((row) => row.mailboxId === original.mailboxId),
+      ).toMatchObject({ imported: 1, sellerUnresolved: 0 });
+      expect(coverage.unresolvedEmails).toEqual([]);
+      expect(
         coverage.rows.find(
           (row) =>
             row.vendorId === vendor.shortcode &&

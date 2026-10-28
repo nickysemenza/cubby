@@ -2,12 +2,14 @@ import { parseBankDescriptor } from "@cubby/schemas/financial-transaction-fields
 import type { MailboxScopedQuery } from "@cubby/schemas/mailbox-research";
 import { and, eq, isNotNull, isNull, or } from "drizzle-orm";
 
+import { senderAddress, distinctSenderDomain } from "~/lib/vendor/domains";
 import { account } from "~/server/db/auth.schema";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   ledgerParty,
+  email,
   vendor,
   financialAccount,
   financialTransaction,
@@ -53,7 +55,7 @@ export const listMemberMailboxes = (db: Database) =>
 export async function listGmailSyncTargets(
   db: Database,
 ): Promise<GmailSyncTarget[]> {
-  const [members, vendors, charges] = await Promise.all([
+  const [members, vendors, charges, receiptSenders] = await Promise.all([
     listMemberMailboxes(db),
     getDb(db)
       .select({
@@ -97,6 +99,14 @@ export async function listGmailSyncTargets(
           ),
         ),
       ),
+    getDb(db)
+      .selectDistinct({
+        sender: email.sender,
+        mailboxId: email.mailboxId,
+        ledgerPartyId: email.ledgerPartyId,
+      })
+      .from(email)
+      .where(and(notDeleted(email), eq(email.classification, "related"))),
   ]);
   const quote = (value: string) => `"${value.replaceAll('"', " ")}"`;
   // One search per distinct merchant (case- and space-insensitive): many
@@ -139,6 +149,27 @@ export async function listGmailSyncTargets(
             mailboxId: row.mailboxId,
             scopedQueries: [
               ...vendorQueries,
+              ...[
+                ...new Set(
+                  receiptSenders
+                    .filter(
+                      (sender) =>
+                        sender.mailboxId === row.mailboxId &&
+                        sender.ledgerPartyId === row.ledgerPartyId,
+                    )
+                    .flatMap(({ sender }) => {
+                      const address = senderAddress(sender);
+                      return address && !distinctSenderDomain(address)
+                        ? [address]
+                        : [];
+                    }),
+                ),
+              ]
+                .sort()
+                .map((address) => ({
+                  key: `sender:${address}`,
+                  query: `from:${quote(address)}`,
+                })),
               ...merchantQueries(
                 charges.filter(
                   (charge) => charge.ledgerPartyId === row.ledgerPartyId,

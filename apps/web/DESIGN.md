@@ -72,7 +72,11 @@ Selection, focus and validation remain visible. Blue Updating dots and failure
 indicators retain their independent meaning; work finishing with the same value
 clears its dot without a value highlight. There is no new motion setting.
 
-Mail coverage is a flat Vendor × mailbox RTable beside Emails, with canonical
+Mail coverage begins with flat mailbox-discovery and shared-sender RTables,
+followed by a disclosed unresolved-seller Email table and the Vendor × mailbox
+RTable. Poll freshness, targeted historical search scope, classification and
+import are distinct; local counts never imply Gmail-wide coverage. Source
+senders are not Vendors. The Vendor table retains canonical
 Vendor and Vendor Account links, explicit coverage states and separate local
 Email and Purchase counts. Selecting a row opens the shared table inspector
 for controlled import and date bounds; Settings retains mailbox switches.

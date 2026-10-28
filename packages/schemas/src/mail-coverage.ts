@@ -7,6 +7,7 @@ import {
   purchaseShortcode,
   vendorAccountShortcode,
   vendorShortcode,
+  emailShortcode,
 } from "./identifiers";
 import { runStatus } from "./run-fields";
 
@@ -100,6 +101,52 @@ export const mailCoverageRow = z.strictObject({
 export const mailCoverage = z.strictObject({
   mailboxes: z.array(mailCoverageMailbox),
   rows: z.array(mailCoverageRow),
+  discovery: z.array(
+    z.strictObject({
+      mailboxId: z.string(),
+      lastPolledAt: z.iso.datetime().nullable(),
+      newMailCatchupPending: z.boolean().nullable(),
+      runId: runShortcode.nullable(),
+      runStatus: runStatus.nullable(),
+      searchesCompleted: count,
+      searchesTotal: count,
+      scanned: count,
+      classified: count,
+      retained: count,
+      pending: count,
+      blocked: count,
+      imported: count,
+      sellerUnresolved: count,
+    }),
+  ),
+  sharedSenders: z.array(
+    z.strictObject({
+      mailboxId: z.string(),
+      sender: z.string(),
+      query: z.string(),
+      state: z.enum(["not_started", "in_progress", "complete"]),
+      completedAt: z.iso.datetime().nullable(),
+      runId: runShortcode.nullable(),
+      scanned: count,
+      classified: count,
+      retained: count,
+      related: count,
+      imported: count,
+      linkedEmails: count,
+      linkedPurchases: count,
+      sellerUnresolved: count,
+    }),
+  ),
+  /** Latest 50 across connected mailboxes; discovery.sellerUnresolved is the full local count. */
+  unresolvedEmails: z.array(
+    z.strictObject({
+      id: emailShortcode,
+      mailboxId: z.string(),
+      sender: z.string().nullable(),
+      subject: z.string().nullable(),
+      receivedAt: z.iso.datetime().nullable(),
+    }),
+  ),
 });
 export type MailCoverage = z.infer<typeof mailCoverage>;
 export type MailCoverageRow = z.infer<typeof mailCoverageRow>;

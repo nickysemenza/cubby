@@ -60,12 +60,24 @@ describe("Mail search progress", () => {
         vendorB,
         merchant,
         descriptor,
+        {
+          key: "sender:noreply@order.online",
+          query: 'from:"noreply@order.online"',
+        },
       ]),
     ).toEqual({
       vendors: { completed: 1, total: 2 },
       charges: { completed: 0, total: 2 },
+      senders: { completed: 0, total: 1 },
       inProgress: merchant,
-      nextPending: [vendorB, descriptor],
+      nextPending: [
+        vendorB,
+        descriptor,
+        {
+          key: "sender:noreply@order.online",
+          query: 'from:"noreply@order.online"',
+        },
+      ],
     });
   });
 
