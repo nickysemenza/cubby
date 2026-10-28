@@ -567,6 +567,10 @@ Paged evaluations annotate the existing Job heartbeat and completion logs with
 `evaluation.prepare`, `evaluation.stage` and `evaluation.infer` phase timing.
 These labels distinguish evidence preparation from decision work without logging
 prompts or household evidence; concurrent decisions share one inference phase.
+Connection stages add `connections.*` timings within inference, and drains add
+`drain.claim`, `drain.prepare` and `drain.publish`. Heartbeats list all active
+phases when work overlaps; completed durations sum per phase, so nested and
+concurrent phase totals are not additive wall time or allocation evidence.
 
 `EvaluationPageAdapter` in `ai/evaluation/repo/evaluation-page.ts` owns finite feature
 preparation, decision evaluation and publication results. Every target carries

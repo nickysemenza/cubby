@@ -15,6 +15,13 @@ const execution = new AsyncLocalStorage<{
   claim: JobClaim;
   details: JobExecutionDetails;
 }>();
+const activePhases = new WeakMap<
+  JobExecutionDetails,
+  {
+    previous: Pick<JobExecutionDetails, "phase" | "phaseStartedAt">;
+    entries: Map<symbol, { phase: string; started: number }>;
+  }
+>();
 
 /** The selected domain step annotates page logs without changing execution state. */
 export const setJobStepKey = (stepKey: string) => {
@@ -37,20 +44,38 @@ export async function withJobPhase<T>(
 ): Promise<T> {
   const details = execution.getStore()?.details;
   if (!details) return work();
-  const previous = {
-    phase: details.phase,
-    phaseStartedAt: details.phaseStartedAt,
+  const phases = activePhases.get(details) ?? {
+    previous: { phase: details.phase, phaseStartedAt: details.phaseStartedAt },
+    entries: new Map<symbol, { phase: string; started: number }>(),
   };
+  activePhases.set(details, phases);
+  const token = Symbol(phase);
   const started = Date.now();
-  details.phase = phase;
-  details.phaseStartedAt = started;
+  const update = () => {
+    const active = [...phases.entries.values()];
+    if (active.length) {
+      details.phase = [...new Set(active.map((entry) => entry.phase))].join(
+        ", ",
+      );
+      details.phaseStartedAt = Math.min(
+        ...active.map((entry) => entry.started),
+      );
+    } else {
+      Object.assign(details, phases.previous);
+      activePhases.delete(details);
+    }
+  };
+  phases.entries.set(token, { phase, started });
+  update();
   try {
     return await work();
   } finally {
     details.phaseMs ??= {};
     details.phaseMs[phase] =
       (details.phaseMs[phase] ?? 0) + Date.now() - started;
-    Object.assign(details, previous);
+    // Parallel stages can finish out of order; restore only phases still active.
+    phases.entries.delete(token);
+    update();
   }
 }
 

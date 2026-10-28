@@ -47,6 +47,7 @@ import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { prepareTagSuggestions } from "~/server/generic/assessment/service/tag-suggestions";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { withJobPhase } from "~/server/generic/jobs/context";
 import {
   lookupShortcodes,
   resolveOrThrow,
@@ -83,9 +84,11 @@ export async function prepareEntityConnections(
   const lockRefs: EntityRef[] = [source];
   let productRecordId: ProductId | undefined;
   const stage = <T>(name: string, fn: () => Promise<T>) =>
-    withTrace(TraceNames.service("connections", name), fn, {
-      "connection.source": source.entityKind,
-    });
+    withJobPhase(`connections.${name}`, () =>
+      withTrace(TraceNames.service("connections", name), fn, {
+        "connection.source": source.entityKind,
+      }),
+    );
   // Each stage's new candidates prepare together, before the next stage can
   // await a provider: evidence is captured as retrieved, so a change made
   // while an embedding waits fails the locked basis comparison at publish
