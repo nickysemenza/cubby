@@ -26,7 +26,6 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
-import { listScaffold } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   derivedMarkTickets,
@@ -170,17 +169,7 @@ describe("Email data quality", () => {
     const gaps = z.array(z.object({ gap: z.boolean() })).parse(rows.rows);
     expect(gaps).toHaveLength(6);
     expect(gaps.filter((row) => row.gap)).toHaveLength(4);
-    const plain = await listScaffold("email", email, {
-      derived: {
-        linkState: sql`0`,
-        scopeLinkState: sql`NULL`,
-        linked: sql`false`,
-        reviewConflict: sql`false`,
-        purchaseId: () => undefined,
-        vendorId: () => undefined,
-        vendorAccountId: () => undefined,
-      },
-    }).raw(
+    const plain = await emailScaffold.raw(
       ctx.db,
       {
         filters: {},

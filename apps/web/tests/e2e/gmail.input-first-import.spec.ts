@@ -210,6 +210,21 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
   });
   const row = coverage.getByRole("row").filter({ hasText: vendorName });
   await expect(row).toBeVisible();
+  await expect(
+    coverage.getByRole("columnheader", { name: /Queue/ }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: /Never searched/ }).click();
+  await expect(page).toHaveURL(/view=never_searched/);
+  await expect(row).toBeVisible();
+  await page.getByRole("tab", { name: /All coverage/ }).click();
+  await page.getByRole("button", { name: /^Columns/ }).click();
+  await page
+    .getByRole("button", { name: "Show Search coverage", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Show Linked Emails", exact: true })
+    .click();
+  await page.keyboard.press("Escape");
   await row.getByRole("button", { name: /^Search coverage for/ }).click();
   await expect(
     page.getByRole("heading", { name: "Search coverage", exact: true }),
@@ -226,7 +241,7 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
   await page.keyboard.press("Escape");
   await row.click();
   await expect(
-    page.getByRole("button", { name: "Start controlled import", exact: true }),
+    page.getByRole("button", { name: "Import next", exact: true }),
   ).toBeEnabled();
   await expect(page.getByLabel("From", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("Through", { exact: true })).toHaveValue(
@@ -237,6 +252,11 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
   await from.press("Enter");
   await expect(from).not.toHaveValue("1 year ago");
   await expect(from).not.toHaveValue("");
+  const selectedDate = await from.inputValue();
+  await page
+    .getByRole("button", { name: "Refresh coverage", exact: true })
+    .click();
+  await expect(from).toHaveValue(selectedDate);
   await page
     .getByRole("button", { name: "Check Gmail matches", exact: true })
     .click();

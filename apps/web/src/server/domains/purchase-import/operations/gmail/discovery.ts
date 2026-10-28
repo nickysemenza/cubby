@@ -2,6 +2,7 @@ import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import {
   ledgerPartyId,
   runEntityId,
+  runShortcode,
   userId,
   type RunId,
 } from "@cubby/schemas/identifiers";
@@ -9,6 +10,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { jobState } from "@cubby/schemas/job";
 import {
   mailboxDiscoveryInput,
+  mergeMailboxQueries,
   mailboxDiscoveryProgress,
   type MailboxDiscoveryProgress,
   type MailboxCoverage,
@@ -67,7 +69,6 @@ import {
   creditScopedPage,
   initializeMailboxCoverage,
   listGmailPage,
-  mergeMailboxQueries,
 } from "../../repo/gmail/sync";
 import { GmailAuthorizationError } from "../../repo/gmail/tokens";
 import type { startMailImport } from "../../repo/mail-import-run";
@@ -588,7 +589,12 @@ export async function saveMailDiscoveryBatch(
           ledgerPartyId: claimed.ledgerPartyId,
           mailboxId: claimed.input.mailboxId,
           from: page.startCoverage,
-          to: creditScopedPage(page, retained.length, new Date()),
+          to: creditScopedPage(
+            page,
+            retained.length,
+            new Date(),
+            runShortcode.parse(claimed.row.shortcode),
+          ),
         }))
       )
         throw new Error("Mailbox page coverage changed before checkpoint");

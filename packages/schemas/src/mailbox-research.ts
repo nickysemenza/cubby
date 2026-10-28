@@ -92,6 +92,8 @@ const scopedQueryPosition = mailboxScopedQuery.extend({
   ...pagePosition.shape,
   /** When the last page finished; absent on entries completed before it was recorded. */
   completedAt: z.iso.datetime().optional(),
+  /** The discovery Run that committed the latest page; older checkpoints have no provenance. */
+  runId: runShortcode.optional(),
   /** Emails retained from this search's pages; absent before it was recorded. */
   emailCount: z.number().int().nonnegative().optional(),
   /** All Gmail matches in committed pages; absent when older pages never counted them. */
@@ -112,6 +114,37 @@ export const mailboxCoverage = z.object({
   nextLane: z.enum(["scan", "history"]),
 });
 export type MailboxCoverage = z.infer<typeof mailboxCoverage>;
+/**
+ * New targeted objectives do not reset broad or unchanged query coverage. An
+ * unfinished query that is no longer a target (its charge was allocated, its
+ * key format retired) is dropped so it cannot keep claiming pages; completed
+ * ones stay so a returning target is not rescanned.
+ */
+export function mergeMailboxQueries(
+  coverage: MailboxCoverage,
+  queries: readonly MailboxScopedQuery[],
+): MailboxCoverage {
+  const next = mailboxCoverage.parse(coverage);
+  const current = new Set(queries.map((query) => query.key));
+  const byKey = new Map(
+    next.scoped
+      .filter((query) => query.completed || current.has(query.key))
+      .map((query) => [query.key, query]),
+  );
+  for (const query of queries) {
+    const prior = byKey.get(query.key);
+    if (!prior || prior.query !== query.query)
+      byKey.set(query.key, {
+        ...query,
+        pageToken: null,
+        completed: false,
+        messageCount: 0,
+      });
+  }
+  next.scoped = [...byKey.values()];
+  return next;
+}
+
 export const mailboxHistoryEvent = z.object({
   sourceKey: z.string(),
   mailboxId: z.string(),
@@ -853,7 +886,9 @@ export const currentScopedPosition = (
         entry.query === query.query &&
         entry.completed,
     );
-    return saved ?? receipt;
+    return saved && !saved.runId && receipt.runId
+      ? { ...saved, runId: receipt.runId }
+      : (saved ?? receipt);
   }
   return position;
 };

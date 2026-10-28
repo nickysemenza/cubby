@@ -1,6 +1,11 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
-import { emailFiltersSchema, type EmailFilters } from "@cubby/schemas/email";
+import {
+  emailFiltersSchema,
+  mailCoverageStage,
+  type EmailFilters,
+} from "@cubby/schemas/email";
+import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import { emailRawOut as rawEmailOut } from "@cubby/schemas/entity-contracts/email";
 import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import {
@@ -9,8 +14,9 @@ import {
   relevanceLabel,
 } from "@cubby/schemas/mailbox-research";
 import { oneOrManyValues } from "@cubby/schemas/pagination";
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 
+import { senderAddress, distinctSenderDomain } from "~/lib/vendor/domains";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import {
@@ -24,11 +30,14 @@ import {
   emailFinancialAssociation,
   shipmentSourceCapture,
   vendorAccount,
+  vendor,
+  orderMail,
 } from "~/server/db/schema";
 import { readEmailFinancialAssociations } from "~/server/domains/email/repo/email-financial-associations";
 import { readEmailPurchaseAssociations } from "~/server/domains/email/repo/email-purchase-associations";
 import {
   emailInScopeSql,
+  emailPurchaseEvidenceSql,
   cachedEmailLinkedSql,
   emailLinkRankSql,
   emailLinkStateSql,
@@ -45,6 +54,7 @@ import {
   emailReviewConflictSql,
 } from "~/server/domains/email/repo/email-sql";
 import { loadEmailImportOutcomes } from "~/server/domains/email/repo/import-outcome";
+import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -459,7 +469,75 @@ const emailRead: ListReadOptions<EmailRow> = {
   },
 };
 
+/** Use the report's sender/proof/accepted-evidence union, rather than the narrower related-Email scope. */
+const coverageScope = listPrepare(async (db) => {
+  const [identities, senders] = await Promise.all([
+    unwrapDb(db)
+      .select({
+        id: vendor.id,
+        website: vendor.website,
+        orderEmailSenders: vendor.orderEmailSenders,
+      })
+      .from(vendor)
+      .where(and(notDeleted(vendor), isNull(vendor.systemKey))),
+    unwrapDb(db)
+      .selectDistinct({ sender: emailTable.sender })
+      .from(emailTable)
+      .where(notDeleted(emailTable)),
+  ]);
+  const vendorsByTerm = new Map<string, Set<string>>();
+  for (const identity of identities)
+    for (const term of vendorSearchTerms(identity)) {
+      const ids = vendorsByTerm.get(term) ?? new Set<string>();
+      ids.add(identity.id);
+      vendorsByTerm.set(term, ids);
+    }
+  const candidates = senders.flatMap(({ sender }) => {
+    const address = senderAddress(sender);
+    const domain = address ? distinctSenderDomain(address) : null;
+    const ids = new Set([
+      ...(address ? (vendorsByTerm.get(address) ?? []) : []),
+      ...(domain ? (vendorsByTerm.get(domain) ?? []) : []),
+    ]);
+    return sender
+      ? [...ids].map((id) => sql`(${sender}::text, ${id}::uuid)`)
+      : [];
+  });
+  return candidates.length
+    ? sql`VALUES ${sql.join(candidates, sql`, `)}`
+    : sql`SELECT NULL::text, NULL::uuid WHERE false`;
+});
+
 export const emailScaffold = listScaffold("email", emailTable, {
+  rows: {
+    coverageCandidates: coverageScope.rows(
+      (candidates) => sql`
+      WITH membership AS (
+        SELECT ${emailTable.id} AS "owner", candidate.vendor FROM ${emailTable}
+        JOIN (${candidates}) candidate(sender, vendor) ON candidate.sender = ${emailTable.sender}
+        WHERE ${notDeleted(emailTable)}
+        UNION
+        SELECT ${emailTable.id}, ${orderMail.vendorId} FROM ${emailTable}
+        JOIN ${orderMail} ON ${orderMail.id} = ${emailTable.orderMailId} AND ${orderMail.ledgerPartyId} = ${emailTable.ledgerPartyId}
+        WHERE ${notDeleted(emailTable)} AND ${orderMail.vendorId} IS NOT NULL
+        UNION
+        SELECT ${emailTable.id}, p."vendorId" FROM ${emailTable}
+        CROSS JOIN LATERAL (${emailPurchaseEvidenceSql()}) evidence
+        JOIN "Purchase" p ON p.id = evidence."purchaseId"
+        WHERE ${notDeleted(emailTable)} AND ${notDeleted("p")} AND evidence.kind IN (${emailLinkEvidenceKind.enum.accepted}, ${emailLinkEvidenceKind.enum.linked})
+      )
+      SELECT membership."owner", membership.vendor, stages.stage FROM membership
+      JOIN ${emailTable} ON ${emailTable.id} = membership."owner"
+      CROSS JOIN LATERAL (VALUES
+        (${mailCoverageStage.enum.known}::text, true),
+        (${mailCoverageStage.enum.classified}::text, ${emailTable.classification} IS NOT NULL),
+        (${mailCoverageStage.enum.retained}::text, ${emailTable.contentClearedAt} IS NULL AND EXISTS (SELECT 1 FROM ${orderMail} WHERE ${orderMail.id} = ${emailTable.orderMailId} AND ${orderMail.ledgerPartyId} = ${emailTable.ledgerPartyId})),
+        (${mailCoverageStage.enum.linked}::text, EXISTS (SELECT 1 FROM (${emailPurchaseEvidenceSql()}) evidence JOIN "Purchase" p ON p.id = evidence."purchaseId" WHERE ${notDeleted("p")} AND p."vendorId" = membership.vendor AND evidence.kind IN (${emailLinkEvidenceKind.enum.accepted}, ${emailLinkEvidenceKind.enum.linked})))
+      ) stages(stage, included)
+      WHERE stages.included
+    `,
+    ),
+  },
   derived: {
     // Ties read newest first in either direction.
     linkState: emailScope.value(({ scope, fixedLinkState }) => [

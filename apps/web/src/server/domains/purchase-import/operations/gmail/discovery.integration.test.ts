@@ -353,6 +353,11 @@ describe("scheduled Gmail discovery", () => {
     if (!before?.coverage || !canonical)
       throw new Error("Synthetic canonical search has no coverage");
     expect(canonical.completed).toBe(true);
+    const [initialRun] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, state.params.runId));
+    expect(canonical.runId).toBe(initialRun?.shortcode);
     const unrelated = {
       key: "merchant:synthetic-unrelated",
       query: '"SYNTHETIC UNRELATED"',
@@ -465,6 +470,7 @@ describe("scheduled Gmail discovery", () => {
         status: "completed",
         imports: { running: 1, completed: 0 },
       },
+      queue: { state: "running" },
     });
     // Normal discovery can prune request-only cursor entries; the completed
     // all-history Run still proves coverage, but never invents a zero total.
@@ -473,10 +479,11 @@ describe("scheduled Gmail discovery", () => {
       .set({ coverage: baseline })
       .where(eq(mailboxCursor.id, before.id));
     const prunedCoverage = await readMailCoverage(ctx.db, ctx.actor.userId);
-    expect(
-      prunedCoverage.rows.find((row) => row.vendorId === seller.shortcode)
-        ?.state,
-    ).toBe("complete");
+    const prunedRow = prunedCoverage.rows.find(
+      (row) => row.vendorId === seller.shortcode,
+    );
+    expect(prunedRow?.state).toBe("complete");
+    expect(prunedRow?.searches[0]?.runId).toBe(prunedRow?.controlledRun?.id);
     const { vendorScaffold } =
       await import("~/server/domains/vendor/repo/vendor");
     const vendors = await vendorScaffold.read(ctx.db, {

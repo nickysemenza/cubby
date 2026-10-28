@@ -53,37 +53,6 @@ export async function initializeMailboxCoverage(
 }
 
 /**
- * New targeted objectives do not reset broad or unchanged query coverage. An
- * unfinished query that is no longer a target (its charge was allocated, its
- * key format retired) is dropped so it cannot keep claiming pages; completed
- * ones stay so a returning target is not rescanned.
- */
-export function mergeMailboxQueries(
-  coverage: MailboxCoverage,
-  queries: readonly MailboxScopedQuery[],
-): MailboxCoverage {
-  const next = mailboxCoverage.parse(coverage);
-  const current = new Set(queries.map((query) => query.key));
-  const byKey = new Map(
-    next.scoped
-      .filter((query) => query.completed || current.has(query.key))
-      .map((query) => [query.key, query]),
-  );
-  for (const query of queries) {
-    const prior = byKey.get(query.key);
-    if (!prior || prior.query !== query.query)
-      byKey.set(query.key, {
-        ...query,
-        pageToken: null,
-        completed: false,
-        messageCount: 0,
-      });
-  }
-  next.scoped = [...byKey.values()];
-  return next;
-}
-
-/**
  * The coverage to commit for a processed page: a targeted page adds the
  * Emails it retained to its search and stamps the search's finish time.
  * Deterministic but for `now`, so a replayed page commits the same counts.
@@ -93,10 +62,12 @@ export function creditScopedPage(
     Partial<Pick<MailboxPage, "messageIds">>,
   retained: number,
   now: Date,
+  runId?: MailboxCoverage["scoped"][number]["runId"],
 ): MailboxCoverage {
   const next = mailboxCoverage.parse(page.nextCoverage);
   const position = next.scoped.find((query) => query.key === page.scopedKey);
   if (!position) return next;
+  if (runId) position.runId = runId;
   position.emailCount = (position.emailCount ?? 0) + retained;
   if (position.messageCount !== undefined && page.messageIds)
     position.messageCount += page.messageIds.length;

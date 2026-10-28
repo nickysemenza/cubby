@@ -265,6 +265,20 @@ describe("Email Purchase links", () => {
         linkedRetainedEmails: 0,
         linkedPurchases: 1,
       });
+      const coverageFilters = {
+        coverageVendorId: parseShortcodeFor("vendor", vendor.shortcode),
+        mailboxId: original.mailboxId,
+        ledgerPartyId: parseShortcodeFor("ledgerParty", party.shortcode),
+      };
+      expect(
+        await list({ ...coverageFilters, coverageStage: "known" }),
+      ).toHaveLength(1);
+      expect(
+        await list({ ...coverageFilters, coverageStage: "linked" }),
+      ).toHaveLength(1);
+      expect(
+        await list({ ...coverageFilters, coverageStage: "retained" }),
+      ).toEqual([]);
       // Another member's copy of the same message, accepted onto this
       // member's account Purchase, never relates.
       const foreignParty = await insertWithShortcode(ctx.db, "ledgerParty", {

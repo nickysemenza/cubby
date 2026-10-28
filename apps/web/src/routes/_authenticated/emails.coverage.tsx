@@ -1,3 +1,4 @@
+import { mailCoverageView } from "@cubby/schemas/mail-coverage";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
@@ -9,6 +10,7 @@ const searchSchema = z.object({
   vendor: z.string().optional(),
   mailbox: z.string().optional(),
   account: z.string().optional(),
+  view: mailCoverageView.default("all"),
 });
 
 export const Route = createFileRoute("/_authenticated/emails/coverage")({
@@ -18,13 +20,21 @@ export const Route = createFileRoute("/_authenticated/emails/coverage")({
 });
 
 function CoverageRoute() {
-  const { vendor, mailbox, account } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const { vendor, mailbox, account, view } = Route.useSearch();
   return (
     <Page variant="list" title="Mail coverage" layout="full">
       <MailCoveragePage
         vendorId={vendor}
         mailboxId={mailbox}
         accountId={account}
+        view={view}
+        onViewChange={(next) =>
+          void navigate({
+            search: (previous) => ({ ...previous, view: next }),
+            replace: true,
+          })
+        }
       />
     </Page>
   );

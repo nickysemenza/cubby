@@ -1,13 +1,10 @@
+import { mergeMailboxQueries } from "@cubby/schemas/mailbox-research";
 /** Plausible failures: gather-all blocks progress; scoped completion skips archives;
  * history advances before the last page; expired history silently authorizes a scan;
  * scans starve newly arriving mail; unrelated or unreadable mail is archived. */
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  initializeMailboxCoverage,
-  listGmailPage,
-  mergeMailboxQueries,
-} from "./sync";
+import { initializeMailboxCoverage, listGmailPage } from "./sync";
 import { GmailApiError, type GmailProvider } from "./types";
 
 const gmail = (overrides: Partial<GmailProvider> = {}): GmailProvider => ({

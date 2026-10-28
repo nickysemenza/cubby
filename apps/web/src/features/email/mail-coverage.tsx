@@ -1,13 +1,14 @@
 import type {
   MailCoverage,
   MailCoverageRow,
+  MailCoverageView,
 } from "@cubby/schemas/mail-coverage";
 import { humanize } from "@cubby/shared";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
@@ -34,6 +35,7 @@ import {
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 import { StatusText } from "~/ui/primitives/status-text";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/ui/primitives/tabs";
 
 const activeRunStatuses = new Set<string>(ACTIVE_RUN_STATUSES);
 const helper = createCubbyColumnHelper<MailCoverageRow>();
@@ -41,11 +43,142 @@ const rowId = (row: MailCoverageRow) => row.key;
 const states = {
   no_search_identity: "No search identity",
   not_started: "Not searched",
-  in_progress: "Searching",
+  in_progress: "Search incomplete",
   no_matches: "No matches",
   matches_found: "Matches found",
   complete: "Search complete",
 } satisfies Record<MailCoverageRow["state"], string>;
+
+const compactVisibility = {
+  vendorAccountId: false,
+  searches: false,
+  classified: false,
+  retained: false,
+  linkedEmails: false,
+  controlledImport: false,
+};
+const coverageViews = [
+  ["all", "All coverage"],
+  ["activity", "Running & queued"],
+  ["never_searched", "Never searched"],
+  ["incomplete", "Incomplete"],
+  ["attention", "Needs attention"],
+] satisfies [MailCoverageView, string][];
+const inView = (row: MailCoverageRow, view: MailCoverageView) => {
+  switch (view) {
+    case "all":
+      return true;
+    case "activity":
+      return row.queue.state === "running" || row.queue.state === "queued";
+    case "never_searched":
+      return row.state === "not_started";
+    case "incomplete":
+      return row.searchesTotal > row.searchesCompleted;
+    case "attention":
+      return (
+        row.state === "no_search_identity" ||
+        row.queue.state === "paused" ||
+        (row.controlledRun !== null &&
+          (row.controlledRun.imports.failed > 0 ||
+            row.controlledRun.imports.needsReview > 0 ||
+            ["failed", "dispatch_failed", "paused_auth"].includes(
+              row.controlledRun.status,
+            )))
+      );
+  }
+};
+function QueueCell({ row }: { row: MailCoverageRow }) {
+  const label =
+    row.queue.state === "running"
+      ? "Running now"
+      : row.queue.state === "queued"
+        ? `Next · #${row.queue.position ?? 1}`
+        : row.queue.state === "paused"
+          ? "Paused"
+          : "—";
+  return (
+    <span
+      className="flex items-center gap-1"
+      title={row.queue.reason ?? undefined}
+    >
+      <StatusText
+        tone={
+          row.queue.state === "running"
+            ? "positive"
+            : row.queue.state === "paused"
+              ? "warning"
+              : "muted"
+        }
+      >
+        {label}
+      </StatusText>
+      {row.queue.runId ? (
+        <EntityRefLink entity="run" id={row.queue.runId} />
+      ) : null}
+    </span>
+  );
+}
+function CoverageCountLink({
+  row,
+  stage,
+  children,
+}: {
+  row: MailCoverageRow;
+  stage: "known" | "classified" | "retained" | "linked";
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      to="/emails"
+      search={{
+        coverageVendorId: row.vendorId,
+        coverageStage: stage,
+        mailboxId: row.mailboxId,
+        ledgerPartyId: row.memberId,
+      }}
+      className="font-mono tabular-nums underline-offset-2 hover:underline"
+      onClick={(event) => event.stopPropagation()}
+    >
+      {children}
+    </Link>
+  );
+}
+function PurchaseCountCell({ row }: { row: MailCoverageRow }) {
+  if (!row.linkedPurchases) return <StatusText>0</StatusText>;
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="link"
+            size="sm"
+            className="px-1 font-mono tabular-nums"
+          />
+        }
+        onClick={(event) => event.stopPropagation()}
+        aria-label={`Linked Purchases for ${row.vendorName}`}
+      >
+        {row.linkedPurchases}
+      </PopoverTrigger>
+      <PopoverContent
+        className="max-h-96 w-80 space-y-2 overflow-y-auto"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h3 className="text-sm font-semibold">Linked Purchases</h3>
+        <p className="text-xs text-muted-foreground">
+          Distinct Purchases linked to this Vendor’s Emails in this mailbox.
+        </p>
+        <ul className="space-y-2">
+          {row.linkedPurchaseIds.map((id) => (
+            <li key={id}>
+              <EntityRefLink entity="purchase" id={id} />
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 function SearchCoverageCell({ row }: { row: MailCoverageRow }) {
   const tone =
@@ -100,9 +233,21 @@ function SearchCoverageCell({ row }: { row: MailCoverageRow }) {
                   {search.state === "complete"
                     ? "Complete"
                     : search.state === "in_progress"
-                      ? "In progress"
+                      ? "Incomplete"
                       : "Not searched"}
                 </Badge>
+                {search.queuePosition !== null ? (
+                  <p className="text-xs">
+                    Mailbox queue #{search.queuePosition}
+                  </p>
+                ) : null}
+                {search.runId ? (
+                  <EntityRefLink entity="run" id={search.runId} />
+                ) : search.state !== "not_started" ? (
+                  <p className="text-xs text-muted-foreground">
+                    Run not recorded
+                  </p>
+                ) : null}
                 {search.completedAt ? (
                   <DateDisplay timestamp={search.completedAt} />
                 ) : search.state === "complete" ? (
@@ -148,6 +293,9 @@ function LinkedEmailCell({ row }: { row: MailCoverageRow }) {
         onClick={(event) => event.stopPropagation()}
       >
         <h3 className="font-semibold">Emails linked to Purchases</h3>
+        <CoverageCountLink row={row} stage="linked">
+          Open {row.linkedEmails} linked Emails
+        </CoverageCountLink>
         <p>
           {countLabel(row.linkedRetainedEmails, "Email")} with content saved
         </p>
@@ -170,6 +318,7 @@ function controlledStatus(row: MailCoverageRow): string {
   if (!control) return "Not requested";
   if (control.queued) return "Waiting for active work";
   if (control.imports.running > 0) return "Importing";
+  if (control.imports.paused > 0) return "Import paused";
   if (control.imports.failed > 0) return "Import failed";
   if (control.imports.needsReview > 0) return "Needs review";
   return `Search ${humanize(control.status).toLowerCase()}`;
@@ -204,6 +353,9 @@ function ControlledRunStatus({ row }: { row: MailCoverageRow }) {
         {[
           controlled.imports.running
             ? `${countLabel(controlled.imports.running, "import")} active`
+            : null,
+          controlled.imports.paused
+            ? `${countLabel(controlled.imports.paused, "import")} paused`
             : null,
           controlled.imports.needsReview
             ? `${countLabel(controlled.imports.needsReview, "import")} need review`
@@ -268,19 +420,25 @@ function ControlledMailImport({
   const alreadyRunning =
     row.controlledRun !== null &&
     (activeRunStatuses.has(row.controlledRun.status) ||
-      row.controlledRun.imports.running > 0);
+      row.controlledRun.imports.running > 0 ||
+      row.controlledRun.imports.paused > 0);
   const canControl =
     mailbox.canControl && row.searchesTotal > 0 && !alreadyRunning;
   return (
-    <section className="space-y-3 border-t py-4" aria-label="Controlled import">
+    <section
+      className="min-w-0 space-y-3 border-t py-4"
+      aria-label="Controlled import"
+    >
       <h2 className="text-base font-semibold">Import selected Vendor</h2>
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <EntityRefLink
-          entity="vendor"
-          id={row.vendorId}
-          name={row.vendorName}
-        />
-        <span>{mailbox.label}</span>
+      <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+        <span className="max-w-full min-w-0 overflow-hidden">
+          <EntityRefLink
+            entity="vendor"
+            id={row.vendorId}
+            name={row.vendorName}
+          />
+        </span>
+        <span className="min-w-0 break-words">{mailbox.label}</span>
         <span className="text-xs text-muted-foreground">
           Automatic import{" "}
           {mailbox.enabled
@@ -291,20 +449,31 @@ function ControlledMailImport({
         </span>
       </div>
       <p className="max-w-prose text-xs text-muted-foreground">
-        Pauses other automatic imports for this mailbox until you resume them.
-        Active work finishes first, then this Vendor is searched and imported.
-        Paid AI may run within the household budget. From includes all earlier
-        history by default; Through starts at today. Clear both dates for all
-        history.
+        Runs next after active work finishes. Other imports stay paused until
+        you resume this mailbox. Paid AI uses the household budget.
       </p>
       {!mailbox.canControl ? (
         <StatusText>
           Only the connected mailbox member can control this import.
         </StatusText>
       ) : null}
+      {row.queue.reason ? (
+        <p className="text-xs text-muted-foreground">{row.queue.reason}</p>
+      ) : null}
+      {row.queue.runId ? (
+        <p className="flex flex-wrap items-center gap-2 text-xs">
+          Current work <EntityRefLink entity="run" id={row.queue.runId} />
+        </p>
+      ) : null}
       {row.searchesTotal === 0 ? (
         <StatusText>
-          Add a sender or domain to the Vendor before searching.
+          Add a sender or domain to{" "}
+          <EntityRefLink
+            entity="vendor"
+            id={row.vendorId}
+            name={row.vendorName}
+          />{" "}
+          before searching.
         </StatusText>
       ) : null}
       {row.searchTerms.length > 0 ? (
@@ -375,8 +544,8 @@ function ControlledMailImport({
         </div>
       </form>
       <p id={`${formId}-date-hint`} className="text-xs text-muted-foreground">
-        Type dates naturally, such as “1 year ago” or “today”, then press Enter
-        or leave the field.
+        Leave From blank for earlier history; Through starts today. Type “1 year
+        ago” or “today”, then press Enter or leave the field.
       </p>
       <div className="space-y-2">
         <Button
@@ -428,7 +597,7 @@ function ControlledMailImport({
           form={`${formId}-range`}
           disabled={!canControl || control.isPending}
         >
-          {control.isPending ? "Starting import…" : "Start controlled import"}
+          {control.isPending ? "Starting import…" : "Import next"}
         </Button>
         {mailbox.resumeEnabled !== null ? (
           <Button
@@ -468,16 +637,20 @@ function CoverageTable({
   vendorId,
   mailboxId,
   accountId,
+  view = "all",
+  onViewChange,
 }: {
   coverage: MailCoverage;
   vendorId?: string;
   mailboxId?: string;
   accountId?: string;
+  view?: MailCoverageView;
+  onViewChange?: (view: MailCoverageView) => void;
 }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   // Responsive inspectors move between containers; the selection owner retains its draft.
   const [draft, setDraft] = useState(initialControlledMailDraft);
-  const rows = useMemo(
+  const contextRows = useMemo(
     () =>
       coverage.rows.filter(
         (row) =>
@@ -486,6 +659,10 @@ function CoverageTable({
           (!mailboxId || row.mailboxId === mailboxId),
       ),
     [coverage.rows, vendorId, mailboxId, accountId],
+  );
+  const rows = useMemo(
+    () => contextRows.filter((row) => inView(row, view)),
+    [contextRows, view],
   );
   const mailboxes = useMemo(
     () =>
@@ -569,6 +746,27 @@ function CoverageTable({
           }),
         );
         add(
+          helper.accessor(
+            (row) =>
+              row.queue.state === "running"
+                ? 0
+                : row.queue.state === "queued"
+                  ? (row.queue.position ?? 1)
+                  : row.queue.state === "paused"
+                    ? 1_000_000 + (row.queue.position ?? 0)
+                    : 2_000_000,
+            {
+              id: "queue",
+              header: "Queue",
+              size: 180,
+              meta: attachCubbyColumnMeta<MailCoverageRow>({
+                mobile: { slot: "meta", priority: 1 },
+              }),
+              cell: ({ row }) => <QueueCell row={row.original} />,
+            },
+          ),
+        );
+        add(
           helper.accessor("state", {
             header: "Coverage",
             size: 160,
@@ -644,6 +842,8 @@ function CoverageTable({
                     : "Local Emails",
               }),
               cell: ({ row, getValue }) => {
+                if (key === "linkedPurchases")
+                  return <PurchaseCountCell row={row.original} />;
                 if (key === "linkedEmails")
                   return <LinkedEmailCell row={row.original} />;
                 const value = getValue();
@@ -656,30 +856,41 @@ function CoverageTable({
                       ? remaining > 0
                         ? "warning"
                         : "positive"
-                      : key === "linkedPurchases"
-                        ? "positive"
-                        : null;
-                return tone ? (
-                  <StatusText
-                    tone={tone}
-                    className="font-mono tabular-nums"
-                    title={
-                      key === "classified" && remaining > 0
-                        ? `${remaining} Emails have no recorded classification`
-                        : undefined
+                      : null;
+                return (
+                  <CoverageCountLink
+                    row={row.original}
+                    stage={
+                      key === "scanned"
+                        ? "known"
+                        : key === "classified"
+                          ? "classified"
+                          : "retained"
                     }
                   >
-                    {value}
-                    {key === "classified" && remaining > 0 ? (
-                      <span className="sr-only">
-                        {" "}
-                        of {row.original.scanned}; {remaining} await
-                        classification
-                      </span>
-                    ) : null}
-                  </StatusText>
-                ) : (
-                  <span className="font-mono tabular-nums">{value}</span>
+                    {tone ? (
+                      <StatusText
+                        tone={tone}
+                        className="font-mono tabular-nums"
+                        title={
+                          key === "classified" && remaining > 0
+                            ? `${remaining} Emails have no recorded classification`
+                            : undefined
+                        }
+                      >
+                        {value}
+                        {key === "classified" && remaining > 0 ? (
+                          <span className="sr-only">
+                            {" "}
+                            of {row.original.scanned}; {remaining} await
+                            classification
+                          </span>
+                        ) : null}
+                      </StatusText>
+                    ) : (
+                      <span className="font-mono tabular-nums">{value}</span>
+                    )}
+                  </CoverageCountLink>
                 );
               },
             }),
@@ -692,7 +903,9 @@ function CoverageTable({
             cell: ({ getValue }) => {
               const timestamp = getValue();
               return timestamp ? (
-                <DateDisplay timestamp={timestamp} />
+                <span title="Latest completion among this Vendor’s current full-history queries. New-mail checks and imports are separate.">
+                  <DateDisplay timestamp={timestamp} />
+                </span>
               ) : (
                 <span
                   className="text-muted-foreground"
@@ -724,11 +937,24 @@ function CoverageTable({
       }),
     [coverage.mailboxes, mailboxes],
   );
-  const table = useLocalTable({ rows, columns, getRowId: rowId, search });
+  const table = useLocalTable({
+    rows,
+    columns,
+    getRowId: rowId,
+    search,
+    initialVisibility: compactVisibility,
+    rowContentVersion: rows,
+  });
   const selected = coverage.rows.find((row) => row.key === selectedKey);
   const mailbox = selected ? mailboxes.get(selected.mailboxId) : undefined;
   return (
-    <>
+    <Tabs
+      value={view}
+      onValueChange={(value) => {
+        const next = coverageViews.find(([key]) => key === value)?.[0];
+        if (next) onViewChange?.(next);
+      }}
+    >
       {vendorId || mailboxId || accountId ? (
         <p className="text-xs text-muted-foreground">
           Showing linked record context.{" "}
@@ -737,42 +963,57 @@ function CoverageTable({
           </Link>
         </p>
       ) : null}
-      <RTable
-        table={table}
-        ariaLabel="Mail coverage by Vendor and mailbox"
-        embedded
-        withoutImages="Coverage rows use canonical Vendor links."
-        currentRowId={selectedKey ?? undefined}
-        onRowClick={(row) => {
-          if (row.original.key !== selectedKey)
-            setDraft(initialControlledMailDraft());
-          setSelectedKey(row.original.key);
-        }}
-        disableMobileDetailsHref
-        inspector={{
-          title: "Controlled mail import",
-          onClose: () => setSelectedKey(null),
-          content:
-            selected && mailbox ? (
-              <ControlledMailImport
-                key={selected.key}
-                row={selected}
-                mailbox={mailbox}
-                draft={draft}
-                onDraftChange={setDraft}
-              />
-            ) : null,
-        }}
-        emptyState={
-          <EmptyState
-            size="inline"
-            description="Connect Gmail in Settings, or clear filters to see all Vendors."
-          >
-            No coverage rows
-          </EmptyState>
-        }
-      />
-    </>
+      {onViewChange ? (
+        <TabsList className="h-auto flex-wrap" aria-label="Mail coverage views">
+          {coverageViews.map(([key, label]) => (
+            <TabsTrigger key={key} value={key}>
+              {label}{" "}
+              <span className="font-mono text-muted-foreground">
+                {contextRows.filter((row) => inView(row, key)).length}
+              </span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      ) : null}
+      <TabsContent value={view} keepMounted>
+        <RTable
+          table={table}
+          ariaLabel="Mail coverage by Vendor and mailbox"
+          embedded
+          showColumnMenu
+          withoutImages="Coverage rows use canonical Vendor links."
+          currentRowId={selectedKey ?? undefined}
+          onRowClick={(row) => {
+            if (row.original.key !== selectedKey)
+              setDraft(initialControlledMailDraft());
+            setSelectedKey(row.original.key);
+          }}
+          disableMobileDetailsHref
+          inspector={{
+            title: "Controlled mail import",
+            onClose: () => setSelectedKey(null),
+            content:
+              selected && mailbox ? (
+                <ControlledMailImport
+                  key={selected.key}
+                  row={selected}
+                  mailbox={mailbox}
+                  draft={draft}
+                  onDraftChange={setDraft}
+                />
+              ) : null,
+          }}
+          emptyState={
+            <EmptyState
+              size="inline"
+              description="Connect Gmail in Settings, or clear filters to see all Vendors."
+            >
+              No coverage rows
+            </EmptyState>
+          }
+        />
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -780,10 +1021,14 @@ export function MailCoveragePage({
   vendorId,
   mailboxId,
   accountId,
+  view = "all",
+  onViewChange,
 }: {
   vendorId?: string;
   mailboxId?: string;
   accountId?: string;
+  view?: MailCoverageView;
+  onViewChange?: (view: MailCoverageView) => void;
 }) {
   const query = useQuery({
     ...run.mailCoverage.queryOptions({}),
@@ -791,10 +1036,13 @@ export function MailCoveragePage({
       current.state.data?.mailboxes.some((mailbox) => mailbox.enabled) ||
       current.state.data?.rows.some(
         (row) =>
+          row.queue.state === "running" ||
+          row.queue.state === "queued" ||
           row.state === "in_progress" ||
           (row.controlledRun !== null &&
             (activeRunStatuses.has(row.controlledRun.status) ||
-              row.controlledRun.imports.running > 0)),
+              row.controlledRun.imports.running > 0 ||
+              row.controlledRun.imports.paused > 0)),
       )
         ? 30_000
         : false,
@@ -802,15 +1050,47 @@ export function MailCoveragePage({
   const loading = useHydratedLoading(query.isPending);
   return (
     <div className="min-w-0 space-y-3">
-      <p className="max-w-prose text-xs text-muted-foreground">
-        Every Vendor appears once per connected mailbox, including Vendors with
-        no mail. Select a row to import that Vendor. Counts cover local
-        sender/domain candidates or attributed evidence, not Gmail totals. A
-        matching domain does not establish Vendor attribution. Linked Purchases
-        are distinct records. Search completion does not mean all purchases were
-        imported; follow the controlled import Run for its outcome. Counts cover
-        recorded history; import dates do not filter this table.
+      <p className="text-xs text-muted-foreground">
+        Track coverage and upcoming work in each mailbox. Select a Vendor to
+        preview Gmail matches or import next.
       </p>
+      <details className="text-xs text-muted-foreground">
+        <summary>How coverage and counts work</summary>
+        <p className="max-w-prose text-xs text-muted-foreground">
+          Every Vendor appears once per connected mailbox, including Vendors
+          with no mail. Select a row to import that Vendor. Counts cover local
+          sender/domain candidates or attributed evidence, not Gmail totals. A
+          matching domain does not establish Vendor attribution. Linked
+          Purchases are distinct records. Search completion does not mean all
+          purchases were imported; follow the controlled import Run for its
+          outcome. Counts cover recorded history; import dates do not filter
+          this table.
+        </p>
+        <p className="mt-2 max-w-prose">
+          Queue positions belong to each mailbox and include unmatched-charge
+          searches. New-mail checks can run between searches. Last searched
+          records historical query completion; new mail may have arrived since
+          then.
+        </p>
+      </details>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={query.isFetching}
+          onClick={() => void query.refetch()}
+        >
+          {query.isFetching ? "Refreshing…" : "Refresh coverage"}
+        </Button>
+        {query.dataUpdatedAt ? (
+          <span className="text-muted-foreground">
+            Updated{" "}
+            <DateDisplay
+              timestamp={new Date(query.dataUpdatedAt).toISOString()}
+            />
+          </span>
+        ) : null}
+      </div>
       {loading ? <StatusText>Loading Mail coverage…</StatusText> : null}
       {query.error ? (
         <div className="space-y-2">
@@ -830,6 +1110,8 @@ export function MailCoveragePage({
           vendorId={vendorId}
           mailboxId={mailboxId}
           accountId={accountId}
+          view={view}
+          onViewChange={onViewChange}
         />
       ) : null}
     </div>
