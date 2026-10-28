@@ -1,5 +1,5 @@
 import { imageId } from "@cubby/schemas/identifiers";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -8,10 +8,10 @@ import {
   image,
   imageProcessingJob,
   imageProcessingSubmission,
-  job,
 } from "~/server/db/schema";
 import { backfillImageProcessing } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 describe("backfillImageProcessing", () => {
@@ -74,10 +74,9 @@ describe("backfillImageProcessing", () => {
     // description are parked for devices.
     expect(
       (
-        await getDb(ctx.db)
-          .select({ kind: job.kind, state: job.state })
-          .from(job)
-          .where(inArray(job.kind, ["image.cloud", "image.device"]))
+        await readJobs(ctx.db, { kinds: ["image.cloud", "image.device"] }).then(
+          (rows) => rows.map(({ kind, state }) => ({ kind, state })),
+        )
       ).sort((left, right) => left.kind.localeCompare(right.kind)),
     ).toEqual([
       { kind: "image.cloud", state: "queued" },

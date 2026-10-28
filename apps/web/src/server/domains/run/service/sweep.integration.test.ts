@@ -19,6 +19,7 @@ import { runHandlers } from "~/server/domains/run/operations/run.server";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { buildHoldVoidProposals } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
+import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { systemPrincipal } from "~/server/http/authenticate";
 import {
@@ -565,14 +566,21 @@ describe("Sweeps", () => {
 
   const evaluationsOf = async (runId: string) => {
     const { rows } = await getDb(ctx.db).execute<{
+      id: string;
       state: string;
-      item: boolean;
-    }>(sql`SELECT e.state, EXISTS (SELECT 1 FROM "WorkItem" w
-        WHERE w.target = 'ai.evaluation' AND w.ref = e.id) AS item
+    }>(sql`SELECT e.id::text AS id, e.state
       FROM "AiEvaluation" e
       WHERE e."runId" = ${runId}::uuid
         OR e.id IN (SELECT "evaluationId" FROM "AiEvaluationRequest" WHERE "runId" = ${runId}::uuid)`);
-    return rows;
+    const items = new Set(
+      (
+        await readWorkItems(ctx.db, {
+          target: "ai.evaluation",
+          refs: rows.map((row) => row.id),
+        })
+      ).map((item) => item.ref),
+    );
+    return rows.map(({ id, state }) => ({ state, item: items.has(id) }));
   };
   const childRuns = async (runId: string) =>
     getDb(ctx.db)

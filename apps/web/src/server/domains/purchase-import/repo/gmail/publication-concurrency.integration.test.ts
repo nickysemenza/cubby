@@ -17,9 +17,9 @@ import {
   orderMail,
   orderMailAttachment,
   emailCandidateObservation,
-  job,
 } from "~/server/db/schema";
 import { startMailImport } from "~/server/domains/purchase-import/repo/mail-import-run";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
@@ -226,10 +226,9 @@ describe("Gmail final publication concurrency", () => {
         expect(f.storage.delete).not.toHaveBeenCalled();
         expect(f.provider.getAttachment).not.toHaveBeenCalled();
         expect(
-          await getDb(ctx.db)
-            .select({ runId: job.runId })
-            .from(job)
-            .where(eq(job.kind, "purchase.dispatch")),
+          await readJobs(ctx.db, { kind: "purchase.dispatch" }).then((rows) =>
+            rows.map(({ runId }) => ({ runId })),
+          ),
         ).toEqual([{ runId: admitted[0]?.runId }]);
       } finally {
         release.resolve();

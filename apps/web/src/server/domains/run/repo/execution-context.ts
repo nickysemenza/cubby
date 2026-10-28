@@ -49,7 +49,7 @@ export async function assertRunExecutable(db: Database, runId: RunId) {
   const sharedExecutable =
     evaluation &&
     (await (
-      await import("~/server/ai/repo/ai-evaluation-requests")
+      await import("~/server/ai/evaluation/repo/ai-evaluation-requests")
     ).evaluationIsExecutable(db, evaluation, runId));
   if (current.status !== "running" && !sharedExecutable)
     throw new Error("Run is no longer executable.");

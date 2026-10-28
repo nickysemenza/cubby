@@ -8,7 +8,6 @@ import { getDb } from "~/server/db/helpers";
 import {
   assessmentState,
   image,
-  job,
   feedback,
   vendorAccount,
 } from "~/server/db/schema";
@@ -18,6 +17,7 @@ import {
 } from "~/server/domains/work/service/work-queue-read";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
 
@@ -100,7 +100,7 @@ describe("image Suggestions in Work", () => {
       .where(eq(assessmentState.id, suppressed.id));
     await propose(second.id, "second");
     const before = {
-      jobs: await getDb(ctx.db).select().from(job),
+      jobs: await readJobs(ctx.db, {}),
       feedback: await getDb(ctx.db).select().from(feedback),
     };
     const queue = await readWorkQueue(ctx.db, {
@@ -139,7 +139,7 @@ describe("image Suggestions in Work", () => {
       }),
     ]);
     expect({
-      jobs: await getDb(ctx.db).select().from(job),
+      jobs: await readJobs(ctx.db, {}),
       feedback: await getDb(ctx.db).select().from(feedback),
     }).toEqual(before);
     await getDb(ctx.db)

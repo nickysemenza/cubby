@@ -5,6 +5,7 @@ import type { Database } from "~/server/db";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { job, jobInvalidationCapture } from "~/server/db/retained-tables";
+import { drainPending } from "~/server/generic/jobs/repo/work-items";
 
 /** Completed and cancelled Jobs older than this are pruned; failed ones stay. */
 export const JOB_RETENTION_MS = 14 * 24 * 60 * 60_000;
@@ -32,7 +33,7 @@ export async function pruneFinishedJobs(
           // Producers hold a key-share lock through their wake transaction;
           // a committed wake or pending item keeps its execution identity.
           sql`NOT EXISTS (SELECT 1 FROM "JobInvalidationCapture" c WHERE c.key = ${job.key} AND NOT c.observed)`,
-          sql`NOT EXISTS (SELECT 1 FROM "WorkItem" w WHERE w.drain = ${job.key})`,
+          sql`NOT ${drainPending(sql`${job.key}`)}`,
         ),
       )
       .limit(limit)

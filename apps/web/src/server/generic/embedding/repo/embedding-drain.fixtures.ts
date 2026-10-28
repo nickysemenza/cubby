@@ -1,14 +1,17 @@
 import type { SearchableEntityRef } from "@cubby/schemas/search";
-import { eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { job, workItem } from "~/server/db/retained-tables";
 import {
   EMBEDDING_REFRESH_DRAIN,
   EMBEDDING_REFRESH_TARGET,
 } from "~/server/generic/embedding/repo/embedding-drain";
 import { embeddingRefreshHandler } from "~/server/generic/embedding/service/embedding-refresh";
+import {
+  updateJobs,
+  updateWorkItems,
+  readWorkItems,
+} from "~/server/generic/jobs/jobs.fixtures";
+import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
@@ -22,20 +25,14 @@ export async function advanceEmbeddingFixture(
   db: Database,
   port: EmbeddingRefreshPort,
 ) {
-  const [execution] = await getDb(db)
-    .select({ id: job.id })
-    .from(job)
-    .where(eq(job.key, EMBEDDING_REFRESH_DRAIN.key))
-    .limit(1);
+  const execution = await readJob(db, { key: EMBEDDING_REFRESH_DRAIN.key });
   if (!execution) return null;
-  await getDb(db)
-    .update(job)
-    .set({ availableAt: new Date(0) })
-    .where(eq(job.id, execution.id));
-  await getDb(db)
-    .update(workItem)
-    .set({ readyAt: new Date(0) })
-    .where(eq(workItem.drain, EMBEDDING_REFRESH_DRAIN.key));
+  await updateJobs(db, { id: execution.id }, { availableAt: new Date(0) });
+  await updateWorkItems(
+    db,
+    { drain: EMBEDDING_REFRESH_DRAIN.key },
+    { readyAt: new Date(0) },
+  );
   await advanceJob(db, execution.id, {
     "embedding.refresh": embeddingRefreshHandler(port),
   });
@@ -53,10 +50,9 @@ export async function embedFixtures(
   await enqueueEmbeddingRefs(db, await prepareSearchDocuments(db, uniqueRefs));
   for (let attempt = 0; attempt < 5; attempt++) {
     await advanceEmbeddingFixture(db, port);
-    const pending = await getDb(db)
-      .select({ ref: workItem.ref })
-      .from(workItem)
-      .where(eq(workItem.target, EMBEDDING_REFRESH_TARGET));
+    const pending = await readWorkItems(db, {
+      target: EMBEDDING_REFRESH_TARGET,
+    });
     if (
       !pending.some(({ ref }) =>
         uniqueRefs.some((candidate) => candidate.entityId === ref),

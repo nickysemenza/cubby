@@ -2,24 +2,23 @@ import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelope
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
-import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import { job as durableJob } from "~/server/db/retained-tables";
 import {
   aiUsage,
   imageProcessingAttempt,
   imageProcessingJob,
 } from "~/server/db/schema";
+import { readDeviceBacklog } from "~/server/domains/image-processing/repo/device-backlog";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
-import { readDeviceBacklog } from "~/server/generic/jobs/repo/device-backlog";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -164,15 +163,16 @@ describe("image job cost", () => {
       kind: "image.device",
       input: {},
     });
-    await getDb(ctx.db)
-      .update(durableJob)
-      .set({
+    await updateJobs(
+      ctx.db,
+      { id: heldExecution.id },
+      {
         state: "running",
         leaseToken: attemptId,
         leaseExpiresAt,
         lastClaimedAt: new Date(),
-      })
-      .where(eq(durableJob.id, heldExecution.id));
+      },
+    );
     await enqueueJob(ctx.db, {
       key: `image-processing:${parked.id}`,
       kind: "image.device",
@@ -219,15 +219,17 @@ describe("image job cost", () => {
     expect(execution.items.map((item) => item.target.entityId)).toEqual([
       heldExecution.shortcode,
     ]);
-    await getDb(ctx.db)
-      .update(durableJob)
-      .set({ leaseExpiresAt: new Date(0) })
-      .where(eq(durableJob.id, heldExecution.id));
+    await updateJobs(
+      ctx.db,
+      { id: heldExecution.id },
+      { leaseExpiresAt: new Date(0) },
+    );
     expect((await devices()).totalCount).toBe(1);
-    await getDb(ctx.db)
-      .update(durableJob)
-      .set({ state: "queued", leaseToken: null, leaseExpiresAt: null })
-      .where(eq(durableJob.id, heldExecution.id));
+    await updateJobs(
+      ctx.db,
+      { id: heldExecution.id },
+      { state: "queued", leaseToken: null, leaseExpiresAt: null },
+    );
     expect((await devices()).totalCount).toBe(0);
   });
 });

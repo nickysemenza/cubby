@@ -3,20 +3,21 @@ import {
   aiProvenance,
   aiRefreshRunInput,
 } from "@cubby/schemas/ai-evaluation";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import {
   enqueueAiEvaluation,
   evaluationSlotKey,
-} from "~/server/ai/repo/ai-evaluation-requests";
+} from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluation, product, run } from "~/server/db/schema";
+import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
+import { workItemsFor } from "~/server/generic/jobs/repo/work-items";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
@@ -31,25 +32,9 @@ import { ensureRun, systemActor } from "./ensure-run";
 describe("AI refresh scheduling admission", () => {
   const ctx = withTestDb();
   const evaluationItems = async () =>
-    z
-      .object({ count: z.coerce.number() })
-      .parse(
-        (
-          await getDb(ctx.db).execute(
-            sql`SELECT count(*) AS count FROM "WorkItem" WHERE target = 'ai.evaluation'`,
-          )
-        ).rows[0],
-      ).count;
+    (await readWorkItems(ctx.db, { target: "ai.evaluation" })).length;
   const aiEvaluationTicket = async (id: string) =>
-    z
-      .array(z.object({ ticket: z.coerce.number() }))
-      .parse(
-        (
-          await getDb(ctx.db).execute(
-            sql`SELECT ticket FROM "WorkItem" WHERE target = 'ai.evaluation' AND ref = ${id}::uuid`,
-          )
-        ).rows,
-      )[0]?.ticket;
+    (await workItemsFor(ctx.db, "ai.evaluation", [id]))[0]?.ticket;
   const target = (recordId = crypto.randomUUID()) => ({
     target: aiEvaluationTarget.parse({
       kind: "email",

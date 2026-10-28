@@ -133,7 +133,7 @@ export async function publishGmailEvidence<T>(
       : undefined;
     const guarded = evaluation
       ? await (
-          await import("~/server/ai/repo/ai-evaluation")
+          await import("~/server/ai/evaluation/repo/ai-evaluation")
         ).guardAiEvaluation(
           databaseForTransaction(tx),
           evaluation.id,
@@ -160,7 +160,7 @@ export async function publishGmailEvidence<T>(
         });
       if (!evaluation || !guarded) return null;
       const { completeAiEvaluation } =
-        await import("~/server/ai/repo/ai-evaluation");
+        await import("~/server/ai/evaluation/repo/ai-evaluation");
       if (!evaluation.reclassification) {
         await completeAiEvaluation(
           databaseForTransaction(tx),
@@ -193,7 +193,7 @@ export async function publishGmailEvidence<T>(
           // attempt's page can no longer clear it.
           const { aiEvaluation } = await import("~/server/db/schema");
           const { markAiEvaluationWork } =
-            await import("~/server/ai/repo/ai-evaluation-work");
+            await import("~/server/ai/evaluation/repo/ai-evaluation-work");
           await tx
             .update(aiEvaluation)
             .set({
@@ -299,7 +299,7 @@ export async function publishGmailEvidence<T>(
       });
     if (evaluation)
       await (
-        await import("~/server/ai/repo/ai-evaluation")
+        await import("~/server/ai/evaluation/repo/ai-evaluation")
       ).completeAiEvaluation(
         txDb,
         evaluation.id,

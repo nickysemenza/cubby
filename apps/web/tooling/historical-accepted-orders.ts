@@ -19,7 +19,7 @@ import {
   inventoryEntry,
   purchasePaymentEvidence,
 } from "~/server/db/schema";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { promoteHistoricalAcceptedObservation } from "~/server/domains/purchase-import/repo/reconciliation-observations";
 import {
   databaseForTransaction,

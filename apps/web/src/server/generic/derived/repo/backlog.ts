@@ -4,28 +4,19 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
 import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
+import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
+import { drainBacklog } from "~/server/generic/jobs/repo/work-items";
 
-const countRow = z.object({
-  target: z.string(),
-  count: z.coerce.number().int().nonnegative(),
-});
-
-/** Fanout tickets count as outstanding work for the derived kind they will refresh. */
 /** Published values are reported per minute over this window. */
 const RECENT_MINUTES = 15;
 
 export async function readDerivedBacklog(
   db: Database,
 ): Promise<DerivedBacklog> {
-  const result = await repositoryQueries(db).execute(
-    sql`SELECT split_part(target, '@', 1) AS target, count(*)::int AS count FROM "WorkItem" WHERE drain = 'derived:drain' GROUP BY split_part(target, '@', 1) ORDER BY 1`,
-  );
-  const rows = z.array(countRow).parse(result.rows);
-  const [oldest, published] = await Promise.all([
-    repositoryQueries(db).execute(
-      sql`SELECT extract(epoch FROM now() - min("dirtiedAt"))::int AS seconds FROM "WorkItem" WHERE drain = 'derived:drain'`,
-    ),
+  const [{ targets: rows, oldestSeconds }, published] = await Promise.all([
+    // Fanout tickets (`target@column`) count toward the kind they refresh.
+    drainBacklog(db, DERIVED_DRAIN_JOB_KEY),
     repositoryQueries(db).execute(
       sql`SELECT floor(extract(epoch FROM now() - "computedAt") / 60)::int AS age, count(*)::int AS count
         FROM "DerivedValue"
@@ -40,9 +31,7 @@ export async function readDerivedBacklog(
     if (row.age >= 0 && row.age < RECENT_MINUTES)
       perMinute[RECENT_MINUTES - 1 - row.age] = row.count;
   return {
-    oldestWaitingSeconds: z
-      .object({ seconds: z.number().int().nullable() })
-      .parse(oldest.rows[0] ?? { seconds: null }).seconds,
+    oldestWaitingSeconds: oldestSeconds,
     recent: { windowMinutes: RECENT_MINUTES, perMinute },
     total: rows.reduce((sum, row) => sum + row.count, 0),
     kinds: storedDerivedDeclarations().map((declaration) => ({

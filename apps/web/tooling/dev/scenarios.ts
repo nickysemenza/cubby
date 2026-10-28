@@ -8,7 +8,7 @@ import {
   markRunFailed,
   startPhotoInventoryRun,
 } from "~/server/domains/purchase-import/repo/run-service";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { eq } from "drizzle-orm";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import assert from "node:assert/strict";

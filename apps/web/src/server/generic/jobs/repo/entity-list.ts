@@ -11,11 +11,13 @@ import {
   INTERNAL_JOB_KINDS,
   JOB_KIND_POLICY,
 } from "~/server/generic/jobs/kind-policy";
+import type { JobRow } from "~/server/generic/jobs/repo/job-reads";
 import { jobWaitingOnReasonSql } from "~/server/generic/jobs/repo/waiting-on";
 import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListReadOptions } from "~/server/generic/list/repo/list-projection";
 /** The Job list's population and derived SQL, shared with the Job repository. */
-export const jobScaffoldOptions = {
+const jobScaffoldOptions = {
   populationFilters: ["includeInternal"],
   population: (filters) =>
     jobFilters.parse(filters).includeInternal
@@ -44,3 +46,8 @@ export const jobScaffoldOptions = {
 const scaffold = listScaffold("job", job, jobScaffoldOptions);
 
 export const jobEntityWhere = (filters: JobFilters) => scaffold.where(filters);
+
+/** The Job repository's list scaffold, with its read bindings. */
+export const jobListScaffold = <Read extends ListReadOptions<JobRow>>(
+  read: Read,
+) => listScaffold("job", job, { ...jobScaffoldOptions, read });

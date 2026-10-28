@@ -2,11 +2,11 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import { jobRunOwned } from "~/server/generic/jobs/repo/external-claim";
+import { externalRunOwned } from "~/server/generic/jobs/repo/external-claim";
 
 /**
  * Device pulls claim a bounded batch but keep the drain's two classes: an
- * active, member-visible Run's parked work (`jobRunOwned`) leads, and after
+ * active, member-visible Run's parked work (`externalRunOwned`) leads, and after
  * this many run-owned device services in a row backfill is owed the next.
  */
 export const DEVICE_BACKFILL_SHARE = 0.2;
@@ -44,7 +44,7 @@ export async function lockDeviceAdmission(db: Database): Promise<number> {
 
 /**
  * Counts one committed device hand-off of the `image.device` Job `key`, by
- * its class now (`jobRunOwned`), in the assignment's transaction: only a
+ * its class now (`externalRunOwned`), in the assignment's transaction: only a
  * hand-off that commits is a service, and a Run ending later never
  * reclassifies it. A refused or failed hand-off writes nothing.
  */
@@ -55,7 +55,7 @@ export async function recordDeviceService(
   // The upsert itself locks the lane; a separate lock query repeats that round trip.
   const result = await repositoryQueries(db).execute<{ streak: number }>(sql`
     INSERT INTO "JobLaneAdmission" (lane, "ownedStreak", "updatedAt")
-    SELECT ${DEVICE_LANE}, CASE WHEN ${jobRunOwned()} THEN 1 ELSE 0 END, now()
+    SELECT ${DEVICE_LANE}, CASE WHEN ${externalRunOwned()} THEN 1 ELSE 0 END, now()
     FROM "Job" WHERE "Job".key = ${key} AND "Job".kind = ${DEVICE_LANE}
     ON CONFLICT (lane) DO UPDATE SET
       "ownedStreak" = CASE WHEN EXCLUDED."ownedStreak" > 0

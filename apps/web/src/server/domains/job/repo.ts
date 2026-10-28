@@ -1,44 +1,20 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { jobRawOut as rawJobOut } from "@cubby/schemas/entity-contracts/job";
-import { parseEntityId } from "@cubby/schemas/identifiers";
 import { describeJobWaitingOn } from "@cubby/schemas/job";
-import { inArray } from "drizzle-orm";
 
-import {
-  databaseForTransaction,
-  isTransaction,
-  unwrapDb,
-} from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
 import { resolveEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
-import { jobScaffoldOptions } from "~/server/generic/jobs/repo/entity-list";
+import { jobListScaffold } from "~/server/generic/jobs/repo/entity-list";
+import { readJobs, type JobRow } from "~/server/generic/jobs/repo/job-reads";
 import { loadJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
-import { listScaffold } from "~/server/generic/list/repo/list";
 import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
-type JobRow = typeof job.$inferSelect;
 
 const read = {
   media: true,
   displayImages: async (db, ids) => {
-    const rows = ids.length
-      ? await unwrapDb(db)
-          .select({
-            id: job.id,
-            subjectKind: job.subjectKind,
-            subjectId: job.subjectId,
-          })
-          .from(job)
-          .where(
-            inArray(
-              job.id,
-              ids.map((id) => parseEntityId("job", id)),
-            ),
-          )
-      : [];
+    const rows = ids.length ? await readJobs(db, { ids }) : [];
     const images = await resolveEntityDisplayImageLists(
       db,
       rows.flatMap((row) =>
@@ -60,12 +36,7 @@ const read = {
     runId: { kind: "lookup", missing: "null", includeDeleted: true },
   },
   bindings: (bind) => {
-    const waiting = bind.batch(({ db, rows }) =>
-      loadJobWaitingOn(
-        isTransaction(db) ? databaseForTransaction(db) : db,
-        rows,
-      ),
-    );
+    const waiting = bind.batch(async ({ rows }) => loadJobWaitingOn(rows));
     const subjects = bind.batch(async ({ db, rows }) => {
       const [images, locations] = await Promise.all([
         lookupEntityReferences(
@@ -113,10 +84,7 @@ const read = {
   },
 } satisfies ListReadOptions<JobRow>;
 
-export const jobScaffold = listScaffold("job", job, {
-  ...jobScaffoldOptions,
-  read,
-});
+export const jobScaffold = jobListScaffold(read);
 
 export const jobRepository = defineRepository("job", {
   scaffold: jobScaffold,

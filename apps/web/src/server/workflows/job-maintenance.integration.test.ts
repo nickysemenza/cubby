@@ -5,14 +5,11 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import {
-  entityIdentity,
-  image,
-  imageProcessingJob,
-  job,
-} from "~/server/db/schema";
+import { entityIdentity, image, imageProcessingJob } from "~/server/db/schema";
 import { createTransparentDerivativeAndJob } from "~/server/domains/image-processing/repo/image-processing";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import {
   JOB_RETENTION_MS,
   pruneFinishedJobs,
@@ -49,25 +46,22 @@ describe("Job maintenance", () => {
 
   const runMaintenance = async () => {
     await enrollQueueMaintenance(ctx.db);
-    const [maintenance] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.key, "jobs.maintenance"));
+    const [maintenance] = await readJobs(ctx.db, { key: "jobs.maintenance" });
     if (!maintenance) throw new Error("Expected maintenance Job");
-    await getDb(ctx.db)
-      .update(job)
-      .set({ availableAt: new Date(0) })
-      .where(eq(job.id, maintenance.id));
+    await updateJobs(
+      ctx.db,
+      { id: maintenance.id },
+      { availableAt: new Date(0) },
+    );
     return advanceJob(ctx.db, maintenance.id, productionJobHandlers);
   };
 
   it("enrolls one internal jobs.maintenance Job", async () => {
     await enrollQueueMaintenance(ctx.db);
     await enrollQueueMaintenance(ctx.db);
-    const rows = await getDb(ctx.db)
-      .select({ id: job.id, kind: job.kind })
-      .from(job)
-      .where(eq(job.key, "jobs.maintenance"));
+    const rows = await readJobs(ctx.db, { key: "jobs.maintenance" }).then(
+      (rows) => rows.map(({ id, kind }) => ({ id, kind })),
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.kind).toBe("jobs.maintenance");
   });
@@ -78,20 +72,20 @@ describe("Job maintenance", () => {
       .update(imageProcessingJob)
       .set({ state: "leased", attemptId: crypto.randomUUID() })
       .where(eq(imageProcessingJob.id, jobId));
-    await getDb(ctx.db)
-      .update(job)
-      .set({ state: "failed", error: "Synthetic exhausted execution" })
-      .where(eq(job.key, `image-processing:${jobId}`));
+    await updateJobs(
+      ctx.db,
+      { key: `image-processing:${jobId}` },
+      { state: "failed", error: "Synthetic exhausted execution" },
+    );
 
     await expect(runMaintenance()).resolves.toBe("succeeded");
     const [processing] = await getDb(ctx.db)
       .select({ state: imageProcessingJob.state })
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, jobId));
-    const [execution] = await getDb(ctx.db)
-      .select({ state: job.state, attempts: job.attempts })
-      .from(job)
-      .where(eq(job.key, `image-processing:${jobId}`));
+    const [execution] = await readJobs(ctx.db, {
+      key: `image-processing:${jobId}`,
+    }).then((rows) => rows.map(({ attempts, state }) => ({ state, attempts })));
     expect(processing?.state).toBe("pending");
     expect(execution).toMatchObject({ state: "queued", attempts: 0 });
   });
@@ -103,13 +97,14 @@ describe("Job maintenance", () => {
       input: {},
     };
     const saved = await enqueueJob(ctx.db, input);
-    await getDb(ctx.db)
-      .update(job)
-      .set({
+    await updateJobs(
+      ctx.db,
+      { id: saved.id },
+      {
         state: "completed",
         updatedAt: new Date(Date.now() - JOB_RETENTION_MS - 60_000),
-      })
-      .where(eq(job.id, saved.id));
+      },
+    );
     const woken = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const producer = withTransactionDatabase(ctx.db, async (tx) => {
@@ -126,10 +121,9 @@ describe("Job maintenance", () => {
     }
     expect(await pruneFinishedJobs(ctx.db, { limit: 100 })).toBe(0);
     expect(
-      await getDb(ctx.db)
-        .select({ id: job.id })
-        .from(job)
-        .where(eq(job.id, saved.id)),
+      await readJobs(ctx.db, { id: saved.id }).then((rows) =>
+        rows.map(({ id }) => ({ id })),
+      ),
     ).toEqual([{ id: saved.id }]);
   });
 
@@ -142,16 +136,11 @@ describe("Job maintenance", () => {
     ] as const) {
       const saved = await enqueueJob(ctx.db, { key, kind: key, input: {} });
       retained.push(saved.id);
-      await getDb(ctx.db)
-        .update(job)
-        .set({ state, updatedAt: old })
-        .where(eq(job.id, saved.id));
+      await updateJobs(ctx.db, { id: saved.id }, { state, updatedAt: old });
     }
 
     await expect(runMaintenance()).resolves.toBe("succeeded");
-    expect(
-      await getDb(ctx.db).select().from(job).where(eq(job.id, retained[0]!)),
-    ).toEqual([]);
+    expect(await readJobs(ctx.db, { id: retained[0]! })).toEqual([]);
     expect(
       await getDb(ctx.db)
         .select({ id: entityIdentity.id })
@@ -159,10 +148,9 @@ describe("Job maintenance", () => {
         .where(inArray(entityIdentity.id, retained)),
     ).toEqual([{ id: retained[1] }]);
     expect(
-      await getDb(ctx.db)
-        .select({ id: job.id })
-        .from(job)
-        .where(eq(job.id, retained[1]!)),
+      await readJobs(ctx.db, { id: retained[1]! }).then((rows) =>
+        rows.map(({ id }) => ({ id })),
+      ),
     ).toEqual([{ id: retained[1] }]);
   });
 });

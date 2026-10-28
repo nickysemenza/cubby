@@ -17,7 +17,7 @@ import { PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { ENTITY_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
 const ALL_TABLES = Object.values(schema).filter((value) =>

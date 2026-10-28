@@ -6,6 +6,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { drainAiEvaluations } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
@@ -14,7 +15,6 @@ import {
   email,
   financialTransaction,
   purchase as purchaseTable,
-  workItem,
   orderMailEvent,
   run,
 } from "~/server/db/schema";
@@ -22,10 +22,10 @@ import * as connectionRepo from "~/server/domains/connection/repo/entity-connect
 import { readEntityConnections } from "~/server/domains/connection/repo/entity-connections";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
-import { drainAiEvaluations } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
+import { updateWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { readRunEvaluationsByCode } from "~/server/generic/run-detail/repo/run-evaluations";
 import {
   refreshSearchDocument,
@@ -310,10 +310,7 @@ describe("connection evaluation pages", () => {
       sourceKey: "synthetic-final-event",
     });
     const ids = await schedule([message.message]);
-    await getDb(ctx.db)
-      .update(workItem)
-      .set({ attempts: 2 })
-      .where(inArray(workItem.ref, ids));
+    await updateWorkItems(ctx.db, { refs: ids }, { attempts: 2 });
     const publish = connectionRepo.publishPreparedEntityConnections;
     vi.spyOn(
       connectionRepo,

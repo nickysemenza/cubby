@@ -13,7 +13,7 @@ import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence"
 import { saveMealFoodInput } from "@cubby/schemas/meal";
 import { z } from "zod";
 import type { Pool } from "pg";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";

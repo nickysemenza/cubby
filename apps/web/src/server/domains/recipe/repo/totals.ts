@@ -24,7 +24,6 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/retained-tables";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const recipeTotalsAreStale = sql`(${recipe.totalsComputedAt} IS NULL OR ${recipe.totals} IS NULL)`;
@@ -205,7 +204,7 @@ export const selectAllStaleRecipeIds = async (
   return rows.map((r) => r.id);
 };
 
-/** Publish prepared totals under the caller's Job fence and specific input check. */
+/** Publish prepared totals; the derived drain's publication fences the transaction. */
 export const commitRecipeTotals = async (
   db: Database,
   input: {
@@ -215,7 +214,6 @@ export const commitRecipeTotals = async (
   },
 ): Promise<RecipeId[]> => {
   return withTransaction(db, async (tx) => {
-    await assertCurrentJob(tx);
     await input.validateInputs?.(tx);
     const updated = await updateRecipeTotalsBatch(tx, input.updates);
     const fresh = await markRecipeTotalsFresh(tx, input.freshOnlyIds);

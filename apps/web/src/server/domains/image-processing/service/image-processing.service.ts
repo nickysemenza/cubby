@@ -27,6 +27,7 @@ import {
 import type { Database } from "~/server/db";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image-processing/repo/description-policy";
+import { lockDeviceAdmission } from "~/server/domains/image-processing/repo/device-admission";
 import {
   claimImageProcessingJob,
   finalizeCompanionImageLeases,
@@ -62,7 +63,6 @@ import { safeImageProcessingError } from "~/server/domains/image-processing/serv
 import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 import { hasMeaningfulPngTransparency } from "~/server/domains/image/service/image-transparency";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
-import { lockDeviceAdmission } from "~/server/generic/jobs/repo/device-admission";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /**

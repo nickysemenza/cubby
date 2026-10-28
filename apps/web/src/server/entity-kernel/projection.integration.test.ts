@@ -325,16 +325,12 @@ describe("entity kernel search projections", () => {
           EXECUTE FUNCTION reject_projection()`),
       );
       try {
-        // The raised message rides on `cause`; the thrown error names the query.
+        // The drain Job retains the raised message in its stored cause chain.
         await expect(
           rename(category.id, "Projected awnings"),
         ).resolves.toMatchObject({ action: "update" });
-        await expect(drainDerivedRefreshFrontier(ctx.db)).rejects.toMatchObject(
-          {
-            cause: expect.objectContaining({
-              message: "synthetic projection failure",
-            }),
-          },
+        await expect(drainDerivedRefreshFrontier(ctx.db)).rejects.toThrow(
+          "synthetic projection failure",
         );
         expect(
           await derivedMarkTickets(ctx.db, "product.searchDocument", productId),

@@ -12,10 +12,12 @@ import {
 } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { aiEvaluation, job, run, task } from "~/server/db/schema";
+import { aiEvaluation, run, task } from "~/server/db/schema";
 import { claimDerivedDiscovery } from "~/server/domains/run/repo/derived-discovery";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
-import { claimJob } from "~/server/generic/jobs/repo/external-claim";
+import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
+import { claimContext } from "~/server/generic/jobs/service/jobs";
 
 import { SUPERSEDED_RUN_FAILURE } from "./ai-refresh-state";
 import * as discoveryRepo from "./connection-refresh";
@@ -137,10 +139,10 @@ describe("connection discovery pacing", () => {
       (item) => item.state,
     );
     expect(states).toEqual(["queued"]);
-    const cancelledJobs = await getDb(ctx.db)
-      .select({ state: job.state })
-      .from(job)
-      .where(and(eq(job.kind, "ai.evaluation"), eq(job.state, "cancelled")));
+    const cancelledJobs = await readJobs(ctx.db, {
+      kind: "ai.evaluation",
+      states: ["cancelled"],
+    }).then((rows) => rows.map(({ state }) => ({ state })));
     expect(cancelledJobs).toHaveLength(0);
   });
 
@@ -430,7 +432,7 @@ describe("connection discovery pacing", () => {
       CONNECTION_DISCOVERY_PENDING_CAP,
     );
     const saved = await claimDerivedDiscovery(ctx.db);
-    const claim = await claimJob(ctx.db, saved.id);
+    const claim = await claimExternal(ctx.db, saved.id);
     if (!claim) throw new Error("Synthetic discovery Job was not claimable");
     const prepared = await connectionDiscoveryJobHandler.prepare(
       ctx.db,
@@ -473,7 +475,7 @@ describe("connection discovery pacing", () => {
       return pending(db);
     });
     const saved = await claimDerivedDiscovery(ctx.db);
-    const claim = await claimJob(ctx.db, saved.id);
+    const claim = await claimExternal(ctx.db, saved.id);
     if (!claim) throw new Error("Synthetic discovery Job was not claimable");
     const before = Date.now();
     const prepared = await connectionDiscoveryJobHandler.prepare(
@@ -482,7 +484,7 @@ describe("connection discovery pacing", () => {
         ...claim,
         cursor: { after: null, runId: cancelled },
       },
-      fromPartial({ signal: new AbortController().signal }),
+      claimContext(ctx.db, claim),
     );
     expect(prepared.page).toMatchObject({
       done: false,

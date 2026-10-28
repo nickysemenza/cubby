@@ -24,6 +24,10 @@ import type {
   StoredDerivedRead,
   CurrentReadFacts,
 } from "~/server/generic/derived/repo/read-context";
+import {
+  owedWorkItem,
+  workPendingWhere,
+} from "~/server/generic/jobs/repo/work-items";
 
 import { fanoutTargetMatches } from "./fanout";
 export type {
@@ -208,10 +212,9 @@ export async function loadStoredDerived(
   if (ids.length === 0 || declarations.length === 0) return out;
   const result = await unwrapDb(db).execute(sql`
     WITH keys AS MATERIALIZED (
-      SELECT declared.*, EXISTS (
-        SELECT 1 FROM "WorkItem" fanout
-         WHERE ${fanoutTargetMatches(sql`fanout.target`, sql`declared.target`)}
-      ) AS "fanoutPending"
+      SELECT declared.*, ${workPendingWhere((column) =>
+        fanoutTargetMatches(column, sql`declared.target`),
+      )} AS "fanoutPending"
       FROM jsonb_to_recordset(${JSON.stringify(
         declarations.map(({ key, target, clock }) => ({ key, target, clock })),
       )}::jsonb) AS declared(key text, target text, clock text)
@@ -224,7 +227,7 @@ export async function loadStoredDerived(
       FROM unnest(${uuidArrayParam(ids)}) AS i(id)
      CROSS JOIN keys k
       LEFT JOIN "DerivedValue" v ON v."entityId" = i.id AND v.key = k.key
-      LEFT JOIN "WorkItem" d ON d.target = k.target AND d.ref = i.id`);
+      LEFT JOIN LATERAL ${owedWorkItem(sql`k.target`, sql`i.id`)} d ON true`);
   for (const row of z.array(valueRow).parse(result.rows)) {
     const byKey = out.get(row.entityId) ?? new Map();
     const metadata = storedFieldDecision.safeParse(row.decidedBy);

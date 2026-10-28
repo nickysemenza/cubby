@@ -23,7 +23,7 @@ import {
   type RequestDatabaseRuntimeScope,
   type RequestDbConnections,
 } from "./db/db-runtime-resolver";
-import * as schema from "./db/schema";
+import { drizzleSchema as schema } from "./db/drizzle-schema";
 
 export { Database };
 export type { RequestDbConnections };

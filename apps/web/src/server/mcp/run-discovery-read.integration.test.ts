@@ -9,16 +9,11 @@ import { describe, expect, it } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import {
-  aiUsage,
-  job,
-  mailboxCursor,
-  run,
-  runOperation,
-} from "~/server/db/schema";
+import { aiUsage, mailboxCursor, run, runOperation } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer } from "~/server/mcp/server";
@@ -121,10 +116,9 @@ describe("member discovery readiness through MCP", () => {
     if (!discovery) throw new Error("Synthetic discovery missing");
     const id = discovery.id;
     expect(
-      await getDb(ctx.db)
-        .select({ kind: job.kind, state: job.state, input: job.input })
-        .from(job)
-        .where(eq(job.key, `run:${id}`)),
+      await readJobs(ctx.db, { key: `run:${id}` }).then((rows) =>
+        rows.map(({ input, kind, state }) => ({ kind, state, input })),
+      ),
     ).toEqual([
       {
         kind: "run.execute",
@@ -194,7 +188,7 @@ describe("member discovery readiness through MCP", () => {
         },
       ]);
     const beforeRuns = await getDb(ctx.db).select().from(run);
-    const beforeJobs = await getDb(ctx.db).select().from(job);
+    const beforeJobs = await readJobs(ctx.db, {});
     const beforeReceipts = await getDb(ctx.db).select().from(runOperation);
     const beforeCursor = await getDb(ctx.db).select().from(mailboxCursor);
     const mcpContext = requireActor(
@@ -276,7 +270,7 @@ describe("member discovery readiness through MCP", () => {
       .update(run)
       .set({ ledgerPartyId: party.id })
       .where(eq(run.id, id));
-    expect(await getDb(ctx.db).select().from(job)).toEqual(beforeJobs);
+    expect(await readJobs(ctx.db, {})).toEqual(beforeJobs);
     // The ownership probe changes only its fixture's ownership and update time.
     expect(
       (await getDb(ctx.db).select().from(run)).map(

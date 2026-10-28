@@ -217,3 +217,32 @@ move onto `EntityEmbedding`. Interactive single-record work (`run.*`,
 `location-ai.*`, `image-metadata.extract`, calendar, image processing) stays a
 Job of one. [Durable Jobs](../jobs.md#coarse-jobs-and-work-items) owns the
 runtime contract.
+
+## Amendment (2026-10): one drain helper, explicit fences
+
+Status: Accepted.
+
+The derived drain kept its own claim, clear and backoff SQL after the coarse
+Jobs amendment, AI evaluation checked Job kinds and read an ambient Job
+execution, and the generic waiting-on derivation joined image attempts. Each
+was a second owner of a queue rule.
+
+- `derived.drain` runs on `defineDrain`. The helper gained a `lock` hook that
+  may narrow a chunk (derived sink sources locked without waiting; fanouts
+  expand before item locks), an `idle` publication (clock expiry), `retain`
+  (direct items behind a newer fanout) and `repeats` (a scheduled drain
+  completes while items back off). Derived item backoff is the kind policy
+  (30 s doubling to 15 minutes); ADR 0021's tickets, fanout blocking and page
+  bound of 20 are unchanged. `markWorkFrom` marks a SQL source set in one
+  statement.
+- Fences are explicit. `JobContext` carries `fence(tx)` and `check()`; Run
+  workflow code receives them through its workflow execution, single-record
+  publications take a `Fenced` writer (`outsideJob(db)` for member callers).
+  `assertCurrentJob` and its ambient lookup are deleted.
+- AI evaluation lives in `ai/evaluation` behind an execution port the Run
+  domain provides, with no Job kind checks or second WorkItem schema.
+- The external-claim interface is a real module, image device admission and
+  backlog belong to image processing, and the lease holder is stored on
+  `Job.leaseHolder` (migration 0055 backfills running image leases).
+- WorkItem SQL lives only in `generic/jobs`, in composable Drizzle queries; the
+  queue internals and WorkItem tables sit behind `no-restricted-imports`.

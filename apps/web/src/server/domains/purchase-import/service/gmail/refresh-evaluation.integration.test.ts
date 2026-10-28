@@ -5,6 +5,10 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import {
+  drainAiEvaluations,
+  withClaimedAiEvaluation,
+} from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
@@ -14,10 +18,6 @@ import {
   emailClassificationObservation,
 } from "~/server/db/schema";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
-import {
-  drainAiEvaluations,
-  withClaimedAiEvaluation,
-} from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { discoverAiRefresh } from "~/server/domains/run/service/ai-refresh";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 

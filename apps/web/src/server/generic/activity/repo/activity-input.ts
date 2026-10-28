@@ -8,9 +8,9 @@ import {
   imageProcessingJob,
   imageProcessingOrphan,
 } from "~/server/db/image-processing-schema";
-import { job } from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { currentJobExecution } from "~/server/generic/jobs/context";
+import { externalExecution } from "~/server/generic/jobs/repo/external-claim";
 
 export async function recordImageDescriptionInput(
   db: Database,
@@ -65,8 +65,9 @@ export async function reserveImageAnalysisInput(
       )
       .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
       .innerJoin(
-        job,
-        eq(job.key, sql`'image-processing:' || ${imageProcessingJob.id}::text`),
+        ...externalExecution.join(
+          sql`'image-processing:' || ${imageProcessingJob.id}::text`,
+        ),
       )
       .where(
         and(
@@ -76,13 +77,12 @@ export async function reserveImageAnalysisInput(
             : eq(imageProcessingAttempt.inputKey, expectedInputKey),
           eq(imageProcessingJob.attemptId, attemptId),
           eq(imageProcessingJob.state, "pending"),
-          eq(job.state, "running"),
           // The unchanged token is the authority: an expired lease no newer
           // claim replaced still belongs to this attempt (late adoption).
-          eq(job.leaseToken, attemptId),
-          currentJobExecution()
-            ? eq(job.generation, currentJobExecution()!.claim.generation)
-            : undefined,
+          externalExecution.held({
+            leaseToken: attemptId,
+            generation: currentJobExecution()?.claim.generation,
+          }),
           eq(image.status, "UPLOADED"),
           eq(image.sha256, imageProcessingJob.sourceContentHash),
           notDeleted(image),
@@ -117,8 +117,9 @@ export async function retainImageAnalysisInput(
       )
       .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
       .innerJoin(
-        job,
-        eq(job.key, sql`'image-processing:' || ${imageProcessingJob.id}::text`),
+        ...externalExecution.join(
+          sql`'image-processing:' || ${imageProcessingJob.id}::text`,
+        ),
       )
       .where(
         and(
@@ -126,13 +127,12 @@ export async function retainImageAnalysisInput(
           eq(imageProcessingAttempt.inputKey, key),
           eq(imageProcessingJob.attemptId, attemptId),
           eq(imageProcessingJob.state, "pending"),
-          eq(job.state, "running"),
           // The unchanged token is the authority: an expired lease no newer
           // claim replaced still belongs to this attempt (late adoption).
-          eq(job.leaseToken, attemptId),
-          currentJobExecution()
-            ? eq(job.generation, currentJobExecution()!.claim.generation)
-            : undefined,
+          externalExecution.held({
+            leaseToken: attemptId,
+            generation: currentJobExecution()?.claim.generation,
+          }),
           eq(image.status, "UPLOADED"),
           eq(image.sha256, imageProcessingJob.sourceContentHash),
           notDeleted(image),

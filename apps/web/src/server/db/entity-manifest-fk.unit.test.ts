@@ -10,8 +10,8 @@ import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
-import * as schema from "~/server/db/schema";
 
 const entities = allEntities;
 type SchemaExport = (typeof schema)[keyof typeof schema];

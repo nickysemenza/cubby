@@ -13,10 +13,10 @@ import { z } from "zod";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
 import { run } from "~/server/db/schema";
 import * as spendingAdvice from "~/server/domains/financial-transaction/service/spending-advice";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { runJobHandler } from "~/server/workflows/runs/job-execution";
 
@@ -163,10 +163,7 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
       families: [{ family: "statement_transaction", scope: {} }],
     });
     for (let page = 0; page < 100; page++) {
-      const [execution] = await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, `run:${runId}`));
+      const [execution] = await readJobs(ctx.db, { key: `run:${runId}` });
       if (!execution) throw new Error("Missing Sweep execution");
       if (execution.state === "completed") break;
       if (["failed", "paused", "cancelled"].includes(execution.state))

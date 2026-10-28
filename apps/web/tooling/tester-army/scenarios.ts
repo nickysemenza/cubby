@@ -13,7 +13,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { runProgressEvent } from "@cubby/schemas/run-fields";
 import { getDb } from "~/server/db/helpers";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { retainedMailFixture } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { enableSyntheticMailImport } from "~/server/domains/purchase-import/repo/purchase-agent-workerd.fixtures";
 import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";

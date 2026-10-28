@@ -14,11 +14,12 @@ import {
   decisionModelFor,
 } from "~/server/ai/decision-model";
 import { DECISION_CONTEXT_BYTE_LIMIT } from "~/server/ai/decision-request-batch";
+import { enqueueAiEvaluations } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import { drainAiEvaluations } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { gatewayEgressInput } from "~/server/ai/gateway-egress-contract";
 import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { productIdentityPrompt } from "~/server/ai/product-identity";
-import { enqueueAiEvaluations } from "~/server/ai/repo/ai-evaluation-requests";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import { setCfEnv } from "~/server/cf-env";
@@ -29,9 +30,8 @@ import {
   prepareProductIdentityPair,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { drainAiEvaluations } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { withJobExecution } from "~/server/generic/jobs/context";
-import { claimJob } from "~/server/generic/jobs/repo/external-claim";
+import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import {
   createProductIdentityFixture,
@@ -379,7 +379,7 @@ describe("Product page transport packing", () => {
       kind: "synthetic.cache",
       input: {},
     });
-    const claim = await claimJob(ctx.db, saved.id);
+    const claim = await claimExternal(ctx.db, saved.id);
     if (!claim) throw new Error("Synthetic cache wave claim missing");
     let settled;
     try {

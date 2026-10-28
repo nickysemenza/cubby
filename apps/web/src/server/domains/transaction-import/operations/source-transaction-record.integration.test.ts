@@ -22,7 +22,8 @@ import {
   saveMailboxMetadata,
 } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import * as changes from "~/server/generic/changes/repo/change";
-import { claimJob, renewJob } from "~/server/generic/jobs/repo/external-claim";
+import { readWorkItems, renewJob } from "~/server/generic/jobs/jobs.fixtures";
+import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { derivedMarkTickets } from "~/server/testing/background-queue";
@@ -117,9 +118,13 @@ describe("finance.record source and Job lifecycle contention", () => {
     const before = await getDb(ctx.db).execute(
       sql`SELECT key, generation, xmin::text AS xmin FROM "Job" ORDER BY key`,
     );
-    const marksBefore = await getDb(ctx.db).execute(
-      sql`SELECT target, ref, ticket FROM "WorkItem" ORDER BY target, ref`,
-    );
+    const marks = async () =>
+      (await readWorkItems(ctx.db)).map(({ target, ref, ticket }) => ({
+        target,
+        ref,
+        ticket,
+      }));
+    const marksBefore = await marks();
     const invalidationsBefore = await getDb(ctx.db).execute(
       sql`SELECT id, key FROM "JobInvalidationCapture" ORDER BY id`,
     );
@@ -156,13 +161,7 @@ describe("finance.record source and Job lifecycle contention", () => {
           )
         ).rows,
       ).toEqual(before.rows);
-      expect(
-        (
-          await getDb(ctx.db).execute(
-            sql`SELECT target, ref, ticket FROM "WorkItem" ORDER BY target, ref`,
-          )
-        ).rows,
-      ).toEqual(marksBefore.rows);
+      expect(await marks()).toEqual(marksBefore);
       // The rolled-back capture left no wake behind.
       expect(
         (
@@ -303,7 +302,7 @@ describe("finance.record source and Job lifecycle contention", () => {
             ).rows[0],
           );
       const claim =
-        change === "renew" ? await claimJob(ctx.db, search.id) : null;
+        change === "renew" ? await claimExternal(ctx.db, search.id) : null;
       if (change === "renew" && !claim)
         throw new Error("Expected synthetic search claim");
       const clients: { financePid: number; writerPid: number }[] = [];
@@ -347,7 +346,7 @@ describe("finance.record source and Job lifecycle contention", () => {
                       clients.push({ financePid, writerPid });
                       const written =
                         change === "claim"
-                          ? (await claimJob(writerDb, search.id)) !== null
+                          ? (await claimExternal(writerDb, search.id)) !== null
                           : claim !== null && (await renewJob(writerDb, claim));
                       if (!written)
                         throw new Error(`Synthetic search ${change} refused`);

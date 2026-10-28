@@ -4,7 +4,7 @@
  */
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { jobState } from "@cubby/schemas/job";
-import { and, eq, gt, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, gt, inArray, is, isNotNull, SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import {
@@ -12,6 +12,7 @@ import {
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
 import { job } from "~/server/db/retained-tables";
+import { jobWhere, type JobFilter } from "~/server/generic/jobs/repo/job-reads";
 
 const ACTIVE = ["queued", "running", "retry_wait", "paused"] as const;
 const stopped = {
@@ -50,7 +51,10 @@ export async function retryJob(db: RepositoryQueryInput, id: string) {
  * cancelled Jobs reopen with a fresh attempt budget and generation. Running
  * and member-paused Jobs are left alone.
  */
-export async function retryJobsNow(db: RepositoryQueryInput, where: SQL) {
+export async function retryJobsNow(
+  db: RepositoryQueryInput,
+  where: SQL | JobFilter,
+) {
   const now = new Date();
   const reopened = await repositoryQueries(db)
     .update(job)
@@ -64,12 +68,42 @@ export async function retryJobsNow(db: RepositoryQueryInput, where: SQL) {
     })
     .where(
       and(
-        where,
+        is(where, SQL) ? where : jobWhere(where),
         inArray(job.state, ["queued", "retry_wait", "failed", "cancelled"]),
       ),
     )
     .returning({ id: job.id });
   return reopened.map((row) => row.id);
+}
+
+/** A member launch outranks the Job's earlier priority. */
+export async function prioritizeJob(
+  db: RepositoryQueryInput,
+  id: string,
+  priority: number,
+) {
+  const [row] = await repositoryQueries(db)
+    .update(job)
+    .set({ priority })
+    .where(eq(job.id, parseEntityId("job", id)))
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * Queued or backing-off Jobs whose key is in `keys` (a key subquery) become
+ * due now; typed waits and attempts stay.
+ */
+export async function makeJobsDueNow(db: RepositoryQueryInput, keys: SQL) {
+  await repositoryQueries(db)
+    .update(job)
+    .set({ availableAt: new Date() })
+    .where(
+      and(
+        inArray(job.state, ["queued", "retry_wait"]),
+        sql`${job.key} IN (${keys})`,
+      ),
+    );
 }
 
 async function controlJob(

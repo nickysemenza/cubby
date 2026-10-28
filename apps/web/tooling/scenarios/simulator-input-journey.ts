@@ -8,7 +8,7 @@ import { pollUntil } from "@cubby/shared/retry";
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { z } from "zod";
 import { imageId } from "@cubby/schemas/identifiers";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { listPhotoRunImages } from "~/server/domains/photo-import/repo/run/proposals";
 import { listImageSightings } from "~/server/domains/image/repo/image";

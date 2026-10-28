@@ -6,12 +6,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import { getDb } from "~/server/db/helpers";
-import { job, run, user } from "~/server/db/schema";
+import { run, user } from "~/server/db/schema";
 import {
   readMailImportSettings,
   setMailImport,
 } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import { readJob, readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { dispatchAiRefreshDiscovery } from "~/server/workflows/ai-refresh-startup";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
@@ -274,10 +275,9 @@ describe("application-owned AI feature observation", () => {
       startDiscovery: true,
     });
     await dispatchAiRefreshDiscovery(ctx.db, activation);
-    const rows = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.key, `run:${activation.discoveryRunId}`));
+    const rows = await readJobs(ctx.db, {
+      key: `run:${activation.discoveryRunId}`,
+    });
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       kind: "run.execute",
@@ -287,10 +287,7 @@ describe("application-owned AI feature observation", () => {
     });
     await dispatchAiRefreshDiscovery(ctx.db, activation);
     expect(
-      await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, `run:${activation.discoveryRunId}`)),
+      await readJobs(ctx.db, { key: `run:${activation.discoveryRunId}` }),
     ).toEqual(rows);
   });
   it("rejects cursor writes from a page that outlived its activation revision", async () => {
@@ -327,10 +324,7 @@ describe("application-owned AI feature observation", () => {
     });
     const id = runEntityId.parse(activation.discoveryRunId);
     await dispatchAiRefreshDiscovery(ctx.db, activation);
-    const [execution] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.key, `run:${id}`));
+    const execution = await readJob(ctx.db, { key: `run:${id}` });
     if (!execution) throw new Error("Expected discovery Job");
     await cancelJob(ctx.db, execution.id);
     await getDb(ctx.db)
@@ -348,10 +342,8 @@ describe("application-owned AI feature observation", () => {
       (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]
         ?.failureCode,
     ).toBe("user_cancelled");
-    expect(
-      (
-        await getDb(ctx.db).select().from(job).where(eq(job.id, execution.id))
-      )[0]?.state,
-    ).toBe("cancelled");
+    expect((await readJob(ctx.db, { id: execution.id }))?.state).toBe(
+      "cancelled",
+    );
   });
 });

@@ -13,14 +13,18 @@ import type { Database } from "~/server/db";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import type { DerivedComputes } from "~/server/generic/derived/repo/compute";
 import {
-  claimDerivedMarks,
   DERIVED_DRAIN_JOB_KEY,
+  derivedChunk,
+  type DerivedChunk,
+  type DerivedPagePlan,
+  lockDerivedChunk,
   markAllStoredDerived,
   markExpiredClockDerived,
   prepareDerivedPage,
-  publishDerivedPage,
+  publishDerivedChunk,
 } from "~/server/generic/derived/repo/drain";
 import { repeatJob } from "~/server/generic/jobs/repo/producer";
+import { defineDrain } from "~/server/generic/jobs/service/drain";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { JobHandler } from "~/server/generic/jobs/types";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
@@ -35,55 +39,60 @@ const RECONCILE_BUCKETS = 24;
 // batch before preparing more, so the invocation budget can yield between pages.
 const DRAIN_PAGE_MARKS = 20;
 
-/** Each page claims ready marks, computes outside the transaction and publishes. */
-export const derivedDrainHandler = (computes: DerivedComputes): JobHandler =>
-  defineJobHandler(z.object({}).passthrough(), async (db) => {
-    const marks = await claimDerivedMarks(db, DRAIN_PAGE_MARKS);
-    if (marks.length === 0)
-      return {
-        page: { done: true },
-        publish: async (tx) => ({ marked: await markExpiredClockDerived(tx) }),
-      };
-    const plan = await withTrace(
-      TraceNames.service("derived", "prepare"),
-      () => prepareDerivedPage(db, computes, marks),
-      {
-        "derived.marks": marks.length,
-        "derived.targets": [...new Set(marks.map((mark) => mark.target))].join(
-          ",",
-        ),
-      },
-    );
-    return {
-      page: { done: false },
-      publish: async (tx) => {
-        const publication = await withTrace(
-          TraceNames.service("derived", "publish"),
-          async (span) => {
-            const result = await publishDerivedPage(tx, plan);
-            span.setAttributes({
-              "derived.processed": result.processed,
-              "derived.changed": result.changed,
-              "derived.expanded": result.expanded,
-            });
-            return result;
-          },
-        );
-        if (publication.drift.length > 0)
-          log.warn("derived.drift", { drift: publication.drift });
-        if (publication.categories.length > 0)
-          await recordChange(tx, {
-            kind: "projection",
-            categories: publication.categories,
-            changes: publication.changes,
+/**
+ * Each page claims ready marks, computes outside the transaction and
+ * publishes through `defineDrain`; an idle page marks expired clock values.
+ */
+export const derivedDrainHandler = (
+  computes: DerivedComputes,
+  /** Production keeps the default page and chunk; test drains settle large fixtures in one transaction. */
+  { limit = DRAIN_PAGE_MARKS, chunk }: { limit?: number; chunk?: number } = {},
+): JobHandler =>
+  defineDrain<{ plan: DerivedPagePlan; chunk: DerivedChunk }>({
+    limit,
+    chunk,
+    repeats: true,
+    async prepare(db, items) {
+      const { plan, failed } = await withTrace(
+        TraceNames.service("derived", "prepare"),
+        () => prepareDerivedPage(db, computes, items),
+        {
+          "derived.marks": items.length,
+          "derived.targets": [
+            ...new Set(items.map((item) => item.target)),
+          ].join(","),
+        },
+      );
+      return { prepared: { plan, chunk: derivedChunk() }, failed };
+    },
+    lock: (tx, items, { plan, chunk }) =>
+      lockDerivedChunk(tx, items, plan, chunk),
+    async publish(tx, items, { plan, chunk }) {
+      const publication = await withTrace(
+        TraceNames.service("derived", "publish"),
+        async (span) => {
+          const result = await publishDerivedChunk(tx, items, plan, chunk);
+          span.setAttributes({
+            "derived.processed": items.length,
+            "derived.changed": result.changed,
+            "derived.expanded": result.expanded,
           });
-        return {
-          processed: publication.processed,
-          changed: publication.changed,
-          expanded: publication.expanded,
-        };
-      },
-    };
+          return result;
+        },
+      );
+      if (publication.drift.length > 0)
+        log.warn("derived.drift", { drift: publication.drift });
+      if (publication.categories.length > 0)
+        await recordChange(tx, {
+          kind: "projection",
+          categories: publication.categories,
+          changes: publication.changes,
+        });
+      return { retain: publication.retain };
+    },
+    async idle(tx) {
+      await markExpiredClockDerived(tx);
+    },
   });
 
 export const derivedReconcileHandler: JobHandler = defineJobHandler(

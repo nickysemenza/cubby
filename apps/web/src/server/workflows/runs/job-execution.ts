@@ -33,9 +33,14 @@ const mailCursor = z.object({
  */
 export const runJobHandler = defineJobHandler(
   runJobInput,
-  async (db, claim, input): Promise<PreparedJobPage> =>
+  async (db, claim, input, context): Promise<PreparedJobPage> =>
     withWorkflowExecution(
-      { runId: input.runId, attempt: claim.generation, database: db },
+      {
+        runId: input.runId,
+        attempt: claim.generation,
+        database: db,
+        job: context,
+      },
       async (): Promise<PreparedJobPage> => {
         const params = { runId: input.runId, attempt: claim.generation };
         const before = await readRun(db, input.runId);

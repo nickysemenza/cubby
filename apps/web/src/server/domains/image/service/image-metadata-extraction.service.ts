@@ -16,6 +16,8 @@ import {
   extractImageMetadata,
   type ImageEmbeddedMetadata,
 } from "~/server/domains/image/service/image-metadata";
+import { outsideJob } from "~/server/generic/jobs/outside-job";
+import type { Fenced } from "~/server/generic/jobs/types";
 
 /** A container's leading bytes hold every tag this parser reads; never worth
  * fetching more than a few MiB even for a multi-hundred-megabyte original. */
@@ -74,12 +76,14 @@ export async function extractAndStoreImageMetadata(
   db: Database,
   imageId: ImageId,
   ports: ExtractImageMetadataPorts = productionExtractImageMetadataPorts,
+  /** The executing Job's fence; member and maintenance callers own no Job. */
+  fenced: Fenced = outsideJob(db),
 ): Promise<"succeeded" | "skipped" | { missing: string }> {
   const row = await ports.getRow(db, imageId);
   if (!row) return "skipped";
   const bytes = await ports.getBytes(row.key, MAX_METADATA_FETCH_BYTES);
   const publish = (write: (tx: Database) => Promise<void>) =>
-    publishExtractedImageMetadata(db, imageId, row, ports.getRow, write);
+    publishExtractedImageMetadata(fenced, imageId, row, ports.getRow, write);
   // No retry can recover a missing original: the row leaves the backlog as
   // `original_missing` instead of being re-selected forever.
   if (bytes === null) {

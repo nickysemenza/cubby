@@ -1,6 +1,6 @@
 {
-  "id": "d787b45b-b3c3-42fa-95c4-10d0c2d83e6c",
-  "prevId": "9f0a1e35-cc75-463e-9f70-41957452bf66",
+  "id": "4055f7fe-1828-4395-b809-7153ce634d96",
+  "prevId": "d787b45b-b3c3-42fa-95c4-10d0c2d83e6c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2626,6 +2626,12 @@
         "leaseExpiresAt": {
           "name": "leaseExpiresAt",
           "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "leaseHolder": {
+          "name": "leaseHolder",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

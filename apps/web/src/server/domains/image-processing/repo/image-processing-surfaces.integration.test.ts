@@ -8,13 +8,13 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { job as durableJob } from "~/server/db/retained-tables";
 import { device, image, imageProcessingJob } from "~/server/db/schema";
 import { readDeviceById } from "~/server/domains/device/repo/device";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
 import { imageJobRepository } from "~/server/domains/image-job/repo";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
 
 import {
@@ -123,10 +123,11 @@ describe("image work on every surface", () => {
       waitingOn: "In progress on Fixture iPad",
     });
 
-    await getDb(ctx.db)
-      .update(durableJob)
-      .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
-      .where(eq(durableJob.key, `image-processing:${id}`));
+    await updateJobs(
+      ctx.db,
+      { key: `image-processing:${id}` },
+      { leaseExpiresAt: new Date(Date.now() - 1_000) },
+    );
 
     const expired = await readJobQueue(ctx.db, {
       filter: { lanes: ["apple_device"], reasons: ["leased"] },

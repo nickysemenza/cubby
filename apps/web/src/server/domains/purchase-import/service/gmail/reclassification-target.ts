@@ -3,8 +3,8 @@ import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 import {
   publishAiEvaluation,
   type ClaimedAiEvaluation,
-} from "~/server/ai/repo/ai-evaluation";
-import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
+} from "~/server/ai/evaluation/repo/ai-evaluation";
+import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { withRunEvaluation } from "~/server/domains/run/repo/execution-context";

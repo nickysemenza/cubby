@@ -1,20 +1,23 @@
-import { job } from "~/server/db/retained-tables";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { pauseJob } from "~/server/generic/jobs/repo/operator";
+import { postponeWorkRefs } from "~/server/generic/jobs/repo/work-items";
+import { AI_EVALUATION_TARGET } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { run } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
-import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   advanceAiWorkRun,
   aiWorkItems,
   type AiWorkPorts,
 } from "~/server/domains/run/service/ai-work";
-import { aiEvaluationJobHandler } from "~/server/domains/run/service/ai-evaluation-drain";
+import { aiEvaluationJobHandler } from "~/server/ai/evaluation/service/ai-evaluation-drain";
+import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { reclassifyEmails } from "~/server/domains/purchase-import/service/gmail/reclassify";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { emailReclassifyResults } from "@cubby/schemas/email-actions";
@@ -65,27 +68,20 @@ export async function driveAiWork(
         return { page: { done: !pending?.length } };
       },
     },
-    "ai.evaluation": aiEvaluationJobHandler(ports),
+    "ai.evaluation": aiEvaluationJobHandler(runAiEvaluationExecution(ports)),
   };
   for (let cycle = 0; cycle < 205; cycle++) {
-    const [execution] = await getDb(db)
-      .select()
-      .from(job)
-      .where(eq(job.key, `run:${id}`));
+    const execution = await readJob(db, { key: `run:${id}` });
     if (!execution) throw new Error("Synthetic Run execution is missing");
     if (
       ["completed", "failed", "paused", "cancelled"].includes(execution.state)
     )
       return;
-    await getDb(db)
-      .update(job)
-      .set({ availableAt: new Date(0) })
-      .where(
-        and(
-          eq(job.id, execution.id),
-          inArray(job.state, ["queued", "retry_wait"]),
-        ),
-      );
+    await updateJobs(
+      db,
+      { id: execution.id, states: ["queued", "retry_wait"] },
+      { availableAt: new Date(0) },
+    );
     await advanceJob(db, execution.id, handlers);
     const [owner] = await getDb(db).select().from(run).where(eq(run.id, id));
     if (!owner) return;
@@ -105,17 +101,20 @@ export async function driveAiWork(
               ports.sweep.pauseAfter - (items.length - pending.length),
             ),
           );
-    const drains = await getDb(db).execute<{ drain: string }>(sql`
-      UPDATE "WorkItem"
-         SET "readyAt" = CASE WHEN ref = ANY(${uuidArrayParam(released.map((item) => item.id))})
-           THEN now() ELSE now() + interval '1 hour' END
-       WHERE target = 'ai.evaluation' AND ref = ANY(${uuidArrayParam(pending.map((item) => item.id))})
-      RETURNING drain`);
-    for (const key of new Set(drains.rows.map((row) => row.drain))) {
-      const [target] = await getDb(db)
-        .select()
-        .from(job)
-        .where(eq(job.key, key));
+    const drains = await postponeWorkRefs(
+      db,
+      AI_EVALUATION_TARGET,
+      pending.map((item) => item.id),
+      new Date(Date.now() + 60 * 60_000),
+    );
+    await postponeWorkRefs(
+      db,
+      AI_EVALUATION_TARGET,
+      released.map((item) => item.id),
+      new Date(),
+    );
+    for (const key of drains) {
+      const target = await readJob(db, { key });
       if (
         !target ||
         ["paused", "failed", "cancelled", "completed"].includes(target.state)
@@ -126,15 +125,11 @@ export async function driveAiWork(
         owner.status === "paused_auth"
       )
         return;
-      await getDb(db)
-        .update(job)
-        .set({ availableAt: new Date(0), waitUntil: null, waitReason: null })
-        .where(
-          and(
-            eq(job.id, target.id),
-            inArray(job.state, ["queued", "retry_wait"]),
-          ),
-        );
+      await updateJobs(
+        db,
+        { id: target.id, states: ["queued", "retry_wait"] },
+        { availableAt: new Date(0), waitUntil: null, waitReason: null },
+      );
       const outcome = await advanceJob(db, target.id, handlers);
       if (["superseded", "paused", "deferred"].includes(outcome)) return;
       if (ports.sweep?.pauseAfter !== undefined) {

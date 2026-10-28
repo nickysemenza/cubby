@@ -7,12 +7,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import {
-  job as durableJob,
-  jobInvalidationCapture,
-} from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import {
+  elapseJobTime,
+  jobInvalidationCaptureCounts,
+  updateJobs,
+} from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { drainDueJobs } from "~/server/generic/jobs/service/jobs";
 import { productionJobHandlers } from "~/server/workflows/jobs";
 
@@ -105,13 +107,7 @@ describe("parked device work wakes idle companions", () => {
     return drainDueJobs(ctx.db, productionJobHandlers, 250, 30_000, 1);
   };
   /** Time passes: every scheduled availability and lease moves two days back. */
-  const elapse = () =>
-    getDb(ctx.db)
-      .update(durableJob)
-      .set({
-        availableAt: sql`${durableJob.availableAt} - interval '2 days'`,
-        leaseExpiresAt: sql`${durableJob.leaseExpiresAt} - interval '2 days'`,
-      });
+  const elapse = () => elapseJobTime(ctx.db, "2 days");
 
   it.each(["failure backoff", "abandoned lease"] as const)(
     "rings once parked device work becomes available after its %s",
@@ -198,12 +194,7 @@ describe("parked device work wakes idle companions", () => {
     ringFailures = 1;
     await runScheduledServerWork();
     const wake = async () =>
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(durableJob)
-          .where(eq(durableJob.key, "image.device.wake"))
-      )[0]!;
+      (await readJobs(ctx.db, { key: "image.device.wake" }))[0]!;
     const backingOff = await wake();
     expect(backingOff).toMatchObject({ state: "retry_wait" });
     expect(backingOff.error).toContain("Synthetic doorbell RPC failure");
@@ -220,26 +211,24 @@ describe("parked device work wakes idle companions", () => {
   it("requeues a finished wake during maintenance without a capture", async () => {
     await parked();
     await runScheduledServerWork();
-    await getDb(ctx.db)
-      .update(durableJob)
-      .set({ state: "completed" })
-      .where(eq(durableJob.key, "image.device.wake"));
-    const [before] = await getDb(ctx.db)
-      .select({ revision: sql<number>`count(*)::int` })
-      .from(jobInvalidationCapture)
-      .where(eq(jobInvalidationCapture.key, "image.device.wake"));
+    await updateJobs(
+      ctx.db,
+      { key: "image.device.wake" },
+      { state: "completed" },
+    );
+    const [before] = await jobInvalidationCaptureCounts(
+      ctx.db,
+      "image.device.wake",
+    );
     await repairImageProcessingExecution(ctx.db, 25);
-    const [wake] = await getDb(ctx.db)
-      .select()
-      .from(durableJob)
-      .where(eq(durableJob.key, "image.device.wake"));
+    const [wake] = await readJobs(ctx.db, { key: "image.device.wake" });
     expect(wake?.state).toBe("queued");
     expect(wake?.availableAt.getTime()).toBeLessThanOrEqual(Date.now());
-    const [after] = await getDb(ctx.db)
-      .select({ revision: sql<number>`count(*)::int` })
-      .from(jobInvalidationCapture)
-      .where(eq(jobInvalidationCapture.key, "image.device.wake"));
-    expect(after?.revision).toBe(before?.revision);
+    const [after] = await jobInvalidationCaptureCounts(
+      ctx.db,
+      "image.device.wake",
+    );
+    expect(after?.captures).toBe(before?.captures);
   });
 
   // Review finding: recovery read a completed wake, then armed it; a claim or
@@ -250,10 +239,11 @@ describe("parked device work wakes idle companions", () => {
   it("keeps a retry a concurrent failure writes while recovery runs", async () => {
     await parked();
     await runScheduledServerWork();
-    await getDb(ctx.db)
-      .update(durableJob)
-      .set({ state: "completed" })
-      .where(eq(durableJob.key, "image.device.wake"));
+    await updateJobs(
+      ctx.db,
+      { key: "image.device.wake" },
+      { state: "completed" },
+    );
     let locked!: () => void;
     const rowLocked = new Promise<void>((resolve) => {
       locked = resolve;
@@ -274,10 +264,7 @@ describe("parked device work wakes idle companions", () => {
     });
     await rowLocked;
     await Promise.all([writer, repairImageProcessingExecution(ctx.db, 25)]);
-    const [wake] = await getDb(ctx.db)
-      .select()
-      .from(durableJob)
-      .where(eq(durableJob.key, "image.device.wake"));
+    const [wake] = await readJobs(ctx.db, { key: "image.device.wake" });
     expect(wake).toMatchObject({
       state: "retry_wait",
       attempts: 3,

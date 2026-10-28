@@ -1,15 +1,7 @@
 import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { runStepState } from "@cubby/schemas/run-step";
-import {
-  and,
-  or,
-  eq,
-  getTableColumns,
-  inArray,
-  isNull,
-  sql,
-} from "drizzle-orm";
+import { and, or, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 
 import {
   describeErrorCauses,
@@ -21,14 +13,16 @@ import {
   withTransactionDatabase,
   runAfterCommit,
 } from "~/server/db/helpers/core";
-import { run as runTable, job } from "~/server/db/retained-tables";
+import { run as runTable } from "~/server/db/retained-tables";
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
+import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
-  assertCurrentJob,
-  currentJobExecution,
-} from "~/server/generic/jobs/repo/execution";
-import { retryJob } from "~/server/generic/jobs/repo/operator";
+  lockUnchangedJob,
+  stoppedRunExecutions,
+} from "~/server/generic/jobs/repo/job-reads";
+import { prioritizeJob, retryJob } from "~/server/generic/jobs/repo/operator";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
 
 import { type WorkflowRunParams, type ExecutedRunPurpose } from "./contract";
 
@@ -142,11 +136,7 @@ export async function launchWorkflowRun(
       });
     }
     if (!input.automatic && execution.priority < priority) {
-      const [raised] = await getDb(tx)
-        .update(job)
-        .set({ priority })
-        .where(eq(job.id, execution.id))
-        .returning();
+      const raised = await prioritizeJob(tx, execution.id, priority);
       if (raised) execution = raised;
     }
     await getDb(tx)
@@ -167,7 +157,7 @@ export async function launchWorkflowRun(
         WHERE e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.result_ready})
           AND (e."runId"=${input.runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${input.runId}::uuid AND r."cancelledAt" IS NULL))`);
       const { markAiEvaluationWork } =
-        await import("~/server/ai/repo/ai-evaluation-work");
+        await import("~/server/ai/evaluation/repo/ai-evaluation-work");
       await markAiEvaluationWork(
         tx,
         pending.rows.map((row) => row.id),
@@ -197,7 +187,7 @@ export async function claimWorkflowRun(
   params: WorkflowRunParams,
   projection?: "id",
 ) {
-  await assertCurrentJob(db);
+  await assertWorkflowEffect(db);
   const current = currentJobExecution();
   if (
     !current ||
@@ -236,7 +226,7 @@ export async function failWorkflowRun(
 ): Promise<boolean> {
   if (!currentJobExecution())
     throw new Error("Run failure requires its universal Job claim");
-  await assertCurrentJob(db);
+  await assertWorkflowEffect(db);
   const [failed] = await getDb(db)
     .update(runTable)
     .set({
@@ -260,24 +250,7 @@ export async function reconcileWorkflowRuns(db: Database) {
         eq(runTable.failureCode, "execution_limit"),
       ),
     );
-  const rows = await getDb(db)
-    .select({
-      id: job.id,
-      generation: job.generation,
-      runId: job.runId,
-      state: job.state,
-      error: job.error,
-    })
-    .from(job)
-    .innerJoin(runTable, eq(runTable.id, job.runId))
-    .where(
-      and(
-        eq(job.kind, "run.execute"),
-        reconcilable(),
-        inArray(job.state, ["failed", "cancelled", "paused"]),
-      ),
-    )
-    .limit(100);
+  const rows = await stoppedRunExecutions(db, reconcilable(), 100);
   for (const row of rows) {
     if (!row.runId || !["failed", "cancelled", "paused"].includes(row.state))
       continue;
@@ -289,18 +262,7 @@ export async function reconcileWorkflowRuns(db: Database) {
         .where(and(eq(runTable.id, row.runId!), reconcilable()))
         .for("update", { skipLocked: true });
       if (!owner) return;
-      const [current] = await getDb(tx)
-        .select({ id: job.id })
-        .from(job)
-        .where(
-          and(
-            eq(job.id, row.id),
-            eq(job.generation, row.generation),
-            eq(job.state, row.state),
-          ),
-        )
-        .for("update", { skipLocked: true });
-      if (!current) return;
+      if (!(await lockUnchangedJob(tx, row))) return;
       await getDb(tx)
         .update(runTable)
         .set({

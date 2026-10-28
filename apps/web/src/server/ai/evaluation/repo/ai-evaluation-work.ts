@@ -3,20 +3,24 @@
  * feature over evaluation work items. Repository-owned callers mark work here
  * without reaching Run wake or Worker composition.
  */
-import { jobState } from "@cubby/schemas/job";
 import {
   runStatus,
   runTrigger,
   VISIBLE_RUN_PURPOSES,
 } from "@cubby/schemas/run-fields";
-import { sql, type SQLWrapper } from "drizzle-orm";
-import { z } from "zod";
+import { and, inArray, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 
-import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
+import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db/database";
-import { uuidArrayParam } from "~/server/db/helpers/query";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
-import { markWork, type Drain } from "~/server/generic/jobs/repo/work-items";
+import { aiEvaluation } from "~/server/db/retained-tables";
+import {
+  markWork,
+  workAttemptLive,
+  workAttemptToken,
+  workPriority,
+  type Drain,
+} from "~/server/generic/jobs/repo/work-items";
 
 /** Work items name evaluations; one `ai.evaluation` drain Job serves each feature. */
 export const AI_EVALUATION_TARGET = "ai.evaluation";
@@ -25,25 +29,19 @@ export const aiEvaluationDrain = (feature: string): Drain => ({
   kind: "ai.evaluation",
 });
 
-/**
- * One attempt is the drain lease plus the item's ticket: a re-mark (changed
- * input, new demand) or a lost lease makes the attempt obsolete.
- */
-export const aiEvaluationAttemptToken = (leaseToken: string, ticket: number) =>
-  `${leaseToken}/${ticket}`;
+/** An evaluation attempt is its drain item's attempt (`workAttemptToken`). */
+export const aiEvaluationAttemptToken = workAttemptToken;
 
 /** The attempt `token` still holds evaluation `id`'s item through a live drain lease. */
 export const aiEvaluationAttemptLive = (
   id: SQLWrapper | string,
   token: string,
-) => {
-  const ref = typeof id === "string" ? sql`${id}::uuid` : id;
-  return sql`EXISTS (SELECT 1 FROM "WorkItem" w JOIN "Job" j ON j.key = w.drain
-    WHERE w.target = ${AI_EVALUATION_TARGET} AND w.ref = ${ref}
-      AND w.ticket = split_part(${token}, '/', 2)::bigint
-      AND j.state = ${jobState.enum.running} AND j."leaseToken" = split_part(${token}, '/', 1)::uuid
-      AND j."leaseExpiresAt" > now())`;
-};
+) =>
+  workAttemptLive(
+    AI_EVALUATION_TARGET,
+    typeof id === "string" ? sql`${id}::uuid` : sql`${id}`,
+    token,
+  );
 
 /**
  * Priority 0 is member demand: the owner or a live requester is a running,
@@ -58,8 +56,8 @@ const demandPriority = sql<number>`CASE WHEN EXISTS (
        VISIBLE_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
        sql`, `,
      )})
-     AND (r.id = e."runId" OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" q
-       WHERE q."evaluationId" = e.id AND q."runId" = r.id AND q."cancelledAt" IS NULL))
+     AND (r.id = ${aiEvaluation.runId} OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" q
+       WHERE q."evaluationId" = ${aiEvaluation.id} AND q."runId" = r.id AND q."cancelledAt" IS NULL))
 ) THEN 0 ELSE 1 END`;
 
 /**
@@ -74,25 +72,23 @@ export async function markAiEvaluationWork(
   { revive = false, readyAt }: { revive?: boolean; readyAt?: Date } = {},
 ) {
   if (!ids.length) return;
-  const result = await getDb(db).execute(sql`
-    SELECT e.id::text AS id, e.feature, ${demandPriority} AS priority
-      FROM "AiEvaluation" e
-      LEFT JOIN "WorkItem" w ON w.target = ${AI_EVALUATION_TARGET} AND w.ref = e.id
-     WHERE e.id = ANY(${uuidArrayParam(ids)})
-       AND e.state IN (${sql.join(
-         PENDING_AI_STATES.map((state) => sql`${state}`),
-         sql`, `,
-       )})
-       ${revive ? sql`AND (w.ref IS NULL OR w.priority > ${demandPriority})` : sql``}`);
-  const rows = z
-    .array(
-      z.object({
-        id: z.string(),
-        feature: z.string(),
-        priority: z.coerce.number(),
-      }),
-    )
-    .parse(result.rows);
+  const owed: SQL = workPriority(AI_EVALUATION_TARGET, sql`${aiEvaluation.id}`);
+  const rows = await getDb(db)
+    .select({
+      id: aiEvaluation.id,
+      feature: aiEvaluation.feature,
+      priority: sql<number>`${demandPriority}::int`,
+    })
+    .from(aiEvaluation)
+    .where(
+      and(
+        inArray(aiEvaluation.id, [...ids]),
+        inArray(aiEvaluation.state, [...PENDING_AI_STATES]),
+        revive
+          ? or(sql`${owed} IS NULL`, sql`${owed} > ${demandPriority}`)
+          : undefined,
+      ),
+    );
   const byFeature = new Map<string, typeof rows>();
   for (const row of rows)
     byFeature.set(row.feature, [...(byFeature.get(row.feature) ?? []), row]);

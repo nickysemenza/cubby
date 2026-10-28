@@ -25,6 +25,13 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { decisionCatalogRows } from "~/server/ai/decision-catalog";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import {
+  AiEvaluationAttemptObsoleteError,
+  publishAiEvaluation,
+  storeAiEvaluationResult,
+  type ClaimedAiEvaluation,
+} from "~/server/ai/evaluation/repo/ai-evaluation";
+import { enqueueAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import {
   suggestFields,
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
@@ -33,13 +40,6 @@ import {
   fieldDependencyKeys,
   fieldPolicyKey,
 } from "~/server/ai/policy/refresh-manifest";
-import {
-  AiEvaluationAttemptObsoleteError,
-  publishAiEvaluation,
-  storeAiEvaluationResult,
-  type ClaimedAiEvaluation,
-} from "~/server/ai/repo/ai-evaluation";
-import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";

@@ -3,6 +3,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import {
+  deleteWorkItems,
+  insertWorkItems,
+} from "~/server/generic/jobs/jobs.fixtures";
 
 import { readDerivedBacklog } from "./backlog";
 
@@ -15,7 +19,7 @@ describe("derived backlog", () => {
   const ctx = withTestDb();
 
   it("reports recent publications per minute and the oldest waiting value", async () => {
-    await getDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
+    await deleteWorkItems(ctx.db);
     await getDb(ctx.db).execute(sql`
       WITH ages(n, minutes) AS (VALUES (1, 0), (2, 0), (3, 2), (4, 14), (5, 20)),
       entities AS (
@@ -27,9 +31,13 @@ describe("derived backlog", () => {
       SELECT entities.id, ${KIND}, ${KEY}, '1'::jsonb,
         now() - (ages.minutes * interval '1 minute') - interval '10 seconds'
       FROM entities JOIN ages ON entities.shortcode = 'PRD-ZZZ' || ages.n`);
-    await getDb(ctx.db).execute(sql`
-      INSERT INTO "WorkItem" (target, ref, "dirtiedAt")
-      VALUES (${`${KIND}.${KEY}`}, gen_random_uuid(), now() - interval '90 seconds')`);
+    await insertWorkItems(ctx.db, [
+      {
+        target: `${KIND}.${KEY}`,
+        ref: crypto.randomUUID(),
+        dirtiedAt: sql`now() - interval '90 seconds'`,
+      },
+    ]);
 
     const backlog = await readDerivedBacklog(ctx.db);
 
@@ -44,7 +52,7 @@ describe("derived backlog", () => {
   });
 
   it("reports no wait when nothing is queued", async () => {
-    await getDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
+    await deleteWorkItems(ctx.db);
     expect((await readDerivedBacklog(ctx.db)).oldestWaitingSeconds).toBeNull();
   });
 });

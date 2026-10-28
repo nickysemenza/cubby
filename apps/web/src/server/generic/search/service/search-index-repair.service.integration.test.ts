@@ -1,9 +1,7 @@
-import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
-import { job } from "~/server/db/schema";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";
 import {
@@ -29,10 +27,7 @@ describe("search repair admission", () => {
     if (first.done) throw new Error("Expected repair progress");
     expect(first.value).toMatchObject({ type: "progress", phase: "sources" });
     for (let page = 0; page < 100; page++) {
-      const executions = await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, "derived:drain"));
+      const executions = await readJobs(ctx.db, { key: "derived:drain" });
       if (executions.every((execution) => execution.state === "completed"))
         break;
       for (const execution of executions)
@@ -60,13 +55,8 @@ describe("search repair admission", () => {
     await stream.next();
     controller.abort();
     await expect(stream.next()).rejects.toThrow(/cancelled/i);
-    expect(
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(job)
-          .where(eq(job.key, "derived:drain"))
-      )[0]?.state,
-    ).toBe("queued");
+    expect((await readJobs(ctx.db, { key: "derived:drain" }))[0]?.state).toBe(
+      "queued",
+    );
   });
 });

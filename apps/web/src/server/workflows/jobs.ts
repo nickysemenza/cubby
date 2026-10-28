@@ -9,12 +9,13 @@ import { jobWaitReason, type JOB_KIND_POLICY } from "@cubby/schemas/job";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
+import { aiEvaluationJobHandler } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import { getPurchaseDispatchHostEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { deviceWakeHandler } from "~/server/domains/image-processing/service/device-wake";
 import { imageProcessingJobHandler } from "~/server/domains/image-processing/service/dispatch";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
-import { aiEvaluationJobHandler } from "~/server/domains/run/service/ai-evaluation-drain";
+import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
 import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
 import {
@@ -30,11 +31,18 @@ import {
 } from "~/server/generic/jobs/service/jobs";
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
 import { handleBackgroundTask } from "~/server/workflows/background-tasks/handle";
+import { withJobFence } from "~/server/workflows/runs/execution";
 import { runJobHandler } from "~/server/workflows/runs/job-execution";
 
 import { aiRefreshActivationHandler } from "./ai-refresh-startup";
 import { derivedComputes } from "./derived-computes";
 import { jobMaintenanceHandler } from "./job-maintenance";
+
+/** Standalone provider Jobs check their lease before each paid request and fence their publications. */
+const providerFenced = (handler: JobHandler): JobHandler => ({
+  prepare: (db, job, context) =>
+    withJobFence(context, () => handler.prepare(db, job, context)),
+});
 
 const background = defineJobHandler(
   z.discriminatedUnion("kind", [
@@ -44,16 +52,21 @@ const background = defineJobHandler(
     maintenancePurchaseDiscoveryTaskSchema,
     calendarFeedMarkDirtyTaskSchema,
   ]),
-  async (db, claim, task) => {
+  async (db, claim, task, context) => {
     if (task.kind !== claim.kind)
       throw new Error(`Job kind ${claim.kind} does not match ${task.kind}`);
-    const outcome = await handleBackgroundTask(db, task);
+    const outcome = await handleBackgroundTask(
+      db,
+      task,
+      undefined,
+      context.fenced,
+    );
     return { page: { done: true, result: { outcome } } };
   },
 );
 const backgroundHandlers = {
-  "location-ai.description.refresh": background,
-  "location-ai.inventory.refresh": background,
+  "location-ai.description.refresh": providerFenced(background),
+  "location-ai.inventory.refresh": providerFenced(background),
   "image-metadata.extract": background,
   "maintenance.purchase-discovery": background,
   "calendar-feed.mark-dirty": background,
@@ -68,9 +81,9 @@ export const productionJobHandlers: JobHandlers = {
   "embedding.refresh": embeddingRefreshHandler(),
   "embedding.cleanup": embeddingCleanupHandler(),
   // `image.device` has no server handler: Apple devices claim it by pull.
-  "image.cloud": imageProcessingJobHandler,
+  "image.cloud": providerFenced(imageProcessingJobHandler),
   "run.execute": runJobHandler,
-  "ai.evaluation": aiEvaluationJobHandler(),
+  "ai.evaluation": aiEvaluationJobHandler(runAiEvaluationExecution()),
   "ai-refresh.activate": aiRefreshActivationHandler,
   "image.device.wake": deviceWakeHandler,
   "jobs.maintenance": jobMaintenanceHandler,

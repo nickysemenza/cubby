@@ -15,24 +15,13 @@ import {
   coordinatorModelFor,
   importRunAgentIdentity,
 } from "@cubby/schemas/import-run-agent";
-import { jobState } from "@cubby/schemas/job";
 import {
   mailboxDiscoveryInput,
   MAILBOX_RESEARCH_VERSION,
 } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import {
-  and,
-  asc,
-  eq,
-  inArray,
-  isNull,
-  ne,
-  notInArray,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, notInArray, or } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -44,7 +33,6 @@ import {
 } from "~/server/db/helpers";
 import {
   ledgerParty,
-  job,
   email as emailTable,
   orderMail,
   run,
@@ -74,6 +62,7 @@ import {
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { hasLiveRunJobLease } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { dispatchStartedRun } from "./dispatch";
@@ -207,19 +196,7 @@ async function partitionOwnership(
       if (transferable) {
         // A dispatch accepted before the mailbox pause may not have written
         // coordinatorStartedAt yet. Its live Job must finish before transfer.
-        const [dispatching] = await tx
-          .select({ id: job.id })
-          .from(job)
-          .where(
-            and(
-              eq(job.runId, owner.id),
-              eq(job.kind, "purchase.dispatch"),
-              eq(job.state, jobState.enum.running),
-              sql`${job.leaseExpiresAt}>now()`,
-            ),
-          )
-          .limit(1);
-        if (dispatching)
+        if (await hasLiveRunJobLease(tx, owner.id, "purchase.dispatch"))
           throw new JobDeferredError(
             "Waiting for the queued Mail import's dispatch to finish before transferring its selected sources",
             new Date(Date.now() + 15_000),

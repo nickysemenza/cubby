@@ -44,11 +44,7 @@ import {
 import { recordFeatureUsage } from "~/server/ai/run-feature";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
-import {
-  getDb,
-  withTransactionDatabase,
-  runBeforeCommitDatabase,
-} from "~/server/db/helpers";
+import { getDb, runBeforeCommitDatabase } from "~/server/db/helpers";
 import {
   entityAttachment,
   image as imageTable,
@@ -72,7 +68,8 @@ import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-br
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { semanticProductCandidates } from "~/server/generic/embedding/service/semantic-search.service";
-import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
+import { outsideJob } from "~/server/generic/jobs/outside-job";
+import type { Fenced } from "~/server/generic/jobs/types";
 import {
   resolveLiveShortcode,
   resolveOrThrow,
@@ -275,15 +272,14 @@ export interface LocationDescriptionResult extends LocationDescription {
 
 /** Provider work finishes before this transaction; only current inputs may publish. */
 async function publishLocationAnalysis(
-  db: Database,
+  fenced: Fenced,
   locationId: LocationId,
   imageCodes: readonly string[],
   currentFingerprint: (tx: Database) => Promise<string>,
   expected: string,
   write: (tx: Database) => Promise<void>,
 ) {
-  await withTransactionDatabase(db, async (tx) => {
-    await assertCurrentJob(tx);
+  await fenced(async (tx) => {
     await getDb(tx)
       .select({ id: locationTable.id })
       .from(locationTable)
@@ -336,6 +332,8 @@ export async function describeLocation(
   locationId: LocationId,
   runId: RunId,
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
+  /** The executing Job's fence; a member request owns no Job. */
+  fenced: Fenced = outsideJob(db),
 ): Promise<LocationDescriptionResult> {
   const location = await readLocationById(db, locationId);
 
@@ -395,7 +393,7 @@ export async function describeLocation(
     },
   );
   await publishLocationAnalysis(
-    db,
+    fenced,
     locationId,
     images.map((image) => image.id),
     async (tx) => {
@@ -585,6 +583,8 @@ export async function detectInventoryItems(
   runId: RunId,
   imageIds?: readonly string[],
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
+  /** The executing Job's fence; a member request owns no Job. */
+  fenced: Fenced = outsideJob(db),
 ): Promise<DetectedInventoryResult> {
   const location = await readLocationById(db, locationId);
 
@@ -632,7 +632,7 @@ export async function detectInventoryItems(
       },
     );
     await publishLocationAnalysis(
-      db,
+      fenced,
       locationId,
       images.map((image) => image.id),
       async (tx) => {

@@ -31,7 +31,6 @@ import {
   financialTransaction,
   ledgerParty,
   ledgerTransfer,
-  run,
   sourceTransactionRecord,
 } from "~/server/db/schema";
 import { labelTransferPairSuggestions } from "~/server/domains/financial-transaction/service/transfer-pair-labels";
@@ -44,10 +43,10 @@ import { generateStatementSuggestionPage } from "~/server/domains/transaction-im
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
-import {
-  isWorkflowInterrupted,
-  withWorkflowExecution,
-} from "~/server/workflows/runs/execution";
+import { currentJobExecution } from "~/server/generic/jobs/context";
+import { cancelJob } from "~/server/generic/jobs/repo/operator";
+import { withJobFixtureExecution } from "~/server/testing/background-queue";
+import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 
 import {
   transferPairSeedKeys,
@@ -735,18 +734,27 @@ describe("transfer-pair suggestions", () => {
     let interrupted: unknown;
     let computations = 0;
     try {
-      await withWorkflowExecution({ runId, attempt: 1 }, () =>
-        labelTransferPairSuggestions(ctx.db, {
+      await withJobFixtureExecution(
+        ctx.db,
+        {
+          key: `run:${runId}`,
+          kind: "run.execute",
+          input: { runId, purpose: "background" },
           runId,
-          port: async (input) => {
-            computations++;
-            await unwrapDb(ctx.db)
-              .update(run)
-              .set({ status: "failed", failureCode: "user_cancelled" })
-              .where(eq(run.id, runId));
-            return answer(input);
-          },
-        }),
+        },
+        () =>
+          labelTransferPairSuggestions(ctx.db, {
+            runId,
+            port: async (input) => {
+              computations++;
+              // A member cancellation retires the Run's Job generation.
+              const owner = currentJobExecution();
+              if (!owner) throw new Error("Expected real Job execution");
+              await cancelJob(ctx.db, owner.claim.id);
+              return answer(input);
+            },
+          }),
+        { releaseClaim: true },
       );
     } catch (error) {
       interrupted = error;

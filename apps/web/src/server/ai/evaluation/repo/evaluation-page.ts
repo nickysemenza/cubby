@@ -69,3 +69,20 @@ export interface EvaluationPageAdapter<P, O> {
    */
   weight?(outcome: EvaluationPageOutcome<O>): number;
 }
+
+/** A paged feature's evaluated page, published in the drain's fenced chunks. */
+export type PreparedEvaluationPage = {
+  /** Targets with an evaluated outcome and their publication weight. */
+  ready: Map<string, { target: EvaluationPageTarget; weight: number }>;
+  /** Business writes for guarded targets; one validity/receipt per target. */
+  publish(
+    tx: Database,
+    ids: readonly string[],
+  ): Promise<EvaluationPagePublication[]>;
+  /** Per-target errors for the drain's failure mapping. */
+  failures: Map<string, unknown>;
+  /** Evidence over the per-target bound can never fit a page. */
+  oversized: Map<string, string>;
+  /** Targets past this page's evidence budget stay due for the next page. */
+  overflow: string[];
+};

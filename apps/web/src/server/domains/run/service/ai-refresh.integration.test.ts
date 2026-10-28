@@ -16,14 +16,18 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import {
+  guardAiEvaluation,
+  publishAiEvaluation,
+} from "~/server/ai/evaluation/repo/ai-evaluation";
+import {
+  drainAiEvaluations,
+  withClaimedAiEvaluation,
+} from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
+import {
   dependencyStamps,
   fieldDependencyKeys,
   compiledRefreshManifest,
 } from "~/server/ai/policy/refresh-manifest";
-import {
-  guardAiEvaluation,
-  publishAiEvaluation,
-} from "~/server/ai/repo/ai-evaluation";
 import {
   producingAiManifest,
   activateAiRefresh,
@@ -40,16 +44,11 @@ import {
   product,
   appSettings,
   feedback,
-  workItem,
 } from "~/server/db/schema";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { writeRunningAttemptProgress as writeRunningAttemptProgressImplementation } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
-import {
-  drainAiEvaluations,
-  withClaimedAiEvaluation,
-} from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -60,6 +59,7 @@ import {
   acceptSuggestion,
   canAutomaticallyFillField,
 } from "~/server/generic/assessment/repo/suggestion-review";
+import { workItemStates } from "~/server/generic/jobs/repo/work-items";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   drainDerivedRefreshFrontier,
@@ -75,7 +75,7 @@ import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
 import { settleAppliedFieldRefresh } from "../repo/ai-refresh-state";
 import { scheduleConnectionRefresh } from "../repo/connection-refresh";
-import type { AiEvaluationPorts } from "./ai-evaluation-drain";
+import type { AiEvaluationPorts } from "./ai-evaluation-execution";
 import { discoverAiRefresh } from "./ai-refresh";
 import {
   categoryPorts,
@@ -1379,15 +1379,9 @@ describe("targeted prompt refresh", () => {
       state: "queued",
       error: null,
     });
-    const [pending] = await getDb(ctx.db)
-      .select()
-      .from(workItem)
-      .where(
-        and(
-          eq(workItem.target, "ai.evaluation"),
-          eq(workItem.ref, evaluation!.id),
-        ),
-      );
+    const [pending] = await workItemStates(ctx.db, "ai.evaluation", [
+      evaluation!.id,
+    ]);
     expect(pending).toMatchObject({
       attempts: 1,
       lastError: expect.stringContaining("candidate coverage is unconfirmed"),

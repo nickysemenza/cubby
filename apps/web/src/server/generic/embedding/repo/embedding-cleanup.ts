@@ -8,7 +8,7 @@ import {
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
 import { entityEmbedding } from "~/server/db/retained-tables";
-import { markWork } from "~/server/generic/jobs/repo/work-items";
+import { markWork, workPending } from "~/server/generic/jobs/repo/work-items";
 
 export const EMBEDDING_CLEANUP_DRAIN = {
   key: "embedding:cleanup",
@@ -32,10 +32,7 @@ async function prepareEmbeddingCleanupPage(
       AND e."artifactState" <> ${embeddingArtifactState.enum.selected}
       AND NOT (e."artifactState" = ${embeddingArtifactState.enum.selected} AND ${notDeleted("e")})
       AND ${after ? sql`e.id > ${after}::uuid` : sql`true`}
-      AND NOT EXISTS (
-        SELECT 1 FROM "WorkItem" w
-        WHERE w.target = ${EMBEDDING_CLEANUP_TARGET} AND w.ref = e.id
-      )
+      AND NOT ${workPending(EMBEDDING_CLEANUP_TARGET, sql`e.id`)}
     ORDER BY e.id LIMIT ${limit}`);
   const ids = rows.rows.map(({ id }) => id);
   return {

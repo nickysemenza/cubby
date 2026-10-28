@@ -4,7 +4,8 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { publishAiEvaluation } from "~/server/ai/repo/ai-evaluation";
+import { publishAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation";
+import { withClaimedAiEvaluation } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -25,7 +26,6 @@ import {
 } from "~/server/domains/connection/repo/entity-connections";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
-import { withClaimedAiEvaluation } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";

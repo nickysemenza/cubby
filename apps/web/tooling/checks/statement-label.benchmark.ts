@@ -25,7 +25,7 @@ import {
   tracePool,
 } from "~/server/db/db-pg-tracing";
 import { getDb } from "~/server/db/helpers";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";

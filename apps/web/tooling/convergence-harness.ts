@@ -28,7 +28,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import { providerFor } from "@cubby/shared/ai/models";
 import type { Database } from "~/server/db";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { ingestGmailMessages } from "~/server/domains/purchase-import/service/gmail/ingest";
 import {
   commitPurchaseImport,

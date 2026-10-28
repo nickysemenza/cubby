@@ -7,11 +7,7 @@ import { getDb } from "~/server/db/helpers";
 import { recipe, expense } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import {
-  claimDerivedMarks,
-  prepareDerivedPage,
-  publishDerivedPage,
-} from "~/server/generic/derived/repo/drain";
-import {
+  drainDerivedPage,
   drainStoredDerived,
   reconcileDerivedRefreshInputs,
   derivedMarkTickets,
@@ -23,7 +19,6 @@ import {
   makeProductInput,
   ingredientRef,
 } from "~/server/testing/repo.fixtures";
-import { derivedComputes } from "~/server/workflows/derived-computes";
 
 // Recipe output must survive lost wakes and reject a prepared superseded page.
 describe("recipe Job publication", () => {
@@ -37,18 +32,21 @@ describe("recipe Job publication", () => {
       makeRecipeInput({ name: "Synthetic fenced recipe" }),
       ctx.actor,
     );
-    const marks = await claimDerivedMarks(ctx.db);
-    const plan = await prepareDerivedPage(ctx.db, derivedComputes, marks);
-    await getDb(ctx.db)
-      .update(recipe)
-      .set({ name: "Synthetic revised recipe" })
-      .where(eq(recipe.id, subject.entityId));
-    const tickets = await derivedMarkTickets(
-      ctx.db,
-      "recipe.totals",
-      subject.entityId,
-    );
-    await publishDerivedPage(ctx.db, plan);
+    let tickets: number[] = [];
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target === "recipe.totals",
+      during: async () => {
+        await getDb(ctx.db)
+          .update(recipe)
+          .set({ name: "Synthetic revised recipe" })
+          .where(eq(recipe.id, subject.entityId));
+        tickets = await derivedMarkTickets(
+          ctx.db,
+          "recipe.totals",
+          subject.entityId,
+        );
+      },
+    });
     expect(
       await derivedMarkTickets(ctx.db, "recipe.totals", subject.entityId),
     ).toEqual(tickets);

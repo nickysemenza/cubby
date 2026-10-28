@@ -24,7 +24,14 @@ export type JobContext = {
     work: (tx: Database) => Promise<T>,
     options?: { isolationLevel?: "serializable" },
   ): Promise<T>;
+  /** Fence a transaction the caller already opened (domain locks first); commits only while owned. */
+  fence(tx: Database): Promise<void>;
+  /** Throws `JobSupersededError` once the claim no longer owns the Job (before paid or external work). */
+  check(): Promise<void>;
 };
+
+/** A fenced transaction runner: `JobContext.fenced`, or `outsideJob` for member-initiated work. */
+export type Fenced = JobContext["fenced"];
 
 export type JobHandler = {
   prepare(

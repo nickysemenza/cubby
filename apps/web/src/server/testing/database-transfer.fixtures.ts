@@ -3,7 +3,7 @@ import { createPostgresPool } from "tooling/postgres-pool";
 
 import type { Database } from "~/server/db";
 import { createDatabase } from "~/server/db/database-runtime";
-import * as schema from "~/server/db/schema";
+import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 
 /** Measure actual PostgreSQL wire values, before Drizzle parses JSON columns. */
 export async function measureDatabaseTransfer<T>(

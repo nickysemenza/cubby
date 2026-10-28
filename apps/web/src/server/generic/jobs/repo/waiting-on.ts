@@ -7,9 +7,8 @@ import {
   type JobWaitingOnReason,
 } from "@cubby/schemas/job";
 import { sql, type SQL } from "drizzle-orm";
+import { z } from "zod";
 
-import type { Database } from "~/server/db/database";
-import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import {
   JOB_KIND_POLICY,
   jobKindPolicy,
@@ -143,33 +142,21 @@ export const jobWaitingOnReasonSql = (
 };
 
 /**
- * Batched waiting-on for listed Jobs. Leased image work includes the executor
- * assigned to its active attempt; Job ETA is intentionally not derived.
+ * Waiting-on for listed Jobs. A lease handed off externally names its holder
+ * (a device); Job ETA is intentionally not derived.
  */
-export async function loadJobWaitingOn(
-  db: Database,
+export function loadJobWaitingOn(
   jobs: readonly JobRow[],
   now = new Date(),
-): Promise<Map<string, JobWaitingOn | null>> {
+): Map<string, JobWaitingOn | null> {
   const out = new Map<string, JobWaitingOn | null>();
-  if (!jobs.length) return out;
-  const live = jobs.filter(
-    (row) =>
-      row.state === jobState.enum.queued ||
-      row.state === jobState.enum.retry_wait ||
-      row.state === jobState.enum.running,
-  );
-  const executors = await leasedExecutors(
-    db,
-    live.filter((row) => row.state === jobState.enum.running),
-  );
   for (const row of jobs) {
     out.set(
       row.id,
       deriveJobWaitingOn(row, {
         now,
-        executor: executors.get(row.id)?.name ?? defaultExecutor(row.kind),
-        executorDeviceId: executors.get(row.id)?.deviceId ?? null,
+        executor: leaseHolder(row)?.name ?? defaultExecutor(row.kind),
+        executorDeviceId: leaseHolder(row)?.deviceId ?? null,
       }),
     );
   }
@@ -179,32 +166,14 @@ export async function loadJobWaitingOn(
 const defaultExecutor = (kind: string) =>
   jobKindPolicy(kind).drained ? "Cubby server" : null;
 
-/** The executor assigned to a leased image attempt (the lease token is its id). */
-async function leasedExecutors(
-  db: Database,
-  running: readonly JobRow[],
-): Promise<
-  Map<string, { name: string | null; deviceId: string | null } | null>
-> {
-  const tokens = running.flatMap((row) =>
-    row.leaseToken && row.key.startsWith("image-processing:")
-      ? [{ id: row.id, token: row.leaseToken }]
-      : [],
-  );
-  if (!tokens.length) return new Map();
-  const result = await repositoryQueries(db).execute<{
-    id: string;
-    name: string | null;
-    deviceId: string | null;
-  }>(sql`SELECT a.id::text AS id, a.executor->>${"name"} AS name,
-      a.executor->>${"deviceId"} AS "deviceId"
-    FROM "ImageProcessingAttempt" a
-    WHERE a.id IN (${sql.join(
-      tokens.map((entry) => sql`${entry.token}::uuid`),
-      sql`, `,
-    )})`);
-  const byToken = new Map(result.rows.map((row) => [row.id, row]));
-  return new Map(
-    tokens.map((entry) => [entry.id, byToken.get(entry.token) ?? null]),
-  );
-}
+const leaseHolderSchema = z.object({
+  name: z.string().nullable().catch(null),
+  deviceId: z.string().nullable().catch(null),
+});
+
+/** Who holds a running Job's lease, recorded at external hand-off. */
+const leaseHolder = (row: JobRow) => {
+  if (row.state !== jobState.enum.running || !row.leaseHolder) return null;
+  const holder = leaseHolderSchema.safeParse(row.leaseHolder);
+  return holder.success ? holder.data : null;
+};

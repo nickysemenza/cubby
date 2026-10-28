@@ -5,6 +5,7 @@
  * loss stop the whole page. A domain supplies only prepare and publish.
  */
 import { describeErrorCauses } from "~/lib/error-diagnostics";
+import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
@@ -13,12 +14,20 @@ import {
   claimWork,
   clearWork,
   deferWork,
-  lockWork,
   nextWorkReadyAt,
-  type WorkItem,
-} from "~/server/generic/jobs/repo/work-items";
+} from "~/server/generic/jobs/repo/work-claims";
+import { lockWork, type WorkItem } from "~/server/generic/jobs/repo/work-items";
 
 import type { JobContext, JobHandler } from "../types";
+
+/** What a drain adapter may know of its claim: identity for attempt tokens, never the lease itself. */
+export type DrainContext = JobContext & {
+  claim: Pick<JobClaim, "key" | "generation" | "leaseToken">;
+};
+
+/** Pause, defer and lease loss stop the page; an adapter must rethrow them rather than settle an item. */
+export const stopsDrainPage = (error: UnparsedError) =>
+  stopsPage(classifyJobFailure(error));
 
 /** Items per publication transaction; an adapter may weight heavy items. */
 const DRAIN_PUBLISH_CHUNK = 25;
@@ -37,27 +46,43 @@ type DrainPublication = {
 export type DrainSpec<P> = {
   /** Items claimed per page. */
   limit: number;
-  /** Publication weight of an item (default 1); a chunk holds at most 25. */
+  /** Publication weight of an item (default 1); a chunk holds at most `chunk`. */
   weight?: (item: WorkItem, prepared: P) => number;
+  /** Weight one publication transaction holds (default 25). */
+  chunk?: number;
   isolationLevel?: "serializable";
   /** Consecutive failures before `exhaust` settles an item; omitted retries forever. */
   maxAttempts?: number;
   prepare(
     db: Database,
     items: readonly WorkItem[],
-    context: JobContext & { claim: JobClaim },
+    context: DrainContext,
   ): Promise<DrainPreparation<P>>;
   /**
-   * Domain locks taken before the items are locked: producers lock domain
-   * rows before marking, so locking items first would invert that order.
+   * Runs first in every publication transaction, before the items are
+   * locked: producers lock domain rows before marking, so locking items
+   * first would invert that order. Producer-order writes belong here too
+   * (derived fanout expansion). Returning items narrows the chunk to them;
+   * the rest stay owed without spending an attempt.
    */
-  lock?(tx: Database, items: readonly WorkItem[], prepared: P): Promise<void>;
+  lock?(
+    tx: Database,
+    items: readonly WorkItem[],
+    prepared: P,
+  ): Promise<void | readonly WorkItem[]>;
   /** Database writes for items still current and locked; never network work. */
   publish(
     tx: Database,
     items: readonly WorkItem[],
     prepared: P,
   ): Promise<void | DrainPublication>;
+  /** Fenced writes when a page finds nothing ready (derived clock expiry). */
+  idle?(tx: Database): Promise<void>;
+  /**
+   * A schedule re-arms this drain (`repeatJob`), so a page with nothing ready
+   * completes even while items back off; the next run retries them.
+   */
+  repeats?: true;
   /** Record the terminal outcome of items that ran out of attempts. */
   exhaust?(
     tx: Database,
@@ -66,19 +91,33 @@ export type DrainSpec<P> = {
   ): Promise<void>;
 };
 
-const message = (error: unknown) => JSON.stringify(describeErrorCauses(error));
+/**
+ * Each cause is capped so the innermost one (the database's own message)
+ * survives the item's 2000-character `lastError`.
+ */
+const message = (error: unknown) => {
+  const { causes, truncated } = describeErrorCauses(error);
+  return JSON.stringify({
+    causes: causes.map((cause) => ({
+      ...cause,
+      message: cause.message.slice(0, 300),
+    })),
+    truncated,
+  });
+};
 
 const chunked = <P>(
   items: readonly WorkItem[],
   prepared: P,
   weight: DrainSpec<P>["weight"],
+  size: number,
 ) => {
   const chunks: WorkItem[][] = [];
   let current: WorkItem[] = [];
   let load = 0;
   for (const item of items) {
     const cost = Math.max(1, weight?.(item, prepared) ?? 1);
-    if (current.length && load + cost > DRAIN_PUBLISH_CHUNK) {
+    if (current.length && load + cost > size) {
       chunks.push(current);
       current = [];
       load = 0;
@@ -96,9 +135,10 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
       const { backoff } = jobKindPolicy(claim.kind);
       const items = await claimWork(db, claim.key, spec.limit);
       if (!items.length) {
-        const next = await nextWorkReadyAt(db, claim.key);
+        const next = spec.repeats ? null : await nextWorkReadyAt(db, claim.key);
         return {
           page: next ? { done: false, availableAt: next } : { done: true },
+          ...(spec.idle ? { publish: (tx) => spec.idle!(tx) } : {}),
         };
       }
       let published = 0;
@@ -108,8 +148,8 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
         entries: readonly (readonly [WorkItem, unknown])[],
       ) => {
         for (const [item, error] of entries) {
-          await spec.lock?.(tx, [item], prepared);
-          const held = await lockWork(tx, [item]);
+          const narrowed = (await spec.lock?.(tx, [item], prepared)) ?? [item];
+          const held = await lockWork(tx, narrowed);
           if (!held.length) continue;
           failed++;
           if (
@@ -125,7 +165,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
       const { prepared, failed: preparationFailures = new Map() } =
         await spec.prepare(db, items, { ...context, claim });
       for (const error of preparationFailures.values())
-        if (stopsPage(classifyJobFailure(error))) throw error;
+        if (stopsDrainPage(error)) throw error;
       if (preparationFailures.size)
         await context.fenced((tx) =>
           settleFailed(tx, [...preparationFailures]),
@@ -135,8 +175,9 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
         try {
           await context.fenced(
             async (tx) => {
-              await spec.lock?.(tx, chunk, prepared);
-              const held = await lockWork(tx, chunk);
+              const narrowed =
+                (await spec.lock?.(tx, chunk, prepared)) ?? chunk;
+              const held = await lockWork(tx, narrowed);
               if (!held.length) return;
               const publication = await spec.publish(tx, held, prepared);
               const retained = new Set(
@@ -171,6 +212,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
         items.filter((item) => !preparationFailures.has(item)),
         prepared,
         spec.weight,
+        spec.chunk ?? DRAIN_PUBLISH_CHUNK,
       ))
         await publish(chunk);
       return {

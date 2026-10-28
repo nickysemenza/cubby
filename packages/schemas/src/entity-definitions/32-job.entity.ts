@@ -239,7 +239,8 @@ export const { definition, readSchemas } = defineEntityModel({
       })),
       { output: false, key: "availableAt", kind: "timestamp" },
       { output: false, key: "leaseToken", kind: "identifier", nullable: true },
-      ...["input", "cursor", "result"].map((key) => ({
+      // leaseHolder: who holds the lease ({name, deviceId}), set at external hand-off.
+      ...["input", "cursor", "result", "leaseHolder"].map((key) => ({
         output: false,
         key,
         kind: "json" as const,
@@ -290,6 +291,7 @@ export const { definition, readSchemas } = defineEntityModel({
       { key: "availableAt", defaultSql: "now()" },
       "leaseToken",
       "leaseExpiresAt",
+      "leaseHolder",
       "lastClaimedAt",
       "error",
       "createdAt",

@@ -6,18 +6,19 @@ import {
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
 import {
   aiExecutionOwner,
   liveAiRequestRun,
   PENDING_AI_STATES,
-} from "~/server/ai/repo/ai-evaluation-requests";
+} from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import {
   AI_EVALUATION_TARGET,
   aiEvaluationDrain,
   aiEvaluationAttemptToken,
   aiEvaluationAttemptLive,
-} from "~/server/ai/repo/ai-evaluation-work";
+} from "~/server/ai/evaluation/repo/ai-evaluation-work";
+import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
+import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -29,15 +30,11 @@ import { repositoryBeforeCommit } from "~/server/db/repository-access.boundary";
 import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import {
-  assertCurrentJob,
-  currentJobExecution,
-} from "~/server/generic/jobs/repo/execution";
-import {
-  postponeWork,
+  postponeWorkRefs,
   type WorkItem,
 } from "~/server/generic/jobs/repo/work-items";
+import type { DrainContext } from "~/server/generic/jobs/service/drain";
 
-import { readAiRefreshActivation } from "./ai-refresh";
 import type {
   EvaluationPageTarget,
   EvaluationPagePublication,
@@ -58,28 +55,11 @@ export class AiEvaluationUnauthorizedError extends Error {
 }
 
 /** Hold not-yet-claimed items until `until`; an attempt already holding one keeps it. */
-export async function postponeAiEvaluationWork(
+export const postponeAiEvaluationWork = (
   db: Database,
   ids: readonly string[],
   until: Date,
-) {
-  if (!ids.length) return;
-  const result = await getDb(db).execute(sql`
-    SELECT target, ref::text AS ref, ticket, priority, attempts FROM "WorkItem"
-     WHERE target = ${AI_EVALUATION_TARGET} AND ref = ANY(${uuidArrayParam(ids)})`);
-  const items = z
-    .array(
-      z.object({
-        target: z.string(),
-        ref: z.string(),
-        ticket: z.coerce.number(),
-        priority: z.coerce.number(),
-        attempts: z.coerce.number(),
-      }),
-    )
-    .parse(result.rows);
-  await postponeWork(db, items, until);
-}
+) => postponeWorkRefs(db, AI_EVALUATION_TARGET, ids, until);
 
 export async function readAiEvaluations(db: Database, ids: readonly string[]) {
   if (!ids.length) return [];
@@ -96,21 +76,17 @@ export type ClaimedAiEvaluation = typeof aiEvaluation.$inferSelect & {
 
 /** Bind one drain item to its live owner; the drain's lease fences every later write. */
 export async function claimAiEvaluation(
-  db: Database,
+  context: Pick<DrainContext, "claim" | "fenced">,
   item: WorkItem,
   requestingRunId?: string,
 ): Promise<ClaimedAiEvaluation | null> {
-  const execution = currentJobExecution();
-  if (!execution || execution.claim.kind !== "ai.evaluation")
-    throw new Error("AI evaluation execution requires its drain Job claim");
-  return withTransactionDatabase(db, async (tx) => {
-    await assertCurrentJob(tx);
+  return context.fenced(async (tx) => {
     const [existing] = await getDb(tx)
       .select()
       .from(aiEvaluation)
       .where(eq(aiEvaluation.id, item.ref));
     if (!existing || !PENDING_AI_STATES.includes(existing.state)) return null;
-    if (execution.claim.key !== aiEvaluationDrain(existing.feature).key)
+    if (context.claim.key !== aiEvaluationDrain(existing.feature).key)
       throw new Error("AI evaluation item belongs to another drain");
     if (
       existing.executionKind === "ai_refresh" &&
@@ -141,10 +117,7 @@ export async function claimAiEvaluation(
     return row
       ? {
           ...row,
-          attemptToken: aiEvaluationAttemptToken(
-            execution.claim.leaseToken,
-            item.ticket,
-          ),
+          attemptToken: aiEvaluationAttemptToken(context.claim, item),
           attempts: item.attempts,
         }
       : null;
@@ -160,9 +133,6 @@ export async function guardAiEvaluation(
   await (
     await import("~/server/workflows/runs/execution")
   ).assertWorkflowEffect(tx);
-  const execution = currentJobExecution();
-  if (!execution || !token.startsWith(`${execution.claim.leaseToken}/`))
-    throw new AiEvaluationAttemptObsoleteError();
   const [read] = await getDb(tx)
     .select()
     .from(aiEvaluation)

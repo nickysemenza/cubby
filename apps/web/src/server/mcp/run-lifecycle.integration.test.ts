@@ -12,7 +12,6 @@ import { getDb } from "~/server/db/helpers";
 import {
   aiUsage,
   appSettings,
-  job,
   runApproval,
   runControlEvent,
   run as runTable,
@@ -20,6 +19,8 @@ import {
 import { retainedMailFixture } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { admitMailImport } from "~/server/domains/purchase-import/repo/mail-import-run";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer } from "~/server/mcp/server";
@@ -340,10 +341,11 @@ describe("Mail import switch and discovery through MCP", () => {
       .update(runTable)
       .set({ status: "completed", endedAt: new Date() })
       .where(eq(runTable.id, classificationOnly.id));
-    await getDb(ctx.db)
-      .update(job)
-      .set({ state: "completed" })
-      .where(eq(job.key, `run:${classificationOnly.id}`));
+    await updateJobs(
+      ctx.db,
+      { key: `run:${classificationOnly.id}` },
+      { state: "completed" },
+    );
     const enabled = await call("run", enable());
     expect(enabled.isError).not.toBe(true);
     expect(enabled.structuredContent).toMatchObject({
@@ -366,10 +368,9 @@ describe("Mail import switch and discovery through MCP", () => {
     });
     if (!discovery) throw new Error("Expected discovery Run");
     expect(
-      await getDb(ctx.db)
-        .select({ state: job.state, input: job.input })
-        .from(job)
-        .where(eq(job.key, `run:${discovery.id}`)),
+      await readJobs(ctx.db, { key: `run:${discovery.id}` }).then((rows) =>
+        rows.map(({ input, state }) => ({ state, input })),
+      ),
     ).toEqual([
       {
         state: "queued",
@@ -476,9 +477,7 @@ describe("Mail import switch and discovery through MCP", () => {
       ).isError,
     ).toBe(true);
     expect(await getDb(ctx.db).select().from(runTable)).toEqual([]);
-    expect(
-      await getDb(ctx.db).select().from(job).where(eq(job.kind, "run.execute")),
-    ).toEqual([]);
+    expect(await readJobs(ctx.db, { kind: "run.execute" })).toEqual([]);
   });
 
   const agentRun = async (purpose?: "mail_import") => {

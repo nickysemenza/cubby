@@ -6,7 +6,6 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { getDb } from "~/server/db/helpers";
 import {
   createExpense,
   updateExpense,
@@ -17,21 +16,19 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { listOperations } from "~/server/entity-kernel/list-operations";
-import {
-  claimDerivedMarks,
-  prepareDerivedPage,
-  publishDerivedPage,
-} from "~/server/generic/derived/repo/drain";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
-import { drainStoredDerived } from "~/server/testing/background-queue";
+import { updateWorkItems } from "~/server/generic/jobs/jobs.fixtures";
+import {
+  drainDerivedPage,
+  drainStoredDerived,
+} from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
   makeProductInput,
   makeExpenseInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { derivedComputes } from "~/server/workflows/derived-computes";
 
 describe("assignment and stored projection precedence", () => {
   const ctx = withTestDb();
@@ -55,18 +52,11 @@ describe("assignment and stored projection precedence", () => {
     );
     await drainStoredDerived(ctx.db);
     await updateProduct(ctx.db, first.entityId, { price: 15 }, ctx.actor);
-    const marks = (await claimDerivedMarks(ctx.db)).filter(
-      (mark) => mark.target === "product.price" && mark.ref === first.entityId,
-    );
-    expect(marks).toHaveLength(1);
-    const oldComputation = await prepareDerivedPage(
-      ctx.db,
-      derivedComputes,
-      marks,
-    );
-    expect([...oldComputation.failed]).toEqual([]);
-    await updateProduct(ctx.db, first.entityId, { price: 2 }, ctx.actor);
-    await publishDerivedPage(ctx.db, oldComputation);
+    await drainDerivedPage(ctx.db, {
+      during: async () => {
+        await updateProduct(ctx.db, first.entityId, { price: 2 }, ctx.actor);
+      },
+    });
 
     const stored = (
       await loadStoredDerived(ctx.db, "product", [first.entityId], ["price"])
@@ -315,9 +305,14 @@ describe("assignment and stored projection precedence", () => {
         }),
       ]),
     );
-    await getDb(ctx.db).execute(sql`UPDATE "WorkItem"
-      SET "lastError" = 'Synthetic unit-price input refresh failure', "readyAt" = now() + interval '1 hour'
-      WHERE target = 'product.price' AND ref = ${product.entityId}`);
+    await updateWorkItems(
+      ctx.db,
+      { target: "product.price", refs: [product.entityId] },
+      {
+        lastError: "Synthetic unit-price input refresh failure",
+        readyAt: sql`now() + interval '1 hour'`,
+      },
+    );
     const failed = entityFieldEnvelopeSchemas.product.detail.parse(
       (
         await executeEntity(context(), {

@@ -39,7 +39,7 @@ export async function gmailExecutionPolicy(
     current &&
     evaluation &&
     (await (
-      await import("~/server/ai/repo/ai-evaluation-requests")
+      await import("~/server/ai/evaluation/repo/ai-evaluation-requests")
     ).evaluationIsExecutable(db, evaluation, current.id));
   if (
     !current ||

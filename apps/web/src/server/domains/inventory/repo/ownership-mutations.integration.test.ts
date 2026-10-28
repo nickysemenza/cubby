@@ -57,6 +57,7 @@ import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fi
 import { executeEntitySelectionIds } from "~/server/entity-kernel/selection-ids";
 import { markExpiredClockDerived } from "~/server/generic/derived/repo/drain";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
+import { updateWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { selectListReadRows } from "~/server/generic/list/repo/list-read-schema";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -294,17 +295,24 @@ describe("inventory ownership mutations", () => {
     });
     expect(await markExpiredClockDerived(ctx.db)).toBeGreaterThan(0);
     expect(await read()).toMatchObject({ stale: true, pending: true });
-    await getDb(ctx.db).execute(sql`
-      UPDATE "WorkItem" SET "lastError" = 'synthetic retry', "readyAt" = (now() AT TIME ZONE 'UTC') + interval '1 hour'
-      WHERE target = 'inventory.ownership' AND ref = ${subject.entryId}`);
+    await updateWorkItems(
+      ctx.db,
+      { target: "inventory.ownership", refs: [subject.entryId] },
+      {
+        lastError: "synthetic retry",
+        readyAt: sql`(now() AT TIME ZONE 'UTC') + interval '1 hour'`,
+      },
+    );
     expect(await markExpiredClockDerived(ctx.db)).toBe(0);
     expect(await read()).toMatchObject({
       error: "synthetic retry",
       pending: true,
     });
-    await getDb(ctx.db).execute(sql`
-      UPDATE "WorkItem" SET "readyAt" = now() AT TIME ZONE 'UTC'
-      WHERE target = 'inventory.ownership' AND ref = ${subject.entryId}`);
+    await updateWorkItems(
+      ctx.db,
+      { target: "inventory.ownership", refs: [subject.entryId] },
+      { readyAt: sql`now() AT TIME ZONE 'UTC'` },
+    );
     await drainStoredDerived(ctx.db);
     expect(await read()).toMatchObject({
       stale: false,

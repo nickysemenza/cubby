@@ -7,9 +7,9 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
 import { run, runOperation, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
@@ -157,10 +157,11 @@ describe("step-ledger Runs", () => {
       kind: "continue",
       waitSeconds: 60,
     });
-    await getDb(ctx.db)
-      .update(job)
-      .set({ leaseExpiresAt: new Date(0) })
-      .where(eq(job.key, `run:${params.runId}`));
+    await updateJobs(
+      ctx.db,
+      { key: `run:${params.runId}` },
+      { leaseExpiresAt: new Date(0) },
+    );
     const successor = { runId: id, attempt: attemptOf(await readRun(id)) };
     expect(await advanceStepRun(ctx.db, successor, drivers)).toMatchObject({
       kind: "continue",

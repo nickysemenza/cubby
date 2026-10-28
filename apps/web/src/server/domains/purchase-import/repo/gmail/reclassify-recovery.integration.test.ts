@@ -7,8 +7,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { aiEvaluationRequest, email, run, job } from "~/server/db/schema";
+import { aiEvaluationRequest, email, run } from "~/server/db/schema";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer } from "~/server/mcp/server";
@@ -220,10 +221,9 @@ describe("durable member reclassification recovery", () => {
       recorded!.shortcode,
       f.owner,
     );
-    const [execution] = await db
-      .select()
-      .from(job)
-      .where(eq(job.key, `run:${recorded!.id}`));
+    const [execution] = await readJobs(ctx.db, {
+      key: `run:${recorded!.id}`,
+    });
     expect(execution?.state).toBe("failed");
     expect(execution?.error).toContain("Synthetic checkpoint failure");
     expect(recovered?.receipts).toMatchObject({

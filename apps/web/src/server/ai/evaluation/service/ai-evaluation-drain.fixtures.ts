@@ -1,25 +1,27 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
-import { z } from "zod";
-
 import {
   claimAiEvaluation,
   type ClaimedAiEvaluation,
-} from "~/server/ai/repo/ai-evaluation";
+} from "~/server/ai/evaluation/repo/ai-evaluation";
+import { AI_EVALUATION_TARGET } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { uuidArrayParam } from "~/server/db/helpers/query";
-import { job } from "~/server/db/retained-tables";
+import {
+  runAiEvaluationExecution,
+  type AiEvaluationPorts,
+} from "~/server/domains/run/service/ai-evaluation-execution";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { wakeJob } from "~/server/generic/jobs/repo/producer";
+import {
+  postponeWorkRefs,
+  workItemStates,
+} from "~/server/generic/jobs/repo/work-items";
 import {
   advanceJob,
   type JobOutcome,
 } from "~/server/generic/jobs/service/jobs";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
 
-import {
-  aiEvaluationJobHandler,
-  type AiEvaluationPorts,
-} from "./ai-evaluation-drain";
+import { aiEvaluationJobHandler } from "./ai-evaluation-drain";
 
 /**
  * Run the real drain pages holding these evaluations, substituting only
@@ -34,34 +36,26 @@ export async function drainAiEvaluations(
   ports: AiEvaluationPorts = {},
   { pages }: { pages?: number } = {},
 ): Promise<JobOutcome[]> {
-  const handlers = { "ai.evaluation": aiEvaluationJobHandler(ports) };
+  const handlers = {
+    "ai.evaluation": aiEvaluationJobHandler(runAiEvaluationExecution(ports)),
+  };
   const outcomes: JobOutcome[] = [];
   for (let page = 0; page < (pages ?? 20); page++) {
-    const due = await getDb(db).execute(sql`
-      UPDATE "WorkItem" SET "readyAt" = now()
-       WHERE target = 'ai.evaluation' AND ref = ANY(${uuidArrayParam(ids)})
-      RETURNING drain`);
-    const drains = [
-      ...new Set(
-        z
-          .array(z.object({ drain: z.string() }))
-          .parse(due.rows)
-          .map((row) => row.drain),
-      ),
-    ].sort();
+    const drains = await postponeWorkRefs(
+      db,
+      AI_EVALUATION_TARGET,
+      ids,
+      new Date(),
+    );
     if (!drains.length) return outcomes;
     for (const key of drains) {
       await wakeJob(db, { key, kind: "ai.evaluation", input: {} });
-      await getDb(db)
-        .update(job)
-        .set({ availableAt: new Date(0), waitReason: null, waitUntil: null })
-        .where(
-          and(eq(job.key, key), inArray(job.state, ["queued", "retry_wait"])),
-        );
-      const [execution] = await getDb(db)
-        .select({ id: job.id })
-        .from(job)
-        .where(eq(job.key, key));
+      await updateJobs(
+        db,
+        { key, states: ["queued", "retry_wait"] },
+        { availableAt: new Date(0), waitReason: null, waitUntil: null },
+      );
+      const execution = await readJob(db, { key });
       if (!execution) throw new Error(`Synthetic drain ${key} is missing`);
       const outcome = await advanceJob(db, execution.id, handlers);
       outcomes.push(outcome);
@@ -74,20 +68,8 @@ export async function drainAiEvaluations(
 
 /** The evaluation's drain item, or undefined once it settled or parked. */
 export async function aiEvaluationItem(db: Database, id: string) {
-  const result = await getDb(db).execute(sql`
-    SELECT drain, priority, attempts, "lastError", "readyAt" FROM "WorkItem"
-     WHERE target = 'ai.evaluation' AND ref = ${id}::uuid`);
-  return z
-    .array(
-      z.object({
-        drain: z.string(),
-        priority: z.coerce.number(),
-        attempts: z.coerce.number(),
-        lastError: z.string().nullable(),
-        readyAt: z.coerce.date(),
-      }),
-    )
-    .parse(result.rows)[0];
+  const [item] = await workItemStates(db, AI_EVALUATION_TARGET, [id]);
+  return item;
 }
 
 /**
@@ -99,27 +81,13 @@ export async function withClaimedAiEvaluation<T>(
   id: string,
   work: (claimed: ClaimedAiEvaluation) => Promise<T>,
 ) {
-  const result = await getDb(db).execute(sql`
-    SELECT drain, target, ref::text AS ref, ticket, priority, attempts
-      FROM "WorkItem" WHERE target = 'ai.evaluation' AND ref = ${id}::uuid`);
-  const [item] = z
-    .array(
-      z.object({
-        drain: z.string(),
-        target: z.string(),
-        ref: z.string(),
-        ticket: z.coerce.number(),
-        priority: z.coerce.number(),
-        attempts: z.coerce.number(),
-      }),
-    )
-    .parse(result.rows);
+  const item = await aiEvaluationItem(db, id);
   if (!item) throw new Error(`Synthetic evaluation ${id} has no drain item`);
   return withJobFixtureExecution(
     db,
     { key: item.drain, kind: "ai.evaluation", input: {} },
-    async () => {
-      const claimed = await claimAiEvaluation(db, item);
+    async (context) => {
+      const claimed = await claimAiEvaluation(context, item);
       if (!claimed) throw new Error(`Synthetic evaluation ${id} is settled`);
       return work(claimed);
     },

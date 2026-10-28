@@ -8,32 +8,33 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import {
   publishAiEvaluation,
   settleAiEvaluations,
-} from "~/server/ai/repo/ai-evaluation";
+} from "~/server/ai/evaluation/repo/ai-evaluation";
 import {
   enqueueAiEvaluation,
   enqueueAiEvaluations,
-} from "~/server/ai/repo/ai-evaluation-requests";
-import { markAiEvaluationWork } from "~/server/ai/repo/ai-evaluation-work";
-import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import {
-  aiEvaluation,
-  aiEvaluationRequest,
-  job,
-  run,
-} from "~/server/db/schema";
-import { readAiRefreshWorkSummary } from "~/server/domains/run/repo/ai-work-state";
-import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { aiEvaluationJobHandler } from "~/server/domains/run/service/ai-evaluation-drain";
+} from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import { markAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
+import { aiEvaluationJobHandler } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import {
   aiEvaluationItem,
   drainAiEvaluations,
   withClaimedAiEvaluation,
-} from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
+} from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
+import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
+import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
+import { readAiRefreshWorkSummary } from "~/server/domains/run/repo/ai-work-state";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
+import {
+  updateJobs,
+  updateWorkItems,
+} from "~/server/generic/jobs/jobs.fixtures";
+import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 
@@ -127,10 +128,7 @@ describe("AI evaluation drain publication", () => {
           z.object({ synthetic: z.boolean() }).safeParse(entry.receipt).success,
       ),
     ).toHaveLength(2);
-    const [coordinator] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.key, `run:${seeded.runId}`));
+    const coordinator = await readJob(ctx.db, { key: `run:${seeded.runId}` });
     expect(coordinator!.availableAt.getTime()).toBeLessThan(Date.now() + 1000);
   });
 
@@ -143,8 +141,10 @@ describe("AI evaluation drain publication", () => {
       id,
       async (claimed) => {
         // Another worker reclaimed the drain after this lease expired.
-        await getDb(ctx.db).execute(
-          sql`UPDATE "Job" SET "leaseToken" = gen_random_uuid() WHERE key = ${drain}`,
+        await updateJobs(
+          ctx.db,
+          { key: drain },
+          { leaseToken: sql`gen_random_uuid()` },
         );
         return publishAiEvaluation(
           ctx.db,
@@ -225,15 +225,17 @@ describe("AI evaluation drain publication", () => {
       .update(run)
       .set({ status: "paused", trigger: "manual" })
       .where(eq(run.id, seeded.runId));
-    await getDb(ctx.db).execute(
-      sql`UPDATE "WorkItem" SET priority = 0, "readyAt" = now() WHERE ref = ${evaluation.id}::uuid`,
+    await updateWorkItems(
+      ctx.db,
+      { refs: [evaluation.id] },
+      { priority: 0, readyAt: sql`now()` },
     );
     const execution = await enqueueJob(ctx.db, {
       key: `ai-evaluation:${feature}`,
       kind: "ai.evaluation",
       input: {},
     });
-    const handler = aiEvaluationJobHandler();
+    const handler = aiEvaluationJobHandler(runAiEvaluationExecution());
     let resumed = false;
     const outcome = await advanceJob(ctx.db, execution.id, {
       "ai.evaluation": {

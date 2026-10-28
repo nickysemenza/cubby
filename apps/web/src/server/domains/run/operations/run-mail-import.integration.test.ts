@@ -8,9 +8,11 @@ import type { JSONType } from "zod";
 import { setCfEnv } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { appSettings, job, run, user } from "~/server/db/schema";
+import { appSettings, run, user } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
+import { deleteJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
@@ -193,15 +195,12 @@ describe("automatic Mail import switch", () => {
     expect(
       mailboxDiscoveryInput.parse(classification?.input).executionPolicy,
     ).toBe("classification_only");
-    await getDb(ctx.db).delete(job).where(eq(job.kind, "run.execute"));
+    await deleteJobs(ctx.db, { kind: "run.execute" });
     await getDb(ctx.db).delete(run);
 
     await invoke("setMailImport", { mailboxId, enabled: true });
     expect(
-      await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.kind, "maintenance.purchase-discovery")),
+      await readJobs(ctx.db, { kind: "maintenance.purchase-discovery" }),
     ).toMatchObject([{ state: "queued" }]);
     expect(
       await invoke("discoverMail", { mailboxId: "synthetic-foreign-mailbox" }),
@@ -218,9 +217,7 @@ describe("automatic Mail import switch", () => {
       .select()
       .from(run)
       .where(eq(run.purpose, "mail_discovery"));
-    expect(
-      await getDb(ctx.db).select().from(job).where(eq(job.kind, "run.execute")),
-    ).toMatchObject([
+    expect(await readJobs(ctx.db, { kind: "run.execute" })).toMatchObject([
       {
         key: `run:${discovery!.id}`,
         state: "queued",

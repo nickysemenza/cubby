@@ -10,10 +10,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
-  job as durableJob,
-  jobLaneAdmission,
-} from "~/server/db/retained-tables";
-import {
   image,
   imageProcessingAttempt,
   imageProcessingEvent,
@@ -21,6 +17,8 @@ import {
   run,
 } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
+import { deviceOwnedStreak } from "~/server/domains/image-processing/repo/device-admission";
+import { DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE } from "~/server/domains/image-processing/repo/device-admission";
 import * as companionDispatch from "~/server/domains/image-processing/service/dispatch";
 import {
   claimCompanionImageCommands,
@@ -29,10 +27,11 @@ import {
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
-  deviceOwnedStreak,
-  DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE,
-} from "~/server/generic/jobs/repo/device-admission";
+  seedJobLaneAdmission,
+  updateJobs,
+} from "~/server/generic/jobs/jobs.fixtures";
 import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 
 import {
   claimImageProcessingJob,
@@ -105,10 +104,11 @@ describe("background companion leases", () => {
       },
     });
   const expire = (jobId: ImageJobId) =>
-    getDb(ctx.db)
-      .update(durableJob)
-      .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
-      .where(eq(durableJob.key, `image-processing:${jobId}`));
+    updateJobs(
+      ctx.db,
+      { key: `image-processing:${jobId}` },
+      { leaseExpiresAt: new Date(Date.now() - 1_000) },
+    );
   const failure = (lease: { id: ImageJobId; attemptId: string }) => ({
     result: {
       jobId: lease.id,
@@ -222,10 +222,7 @@ describe("background companion leases", () => {
           (command) => Date.parse(command.deadline) >= Date.now() + 59_000,
         ),
       ).toBe(true);
-      const executions = await getDb(ctx.db)
-        .select()
-        .from(durableJob)
-        .where(eq(durableJob.kind, "image.device"));
+      const executions = await readJobs(ctx.db, { kind: "image.device" });
       for (const command of pulled.commands) {
         expect(
           executions
@@ -261,9 +258,7 @@ describe("background companion leases", () => {
     );
     const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
     await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION, "image/jpeg", owner);
-    await getDb(ctx.db)
-      .insert(jobLaneAdmission)
-      .values({ lane: "image.device", ownedStreak: 3 });
+    await seedJobLaneAdmission(ctx.db, "image.device", 3);
     const reserve = companionDispatch.reserveCompanionAnalysisOutput;
     let reservationSucceeded = false;
     const spy = vi
@@ -305,10 +300,9 @@ describe("background companion leases", () => {
       expect(attempts.map((attempt) => attempt.jobId).sort()).toEqual(
         [prefix, backfill].sort(),
       );
-      const [released] = await getDb(ctx.db)
-        .select()
-        .from(durableJob)
-        .where(eq(durableJob.key, `image-processing:${refused}`));
+      const [released] = await readJobs(ctx.db, {
+        key: `image-processing:${refused}`,
+      });
       expect(released?.leaseToken).toBeNull();
       expect(released!.availableAt.getTime()).toBeGreaterThan(Date.now());
       const [row] = await getDb(ctx.db)
@@ -357,10 +351,9 @@ describe("background companion leases", () => {
     const pulled = await batchPull(2);
     expect(pulled.commands.map((command) => command.jobId)).toEqual([ready]);
     expect(pulled.command).toEqual(pulled.commands[0]);
-    const [released] = await getDb(ctx.db)
-      .select()
-      .from(durableJob)
-      .where(eq(durableJob.key, `image-processing:${unsupported}`));
+    const [released] = await readJobs(ctx.db, {
+      key: `image-processing:${unsupported}`,
+    });
     expect(released?.leaseToken).toBeNull();
     expect(released!.availableAt.getTime()).toBeGreaterThan(Date.now());
     const attempts = await getDb(ctx.db).select().from(imageProcessingAttempt);
@@ -394,10 +387,9 @@ describe("background companion leases", () => {
       }),
     ).toEqual([]);
     expect(await deviceOwnedStreak(ctx.db)).toBe(0);
-    const [execution] = await getDb(ctx.db)
-      .select()
-      .from(durableJob)
-      .where(eq(durableJob.key, `image-processing:${waiting}`));
+    const [execution] = await readJobs(ctx.db, {
+      key: `image-processing:${waiting}`,
+    });
     expect(execution?.leaseToken).toBeNull();
     expect(execution?.state).toBe("queued");
     expect(
@@ -408,17 +400,17 @@ describe("background companion leases", () => {
   it("claims parked device work at once but preserves retry backoff", async () => {
     const parked = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
     const backingOff = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-    await getDb(ctx.db)
-      .update(durableJob)
-      .set({
+    await updateJobs(
+      ctx.db,
+      { key: `image-processing:${backingOff}` },
+      {
         state: "retry_wait",
         availableAt: sql`now() + interval '1 hour'`,
-      })
-      .where(eq(durableJob.key, `image-processing:${backingOff}`));
-    const [execution] = await getDb(ctx.db)
-      .select({ kind: durableJob.kind })
-      .from(durableJob)
-      .where(eq(durableJob.key, `image-processing:${parked}`));
+      },
+    );
+    const [execution] = await readJobs(ctx.db, {
+      key: `image-processing:${parked}`,
+    }).then((rows) => rows.map(({ kind }) => ({ kind })));
     expect(execution?.kind).toBe("image.device");
     const first = await claim();
     expect(first?.id).toBe(parked);
@@ -438,10 +430,9 @@ describe("background companion leases", () => {
     const lease = await claim();
     if (!lease) throw new Error("Expected lease");
     await assign(lease);
-    const [execution] = await getDb(ctx.db)
-      .select({ lastClaimedAt: durableJob.lastClaimedAt })
-      .from(durableJob)
-      .where(eq(durableJob.key, `image-processing:${parked}`));
+    const [execution] = await readJobs(ctx.db, {
+      key: `image-processing:${parked}`,
+    }).then((rows) => rows.map(({ lastClaimedAt }) => ({ lastClaimedAt })));
     const queue = await readJobQueue(ctx.db, {
       filter: { kinds: ["image.device"] },
       runId: null,
@@ -707,12 +698,13 @@ describe("background companion leases", () => {
             deviceId,
           });
           expect(lease?.id).toBe(backfill);
-          await getDb(tx)
-            .update(durableJob)
-            .set({
+          await updateJobs(
+            tx,
+            { key: `image-processing:${backfill}` },
+            {
               leaseExpiresAt: sql`clock_timestamp() + interval '100 milliseconds'`,
-            })
-            .where(eq(durableJob.key, `image-processing:${backfill}`));
+            },
+          );
           await getDb(tx).execute(sql`SELECT pg_sleep(0.3)`);
           return assignImageProcessingExecutor(tx, {
             jobId: lease!.id,
@@ -904,10 +896,9 @@ describe("background companion leases", () => {
         deviceId,
       }),
     ).toBe(false);
-    const [execution] = await getDb(ctx.db)
-      .select({ state: durableJob.state, attempts: durableJob.attempts })
-      .from(durableJob)
-      .where(eq(durableJob.key, `image-processing:${jobId}`));
+    const [execution] = await readJobs(ctx.db, {
+      key: `image-processing:${jobId}`,
+    }).then((rows) => rows.map(({ attempts, state }) => ({ state, attempts })));
     // Due at once, and the release spent nothing.
     expect(execution).toEqual({ state: "queued", attempts: 0 });
 
@@ -983,16 +974,16 @@ describe("background companion leases", () => {
     expect(
       (await completeImageProcessingJob(ctx.db, failure(lease))).adopted,
     ).toBe(true);
-    const [execution] = await getDb(ctx.db)
-      .select({ state: durableJob.state, attempts: durableJob.attempts })
-      .from(durableJob)
-      .where(eq(durableJob.key, `image-processing:${jobId}`));
+    const [execution] = await readJobs(ctx.db, {
+      key: `image-processing:${jobId}`,
+    }).then((rows) => rows.map(({ attempts, state }) => ({ state, attempts })));
     expect(execution).toEqual({ state: "retry_wait", attempts: 1 });
 
-    await getDb(ctx.db)
-      .update(durableJob)
-      .set({ availableAt: new Date(0) })
-      .where(eq(durableJob.key, `image-processing:${jobId}`));
+    await updateJobs(
+      ctx.db,
+      { key: `image-processing:${jobId}` },
+      { availableAt: new Date(0) },
+    );
     const next = await claim();
     if (!next) throw new Error("Expected retry lease");
     await assign(next);

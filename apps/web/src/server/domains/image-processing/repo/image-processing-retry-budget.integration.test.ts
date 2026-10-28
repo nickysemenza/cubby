@@ -1,6 +1,6 @@
 import { type ImageJobId, parseEntityId } from "@cubby/schemas/identifiers";
 import { JOB_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/job";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -10,18 +10,17 @@ import {
   imageProcessingEvent,
   imageProcessingJob,
 } from "~/server/db/image-processing-schema";
-import {
-  job as durableJob,
-  jobLaneAdmission,
-} from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
+import { deviceOwnedStreak } from "~/server/domains/image-processing/repo/device-admission";
+import { DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE } from "~/server/domains/image-processing/repo/device-admission";
 import { claimCompanionImageCommands } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import {
-  deviceOwnedStreak,
-  DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE,
-} from "~/server/generic/jobs/repo/device-admission";
+  seedJobLaneAdmission,
+  updateJobs,
+} from "~/server/generic/jobs/jobs.fixtures";
+import { readJob } from "~/server/generic/jobs/repo/job-reads";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
 import {
@@ -68,22 +67,27 @@ describe("image job retry policy", () => {
         displayed: imageJobDisplayStateSql(),
         attemptId: imageProcessingJob.attemptId,
         derivativeId: imageProcessingJob.derivativeId,
-        failures: durableJob.attempts,
-        executionState: durableJob.state,
         lastError: imageProcessingJob.lastError,
-        coolingDown: sql<boolean>`${durableJob.availableAt} > ${new Date().toISOString()}::timestamp`,
       })
       .from(imageProcessingJob)
-      .innerJoin(durableJob, eq(durableJob.key, `image-processing:${jobId}`))
       .where(eq(imageProcessingJob.id, jobId));
-    if (!job) throw new Error("Missing job");
-    return job;
+    const execution = await readJob(ctx.db, {
+      key: `image-processing:${jobId}`,
+    });
+    if (!job || !execution) throw new Error("Missing job");
+    return {
+      ...job,
+      failures: execution.attempts,
+      executionState: execution.state,
+      coolingDown: execution.availableAt > new Date(),
+    };
   };
   const makeDue = (jobId: ImageJobId) =>
-    getDb(ctx.db)
-      .update(durableJob)
-      .set({ availableAt: new Date(0) })
-      .where(eq(durableJob.key, `image-processing:${jobId}`));
+    updateJobs(
+      ctx.db,
+      { key: `image-processing:${jobId}` },
+      { availableAt: new Date(0) },
+    );
   const devicePull = () =>
     claimImageProcessingJob(ctx.db, {
       kinds: ["subject_lift"],
@@ -187,13 +191,7 @@ describe("image job retry policy", () => {
     };
     // Backfill's turn is due; the refused hand-off must leave it owed.
     const DEVICE_OWNED_STREAK = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
-    await getDb(ctx.db)
-      .insert(jobLaneAdmission)
-      .values({ lane: "image.device", ownedStreak: DEVICE_OWNED_STREAK })
-      .onConflictDoUpdate({
-        target: jobLaneAdmission.lane,
-        set: { ownedStreak: DEVICE_OWNED_STREAK },
-      });
+    await seedJobLaneAdmission(ctx.db, "image.device", DEVICE_OWNED_STREAK);
     const optedOut = await device(false);
     expect(await optedOut()).toBeNull();
     expect(await deviceOwnedStreak(ctx.db)).toBe(DEVICE_OWNED_STREAK);

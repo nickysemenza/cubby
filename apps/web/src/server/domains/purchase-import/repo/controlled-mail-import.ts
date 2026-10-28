@@ -4,7 +4,6 @@ import {
   type RunId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import { jobState } from "@cubby/schemas/job";
 import {
   emailStatus,
   mailboxDiscoveryInput,
@@ -30,17 +29,12 @@ import { senderAddress } from "~/lib/vendor/domains";
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
-import {
-  email,
-  job,
-  orderMail,
-  run,
-  vendor,
-} from "~/server/db/retained-tables";
+import { email, orderMail, run, vendor } from "~/server/db/retained-tables";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { readMailImportSettings } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { runJobLeaseLive } from "~/server/generic/jobs/repo/job-reads";
 
 type ControlledMailScope = z.infer<typeof mailboxDiscoveryInput> & {
   vendorId: VendorId;
@@ -273,7 +267,7 @@ export async function waitForActiveMailboxImports(
         eq(run.status, "running"),
         or(
           isNotNull(run.coordinatorStartedAt),
-          sql`EXISTS (SELECT 1 FROM ${job} WHERE ${job.runId}=${run.id} AND ${job.kind}='purchase.dispatch' AND ${job.state}=${jobState.enum.running} AND ${job.leaseExpiresAt}>now())`,
+          runJobLeaseLive(run.id, "purchase.dispatch"),
         ),
         notDeleted(run),
         exists(
