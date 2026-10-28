@@ -236,6 +236,28 @@ describe("vendor Mail search status", () => {
       sender: "Synthetic Cafe <noreply@order.online>",
       subject: "Synthetic Cafe receipt",
     });
+    // A mailbox with newer receipts must not consume another mailbox's sample.
+    await Promise.all(
+      Array.from({ length: 50 }, (_, index) =>
+        retainedMailFixture(ctx.db, {
+          ledgerPartyId: a.party.id,
+          mailboxId: a.mailboxId,
+          messageId: `synthetic-shared-receipt-${index}`,
+          checksum: "a".repeat(64),
+          sender: "Synthetic Cafe <noreply@order.online>",
+          subject: `Synthetic receipt ${index}`,
+        }),
+      ),
+    );
+    await retainedMailFixture(ctx.db, {
+      ledgerPartyId: b.party.id,
+      mailboxId: b.mailboxId,
+      messageId: "synthetic-older-receipt",
+      checksum: "b".repeat(64),
+      sender: "orders@other.example.test",
+      subject: "Synthetic older receipt",
+      receivedAt: new Date("2026-09-01T12:00:00Z"),
+    });
     const report = await readMailCoverage(ctx.db, ctx.actor.userId);
     expect(report.sharedSenders).toEqual([
       expect.objectContaining({
@@ -243,11 +265,11 @@ describe("vendor Mail search status", () => {
         sender: "noreply@order.online",
         state: "complete",
         completedAt: "2026-10-01T12:00:00Z",
-        scanned: 1,
-        classified: 1,
-        retained: 1,
-        related: 1,
-        sellerUnresolved: 1,
+        scanned: 51,
+        classified: 51,
+        retained: 51,
+        related: 51,
+        sellerUnresolved: 51,
         linkedEmails: 0,
         linkedPurchases: 0,
         imported: 0,
@@ -255,13 +277,18 @@ describe("vendor Mail search status", () => {
     ]);
     expect(
       report.discovery.find((row) => row.mailboxId === a.mailboxId),
-    ).toMatchObject({ sellerUnresolved: 1 });
+    ).toMatchObject({ sellerUnresolved: 51 });
     expect(
       report.discovery.find((row) => row.mailboxId === b.mailboxId),
-    ).toMatchObject({ sellerUnresolved: 0 });
-    expect(report.unresolvedEmails.map((row) => row.subject)).toEqual([
-      "Synthetic Cafe receipt",
-    ]);
+    ).toMatchObject({ sellerUnresolved: 1 });
+    expect(
+      report.unresolvedEmails.filter((row) => row.mailboxId === a.mailboxId),
+    ).toHaveLength(50);
+    expect(
+      report.unresolvedEmails
+        .filter((row) => row.mailboxId === b.mailboxId)
+        .map((row) => row.subject),
+    ).toEqual(["Synthetic older receipt"]);
     expect(
       report.rows.filter((row) => row.vendorId === done.shortcode),
     ).toEqual([

@@ -72,6 +72,7 @@ export async function importVendorCandidates(
       name: vendor.name,
       aliases: vendor.aliases,
       website: vendor.website,
+      orderEmailSenders: vendor.orderEmailSenders,
     })
     .from(vendor)
     .where(notDeleted(vendor));
@@ -96,6 +97,15 @@ export async function importVendorCandidates(
       return {
         id: row.id,
         candidate,
+        sharedPlatform:
+          SHARED_PLATFORM_DOMAINS.has(site ?? "") ||
+          row.orderEmailSenders.some((sender) =>
+            SHARED_PLATFORM_DOMAINS.has(
+              vendorWebsiteDomain(
+                `https://${senderAddress(sender)?.split("@").at(-1)}`,
+              ) ?? "",
+            ),
+          ),
         similar: known.some((value) => similarName(value, name)),
       };
     })
@@ -112,8 +122,9 @@ export async function importVendorCandidates(
         a.candidate.name.localeCompare(b.candidate.name),
     )
     .slice(0, 20)
-    .map(({ id, candidate }) => ({
+    .map(({ id, candidate, sharedPlatform }) => ({
       id,
+      sharedPlatform,
       candidate: {
         ...candidate,
         ...(candidate.exactNameMatch
@@ -257,10 +268,10 @@ export async function resolveImportVendor(
     );
   const candidates = await importVendorCandidates(db, input);
   const platformAlias = candidates.find(
-    ({ candidate }) =>
+    ({ candidate, sharedPlatform }) =>
       candidate.exactNameMatch &&
       candidate.name.toLowerCase() !== name.toLowerCase() &&
-      SHARED_PLATFORM_DOMAINS.has(vendorWebsiteDomain(candidate.website) ?? ""),
+      sharedPlatform,
   );
   if (platformAlias) {
     // Retain historical data, but do not let an alias learned by an older

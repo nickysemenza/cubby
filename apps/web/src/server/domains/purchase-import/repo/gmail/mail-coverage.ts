@@ -16,16 +16,7 @@ import {
 } from "@cubby/schemas/mailbox-research";
 import { runPurpose } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
-import {
-  and,
-  desc,
-  eq,
-  isNotNull,
-  isNull,
-  inArray,
-  sql,
-  or,
-} from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, inArray, sql } from "drizzle-orm";
 
 import { distinctSenderDomain, senderAddress } from "~/lib/vendor/domains";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
@@ -330,40 +321,38 @@ export async function readMailCoverage(
       .orderBy(desc(run.startedAt), desc(run.id)),
     listGmailSyncTargets(db),
   ]);
-  const unresolvedEmails = members.length
-    ? await getDb(db)
-        .select({
-          id: email.shortcode,
-          mailboxId: email.mailboxId,
-          sender: email.sender,
-          subject: email.subject,
-          receivedAt: email.receivedAt,
-        })
-        .from(email)
-        .leftJoin(
-          orderMail,
-          and(
-            eq(orderMail.id, email.orderMailId),
-            eq(orderMail.ledgerPartyId, email.ledgerPartyId),
-          ),
-        )
-        .where(
-          and(
-            notDeleted(email),
-            sellerUnresolved,
-            or(
-              ...members.map((member) =>
-                and(
-                  eq(email.mailboxId, member.mailboxId),
-                  eq(email.ledgerPartyId, member.ledgerPartyId),
-                ),
-              ),
+  const unresolvedEmails = (
+    await Promise.all(
+      members.map((member) =>
+        getDb(db)
+          .select({
+            id: email.shortcode,
+            mailboxId: email.mailboxId,
+            sender: email.sender,
+            subject: email.subject,
+            receivedAt: email.receivedAt,
+          })
+          .from(email)
+          .leftJoin(
+            orderMail,
+            and(
+              eq(orderMail.id, email.orderMailId),
+              eq(orderMail.ledgerPartyId, email.ledgerPartyId),
             ),
-          ),
-        )
-        .orderBy(desc(email.receivedAt), desc(email.id))
-        .limit(50)
-    : [];
+          )
+          .where(
+            and(
+              notDeleted(email),
+              sellerUnresolved,
+              eq(email.mailboxId, member.mailboxId),
+              eq(email.ledgerPartyId, member.ledgerPartyId),
+            ),
+          )
+          .orderBy(desc(email.receivedAt), desc(email.id))
+          .limit(50),
+      ),
+    )
+  ).flat();
   const terms = new Map(vendors.map((row) => [row.id, vendorSearchTerms(row)]));
   const vendorQueries = new Map(
     vendors.map((row) => [

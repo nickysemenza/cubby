@@ -415,7 +415,7 @@ describe("member prepare and commit identity fences", () => {
         // An older sender-proof policy could already have polluted this alias.
         await getDb(ctx.db)
           .update(vendorTable)
-          .set({ aliases: ["Delta Bistro"] })
+          .set({ website: null, aliases: ["Delta Bistro"] })
           .where(eq(vendorTable.id, platform.id));
         await expect(
           prepareNamed("historical-platform-alias", mail, {

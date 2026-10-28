@@ -137,7 +137,7 @@ export const mailCoverage = z.strictObject({
       sellerUnresolved: count,
     }),
   ),
-  /** Latest 50 across connected mailboxes; discovery.sellerUnresolved is the full local count. */
+  /** Latest 50 per connected mailbox; discovery.sellerUnresolved is the full local count. */
   unresolvedEmails: z.array(
     z.strictObject({
       id: emailShortcode,
