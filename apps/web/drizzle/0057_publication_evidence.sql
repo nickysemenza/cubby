@@ -67,11 +67,11 @@ BEGIN
     PERFORM derived_mark('meal.searchDocument@3', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@0', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@0', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@0', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@0', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@0', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@0', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."entityKind" = 'image' AND NEW."feature" = 'image-description' THEN PERFORM derived_mark('project.searchDocument@3', ARRAY[NEW."entityId"::uuid]); END IF;
@@ -216,11 +216,11 @@ BEGIN
     PERFORM derived_mark('meal.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@1', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@1', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@1', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@1', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@1', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@1', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('project.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
@@ -372,11 +372,11 @@ BEGIN
     PERFORM derived_mark('meal.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@2', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@2', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@2', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@2', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@2', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@2', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('project.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
@@ -528,11 +528,11 @@ BEGIN
     PERFORM derived_mark('cookbook.dataQuality', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@3', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@3', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@3', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@3', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@3', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@3', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -551,11 +551,11 @@ BEGIN
     PERFORM derived_mark('product.dataQuality', ARRAY[OLD."productId"::uuid] || ARRAY[NEW."productId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@4', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@4', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@4', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@4', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@4', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@4', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('device.dataQuality', ARRAY[NEW."id"::uuid]); END IF;
@@ -574,11 +574,11 @@ CREATE OR REPLACE FUNCTION derived_mark_email() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@5', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@5', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@5', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@5', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@5', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@5', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('purchase.dataQuality@4', ARRAY[NEW."id"::uuid]); END IF;
@@ -595,11 +595,11 @@ BEGIN
     PERFORM derived_mark('purchase.dataQuality@36', ARRAY[OLD."ledgerPartyId"::uuid] || ARRAY[NEW."ledgerPartyId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@14', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@14', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@14', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@14', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."ledgerPartyId", OLD."provider", OLD."mailboxId", OLD."messageId", OLD."orderMailId", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."ledgerPartyId", NEW."provider", NEW."mailboxId", NEW."messageId", NEW."orderMailId", NEW."deletedAt") THEN
-    PERFORM derived_mark('expense.beneficiaryResult@14', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('expense.beneficiaryResult@14', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('email.relationshipFacts', ARRAY[NEW."id"::uuid]); END IF;
@@ -625,11 +625,11 @@ CREATE OR REPLACE FUNCTION derived_mark_entity() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@52', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@52', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@52', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@52', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."kind", OLD."shortcode", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."kind", NEW."shortcode", NEW."deletedAt") THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@52', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@52', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -851,11 +851,11 @@ BEGIN
     PERFORM derived_mark('ledgerTransfer.dataQuality', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@6', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@6', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@6', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@6', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@6', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@6', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."entityKind" = 'project' THEN PERFORM derived_mark('project.searchDocument', ARRAY[NEW."entityId"::uuid]); END IF;
@@ -1518,11 +1518,11 @@ BEGIN
     PERFORM derived_mark('inventory.searchDocument@12', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@7', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@7', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@7', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@7', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@7', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@7', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."entityKind" = 'purchase' THEN PERFORM derived_mark('purchase.dataQuality', ARRAY[NEW."entityId"::uuid]); END IF;
@@ -1772,11 +1772,11 @@ BEGIN
     PERFORM derived_mark('inventory.ownership@18', ARRAY[OLD."toEntityId"::uuid] || ARRAY[NEW."toEntityId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@8', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@8', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@8', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@8', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@8', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@8', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."kind" = 'projectTool' THEN PERFORM derived_mark('project.dataQuality@18', ARRAY[NEW."fromEntityId"::uuid]); END IF;
@@ -2047,11 +2047,11 @@ BEGIN
     PERFORM derived_mark('project.completionYear', ARRAY[OLD."projectId"::uuid] || ARRAY[NEW."projectId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@9', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@9', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@9', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@9', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@9', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@9', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.rollups', ARRAY[NEW."projectId"::uuid]); END IF;
@@ -2082,11 +2082,11 @@ BEGIN
     PERFORM derived_mark('project.rollups@13', ARRAY[OLD."purchaseId"::uuid] || ARRAY[NEW."purchaseId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.rollups@19', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.rollups@19', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.rollups@19', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.rollups@19', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.rollups@19', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.rollups@19', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.dataQuality@14', ARRAY[NEW."projectId"::uuid]); END IF;
@@ -2231,11 +2231,11 @@ BEGIN
     PERFORM derived_mark('inventory.ownership@20', ARRAY[OLD."expenseId"::uuid] || ARRAY[NEW."expenseId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@10', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@10', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@10', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@10', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@10', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@10', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('expense.beneficiaryResult', ARRAY[NEW."expenseId"::uuid]); END IF;
@@ -2254,11 +2254,11 @@ CREATE OR REPLACE FUNCTION derived_mark_externalsource() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@57', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@57', ARRAY[coalesce(NEW."vendorId"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@57', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@57', ARRAY[coalesce(OLD."vendorId"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."vendorId", OLD."slug", OLD."issuer") IS DISTINCT FROM (NEW."vendorId", NEW."slug", NEW."issuer") THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@57', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@57', ARRAY[coalesce(OLD."vendorId"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."vendorId"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -2319,11 +2319,11 @@ BEGIN
     PERFORM derived_mark('meal.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@11', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@11', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@11', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@11', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@11', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@11', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
@@ -2475,11 +2475,11 @@ BEGIN
     PERFORM derived_mark('ledgerParty.dataQuality', ARRAY[OLD."ledgerPartyId"::uuid] || ARRAY[NEW."ledgerPartyId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@12', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@12', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@12', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@12', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@12', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@12', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('purchase.dataQuality@26', ARRAY[NEW."id"::uuid]); END IF;
@@ -2589,11 +2589,11 @@ BEGIN
     PERFORM derived_mark('ledgerTransfer.dataQuality', ARRAY[OLD."ledgerTransferId"::uuid] || ARRAY[NEW."ledgerTransferId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@13', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@13', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@13', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@13', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@13', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@13', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('purchase.dataQuality@25', ARRAY[NEW."id"::uuid]); END IF;
@@ -2675,11 +2675,11 @@ BEGIN
     PERFORM derived_mark('inventory.ownership@15', ARRAY[OLD."purchaseId"::uuid] || ARRAY[NEW."purchaseId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@14', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@14', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@14', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@14', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@14', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@14', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('purchase.dataQuality', ARRAY[NEW."purchaseId"::uuid]); END IF;
@@ -2726,11 +2726,11 @@ CREATE OR REPLACE FUNCTION derived_mark_gardenentry() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@15', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@15', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@15', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@15', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@15', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@15', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('planting.dataQuality@5', ARRAY[NEW."id"::uuid]); END IF;
@@ -3029,11 +3029,11 @@ BEGIN
     PERFORM derived_mark('ledgerTransfer.dataQuality@3', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@16', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@16', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@16', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@16', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@16', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@16', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.searchDocument@2', ARRAY[NEW."id"::uuid]); END IF;
@@ -3738,11 +3738,11 @@ CREATE OR REPLACE FUNCTION derived_mark_imagederivative() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@17', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@17', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@17', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@17', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@17', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@17', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -3754,11 +3754,11 @@ CREATE OR REPLACE FUNCTION derived_mark_imageprocessingjob() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@56', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@56', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@56', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@56', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."imageId") IS DISTINCT FROM (NEW."id", NEW."imageId") THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@56', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@56', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('imageJob.dataQuality', ARRAY[NEW."id"::uuid]); END IF;
@@ -3777,11 +3777,11 @@ CREATE OR REPLACE FUNCTION derived_mark_imagesighting() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@18', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@18', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@18', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@18', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@18', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@18', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('image.dataQuality', ARRAY[NEW."imageId"::uuid]); END IF;
@@ -3800,11 +3800,11 @@ CREATE OR REPLACE FUNCTION derived_mark_importsourceclaim() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@19', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@19', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@19', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@19', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@19', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@19', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('purchase.dataQuality@37', ARRAY[NEW."ledgerPartyId"::uuid]); END IF;
@@ -3814,18 +3814,18 @@ BEGIN
     PERFORM derived_mark('purchase.dataQuality@37', ARRAY[OLD."ledgerPartyId"::uuid] || ARRAY[NEW."ledgerPartyId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@10', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@10', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@10', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@10', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."canonicalClaimId", OLD."ledgerPartyId", OLD."kind", OLD."externalKey") IS DISTINCT FROM (NEW."id", NEW."canonicalClaimId", NEW."ledgerPartyId", NEW."kind", NEW."externalKey") THEN
-    PERFORM derived_mark('expense.beneficiaryResult@10', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('expense.beneficiaryResult@10', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('email.relationshipFacts@7', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('email.relationshipFacts@7', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('email.relationshipFacts@7', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('email.relationshipFacts@7', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."canonicalClaimId", OLD."ledgerPartyId", OLD."kind", OLD."externalKey") IS DISTINCT FROM (NEW."id", NEW."canonicalClaimId", NEW."ledgerPartyId", NEW."kind", NEW."externalKey") THEN
-    PERFORM derived_mark('email.relationshipFacts@7', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('email.relationshipFacts@7', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('email.dataQuality@7', ARRAY[NEW."ledgerPartyId"::uuid]); END IF;
@@ -3844,11 +3844,11 @@ CREATE OR REPLACE FUNCTION derived_mark_importsourceorder() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@20', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@20', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@20', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@20', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@20', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@20', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('purchase.dataQuality', ARRAY[NEW."purchaseId"::uuid]); END IF;
@@ -3865,11 +3865,11 @@ BEGIN
     PERFORM derived_mark('expense.beneficiaryResult@7', ARRAY[OLD."purchaseId"::uuid] || ARRAY[NEW."purchaseId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('email.relationshipFacts@8', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('email.relationshipFacts@8', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('email.relationshipFacts@8', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('email.relationshipFacts@8', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."sourceClaimId", OLD."purchaseId", OLD."checksum") IS DISTINCT FROM (NEW."id", NEW."sourceClaimId", NEW."purchaseId", NEW."checksum") THEN
-    PERFORM derived_mark('email.relationshipFacts@8', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('email.relationshipFacts@8', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('email.dataQuality@9', ARRAY[NEW."sourceClaimId"::uuid]); END IF;
@@ -3895,11 +3895,11 @@ BEGIN
     PERFORM derived_mark('product.dataQuality', ARRAY[OLD."productId"::uuid] || ARRAY[NEW."productId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@21', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@21', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@21', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@21', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@21', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@21', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -3953,11 +3953,11 @@ BEGIN
     PERFORM derived_mark('ingredient.dataQuality', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@22', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@22', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@22', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@22', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@22', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@22', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -4060,11 +4060,11 @@ BEGIN
     PERFORM derived_mark('inventory.dataQuality', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@23', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@23', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@23', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@23', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@23', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@23', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -4230,11 +4230,11 @@ BEGIN
     PERFORM derived_mark('ledgerParty.dataQuality', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@24', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@24', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@24', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@24', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@24', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@24', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.rollups@18', ARRAY[NEW."id"::uuid]); END IF;
@@ -4265,11 +4265,11 @@ BEGIN
     PERFORM derived_mark('purchase.dataQuality@40', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@9', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@9', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@9', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@9', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."kind", OLD."name", OLD."shortcode", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."kind", NEW."name", NEW."shortcode", NEW."deletedAt") THEN
-    PERFORM derived_mark('expense.beneficiaryResult@9', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('expense.beneficiaryResult@9', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('email.dataQuality@8', ARRAY[NEW."id"::uuid]); END IF;
@@ -4295,11 +4295,11 @@ BEGIN
     PERFORM derived_mark('ledgerTransfer.dataQuality', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@25', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@25', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@25', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@25', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@25', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@25', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -4332,11 +4332,11 @@ BEGIN
     PERFORM derived_mark('product.readFacts', ARRAY[OLD."productId"::uuid] || ARRAY[NEW."productId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('product.readFacts@44', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('product.readFacts@44', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('product.readFacts@44', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('product.readFacts@44', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."name", OLD."parentId", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."name", NEW."parentId", NEW."deletedAt") THEN
-    PERFORM derived_mark('product.readFacts@44', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('product.readFacts@44', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('product.dataQuality', ARRAY[NEW."productId"::uuid]); END IF;
@@ -4402,11 +4402,11 @@ BEGIN
     PERFORM derived_mark('inventory.dataQuality@22', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@26', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@26', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@26', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@26', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@26', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@26', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('planting.searchDocument@9', ARRAY[NEW."id"::uuid]); END IF;
@@ -4453,11 +4453,11 @@ BEGIN
     PERFORM derived_mark('meal.dataQuality', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@27', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@27', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@27', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@27', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@27', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@27', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -4483,11 +4483,11 @@ BEGIN
     PERFORM derived_mark('meal.dataQuality', ARRAY[OLD."mealId"::uuid] || ARRAY[NEW."mealId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@28', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@28', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@28', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@28', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@28', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@28', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -4527,11 +4527,11 @@ BEGIN
     PERFORM derived_mark('meal.dataQuality', ARRAY[OLD."mealId"::uuid] || ARRAY[NEW."mealId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@29', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@29', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@29', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@29', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@29', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@29', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -4543,11 +4543,11 @@ CREATE OR REPLACE FUNCTION derived_mark_mealrecipeportion() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@30', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@30', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@30', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@30', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@30', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@30', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -4573,11 +4573,11 @@ BEGIN
     PERFORM derived_mark('purchase.dataQuality@38', ARRAY[OLD."ledgerPartyId"::uuid] || ARRAY[NEW."ledgerPartyId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@11', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@11', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@11', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@11', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."ledgerPartyId") IS DISTINCT FROM (NEW."id", NEW."ledgerPartyId") THEN
-    PERFORM derived_mark('expense.beneficiaryResult@11', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('expense.beneficiaryResult@11', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('email.relationshipFacts@1', ARRAY[NEW."id"::uuid]); END IF;
@@ -4617,11 +4617,11 @@ BEGIN
     PERFORM derived_mark('purchase.dataQuality@42', ARRAY[OLD."orderMailId"::uuid] || ARRAY[NEW."orderMailId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@12', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@12', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@12', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@12', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."orderMailId", OLD."providerAttachmentId") IS DISTINCT FROM (NEW."id", NEW."orderMailId", NEW."providerAttachmentId") THEN
-    PERFORM derived_mark('expense.beneficiaryResult@12', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('expense.beneficiaryResult@12', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('email.relationshipFacts@3', ARRAY[NEW."orderMailId"::uuid]); END IF;
@@ -4661,11 +4661,11 @@ BEGIN
     PERFORM derived_mark('purchase.dataQuality@41', ARRAY[OLD."orderMailId"::uuid] || ARRAY[NEW."orderMailId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@13', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@13', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@13', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.beneficiaryResult@13', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."orderMailId", OLD."supersededAt") IS DISTINCT FROM (NEW."id", NEW."orderMailId", NEW."supersededAt") THEN
-    PERFORM derived_mark('expense.beneficiaryResult@13', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('expense.beneficiaryResult@13', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('email.relationshipFacts@2', ARRAY[NEW."orderMailId"::uuid]); END IF;
@@ -4698,11 +4698,11 @@ BEGIN
     PERFORM derived_mark('product.dataQuality', ARRAY[OLD."productId"::uuid] || ARRAY[NEW."productId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@31', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@31', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@31', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@31', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@31', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@31', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -4714,11 +4714,11 @@ CREATE OR REPLACE FUNCTION derived_mark_photogroupsourceevidence() RETURNS trigg
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@32', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@32', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@32', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@32', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@32', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@32', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -4730,11 +4730,11 @@ CREATE OR REPLACE FUNCTION derived_mark_photorunimage() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@33', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@33', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@33', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@33', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@33', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@33', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('run.dataQuality', ARRAY[NEW."runId"::uuid]); END IF;
@@ -4753,11 +4753,11 @@ CREATE OR REPLACE FUNCTION derived_mark_plant() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@34', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@34', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@34', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@34', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@34', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@34', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('planting.searchDocument@8', ARRAY[NEW."id"::uuid]); END IF;
@@ -4804,11 +4804,11 @@ BEGIN
     PERFORM derived_mark('product.dataQuality', ARRAY[OLD."sourceProductId"::uuid] || ARRAY[NEW."sourceProductId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@35', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@35', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@35', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@35', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@35', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@35', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('planting.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
@@ -5114,11 +5114,11 @@ BEGIN
     PERFORM derived_mark('project.completionYear@5', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@36', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@36', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@36', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@36', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@36', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@36', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.rollups@5', ARRAY[NEW."id"::uuid]); END IF;
@@ -5128,11 +5128,11 @@ BEGIN
     PERFORM derived_mark('project.rollups@5', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.rollups@21', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.rollups@21', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.rollups@21', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.rollups@21', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.rollups@21', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.rollups@21', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.dataQuality@11', ARRAY[NEW."id"::uuid]); END IF;
@@ -5543,11 +5543,11 @@ BEGIN
     PERFORM derived_mark('product.readFacts@15', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('product.readFacts@45', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('product.readFacts@45', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('product.readFacts@45', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('product.readFacts@45', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."stockTracked", OLD."parentId", OLD."name", OLD."feature", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."stockTracked", NEW."parentId", NEW."name", NEW."feature", NEW."deletedAt") THEN
-    PERFORM derived_mark('product.readFacts@45', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('product.readFacts@45', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('product.conversionCoverage@3', ARRAY[NEW."id"::uuid]); END IF;
@@ -5606,11 +5606,11 @@ BEGIN
     PERFORM derived_mark('project.completionYear@6', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@37', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@37', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@37', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@37', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@37', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@37', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.rollups@6', ARRAY[NEW."id"::uuid]); END IF;
@@ -5620,11 +5620,11 @@ BEGIN
     PERFORM derived_mark('project.rollups@6', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.rollups@22', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.rollups@22', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.rollups@22', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.rollups@22', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.rollups@22', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.rollups@22', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.dataQuality@6', ARRAY[NEW."id"::uuid]); END IF;
@@ -5685,11 +5685,11 @@ CREATE OR REPLACE FUNCTION derived_mark_productconversioncoverage() RETURNS trig
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@53', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@53', ARRAY[coalesce(NEW."productId"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@53', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@53', ARRAY[coalesce(OLD."productId"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@53', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@53', ARRAY[coalesce(OLD."productId"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."productId"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -5722,11 +5722,11 @@ BEGIN
     PERFORM derived_mark('inventory.valuation@10', ARRAY[OLD."productId"::uuid] || ARRAY[NEW."productId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@38', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@38', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@38', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@38', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@38', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@38', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -5766,11 +5766,11 @@ BEGIN
     PERFORM derived_mark('project.completionYear', ARRAY[OLD."parentProjectId"::uuid] || ARRAY[NEW."parentProjectId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@39', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@39', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@39', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@39', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@39', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@39', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.rollups', ARRAY[NEW."id"::uuid]); END IF;
@@ -5815,11 +5815,11 @@ BEGIN
     PERFORM derived_mark('project.rollups@17', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.rollups@23', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.rollups@23', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.rollups@23', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.rollups@23', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."deletedAt", OLD."shortcode") IS DISTINCT FROM (NEW."id", NEW."deletedAt", NEW."shortcode") THEN
-    PERFORM derived_mark('project.rollups@23', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.rollups@23', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
@@ -5992,11 +5992,11 @@ BEGIN
     PERFORM derived_mark('project.completionYear', ARRAY[OLD."defaultProjectId"::uuid] || ARRAY[NEW."defaultProjectId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@40', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@40', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@40', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@40', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@40', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@40', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.rollups', ARRAY[NEW."defaultProjectId"::uuid]); END IF;
@@ -6013,11 +6013,11 @@ BEGIN
     PERFORM derived_mark('project.rollups@14', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.rollups@20', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.rollups@20', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.rollups@20', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.rollups@20', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.rollups@20', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.rollups@20', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.dataQuality', ARRAY[NEW."defaultProjectId"::uuid]); END IF;
@@ -6132,11 +6132,11 @@ BEGIN
     PERFORM derived_mark('expense.dataQuality@34', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('email.relationshipFacts@5', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('email.relationshipFacts@5', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('email.relationshipFacts@5', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('email.relationshipFacts@5', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."orderId", OLD."vendorId", OLD."vendorAccountId", OLD."statedTotal", OLD."date", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."orderId", NEW."vendorId", NEW."vendorAccountId", NEW."statedTotal", NEW."date", NEW."deletedAt") THEN
-    PERFORM derived_mark('email.relationshipFacts@5', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('email.relationshipFacts@5', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('email.dataQuality@4', ARRAY[NEW."id"::uuid]); END IF;
@@ -6169,11 +6169,11 @@ CREATE OR REPLACE FUNCTION derived_mark_purchasepaymentevidence() RETURNS trigge
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@41', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@41', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@41', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@41', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@41', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@41', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('purchase.dataQuality', ARRAY[NEW."purchaseId"::uuid]); END IF;
@@ -6262,11 +6262,11 @@ BEGIN
     PERFORM derived_mark('meal.dataQuality@9', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@42', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@42', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@42', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@42', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@42', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@42', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -6313,11 +6313,11 @@ BEGIN
     PERFORM derived_mark('ingredient.dataQuality@13', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@43', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@43', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@43', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@43', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@43', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@43', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -6357,11 +6357,11 @@ BEGIN
     PERFORM derived_mark('ingredient.dataQuality', ARRAY[OLD."ingredientId"::uuid] || ARRAY[NEW."ingredientId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@44', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@44', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@44', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@44', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@44', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@44', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -6373,11 +6373,11 @@ CREATE OR REPLACE FUNCTION derived_mark_run() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@55', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@55', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@55', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@55', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."vendorId", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."vendorId", NEW."deletedAt") THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@55', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@55', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('run.dataQuality', ARRAY[NEW."id"::uuid]); END IF;
@@ -6403,11 +6403,11 @@ CREATE OR REPLACE FUNCTION derived_mark_shipment() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@45', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@45', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@45', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@45', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@45', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@45', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('shipment.eventSummary', ARRAY[NEW."id"::uuid]); END IF;
@@ -6440,11 +6440,11 @@ CREATE OR REPLACE FUNCTION derived_mark_sourcetransactionrecord() RETURNS trigge
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@46', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@46', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@46', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@46', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@46', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@46', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('sourceTransactionRecord.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
@@ -6477,11 +6477,11 @@ BEGIN
     PERFORM derived_mark('project.completionYear@7', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@47', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@47', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@47', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@47', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@47', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@47', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.rollups@7', ARRAY[NEW."id"::uuid]); END IF;
@@ -6612,11 +6612,11 @@ BEGIN
     PERFORM derived_mark('project.completionYear@9', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@48', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@48', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@48', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@48', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@48', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@48', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.rollups', ARRAY[NEW."projectId"::uuid]); END IF;
@@ -6705,11 +6705,11 @@ CREATE OR REPLACE FUNCTION derived_mark_transactionimport() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@49', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@49', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@49', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@49', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@49', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@49', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('transactionImport.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
@@ -6728,11 +6728,11 @@ CREATE OR REPLACE FUNCTION derived_mark_transactionimportrecord() RETURNS trigge
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@54', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@54', ARRAY[coalesce(NEW."importId"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@54', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@54', ARRAY[coalesce(OLD."importId"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@54', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@54', ARRAY[coalesce(OLD."importId"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."importId"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   RETURN NULL;
 END $$;
@@ -6807,11 +6807,11 @@ BEGIN
     PERFORM derived_mark('inventory.dataQuality@19', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@50', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@50', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@50', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@50', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@50', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@50', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.dataQuality@23', ARRAY[NEW."id"::uuid]); END IF;
@@ -7117,11 +7117,11 @@ BEGIN
     PERFORM derived_mark('inventory.ownership@14', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@51', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@51', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@51', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('project.workDiagnosticFacts@51', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('project.workDiagnosticFacts@51', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('project.workDiagnosticFacts@51', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('purchase.dataQuality@33', ARRAY[NEW."id"::uuid]); END IF;
@@ -7138,11 +7138,11 @@ BEGIN
     PERFORM derived_mark('expense.beneficiaryResult@6', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('email.relationshipFacts@6', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('email.relationshipFacts@6', ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('email.relationshipFacts@6', ARRAY['00000000-0000-4000-8000-000000000000'::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('email.relationshipFacts@6', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."ledgerPartyId", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."ledgerPartyId", NEW."deletedAt") THEN
-    PERFORM derived_mark('email.relationshipFacts@6', ARRAY['00000000-0000-4000-8000-000000000000'::uuid] || ARRAY['00000000-0000-4000-8000-000000000000'::uuid]);
+    PERFORM derived_mark('email.relationshipFacts@6', ARRAY[coalesce(OLD."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)] || ARRAY[coalesce(NEW."id"::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('email.dataQuality@5', ARRAY[NEW."id"::uuid]); END IF;

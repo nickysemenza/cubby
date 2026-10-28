@@ -249,7 +249,6 @@ describe("stored derived values", () => {
   it("claims newer member edits before older background source writes without demoting member work", async () => {
     const background = await makeProduct("Synthetic background source", 2);
     const member = await makeProduct("Synthetic member source", 3);
-    await clearMarks();
     const saved = await enqueueJob(ctx.db, {
       key: "synthetic:derived-source-priority",
       kind: "image.cloud",
@@ -257,6 +256,8 @@ describe("stored derived values", () => {
     });
     const claim = await claimExternal(ctx.db, saved.id);
     if (!claim) throw new Error("Expected synthetic Job claim");
+    // Job identity creation is fixture setup, before the source writes under test.
+    await clearMarks();
     const rename = (id: ProductId, name: string) =>
       withTransaction(ctx.db, (tx) =>
         tx.update(product).set({ name }).where(eq(product.id, id)),

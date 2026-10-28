@@ -3031,9 +3031,9 @@ to publish. Missing upstream publications without queued work still fail explici
 The schema guard checks
 every declared table and column against the Drizzle schema: PL/pgSQL resolves
 trigger columns only when a row fires, so a misspelled column would fail saves.
-Fixed-target inputs queue one constant fanout reference independently of the
-source's matched UUID. A nullable source reference must not silently suppress
-invalidation; only the drain selects the fixed target rows.
+Fixed-target inputs preserve non-null source references so independent writers
+do not contend on one work ticket. A null source UUID uses a constant fallback:
+it must not silently suppress invalidation. Only the drain selects target rows.
 
 Inputs follow the precision and relationships of the compute. Exact valuations
 watch raw pricing inputs rather than a rounded stored price. Kit-link and
