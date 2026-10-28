@@ -123,12 +123,8 @@ extension FieldEnvelope {
         }
         if isMissing {
             return failure == nil
-                ? .init(
-                    tone: .missing, label: String(Self.missingLabel(failure: nil).dropLast()),
-                    systemImage: "clock")
-                : .init(
-                    tone: .missing, label: Self.missingLabel(failure: failure),
-                    systemImage: "exclamationmark.triangle")
+                ? .init(tone: .missing, label: "Updating", systemImage: "clock")
+                : .init(tone: .missing, label: "Unavailable", systemImage: "exclamationmark.triangle")
         }
         if case .empty(.explicitNone) = decision?.outcome {
             return .init(tone: .none, label: Self.noneLabel(field: field), systemImage: "nosign")
