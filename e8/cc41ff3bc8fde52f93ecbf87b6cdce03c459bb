@@ -1,0 +1,109 @@
+apps/web/src/server/operation-runtime/workflow-stream.server.unit.test.ts
+  s_7c8c7e7c279aa7::t_b752b2ba5346e8 16-19,36-43,106,137,180
+apps/web/tooling/checks/read-performance-operations.ts
+  s_7c8c7e7c279aa7::t_892f6bc362724f 8,33,90,119,131,142,150-151,153-167,172
+apps/web/src/entity/hooks/use-workflow-command.unit.test.tsx
+  s_7c8c7e7c279aa7::t_cb65466691d4c7 26-29,97-100
+apps/web/src/ui/feedback/error-details.tsx
+  s_7c8c7e7c279aa7::t_63b3124900a0c9 69,71
+apps/web/src/server/operation-runtime/operation-dispatch.server.ts
+  s_7c8c7e7c279aa7::t_833a66db496608 1-7,9-17,20-30,32-34,36-138,140-145,148-149,151-183,185-188,190-206,208,210-213,215-217,220-322,324-326
+packages/shared/src/error-utils.ts
+  s_7c8c7e7c279aa7::t_5b15c33c6f1f53 55-60
+apps/web/src/server/operation-runtime/operation-domain.server.ts
+  s_7c8c7e7c279aa7::t_0efc65fe1b9a52 7,13,184-189
+apps/web/src/lib/error-utils.ts
+  s_7c8c7e7c279aa7::t_0f68bed48b49c1 14,104-115
+apps/web/src/entity/editing/use-entity-commands.unit.test.tsx
+  s_7c8c7e7c279aa7::t_c0bfe6f6bdb0f4 11
+apps/web/src/integrations/tanstack-query/browser-operation-transport.unit.test.ts
+  s_7c8c7e7c279aa7::t_73aefb3799b262 4,27,30,34,38,55-76,79,92-93,99-102,106,164,298,301,304,331
+apps/web/tests/e2e/browser-operation-dispatch.spec.ts
+  s_7c8c7e7c279aa7::t_c2e9d1c3859007 11,17,26,32,35,43,45,53,56,61-63,69,73-77
+apps/web/docs/web-runtime.md
+  s_7c8c7e7c279aa7::t_c7b7f685bb6fb9 28-31,33,37,92-93
+apps/web/src/server/testing/mcp-test-utils.ts
+  s_7c8c7e7c279aa7::t_3b4c4b7470bf3f 31,180-200
+apps/web/src/integrations/tanstack-query/start-transport.unit.test.ts
+  s_7c8c7e7c279aa7::t_026e8c71521326 1-2,5,9,14,16,21,23-26,28-31,45,59,93-100,114-127
+apps/web/src/integrations/tanstack-query/browser-operation-transport.ts
+  s_7c8c7e7c279aa7::t_bb6eac90cca622 12-13,20,34-47,54-57,60,66,68,78-80,83-92,97-99,101,103-104,106-107,112,123-207,211,215,218-219,222-223,225-250,252-263,275-276,279-280,282,299,301-307,309-316,318-319,365,373,377,379-383,385-388,390,393-395
+apps/web/src/server/mcp/tools/tool-registration.ts
+  s_7c8c7e7c279aa7::t_f10de0498f5d12 41,77,122-123,518-529,531-533
+apps/web/src/entity/suggestions/queue/suggestion-review-context.unit.test.tsx
+  s_7c8c7e7c279aa7::t_80fdb55ae3cec0 25
+apps/web/src/integrations/tanstack-query/start-transport.ts
+  s_7c8c7e7c279aa7::t_bb061bbc999786 6,13-15,19-23,49-75,81,95,97-98,101,107,114-118,120-124,126-127,129-136,140-148,152,155-158,160,168-172,188-190,192-198,217-219,224,228-232,236,242-243
+apps/web/src/lib/start-operation-error.ts
+  s_7c8c7e7c279aa7::t_bfbcaff66faff0 1,4-5,7-17
+apps/web/src/entity/fields/field-resolution-bulk.unit.test.tsx
+  s_7c8c7e7c279aa7::t_35e83209b9eb6c 9,42-53
+apps/web/tests/e2e/support/dispatch-wire.ts
+  s_7c8c7e7c279aa7::t_eb799b062773d8 27,57-60,73,77
+apps/web/tooling/checks/read-performance-operations.unit.test.ts
+  s_7c8c7e7c279aa7::t_a6277b72fed974 36,65-71,73-80,82-83,108-116,118-119,139,141-142,145,152,161-162,164,199,237,256-257,260-264,286,398,436
+apps/web/tests/e2e/support/start-operation.ts
+  s_7c8c7e7c279aa7::t_ae791e430ab589 7-9,27,29,31-32,36
+apps/web/src/lib/request-id.ts
+  s_7c8c7e7c279aa7::t_55f211e7a4cfd6 12,87,108-110,152-177
+apps/web/src/lib/error-diagnostics.ts
+  s_7c8c7e7c279aa7::t_cb6c05809ba00a 21
+apps/web/src/server/errors/app-error.ts
+  s_7c8c7e7c279aa7::t_b643abe05282dc 46
+apps/web/src/lib/request-id.unit.test.ts
+  s_7c8c7e7c279aa7::t_68617c06e18834 129-130
+apps/web/src/entity/editing/entity-edit-dialog.lifecycle.unit.test.tsx
+  s_7c8c7e7c279aa7::t_c5b1f1d4d9bed7 10
+apps/web/src/server/mcp/entity-kernel.integration.test.ts
+  s_7c8c7e7c279aa7::t_1e291bf4d6162e 31,408,411
+apps/web/tests/e2e/suggestions.spec.ts
+  s_7c8c7e7c279aa7::t_732eed982e488b 126-136,138,140,198-222,234-244,246,248,983-997,999,1001
+apps/web/src/server/domains/run/operations/run-mail-import.integration.test.ts
+  s_7c8c7e7c279aa7::t_7463a34327f2b3 8,20,32-55,57-60
+apps/web/src/server/operation-runtime/subscription-domain.server.ts
+  s_7c8c7e7c279aa7::t_4369a84814f447 9-13,41,43-44,86,89,116-121
+apps/web/tsconfig.contracts.json
+  s_7c8c7e7c279aa7::t_2cb826e90f6480 9
+apps/apple/AGENTS.md
+  s_7c8c7e7c279aa7::t_ab3723fd556bfb 24-25
+apps/web/src/integrations/tanstack-query/workflow-stream.ts
+  s_7c8c7e7c279aa7::t_569987025182a1 3,5-7,9-11,13-17,28-29,31-32,34,39,41-43,45,48,51-81
+apps/web/src/ui/feedback/route-error.tsx
+  s_7c8c7e7c279aa7::t_5481b115a42cff 21
+docs/agents/validation-tests.md
+  s_7c8c7e7c279aa7::t_f55ba308cabef9 595-596
+apps/web/src/ui/feedback/error-details.unit.test.tsx
+  s_7c8c7e7c279aa7::t_f812c91b28a976 16
+apps/web/src/integrations/tanstack-query/operation-catalog.ts
+  s_7c8c7e7c279aa7::t_3a88d08058d08f 418-434,437
+apps/web/src/server/operation-runtime/start-operation.server.ts
+  s_7c8c7e7c279aa7::t_41966883c1f150 10,13,343-344,348,351,368,433,444-554,614-617,619-624,628-629,644,666,694-697,762-763,830
+docs/development.md
+  s_7c8c7e7c279aa7::t_fab9fa8ad1dea3 631-632,639-649,655-656
+apps/web/src/server/operation-runtime/browser-operation-dispatch.ts
+  s_7c8c7e7c279aa7::t_8cc8f6720f6831 1,4-6,8,10-11
+apps/web/src/server/operation-runtime/workflow-stream.server.ts
+  s_7c8c7e7c279aa7::t_a690600c72b669 5,9-13,21-24,27-29,31-32,35,37,40-41,49-56,58,71-78,80-86,89-92,94-98,100-146,148-173,175,177-189,192-194,196,198-205,210
+apps/web/tsconfig.client.json
+  s_7c8c7e7c279aa7::t_35e04871fc1753 31-32
+docs/agents/mcp.md
+  s_7c8c7e7c279aa7::t_6a88af8fe670fa 165
+apps/web/src/server/operation-runtime/operation-dispatch.server.unit.test.ts
+  s_7c8c7e7c279aa7::t_c939a52526df94 8,13,15,17-18,27-39,41,43-44,48,50-60,63,65,67,69-72,74-77,79,81,83-85,90-97,99,106,109-129,131-132,135-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e8cc41ff3bc8fde52f93ecbf87b6cdce03c459bb",
+  "prompts": {},
+  "sessions": {
+    "s_7c8c7e7c279aa7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9f1ee8aa-04a7-458e-a251-1d90b6fd9922",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
