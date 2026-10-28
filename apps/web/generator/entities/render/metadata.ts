@@ -509,6 +509,22 @@ export const renderEntityMetadataArtifacts = (
     },
     {
       relativePath:
+        "apps/web/src/entity/generated/entity-metadata-loaders.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "@cubby/schemas/entity";\n' +
+        'import { freezeMetadata } from "~/entity/immutable-metadata";\n' +
+        "export const publicEntityMetadataLoaders = {\n" +
+        entities
+          .map(
+            ({ key }) =>
+              `  ${JSON.stringify(key)}: async () => { const { metadata } = await import("@cubby/schemas/entity-metadata/${key}"); return freezeMetadata(metadata); },\n`,
+          )
+          .join("") +
+        "} satisfies Record<Entity, () => Promise<unknown>>;\n",
+    },
+    {
+      relativePath:
         "apps/web/src/server/generated/entity-metadata-loaders.gen.ts",
       source:
         generatedHeader +

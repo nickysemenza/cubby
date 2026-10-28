@@ -471,6 +471,13 @@ Declarations may import shared primitives and cycle-safe field modules. They
 must not import canonical schemas, generated artifacts, server implementations,
 or browser modules. Implementation references remain `{ module, export }` data.
 Browser metadata is generated separately and contains no executable schemas.
+The public `@cubby/schemas/entity-metadata/*` alias and compiler-only
+`@cubby/schemas/compiler/generated/entity-metadata/*` alias select the same
+canonical generated per-entity slices. The generated browser loader imports
+those public slices lazily; it never imports declarations or compiler closures.
+Document QueryClients own admitted primary/direct-dependency bundles. SSR sends
+admission identities, reconstructed before Query publishes successful data; see
+[metadata transport](../apps/web/docs/web-runtime.md#entity-metadata-transport).
 Static generator inputs also cannot execute schemas that consume generated
 output: install runs generation before those files exist. Shared presentation
 vocabulary such as `activity-fields.ts` owns primitive enums and labels so runtime

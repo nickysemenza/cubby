@@ -166,22 +166,37 @@ in the route's literal options object; loader-time helpers stay React-free in
 Entity route `beforeLoad` awaits `ensureEntityMetadata(queryClient, entity)`
 before list-filter compilation or rendering. The server imports the requested
 entity slice and its directly declared relation/reference dependencies, validates
-and freezes each compiler-owned slice, and returns them in one loader read.
-Dependencies are not traversed transitively. Query's SSR dehydration owns their
-transport; a document's QueryClient owns their cache. Accessors take that explicit
-scope, and `useEntityMetadata` consumes the same cache without a hydration-time read.
-Each query stores the requested slice and its direct dependencies together, so
-SSR transports the complete admission rather than side-effect cache writes. A
-dependency slice alone does not establish that its own dependencies are available:
-later navigation admits that entity's complete bundle. Synchronous dependency
-reads consult only bundles already admitted to the document's QueryClient.
+and freezes each compiler-owned slice, and returns them in one local loader read.
+Dependencies are not traversed transitively. A document's QueryClient owns the
+complete admitted bundles. Accessors take that explicit scope.
+
+The app's wrapper around TanStack's SSR Query integration replaces metadata query
+data with its entity admission identity on the existing initial state, streamed
+batches and pending promises. The browser reconstructs each complete bundle from
+lazy Vite chunks using the public `@cubby/schemas/entity-metadata/*` exports of
+the same canonical generated slices. It awaits reconstruction before passing
+successful data to Query; pending query promises resolve through reconstruction.
+The installed router hydrate hook awaits initial admission before React renders.
+The stream transform awaits subsequent admissions before TanStack hydrates each
+batch. Never use async Query `deserializeData`: successful data would contain a
+Promise rather than metadata. TanStack retains stream consumption, errors,
+cancellation, request cleanup and query publication; the app does not fork them.
+
+Browser navigation and dynamic admissions use those same public chunks, without
+a metadata RPC or hydration-time server read. Module loading deduplicates immutable
+code; it does not establish QueryClient admission. A dependency slice alone does
+not establish that its own dependencies are available: later navigation admits
+that entity's complete bundle. Synchronous dependency reads consult only bundles
+already admitted to the document's QueryClient.
 Dynamic pickers, previews and graph nodes admit their requested slice through that
 hook; non-entity Calendar loads its declared source slices before pure compilation.
 The shell uses only the generated names/icons/routes/capabilities roster.
+Key-only renderer iteration uses `entityKeys` from `entity-roster`; importing
+`allEntities` from the full manifest eagerly retains the metadata catalog.
 
 Editors resolve their requested definition from the explicit QueryClient. A dynamic
 dialog admits that metadata inside its local overlay before loading the baseline
-or rendering the form. Slices transport compiler-owned `createDefaults` and
+or rendering the form. Slices contain compiler-owned `createDefaults` and
 `structuredSchemas`; selected server validation applies the original exact Zod
 contract asynchronously, preserving field paths and pending state. Enum option
 rosters have no global metadata cache; mounted controls memoize their options.

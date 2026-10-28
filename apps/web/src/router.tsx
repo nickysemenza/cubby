@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/tanstackstart-react";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 
+import { installEntityMetadataTransport } from "~/entity/metadata-transport";
 import { RoutePending } from "~/entity/navigation/route-pending";
 import { SENTRY_RELEASE_META } from "~/lib/build-metadata";
 import { installPreloadErrorRecovery } from "~/lib/deploy-recovery";
@@ -114,6 +115,7 @@ export const getRouter = () => {
     router,
     queryClient: rqContext.queryClient,
   });
+  installEntityMetadataTransport(router);
 
   return router;
 };

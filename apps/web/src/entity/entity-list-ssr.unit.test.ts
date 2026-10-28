@@ -1,11 +1,22 @@
+import { QueryClient } from "@tanstack/react-query";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+} from "@tanstack/react-router";
+import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
+import { attachRouterServerSsrUtils } from "@tanstack/react-router/ssr/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
 import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
+import { entityMetadata, entityMetadataQueryOptions } from "~/entity/metadata";
+import { installEntityMetadataTransport } from "~/entity/metadata-transport";
 import { entityListDefaultSort } from "~/entity/sortable-fields";
 import { productListReadProjection } from "~/features/product/list-read";
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
+import { loadEntityMetadata } from "~/server/entity-metadata/loader.server";
 
 import {
   ensureEntityListSsr,
@@ -241,5 +252,108 @@ describe("ensureEntityListSsr", () => {
     await preload;
 
     expect(cancel).toHaveBeenCalledOnce();
+  });
+});
+
+describe("metadata SSR admission", () => {
+  it("reconstructs initial, streamed and pending bundles before successful publication without refetching", async () => {
+    const server = new QueryClient();
+    const browser = new QueryClient();
+    const unrelated = new QueryClient();
+    const serverRouter = createRouter({
+      routeTree: createRootRoute(),
+      history: createMemoryHistory(),
+      origin: "https://synthetic.invalid",
+      isServer: true,
+    });
+    const browserRouter = createRouter({
+      routeTree: createRootRoute(),
+      history: createMemoryHistory(),
+      origin: "https://synthetic.invalid",
+      isServer: false,
+    });
+    setupRouterSsrQueryIntegration({
+      router: serverRouter,
+      queryClient: server,
+    });
+    setupRouterSsrQueryIntegration({
+      router: browserRouter,
+      queryClient: browser,
+    });
+    installEntityMetadataTransport(serverRouter);
+    installEntityMetadataTransport(browserRouter);
+    attachRouterServerSsrUtils({ router: serverRouter, manifest: undefined });
+    const product = await loadEntityMetadata("product");
+    const inventory = await loadEntityMetadata("inventory");
+    const expense = await loadEntityMetadata("expense");
+    const pending = Promise.withResolvers<typeof inventory>();
+    const invalidSuccesses: unknown[] = [];
+    const unsubscribe = browser.getQueryCache().subscribe(({ query }) => {
+      if (
+        query.queryKey[0] === "entity-metadata" &&
+        query.state.status === "success"
+      ) {
+        if (
+          query.state.data instanceof Promise ||
+          typeof query.state.data === "string"
+        )
+          invalidSuccesses.push(query.state.data);
+      }
+    });
+    try {
+      server.setQueryData(
+        entityMetadataQueryOptions("product").queryKey,
+        product,
+      );
+      const pendingRead = server.fetchQuery({
+        ...entityMetadataQueryOptions("inventory"),
+        queryFn: () => pending.promise,
+      });
+      const state = await serverRouter.options.dehydrate?.();
+      if (!state) throw new Error("Missing Query dehydration state");
+      expect(JSON.stringify(state.query.initial)).not.toContain(
+        "structuredSchemas",
+      );
+      await browserRouter.options.hydrate?.(state);
+      expect(entityMetadata(browser, "product")).toEqual(product.primary);
+      for (const dependency of product.dependencies)
+        expect(entityMetadata(browser, dependency.entity)).toEqual(dependency);
+      expect(() => entityMetadata(unrelated, "product")).toThrow(
+        "must be loaded before use",
+      );
+      // A dependency is readable, but is not itself an admitted complete bundle.
+      expect(
+        browser.getQueryData(entityMetadataQueryOptions("inventory").queryKey),
+      ).toBeUndefined();
+      await server.fetchQuery({
+        ...entityMetadataQueryOptions("expense"),
+        queryFn: async () => expense,
+      });
+      pending.resolve(inventory);
+      await pendingRead;
+      serverRouter.serverSsr?.setRenderFinished();
+      await vi.waitFor(() => {
+        expect(entityMetadata(browser, "inventory")).toEqual(inventory.primary);
+        expect(entityMetadata(browser, "expense")).toEqual(expense.primary);
+      });
+      const refetch = vi.fn(async () => {
+        throw new Error("Unexpected metadata refetch");
+      });
+      for (const entity of ["product", "inventory", "expense"] as const) {
+        const bundle = await browser.ensureQueryData({
+          ...entityMetadataQueryOptions(entity),
+          queryFn: refetch,
+        });
+        expect(bundle.primary.entity).toBe(entity);
+      }
+      expect(refetch).not.toHaveBeenCalled();
+      expect(invalidSuccesses).toEqual([]);
+    } finally {
+      unsubscribe();
+      serverRouter.serverSsr?.cleanup();
+      server.clear();
+      browser.clear();
+      unrelated.clear();
+    }
   });
 });
