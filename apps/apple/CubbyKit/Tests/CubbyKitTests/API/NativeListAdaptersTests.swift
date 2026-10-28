@@ -214,6 +214,7 @@ struct NativeListAdaptersTests {
                 "pageIndex": .number(0),
                 "pageSize": .number(20),
                 "totalCount": .number(Double(encodedItems.count)),
+                "hasNextPage": .bool(false),
             ]),
             "items": .array(encodedItems),
         ])
