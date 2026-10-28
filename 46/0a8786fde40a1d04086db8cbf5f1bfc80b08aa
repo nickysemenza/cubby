@@ -1,0 +1,45 @@
+apps/web/docs/web-runtime.md
+  s_f9b38eae28f662::t_13a8dd825f8bd3 57-76
+apps/web/generator/entities/render/read-contracts.ts
+  s_f9b38eae28f662::t_a678424d2aa3c3 21,56
+apps/web/src/entity/model/read-schemas/loaders.ts
+  s_f9b38eae28f662::t_a7647e606932db 1,11,23
+apps/web/src/integrations/tanstack-query/operation-catalog.ts
+  s_f9b38eae28f662::t_a9d45e3cf3ece5 21,55,60,503-507,514-516,569-573,716-720
+apps/web/src/integrations/tanstack-query/operation-overrides/entityDetail.ts
+  s_f9b38eae28f662::t_b089f9099f32b4 3,20-26
+apps/web/src/integrations/tanstack-query/operation-overrides/entityList.ts
+  s_f9b38eae28f662::t_3d502cf7b7becf 3,17-23
+apps/web/src/integrations/tanstack-query/start-transport.ts
+  s_f9b38eae28f662::t_91a8c55760cc76 6-9,199-202,246-252
+apps/web/src/integrations/tanstack-query/workflow-command-runtime.ts
+  s_f9b38eae28f662::t_96e6babff7484b 7,39-43
+apps/web/src/integrations/tanstack-query/workflow-stream.ts
+  s_f9b38eae28f662::t_4db4eeed1f9fad 10-13,65-67
+apps/web/src/lib/start-operation-error.ts
+  s_f9b38eae28f662::t_7997b30eef0d9f 1-2,21-72
+apps/web/src/server/entity-reads/detail-contracts.ts
+  s_f9b38eae28f662::t_fa71523d6e7b3d 1
+apps/web/src/server/entity-reads/list-contracts.ts
+  s_f9b38eae28f662::t_e81a9394c9a32b 4,6
+apps/web/src/server/operation-runtime/entity-list-runtime.server.ts
+  s_f9b38eae28f662::t_08039c09e5a83a 3
+apps/web/src/server/operation-runtime/entity-runtime.server.ts
+  s_f9b38eae28f662::t_994ecec98fefeb 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "460a8786fde40a1d04086db8cbf5f1bfc80b08aa",
+  "prompts": {},
+  "sessions": {
+    "s_f9b38eae28f662": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15d31a0c-0fdb-4745-b359-8664bbd5360e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
