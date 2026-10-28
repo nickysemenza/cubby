@@ -8,6 +8,18 @@ it("retains service Cost publications and existing retry tickets during evidence
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
     await migrateDatabase(db, { through: "0056_recipe_publication" });
+    const anchor = "00000000-0000-4000-8000-000000000004";
+    await client.query(
+      `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'project','PRJ-HSHD')`,
+      [anchor],
+    );
+    await client.query(
+      `INSERT INTO "Project" (id,shortcode,name) VALUES ($1,'PRJ-HSHD','Synthetic household anchor')`,
+      [anchor],
+    );
+    const projectBefore = (
+      await client.query(`SELECT * FROM "Project" WHERE id=$1`, [anchor])
+    ).rows;
     const queued = "00000000-0000-4000-8000-000000000001";
     const missing = "00000000-0000-4000-8000-000000000002";
     const captured = "00000000-0000-4000-8000-000000000003";
@@ -79,6 +91,17 @@ it("retains service Cost publications and existing retry tickets during evidence
     const beforeTicket = await ticket();
     await migrateDatabase(db, { through: "0057_publication_evidence" });
     expect(await publications()).toEqual(beforePublications);
+    expect(
+      (await client.query(`SELECT * FROM "Project" WHERE id=$1`, [anchor]))
+        .rows,
+    ).toEqual(projectBefore);
+    expect(
+      (
+        await client.query(
+          `SELECT ref,priority FROM "WorkItem" WHERE target='project.workDiagnosticFacts'`,
+        )
+      ).rows,
+    ).toEqual([{ ref: anchor, priority: 2 }]);
     expect(await ticket()).toEqual(beforeTicket);
     expect(
       (

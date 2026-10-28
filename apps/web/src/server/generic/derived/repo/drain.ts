@@ -38,6 +38,7 @@ import {
   unobservedWork,
   type WorkItem,
   workTicketsWhere,
+  workPendingWhere,
 } from "~/server/generic/jobs/repo/work-items";
 
 export { DERIVED_DRAIN_JOB_KEY };
@@ -45,6 +46,27 @@ export const DERIVED_DRAIN: Drain = {
   key: DERIVED_DRAIN_JOB_KEY,
   kind: "derived.drain",
 };
+
+/** Global dependents cannot share preparation with their still-owed upstream publications. */
+export function derivedWorkEligible(target: SQL): SQL {
+  const blocked = storedDerivedDeclarations().flatMap((declaration) =>
+    declaration.dependsOn.flatMap((dependency) =>
+      "targetWhere" in dependency
+        ? [
+            sql`(${target} = ${declaration.target} AND ${workPendingWhere(
+              (
+                column,
+              ) => sql`(${column} = ${`${dependency.entity}.${dependency.key}`}
+              OR ${fanoutTargetMatches(column, sql`${`${dependency.entity}.${dependency.key}`}::text`)})`,
+            )})`,
+          ]
+        : [],
+    ),
+  );
+  return blocked.length
+    ? sql`NOT (${sql.join(blocked, sql` OR `)})`
+    : sql`true`;
+}
 
 const ident = (name: string) => sql.raw(`"${name.replaceAll('"', '""')}"`);
 const fixedTargetRows = (

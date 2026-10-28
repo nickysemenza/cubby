@@ -2869,6 +2869,18 @@ publication, including while refresh is pending or failed. Retained publications
 without the total remain visible with unavailable additional evidence until the
 existing drain backfills them; opening the explanation never computes that total.
 
+Home and Work queue diagnostic sources read one household-day publication on the
+reserved household Project. Canonical detectors, including private financial
+findings, run only in background preparation. Display reads fetch compact counts
+and status; private finding arrays stay in SQL through current ownership fences,
+search, exact totals and pagination. Missing counts remain unavailable rather than
+zero, and stale/error publications retain their last successful findings. Current
+actions still validate authoritative evidence. The declaration names the physical
+graph and canonical source tables and its quality/rollup dependencies; new source
+tables require enrollment and read-set coverage. Project attention still combines
+stored rollups with current Task/Expense checks; this diagnostic publication does
+not replace that separate owner.
+
 A stored result may declare `resultSchema` and supply several scalar fields through
 `model.derived.<field>.fromResult: { key, path }`. Generation checks each path and
 scalar type against that schema. These fields share the result's publication,
@@ -3008,7 +3020,12 @@ object with `jsonKey`, or compare its `from` object’s UUID with
 `fromJsonKey`; malformed JSON references contribute no records. `dependsOn` names other stored
 values it reads, by column match, link table, join path or fixed `targetWhere`.
 A fixed dependency marks only those target rows when any upstream publication
-changes; it does not subscribe to every `DerivedValue` write. A unit test checks
+changes; it does not subscribe to every `DerivedValue` write.
+Global dependents wait at claim admission while an upstream direct or fanout
+ticket remains owed, including backed-off work. Preparation cannot observe a
+partially rebuilt upstream population or spend retries waiting for its own page
+to publish. Missing upstream publications without queued work still fail explicitly.
+The schema guard checks
 every declared table and column against the Drizzle schema: PL/pgSQL resolves
 trigger columns only when a row fires, so a misspelled column would fail saves.
 Fixed-target inputs queue one constant fanout reference independently of the
