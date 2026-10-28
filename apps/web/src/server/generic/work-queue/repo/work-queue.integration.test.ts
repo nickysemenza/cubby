@@ -463,16 +463,14 @@ describe("composed Work queue engine", () => {
       userId: ctx.actor.userId,
     });
     const otherUser = testUserId("synthetic-diagnostic-other");
-    await getDb(ctx.db)
-      .insert(user)
-      .values({
-        id: otherUser,
-        name: "Synthetic diagnostic other",
-        email: "diagnostic-other@example.test",
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+    await getDb(ctx.db).insert(user).values({
+      id: otherUser,
+      name: "Synthetic diagnostic other",
+      email: "diagnostic-other@example.test",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
     const second = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic diagnostic other",
       kind: "member",
