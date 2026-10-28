@@ -35,7 +35,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   input mode `count`/`estimate`/`tally`, results family). Executed kinds register one
   driver per step in `server/domains/run/service/run-step-registry.ts`
   (`StepDriversFor<P>`: a `count` step must supply its COUNT); `step-run.ts` freezes
-  that population once per step generation and pages it. Routine passes use
+  that population once per step generation and pages it. A step's Retry failed
+  pages its re-admitted refs through `pageRetryRefs` in bounded slices without
+  moving the population cursor. Routine passes use
   `routineStepHandler` (`service/routine-run.ts`) so their Job creates the Run lazily.
   Counts, tallies, no-result reasons, raw errors and Retry failed render through the
   `run.steps` slot. Suggestion families add Sweep steps (`service/sweep.ts`); backlogs

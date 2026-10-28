@@ -416,9 +416,13 @@ declaration:
   candidates publish one at a time, isolating the failing item.
 - `labelBacklog` is the predicate a label pass and its Sweep count read.
 
-Discovery, generation cursors, retry refs, the transfer-pair out-of-scope
-retire pass, the complete-label receipt recovery and
-`refreshTransferPairStatements` stay family code: their cursors, receipts and
-scope rules differ, and a shared page would only forward to them. Suppression,
+Retry failed pages through the Run step helper `pageRetryRefs`: each page
+re-admits a bounded slice of the step's retained refs and keeps the rest for
+the next page, so transfer-pair retries are now bounded like statement ones.
+The family supplies only how one slice is re-admitted. Discovery, generation
+cursors, the transfer-pair out-of-scope retire pass, the complete-label
+receipt recovery and `refreshTransferPairStatements` stay family code: their
+cursors, receipts and scope rules differ, and a shared page would only forward
+to them. Suppression,
 fingerprint and reconfirm behavior are unchanged. Suggestions still publish in
 Run steps; moving them onto drains comes later, with #3142.
