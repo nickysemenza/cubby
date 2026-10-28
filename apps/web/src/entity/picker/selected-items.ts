@@ -1,11 +1,13 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
-import { useQueries } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { z } from "zod";
 
 import { entityLabel } from "~/entity/entities";
 import { entityDetailFor } from "~/entity/entity-detail";
+import { entityMetadataQueryOptions } from "~/entity/metadata";
 
 import type {
   ComboboxItem,
@@ -26,6 +28,7 @@ const vendorDetail = z.object({
 
 /** One detail read → the same row the entity's search provider builds. */
 function itemFromDetail(
+  queryClient: QueryClient,
   entity: PickerEntity,
   id: string,
   detail: unknown,
@@ -50,7 +53,11 @@ function itemFromDetail(
       );
     }
     default:
-      return buildRecordComboboxItem(entity, pickerRecord.parse(detail));
+      return buildRecordComboboxItem(
+        queryClient,
+        entity,
+        pickerRecord.parse(detail),
+      );
   }
 }
 
@@ -88,6 +95,7 @@ export function useSelectedPickerItems(
   ids: readonly string[],
   known: readonly ComboboxItem[],
 ): ComboboxItem[] {
+  const queryClient = useQueryClient();
   const byId = useMemo(
     () => new Map(known.map((item) => [item.id, item])),
     [known],
@@ -95,6 +103,10 @@ export function useSelectedPickerItems(
   const unresolved = entity
     ? [...new Set(ids)].filter((id) => !isComplete(byId.get(id), id, entity))
     : [];
+  const metadata = useQuery({
+    ...entityMetadataQueryOptions(entity ?? "product"),
+    enabled: entity !== undefined && unresolved.length > 0,
+  });
   const results = useQueries({
     queries: entity
       ? unresolved.map((id) => entityDetailFor(entity).queryOptions(id))
@@ -114,8 +126,8 @@ export function useSelectedPickerItems(
         presentation: held?.presentation,
       };
     }
-    if (result?.data !== undefined) {
-      const built = itemFromDetail(entity, id, result.data);
+    if (metadata.data && result?.data !== undefined) {
+      const built = itemFromDetail(queryClient, entity, id, result.data);
       return held?.presentation
         ? { ...built, presentation: held.presentation }
         : built;

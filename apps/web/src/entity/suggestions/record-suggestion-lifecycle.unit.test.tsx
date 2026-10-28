@@ -12,13 +12,13 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import type { EntityMutationPort } from "~/entity/editing/types";
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import type { EntitySuggestionsOperations } from "./field-suggestion";
 import {

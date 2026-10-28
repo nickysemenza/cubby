@@ -87,5 +87,6 @@ export const workItem = pgTable(
     ),
     primaryKey({ columns: [t.target, t.ref] }),
     index("WorkItem_ready_idx").on(t.drain, t.priority, t.readyAt),
+    index("WorkItem_target_prefix_idx").on(sql`${t.target} COLLATE "C"`),
   ],
 );

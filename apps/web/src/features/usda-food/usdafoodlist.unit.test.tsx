@@ -2,12 +2,12 @@ import { foodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { EntityListCardDensityProvider } from "~/entity/entity-list/generic-entity-list";
 import { entitySearch } from "~/entity/generated/entity-search.gen";
 import { listChromePage } from "~/entity/routing/list-page";
 import { installFeatures } from "~/features/registry";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog/usdaFood.gen";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
   type USDAFoodListOperations,
@@ -32,7 +32,7 @@ const food = foodSummaryWithLinkedProducts.parse({
 const operations: USDAFoodListOperations = {
   list: usdaFood.list.withTransport(async () => ({
     items: [food],
-    meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
+    meta: { hasNextPage: false, pageIndex: 0, pageSize: 100, totalCount: 1 },
   })),
 };
 
@@ -93,7 +93,12 @@ describe("USDAFoodList", () => {
         reads.push(input);
         return {
           items: [food],
-          meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
+          meta: {
+            hasNextPage: false,
+            pageIndex: 0,
+            pageSize: 100,
+            totalCount: 1,
+          },
         };
       }),
     };

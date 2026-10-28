@@ -109,6 +109,18 @@ and turned one Product save into a 115–147 second rollback; #2855 removed them
   selected result; valuation-presence filters and the Item prices footer exclude
   services. Live charge evidence remains on demand, never a competing display
   amount. Old scalar price caches cannot establish a historical service tuple.
+- **Product display reads use publications.** List and detail bindings read
+  stored pricing evidence, quantity and placement facts, ownership evidence,
+  inventory valuations and USDA food facts. They never fold Expense history or
+  call the USDA release during a normal read. Pending work keeps the previous
+  result and its existing stale/work disclosure; missing results stay
+  unavailable. Current manual price intent still wins immediately.
+  Compact Product search and kit previews consume the same publications;
+  their `displayFacts` marker distinguishes missing and stale snapshots.
+  The stored facts include picker stock state so these reads never rebuild
+  the quantity ledger. A missing picker ledger is null, never a zero balance.
+  Conversion graphs and WASM outputs remain transient. Financial entry, reconciliation and
+  write validation retain authoritative live evidence.
 - **One explanation surface.** Clients render the envelope: a cell mark for
   inherited and auto values, an immediate updating dot, and one web popover or
   native sheet/popover combining current assignment, permitted edits and source

@@ -1,14 +1,12 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { DetailActivityEvent } from "@cubby/schemas/entity-detail-data";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import {
-  type AuditableEntity,
-  isAuditableEntity,
-} from "@cubby/schemas/entity-manifest";
+import type { AuditableEntity } from "@cubby/schemas/entity-manifest";
+import { isAuditableEntity } from "@cubby/schemas/entity-roster";
 import { useState } from "react";
 
 import { EntityAuditLink } from "~/entity/components/entity-ref-link";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import { useEntityMetadata } from "~/entity/metadata";
 import { formatCalendarDay, formatInstant } from "~/lib/date-format";
 import { dateSpanParts } from "~/lib/date-span";
 import { householdLocalDate } from "~/lib/household-date";
@@ -19,8 +17,10 @@ import {
   RecordMore,
   RecordRow,
 } from "~/ui/common/record-list";
+import { QuerySection } from "~/ui/feedback/query-section";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
+import { VisibleContent } from "~/ui/hooks/visible-content";
 import { Section } from "~/ui/layout";
 
 import { AuditLogList } from "../audit-log/audit-log-list";
@@ -52,15 +52,15 @@ function groupActivityByDay(events: readonly DetailActivityEvent[]) {
   return groups;
 }
 
-/** Audit rows carry the action and changed keys; show the verb and labels. */
-function changeText(event: DetailActivityEvent) {
-  const fields: readonly { key: string; label: string }[] =
-    entityFieldModels[event.entity].fields;
-  const labels = event.subtitle
+/** Each change can name an entity outside the route's direct dependencies. */
+function ChangeSubtitle({ event }: { event: DetailActivityEvent }) {
+  const fields: readonly { key: string; label: string }[] = useEntityMetadata(
+    event.entity,
+  ).fields.fields;
+  return event.subtitle
     ?.split(", ")
     .map((key) => fields.find((field) => field.key === key)?.label ?? key)
     .join(", ");
-  return { title: changeVerb(event.title), subtitle: labels };
 }
 
 /**
@@ -68,14 +68,6 @@ function changeText(event: DetailActivityEvent) {
  * activity relations merged with the record's own change history.
  */
 export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
-  const hydrated = useHydrated();
-  const activity = useDetailActivity(
-    { source: { entityKind: entity, entityId: id }, limit: 8 },
-    hydrated,
-  );
-  const events = activity.data?.pages.flatMap((page) => page.items) ?? [];
-  const groups = groupActivityByDay(events);
-  const today = useHouseholdToday() ?? householdLocalDate();
   return (
     <Section
       // The page's established activity anchor: `#history` links keep working.
@@ -87,6 +79,31 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
       className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       data-testid="detail-activity"
     >
+      <VisibleContent
+        fallback={
+          <RecordList
+            aria-label="Recent changes and spend"
+            state={{ status: "pending" }}
+          />
+        }
+      >
+        <DetailActivityContent entity={entity} id={id} />
+      </VisibleContent>
+    </Section>
+  );
+}
+
+function DetailActivityContent({ entity, id }: { entity: Entity; id: string }) {
+  const hydrated = useHydrated();
+  const activity = useDetailActivity(
+    { source: { entityKind: entity, entityId: id }, limit: 8 },
+    hydrated,
+  );
+  const events = activity.data?.pages.flatMap((page) => page.items) ?? [];
+  const groups = groupActivityByDay(events);
+  const today = useHouseholdToday() ?? householdLocalDate();
+  return (
+    <>
       {activity.isError || activity.isPending ? (
         <RecordList
           aria-label="Recent changes and spend"
@@ -136,10 +153,11 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
                   aria-label={`${formatCalendarDay(day, "dateShort")} activity`}
                 >
                   {dayEvents.map((event) => {
-                    const { title, subtitle } =
+                    const title =
                       event.kind === "change"
-                        ? changeText(event)
-                        : { title: event.title, subtitle: event.subtitle };
+                        ? changeVerb(event.title)
+                        : event.title;
+                    const subtitle = event.subtitle;
                     const primary =
                       event.kind === "record" && event.shortcode ? (
                         <EntityAuditLink
@@ -183,7 +201,13 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
                             {primary}
                             {event.kind === "change" && subtitle ? (
                               <span className="text-xs text-muted-foreground">
-                                {subtitle}
+                                <QuerySection
+                                  title="activity fields"
+                                  resetKey={event.entity}
+                                  fallback={subtitle}
+                                >
+                                  <ChangeSubtitle event={event} />
+                                </QuerySection>
                               </span>
                             ) : null}
                           </>
@@ -230,7 +254,7 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
       {isAuditableEntity(entity) ? (
         <ChangeDetails entity={entity} id={id} />
       ) : null}
-    </Section>
+    </>
   );
 }
 

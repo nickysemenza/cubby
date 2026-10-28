@@ -1,15 +1,10 @@
 import type { ConnectedRecordsOutput } from "@cubby/schemas/connected-records";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
-import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import {
-  entityManifest,
-  type BrowserRoutedEntity,
-} from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { type BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
-import { useQuery } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQuery, useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { flexRender, type RowData } from "@tanstack/react-table";
 import {
@@ -30,11 +25,14 @@ import type {
 import { entityListFor } from "~/entity/entity-list";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { getEntityFilters } from "~/entity/filter-manifest";
-import { filterUrlKey } from "~/entity/filters";
+import { buildFiltersFromManifest, filterUrlKey } from "~/entity/filters";
 import {
   listEntities,
+  entityListParamsFromParsed,
+  parseEntityListInput,
   type ListEntity,
 } from "~/entity/generated/entity-lists.gen";
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import {
   connectionRefs,
   ConnectionPaths,
@@ -46,7 +44,7 @@ import {
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useHydrated } from "~/ui/hooks/use-hydrated";
+import { QuerySection } from "~/ui/feedback/query-section";
 import { Button } from "~/ui/primitives/button";
 
 import {
@@ -113,31 +111,20 @@ export interface RelationSectionPlan {
 const isListEntity = (value: string): value is ListEntity =>
   listEntities.some((entity) => entity === value);
 
-interface DeclaredEditIntents {
-  fields: Readonly<Partial<Record<string, readonly string[]>>>;
-  create: readonly string[];
-}
-
-/** The create intents a list entity declares, or none for one without editing. */
-const editIntentsFor = (entity: ListEntity): DeclaredEditIntents | undefined =>
-  // SAFETY: `generatedEntityEditIntents` is `satisfies Partial<Record<Entity,
-  // …>>`; indexing by a list entity is either its roster or absent.
-  (
-    generatedEntityEditIntents as Partial<
-      Record<ListEntity, DeclaredEditIntents>
-    >
-  )[entity];
-
 /** The first declared create intent of `target` that can be seeded through `field`. */
 function createSeedThrough(
+  queryClient: QueryClient,
   target: ListEntity,
   field: string,
 ): { intent: string; field: string; multiple: boolean } | null {
-  const intents = editIntentsFor(target);
-  const intent = intents?.create.find((candidate) =>
-    intents.fields[candidate]?.includes(field),
+  const intents = entityMetadata(queryClient, target).editIntents;
+  if (intents === null) return null;
+  const fields: Readonly<Partial<Record<string, readonly string[]>>> =
+    intents.fields;
+  const intent = intents.create.find((candidate) =>
+    fields[candidate]?.includes(field),
   );
-  const modelField = entityFieldModels[target].fields.find(
+  const modelField = entityMetadata(queryClient, target).fields.fields.find(
     (candidate) => candidate.key === field,
   );
   return intent === undefined
@@ -152,6 +139,7 @@ function createSeedThrough(
  * table's test can assert the resolved filter and links without rendering.
  */
 export function planRelationSection(
+  queryClient: QueryClient,
   entity: BrowserRoutedEntity,
   section: Pick<
     RelationSection,
@@ -159,7 +147,10 @@ export function planRelationSection(
   > &
     Partial<Pick<RelationSection, "groupBy">>,
 ): RelationSectionPlan {
-  const relation = entityManifest[entity].relationships.find(
+  const relation = entityMetadata(
+    queryClient,
+    entity,
+  ).descriptor.relationships.find(
     (candidate) => candidate.key === section.relation,
   );
   if (relation === undefined)
@@ -169,7 +160,7 @@ export function planRelationSection(
     throw new Error(
       `${entity}.${section.relation} targets ${target}, which has no list`,
     );
-  const descriptor = getEntityFilters(target).find(
+  const descriptor = getEntityFilters(queryClient, target).find(
     (candidate) => candidate.columnId === section.filter.descriptor,
   );
   if (descriptor === undefined)
@@ -181,7 +172,7 @@ export function planRelationSection(
   // is what a `<key>Filter` list-filter alias names once the suffix goes.
   const seedField = filterKey.replace(/Filter$/u, "");
   const explicitField = section.prefill?.field;
-  let seed = createSeedThrough(target, explicitField ?? seedField);
+  let seed = createSeedThrough(queryClient, target, explicitField ?? seedField);
   // The descriptor's own key names no create field — a derived descriptor
   // like `journalPlantingId` reads a computed column, not a
   // storage field. Fall back to the target's own reference field pointing at
@@ -193,11 +184,14 @@ export function planRelationSection(
     seed === null &&
     descriptor.referenceEntity !== undefined
   ) {
-    const referenceField = entityFieldModels[target].fields.find(
+    const referenceField = entityMetadata(
+      queryClient,
+      target,
+    ).fields.fields.find(
       (field) => field.reference?.entity === descriptor.referenceEntity,
     );
     if (referenceField !== undefined)
-      seed = createSeedThrough(target, referenceField.key);
+      seed = createSeedThrough(queryClient, target, referenceField.key);
   }
   return {
     source: entity,
@@ -211,23 +205,29 @@ export function planRelationSection(
     seedMultiple: seed?.multiple === true,
     columns: section.columns,
     sort: section.sort ?? {
-      field: defaultSortFor(target),
-      direction: defaultSortDirectionFor(target),
+      field: defaultSortFor(queryClient, target),
+      direction: defaultSortDirectionFor(queryClient, target),
     },
     limit: section.limit,
     groupBy: section.groupBy ?? null,
-    backReferenceColumn: backReferenceColumnFor(entity, target, seedField),
+    backReferenceColumn: backReferenceColumnFor(
+      queryClient,
+      entity,
+      target,
+      seedField,
+    ),
     derived: relation.provenance.kind === "derived",
   };
 }
 
 /** The target's list column for the field that points back at `source`. */
 function backReferenceColumnFor(
+  queryClient: QueryClient,
   source: BrowserRoutedEntity,
   target: ListEntity,
   fieldKey: string,
 ): string | null {
-  const field = entityFieldModels[target].fields.find(
+  const field = entityMetadata(queryClient, target).fields.fields.find(
     (candidate) =>
       candidate.key === fieldKey && candidate.reference?.entity === source,
   );
@@ -295,7 +295,9 @@ export function RelationSectionActions({
   title: string;
   createLabel?: string;
 }) {
-  const { singular } = entitySummary[plan.target];
+  const {
+    summary: { singular },
+  } = useEntityMetadata(plan.target);
   const { setCreating, dialog } = useRelationCreateDialog(plan, recordId);
 
   return (
@@ -462,10 +464,8 @@ const skeletonRowsFor = (plan: RelationSectionPlan) =>
   plan.limit != null ? Math.min(plan.limit, 3) : 3;
 
 /**
- * Relation rows are only fetched in the browser, so the server and the first
- * client render show this static skeleton. Building the full list stack just
- * to draw a skeleton cost every detail page one table setup per relation
- * section of server CPU.
+ * The streamed relation's pending state avoids constructing a table until its
+ * first complete page is available.
  */
 function RelationStaticSkeleton({ rows }: { rows: number }) {
   const columns = 4;
@@ -501,19 +501,56 @@ function RelationStaticSkeleton({ rows }: { rows: number }) {
  * still gets its own `…` menu.
  */
 export function EntityRelationTable(props: EntityRelationTableProps) {
-  const hydrated = useHydrated();
   // Above the live table: its row-action hooks read the scope while it renders.
   const scope = useMemo(
     () => ({ source: props.plan.source, recordId: props.recordId }),
     [props.plan.source, props.recordId],
   );
-  if (!hydrated)
-    return <RelationStaticSkeleton rows={skeletonRowsFor(props.plan)} />;
   return (
     <RelationScopeContext.Provider value={scope}>
-      <LiveEntityRelationTable {...props} />
+      <QuerySection
+        title={props.title}
+        resetKey={`${props.recordId}:${props.plan.relation}`}
+        fallback={<RelationStaticSkeleton rows={skeletonRowsFor(props.plan)} />}
+      >
+        <StreamedEntityRelationTable {...props} />
+      </QuerySection>
     </RelationScopeContext.Provider>
   );
+}
+
+function StreamedEntityRelationTable(props: EntityRelationTableProps) {
+  const { plan, recordId, operations = productionOperations } = props;
+  const queryClient = useQueryClient();
+  useEntityMetadata(plan.target);
+  // The first page uses exactly the embedded table's opening filters and key.
+  // Its ordinary observer then owns edits, grouping and retained refresh state.
+  useSuspenseInfiniteQuery(
+    entityListFor(plan.target, operations.list).infiniteQueryOptions(
+      entityListParamsFromParsed(
+        plan.target,
+        parseEntityListInput(plan.target, {
+          entity: plan.target,
+          includeCount: true,
+          filters: {
+            ...buildFiltersFromManifest(
+              getEntityFilters(queryClient, plan.target),
+              () => undefined,
+            ),
+            [plan.filterKey]: recordId,
+            ...(plan.subtree === null ? {} : { [plan.subtree]: false }),
+          },
+          pagination: {
+            pageIndex: 0,
+            pageSize: plan.limit ?? DEFAULT_RELATION_PAGE_SIZE,
+          },
+          sort: [{ orderBy: plan.sort.field, direction: plan.sort.direction }],
+          ...(plan.groupBy ? { groupBy: [{ key: plan.groupBy }] } : {}),
+        }),
+      ),
+    ),
+  );
+  return <LiveEntityRelationTable {...props} />;
 }
 
 function LiveEntityRelationTable({
@@ -524,6 +561,8 @@ function LiveEntityRelationTable({
   operations = productionOperations,
 }: EntityRelationTableProps) {
   const { target } = plan;
+  const queryClient = useQueryClient();
+  useEntityMetadata(target);
   const movementSource = relationshipMovementSource(
     plan.source,
     plan.target,
@@ -554,12 +593,18 @@ function LiveEntityRelationTable({
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<RelationRow>((add) => {
-        createEntityDisplayColumns<RelationRow>(target, helper, undefined, {
-          only: plan.columns ?? undefined,
-          skipSpecialized: true,
-          onSaveField,
-          onSaveFields: onSaveField?.row,
-        })
+        createEntityDisplayColumns<RelationRow>(
+          queryClient,
+          target,
+          helper,
+          undefined,
+          {
+            only: plan.columns ?? undefined,
+            skipSpecialized: true,
+            onSaveField,
+            onSaveFields: onSaveField?.row,
+          },
+        )
           .filter(
             (column) =>
               plan.columns !== null || column.id !== plan.backReferenceColumn,
@@ -600,6 +645,7 @@ function LiveEntityRelationTable({
       plan.derived,
       target,
       movementSource,
+      queryClient,
     ],
   );
   const tableStateOptions = useMemo(

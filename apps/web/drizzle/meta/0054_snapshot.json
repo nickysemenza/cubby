@@ -1,6 +1,6 @@
 {
-  "id": "9f0a1e35-cc75-463e-9f70-41957452bf66",
-  "prevId": "68a033f3-f807-492f-af59-ddbd77ab540b",
+  "id": "d787b45b-b3c3-42fa-95c4-10d0c2d83e6c",
+  "prevId": "9f0a1e35-cc75-463e-9f70-41957452bf66",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5300,6 +5300,21 @@
               "expression": "readyAt",
               "isExpression": false,
               "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "WorkItem_target_prefix_idx": {
+          "name": "WorkItem_target_prefix_idx",
+          "columns": [
+            {
+              "expression": "\"target\" COLLATE \"C\"",
+              "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],

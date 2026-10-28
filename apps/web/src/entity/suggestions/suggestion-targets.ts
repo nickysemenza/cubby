@@ -1,9 +1,11 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldSuggestionContextKeys } from "@cubby/schemas/field-suggestion";
+import type { QueryClient } from "@tanstack/react-query";
 
-type ManifestField =
-  (typeof entityFieldModels)[ShortcodeEntity]["fields"][number];
+import { entityMetadata } from "~/entity/metadata";
+
+type ManifestField = EntityFieldModel["fields"][number];
 
 /** A manifest field whose `control.suggest` opts it into auto-suggestion. */
 interface SuggestTarget {
@@ -42,10 +44,11 @@ const EMPTY_TARGETS: SuggestTargets = { targets: [], basisKeys: [] };
  * what a caller (the provider, or a single-field surface) needs to watch.
  */
 export function suggestTargetsFor(
+  queryClient: QueryClient,
   entity: ShortcodeEntity,
   fieldKeys?: readonly string[],
 ): SuggestTargets {
-  const fields = entityFieldModels[entity].fields;
+  const fields = entityMetadata(queryClient, entity).fields.fields;
   const roster = fieldKeys ? new Set(fieldKeys) : null;
   const targets: SuggestTarget[] = [];
   const basisKeys = new Set<string>();
@@ -73,15 +76,18 @@ export function suggestTargetsFor(
 
 /** Visible aliases and canonical field keys share one suggestion admission owner. */
 export function visibleSuggestTargets(
+  queryClient: QueryClient,
   entity: ShortcodeEntity,
   fieldKeys: readonly string[],
 ) {
   const visible = new Set(fieldKeys);
-  const updateFields: readonly string[] = entityFieldModels[entity].update;
+  const updateFields: readonly string[] = entityMetadata(queryClient, entity)
+    .fields.update;
   return suggestTargetsFor(
+    queryClient,
     entity,
-    entityFieldModels[entity].fields
-      .filter(
+    entityMetadata(queryClient, entity)
+      .fields.fields.filter(
         (field) =>
           visible.has(field.key) ||
           (field.reference != null &&

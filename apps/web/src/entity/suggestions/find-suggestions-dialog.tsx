@@ -1,10 +1,10 @@
 import { connectionEndpointKinds } from "@cubby/schemas/entity-connections";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   shortcodeEntities,
-  type ShortcodeEntity,
-} from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+  entityRoster,
+  suggestionEntities,
+} from "@cubby/schemas/entity-roster";
 import { financialAccountShortcode } from "@cubby/schemas/identifiers";
 import {
   SWEEP_FAMILY_LABEL,
@@ -13,11 +13,12 @@ import {
 import type { SweepStartInput } from "@cubby/schemas/sweep";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useDebouncedValue } from "@tanstack/react-pacer";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { z } from "zod";
 
+import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { Picker } from "~/entity/picker/picker";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
@@ -43,20 +44,14 @@ const jsonFilters = z
     ),
   );
 
-/** Entities with at least one declared decision field, and those fields. */
-const DECISION_FIELDS = shortcodeEntities.flatMap((entity) => {
-  const fields = entityFieldModels[entity].fields.flatMap((field) =>
-    field.control?.suggest ? [{ value: field.key, label: field.label }] : [],
-  );
-  return fields.length ? [{ entity, fields }] : [];
-});
-const DECISION_ENTITY_OPTIONS = DECISION_FIELDS.map(({ entity }) => ({
+/** Capability rosters do not load field definitions for unselected entities. */
+const DECISION_ENTITY_OPTIONS = suggestionEntities.map((entity) => ({
   value: entity,
-  label: entitySummary[entity].singular,
+  label: entityRoster[entity].singular,
 }));
 const CONNECTION_KIND_OPTIONS = shortcodeEntities
   .filter((entity) => connectionEndpointKinds.includes(entity))
-  .map((entity) => ({ value: entity, label: entitySummary[entity].singular }));
+  .map((entity) => ({ value: entity, label: entityRoster[entity].singular }));
 
 const FAMILY_ROWS = [
   {
@@ -150,7 +145,8 @@ export function FindSuggestionsAction({
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  if (!DECISION_FIELDS.some((item) => item.entity === entity)) return null;
+  if (!suggestionEntities.some((candidate) => candidate === entity))
+    return null;
   return (
     <>
       <Button
@@ -226,67 +222,84 @@ export function FindSuggestionsDialog({
       else next.delete(family);
       return next;
     });
-  const entityFields =
-    DECISION_FIELDS.find(({ entity }) => entity === fieldEntity)?.fields ?? [];
-  const input: SweepStartInput | null = families.size
-    ? {
-        families: FAMILY_ROWS.flatMap(
-          ({ family }): SweepStartInput["families"] => {
-            if (!families.has(family)) return [];
-            if (family === "transfer_pair")
+  const selectedEntity = z.enum(shortcodeEntities).safeParse(fieldEntity).data;
+  const metadataQueries = useMemo(
+    () => (selectedEntity ? [entityMetadataQueryOptions(selectedEntity)] : []),
+    [selectedEntity],
+  );
+  const [metadata] = useQueries({ queries: metadataQueries });
+  const metadataSlice = metadata?.data;
+  const entityFields = useMemo(
+    () =>
+      metadataSlice?.fields.fields.flatMap((field) =>
+        field.control?.suggest
+          ? [{ value: field.key, label: field.label }]
+          : [],
+      ) ?? [],
+    [metadataSlice],
+  );
+  const fieldsReady =
+    !families.has("field") || !selectedEntity || metadata?.isSuccess;
+  const input: SweepStartInput | null =
+    families.size && fieldsReady
+      ? {
+          families: FAMILY_ROWS.flatMap(
+            ({ family }): SweepStartInput["families"] => {
+              if (!families.has(family)) return [];
+              if (family === "transfer_pair")
+                return [
+                  {
+                    family,
+                    ...(transferAccounts.length
+                      ? {
+                          accountIds: transferAccounts.map((item) =>
+                            financialAccountShortcode.parse(item.id),
+                          ),
+                        }
+                      : {}),
+                    ...(transferSince ? { since: `${transferSince}-01` } : {}),
+                  },
+                ];
+              if (family === "statement_transaction")
+                return [
+                  {
+                    family,
+                    ...(accounts.length
+                      ? {
+                          accountIds: accounts.map((item) =>
+                            financialAccountShortcode.parse(item.id),
+                          ),
+                        }
+                      : {}),
+                    ...(since ? { since: `${since}-01` } : {}),
+                  },
+                ];
+              if (family === "recommendation")
+                return [
+                  { family, ...(kinds.length ? { entityKinds: kinds } : {}) },
+                ];
               return [
                 {
                   family,
-                  ...(transferAccounts.length
+                  ...(fieldEntity
                     ? {
-                        accountIds: transferAccounts.map((item) =>
-                          financialAccountShortcode.parse(item.id),
-                        ),
+                        targets: [
+                          {
+                            entity: fieldEntity,
+                            fields: fields.length
+                              ? fields
+                              : entityFields.map((field) => field.value),
+                            filters: preset?.field?.filters ?? {},
+                          },
+                        ],
                       }
                     : {}),
-                  ...(transferSince ? { since: `${transferSince}-01` } : {}),
                 },
               ];
-            if (family === "statement_transaction")
-              return [
-                {
-                  family,
-                  ...(accounts.length
-                    ? {
-                        accountIds: accounts.map((item) =>
-                          financialAccountShortcode.parse(item.id),
-                        ),
-                      }
-                    : {}),
-                  ...(since ? { since: `${since}-01` } : {}),
-                },
-              ];
-            if (family === "recommendation")
-              return [
-                { family, ...(kinds.length ? { entityKinds: kinds } : {}) },
-              ];
-            return [
-              {
-                family,
-                ...(fieldEntity
-                  ? {
-                      targets: [
-                        {
-                          entity: fieldEntity,
-                          fields: fields.length
-                            ? fields
-                            : entityFields.map((field) => field.value),
-                          filters: preset?.field?.filters ?? {},
-                        },
-                      ],
-                    }
-                  : {}),
-              },
-            ];
-          },
-        ),
-      }
-    : null;
+            },
+          ),
+        }
+      : null;
   const [debounced] = useDebouncedValue(input, { wait: 300 });
   const estimate = useQuery({
     ...run.sweepEstimate.queryOptions(debounced ?? { families: [] }),
@@ -416,6 +429,7 @@ export function FindSuggestionsDialog({
                 placeholder="All decision fields"
                 className="w-56"
                 options={entityFields}
+                isLoading={metadata?.isPending}
                 values={fields}
                 onValuesChange={setFields}
               />
@@ -426,6 +440,13 @@ export function FindSuggestionsDialog({
               <span className="text-xs text-muted-foreground">
                 Limited to the list's current filters
               </span>
+            ) : null}
+            {metadata?.error ? (
+              <ErrorDisplay
+                error={metadata.error}
+                title="decision fields"
+                onRetry={() => void metadata.refetch()}
+              />
             ) : null}
           </FamilyRow>
         </div>

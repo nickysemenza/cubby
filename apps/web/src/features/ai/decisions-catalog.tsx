@@ -1,8 +1,9 @@
 import { formatConfidence, type DecisionCatalogRow } from "@cubby/schemas/ai";
 import { aiSmokeRunOut } from "@cubby/schemas/ai-smoke";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import { getErrorMessage, humanize } from "@cubby/shared";
+import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -11,6 +12,7 @@ import { z } from "zod";
 import { EntityIcon } from "~/entity/entities";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
+import { ensureEntityMetadata } from "~/entity/metadata";
 import RTable from "~/entity/table/table";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { formatCount } from "~/lib/number-format";
@@ -46,7 +48,7 @@ const fieldSuggestionsResultSchema = z
   .passthrough();
 
 const decisionScope = (row: DecisionCatalogRow) =>
-  row.entity ? entitySummary[row.entity].singular : "Feature";
+  row.entity ? entityRoster[row.entity].singular : "Feature";
 
 const ENTITY_CHOICE: GroupConfig["choice"] = {
   key: "entity",
@@ -332,6 +334,7 @@ function TryOutcome({
 /** Runs one record's basis through Jev and Clef with the smoke runner,
  * pinning each model through `decisionModel`. */
 function TryPanel({ row }: { row: DecisionCatalogRow }) {
+  const queryClient = useQueryClient();
   const entity = row.entity;
   const field = row.field;
   const [recordId, setRecordId] = useState("");
@@ -351,9 +354,11 @@ function TryPanel({ row }: { row: DecisionCatalogRow }) {
         entity as StandardEntity,
       ).readFresh(recordId.trim());
       if (!record) throw new Error(`Record ${recordId} was not found.`);
+      await ensureEntityMetadata(queryClient, entity);
       const loaded = fieldSuggestionBasisFromRecord(
+        queryClient,
         entity,
-        suggestTargetsFor(entity, [field]),
+        suggestTargetsFor(queryClient, entity, [field]),
         record,
       );
       setBasis(
@@ -404,7 +409,7 @@ function TryPanel({ row }: { row: DecisionCatalogRow }) {
       <Row gap="xs" wrap align="center">
         <Input
           aria-label="Record code"
-          placeholder={`${entitySummary[entity].singular} code (optional)`}
+          placeholder={`${entityRoster[entity].singular} code (optional)`}
           className="w-48"
           value={recordId}
           onChange={(event) => setRecordId(event.target.value)}

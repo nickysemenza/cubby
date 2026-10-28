@@ -23,7 +23,7 @@ afterEach(() => {
     );
 });
 
-function fixture() {
+function fixture(deferContract = false) {
   const migrationsFolder = mkdtempSync(
     join(tmpdir(), "cubby-migration-boundary-"),
   );
@@ -31,7 +31,7 @@ function fixture() {
   const statements = [
     "SELECT 'synthetic_base';",
     "SELECT 'synthetic_expand';",
-    "SELECT 'synthetic_contract';",
+    `${deferContract ? "-- cubby:after-deploy\n" : ""}SELECT 'synthetic_contract';`,
   ];
   const entries = statements.map((text, idx) => ({
     idx,
@@ -88,16 +88,39 @@ function fixture() {
   };
 }
 
-it("applies every pending predecessor through the exact boundary without executing the contract", async () => {
-  const state = fixture();
+it("preserves consumer-dependent work across a failed deployment and retry", async () => {
+  const state = fixture(true);
   state.applied.length = 0;
   await migrateDatabase(state.db, {
     migrationsFolder: state.migrationsFolder,
-    through: "0001_expand",
+    through: "0002_contract",
+    beforeDeploy: true,
   });
   expect(state.executed).toEqual([
     "SELECT 'synthetic_base';",
     "SELECT 'synthetic_expand';",
+  ]);
+  state.applied.push(
+    ...state.entries
+      .slice(0, 2)
+      .map((entry) => ({ hash: entry.hash, created_at: String(entry.when) })),
+  );
+  await migrateDatabase(state.db, {
+    migrationsFolder: state.migrationsFolder,
+    beforeDeploy: true,
+  });
+  expect(state.executed).toEqual([
+    "SELECT 'synthetic_base';",
+    "SELECT 'synthetic_expand';",
+  ]);
+  await migrateDatabase(state.db, {
+    migrationsFolder: state.migrationsFolder,
+    through: "0002_contract",
+  });
+  expect(state.executed).toEqual([
+    "SELECT 'synthetic_base';",
+    "SELECT 'synthetic_expand';",
+    "-- cubby:after-deploy\nSELECT 'synthetic_contract';",
   ]);
 });
 

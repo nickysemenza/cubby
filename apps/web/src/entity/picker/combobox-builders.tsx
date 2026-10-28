@@ -1,6 +1,4 @@
 import { displayImagesField } from "@cubby/schemas/display-images";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   fieldValueOf,
   fieldEnvelopeFor,
@@ -20,6 +18,7 @@ import {
 } from "@cubby/schemas/image-summary";
 import type { LocationTreeNode, LocationType } from "@cubby/schemas/location";
 import { locationType } from "@cubby/schemas/location";
+import type { ProductPickerItemOut } from "@cubby/schemas/product";
 import type { ProductCategorySummary as ProductCategory } from "@cubby/schemas/product-category-fields";
 import {
   isServiceProductFeature,
@@ -27,6 +26,7 @@ import {
 } from "@cubby/schemas/product-category-fields";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import { type ShortcodeType } from "@cubby/shared";
+import { type QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
@@ -34,6 +34,7 @@ import { VendorMark } from "~/entity/components/vendor-cell";
 import { enumDisplayValue } from "~/entity/display/enum-field-display";
 import { EntityIcon, entityLabel } from "~/entity/entities";
 import { compactFieldText } from "~/entity/fields/field-text";
+import { entityMetadata } from "~/entity/metadata";
 import { categoryText } from "~/entity/presentation/category-text";
 import { locationToSegments } from "~/entity/presentation/location-breadcrumb";
 import { LocationIcon } from "~/entity/presentation/location-icons";
@@ -69,19 +70,20 @@ const MAX_META = 2;
  * native, so a picker row says what the record's card says.
  */
 function recordRowProjection<E extends ShortcodeType>(
+  queryClient: QueryClient,
   entity: E,
   record: PickerRecord,
 ) {
-  const titleField = entitySummary[entity].titleField;
-  const slotted = entityFieldModels[entity].fields
-    .flatMap((field) => {
+  const titleField = entityMetadata(queryClient, entity).summary.titleField;
+  const slotted = entityMetadata(queryClient, entity)
+    .fields.fields.flatMap((field) => {
       const mobile = field.display.mobile;
       if (!mobile || field.key === titleField) return [];
       return [{ field, slot: mobile.slot, priority: mobile.priority ?? 50 }];
     })
     .sort((a, b) => a.priority - b.priority);
   const text = (entry: (typeof slotted)[number]) =>
-    compactFieldText(entity, record, entry.field);
+    compactFieldText(queryClient, entity, record, entry.field);
   const subtitle = slotted
     .filter((entry) => entry.slot === "subtitle")
     .find((entry) => !!text(entry));
@@ -96,7 +98,7 @@ function recordRowProjection<E extends ShortcodeType>(
     : undefined;
   const status =
     subtitle?.field.kind === "enum" && typeof rawSubtitle === "string"
-      ? enumDisplayValue(entity, subtitle.field, rawSubtitle)
+      ? enumDisplayValue(queryClient, entity, subtitle.field, rawSubtitle)
       : null;
   const trailing = slotted
     .filter((entry) => entry.slot === "trailing")
@@ -143,13 +145,15 @@ function recordThumb(entity: ShortcodeType, record: PickerRecord): PickerThumb {
  * projection supplies the secondary/status and trailing columns.
  */
 export function buildRecordComboboxItem<E extends ShortcodeType>(
+  queryClient: QueryClient,
   entity: E,
   record: PickerRecord,
 ): ComboboxItem<ShortcodeFor<E>> {
   const shortcode = parseShortcodeFor(entity, record.id);
-  const title = record[entitySummary[entity].titleField];
+  const title = record[entityMetadata(queryClient, entity).summary.titleField];
   const aliases = pickerAliases.safeParse(record.aliases).data;
   const { secondary, detail, status, trailing } = recordRowProjection(
+    queryClient,
     entity,
     record,
   );
@@ -233,18 +237,8 @@ export const buildProductComboboxItem = (
     category?: ProductCategory | null;
     coverImageUrl?: string | null;
     aliases?: string[] | null;
-    quantityLedger?: {
-      acquiredUnits: number;
-      exitedUnits: number;
-      expectedQuantity: number;
-      unknownAcquisitionLines: number;
-      unknownExitLines: number;
-      locationCount: number;
-    };
-    onHand?:
-      | { state: "none" }
-      | { state: "counted"; units: number }
-      | { state: "mixed" };
+    quantityLedger?: ProductPickerItemOut["quantityLedger"];
+    onHand?: ProductPickerItemOut["onHand"];
     onHandUnits?: number | null;
     inventoryEntry?: Array<{
       amount: { value: number; unit: string };
@@ -271,7 +265,8 @@ export const buildProductComboboxItem = (
       : null,
   ) ||
     !ledger ||
-    !onHand
+    !onHand ||
+    onHand.state === "unavailable"
     ? base
     : withProductInventoryPresentation(base, ledger, onHand, intent);
 };
@@ -284,7 +279,7 @@ type DerivedOnHand =
 
 function deriveProductOnHand(
   product: ProductPickerInput,
-  ledger: NonNullable<ProductPickerInput["quantityLedger"]> | undefined,
+  ledger: ProductPickerInput["quantityLedger"],
 ): DerivedOnHand | undefined {
   const inventoryUnits = new Set(
     product.inventoryEntry?.map((entry) => entry.amount.unit) ?? [],

@@ -1,7 +1,7 @@
 import { declaredClassificationPolicies } from "@cubby/schemas/classification-field-policy";
 
 import { derivedTriggerDdl } from "~/server/db/derived-trigger-ddl";
-import { entityIdentityDropTriggerSql } from "~/server/db/entity-identity-schema";
+import { entityIdentityDropTriggerSql } from "~/server/db/entity-identity-ddl";
 import { entityLinkDropLivenessTriggerSql } from "~/server/db/entity-link-schema";
 
 import { assessmentHistoryDdl, statementSuggestionDdl } from "./assessment-ddl";

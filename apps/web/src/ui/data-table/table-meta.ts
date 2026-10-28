@@ -1,10 +1,8 @@
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { humanize, type NumberRange, parseShortcode } from "@cubby/shared";
+import { humanize, type NumberRange } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { type ReactNode, useEffect } from "react";
-import { z } from "zod";
 
 import type { PickerRecordSource } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
@@ -94,35 +92,6 @@ export type ColumnExplanation = {
 
 export type RowColumnExplanation<TData> = {
   resolve: (row: TData) => ColumnExplanation | undefined;
-};
-
-/** Declare the same explanation before sizing that the row fallback renders. */
-export function declaredColumnExplanation(
-  entity: EntityRef["entityKind"],
-  columnId: string,
-): ColumnExplanation | undefined {
-  const field = entityFieldModels[entity].fields.find(
-    (candidate) =>
-      candidate.key === columnId || candidate.key === `${columnId}Id`,
-  );
-  return field?.explanation
-    ? { entity, field: field.key, label: field.label }
-    : undefined;
-}
-
-const rowIdentitySchema = z.object({ id: z.string() });
-
-export const resolveColumnExplanation = <TData>(
-  explanation: ColumnExplanation | RowColumnExplanation<TData> | undefined,
-  row: TData,
-  columnId?: string,
-): ColumnExplanation | undefined => {
-  if (explanation)
-    return "resolve" in explanation ? explanation.resolve(row) : explanation;
-  const identity = rowIdentitySchema.safeParse(row);
-  const parsed = identity.success ? parseShortcode(identity.data.id) : null;
-  if (!parsed || !columnId) return undefined;
-  return declaredColumnExplanation(parsed.type, columnId);
 };
 
 /** Per-column Cubby rendering and editing conventions, bound through v9's meta slot. */
@@ -216,7 +185,7 @@ interface TableGroupChoice {
 }
 
 export interface ServerTotals {
-  totalCount: number;
+  totalCount?: number;
   sums?: Record<string, number>;
 }
 

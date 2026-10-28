@@ -86,16 +86,6 @@ export const renderFilterArtifacts = (
   entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
   const { filters: filterEntities } = entityProjectionMaps(entities);
-  const { imports: runtimeImports, alias } = sourceRefImports(
-    filterEntities.flatMap(({ filterDescriptors }) =>
-      filterDescriptors.flatMap((descriptor) =>
-        [descriptor.optionsRef, descriptor.expandRef].filter(
-          (ref): ref is SourceRef => ref !== null,
-        ),
-      ),
-    ),
-    "filterRef",
-  );
   const coreRefs = sourceRefImports(
     filterEntities.flatMap(({ filterDescriptors }) =>
       filterDescriptors.flatMap(({ expandRef }) =>
@@ -104,10 +94,7 @@ export const renderFilterArtifacts = (
     ),
     "filterRef",
   );
-  const runtimeDescriptor = (
-    descriptor: FilterDescriptor,
-    core = false,
-  ): string => {
+  const runtimeDescriptor = (descriptor: FilterDescriptor): string => {
     const properties = [
       `columnId:${JSON.stringify(descriptor.columnId)}`,
       ...(descriptor.field === null
@@ -117,27 +104,6 @@ export const renderFilterArtifacts = (
         ? []
         : [`urlKey:${JSON.stringify(descriptor.urlKey)}`]),
       `kind:${JSON.stringify(descriptor.kind)}`,
-      ...(core
-        ? []
-        : [`placeholder:${JSON.stringify(descriptor.placeholder)}`]),
-      ...(core || descriptor.options === null
-        ? []
-        : [
-            `options:${compactLiteral(
-              descriptor.options.map(
-                ({ expand: _expand, ...option }) => option,
-              ),
-            )}`,
-          ]),
-      ...(core || descriptor.optionsRef === null
-        ? []
-        : [`options:${alias(descriptor.optionsRef)}`]),
-      ...(core || descriptor.optionsKey === null
-        ? []
-        : [`optionsKey:${JSON.stringify(descriptor.optionsKey)}`]),
-      ...(core || descriptor.label === null
-        ? []
-        : [`label:${JSON.stringify(descriptor.label)}`]),
       ...(descriptor.brandRef === null
         ? []
         : [
@@ -151,7 +117,7 @@ export const renderFilterArtifacts = (
           ]),
       ...(descriptor.expandRef === null
         ? []
-        : [`expand:${(core ? coreRefs.alias : alias)(descriptor.expandRef)}`]),
+        : [`expand:${coreRefs.alias(descriptor.expandRef)}`]),
       ...(presetTable(descriptor) === null
         ? []
         : [`expand:presetExpand(${compactLiteral(presetTable(descriptor))})`]),
@@ -200,28 +166,7 @@ export const renderFilterArtifacts = (
   const usesPresets = filterEntities.some(({ filterDescriptors }) =>
     filterDescriptors.some((descriptor) => presetTable(descriptor) !== null),
   );
-  const runtimeRoster = filterEntities
-    .map(
-      ({ key, filterDescriptors }) =>
-        `${JSON.stringify(key)}:[${filterDescriptors.map((descriptor) => runtimeDescriptor(descriptor)).join(",")}],`,
-    )
-    .join("\n");
   return [
-    {
-      relativePath:
-        "apps/web/src/entity/generated/entity-filter-bindings.gen.ts",
-      source:
-        generatedHeader +
-        'import type { Entity } from "@cubby/schemas/entity";\n' +
-        'import { parseShortcodeFor } from "@cubby/schemas/identifiers";\n' +
-        (usesPresets
-          ? 'import { presetExpand } from "~/entity/filter-presets";\n'
-          : "") +
-        `${runtimeImports}\n` +
-        'import type { FilterSpec } from "../filter-manifest";\n\n' +
-        "// Generated runtime filter assembly stays one entity per line.\n// oxfmt-ignore\n" +
-        `export const generatedEntityFilters = {\n${runtimeRoster}\n} satisfies Record<Entity, readonly FilterSpec[]>;\n`,
-    },
     {
       relativePath: "apps/web/src/entity/generated/entity-filter-codecs.gen.ts",
       source:
@@ -237,7 +182,7 @@ export const renderFilterArtifacts = (
         `export const generatedEntityFilterCodecs = {\n${filterEntities
           .map(
             ({ key, filterDescriptors }) =>
-              `${JSON.stringify(key)}:[${filterDescriptors.map((descriptor) => runtimeDescriptor(descriptor, true)).join(",")}],`,
+              `${JSON.stringify(key)}:[${filterDescriptors.map((descriptor) => runtimeDescriptor(descriptor)).join(",")}],`,
           )
           .join(
             "\n",

@@ -31,6 +31,7 @@ import {
   type DerivedSink,
   isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
+import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
 
 type Executor = ReturnType<typeof unwrapDb>;
 
@@ -120,9 +121,9 @@ export async function prepareDerivedPage(
           .parse(
             (
               await unwrapDb(db).execute(sql`
-      SELECT ticket FROM "WorkItem"
-       WHERE strpos(target, '@') > 0
-         AND split_part(target, '@', 1) = ANY(ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(directTargets)}::jsonb)))`)
+      SELECT pending.ticket FROM jsonb_array_elements_text(${JSON.stringify(directTargets)}::jsonb) declared(target)
+        JOIN "WorkItem" pending ON ${fanoutTargetMatches(sql`pending.target`, sql`declared.target`)}
+       WHERE pending.drain = ${DERIVED_DRAIN_JOB_KEY}`)
             ).rows,
           )
           .map((mark) => mark.ticket);
@@ -234,7 +235,7 @@ const lockPublishableMarks = async (
      WHERE d.target = ${declaration.target}
        AND NOT EXISTS (
          SELECT 1 FROM "WorkItem" pending
-          WHERE starts_with(pending.target, ${`${declaration.target}@`})
+          WHERE ${fanoutTargetMatches(sql`pending.target`, sql`${declaration.target}::text`)}
             AND NOT EXISTS (
               SELECT 1 FROM jsonb_array_elements_text(${JSON.stringify(fanoutTickets)}::jsonb) observed(ticket)
               WHERE observed.ticket::bigint = pending.ticket
@@ -379,7 +380,7 @@ const publishValues = async (
          -- A source edit can precede dependent ticket expansion. Keep the
          -- previous result and direct work until that fanout has expanded.
          SELECT 1 FROM "WorkItem" pending
-          WHERE starts_with(pending.target, i.target || '@')
+          WHERE ${fanoutTargetMatches(sql`pending.target`, sql`i.target`)}
             AND NOT EXISTS (
               SELECT 1 FROM jsonb_array_elements_text(${JSON.stringify(groups[0]?.fanoutTickets ?? [])}::jsonb) observed(ticket)
               WHERE observed.ticket::bigint = pending.ticket

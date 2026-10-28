@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { useEntityMetadata } from "~/entity/metadata";
 import { Page } from "~/entity/page/page";
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { Picker } from "~/entity/picker/picker";
@@ -248,13 +249,15 @@ function MemberLoginPicker({
   disabled: boolean;
   onChange: (ledgerParty: string | null) => void;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("ledgerParty");
   // "" is the unlinked sentinel: not a ledger-party code, so the record
   // picker holds it as-is.
   const items = useMemo(
     (): ComboboxItem[] => [
       { id: "", name: "Not linked" },
       ...parties.map((party) => {
-        const item = buildRecordComboboxItem("ledgerParty", {
+        const item = buildRecordComboboxItem(queryClient, "ledgerParty", {
           id: party.shortcode,
           name: party.name,
         });
@@ -269,7 +272,7 @@ function MemberLoginPicker({
           : item;
       }),
     ],
-    [parties, userId],
+    [parties, userId, queryClient],
   );
   return (
     <Picker

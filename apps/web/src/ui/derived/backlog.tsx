@@ -1,4 +1,4 @@
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import { humanize } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -34,7 +34,6 @@ export function DerivedBacklogStatus({
 }) {
   const { data, dataUpdatedAt } = useQuery({
     ...derived.backlog.queryOptions({}),
-    refetchInterval: 15_000,
   });
   const progress = useBacklogProgress(data?.total, dataUpdatedAt);
   if (!data?.total) return null;
@@ -67,7 +66,6 @@ export function DerivedBacklogStatus({
 export function DerivedBacklogOverview() {
   const result = useQuery({
     ...derived.backlog.queryOptions({}),
-    refetchInterval: 15_000,
   });
   const [observed, setObserved] = useState(0);
   const [samples, setSamples] = useState<readonly BacklogSample[]>([]);
@@ -168,7 +166,7 @@ function DerivedBacklogMatrix({ matrix }: { matrix: BacklogMatrix }) {
           surface="background"
           rowHover
           renderColumnHeader={(column) => humanize(column.data)}
-          renderRowHeader={(row) => entitySummary[row.data.entity].singular}
+          renderRowHeader={(row) => entityRoster[row.data.entity].singular}
           renderCell={(row, column) => {
             const count = row.data.counts.get(column.key);
             return count === undefined ? null : formatCount(count);
@@ -183,7 +181,7 @@ function DerivedBacklogMatrix({ matrix }: { matrix: BacklogMatrix }) {
           cellTitle={(row, column) => {
             const count = row.data.counts.get(column.key);
             if (count === undefined) return undefined;
-            return `${entitySummary[row.data.entity].singular} · ${humanize(column.key)}: ${formatCount(count)} updating`;
+            return `${entityRoster[row.data.entity].singular} · ${humanize(column.key)}: ${formatCount(count)} updating`;
           }}
           pinned={PINNED}
           renderPinnedCell={(row) => (

@@ -1,13 +1,10 @@
 import { displayImagesField } from "@cubby/schemas/display-images";
 import { isSlotListView } from "@cubby/schemas/entity-definitions/definition";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import {
-  shortcodeEntities,
-  type BrowserRoutedEntity,
-} from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { shortcodeEntities } from "@cubby/schemas/entity-roster";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import {
@@ -58,9 +55,11 @@ import {
   type ListOverrideContext,
   type ListOverrideWorkbenchProps,
 } from "~/entity/list-columns/types";
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { usePageCount } from "~/entity/page/page";
 import { FindSuggestionsAction } from "~/entity/suggestions/find-suggestions-dialog";
+import { declaredColumnExplanation } from "~/entity/table/column-explanation";
 import {
   createImageColumn,
   isImageColumnId,
@@ -193,17 +192,19 @@ function useListColumns(
   parts: EntityListOverrideResult<BaseListRow, object>,
   nested: boolean,
 ) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
   const helper = useMemo(() => createCubbyColumnHelper<BaseListRow>(), []);
   const { overrides, compose } = parts;
   // An entity with no standard update command (Run) gets no writer at all.
   const onSaveField = useEntityFieldSave(entity);
   const identity = useMemo(
     () =>
-      identityListConfig(entity, {
+      identityListConfig(queryClient, entity, {
         generatedCrud: isStandardEntity(entity),
         flatRows: !parts.tree && !nested,
       }),
-    [entity, parts.tree, nested],
+    [entity, parts.tree, nested, queryClient],
   );
   const identityEditable = useMemo(() => {
     if (!identity.canAutoEdit || parts.list?.nameEditable || !onSaveField)
@@ -217,16 +218,22 @@ function useListColumns(
     };
   }, [identity, onSaveField, parts.list?.nameEditable]);
   const columns = useMemo(() => {
-    const declared = createEntityDisplayColumns(entity, helper, overrides, {
-      onSaveField,
-      onSaveFields: onSaveField?.row,
-    });
+    const declared = createEntityDisplayColumns(
+      queryClient,
+      entity,
+      helper,
+      overrides,
+      {
+        onSaveField,
+        onSaveFields: onSaveField?.row,
+      },
+    );
     const composed = compose
       ? assertSpecialistColumnProvenance(entity, declared, compose(declared))
       : declared;
     // Every list leads with the image column; an entity with no image source
     // shows its icon there, so rows of every kind share one shape.
-    const imageId = entityFieldModels[entity].fields.some(
+    const imageId = entityMetadata(queryClient, entity).fields.fields.some(
       (field) => field.key === "images" && field.display.list,
     )
       ? "images"
@@ -240,6 +247,7 @@ function useListColumns(
         createImageColumn(helper, {
           entity,
           id: imageId,
+          explanation: declaredColumnExplanation(queryClient, entity, imageId),
           getImages: (row) => {
             const effectiveRowDisplayImages = readRecordField(
               row,
@@ -254,7 +262,7 @@ function useListColumns(
       );
       composed.visit(add);
     });
-  }, [entity, helper, overrides, compose, onSaveField]);
+  }, [entity, helper, overrides, compose, onSaveField, queryClient]);
   return { columns, identityEditable };
 }
 
@@ -262,14 +270,16 @@ function useListInitialColumnVisibility(
   entity: BrowserRoutedEntity,
   overrides?: Record<string, boolean>,
 ) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
   return useMemo(
     () => ({
-      ...entityListHiddenColumns(entity),
+      ...entityListHiddenColumns(queryClient, entity),
       ...overrides,
       createdAt: true,
       updatedAt: true,
     }),
-    [entity, overrides],
+    [entity, overrides, queryClient],
   );
 }
 
@@ -313,8 +323,14 @@ export function EmbeddedEntityList({
   operations?: GenericEntityListProps["operations"];
   refreshIntervalMs?: number;
 }) {
-  const view = viewsForEntity(entity).find(
-    (candidate) => candidate.id === savedViewId,
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
+  const view = useMemo(
+    () =>
+      viewsForEntity(queryClient, entity).find(
+        (candidate) => candidate.id === savedViewId,
+      ),
+    [queryClient, entity, savedViewId],
   );
   if (savedViewId && !view)
     throw new Error(`Unknown saved view: ${entity}.${savedViewId}`);
@@ -392,7 +408,7 @@ export function EmbeddedEntityList({
     preview: {},
     selectable: Boolean(actions),
   });
-  const codec = compileFilterCodec(getEntityFilters(entity));
+  const codec = compileFilterCodec(getEntityFilters(queryClient, entity));
   const refresh = list.workbench.refreshControls.onRefresh;
   useEffect(() => {
     if (!refreshIntervalMs) return;
@@ -454,7 +470,7 @@ export function EmbeddedEntityList({
 }
 
 /**
- * The one list page: rendered from `entitySummary[entity].list` over
+ * The one list page: rendered from `entityMetadata(queryClient, entity).summary.list` over
  * `useEntityList` + `ListWorkbench`, with the entity's hand-written half
  * (`entities/list-columns/<entity>`) and slot views (`listSlots`) plugged
  * in by its route component. The view switcher and header live in `listPage`.
@@ -465,7 +481,7 @@ export function GenericEntityList({
   override = NO_OVERRIDE,
 }: GenericEntityListProps) {
   const { search, navigate } = useListSearch();
-  const { view } = resolveListView(entity, search);
+  const { view } = resolveListView(useQueryClient(), entity, search);
 
   if (typeof view === "object" && view.kind === "board") {
     if (!isListEntity(entity))
@@ -507,27 +523,32 @@ function ServerListBody({
   context: ListOverrideContext;
   operations: GenericEntityListProps["operations"];
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
   const { density } = useEntityListCardDensity();
   const parts = override.use(context);
   // A module's hand-written tree (heterogeneous rows, like wish candidates)
   // wins; otherwise the table nests under the declared `list.tree`, read
   // from the server root by root. Cards and the timeline stay flat.
   const nested =
-    !parts.tree && view === "table" && listNested(entity, context.search);
+    !parts.tree &&
+    view === "table" &&
+    listNested(queryClient, entity, context.search);
   const { navigate } = context;
   const nestToggle = useMemo(
     () =>
-      parts.tree || !entitySummary[entity].list.tree?.toggle
+      parts.tree ||
+      !entityMetadata(queryClient, entity).summary.list.tree?.toggle
         ? undefined
         : {
             nested,
             onNestedChange: (value: boolean) =>
               navigate(
-                { nest: nestSearchValue(entity, value) },
+                { nest: nestSearchValue(queryClient, entity, value) },
                 { replace: true },
               ),
           },
-    [entity, navigate, nested, parts.tree],
+    [entity, navigate, nested, parts.tree, queryClient],
   );
   const onGroupByChange = useCallback(
     (key: string | null) => navigate({ groupBy: key ? [{ key }] : undefined }),
@@ -628,12 +649,15 @@ function ServerListBody({
             className="ml-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
           >
             {(list.resultMembership === "unresolved" ||
-              (list.unresolvedCount ?? 0) > 0) && (
+              list.unresolvedCount === undefined ||
+              list.unresolvedCount > 0) && (
               <div className="flex flex-wrap items-center gap-1">
                 <output className="text-muted-foreground">
                   {list.resultMembership === "unresolved"
                     ? "Showing unresolved records"
-                    : `Count incomplete · ${formatCount(list.unresolvedCount ?? 0)} unresolved`}
+                    : list.unresolvedCount === undefined
+                      ? "Unresolved count deferred"
+                      : `Count incomplete · ${formatCount(list.unresolvedCount)} unresolved`}
                 </output>
                 <Button
                   variant="link"
@@ -653,12 +677,13 @@ function ServerListBody({
               </div>
             )}
             <ListTotalSummary
-              totals={entitySummary[entity].list.totals}
+              totals={entityMetadata(queryClient, entity).summary.list.totals}
               labels={list.totalLabels}
               scopeLabel={
                 list.resultMembership === "unresolved"
                   ? "Unresolved records"
-                  : (list.unresolvedCount ?? 0) > 0
+                  : list.unresolvedCount === undefined ||
+                      list.unresolvedCount > 0
                     ? "Known matches"
                     : undefined
               }

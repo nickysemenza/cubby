@@ -6,6 +6,7 @@ import {
   publicImageUrlSummary,
 } from "@cubby/schemas/image-summary";
 import { parseShortcode } from "@cubby/shared";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { isValidElement, type ReactNode, useMemo } from "react";
@@ -28,10 +29,8 @@ import type {
   CubbyTable as ITable,
   CubbyRow as Row,
 } from "../../ui/data-table/table-features";
-import {
-  mobileColumnLabel,
-  resolveColumnExplanation,
-} from "../../ui/data-table/table-meta";
+import { mobileColumnLabel } from "../../ui/data-table/table-meta";
+import { resolveColumnExplanation } from "./column-explanation";
 import { RelationFieldWorkbench } from "./relation-field-workbench";
 
 interface SlotValue {
@@ -221,6 +220,7 @@ function getPriority(
 
 // Slot routing stays centralized so desktop-only columns cannot leak into cards.
 function collectMobileSlots<TItem extends RowData>(
+  queryClient: QueryClient,
   row: Row<TItem>,
   entity: Entity | undefined,
 ) {
@@ -241,6 +241,7 @@ function collectMobileSlots<TItem extends RowData>(
     const slot = resolveSlot(colId, meta);
     if (slot === "hidden") continue;
     const explanation = resolveColumnExplanation(
+      queryClient,
       meta?.explanation,
       row.original,
       colId,
@@ -354,17 +355,19 @@ function collectMobileSlots<TItem extends RowData>(
 }
 
 function projectMobileRow<TItem extends RowData>({
+  queryClient,
   row,
   entity,
   basePath,
   getDetailsHref,
 }: {
+  queryClient: QueryClient;
   row: Row<TItem>;
   entity: Entity | undefined;
   basePath: string | undefined;
   getDetailsHref: ((item: TItem) => string | undefined) | undefined;
 }): MobileListRowModel<TItem> {
-  const slots = collectMobileSlots(row, entity);
+  const slots = collectMobileSlots(queryClient, row, entity);
   slots.subtitleCandidates.sort((a, b) => a.priority - b.priority);
   slots.trailingValues.sort((a, b) => a.priority - b.priority);
   slots.metaValues.sort((a, b) => a.priority - b.priority);
@@ -412,6 +415,7 @@ export function useMobileListModel<TItem extends RowData>({
   /** External cell-render state snapshot; see useTableConfig. */
   rowContentVersion?: unknown;
 }): MobileListRowModel<TItem>[] {
+  const queryClient = useQueryClient();
   const rows = table.getRowModel().rows;
   const basePath =
     !disableDetailsHref && entity && isBrowserRoutedEntity(entity)
@@ -428,13 +432,21 @@ export function useMobileListModel<TItem extends RowData>({
     void rowContentVersion;
     return rows.map((row) =>
       projectMobileRow({
+        queryClient,
         row,
         entity,
         basePath,
         getDetailsHref: resolvedGetDetailsHref,
       }),
     );
-  }, [basePath, entity, resolvedGetDetailsHref, rowContentVersion, rows]);
+  }, [
+    basePath,
+    entity,
+    resolvedGetDetailsHref,
+    rowContentVersion,
+    rows,
+    queryClient,
+  ]);
 }
 
 //

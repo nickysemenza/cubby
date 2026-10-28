@@ -13,13 +13,13 @@ import { afterEach, expect, it } from "vitest";
 import { userEvent } from "vitest/browser";
 import { z } from "zod";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
+import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { mock } from "~/lib/test/mock-schema";
 import {
   getEntityListOutputSchema,
   purchaseListItem,
-} from "~/entity/generated/entity-lists.gen";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { mock } from "~/lib/test/mock-schema";
+} from "~/server/generated/entity-lists.server.gen";
 
 import { FinancialBookingReview } from "./financial-booking-review";
 
@@ -108,7 +108,12 @@ it("reviews a reimbursement against the chosen Purchase and commits its exact ap
         data: mock(getEntityListOutputSchema("purchase"), {
           overrides: {
             items: [purchase],
-            meta: { totalCount: 1, pageIndex: 0, pageSize: 20 },
+            meta: {
+              hasNextPage: false,
+              totalCount: 1,
+              pageIndex: 0,
+              pageSize: 20,
+            },
           },
         }),
       };

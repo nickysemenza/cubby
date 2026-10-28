@@ -54,6 +54,7 @@ const inputSchema = z.object({
   groupBy: listGroupByDimensionsSchema.optional(),
   nesting: z.unknown().optional(),
   resultMembership: listResultMembership.optional(),
+  includeCount: z.boolean().optional(),
 });
 
 export function defineListOperations<
@@ -113,6 +114,9 @@ export function defineListOperations<
             parseSorts(binding, input.sort, Boolean(input.filters.searchQuery)),
             pagination,
             projection,
+            "page",
+            undefined,
+            input.includeCount,
           ),
       );
       const sums = result.sums;
@@ -141,6 +145,7 @@ export function defineListOperations<
         action: "list" as const,
         entity: binding.entity,
         ...buildPaginatedResponse(pagination, enveloped, result.count, {
+          hasNextPage: result.hasNextPage,
           unresolvedCount: result.unresolvedCount,
           incompleteSums: result.incompleteSums,
           sums,
@@ -198,7 +203,10 @@ export function defineListOperations<
           "count",
           preparation,
         );
-        return { count: result.count, unresolvedCount: result.unresolvedCount };
+        return {
+          count: z.number().int().nonnegative().parse(result.count),
+          unresolvedCount: result.unresolvedCount,
+        };
       };
       const [total, ...counts] = await withTrace(
         "entity.list.viewCounts",

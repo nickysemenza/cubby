@@ -14,6 +14,8 @@ import {
 } from "@cubby/worker-tracing";
 import { z } from "zod";
 
+import { withWasmMetrics } from "~/lib/wasm-metrics";
+
 declare const __CF_WORKERS__: boolean | undefined;
 const isCloudflareWorkerBuild = (
   flag: boolean | undefined = typeof __CF_WORKERS__ === "undefined"
@@ -126,13 +128,30 @@ export const withInvocationTrace = async <T>(
   fn: (span: AppSpan) => Promise<T>,
   attributes?: Record<string, SpanAttr>,
 ): Promise<T> => {
-  return traceContext.run([name], async () => {
-    if (IS_CF)
-      return enterInvocationSpan(await getCfTracing(), name, fn, {
-        attributes,
-      });
-    return fn(NOOP_TRACE_SPAN);
-  });
+  return traceContext.run([name], () =>
+    withWasmMetrics(
+      (metrics) => {
+        withSynchronousManualTrace("wasm.request", (span, end) => {
+          span.setAttributes({
+            "wasm.call.count": metrics.calls,
+            "wasm.call.failure_count": metrics.failures,
+            "wasm.duration_sum_ms": Math.round(metrics.durationMs),
+            "wasm.methods": [...metrics.methods]
+              .map(([method, count]) => `${method}:${count}`)
+              .join(" "),
+          });
+          end();
+        });
+      },
+      async () => {
+        if (IS_CF)
+          return enterInvocationSpan(await getCfTracing(), name, fn, {
+            attributes,
+          });
+        return fn(NOOP_TRACE_SPAN);
+      },
+    ),
+  );
 };
 
 /** Run work under a span whose lifetime is explicitly ended by the caller. */

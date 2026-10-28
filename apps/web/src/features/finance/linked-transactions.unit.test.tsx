@@ -1,13 +1,22 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
-import { getEntityListOutputSchema } from "~/entity/generated/entity-lists.gen";
+import { getEntityListOutputSchema } from "~/server/generated/entity-lists.server.gen";
 const financialTransactionListResponse = getEntityListOutputSchema(
   "financialTransaction",
 );
 import { testCompleteDataQuality } from "@cubby/schemas/testing";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render as testingRender,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entityListFor } from "~/entity/entity-list";
@@ -18,6 +27,36 @@ import {
   type LinkedTransactionsOperations,
   LinkedTransactions,
 } from "./linked-transactions";
+
+let queryClient: Awaited<ReturnType<typeof metadataQueryClient>>;
+beforeEach(async () => {
+  queryClient = await metadataQueryClient();
+});
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
+
+function MetadataProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+function render(ui: ReactNode, options?: Parameters<typeof testingRender>[1]) {
+  const BrowserWrapper = options?.wrapper;
+  return testingRender(ui, {
+    ...options,
+    wrapper: ({ children }) =>
+      BrowserWrapper ? (
+        <BrowserWrapper>
+          <MetadataProvider>{children}</MetadataProvider>
+        </BrowserWrapper>
+      ) : (
+        <MetadataProvider>{children}</MetadataProvider>
+      ),
+  });
+}
 
 installFeatures();
 
@@ -121,7 +160,7 @@ function transactionResponse({
         updatedAt: new Date("2026-08-16T00:00:00.000Z"),
       }),
     ],
-    meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
+    meta: { pageIndex: 0, pageSize: 100, hasNextPage: false, totalCount: 1 },
   });
 }
 

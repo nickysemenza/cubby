@@ -1,5 +1,9 @@
 import type { ListGroupBy, ListNesting } from "@cubby/schemas/pagination";
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import {
+  infiniteQueryOptions,
+  queryOptions,
+  type QueryClient,
+} from "@tanstack/react-query";
 
 import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
 import {
@@ -10,6 +14,7 @@ import { defaultPagination } from "~/ui/data-table/table-utils";
 
 import { listGroupBy } from "./entity-list/list-grouping";
 import type { ListSearch } from "./entity-list/list-slot-types";
+import { correlateEntityList } from "./entity-read-result";
 import { getEntityFilters } from "./filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -23,15 +28,15 @@ import {
   type EntityListResultByEntity,
   entityListParamsFromParsed,
   entityListInputFor,
-  getEntityListOutputSchema,
   type ListEntity,
   parseEntityListInput,
 } from "./generated/entity-lists.gen";
-import { entityListDefaultSort } from "./sortable-fields";
+import { entityMetadata } from "./metadata";
 
 export type EntityListParams<E extends ListEntity> =
   EntityListParamsByEntity[E];
 interface CompileEntityListOptions {
+  includeCount?: boolean;
   pageSize?: number;
   defaultSort?: { orderBy: string; direction: "asc" | "desc" };
   groupBy?: ListGroupBy[];
@@ -45,10 +50,13 @@ interface CompileEntityListOptions {
  * hydration, preloads, and Back/Forward all share a canonical cache key.
  */
 export function compileEntityListInput<E extends ListEntity>(
+  queryClient: QueryClient,
   entity: E,
   validatedSearch: ListSearch,
   options: CompileEntityListOptions = {},
 ): EntityListParams<E> {
+  const metadata = entityMetadata(queryClient, entity);
+  const filters = getEntityFilters(queryClient, entity);
   const parsedSort = paramToSort(validatedSearch.sort)?.map((term) => ({
     orderBy: term.id,
     direction: term.desc ? ("desc" as const) : ("asc" as const),
@@ -57,13 +65,14 @@ export function compileEntityListInput<E extends ListEntity>(
   const input: EntityListParseInput = {
     entity,
     filters: buildFiltersFromManifest(
-      getEntityFilters(entity),
-      filterGetterFromSearch(getEntityFilters(entity), validatedSearch),
+      filters,
+      filterGetterFromSearch(filters, validatedSearch),
     ),
     pagination: {
       pageIndex: 0,
       pageSize: options.pageSize ?? defaultPagination.pageSize,
     },
+    includeCount: options.includeCount ?? false,
   };
   // Omitted rather than an empty array: server list search recognizes the
   // absence of a user sort and opens in lexical relevance order. A URL sort
@@ -71,7 +80,12 @@ export function compileEntityListInput<E extends ListEntity>(
   // person selected it deliberately.
   if (parsedSort) input.sort = parsedSort;
   else if (!searching) {
-    input.sort = [options.defaultSort ?? entityListDefaultSort(entity)];
+    input.sort = [
+      options.defaultSort ?? {
+        orderBy: metadata.sort?.default ?? "createdAt",
+        direction: metadata.sort?.direction ?? "desc",
+      },
+    ];
   }
   const dimensions = options.groupBy ?? listGroupBy(validatedSearch);
   if (dimensions?.length) input.groupBy = dimensions;
@@ -94,7 +108,10 @@ export function entityListFor<E extends ListEntity>(
 ) {
   const operation = listOperation.forEntity(entity);
   const wireInputFor = (input: EntityListParams<E>) =>
-    entityListInputFor(entity, input);
+    entityListInputFor(entity, {
+      ...input,
+      includeCount: input.includeCount ?? true,
+    });
   const queryKeyFor = (
     input: EntityListInputByEntity[E],
   ): OperationQueryKey<EntityListInputByEntity[E]> => [
@@ -105,9 +122,12 @@ export function entityListFor<E extends ListEntity>(
   const call = async (
     input: EntityListInputByEntity[E],
     signal?: AbortSignal,
+    consistency?: "strong",
   ): Promise<EntityListResultByEntity[E]> => {
-    const result = await operation.call(input, { signal });
-    return getEntityListOutputSchema(entity).parse(result);
+    return correlateEntityList(
+      entity,
+      await operation.call(input, { signal, consistency }),
+    );
   };
   const keyInputFor = (wireInput: EntityListInputByEntity[E]) => {
     try {
@@ -126,14 +146,24 @@ export function entityListFor<E extends ListEntity>(
     entity,
     queryKey: (input: EntityListParams<E>) =>
       queryKeyFor(keyInputFor(wireInputFor(input))),
-    queryOptions: (input: EntityListParams<E>) => {
+    queryOptions: (
+      input: EntityListParams<E>,
+      readOptions?: { consistency?: "strong" },
+    ) => {
       const wireInput = wireInputFor(input);
       const keyInput = keyInputFor(wireInput);
       const policy = operation.policy(keyInput);
       return queryOptions({
         queryKey: queryKeyFor(keyInput),
-        queryFn: async ({ signal }) =>
-          call(parseEntityListInput(entity, wireInput), signal),
+        queryFn: async ({ signal, client, queryKey }) =>
+          call(
+            parseEntityListInput(entity, wireInput),
+            signal,
+            readOptions?.consistency ??
+              (client.getQueryState(queryKey)?.isInvalidated
+                ? "strong"
+                : undefined),
+          ),
         meta: policy.meta,
         ...policy.freshness,
       });
@@ -150,9 +180,9 @@ export function entityListFor<E extends ListEntity>(
       return {
         queryKey: queryKeyFor(keyInput),
         meta: policy.meta,
-        execute: (signal: AbortSignal) =>
+        execute: (signal: AbortSignal, consistency?: "strong") =>
           Promise.resolve(
-            call(parseEntityListInput(entity, wireInput), signal),
+            call(parseEntityListInput(entity, wireInput), signal, consistency),
           ),
       };
     },
@@ -163,20 +193,21 @@ export function entityListFor<E extends ListEntity>(
       const policy = operation.policy(parsed);
       return infiniteQueryOptions({
         queryKey: infiniteOperationQueryKey(queryKeyFor(parsed)),
-        queryFn: async ({ pageParam, signal }) =>
+        queryFn: async ({ pageParam, signal, client, queryKey }) =>
           call(
             parseEntityListInput(entity, {
               ...wireInputFor(firstPage),
               pagination: { ...firstPage.pagination, pageIndex: pageParam },
             }),
             signal,
+            client.getQueryState(queryKey)?.isInvalidated
+              ? "strong"
+              : undefined,
           ),
         initialPageParam: 0,
         getNextPageParam: (lastPage) => {
-          const { pageIndex, pageSize, totalCount } = lastPage.meta;
-          return (pageIndex + 1) * pageSize < totalCount
-            ? pageIndex + 1
-            : undefined;
+          const { pageIndex, hasNextPage } = lastPage.meta;
+          return hasNextPage ? pageIndex + 1 : undefined;
         },
         meta: policy.meta,
         ...policy.freshness,

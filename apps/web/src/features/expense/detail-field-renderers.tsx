@@ -1,24 +1,22 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { fieldDecisionOf } from "@cubby/schemas/field-envelope";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderDetailFieldValue } from "~/entity/display/entity-display";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { useEntityMetadata } from "~/entity/metadata";
 import { formatCurrency } from "~/lib/number-format";
 import { Stack } from "~/ui/layout";
 
 import type { EntityDetailFieldRenderers } from "../../entity/display/detail-field-renderers/index";
 
-const categoryField = entityFieldModels.expense.fields.find(
-  (field) => field.key === "spendingCategoryId",
-);
-
-const projectField = entityFieldModels.expense.fields.find(
-  (field) => field.key === "projectId",
-);
-
 /** Allocated projects retain their per-share amounts; proposals use the shared queue. */
 function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata("expense");
+  const projectField = metadata.fields.fields.find(
+    (field) => field.key === "projectId",
+  );
   // Regression: without min-w-0, a share's project link did not truncate and
   // pushed its amount past the two-column facts.
   return (
@@ -56,17 +54,26 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
           ) : null}
         </Stack>
       ) : projectField ? (
-        renderDetailFieldValue("expense", expense, projectField)
+        renderDetailFieldValue(queryClient, "expense", expense, projectField)
       ) : null}
     </Stack>
   );
 }
 
+function ExpenseCategoryField({ expense }: { expense: ExpenseOut }) {
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata("expense");
+  const categoryField = metadata.fields.fields.find(
+    (field) => field.key === "spendingCategoryId",
+  );
+  return categoryField
+    ? renderDetailFieldValue(queryClient, "expense", expense, categoryField)
+    : null;
+}
+
 export const expenseDetailFields = {
   "expense-spending-category": (expense) => ({
-    value: categoryField
-      ? renderDetailFieldValue("expense", expense, categoryField)
-      : null,
+    value: <ExpenseCategoryField expense={expense} />,
   }),
   "expense-project": (expense) => ({
     value: <ExpenseProjectField expense={expense} />,

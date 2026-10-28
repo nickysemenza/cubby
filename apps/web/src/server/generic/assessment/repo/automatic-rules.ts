@@ -7,7 +7,7 @@ import {
 } from "@cubby/schemas/automatic-rule";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
+import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy";
 import type { StatementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
 import { cents } from "@cubby/shared";
 

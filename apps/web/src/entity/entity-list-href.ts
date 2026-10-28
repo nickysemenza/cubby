@@ -1,8 +1,9 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { ListGroupBy } from "@cubby/schemas/pagination";
+import type { QueryClient } from "@tanstack/react-query";
 
+import { getEntityFilters } from "~/entity/filter-manifest";
 import { encodeFilters, sortToParam } from "~/entity/filters";
-import { generatedEntityFilters } from "~/entity/generated/entity-filter-bindings.gen";
 import { generatedBrowserRoutes } from "~/entity/generated/entity-routes.gen";
 import type { ViewDefinition } from "~/entity/model/view-manifest";
 
@@ -20,10 +21,11 @@ type ListState = {
  * list.
  */
 export const entityListSearch = (
+  queryClient: QueryClient,
   entity: BrowserRoutedEntity,
   state: ListState,
 ) => {
-  const specs = generatedEntityFilters[entity];
+  const specs = getEntityFilters(queryClient, entity);
   const known = new Set(specs.map((spec) => spec.columnId));
   const unknown = state.filters.find(({ id }) => !known.has(id));
   if (unknown)
@@ -44,11 +46,12 @@ export const entityListSearch = (
 
 /** `href` (not a typed `to`) because the entity is dynamic. */
 export const entityListHref = (
+  queryClient: QueryClient,
   entity: BrowserRoutedEntity,
   state: ListState,
   params: Record<string, string> = {},
 ): string =>
   `${generatedBrowserRoutes[entity].routes.list}?${new URLSearchParams({
     ...params,
-    ...entityListSearch(entity, state),
+    ...entityListSearch(queryClient, entity, state),
   }).toString()}`;

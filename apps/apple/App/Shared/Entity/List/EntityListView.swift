@@ -605,7 +605,8 @@ struct EntityListView: View {
     }
 
     private func countSummary(_ meta: ListPageMeta) -> String {
-        let count = ValueFormat.count(Double(meta.totalCount))
+        guard let totalCount = meta.totalCount else { return "Count unavailable" }
+        let count = ValueFormat.count(Double(totalCount))
         if model?.resultMembership == .unresolved { return "\(count) unresolved" }
         if (meta.unresolvedCount ?? 0) > 0 { return "\(count) known" }
         return count

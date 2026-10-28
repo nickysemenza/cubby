@@ -1,9 +1,9 @@
-import { connectionCatalog } from "@cubby/schemas/connected-views";
 import type { Entity } from "@cubby/schemas/entity";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import { useEntityMetadata } from "~/entity/metadata";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section, Disclosure } from "~/ui/layout";
@@ -25,7 +25,7 @@ export function EntityConnectionContext({
   id: string;
   showOpenLink?: boolean;
 }) {
-  if (!connectionCatalog.views(entity, "context").length) return null;
+  if (!useEntityMetadata(entity).connections.context.length) return null;
   return (
     <ResolvedContext entity={entity} id={id} showOpenLink={showOpenLink} />
   );

@@ -24,11 +24,11 @@ import { Profiler } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { MobileCardView } from "~/entity/table/mobile-card-view";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

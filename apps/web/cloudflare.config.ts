@@ -147,6 +147,13 @@ export const productionWorker = defineWorker({
     HYPERDRIVE_CACHED: bindings.hyperdrive({
       id: "427dd7a2876c4dccbe056d37fa7374ff",
     }),
+    // Normal GitHub deployment resolves the idempotently provisioned config
+    // before building. Local/test builds replace all three bindings.
+    HYPERDRIVE_BACKGROUND: bindings.hyperdrive({
+      id:
+        process.env.CUBBY_BACKGROUND_HYPERDRIVE_ID ??
+        "00000000000000000000000000000000",
+    }),
     USDA_RELEASES: bindings.r2({
       name: "cubby-usda-releases",
     }),

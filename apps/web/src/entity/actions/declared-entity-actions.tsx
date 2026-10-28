@@ -4,6 +4,7 @@ import {
   locationShortcode,
 } from "@cubby/schemas/identifiers";
 import { productListItemOut } from "@cubby/schemas/product";
+import { useQueryClient } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { z } from "zod";
 
@@ -238,6 +239,7 @@ const adjustableInventory = z.object({
  * correction, not a recount, so it never stamps `verifiedAt`.
  */
 function useAdjustInventoryAmountAction(): EntityActionHandles {
+  const queryClient = useQueryClient();
   const [entry, setEntry] = useState<EntityActionRow | null>(null);
   const stage = (row: EntityActionRow) => {
     const adjustable = adjustableInventory.safeParse(row).success;
@@ -275,6 +277,7 @@ function useAdjustInventoryAmountAction(): EntityActionHandles {
         // the inventory request seeds from; the registry validates the rest.
         request={
           detailEditRequest(
+            queryClient,
             "inventory",
             entry as never,
             "amount",

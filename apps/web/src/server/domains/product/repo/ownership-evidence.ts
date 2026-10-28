@@ -12,30 +12,44 @@ import { getDb } from "~/server/db/helpers";
 import { loadProductOwnershipTimelines } from "./ownership";
 import { loadProductOwnershipQuantityEvidence } from "./quantity-ledger";
 
-export async function loadProductOwnershipEvidence(
+/** Resolve one bounded page together; never fan out one history read per row. */
+export async function loadProductOwnershipEvidenceBatch(
   db: Database,
-  id: ProductId,
-  category: RawProductCategorySummary | null,
-): Promise<ProductOwnershipEvidenceOut> {
-  if (isServiceProductCategory(category))
-    return {
-      state: "uncertain",
-      acquiredAt: null,
-      exitedAt: null,
-      confidenceLostAt: null,
-    };
-  const [timelines, quantities] = await Promise.all([
-    loadProductOwnershipTimelines(getDb(db), [id]),
-    loadProductOwnershipQuantityEvidence(db, [id]),
-  ]);
-  const timeline = timelines.get(id);
-  const quantity = quantities.get(id);
-  if (!timeline || !quantity)
-    throw new Error("Product ownership evidence omitted its row");
-  return productOwnershipEvidence(
-    timeline,
-    quantity.ownExpectedQuantity,
-    quantity.hasKitContributions,
+  products: readonly {
+    id: ProductId;
+    category: RawProductCategorySummary | null;
+  }[],
+): Promise<Map<ProductId, ProductOwnershipEvidenceOut>> {
+  const ids = products
+    .filter((row) => !isServiceProductCategory(row.category))
+    .map((row) => row.id);
+  const timelines = await loadProductOwnershipTimelines(getDb(db), ids);
+  const quantities = await loadProductOwnershipQuantityEvidence(db, ids);
+  return new Map(
+    products.map((row): [ProductId, ProductOwnershipEvidenceOut] => {
+      if (isServiceProductCategory(row.category))
+        return [
+          row.id,
+          {
+            state: "uncertain",
+            acquiredAt: null,
+            exitedAt: null,
+            confidenceLostAt: null,
+          },
+        ];
+      const timeline = timelines.get(row.id);
+      const quantity = quantities.get(row.id);
+      if (!timeline || !quantity)
+        throw new Error("Product ownership evidence omitted its row");
+      return [
+        row.id,
+        productOwnershipEvidence(
+          timeline,
+          quantity.ownExpectedQuantity,
+          quantity.hasKitContributions,
+        ),
+      ];
+    }),
   );
 }
 

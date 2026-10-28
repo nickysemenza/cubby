@@ -3,6 +3,7 @@ import type {
   IngredientFilters,
   IngredientListItem,
 } from "@cubby/schemas/ingredient";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -132,6 +133,7 @@ export const ingredientListOverride = defineListOverride<
   IngredientFilters
 >({
   use() {
+    const queryClient = useQueryClient();
     const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
       [],
     );
@@ -164,6 +166,7 @@ export const ingredientListOverride = defineListOverride<
               meta: attachCubbyColumnMeta<IngredientListItem>({
                 columnGroup: "Use",
                 provenance: relationshipFieldProvenance(
+                  queryClient,
                   "ingredient",
                   "recipes",
                 ),
@@ -187,6 +190,7 @@ export const ingredientListOverride = defineListOverride<
               meta: {
                 columnGroup: "Catalog",
                 provenance: relationshipFieldProvenance(
+                  queryClient,
                   "ingredient",
                   "products",
                 ),
@@ -199,7 +203,7 @@ export const ingredientListOverride = defineListOverride<
             }),
           );
         }),
-      [],
+      [queryClient],
     );
 
     const list = useMemo(

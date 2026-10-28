@@ -1,9 +1,17 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import {
+  cleanup,
+  fireEvent,
+  render as testingRender,
+  screen,
+} from "@testing-library/react";
+import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
@@ -14,6 +22,36 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/ui/data-table/table-features";
+
+let queryClient: Awaited<ReturnType<typeof metadataQueryClient>>;
+beforeEach(async () => {
+  queryClient = await metadataQueryClient();
+});
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
+
+function MetadataProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+function render(ui: ReactNode, options?: Parameters<typeof testingRender>[1]) {
+  const BrowserWrapper = options?.wrapper;
+  return testingRender(ui, {
+    ...options,
+    wrapper: ({ children }) =>
+      BrowserWrapper ? (
+        <BrowserWrapper>
+          <MetadataProvider>{children}</MetadataProvider>
+        </BrowserWrapper>
+      ) : (
+        <MetadataProvider>{children}</MetadataProvider>
+      ),
+  });
+}
 
 const LINKED: ExpenseOut = entityReadFixture(
   entityFieldEnvelopeSchemas.expense.list,
@@ -115,7 +153,7 @@ function ExpensePurchaseCell({ expense }: { expense: ExpenseOut }) {
   const columns = useMemo(
     () =>
       helper.columns([
-        expenseVendorColumn(helper, async () => undefined, {
+        expenseVendorColumn(queryClient, helper, async () => undefined, {
           asPurchase: true,
         }),
       ]),

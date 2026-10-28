@@ -355,24 +355,24 @@ export async function publicFieldEnvelopeBatch({
   };
   for (const root of roots) collect(root);
   const facts = new Map<ShortcodeEntity, PageFieldReadContexts>();
-  await Promise.all(
-    [...requested].map(async ([kind, codes]) => {
-      const existing = new Map(
-        [...(contexts?.get(kind) ?? [])].map(([code, context]) => [
-          canonicalCode(code),
-          context,
-        ]),
-      );
-      const missing = [...codes].filter((code) => !existing.has(code));
-      let loaded: PageFieldReadContexts | undefined;
-      if (missing.length) {
-        const read = repositoryReadPorts(kind);
-        if (!read) throw new Error(`No repository read ports for ${kind}`);
-        loaded = await read.fieldReads(db, missing);
-      }
-      facts.set(kind, new Map([...existing, ...(loaded ?? [])]));
-    }),
-  );
+  // Each kind can fan out into several fact reads. Keep one kind in flight
+  // so embedded projections cannot exhaust the invocation's socket reserve.
+  for (const [kind, codes] of requested) {
+    const existing = new Map(
+      [...(contexts?.get(kind) ?? [])].map(([code, context]) => [
+        canonicalCode(code),
+        context,
+      ]),
+    );
+    const missing = [...codes].filter((code) => !existing.has(code));
+    let loaded: PageFieldReadContexts | undefined;
+    if (missing.length) {
+      const read = repositoryReadPorts(kind);
+      if (!read) throw new Error(`No repository read ports for ${kind}`);
+      loaded = await read.fieldReads(db, missing);
+    }
+    facts.set(kind, new Map([...existing, ...(loaded ?? [])]));
+  }
   const serialize = (node: ReadNode): ReadRow => {
     let row = node.row;
     for (const child of node.children)

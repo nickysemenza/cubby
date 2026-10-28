@@ -4,12 +4,14 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { testShortcode } from "@cubby/schemas/testing";
+import { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, renderHook } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import type { EntityActionDefinition } from "~/entity/actions/entity-action-definition";
 import { RelationScopeContext } from "~/entity/entity-detail/relation-scope";
 import { installFeatures } from "~/features/registry";
@@ -157,8 +159,15 @@ const REGISTRY: readonly EntityActionDefinition[] = [
   }),
 ];
 
+let metadataClient: QueryClient;
+const metadataWrapper = ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={metadataClient}>{children}</QueryClientProvider>
+);
+
 const resolve = (entity: "product" | "vendor" | "task") =>
-  renderHook(() => useEntityActions<TestRow>(entity, REGISTRY)).result;
+  renderHook(() => useEntityActions<TestRow>(entity, REGISTRY), {
+    wrapper: metadataWrapper,
+  }).result;
 
 const rowMenuText = (
   rowMenuItems: (row: TestRow) => React.ReactNode,
@@ -166,6 +175,10 @@ const rowMenuText = (
 ) => render(<div>{rowMenuItems({ id })}</div>).container.textContent;
 
 describe("useEntityActions", () => {
+  beforeEach(async () => {
+    metadataClient = await metadataQueryClient();
+  });
+  afterEach(() => metadataClient.clear());
   it("resolves only the verbs the entity declares", () => {
     const product = resolve("product");
     const vendor = resolve("vendor");
@@ -240,8 +253,9 @@ describe("useEntityActions", () => {
       }),
     ];
 
-    const { result } = renderHook(() =>
-      useEntityActions<TestRow>("product", registry),
+    const { result } = renderHook(
+      () => useEntityActions<TestRow>("product", registry),
+      { wrapper: metadataWrapper },
     );
     const [stock, duplicate] = result.current.selectionActionItems;
 
@@ -296,8 +310,9 @@ describe("useEntityActions", () => {
       }),
     ];
 
-    const { result } = renderHook(() =>
-      useEntityActions<TestRow>("product", registry),
+    const { result } = renderHook(
+      () => useEntityActions<TestRow>("product", registry),
+      { wrapper: metadataWrapper },
     );
 
     expect(result.current.detailActions).toEqual([]);
@@ -338,7 +353,7 @@ describe("useEntityActions", () => {
     const { rerender } = renderHook(
       ({ entity }: { entity: "product" | "task" }) =>
         useEntityActions<TestRow>(entity, REGISTRY),
-      { initialProps },
+      { initialProps, wrapper: metadataWrapper },
     );
 
     expect(() => rerender({ entity: "task" })).toThrow(

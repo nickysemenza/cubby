@@ -8,8 +8,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { installFeatures } from "~/features/registry";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 
@@ -40,7 +40,7 @@ const listQueryOptions = () => ({
     // The returned page intentionally has more rows than its page size. The
     // server list hook owns accumulation, while the table must render every
     // accumulated row rather than applying client pagination a second time.
-    meta: { pageIndex: 0, pageSize: 1, totalCount: 500 },
+    meta: { hasNextPage: false, pageIndex: 0, pageSize: 1, totalCount: 500 },
   }),
 });
 

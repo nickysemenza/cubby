@@ -2,7 +2,6 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   isPurchaseAdjustmentExpense,
@@ -13,6 +12,9 @@ import {
   fieldValueOf,
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
+import { useQueryClient } from "@tanstack/react-query";
+
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 type FieldResolutions = Record<string, ReadableFieldEnvelope>;
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import {
@@ -217,6 +219,8 @@ export function FieldSuggestionProvider({
   receiptHandler?: { current: ((recordId: string) => Promise<void>) | null };
   children: ReactNode;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
   const form = useFormContext();
   const reviewedDrafts = useRef(
     new Map<string, { assessmentId: string; proposal: FieldSuggestion }>(),
@@ -274,7 +278,7 @@ export function FieldSuggestionProvider({
     return parsed.success ? (parsed.data.fields ?? {}) : {};
   }, [record]);
   const targets = useMemo(() => {
-    const declared = suggestTargetsFor(entity, fieldKeys);
+    const declared = suggestTargetsFor(queryClient, entity, fieldKeys);
     // A `mode: "prune"` target proposes removing entries from a text-array
     // field, not a value to auto-fill — its review UI needs PR 3's ChipsInput
     // wiring, so a form-surface provider never requests it, even when the
@@ -286,7 +290,7 @@ export function FieldSuggestionProvider({
     );
     const basisKeys = new Set(filtered.flatMap((target) => target.basis));
     return { targets: filtered, basisKeys: [...basisKeys] };
-  }, [entity, fieldKeys]);
+  }, [queryClient, entity, fieldKeys]);
 
   const watchedKeys = useMemo(
     () =>
@@ -428,6 +432,7 @@ export function FieldSuggestionProvider({
   });
 
   const sufficient = isBasisSufficient(
+    queryClient,
     entity,
     targets,
     debouncedBasis,
@@ -721,7 +726,7 @@ export function FieldSuggestionProvider({
         const latestDraft = form.getValues(path);
         const changedDuringApply =
           basisValueOf(latestDraft) !== basisValueOf(drafts.get(key));
-        const field = entityFieldModels[entity].fields.find(
+        const field = entityMetadata(queryClient, entity).fields.fields.find(
           (item) => item.key === key,
         );
         form.resetField(path, {

@@ -6,6 +6,7 @@ import { imageAssociationStorage } from "./image-associations";
 import {
   productPrimaryPlacement,
   productReadSchemas,
+  productReadFacts,
 } from "../product-read-fields";
 import { productChildren } from "../child-tables/product.js";
 import { type DerivedStoredInput, defineEntity } from "./definition.js";
@@ -897,6 +898,8 @@ export default defineEntity(
         },
         {
           key: "primaryPlacement",
+          storedKey: "readFacts",
+          storedPath: ["primaryPlacement"],
           kind: "json",
           nullable: true,
           labelOverride: "Where",
@@ -1621,6 +1624,8 @@ Rules:
         {
           display: { detail: false, list: false },
           key: "pricing",
+          storedKey: "readFacts",
+          storedPath: ["pricing"],
           kind: "json",
           validation: {
             read: productPricingOut,
@@ -1672,6 +1677,7 @@ Rules:
         },
         {
           key: "food",
+          storedKey: "food",
           kind: "json",
           nullable: true,
           labelOverride: "USDA Food",
@@ -1980,6 +1986,8 @@ Rules:
         },
         {
           key: "stockStatus",
+          storedKey: "readFacts",
+          storedPath: ["stockStatus"],
           kind: "text",
           labelOverride: "Inventory status",
           display: { columnGroup: "Stock", listHidden: true, width: "md" },
@@ -2124,6 +2132,8 @@ Rules:
           // hidden-by-default addition (same shape as the task entity's
           // `dueEndDate`/`sortOrder`), not part of the read-only cluster above.
           key: "onHandUnits",
+          storedKey: "readFacts",
+          storedPath: ["onHandUnits"],
           kind: "number",
           nullable: true,
           display: {
@@ -2304,6 +2314,47 @@ Rules:
       },
       // Stored derived values that are not list fields (ADR 0021).
       stored: {
+        readFacts: {
+          compute: "product.readFacts",
+          publishes: "derivedValue",
+          clock: "householdDay",
+          resultSchema: productReadFacts,
+          inputs: [
+            ...PRODUCT_PRICING_INPUTS,
+            ...QUANTITY_INPUTS,
+            ...PRODUCT_OWNERSHIP_INPUTS,
+            {
+              table: "Product",
+              match: { id: "id" },
+              columns: ["stockTracked", "categoryId"],
+            },
+            // Location ancestry and labels are part of the saved placement.
+            // A tree edit can affect descendants without a direct stock edge.
+            {
+              table: "Location",
+              match: { id: "id" },
+              columns: ["name", "parentId", "deletedAt"],
+              targetWhere: { deletedAt: null },
+            },
+          ],
+        },
+        food: {
+          compute: "product.food",
+          publishes: "derivedValue",
+          resultSchema: foodSummary.nullable(),
+          inputs: [
+            {
+              table: "Product",
+              match: { id: "id" },
+              columns: ["fdc_id", "deletedAt"],
+            },
+            {
+              table: "EntityExternalId",
+              match: { entityId: "id" },
+              where: { entityKind: "product" },
+            },
+          ],
+        },
         ownership: {
           compute: "product.ownership",
           clock: "householdDay",

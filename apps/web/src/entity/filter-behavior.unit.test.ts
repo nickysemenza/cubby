@@ -2,12 +2,16 @@ import { entitySchema } from "@cubby/schemas/entity";
 import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
+
 import { resolveDateRange } from "./filter-behavior";
 import { getEntityFilters } from "./filter-manifest";
 import { entityFilterFieldMaps } from "./generated/entity-filter-fields.gen";
 
+const queryClient = await metadataQueryClient();
+
 const rangeSpec = (entity: string, columnId: string) => {
-  const spec = getEntityFilters(entitySchema.parse(entity)).find(
+  const spec = getEntityFilters(queryClient, entitySchema.parse(entity)).find(
     (candidate) => candidate.columnId === columnId,
   );
   if (spec?.expand === undefined)
@@ -21,7 +25,10 @@ describe("declared range presets", () => {
   it("expands every declared option into a patch of real filter fields", () => {
     let expanders = 0;
     for (const [entity, fields] of Object.entries(entityFilterFieldMaps)) {
-      for (const spec of getEntityFilters(entitySchema.parse(entity))) {
+      for (const spec of getEntityFilters(
+        queryClient,
+        entitySchema.parse(entity),
+      )) {
         if (spec.kind !== "range" || spec.expand === undefined) continue;
         for (const option of spec.options ?? []) {
           const patch = spec.expand(option.value);

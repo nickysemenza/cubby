@@ -1,6 +1,6 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { TaskFilters } from "@cubby/schemas/project";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { match } from "ts-pattern";
 
@@ -11,6 +11,7 @@ import {
   type EntityDisplayImageMap,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
+import { useEntityMetadata } from "~/entity/metadata";
 import { renderOptionCell } from "~/entity/table/column-helpers";
 import { task } from "~/integrations/tanstack-query/generated/catalog/task.gen";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -93,6 +94,12 @@ function TaskRows({
   rows: ActionableTaskOut[];
   displayImages: EntityDisplayImageMap;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("task");
+  const statusOptions = useMemo(
+    () => fieldEnumOptions(queryClient, "task", "status"),
+    [queryClient],
+  );
   return (
     <StaticTable
       rows={rows}
@@ -128,8 +135,7 @@ function TaskRows({
           id: "column-1",
           header: "Status",
           headClassName: "w-32",
-          cell: (t) =>
-            renderOptionCell(t.status, fieldEnumOptions("task", "status")),
+          cell: (t) => renderOptionCell(t.status, statusOptions),
         },
         {
           id: "column-2",
@@ -198,6 +204,12 @@ export function NextTasks({ filters }: { filters: TaskFilters }) {
 }
 
 function NextTasksBody({ data }: { data: ActionableTasksOut }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("task");
+  const statusOptions = useMemo(
+    () => fieldEnumOptions(queryClient, "task", "status"),
+    [queryClient],
+  );
   const imageRefs = useMemo(
     () => [
       ...data.next.map((task) => ({
@@ -284,10 +296,7 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
                       name: bt.task.name,
                     }}
                   />
-                  {renderOptionCell(
-                    bt.task.status,
-                    fieldEnumOptions("task", "status"),
-                  )}
+                  {renderOptionCell(bt.task.status, statusOptions)}
                   {bt.task.subtaskCount > 0 && (
                     <Badge variant="outline">
                       {bt.task.doneSubtaskCount}/{bt.task.subtaskCount}

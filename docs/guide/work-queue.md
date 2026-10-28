@@ -8,6 +8,12 @@ counts and paging. Its All, Automatic, Agent, Review, Waiting and Problems views
 share that one server read with record work sections, including Runs. GitHub
 Issues owns delivery and remaining domain coverage.
 
+Statement review work probes current eligibility only for the admitted financial
+accounts, stopping after the first eligible proposal per account. Record work
+for another entity never prepares statement suggestions. These reads retain
+source withdrawals, ignores, supersessions and settlement references as the
+eligibility authority; a stored pending proposal alone does not establish work.
+
 The Runs header links to **Run types** (`/runs/types`), a catalog of every
 declared Run kind. Its indexed sections expose purpose keys, execution owners,
 progress sources, AI ownership and ordered steps (purpose, action, input mode,

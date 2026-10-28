@@ -9,6 +9,7 @@
 //! Pure serde + parser code (no JsValue except the export shims) so
 //! `cargo test` runs natively.
 
+use ingredient::unit::{MeasureKind, convert_measure_with_graph, make_graph};
 use ingredient::{
     from_str as parse_ingredient_str,
     unit::{Measure, Unit, singular},
@@ -377,6 +378,72 @@ pub fn unit_mappings_from_food(food: WFoodInput) -> WUnitMappings {
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn product_unit_mappings(product: WProductInput) -> WUnitMappings {
     WUnitMappings(product_mappings(&product))
+}
+
+/// One page crosses the JS/WASM boundary once, preserving its input order.
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
+#[serde(transparent)]
+pub struct WProductDisplayInputs(pub Vec<WProductInput>);
+
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
+pub struct WNaturalUnitPrice {
+    pub unit: String,
+    pub price: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
+pub struct WProductDisplay {
+    pub id: String,
+    pub mappings: Vec<WUnitMapping>,
+    pub natural: Option<WNaturalUnitPrice>,
+    pub per_gram: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
+#[serde(transparent)]
+pub struct WProductDisplays(pub Vec<WProductDisplay>);
+
+/// Synthesize mappings and comparable prices with one graph per Product.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn product_display_batch(products: WProductDisplayInputs) -> WProductDisplays {
+    WProductDisplays(
+        products
+            .0
+            .into_iter()
+            .map(|product| {
+                let mappings = product_mappings(&product);
+                let pairs: Vec<_> = mappings.iter().map(WUnitMapping::to_pair).collect();
+                let graph = make_graph(&pairs);
+                let price = |unit| {
+                    convert_measure_with_graph(
+                        &ingredient::unit::Measure::new(unit, 1.0),
+                        MeasureKind::Money,
+                        &graph,
+                    )
+                    .map(WAmount::from)
+                    .map(|amount| amount.value)
+                    .filter(|value| value.is_finite())
+                };
+                let natural = ["oz", "fl oz", "each"].into_iter().find_map(|unit| {
+                    price(unit).map(|price| WNaturalUnitPrice {
+                        unit: unit.to_string(),
+                        price,
+                    })
+                });
+                let per_gram = price("g");
+                WProductDisplay {
+                    id: product.id,
+                    mappings,
+                    natural,
+                    per_gram,
+                }
+            })
+            .collect(),
+    )
 }
 
 // Tests — including the ProMix fdc 576208 bare-count regression suite, ported

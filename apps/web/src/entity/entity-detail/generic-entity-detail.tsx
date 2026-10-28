@@ -1,17 +1,8 @@
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { onDetailSurface } from "@cubby/schemas/entity-detail-summary";
-import {
-  entityFieldModels,
-  type EntityFieldModel,
-} from "@cubby/schemas/entity-fields";
-import {
-  entityManifest,
-  imageDisplayBindings,
-  isAuditableEntity,
-  isGalleryEntity,
-} from "@cubby/schemas/entity-manifest";
+import { type EntityFieldModel } from "@cubby/schemas/entity-fields";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { isGalleryEntity } from "@cubby/schemas/entity-roster";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
@@ -22,6 +13,7 @@ import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { PuzzlePieceIcon } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { type ComponentProps, lazy, Suspense, useState } from "react";
 import { z } from "zod";
 
@@ -42,6 +34,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { readRecordField } from "~/entity/entity-references";
 import { featureRegistry } from "~/entity/feature-registry";
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import type { DetailHeroActions } from "~/entity/page/entity-page-header";
 import { Page } from "~/entity/page/page";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
@@ -53,6 +46,7 @@ import {
   type ImageChainQueryOptions,
 } from "~/ui/derived/image-chain";
 import { WhyValue } from "~/ui/derived/why-value";
+import { VisibleContent } from "~/ui/hooks/visible-content";
 import { Section } from "~/ui/layout";
 import { DetailEditAction } from "~/ui/primitives/detail-edit-action";
 import { Skeleton } from "~/ui/primitives/skeleton";
@@ -114,8 +108,10 @@ type DisplayField = EntityFieldModel["fields"][number];
  * itself walks every entity the same way.
  */
 const presentationOf = (
+  queryClient: QueryClient,
   entity: GenericDetailEntity,
-): CompiledEntityPresentation & { singular: string } => entitySummary[entity];
+): CompiledEntityPresentation & { singular: string } =>
+  entityMetadata(queryClient, entity).summary;
 
 const sectionIcon = (kind: DeclaredSection["kind"]) => {
   switch (kind) {
@@ -132,16 +128,20 @@ const sectionIcon = (kind: DeclaredSection["kind"]) => {
 
 /** The chip the hero declares, read off the record. */
 function heroStampOf<E extends GenericDetailEntity>(
+  queryClient: QueryClient,
   entity: E,
   record: DetailRecordOf<E>,
 ) {
-  const { hero } = presentationOf(entity).detail;
-  const fields: readonly DisplayField[] = entityFieldModels[entity].fields;
+  const { hero } = presentationOf(queryClient, entity).detail;
+  const fields: readonly DisplayField[] = entityMetadata(queryClient, entity)
+    .fields.fields;
   const chipField =
     hero.chip === null
       ? undefined
       : fields.find((candidate) => candidate.key === hero.chip);
-  const chip = chipField ? heroChipLabel(entity, record, chipField) : null;
+  const chip = chipField
+    ? heroChipLabel(queryClient, entity, record, chipField)
+    : null;
   return chip === null ? undefined : { label: chip, tone: "ink" as const };
 }
 
@@ -173,19 +173,20 @@ interface GenericEntityDetailOperations {
 }
 
 function declaredSections<E extends GenericDetailEntity>(
+  queryClient: QueryClient,
   entity: E,
   record: DetailRecordOf<E>,
   bag: DetailRecordBag,
   operations: GenericEntityDetailOperations,
 ): DetailSection[] {
-  const { detail, singular } = presentationOf(entity);
+  const { detail, singular } = presentationOf(queryClient, entity);
   const slots = detailSlotsFor(entity);
   // A field a summary slot shows is not repeated by a later section.
   const summarized = new Set(
     detail.summary.flatMap((slot) =>
       slot.kind === "fields" &&
       onDetailSurface(slot, "web") &&
-      !isEmptySummaryCell(entity, record, slot)
+      !isEmptySummaryCell(queryClient, entity, record, slot)
         ? slot.fields
         : [],
     ),
@@ -228,7 +229,7 @@ function declaredSections<E extends GenericDetailEntity>(
         ];
       }
       case "relation": {
-        const plan = planRelationSection(entity, section);
+        const plan = planRelationSection(queryClient, entity, section);
         const contextFields = unsummarized(section.contextFields);
         const createLabel =
           detail.variant === "journal" ? verbDef("logEntry").label : undefined;
@@ -325,7 +326,24 @@ function declaredSections<E extends GenericDetailEntity>(
       }
     }
   });
-  return orderSections(detail.variant, sections, built);
+  const ordered = orderSections(detail.variant, sections, built);
+  let streamedRelation = false;
+  return ordered.map((section) => {
+    const declared = sections.find((candidate) => candidate.id === section.id);
+    if (declared?.kind === "fields") return section;
+    if (declared?.kind === "relation" && !streamedRelation) {
+      streamedRelation = true;
+      return section;
+    }
+    return {
+      ...section,
+      content: (
+        <VisibleContent fallback={<SlotFallback />}>
+          {section.content}
+        </VisibleContent>
+      ),
+    };
+  });
 }
 
 /**
@@ -333,12 +351,14 @@ function declaredSections<E extends GenericDetailEntity>(
  * the editing registry at runtime.
  */
 function editRequestFor<E extends GenericDetailEntity>(
+  queryClient: QueryClient,
   entity: E,
   record: DetailRecordOf<E>,
 ): EntityEditDialogRequest<EditableEntity> {
   // SAFETY: the caller proved `isGeneratedBrowserCrudEntity(entity)`, i.e.
   // the entity has the standard update contract this request names.
   const request: unknown = detailEditRequest(
+    queryClient,
     entity as EditableEntity,
     record as never,
   );
@@ -386,7 +406,7 @@ function detailWayfinding<E extends GenericDetailEntity>(
 
 /**
  * The one detail page: every section, the hero and the edit affordance come
- * from `entitySummary[entity].detail`; a slot is the only hand-written fill
+ * from `entityMetadata(queryClient, entity).summary.detail`; a slot is the only hand-written fill
  * and renders only where `detailSlots` provides it.
  */
 type GenericEntityDetailProps<E extends GenericDetailEntity> = {
@@ -410,13 +430,19 @@ function RunEvidenceDetail<E extends GenericDetailEntity>({
   record,
   operations = {},
 }: GenericEntityDetailProps<E>) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
   const bag = detailRecordSchema.parse(record);
-  const { titleField } = presentationOf(entity);
+  const { titleField } = presentationOf(queryClient, entity);
   const title =
     readRecordField(record, titleField, z.string().catch("")) || bag.id;
-  const sections = declaredSections(entity, record, bag, operations).filter(
-    (section) => section.workspace === "evidence",
-  );
+  const sections = declaredSections(
+    queryClient,
+    entity,
+    record,
+    bag,
+    operations,
+  ).filter((section) => section.workspace === "evidence");
   return (
     <DetailActionProvider>
       <Page
@@ -430,7 +456,7 @@ function RunEvidenceDetail<E extends GenericDetailEntity>({
           entity={entity}
           id={bag.id}
           visibleSections={sections.map((section) => section.id)}
-          visibleFields={presentationOf(entity)
+          visibleFields={presentationOf(queryClient, entity)
             .detail.sections.filter(
               (section) =>
                 section.workspace === "evidence" && section.kind === "fields",
@@ -475,11 +501,13 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   record: DetailRecordOf<E>;
   operations?: GenericEntityDetailOperations;
 }) {
-  const { detail, titleField, singular } = presentationOf(entity);
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
+  const { detail, titleField, singular } = presentationOf(queryClient, entity);
   const bag = detailRecordSchema.parse(record);
   const title =
     readRecordField(record, titleField, z.string().catch("")) || bag.id;
-  const heroStamp = heroStampOf(entity, record);
+  const heroStamp = heroStampOf(queryClient, entity, record);
   const [editing, setEditing] = useState(false);
   const EditOverride = detailEditOverrideFor(entity);
   const heroActions: readonly string[] = detail.hero.actions;
@@ -493,8 +521,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   // fallbacks are resolved at this page boundary, just as for record pills.
   const imageRef = { entityKind: entity, entityId: bag.id };
   const displayImages = useEntityDisplayImages(
-    (entityManifest[entity].imageStorage !== false ||
-      imageDisplayBindings[entity].length > 0) &&
+    entityMetadata(queryClient, entity).descriptor.displayImages &&
       !heroImages?.length
       ? [imageRef]
       : [],
@@ -505,7 +532,13 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const emoji = z
     .looseObject({ emoji: z.string().nullish() })
     .parse(record).emoji;
-  const sections = declaredSections(entity, record, bag, operations);
+  const sections = declaredSections(
+    queryClient,
+    entity,
+    record,
+    bag,
+    operations,
+  );
   // The first fields section left after the summary is the record's headline
   // facts, leading the content column ahead of Needs you and Activity.
   const fieldSectionIds = new Set(
@@ -516,7 +549,8 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const facts = sections.find((section) => fieldSectionIds.has(section.id));
   // Change history plus declared dated relations, merged into one timeline.
   const timeline =
-    isAuditableEntity(entity) || detail.activityRelations.length > 0;
+    entityMetadata(queryClient, entity).descriptor.auditable ||
+    detail.activityRelations.length > 0;
   sections.push({
     id: "connected-records",
     title: "Connected records",
@@ -674,8 +708,8 @@ function FullEntityDetail<E extends GenericDetailEntity>({
             <DetailSuggestions
               entity={entity}
               records={[record]}
-              fieldKeys={entityFieldModels[entity].fields
-                .filter((field) => field.display.detail)
+              fieldKeys={entityMetadata(queryClient, entity)
+                .fields.fields.filter((field) => field.display.detail)
                 .map((field) => field.key)}
             >
               <RecordQualityProvider
@@ -691,7 +725,15 @@ function FullEntityDetail<E extends GenericDetailEntity>({
                       content: (
                         <>
                           <QualitySectionChecks section={section.id} />
-                          {section.content}
+                          {detail.sections.some(
+                            (declared) => declared.id === section.id,
+                          ) ? (
+                            section.content
+                          ) : (
+                            <VisibleContent fallback={<SlotFallback />}>
+                              {section.content}
+                            </VisibleContent>
+                          )}
                         </>
                       ),
                     }))}
@@ -739,7 +781,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
             <EntityEditDialog<EditableEntity>
               open
               onOpenChange={setEditing}
-              request={editRequestFor<E>(entity, record)}
+              request={editRequestFor<E>(queryClient, entity, record)}
             />
           )
         ) : null}

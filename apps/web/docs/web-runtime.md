@@ -75,9 +75,16 @@ An enabled import button must not let a reattached EPUB feed an unfinished
 automatic photo pass and bypass the failed photo's Retry action.
 
 Hydration: TanStack Start's SSR query stream lands in the client cache before
-React hydrates, so gate loading branches with `useHydratedLoading`/`useHydrated`,
-and gate auth-required queries on `useHydrated() && session`, never raw session
-state. Interactive controls in streamed sections, design showcases, and lazy
+React hydrates. First-screen protected reads inherit the root route's server
+session guard and use `useSuspenseQuery` / `useSuspenseInfiniteQuery` inside
+independent `QuerySection` boundaries. Start Home's shared reads concurrently
+in its loader without awaiting the dashboard; the loader returns the stable
+household date inputs. Needs you, What changed, Meals, the key-number strip,
+detail summary cells and the first declared relation stream their real data.
+Do not add client-session or hydration gates to these reads. Later sections
+use `VisibleContent` for one-shot viewport admission and remain mounted after
+admission. Interaction-only authenticated reads can use `useHydrated() &&
+session`; passive loading branches use `useHydratedLoading`/`useHydrated`. Interactive controls in streamed sections, design showcases, and lazy
 detail slots stay disabled until their own
 `useHydrated()` is true; shell hydration alone does not establish their handlers
 are attached. Direct loads to protected routes are gated server-side at the root route
@@ -113,21 +120,20 @@ declared-control bindings preserve its value type. Generated cells reread the
 row, while ordinary factories request the cached accessor value lazily. Keep
 inheritance intent and domain formatting in their existing adapters.
 Full record timelines join the continuous detail page. Timeline renderers remain lazy imports; section navigation never unmounts an editor or timeline.
-Ordinary browser surfaces never import `entityInspectorMetadata`: it carries the
-compiler's filter descriptors, port refs, and a duplicate of the summary, and
-one import ships all of it to every list. Read names, titles, resolved
-`primarySearch`, `list.initialFilter`, `bulkUpdate`, `recordEmojiField`, and
-`recordIconEntityField` from `entitySummary`;
-`shortcodePrefix`/`searchable` from `entityManifest`; and filter
-`field`/`columnId`/`kind`/URL key/`referenceEntity` from `getEntityFilters`
-with `filterUrlKey` (a runtime spec omits `urlKey` when it equals
-`columnId`). The server and the lazily loaded schema surfaces
-(`entity/platform`: the Entities schema sheet and the
-`/entities/schema/$entity` page) keep the full inspector.
+Ordinary browser surfaces read entity fields, filters and saved views from the
+selected metadata slice in their explicit QueryClient. `getEntityFilters` adapts
+`filterDescriptors` data, including preset expansions, declared dynamic expansion
+rules, reference brands, sentinels and range bounds; it never imports the universal
+filter bindings or exact filter-schema maps. Filter menus retain deferred rosters.
+`viewsForEntity(queryClient, entity)` adapts only that entity's saved views. Home
+uses the small generated home-pin roster. Canonical aggregate Problems declarations
+stay server-owned; browser continuations read the selected declaration through a
+server function. Technical schema surfaces request compact server-owned presentation
+rows and the selected entity's report through local query boundaries. They never
+hydrate every entity's metadata slice or import the full inspector into the browser.
 Route loaders split through TanStack Router's `defaultBehavior` alongside
-the component chunks. Keep the generated entity maps and lazy slot registries
-shared: per-entity model registration adds initialization and cross-entity
-Suspense contracts without removing the all-entity list schemas. Scope
+the component chunks. Keep lazy slot registries shared; entity metadata arrives as compiler-owned slices
+in QueryClient rather than through global installed models, caches or proxies. Scope
 `AuthUIProvider` to the auth/account views; ordinary session reads use
 `authClient.useSession()`. The JSON viewer uses `browserOnlyLazy` at its interaction boundary. Keep the
 generic editor eager: a cold editor graph delays opening and adds a Suspense
@@ -135,7 +141,7 @@ contract to every caller.
 Date-cell inputs stay eager so typing to edit keeps every keystroke while
 focus transfers to the input.
 Keep picker option rosters and Base UI label/equality functions stable across
-form rerenders; use the existing enum roster cache and memoize search projections.
+form rerenders; memoize the mounted control's scoped enum options and search projections.
 Resolve the page toolbar's header portal target in a layout effect before paint:
 moving the inline fallback later remounts it and discards an early search draft.
 Keep list page factories (`list-page.tsx`) separate from detail factories
@@ -143,6 +149,42 @@ Keep list page factories (`list-page.tsx`) separate from detail factories
 factory result to a module-level constant referenced by a splittable property
 in the route's literal options object; loader-time helpers stay React-free in
 `detail-loader.ts`.
+
+## Entity metadata transport
+
+Entity route `beforeLoad` awaits `ensureEntityMetadata(queryClient, entity)`
+before list-filter compilation or rendering. The server imports the requested
+entity slice and its directly declared relation/reference dependencies, validates
+and freezes each compiler-owned slice, and returns them in one loader read.
+Dependencies are not traversed transitively. Query's SSR dehydration owns their
+transport; a document's QueryClient owns their cache. Accessors take that explicit
+scope, and `useEntityMetadata` consumes the same cache without a hydration-time read.
+Slice storage and dependency admission use separate cache entries: a slice seeded
+as another entity's dependency does not establish that its own dependencies are
+available on a later navigation. Dependency slices live with the document cache.
+Dynamic pickers, previews and graph nodes admit their requested slice through that
+hook; non-entity Calendar loads its declared source slices before pure compilation.
+The shell uses only the generated names/icons/routes/capabilities roster.
+
+Editors resolve their requested definition from the explicit QueryClient. A dynamic
+dialog admits that metadata inside its local overlay before loading the baseline
+or rendering the form. Slices transport compiler-owned `createDefaults` and
+`structuredSchemas`; selected server validation applies the original exact Zod
+contract asynchronously, preserving field paths and pending state. Enum option
+rosters have no global metadata cache; mounted controls memoize their options.
+
+Suggestions, editor basis helpers and Why-this-value source fields read an admitted
+entity slice from their explicit QueryClient. The sweep menu uses the lean
+suggestion-capable roster and loads selected field details before enabling its
+scope. Metadata-dependent suggestion identity and review policy stay server-owned
+in `field-suggestion-policy`; shared normalization and context helpers remain
+metadata-free.
+
+Browser list/detail contracts validate lightweight wire plans and import output
+types only. The selected server read owner loads the full entity schemas,
+validates exact filters, resolves filter tokens, and validates complete outputs.
+Keep those schemas and the whole metadata catalogs outside the browser and hot
+Worker ingress. A dynamic import in source is not emitted-bundle evidence.
 
 ## Confirmed edit state
 
@@ -179,10 +221,43 @@ Invalid rows issue no writes; successful sibling rows remain saved. Errors keep
 row and field context, and retry targets failed original row identities only.
 Multi-field rows without a shared atomic row writer reject before dispatch.
 
+## Read consistency
+
+Ordinary browser display operations use `HYPERDRIVE_CACHED`: at most 60 seconds
+of cached data plus 15 seconds of stale-while-revalidate. Authentication and
+identity resolution remain authoritative. Mutations, money entry, financial
+record reads/reports, settlement/reconciliation previews and receiving decisions
+always use `HYPERDRIVE` with caching disabled. The shared operation runner makes
+the policy decision after validating input, including the generic entity or
+report slot, so an operation's explicit context policy cannot downgrade money.
+
+Read-your-writes belongs to the member's browser session. Attempted writes return
+a signed `cubby.last_write` cookie carrying the member, session and write time;
+reads stay strong for 90 seconds, beyond the full cache window. The marker uses
+the current Better Auth secret and cookie security helpers, `SameSite=Lax`,
+`Path=/`, and `Secure` in production (the existing local test override applies).
+It is script-readable so stream envelopes can renew it after headers were sent.
+The transport sets a short-lived pending claim before a mutation or stream;
+invalid claims fail closed if an aborted response never delivers its signature.
+The marker grants no authentication authority. Tampering, wrong member/session,
+future timestamps and expired signatures select strong reads. A browser without
+a marker is cache eligible; API-key, MCP and native callers stay strong without
+a valid marker (`X-Cubby-Read-Marker` can carry the signed token). Tokens remain
+verifiable for one day so an API caller can retain a marker past the 90-second
+strong-read window; the browser cookie itself expires after 90 seconds. There is no
+freshness DO RPC on reads. Background and derived notifications do not mint
+member markers.
+
+Invalidated operation queries send `X-Cubby-Read-Consistency: strong` on their
+refetch. The query's invalidation state preserves that bypass for inactive
+baselines fetched later, including infinite queries. Query batching groups by
+headers, so a strong refetch cannot downgrade into an ordinary cached batch.
+Notifications invalidate only their existing affected cache ripples.
+
 ## Change notifications
 
 The authenticated shell subscribes to the `household.changed` doorbell topic
-(`/api/doorbell`, owned by the household freshness Durable Object) over a
+(`/api/doorbell`, owned by the notification Durable Object) over a
 same-origin WebSocket. A ring carries `changes`, a map from cache category to
 public record shortcodes or `null` for a whole category. Writers that cannot name
 records publish `null`; more than 200 distinct ids collapse to `null`. Image
@@ -190,8 +265,8 @@ processing resolves its storage UUIDs to public shortcodes before enrollment.
 A ring without `changes` rereads every loaded view. Writers enroll changes in
 their transaction; successful savepoints union ids (`null` absorbs ids), while
 rollback discards them.
-After the outer commit, one best-effort hint advances the strong-read window
-before broadcasting. Audit writes cover ordinary entity edits across transports;
+After the outer commit, one best-effort hint broadcasts the affected categories.
+Notifications never advance a household or member strong-read window. Audit writes cover ordinary entity edits across transports;
 non-audited recipe totals, conversion coverage, assessments, saved AI analyses and search/embedding
 publication enroll at their saved projection owners. Image-processing completion, retry, retirement and subject-lift claims publish record-scoped hints; other claims, ordinary Job heartbeats and
 cursor-only advances do not publish hints. Unchanged periodic projections do not
@@ -225,6 +300,11 @@ path as edits; timestamp-only periodic updates do not imply changed output.
 Subscription establishment, reconnect and app resume resync cache-backed queries
 to recover missed hints. Logout unmounts the subscription; delivery requires
 reauthentication after its five-minute lease expires.
+
+The derived backlog badge and its overview consume these change notifications,
+including reconnect/resume resync, without a fixed polling interval. Workflow
+progress polling stays local to its workflow; query defaults pause intervals
+while the browser tab is hidden.
 
 This replaces fixed post-mutation refresh timers. Delivery is not a durable event
 log: a Worker can die after database commit but before publishing, even while a
@@ -280,6 +360,11 @@ filters, including all pages and the inherited `effectiveFeature` value.
 Unresolved references distinguish pending pages, completed missing IDs and
 failed reads; cached matches remain visible during refresh errors.
 
+Saved-view counts load on interaction with the view tabs or filter editor,
+sharing one cached operation across observers. Pending or failed counts stay
+absent; never substitute loaded-row length or zero for a population total.
+Product filter rosters activate when their editor opens (or a selected value
+needs its label); a complete deferred roster retains local picker search.
 Saved-view counts forward count intent through the canonical repository reader.
 They retain the same filters, prepared membership facts and custom counts as the
 list, while skipping row selection, presentation bindings, ordering and group

@@ -319,7 +319,7 @@ const makeableWorkflow = bindWorkflow(
         )
         .sort((a, b) => b.coverage - a.coverage)
         .slice(0, input.limit ?? 24),
-      truncated: candidates.count > CANDIDATE_CAP,
+      truncated: z.number().parse(candidates.count) > CANDIDATE_CAP,
       candidateCap: CANDIDATE_CAP,
     })),
 );

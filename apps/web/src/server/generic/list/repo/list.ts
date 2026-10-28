@@ -57,10 +57,7 @@ import type { PgColumn, PgSelect, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { ListFacet } from "~/contracts/entity-list.contract";
-import {
-  ENTITY_LIST_READ_SCHEMAS,
-  type ListEntity,
-} from "~/entity/generated/entity-lists.gen";
+import type { ListEntity } from "~/entity/generated/entity-lists.gen";
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -82,8 +79,10 @@ import {
   shortcodeSetCondition,
   unwrapDb,
 } from "~/server/db/helpers";
+import { executeListQueryWithoutCount } from "~/server/db/helpers/query";
 import { registerReadPorts } from "~/server/entity-kernel/repo/read-ports";
 import { createAppError } from "~/server/errors/app-error";
+import { ENTITY_LIST_READ_SCHEMAS } from "~/server/generated/entity-lists.server.gen";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { loadCurrentFieldOwnership } from "~/server/generic/assessment/repo/automatic-fields";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
@@ -1165,6 +1164,8 @@ interface ListRequest<Filters extends object> {
   filters: Filters;
   sorts: SortParams[];
   pagination: PaginationParams;
+  /** Existing callers retain exact counts; browser rosters may select one extra row. */
+  includeCount?: boolean;
   readIntent?: ListReadIntent;
   projection?: ListProjection;
   /** Shares prepared derived data across the reads of one request. */
@@ -1928,7 +1929,7 @@ export function listScaffold<
       );
     },
 
-    /** No additional query when the requested filters depend only on known data. */
+    /** Explicit counts report unknown membership; uncounted pages defer this scan. */
     async unresolvedCount<Filters extends object>(
       db: Database | DrizzleTransaction,
       filters: Filters,
@@ -1941,71 +1942,6 @@ export function listScaffold<
         scaffold.unresolvedWhere(filters, context),
         listTable,
       );
-    },
-
-    /** Stored contributors determine completeness; current authoritative scalars can settle it. */
-    async incompleteSums<Filters extends object>(
-      db: Database | DrizzleTransaction,
-      filters: Filters,
-      context: ListContext = ListContext.empty,
-      unresolvedCount = 0,
-    ): Promise<string[] | undefined> {
-      const uncertainMembership =
-        unresolvedCount > 0
-          ? entitySummary[entity].list.totals.flatMap((total) => total.keys)
-          : [];
-      const totals = entitySummary[entity].list.totals.filter(
-        (total) => "requiresResults" in total,
-      );
-      if (totals.length === 0)
-        return uncertainMembership.length
-          ? [...new Set(uncertainMembership)]
-          : undefined;
-      const selections: Record<string, SQL<boolean>> = {};
-      for (const [index, total] of totals.entries()) {
-        const results = (total.requiresResults ?? []).map((key) => {
-          const field = derivedFields[key];
-          const currentValue =
-            field?.shape === "value" && field.type === "number"
-              ? derivedValueSql(entity, derivedSql, key, context)
-              : undefined;
-          const available = storedFieldAvailableSql(entity, key, table.id, {
-            currentValue,
-          });
-          if (!available)
-            throw new Error(
-              `${entity}.totals.${total.id}: ${key} is not a published result`,
-            );
-          return available;
-        });
-        const live = total.keys.flatMap((key) => {
-          const field = derivedFields[key];
-          return field?.shape === "value" && field.type === "number"
-            ? [derivedValueSql(entity, derivedSql, key, context)]
-            : [];
-        });
-        const ready = or(
-          and(...results),
-          live.length === total.keys.length
-            ? and(...live.map((value) => sql`${value} IS NOT NULL`))
-            : undefined,
-        );
-        selections[`total_${index}`] =
-          sql<boolean>`COALESCE(bool_or(NOT (${ready})), false)`;
-      }
-      const [row] = await unwrapDb(db)
-        .select(selections)
-        .from(listTable)
-        .where(scaffold.where(filters, { context }));
-      const flags = z.record(z.string(), z.boolean()).parse(row);
-      return [
-        ...new Set([
-          ...uncertainMembership,
-          ...totals.flatMap((total, index) =>
-            flags[`total_${index}`] ? total.keys : [],
-          ),
-        ]),
-      ];
     },
 
     /** One snapshot per page; refuse any population change during cursor traversal. */
@@ -2292,9 +2228,9 @@ export function listScaffold<
       ).withReader(request.reader);
       const totals =
         request.readIntent !== "count" && request.projection === undefined
-          ? scaffold.totals(db, request.filters, context)
+          ? scaffold.totalSummary(db, request.filters, context)
           : undefined;
-      const [page, sums] = await Promise.all([
+      const [page, summary] = await Promise.all([
         scaffold.list(db, scoped, {
           orderBy: readDeclaration.orderBy?.(
             listFilterValues.parse(request.filters),
@@ -2311,7 +2247,7 @@ export function listScaffold<
         }),
         totals,
       ]);
-      return sums === undefined ? page : { ...page, sums };
+      return summary === undefined ? page : { ...page, ...summary };
     },
 
     /**
@@ -2392,22 +2328,32 @@ export function listScaffold<
       };
     },
 
-    /**
-     * The declared `presentation.list.totals` over the filtered population:
-     * one aggregate statement, each key's own additive SQL.
-     */
+    /** Numeric consumers receive only totals whose contributions are complete. */
     async totals<Filters extends object>(
       db: Database | DrizzleTransaction,
       filters: Filters,
       context?: ListContext,
     ): Promise<Record<string, number> | undefined> {
-      const keys = [
-        ...new Set(
-          (entitySummary[entity]?.list.totals ?? []).flatMap(
-            (total) => total.keys,
-          ),
-        ),
-      ];
+      const totals = await scaffold.totalSummary(db, filters, context);
+      return totals === undefined
+        ? undefined
+        : Object.fromEntries(
+            Object.entries(totals.sums).filter(
+              ([key]) => !totals.incompleteSums.includes(key),
+            ),
+          );
+    },
+
+    /** Sums and publication completeness share the existing aggregate statement. */
+    async totalSummary<Filters extends object>(
+      db: Database | DrizzleTransaction,
+      filters: Filters,
+      context?: ListContext,
+    ): Promise<
+      { sums: Record<string, number>; incompleteSums: string[] } | undefined
+    > {
+      const totals = entitySummary[entity]?.list.totals ?? [];
+      const keys = [...new Set(totals.flatMap((total) => total.keys))];
       if (keys.length === 0) return undefined;
       const prepared =
         context ??
@@ -2416,20 +2362,72 @@ export function listScaffold<
           readIntent: "count",
           projection: keys,
         }));
+      const where = scaffold.where(filters, { context: prepared });
+      const unresolved = scaffold.hasResultFilters(filters)
+        ? scaffold.unresolvedWhere(filters, prepared)
+        : undefined;
+      const selections: Record<string, SQL<number | boolean>> = {};
+      for (const [index, key] of keys.entries())
+        selections[`sum_${index}`] =
+          sql<number>`COALESCE(sum((${listMetricSql(entity, key, derivedSql, table, prepared)})::numeric) FILTER (WHERE ${where ?? sql`true`}), 0)::double precision`;
+      if (unresolved)
+        selections.unresolved = sql<boolean>`COALESCE(bool_or(${unresolved}), false)`;
+      for (const [index, total] of totals.entries()) {
+        if (!("requiresResults" in total)) continue;
+        const results = (total.requiresResults ?? []).map((key) => {
+          const field = derivedFields[key];
+          const currentValue =
+            field?.shape === "value" && field.type === "number"
+              ? derivedValueSql(entity, derivedSql, key, prepared)
+              : undefined;
+          const available = storedFieldAvailableSql(entity, key, table.id, {
+            currentValue,
+          });
+          if (!available)
+            throw new Error(
+              `${entity}.totals.${total.id}: ${key} is not a published result`,
+            );
+          return available;
+        });
+        const live = total.keys.flatMap((key) => {
+          const field = derivedFields[key];
+          return field?.shape === "value" && field.type === "number"
+            ? [derivedValueSql(entity, derivedSql, key, prepared)]
+            : [];
+        });
+        // Current authoritative scalars can settle a contribution before publication.
+        const ready = or(
+          and(...results),
+          live.length === total.keys.length
+            ? and(...live.map((value) => sql`${value} IS NOT NULL`))
+            : undefined,
+        );
+        selections[`incomplete_${index}`] =
+          sql<boolean>`COALESCE(bool_or((${ready}) IS NOT TRUE) FILTER (WHERE ${where ?? sql`true`}), false)`;
+      }
       const [row] = await unwrapDb(db)
-        .select(
-          Object.fromEntries(
-            keys.map((key) => [
-              key,
-              sql<number>`COALESCE(sum((${listMetricSql(entity, key, derivedSql, table, prepared)})::numeric), 0)::double precision`,
-            ]),
-          ),
-        )
+        .select(selections)
         .from(listTable)
-        .where(scaffold.where(filters, { context: prepared }));
-      return Object.fromEntries(
-        keys.map((key) => [key, Number(row?.[key] ?? 0)]),
-      );
+        // Unknown candidates establish completeness but never enter the known subtotal.
+        .where(unresolved ? or(where ?? sql`true`, unresolved) : where);
+      const flags = z
+        .record(z.string(), z.union([z.number(), z.boolean()]))
+        .parse(row);
+      return {
+        sums: Object.fromEntries(
+          keys.map((key, index) => [key, Number(flags[`sum_${index}`])]),
+        ),
+        incompleteSums:
+          flags.unresolved === true
+            ? keys
+            : [
+                ...new Set(
+                  totals.flatMap((total, index) =>
+                    flags[`incomplete_${index}`] === true ? total.keys : [],
+                  ),
+                ),
+              ],
+      };
     },
 
     /** Narrow/internal consumers retain the selected raw shape and own their explicit computation. */
@@ -2447,7 +2445,7 @@ export function listScaffold<
       );
     },
     /**
-     * One list read: where → order → page → rows + count → hydrate. A
+     * One list read: where → order → page → rows → hydrate. A
      * `count` read never runs the row query or hydration.
      */
     async list<Filters extends object, Out, Row = InferSelectModel<T>>(
@@ -2457,7 +2455,8 @@ export function listScaffold<
     ): Promise<{
       data: Out[];
       fieldReads?: PageFieldReadContexts;
-      count: number;
+      count?: number;
+      hasNextPage: boolean;
       unresolvedCount?: number;
       incompleteSums?: string[];
       groups?: ListGroupSummary[];
@@ -2497,6 +2496,8 @@ export function listScaffold<
       const projection = request.projection ?? pageFields();
       const { take, skip } = buildTakeSkip(request.pagination);
       const readIntent = request.readIntent ?? "page";
+      const includeCount =
+        request.includeCount !== false || readIntent === "count";
       // Sections lead the total order, so a page never splits a section the
       // summary query counts whole.
       const group =
@@ -2579,30 +2580,37 @@ export function listScaffold<
         | undefined;
       // The id/count projection binds no fields, so it carries no envelope.
       const withEnvelope = Boolean(spec.derived) && projection.length > 0;
-      const readLoadedPageWithCount =
+      const readLoadedPage =
         loadIds && !spec.count
           ? () =>
               traceListPageWithCount(async (span) => {
-                // Keep the authoritative FROM, predicates and total order. A window
-                // counts before LIMIT without a second evaluation of the filter.
+                // Uncounted pages select only a bounded id page. The lookahead id
+                // establishes continuation and never reaches hydration or bindings.
                 const ids = await unwrapDb(db)
                   .select({
                     id: sql<string>`${table.id}`,
-                    total: sql<number>`count(*) OVER ()::int`,
+                    ...(includeCount
+                      ? { total: sql<number>`count(*) OVER ()::int` }
+                      : {}),
                   })
                   .from(source)
                   .where(page.where)
                   .orderBy(...page.orderBy)
-                  .limit(page.limit)
+                  .limit(page.limit + (includeCount ? 0 : 1))
                   .offset(page.offset);
                 // With a positive LIMIT, an empty first page proves the total is zero.
                 // Later empty pages need a count because OFFSET may hide matches.
-                const count =
-                  ids[0]?.total ??
-                  (page.offset === 0 && page.limit > 0
-                    ? 0
-                    : await countWhere(db, table, where, source));
-                const pageIds = ids.map((row) => row.id);
+                const count = includeCount
+                  ? (ids[0]?.total ??
+                    (page.offset === 0 && page.limit > 0
+                      ? 0
+                      : await countWhere(db, table, where, source)))
+                  : undefined;
+                const hasNextPage =
+                  count === undefined
+                    ? ids.length > page.limit
+                    : page.offset + page.limit < count;
+                const pageIds = ids.slice(0, page.limit).map((row) => row.id);
                 prefetched = spec.prefetch?.(pageIds, projection);
                 // The envelope's stored meta needs only ids: read it beside the rows.
                 storedMeta = withEnvelope
@@ -2617,10 +2625,10 @@ export function listScaffold<
                 const data = await loadIds(pageIds, projection);
                 span.setAttributes({
                   "db.result_count": data.length,
-                  "db.total_count": count,
+                  ...(count === undefined ? {} : { "db.total_count": count }),
                   "list.rows": data.length,
                 });
-                return { data, count };
+                return { data, count, hasNextPage };
               })
           : undefined;
       return withListReadTracing(
@@ -2653,9 +2661,10 @@ export function listScaffold<
                   offset: skip,
                 })
               : null;
-          const { data, count } = groupedPage
+          const result = groupedPage
             ? {
                 count: groupedPage.count,
+                hasNextPage: skip + take < groupedPage.membershipCount,
                 data:
                   groupedPage.ids.length === 0
                     ? []
@@ -2681,14 +2690,26 @@ export function listScaffold<
                         });
                       }),
               }
-            : readIntent !== "count" && readLoadedPageWithCount
-              ? await readLoadedPageWithCount()
-              : await executeListQueryWithCount({
-                  kind: readIntent,
-                  rows: () => selectRows(page, projection),
-                  count:
-                    spec.count ?? (() => countWhere(db, table, where, source)),
-                });
+            : readIntent !== "count" && readLoadedPage
+              ? await readLoadedPage()
+              : !includeCount
+                ? await executeListQueryWithoutCount({
+                    rows: () =>
+                      selectRows({ ...page, limit: take + 1 }, projection),
+                    pageSize: take,
+                  })
+                : await executeListQueryWithCount({
+                    kind: readIntent,
+                    rows: () => selectRows(page, projection),
+                    count:
+                      spec.count ??
+                      (() => countWhere(db, table, where, source)),
+                  });
+          const { data, count } = result;
+          const hasNextPage =
+            "hasNextPage" in result
+              ? result.hasNextPage
+              : count !== undefined && skip + take < count;
           const grouped =
             groupedPage === null
               ? {}
@@ -2697,26 +2718,15 @@ export function listScaffold<
                   memberships: groupedPage.memberships,
                   membershipCount: groupedPage.membershipCount,
                 };
-          const unresolvedCount = await scaffold.unresolvedCount(
-            db,
-            request.filters,
-            context,
-          );
-          const incompleteSums =
-            readIntent === "count" || projection.length === 0
-              ? undefined
-              : await scaffold.incompleteSums(
-                  db,
-                  request.filters,
-                  context,
-                  unresolvedCount,
-                );
+          const unresolvedCount = includeCount
+            ? await scaffold.unresolvedCount(db, request.filters, context)
+            : undefined;
           if (readIntent === "count" || data.length === 0)
             return {
               data: [],
               count,
+              hasNextPage,
               unresolvedCount,
-              incompleteSums,
               ...grouped,
             };
           return withListReadTracing({ rows: data.length }, async () => {
@@ -2747,8 +2757,8 @@ export function listScaffold<
               return {
                 ...complete,
                 count,
+                hasNextPage,
                 unresolvedCount,
-                incompleteSums,
                 ...grouped,
               };
             const codeOf = (row: Out) => {
@@ -2772,8 +2782,8 @@ export function listScaffold<
               ),
               fieldReads: complete.fieldReads,
               count,
+              hasNextPage,
               unresolvedCount,
-              incompleteSums,
               ...grouped,
             };
           });

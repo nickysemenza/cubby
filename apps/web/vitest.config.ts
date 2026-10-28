@@ -357,6 +357,14 @@ export default defineConfig({
               // etc. actually apply. `preview-test-setup.ts` imports the app's
               // real `styles.css` entry point to feed it.
               plugins: [react(), tailwindcss()],
+              resolve: {
+                alias: {
+                  "@tanstack/start-storage-context": join(
+                    import.meta.dirname,
+                    "tooling/preview-start-storage.fixtures.ts",
+                  ),
+                },
+              },
               // Vite's default dependency scanner (no `index.html` here) falls
               // back to crawling the whole `src` tree for an entry, which reaches
               // `#tanstack-start-entry`/`#tanstack-router-entry` — virtual

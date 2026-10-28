@@ -4,11 +4,18 @@ import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { productCost } from "@cubby/schemas/product-fields";
 import { testShortcode } from "@cubby/schemas/testing";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { flexRender, type RowData, useTable } from "@tanstack/react-table";
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render as testingRender,
+  screen,
+} from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { ProductCostValue } from "~/entity/display/product-cost-value";
 import { formatCurrency } from "~/lib/number-format";
 import { booleanCellOptions } from "~/lib/select-options";
@@ -35,6 +42,36 @@ import {
   createSingleEntityInlineLinkColumn,
   rowImages,
 } from "./column-helpers";
+
+let queryClient: Awaited<ReturnType<typeof metadataQueryClient>>;
+beforeEach(async () => {
+  queryClient = await metadataQueryClient();
+});
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
+
+function MetadataProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+function render(ui: ReactNode, options?: Parameters<typeof testingRender>[1]) {
+  const BrowserWrapper = options?.wrapper;
+  return testingRender(ui, {
+    ...options,
+    wrapper: ({ children }) =>
+      BrowserWrapper ? (
+        <BrowserWrapper>
+          <MetadataProvider>{children}</MetadataProvider>
+        </BrowserWrapper>
+      ) : (
+        <MetadataProvider>{children}</MetadataProvider>
+      ),
+  });
+}
 
 const activeBrowserHarnesses: Array<
   ReturnType<typeof createBrowserTestHarness>
@@ -85,11 +122,7 @@ function renderColumn<TRow extends RowData, TValue>(
 
   const browserHarness = createBrowserTestHarness();
   activeBrowserHarnesses.push(browserHarness);
-  const result = render(
-    <browserHarness.wrapper>
-      <Harness />
-    </browserHarness.wrapper>,
-  );
+  const result = render(<Harness />, { wrapper: browserHarness.wrapper });
   return result;
 }
 
@@ -130,11 +163,13 @@ describe("createSingleEntityInlineLinkColumn", () => {
   it("always supplies a semantic entity header unless the caller names one", () => {
     const helper = createCubbyColumnHelper<{ location: never }>();
     const location = createSingleEntityInlineLinkColumn(
+      queryClient,
       helper,
       "location",
       "location",
     );
     const renamed = createSingleEntityInlineLinkColumn(
+      queryClient,
       helper,
       "location",
       "location",
@@ -153,6 +188,7 @@ describe("createSingleEntityInlineLinkColumn", () => {
     onSave: (id: string | null) => Promise<void>;
   }) =>
     createSingleEntityInlineLinkColumn(
+      queryClient,
       createCubbyColumnHelper<ProductRelationRow>(),
       "product",
       "product",

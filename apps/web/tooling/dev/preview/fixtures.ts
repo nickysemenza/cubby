@@ -4,10 +4,10 @@ import { z } from "zod";
 
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import {
-  getEntityListOutputSchema,
   type ListEntity,
   listEntities,
 } from "~/entity/generated/entity-lists.gen";
+import { getEntityListOutputSchema } from "~/server/generated/entity-lists.server.gen";
 import { mock } from "~/lib/test/mock-schema";
 import type { BaseListRow } from "~/entity/hooks/use-entity-list";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
@@ -75,7 +75,11 @@ export function previewListOperation(
       if (state === "error") return Promise.reject(previewFailure(entity));
       return Promise.resolve({
         items: rows,
-        meta: { ...params.pagination, totalCount: rows.length },
+        meta: {
+          ...params.pagination,
+          totalCount: rows.length,
+          hasNextPage: false,
+        },
       });
     },
   });

@@ -1,5 +1,6 @@
 import { searchableEntitySchema, type SearchHit } from "@cubby/schemas/search";
 import { parseShortcode } from "@cubby/shared";
+import { type QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 
@@ -173,11 +174,13 @@ function useEntitySearchWithDialog<TId extends string = string>() {
  * none for an entity without one (its candidates come from scope alone).
  */
 export function resolveBlankFilterKey(
+  queryClient: QueryClient,
   entity: Exclude<PickerSearchEntity, "vendor">,
 ): string | null {
   return (
-    getEntityFilters(entity).find((spec) => spec.columnId === "name")?.field ??
-    null
+    getEntityFilters(queryClient, entity).find(
+      (spec) => spec.columnId === "name",
+    )?.field ?? null
   );
 }
 

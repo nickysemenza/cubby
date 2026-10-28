@@ -1,7 +1,11 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { describe, expect, it } from "vitest";
 
+import { createEditorTestQueryClient } from "#web/tests/editor-metadata.fixtures.ts";
+
 import { compactFieldText } from "./field-text";
+
+const queryClient = createEditorTestQueryClient();
 
 const field = (
   entity: "project" | "financialAccount" | "wish" | "task",
@@ -20,6 +24,7 @@ describe("compactFieldText", () => {
   it("formats a money-control number as currency", () => {
     expect(
       compactFieldText(
+        queryClient,
         "project",
         { id: "PRJ-4K7M", costEstimate: 1250 },
         field("project", "costEstimate"),
@@ -29,6 +34,7 @@ describe("compactFieldText", () => {
 
   it("reads an enum as its label, never the stored key", () => {
     const text = compactFieldText(
+      queryClient,
       "project",
       { id: "PRJ-4K7M", status: "in_progress" },
       field("project", "status"),
@@ -40,6 +46,7 @@ describe("compactFieldText", () => {
   it("reads a declared value-option path as its label", () => {
     expect(
       compactFieldText(
+        queryClient,
         "financialAccount",
         { id: "FAC-4K7M", identity: { kind: "stored_value" } },
         field("financialAccount", "identity"),
@@ -51,6 +58,7 @@ describe("compactFieldText", () => {
     const at = "2026-03-14T12:00:00.000Z";
     expect(
       compactFieldText(
+        queryClient,
         "wish",
         { id: "WSH-4K7M", acquiredAt: at },
         field("wish", "acquiredAt"),

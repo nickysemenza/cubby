@@ -2,7 +2,7 @@ import { z } from "zod";
 import { timestampedFields } from "./base-entity";
 import { publicImpactItemSchema } from "./entity-integrity";
 import { id, anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
-import { shortcodeEntities } from "./entity-manifest";
+import { shortcodeEntities } from "./generated/entity-roster.gen";
 
 export const dbTimestampsOut = z
   .object(timestampedFields)

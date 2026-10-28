@@ -28,12 +28,12 @@ import { imageCaptureLocation } from "./image-capture-fields";
 import { imageSightingCamera } from "./image-sighting-fields";
 import { purchaseDocumentKind } from "./purchase";
 import { runTargetState } from "./purchase-import";
+import { type ShortcodeEntity } from "./entity-manifest";
 import {
   coverEntities,
   galleryEntities,
   logoEntities,
-  type ShortcodeEntity,
-} from "./entity-manifest";
+} from "./generated/entity-roster.gen";
 import { anyShortcodeSchema } from "./identifiers";
 import { entityImage } from "./entity";
 import {

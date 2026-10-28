@@ -212,7 +212,7 @@ export interface EntityEditIntentDefinition<
     record?: R;
     patch: EntityEditValueBag;
     context: EntityEditContext;
-  }): EntityEditBuildResult<E>;
+  }): Promise<EntityEditBuildResult<E>>;
 }
 
 /** Intent variants available for one router operation. */

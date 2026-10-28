@@ -42,7 +42,7 @@ import {
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
 
-import { viewProblemDeclarations } from "~/entity/model/view-manifest";
+import { viewProblemDeclarations } from "~/entity/model/view-problems";
 import { householdDaysAgo } from "~/lib/household-date";
 import { getDb } from "~/server/db/helpers";
 import {

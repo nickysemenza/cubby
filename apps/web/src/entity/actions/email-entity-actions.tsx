@@ -1,5 +1,5 @@
+import { emailFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/email";
 import type { ReclassifyEmailsOut } from "@cubby/schemas/email-actions";
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   type EmailShortcode,
@@ -114,7 +114,7 @@ const pairRow = z
   .object({
     id: z.string(),
     checksum: z.string(),
-    fields: entityFieldEnvelopeSchemas.email.list.shape.fields.pick({
+    fields: emailFieldEnvelopeSchemas.list.shape.fields.pick({
       ownedByViewer: true,
       ledgerPartyName: true,
       purchaseLinks: true,

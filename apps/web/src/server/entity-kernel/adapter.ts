@@ -180,6 +180,7 @@ export type EntityRepository<
     projection?: ListProjection,
     readIntent?: Extract<ListReadIntent, "page" | "count">,
     preparation?: ListPreparationScope,
+    includeCount?: boolean,
   ): Promise<ListReadPage<ListReadRow>>;
   /** Live records by public id; the projection defaults to the detail fields. */
   read(

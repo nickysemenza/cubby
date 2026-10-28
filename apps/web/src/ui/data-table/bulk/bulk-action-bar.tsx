@@ -29,7 +29,8 @@ export interface BulkActionBarProps<TData extends RowData> {
    */
   selectAllMatching?: {
     /** Total rows matching the current filters (server count). */
-    totalCount: number;
+    totalCount: number | undefined;
+    hasNextPage?: boolean;
     /** Rows currently in memory (all selected when this shows). */
     loadedCount: number;
     /** Load every remaining page, then select all. */
@@ -66,7 +67,9 @@ export function BulkActionBar<TData extends RowData>({
   const showSelectAll =
     selectAllMatching != null &&
     selectedCount >= selectAllMatching.loadedCount &&
-    selectAllMatching.loadedCount < selectAllMatching.totalCount;
+    (selectAllMatching.totalCount === undefined
+      ? selectAllMatching.hasNextPage === true
+      : selectAllMatching.loadedCount < selectAllMatching.totalCount);
 
   const handleActionClick = (action: BulkAction<TData>) => {
     if (
@@ -134,7 +137,7 @@ export function BulkActionBar<TData extends RowData>({
           {selectAllMatching.isSelectingAll && (
             <Spinner className="mr-1 size-3" aria-hidden="true" />
           )}
-          Select all {selectAllMatching.totalCount}
+          Select all {selectAllMatching.totalCount ?? "matching"}
         </Button>
       )}
 

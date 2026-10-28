@@ -49,6 +49,8 @@ import {
   type RawProductOutput,
   rawProductOutput,
 } from "@cubby/schemas/product-raw-read";
+import { productReadFacts } from "@cubby/schemas/product-read-fields";
+import { foodSummary } from "@cubby/usda";
 import {
   and,
   asc,
@@ -61,6 +63,7 @@ import {
 } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
+import { z } from "zod";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
@@ -139,13 +142,11 @@ import {
   productHasGtin,
   productMatchesGtinTerm,
 } from "~/server/domains/product/repo/gtin";
-import {
-  enrichProductListItems,
-  productUnitPriceDetailFields,
-} from "~/server/domains/product/repo/list-enrichment";
+import { projectProductUnitPriceBatch } from "~/server/domains/product/repo/list-enrichment";
 import { buildNutritionDisplay } from "~/server/domains/product/repo/nutrition-display";
 import { productSearch as productSearchRead } from "~/server/domains/product/repo/search-read-product";
 import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
+import { loadStoredProductDisplay } from "~/server/domains/product/repo/stored-display";
 import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
 import { externalIdsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
@@ -189,7 +190,6 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { liveAliasSqlText } from "~/server/lib/live-row";
-import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summary";
 
 import { assertProductCategoryChange } from "./classification";
 import {
@@ -209,25 +209,21 @@ import {
   productImageShortcodesOf,
 } from "./mappers";
 import { ownershipExitExpensePredicate } from "./ownership";
-import { loadProductOwnershipEvidence } from "./ownership-evidence";
 import {
   productReadPriceSql,
   productReadCostSql,
-  enrichProductRowsWithPricing,
-  loadEffectiveProductPricesById,
+  resolveProductPricing,
 } from "./pricing";
 import { storedEffectivePrice } from "./pricing";
 import {
-  enrichProductRowsWithQuantityLedger,
+  EMPTY_QUANTITY_LEDGER,
   expectedQuantityFilterSql,
   hasUnknownAcquisitionLinesSql,
   hasUnknownQuantityLinesSql,
   unknownQuantityLinesReadSql,
-  loadProductPickerQuantities,
   onHandUnitsFilterSql,
   onHandUnitsSql,
 } from "./quantity-ledger";
-import { productStockContext } from "./stock-context";
 import { unitMappingColumns } from "./unit-mappings";
 import {
   assertNoCanonicalPriceMapping,
@@ -563,29 +559,58 @@ export const productScaffold = listScaffold<
           ]),
         );
       });
-      const pricing = bind.batch(
-        async ({ db, rows }) =>
-          new Map(
-            (await enrichProductRowsWithPricing(db, rows)).map((row) => [
-              row.id,
-              row.pricing,
-            ]),
-          ),
+      const stored = bind.ids(
+        (page) =>
+          page.stored ??
+          loadStoredDerived(page.db, "product", page.ids, [
+            "price",
+            "cost",
+            "readFacts",
+            "food",
+          ]),
       );
-      const ledgers = bind.ids(({ db, ids }) =>
-        enrichProductRowsWithQuantityLedger(
-          readerDatabase(db),
-          productIds(ids).map((id) => ({ id })),
-        ).then((rows) => new Map(rows.map((row) => [row.id, row]))),
-      );
-      const stock = bind.batch(async (page) => {
-        const [inventories, prices, ledgered] = await Promise.all([
-          inventory.load(page.idPage),
-          pricing.load(page),
-          ledgers.load(page.idPage),
-        ]);
-        return { inventories, prices, ledgered };
+      const facts = bind.ids(async (page) => {
+        const published = await stored.load(page);
+        return new Map(
+          page.ids.map((id) => {
+            const read = published.get(id)?.get("readFacts");
+            return [
+              id,
+              read?.resultExists ? productReadFacts.parse(read.value) : null,
+            ];
+          }),
+        );
       });
+      const pricing = bind.batch(async (page) => {
+        const published = await stored.load(page.idPage);
+        const snapshots = await facts.load(page.idPage);
+        return new Map(
+          page.rows.map((row) => {
+            const saved =
+              snapshots.get(row.id)?.pricing ?? resolveProductPricing(null);
+            const effectivePrice = storedEffectivePrice(published, {
+              ...row,
+              category: row.categorySummary,
+            });
+            const selected = {
+              ...saved,
+              effectivePrice,
+              source:
+                row.price !== null &&
+                !isServiceProductCategory(row.categorySummary)
+                  ? "explicit"
+                  : effectivePrice !== null
+                    ? "derived"
+                    : "none",
+            } satisfies typeof saved;
+            return [row.id, selected];
+          }),
+        );
+      });
+      const stock = bind.batch(async (page) => ({
+        facts: await facts.load(page.idPage),
+        prices: await pricing.load(page),
+      }));
       const ingredients = bind.batch(async ({ db, rows }) => {
         const ids = uniq(
           rows.flatMap((row) => (row.ingredientId ? [row.ingredientId] : [])),
@@ -598,53 +623,62 @@ export const productScaffold = listScaffold<
               });
         return new Map(loaded.map((row) => [row.id, row]));
       });
-      // A read without the kernel's USDA client (a script) resolves no food.
+      // Read the published USDA facts; request readers never call the release DO.
       const food = bind.batch(async (page) => {
-        const [identities, mappings, prices, stored] = await Promise.all([
-          externalIds.load(page.idPage),
-          unitMappings.load(page.idPage),
-          pricing.load(page),
-          page.idPage.stored ??
-            loadStoredDerived(
-              page.db,
-              "product",
-              page.rows.map((row) => row.id),
-              ["price"],
-            ),
-        ]);
-        const seeds = page.rows.map((row) => {
+        const identities = await externalIds.load(page.idPage);
+        const mappings = await unitMappings.load(page.idPage);
+        const prices = await pricing.load(page);
+        const published = await stored.load(page.idPage);
+        const prepared = page.rows.map((row) => {
           const id = parseShortcodeFor("product", row.shortcode);
           const price = prices.get(row.id);
           if (!price) throw new Error("Product food binding requires pricing");
-          return {
+          const read = published.get(row.id)?.get("food");
+          const food = read?.resultExists
+            ? foodSummary.nullable().parse(read.value)
+            : null;
+          const seed = {
             id,
             primaryGtin: primaryGtinOf(identities.get(row.id)),
             fdc_id: row.fdc_id,
             price: row.price,
-            pricing: {
-              ...price,
-              effectivePrice: storedEffectivePrice(stored, {
-                ...row,
-                category: row.categorySummary,
-              }),
-            },
+            pricing: price,
             labelNutrition: row.labelNutrition,
             unitMappings: mapProductUnitMappings(
               id,
               mappings.get(row.id) ?? [],
             ),
           };
+          return {
+            rowId: row.id,
+            seed,
+            food,
+            service: isServiceProductCategory(row.categorySummary),
+          };
         });
-        const enriched = await enrichProductListItems(
-          seeds,
-          page.context.reader.usdaClient,
+        const projections = projectProductUnitPriceBatch(
+          prepared.map(({ seed, food, service }) => ({
+            product: { ...seed, food },
+            price: seed.pricing.effectivePrice,
+            service,
+          })),
         );
         return new Map(
-          page.rows.map((row, index) => {
-            const value = enriched[index];
-            if (!value)
-              throw new Error("Product food batch omitted a selected row");
-            return [row.id, { seed: seeds[index]!, value }];
+          prepared.map(({ rowId, seed, food }, index) => {
+            const projection = projections[index];
+            if (!projection)
+              throw new Error("Product display batch omitted a selected row");
+            return [
+              rowId,
+              {
+                seed,
+                value: {
+                  food,
+                  unitPriceMappings: projection.unitPriceMappings,
+                  ...projection.values,
+                },
+              },
+            ];
           }),
         );
       });
@@ -726,43 +760,28 @@ export const productScaffold = listScaffold<
           (row) => row.productId ?? "",
         ),
       );
-      const ownershipEvidence = bind.batch(async ({ db, rows }) => {
-        const database = readerDatabase(db);
-        return new Map(
-          await Promise.all(
-            rows.map(
-              async (row) =>
-                [
-                  row.id,
-                  await loadProductOwnershipEvidence(
-                    database,
-                    row.id,
-                    row.categorySummary,
-                  ),
-                ] as const,
-            ),
-          ),
-        );
-      });
       const recipeUsages = bind.batch(async (page) => {
         const linked = await ingredients.load(page);
         const database = readerDatabase(page.db);
-        return new Map(
-          await Promise.all(
-            page.rows.map(async (row) => {
-              const live = row.ingredientId
-                ? linked.get(row.ingredientId)
-                : undefined;
-              return [
-                row.id,
-                live
-                  ? (await getRecipeUsagesForIngredient(database, live.id))
-                      .recipeUsages
-                  : [],
-              ] as const;
-            }),
-          ),
-        );
+        const usages = new Map<
+          ProductId,
+          Awaited<
+            ReturnType<typeof getRecipeUsagesForIngredient>
+          >["recipeUsages"]
+        >();
+        for (const row of page.rows) {
+          const live = row.ingredientId
+            ? linked.get(row.ingredientId)
+            : undefined;
+          usages.set(
+            row.id,
+            live
+              ? (await getRecipeUsagesForIngredient(database, live.id))
+                  .recipeUsages
+              : [],
+          );
+        }
+        return usages;
       });
       return [
         bind(
@@ -874,19 +893,15 @@ export const productScaffold = listScaffold<
             quantityVarianceLabel: true,
           }),
           (row, loaded) => {
-            const inventoryEntry = loaded.inventories.get(row.id) ?? [];
             const pricing = loaded.prices.get(row.id);
-            const ledgered = loaded.ledgered.get(row.id);
-            if (!pricing || !ledgered)
-              throw new Error(
-                "Product stock binding requires loaded pricing and ledger",
-              );
+            if (!pricing)
+              throw new Error("Product stock binding requires pricing");
+            const snapshot = loaded.facts.get(row.id);
             const service = isServiceProductCategory(row.categorySummary);
-            const quantity = deriveProductQuantitySummary(
-              inventoryEntry,
-              ledgered.quantityLedger,
-              service,
-            );
+            // The raw shape needs a ledger; the field envelope keeps a missing
+            // publication unavailable rather than presenting these placeholders.
+            const quantityLedger =
+              snapshot?.quantityLedger ?? EMPTY_QUANTITY_LEDGER;
             const fieldResolutions = productFieldResolutions(
               {
                 price: row.price,
@@ -896,24 +911,21 @@ export const productScaffold = listScaffold<
               },
               pricing,
             );
-            const tracking = fieldResolutions.stockTracked?.value;
             return {
               pricing,
               fieldResolutions,
-              primaryPlacement: ledgered.primaryPlacement,
-              ...quantity,
-              ...productStockContext({
-                category: row.categorySummary,
-                quantityLedger: ledgered.quantityLedger,
-                inventoryEntry,
-                stockTracked:
-                  tracking === true ? true : tracking === false ? false : null,
-              }),
-              ledgerExpectedQuantityLabel: service
-                ? null
-                : expectedQuantityLabel(quantity.quantityLedger),
+              primaryPlacement: snapshot?.primaryPlacement ?? null,
+              quantityLedger,
+              onHandUnits: snapshot?.onHandUnits ?? null,
+              quantityVariance: snapshot?.quantityVariance ?? null,
+              stockStatus: snapshot?.stockStatus ?? null,
+              stockStatusItems: snapshot?.stockStatusItems ?? [],
+              ledgerExpectedQuantityLabel:
+                service || !snapshot
+                  ? null
+                  : expectedQuantityLabel(quantityLedger),
               quantityVarianceLabel: quantityVarianceLabel(
-                quantity.quantityVariance,
+                snapshot?.quantityVariance ?? null,
               ),
             };
           },
@@ -941,13 +953,9 @@ export const productScaffold = listScaffold<
             nutritionDisplay: true,
           }),
           (row, loaded) => {
-            const { seed, value } = foodOf(loaded, row.id);
+            const { value } = foodOf(loaded, row.id);
             return {
-              unitPriceDetailLabel: productUnitPriceDetailFields({
-                ...seed,
-                category: row.categorySummary,
-                food: value.food,
-              }).unitPriceDetailLabel,
+              unitPriceDetailLabel: value.unitPriceDetailLabel,
               nutritionDisplay: buildNutritionDisplay({
                 labelNutrition: row.labelNutrition,
                 food: value.food,
@@ -956,13 +964,19 @@ export const productScaffold = listScaffold<
           },
           { scope: "detail" },
         ),
-        ownershipEvidence.fields(
+        facts.fields(
           rawProductDetail.pick({ ownershipEvidence: true }),
           (row, loaded) => {
-            const evidence = loaded.get(row.id);
-            if (!evidence)
-              throw new Error("Product ownership evidence was not loaded");
-            return { ownershipEvidence: evidence };
+            return {
+              ownershipEvidence:
+                loaded.get(row.id)?.ownershipEvidence ??
+                productReadFacts.shape.ownershipEvidence.parse({
+                  state: "uncertain",
+                  acquiredAt: null,
+                  exitedAt: null,
+                  confidenceLostAt: null,
+                }),
+            };
           },
           { scope: "detail" },
         ),
@@ -1209,24 +1223,36 @@ export const productSearch = async (
         }),
     },
   );
-  if (!page.data.length) return { ...page, data: [] };
+  const count = z.number().parse(page.count);
+  if (!page.data.length) return { ...page, count, data: [] };
   const resultIds = page.data.map((result) => result.id);
-  const [categories, quantities, coverImageUrls, prices] = await Promise.all([
+  const [categories, display, coverImageUrls] = await Promise.all([
     loadCategorySummaries(db),
-    loadProductPickerQuantities(db, resultIds),
+    loadStoredProductDisplay(db, resultIds),
     getProductCoverImageUrlsByProductIds(db, resultIds),
-    loadEffectiveProductPricesById(db, resultIds),
   ]);
   return {
     ...page,
+    count,
     data: page.data.map((result) =>
       dbProductToPickerItemAPI({
         ...result,
         category: result.categoryId
           ? (categories.get(result.categoryId) ?? null)
           : null,
-        ...quantities.get(result.id)!,
-        price: prices.get(result.id) ?? null,
+        quantityLedger:
+          display.facts.get(result.id)?.value?.quantityLedger ?? null,
+        onHand: display.facts.get(result.id)?.value?.pickerOnHand ?? {
+          state: "unavailable",
+        },
+        displayFacts: {
+          available: display.facts.get(result.id)?.value != null,
+          stale: display.facts.get(result.id)?.stale ?? false,
+        },
+        price: storedEffectivePrice(display.stored, {
+          ...result,
+          category: categories.get(result.categoryId!) ?? null,
+        }),
         coverImageUrl: coverImageUrls.get(result.id) ?? null,
       }),
     ),
@@ -1252,14 +1278,14 @@ export const getProductPickerItemsByIds = async (
       name: true,
       brandId: true,
       categoryId: true,
+      price: true,
     },
   });
   const categories = await loadCategorySummaries(db);
   const rowIds = rows.map((row) => row.id);
-  const [quantities, coverImageUrls, prices] = await Promise.all([
-    loadProductPickerQuantities(db, rowIds),
+  const [display, coverImageUrls] = await Promise.all([
+    loadStoredProductDisplay(db, rowIds),
     getProductCoverImageUrlsByProductIds(db, rowIds),
-    loadEffectiveProductPricesById(db, rowIds),
   ]);
   const byId = new Map(
     rows.map((row) => [
@@ -1267,8 +1293,19 @@ export const getProductPickerItemsByIds = async (
       dbProductToPickerItemAPI({
         ...row,
         category: categories.get(row.categoryId!) ?? null,
-        ...quantities.get(row.id)!,
-        price: prices.get(row.id) ?? null,
+        quantityLedger:
+          display.facts.get(row.id)?.value?.quantityLedger ?? null,
+        onHand: display.facts.get(row.id)?.value?.pickerOnHand ?? {
+          state: "unavailable",
+        },
+        displayFacts: {
+          available: display.facts.get(row.id)?.value != null,
+          stale: display.facts.get(row.id)?.stale ?? false,
+        },
+        price: storedEffectivePrice(display.stored, {
+          ...row,
+          category: categories.get(row.categoryId!) ?? null,
+        }),
         coverImageUrl: coverImageUrls.get(row.id) ?? null,
       }),
     ]),

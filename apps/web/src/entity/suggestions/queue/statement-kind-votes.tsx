@@ -2,8 +2,10 @@ import type { StatementSuggestionOut } from "@cubby/schemas/statement-suggestion
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import { useEntityMetadata } from "~/entity/metadata";
 import { cn } from "~/lib/utils";
 
 import { RecordLink } from "./suggestion-values";
@@ -11,9 +13,10 @@ import { RecordLink } from "./suggestion-values";
 type Create = NonNullable<StatementSuggestionOut["create"]>;
 type Vote = Create["votes"][keyof Create["votes"]];
 
-const KIND_OPTIONS = fieldEnumOptions("financialTransaction", "kind");
-const kindLabel = (kind: string) =>
-  KIND_OPTIONS.find((option) => option.value === kind)?.label ?? kind;
+const kindLabel = (queryClient: QueryClient, kind: string) =>
+  fieldEnumOptions(queryClient, "financialTransaction", "kind").find(
+    (option) => option.value === kind,
+  )?.label ?? kind;
 
 const SOURCES = [
   { source: "rule", label: "Rule", hint: "provider category" },
@@ -30,8 +33,12 @@ type KindVote = {
   stance: Stance;
 };
 
-const voteText = (vote: Vote) =>
-  vote === null ? "no vote" : vote === "mixed" ? "mixed" : kindLabel(vote);
+const voteText = (queryClient: QueryClient, vote: Vote) =>
+  vote === null
+    ? "no vote"
+    : vote === "mixed"
+      ? "mixed"
+      : kindLabel(queryClient, vote);
 
 /**
  * Each source's vote against the proposed kind, and the clean rule's reading
@@ -39,6 +46,7 @@ const voteText = (vote: Vote) =>
  * votes were recorded has none, so it falls back to the source of the kind.
  */
 export function kindAgreement(
+  queryClient: QueryClient,
   create: Pick<Create, "kind" | "kindSource" | "votes">,
 ) {
   const votes: KindVote[] = SOURCES.map(({ source, label, hint }) => {
@@ -64,7 +72,7 @@ export function kindAgreement(
     ? `: ${agree.map((vote) => vote.source).join(" + ")}`
     : "";
   const dissent = disagree.length
-    ? `; ${disagree.map((vote) => `${vote.source} says ${voteText(vote.vote)}`).join(", ")}`
+    ? `; ${disagree.map((vote) => `${vote.source} says ${voteText(queryClient, vote.vote)}`).join(", ")}`
     : "";
   return {
     votes,
@@ -88,11 +96,13 @@ const STANCE = {
 
 /** The three kind votes, each source → its kind, marked by agreement. */
 export function KindVotes({ create }: { create: Create }) {
-  const { votes, reason } = kindAgreement(create);
+  const queryClient = useQueryClient();
+  useEntityMetadata("financialTransaction");
+  const { votes, reason } = kindAgreement(queryClient, create);
   return (
     <div className="flex flex-col gap-0.5">
       <p>
-        Kind {kindLabel(create.kind)}{" "}
+        Kind {kindLabel(queryClient, create.kind)}{" "}
         <span className="text-muted-foreground">· {reason}</span>
       </p>
       <ul aria-label="Kind votes" className="flex flex-col gap-0.5">
@@ -119,7 +129,7 @@ export function KindVotes({ create }: { create: Create }) {
                   vote.stance === "abstain" && "text-muted-foreground",
                 )}
               >
-                {voteText(vote.vote)}
+                {voteText(queryClient, vote.vote)}
               </span>
             </li>
           );

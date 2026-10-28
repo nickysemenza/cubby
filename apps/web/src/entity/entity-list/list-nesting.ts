@@ -1,6 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { type QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+
+import { entityMetadata } from "~/entity/metadata";
 
 const nestSearchSchema = z.object({
   nest: z.enum(["on", "off"]).optional().catch(undefined),
@@ -11,10 +13,11 @@ const nestSearchSchema = z.object({
  * without a toggle, otherwise the URL's `nest` or the declared default.
  */
 export function listNested(
+  queryClient: QueryClient,
   entity: Entity,
   search: z.input<typeof nestSearchSchema>,
 ): boolean {
-  const tree = entitySummary[entity].list.tree;
+  const tree = entityMetadata(queryClient, entity).summary.list.tree;
   if (!tree) return false;
   if (!tree.toggle) return true;
   const { nest } = nestSearchSchema.parse(search);
@@ -23,10 +26,14 @@ export function listNested(
 
 /** The URL value for a nested choice; the declared default stays absent. */
 export function nestSearchValue(
+  queryClient: QueryClient,
   entity: Entity,
   nested: boolean,
 ): "on" | "off" | undefined {
-  if (nested === entitySummary[entity].list.tree?.defaultNested)
+  if (
+    nested ===
+    entityMetadata(queryClient, entity).summary.list.tree?.defaultNested
+  )
     return undefined;
   return nested ? "on" : "off";
 }

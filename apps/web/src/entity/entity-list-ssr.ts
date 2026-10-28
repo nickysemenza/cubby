@@ -1,8 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
+import { entityMetadata, ensureEntityMetadata } from "~/entity/metadata";
 
 import { listNested } from "./entity-list/list-nesting";
 import type { ListSearch } from "./entity-list/list-slot-types";
@@ -27,8 +27,9 @@ type EntityListLoaderArgs = {
 
 /** Bind the standard eager list loader while leaving route options literal. */
 export function entityListLoader<E extends ListEntity>(entity: E) {
-  return ({ context, deps, abortController }: EntityListLoaderArgs) => {
-    const { view } = resolveListView(entity, deps);
+  return async ({ context, deps, abortController }: EntityListLoaderArgs) => {
+    await ensureEntityMetadata(context.queryClient, entity);
+    const { view } = resolveListView(context.queryClient, entity, deps);
     return ensureEntityListSsr({
       queryClient: context.queryClient,
       entity,
@@ -38,7 +39,7 @@ export function entityListLoader<E extends ListEntity>(entity: E) {
       // list is not its first page to hydrate.
       active: typeof view === "string",
       // The table pages a nested tree's roots; Cards and the timeline stay flat.
-      nested: view === "table" && listNested(entity, deps),
+      nested: view === "table" && listNested(context.queryClient, entity, deps),
       signal: abortController.signal,
     });
   };
@@ -58,19 +59,27 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
   signal?: AbortSignal;
 }) {
   if (options.active === false) return;
+  await ensureEntityMetadata(options.queryClient, options.entity);
   const defaultSort =
-    options.defaultSort ?? entityListDefaultSort(options.entity);
+    options.defaultSort ??
+    entityListDefaultSort(options.queryClient, options.entity);
   const query = entityListFor(options.entity).infiniteQueryOptions(
     compileEntityListInput(
+      options.queryClient,
       options.entity,
-      searchWithInitialFilter(options.entity, options.search),
+      searchWithInitialFilter(
+        options.queryClient,
+        options.entity,
+        options.search,
+      ),
       {
         defaultSort,
         nesting: options.nested ? ROOTS_SCOPE : undefined,
         // Timeline owns its arrangement; retained URL dimensions must not
         // preload a grouped query the mounted renderer never consumes.
         groupBy:
-          resolveListView(options.entity, options.search).view === "timeline"
+          resolveListView(options.queryClient, options.entity, options.search)
+            .view === "timeline"
             ? []
             : undefined,
       },
@@ -115,14 +124,16 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
  * the server-rendered page and the hydrating table share one cache key.
  */
 export function searchWithInitialFilter(
+  queryClient: QueryClient,
   entity: Entity,
   search: ListSearch,
 ): ListSearch {
   // The summary carries the same initial filter as the inspector metadata,
   // which is ~350 KB the route loaders would otherwise load on every request.
-  const initial = entitySummary[entity].list.initialFilter;
+  const initial = entityMetadata(queryClient, entity).summary.list
+    .initialFilter;
   if (initial.length === 0) return search;
-  const specs = getEntityFilters(entity);
+  const specs = getEntityFilters(queryClient, entity);
   if (
     resolveOpeningFilters(decodeFilters(specs, search), search, initial) !==
     initial

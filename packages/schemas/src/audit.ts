@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { auditChannelSchema } from "./context";
 import { entitySchema } from "./entity";
-import { auditableEntities, type ShortcodeEntity } from "./entity-manifest";
+import { type ShortcodeEntity } from "./entity-manifest";
+import { auditableEntities } from "./generated/entity-roster.gen";
 import {
   anyShortcodeSchema,
   deviceShortcode,

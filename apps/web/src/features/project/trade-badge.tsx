@@ -1,14 +1,16 @@
-import { TRADE_LABELS } from "@cubby/schemas/project";
-import type { Trade } from "@cubby/schemas/project";
+import { TRADE_LABELS, type Trade } from "@cubby/schemas/task-fields";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import { useEntityMetadata } from "~/entity/metadata";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
 import { TradeIcon } from "../../entity/presentation/trade-options";
 
-// Separate from the options module: the enum registry imports that module during initialization.
 export function TradeBadge({ trade }: { trade: Trade }) {
-  const option = fieldEnumOptions("task", "trade").find(
+  const queryClient = useQueryClient();
+  useEntityMetadata("task");
+  const option = fieldEnumOptions(queryClient, "task", "trade").find(
     (option) => option.value === trade,
   );
   return (

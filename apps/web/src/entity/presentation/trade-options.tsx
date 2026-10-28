@@ -1,36 +1,20 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { type Trade, TRADE_LABELS } from "@cubby/schemas/project";
+import { type Trade, TRADE_LABELS } from "@cubby/schemas/task-fields";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { OptionGlyph } from "~/ui/common/option-glyph";
 
-/**
- * Trade presentation — glyphs, chips, and select options.
- *
- * Split out of `shared.tsx` so the filter manifest can import `tradeOptions`
- * without dragging in the tables `shared.tsx` defines. Those tables reach the
- * manifest through `useStandardColumns`, so importing them back would close an
- * import cycle and leave these module-level consts `undefined` at first
- * evaluation. `shared.tsx` re-exports everything here, so its consumers are
- * unaffected.
- */
+/** Trade glyphs and choices share the canonical declaration's scoped roster. */
+function tradeRoster(queryClient: QueryClient) {
+  return (
+    entityMetadata(queryClient, "task").fields.fields.find(
+      (field) => field.key === "trade",
+    )?.control?.options ?? []
+  );
+}
 
-/**
- * Monochrome glyph per trade, from the trade declaration's option `glyph` so
- * web and Apple draw the same mark. `currentColor` glyphs sit cleanly on the
- * neutral category chip.
- */
-const tradeRoster =
-  entityFieldModels.task.fields.find((field) => field.key === "trade")?.control
-    ?.options ?? [];
-const TRADE_GLYPHS = new Map(
-  tradeRoster.map((option) => [option.value, option.glyph?.phosphor]),
-);
-
-/**
- * Bare trade glyph — the same icon as `TradeBadge` without the pill, for tight
- * spots like a schedule name pane where the label is already present.
- */
 export function TradeIcon({
   trade,
   className,
@@ -38,9 +22,14 @@ export function TradeIcon({
   trade: Trade;
   className?: string;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("task");
+  const option = tradeRoster(queryClient).find(
+    (candidate) => candidate.value === trade,
+  );
   return (
     <OptionGlyph
-      name={TRADE_GLYPHS.get(trade) ?? "Shapes"}
+      name={option?.glyph?.phosphor ?? "Shapes"}
       weight="regular"
       className={className}
       label={TRADE_LABELS[trade]}
@@ -48,19 +37,22 @@ export function TradeIcon({
   );
 }
 
-/**
- * `{value,label,icon}` options for the trade filter/inline-edit select — shared
- * by tasks and expenses. The glyph mirrors `TradeBadge` so the select and the
- * chip match.
- */
-export const tradeOptions: PickerOption[] = tradeRoster.map((option) => ({
-  value: option.value,
-  label: option.label,
-  icon: (
-    <OptionGlyph
-      name={option.glyph?.phosphor ?? "Shapes"}
-      weight="regular"
-      className="size-3.5"
-    />
-  ),
-}));
+export function tradeOptions(queryClient: QueryClient): PickerOption[] {
+  return tradeRoster(queryClient).map((option) => ({
+    value: option.value,
+    label: option.label,
+    icon: (
+      <OptionGlyph
+        name={option.glyph?.phosphor ?? "Shapes"}
+        weight="regular"
+        className="size-3.5"
+      />
+    ),
+  }));
+}
+
+export function useTradeOptions(): PickerOption[] {
+  const queryClient = useQueryClient();
+  useEntityMetadata("task");
+  return useMemo(() => tradeOptions(queryClient), [queryClient]);
+}

@@ -52,7 +52,9 @@ extension Entity {
                     for row in result.items {
                         print("\(row.id)\t\(row.title)")
                     }
-                    print("Matching records: \(result.meta.totalCount.formatted())")
+                    if let totalCount = result.meta.totalCount {
+                        print("Matching records: \(totalCount.formatted())")
+                    }
                     if let totals = ListTotalsSummary.line(
                         totals: descriptor.presentation.listTotals,
                         labels: result.meta.totalLabels)

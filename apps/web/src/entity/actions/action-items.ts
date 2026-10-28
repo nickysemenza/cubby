@@ -1,8 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import {
-  browserRoutedEntities,
-  type BrowserRoutedEntity,
-} from "@cubby/schemas/entity-manifest";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { browserRoutedEntities } from "@cubby/schemas/entity-roster";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
@@ -62,9 +60,9 @@ export interface ActionItem {
   surfaces: ActionSurface[];
 }
 
-interface EntityCreateSearch {
+type EntityCreateSearch = {
   create: true;
-}
+};
 
 /**
  * Build an entity-create action from the generated route capability. The

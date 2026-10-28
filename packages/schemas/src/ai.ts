@@ -16,7 +16,7 @@ import {
 } from "./generated/entity-field-envelope-fields.product.gen";
 import { fieldEnvelope, withFieldEnvelopes } from "./field-envelope";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
-import { shortcodeEntities } from "./entity-manifest";
+import { shortcodeEntities } from "./generated/entity-roster.gen";
 import { anyShortcodeSchema } from "./identifier-fields";
 import {
   runShortcode,

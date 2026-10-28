@@ -54,7 +54,6 @@ import {
   getProductCoverImageUrlsByProductIds,
   productScaffold,
 } from "~/server/domains/product/repo/crud";
-import { overlayProductFood } from "~/server/domains/product/repo/list-enrichment";
 // `findMergeComponentCycle` is the SAME question `mergeProducts` already
 // answers — "does identifying/adding these edges make a product reach
 // itself" — reused here rather than reimplemented. Called with `loserIds: []`
@@ -62,13 +61,12 @@ import { overlayProductFood } from "~/server/domains/product/repo/list-enrichmen
 // "does keepId reach itself over this edge set", which is exactly the attach
 // question: no node identification happens on attach, only new edges.
 import { findMergeComponentCycle } from "~/server/domains/product/repo/merge";
-import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
-import { loadProductPickerQuantities } from "~/server/domains/product/repo/quantity-ledger";
+import { storedProductPrice } from "~/server/domains/product/repo/pricing";
 import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
+import { loadStoredProductDisplay } from "~/server/domains/product/repo/stored-display";
 // A kit's most recent acquisition remains narrower than identity relations,
 // which also include exits and planned Expenses.
 import { expenseAcquisitionPairPredicate } from "~/server/domains/purchase/repo/purchase-products";
-import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { linkRelationAdapter } from "~/server/entity-kernel/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
@@ -95,7 +93,6 @@ export interface ProductComponentEntry {
 export async function listKitComponentRows(
   db: Database,
   parentProductIds: ProductId[],
-  usdaClient?: UsdaFoodBatchPort,
 ): Promise<
   Array<Omit<KitComponentRowOut, "product"> & { product: RawProductList }>
 > {
@@ -154,10 +151,7 @@ export async function listKitComponentRows(
       readIntent: "sample",
     }),
   );
-  const items = await overlayProductFood(
-    rows.map((row) => rawProductList.parse(row)),
-    usdaClient,
-  );
+  const items = rows.map((row) => rawProductList.parse(row));
   const byId = new Map(items.map((item) => [item.id, item]));
 
   return edges.flatMap((edge) => {
@@ -183,6 +177,7 @@ export async function listProductComponents(
       productId: product.id,
       productCode: product.shortcode,
       productName: product.name,
+      price: product.price,
       brandName: productBrandNameSql(product.brandId),
       quantity: entityLink.quantity,
       attachedAt: entityLink.createdAt,
@@ -202,25 +197,28 @@ export async function listProductComponents(
     .orderBy(asc(product.name), asc(product.id));
 
   const componentProductIds = rows.map((row) => row.productId);
-  // `loadProductPickerQuantities` rather than a stock query of our own: it
-  // already owns the live-`Location` join, the identity-location union (a bin
-  // in service IS a unit you hold), and the mixed-unit guard. Those three rules
-  // exist in exactly one place on purpose, so a component's count here cannot
-  // drift from the same product's count on the products list.
-  const [prices, coverImageUrls, quantities] = await Promise.all([
-    loadEffectiveProductPricesById(db, componentProductIds),
+  const [display, coverImageUrls] = await Promise.all([
+    loadStoredProductDisplay(db, componentProductIds),
     getProductCoverImageUrlsByProductIds(db, componentProductIds),
-    loadProductPickerQuantities(db, componentProductIds),
   ]);
 
   return rows.map((row) => {
-    const onHand = quantities.get(row.productId)?.onHand;
+    const facts = display.facts.get(row.productId);
+    const onHand = facts?.value?.pickerOnHand;
     return {
       productId: parseShortcodeFor("product", row.productCode),
       productName: row.productName,
       brandName: row.brandName,
       quantity: linkQuantity(row.quantity),
-      price: prices.get(row.productId) ?? null,
+      price: storedProductPrice(display.stored, {
+        id: row.productId,
+        price: row.price,
+        service: row.service,
+      }),
+      displayFacts: {
+        available: facts?.value != null,
+        stale: facts?.stale ?? false,
+      },
       coverImageUrl: coverImageUrls.get(row.productId) ?? null,
       onHandUnits: row.service
         ? null
@@ -340,6 +338,8 @@ export async function listKitMembership(
       parentId: parent.id,
       parentCode: parent.shortcode,
       parentName: parent.name,
+      price: parent.price,
+      service: serviceCategorySql(sql`${parent.categoryId}`),
       brandName: productBrandNameSql(parent.brandId),
       quantity: entityLink.quantity,
       attachedAt: entityLink.createdAt,
@@ -358,12 +358,14 @@ export async function listKitMembership(
     .orderBy(desc(entityLink.createdAt));
 
   const parentProductIds = uniq(rows.map((row) => row.parentId));
-  const [prices, expenseCounts, purchases, coverImageUrls] = await Promise.all([
-    loadEffectiveProductPricesById(db, parentProductIds),
-    loadLiveExpenseCountsByProductId(db, parentProductIds),
-    loadMostRecentPurchaseByProductId(db, parentProductIds),
-    getProductCoverImageUrlsByProductIds(db, parentProductIds),
-  ]);
+  const [display, expenseCounts, purchases, coverImageUrls] = await Promise.all(
+    [
+      loadStoredProductDisplay(db, parentProductIds),
+      loadLiveExpenseCountsByProductId(db, parentProductIds),
+      loadMostRecentPurchaseByProductId(db, parentProductIds),
+      getProductCoverImageUrlsByProductIds(db, parentProductIds),
+    ],
+  );
 
   return rows.map((row) => ({
     parentProductId: parseShortcodeFor("product", row.parentCode),
@@ -372,7 +374,15 @@ export async function listKitMembership(
     quantity: linkQuantity(row.quantity),
     coverImageUrl: coverImageUrls.get(row.parentId) ?? null,
     attachedAt: row.attachedAt,
-    price: prices.get(row.parentId) ?? null,
+    price: storedProductPrice(display.stored, {
+      id: row.parentId,
+      price: row.price,
+      service: row.service,
+    }),
+    displayFacts: {
+      available: display.facts.get(row.parentId)?.value != null,
+      stale: display.facts.get(row.parentId)?.stale ?? false,
+    },
     expenseCount: expenseCounts.get(row.parentId) ?? 0,
     purchase: purchases.get(row.parentId) ?? null,
   }));

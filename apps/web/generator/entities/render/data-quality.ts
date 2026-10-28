@@ -1,4 +1,3 @@
-import { declarationModules } from "../declarations.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 
@@ -6,7 +5,7 @@ type ScoredEntity = CompiledEntity & {
   dataQuality: NonNullable<CompiledEntity["dataQuality"]>;
 };
 
-const scoredEntitiesFor = (
+export const scoredEntitiesFor = (
   entities: readonly CompiledEntity[],
 ): ScoredEntity[] =>
   entities.flatMap((entity) =>
@@ -50,13 +49,6 @@ export const renderDataQualityArtifacts = (
   const source =
     generatedHeader +
     'import { z } from "zod";\n' +
-    'import { ownDataCheckSchema } from "../entity-definitions/definition";\n' +
-    scored
-      .map(
-        (entity) =>
-          `import ${entity.key}Definition from "${declarationModules.get(entity.key)?.path}";\n`,
-      )
-      .join("") +
     'import type { DataQualityCheckKind, DataQualityFacetName } from "../data-quality-facets";\n\n' +
     `export const scoredEntities = ${JSON.stringify(scored.map((entity) => entity.key))} as const;\n` +
     "export type ScoredEntity = (typeof scoredEntities)[number];\n\n" +
@@ -66,7 +58,7 @@ export const renderDataQualityArtifacts = (
     `export const dataChecksByEntity = {\n${scored
       .map(
         (entity) =>
-          `  ${JSON.stringify(entity.key)}: ownDataCheckSchema(${entity.key}Definition),`,
+          `  ${JSON.stringify(entity.key)}: z.enum(${JSON.stringify(entity.dataQuality.checks.map(({ id }) => id))}),`,
       )
       .join("\n")}\n} as const;\n` +
     "export type DataCheckOf<E extends ScoredEntity> = z.infer<(typeof dataChecksByEntity)[E]>;\n\n" +

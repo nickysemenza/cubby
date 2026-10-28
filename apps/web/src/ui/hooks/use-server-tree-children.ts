@@ -1,5 +1,5 @@
 import type { ListNesting } from "@cubby/schemas/pagination";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, type QueryFunctionContext } from "@tanstack/react-query";
 import type { ExpandedState, OnChangeFn, RowData } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
@@ -30,7 +30,7 @@ export type ServerTreeChildStatus =
   | {
       kind: "more";
       /** Matching children the loaded pages have not shown yet. */
-      remaining: number;
+      remaining?: number;
       loading: boolean;
       loadMore: () => void;
     };
@@ -112,7 +112,11 @@ export function useServerTreeChildren<TData extends { id: string }>({
     queries: requests.map(({ plan }) => ({
       queryKey: [...plan.queryKey, "__tree_children__"],
       meta: plan.meta,
-      queryFn: ({ signal }: { signal: AbortSignal }) => plan.execute(signal),
+      queryFn: ({ signal, client, queryKey }: QueryFunctionContext) =>
+        plan.execute(
+          signal,
+          client.getQueryState(queryKey)?.isInvalidated ? "strong" : undefined,
+        ),
     })),
     combine,
   });
@@ -149,7 +153,11 @@ export function useServerTreeChildren<TData extends { id: string }>({
       const last = pages.at(-1);
       // Every page of one scope reports the same total.
       const meta = pages.find((page) => page.data)?.data?.meta;
-      const remaining = meta ? meta.totalCount - items.length : 0;
+      const remaining =
+        meta?.totalCount === undefined
+          ? undefined
+          : meta.totalCount - items.length;
+      const hasMore = last?.data?.meta.hasNextPage ?? false;
       const status: ServerTreeChildStatus | undefined =
         failed.length > 0
           ? {
@@ -162,7 +170,7 @@ export function useServerTreeChildren<TData extends { id: string }>({
             }
           : items.length === 0 && last?.isPending
             ? { kind: "loading" }
-            : remaining > 0
+            : hasMore
               ? {
                   kind: "more",
                   remaining,

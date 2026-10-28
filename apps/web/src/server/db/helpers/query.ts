@@ -326,6 +326,19 @@ export async function executeListQueryWithCount<T>(
   });
 }
 
+/** Select one extra candidate, then trim it before hydration. Never runs a count. */
+export async function executeListQueryWithoutCount<T>(plan: {
+  rows: () => Promise<T[]>;
+  pageSize: number;
+}): Promise<{ data: T[]; count: undefined; hasNextPage: boolean }> {
+  const rows = await traceListPage(plan.rows);
+  return {
+    data: rows.slice(0, plan.pageSize),
+    count: undefined,
+    hasNextPage: rows.length > plan.pageSize,
+  };
+}
+
 const LOCK_ENTITY_BY_NAME = {
   Expense: "expense",
   FinancialAccount: "financialAccount",

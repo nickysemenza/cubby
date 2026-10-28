@@ -1,4 +1,4 @@
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { shortcodeEntities } from "@cubby/schemas/entity-roster";
 import { anyShortcodeSchema, nonEmptyTuple } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 

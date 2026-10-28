@@ -1,10 +1,10 @@
 import { z } from "zod";
 
 import { plainDate } from "./base-entity";
-import { dataCheck, type DataCheck, dataQuality } from "./data-quality";
+import { dataCheck, dataQuality } from "./data-quality";
 import { displayImagesField } from "./display-images";
-import { shortcodeEntities } from "./entity-manifest";
-import { entitySummary } from "./generated/entity-summary.gen";
+import { shortcodeEntities } from "./generated/entity-roster.gen";
+import { entityRoster } from "./generated/entity-roster.gen";
 import { projectShortcode } from "./identifier-fields";
 import { anyShortcodeSchema } from "./identifier-fields";
 import { nonEmptyTuple } from "./identifiers";
@@ -59,7 +59,7 @@ export const workFamilyOptions = optionsOf(workFamily.options);
 /** A row's record type; a Problems diagnostic count has none. */
 export const workRecordTypeOptions = shortcodeEntities.map((value) => ({
   value,
-  label: entitySummary[value].singular,
+  label: entityRoster[value].singular,
 }));
 
 /**
@@ -100,19 +100,6 @@ export const workQueueGapViews = [
   family: WorkFamily;
   view: string;
 }[];
-
-/** The checks a gap view's rows can carry: its declared `dataGaps` filter. */
-export const workQueueGapChecks = (
-  gapView: (typeof workQueueGapViews)[number],
-): DataCheck[] =>
-  (
-    entitySummary[gapView.entity].list.savedViews.find(
-      (view) => view.id === gapView.view,
-    )?.filters ?? []
-  )
-    .flatMap((filter) => (filter.id === "dataGaps" ? [filter.value] : []))
-    .flat()
-    .flatMap((value) => dataCheck.safeParse(value).data ?? []);
 
 export const workQueueGapSchema = z.object({
   check: dataCheck,

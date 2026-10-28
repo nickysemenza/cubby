@@ -2,6 +2,8 @@ import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
+
 import {
   entityFieldProvenance,
   FieldProvenance,
@@ -47,8 +49,11 @@ describe("formatFieldProvenance", () => {
 });
 
 describe("specialist provenance builders", () => {
-  it("resolves relation-backed sources from the entity manifest", () => {
-    expect(relationshipFieldProvenance("purchase", "expenses")).toEqual({
+  it("resolves relation-backed sources from scoped metadata", async () => {
+    const queryClient = await metadataQueryClient();
+    expect(
+      relationshipFieldProvenance(queryClient, "purchase", "expenses"),
+    ).toEqual({
       kind: "derived",
       sources: [{ entity: "expense", label: null, relation: "expenses" }],
     });

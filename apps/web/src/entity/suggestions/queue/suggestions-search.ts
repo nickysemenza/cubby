@@ -1,5 +1,5 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { shortcodeEntities } from "@cubby/schemas/entity-roster";
 import { suggestionListFamily } from "@cubby/schemas/suggestion-list";
 import {
   suggestionFilterDeclaration,

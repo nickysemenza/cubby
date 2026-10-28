@@ -2,7 +2,7 @@ import { calendarMealItem, calendarMealSource } from "@cubby/schemas/calendar";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import { entityEditRegistry } from "~/entity/editing/definitions";
+import { createEditorTestQueryClient } from "#web/tests/editor-metadata.fixtures.ts";
 import {
   initialEntityEditValues,
   resolveEntityEdit,
@@ -11,6 +11,8 @@ import { mock } from "~/lib/test/mock-schema";
 
 import { calendarItemEditDescriptor } from "./calendar-kind-registry";
 import { mealCalendarSourceFixture } from "./calendar-source.fixtures";
+
+const queryClient = createEditorTestQueryClient();
 
 describe("Calendar Meal editor source intent", () => {
   it("seeds the stored assignment and retains current controls when the effective value differs", () => {
@@ -58,7 +60,7 @@ describe("Calendar Meal editor source intent", () => {
       surface: "calendar",
       record: edit.record,
     } as const;
-    const resolved = resolveEntityEdit(entityEditRegistry, request);
+    const resolved = resolveEntityEdit(queryClient, request);
     if (!("definition" in resolved))
       throw new Error("Synthetic Meal editor must resolve");
     const values = initialEntityEditValues(resolved, request);

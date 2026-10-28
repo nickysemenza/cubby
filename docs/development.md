@@ -113,7 +113,12 @@ Start streams   →  cancellable workflow streams
   describe the browser build; `@cubby/recipebridge/worker` exposes the full
   interface and is restricted to `src/server`. Package conditions select the
   browser build or the shared `packages/wasm/workerd.js` initializer; both
-  workerd subpaths resolve to that one module. Node tests use the full build.
+  workerd subpaths resolve to that one module. It instantiates WASM lazily on
+  the first call. Page reads batch Product conversion displays in one call;
+  conversion outputs remain transient. Request telemetry records one aggregate
+  WASM span, including streamed rendering, rather than a span per call. Primitive
+  arguments use compact cache keys; object inputs are batched instead of serialized
+  into cache keys. Node tests use the full build.
   `check-client-bundle.ts` checks each package lands in the right bundle.
   Cookbook EPUB estimates and extraction use the same deployment options:
   Sonnet 5 first, Haiku 4.5 for the second opinion, then Luna. Anthropic calls
@@ -199,7 +204,10 @@ loads itself into its Durable Object:
 5. Once ready, `POST` to the same route: Product links to superseded food
    revisions advance to the current revision, and the response lists each
    advance. A `POST` on a failed load resumes it instead; on a loading one it
-   returns the progress. Re-running it advances nothing new.
+   returns the progress. It also marks stored Product food summaries dirty,
+   including stable food IDs and UPC matches; the existing derived drain refreshes
+   them from the active release. Re-running it advances no additional links and
+   requests another food refresh.
 
 The dev Worker seeds its `USDA_RELEASES` bucket on its first request with the
 synthetic release `2000-01` (`apps/web/tooling/dev/usda-synthetic-release.ts`):

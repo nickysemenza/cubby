@@ -18,7 +18,12 @@ describe("selected-record action admission", () => {
         queryKey: ["selection", ids],
         execute: async () => ({
           items: [...ids].reverse().map((id) => ({ id })),
-          meta: { pageIndex: 0, pageSize: 100, totalCount: ids.length },
+          meta: {
+            hasNextPage: false,
+            pageIndex: 0,
+            pageSize: 100,
+            totalCount: ids.length,
+          },
         }),
       };
     };
@@ -38,7 +43,12 @@ describe("selected-record action admission", () => {
       queryKey: ["missing"],
       execute: async () => ({
         items: [{ id: "present" }],
-        meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
+        meta: {
+          hasNextPage: false,
+          pageIndex: 0,
+          pageSize: 100,
+          totalCount: 1,
+        },
       }),
     });
     await expect(

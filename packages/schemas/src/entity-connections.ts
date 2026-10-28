@@ -8,7 +8,7 @@ import { entityGraphRootSchema } from "./entity-graph";
 
 import { entitySchema } from "./entity-core";
 import { edgeRoleSchema, operationDispositionSchema } from "./entity-integrity";
-import { shortcodeEntities } from "./entity-manifest";
+import { shortcodeEntities } from "./generated/entity-roster.gen";
 import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
 import { runShortcode } from "./identifiers";
 

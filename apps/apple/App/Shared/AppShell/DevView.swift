@@ -199,7 +199,7 @@ struct DevView: View {
         do {
             let page = try await model.client.list(EntityCatalog[.product], page: 1, pageSize: 1)
             apiResult =
-                "\(page.meta.totalCount.formatted()) products · first: \(page.items.first?.title ?? "none")"
+                "\(page.meta.totalCount.map { $0.formatted() } ?? "Count unavailable") products · first: \(page.items.first?.title ?? "none")"
         } catch {
             apiResult = String(describing: error)
             model.handle(error)

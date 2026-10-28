@@ -2,6 +2,7 @@ import { compactLiteral, generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 import { entityProjectionMaps } from "./capabilities.ts";
 import { treeRowExtension } from "./capabilities.ts";
+import { renderBrowserReadContracts } from "./browser-read-contracts.ts";
 
 export const renderEntityReadArtifacts = (
   entities: readonly CompiledEntity[],
@@ -53,7 +54,7 @@ export const renderEntityReadArtifacts = (
   const listInputVariants = listEntitySpecs
     .map(
       ({ key, filterSchema, inspector }) =>
-        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:listGroupByDimensionsSchema.optional(),resultMembership:listResultMembership.optional()${inspector.list.tree === null ? "" : ",nesting:listNestingSchema.optional()"}})`,
+        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:listGroupByDimensionsSchema.optional(),resultMembership:listResultMembership.optional(),includeCount:z.boolean().optional()${inspector.list.tree === null ? "" : ",nesting:listNestingSchema.optional()"}})`,
     )
     .join(",\n  ");
   // Strict: an unknown filter name is a 400, not a silently wider list.
@@ -115,9 +116,10 @@ export const renderEntityReadArtifacts = (
         : [`  ${JSON.stringify(key)}: ${filterSchema.export},`],
     )
     .join("\n");
-  return [
+  const artifacts: EntityArtifacts[] = [
     {
-      relativePath: "apps/web/src/entity/generated/entity-details.gen.ts",
+      relativePath:
+        "apps/web/src/server/generated/entity-details.server.gen.ts",
       source:
         generatedHeader +
         `${detailRuntimeImportSource}\n\n` +
@@ -148,15 +150,15 @@ export const renderEntityReadArtifacts = (
         "}\n",
     },
     {
-      relativePath: "apps/web/src/entity/generated/entity-lists.gen.ts",
+      relativePath: "apps/web/src/server/generated/entity-lists.server.gen.ts",
       source:
         generatedHeader +
         "// Generated schema aliases retain deterministic import order.\n" +
         `${listFilterFieldImports}\n` +
         'import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";\n' +
-        'import { compileListReadSchema } from "../model/list-read-fields";\n' +
+        'import { compileListReadSchema } from "../../entity/model/list-read-fields";\n' +
         'import { listChildCountSchema, listNestingSchema, listResultMembership, listGroupByDimensionsSchema, type ListGroupBy, MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
-        'import type { FilterPatch } from "../filters";\n' +
+        'import type { FilterPatch } from "../../entity/filters";\n' +
         'import { z } from "zod";\n\n' +
         `export const listEntities = ${compactLiteral(listEntityKeys)} as const;\n` +
         "export type ListEntity = (typeof listEntities)[number];\n\n" +
@@ -170,14 +172,14 @@ export const renderEntityReadArtifacts = (
         `export const entityListInputSchema = z.discriminatedUnion("entity", [\n  ${listInputVariants}\n]);\n\n` +
         `${listItemSchemas}\n\n` +
         `export const ENTITY_LIST_READ_SCHEMAS = {\n${listReadSchemas}\n} as const;\n\n` +
-        "const ENTITY_LIST_OUTPUT_SCHEMAS = {\n" +
+        "export const ENTITY_LIST_OUTPUT_SCHEMAS = {\n" +
         `${listOutputSchemas}\n` +
         "} as const;\n\n" +
         "type EntityListInputFiltersByEntity = { [E in ListEntity]: z.input<(typeof ENTITY_LIST_FILTER_SCHEMAS)[E]> };\n" +
         "type EntityListParsedFiltersByEntity = { [E in ListEntity]: z.output<(typeof ENTITY_LIST_FILTER_SCHEMAS)[E]> };\n" +
         "type EntityListSort = z.input<typeof entityListSortSchema>;\n" +
         "export type EntityListInputByEntity = {\n" +
-        "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: ListGroupBy[]; resultMembership?: z.input<typeof listResultMembership>; nesting?: z.input<typeof listNestingSchema> };\n" +
+        "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: ListGroupBy[]; resultMembership?: z.input<typeof listResultMembership>; includeCount?: boolean; nesting?: z.input<typeof listNestingSchema> };\n" +
         "};\n" +
         "export type ParsedEntityListInputByEntity = {\n" +
         '  [E in ListEntity]: Omit<EntityListInputByEntity[E], "filters"> & { filters: EntityListParsedFiltersByEntity[E] };\n' +
@@ -193,7 +195,7 @@ export const renderEntityReadArtifacts = (
         "  const { entity: _entity, ...params } = input;\n" +
         "  return params;\n" +
         "}\n\n" +
-        "export type EntityListParseInput = EntityListInputByEntity[ListEntity] | { entity: ListEntity; filters: FilterPatch; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: ListGroupBy[]; resultMembership?: z.input<typeof listResultMembership>; nesting?: z.input<typeof listNestingSchema> };\n\n" +
+        "export type EntityListParseInput = EntityListInputByEntity[ListEntity] | { entity: ListEntity; filters: FilterPatch; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: ListGroupBy[]; resultMembership?: z.input<typeof listResultMembership>; includeCount?: boolean; nesting?: z.input<typeof listNestingSchema> };\n\n" +
         "export type EntityListResultByEntity = {\n" +
         "  [E in ListEntity]: z.output<(typeof ENTITY_LIST_OUTPUT_SCHEMAS)[E]>;\n" +
         "};\n\n" +
@@ -235,6 +237,71 @@ export const renderEntityReadArtifacts = (
         `${filterFieldImportSource}\n\n` +
         "// Generated filter field assembly stays one entity per line.\n// oxfmt-ignore\n" +
         `export const entityFilterFieldMaps = {\n${filterFieldBindings}\n} satisfies Partial<Record<Entity, Record<string, z.ZodType>>>;\n`,
+    },
+  ];
+  const entityReads = entities.filter(
+    ({ key }) =>
+      detailEntities.some((entity) => entity.key === key) ||
+      listEntityKeys.includes(key),
+  );
+  const perEntity = entityReads.map((entity): EntityArtifacts => {
+    const { key } = entity;
+    const name = key.replaceAll(/-([a-z])/gu, (_, letter: string) =>
+      letter.toUpperCase(),
+    );
+    const listed = listEntityKeys.includes(key);
+    const filter = entity.filterSchema;
+    return {
+      relativePath: `apps/web/src/server/generated/entity-read.${key}.gen.ts`,
+      source:
+        generatedHeader +
+        `import { ${name}FieldEnvelopeSchemas as envelopes } from "@cubby/schemas/compiler/generated/entity-field-envelopes/${key}";\n` +
+        (listed && filter
+          ? `import { ${filter.export} as filterFields } from ${JSON.stringify(filter.module)};\n`
+          : "") +
+        'import { shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
+        `import { ${entity.inspector.list.tree === null ? "" : "listNestingSchema, listChildCountSchema, "}listResultMembership, listGroupByDimensionsSchema, MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n` +
+        'import { compileListReadSchema } from "~/entity/model/list-read-fields";\n' +
+        'import { z } from "zod";\n' +
+        `export const detailInput = z.object({ entity: z.literal(${JSON.stringify(key)}), shortcode: shortcodeSchema(${JSON.stringify(key)}) });\n` +
+        "export const detailOutput = envelopes.detail;\n" +
+        (listed
+          ? `const filters = ${filter === null ? "z.record(z.string(),z.unknown())" : `z.strictObject(filterFields)${entity.descriptor.searchable === true ? ".extend({searchQuery:z.string().trim().min(1).max(100).optional()})" : ""}.extend({ids:z.array(z.string()).max(500).optional()})`};\n` +
+            `export const listInput = z.object({entity:z.literal(${JSON.stringify(key)}),filters,sort:z.array(z.object({orderBy:z.string().min(1),direction:z.enum(["asc","desc"])})).min(1).max(MAX_SORTS).optional(),pagination:z.object({pageIndex:z.number().int().min(0),pageSize:z.number().int().min(1).max(MAX_PAGE_SIZE)}).optional(),groupBy:listGroupByDimensionsSchema.optional(),resultMembership:listResultMembership.optional(),includeCount:z.boolean().optional()${entity.inspector.list.tree === null ? "" : ",nesting:listNestingSchema.optional()"}});\n` +
+            `export const listItem = envelopes.list${treeRowExtension(entity.inspector)};\n` +
+            "export const listOutput = z.object({items:z.array(listItem),meta:paginatedMetaSchema});\n" +
+            "export const listRead = compileListReadSchema(listItem);\n"
+          : ""),
+    };
+  });
+  return [
+    ...artifacts,
+    ...perEntity,
+    ...renderBrowserReadContracts(entities),
+    {
+      relativePath: "apps/web/src/server/generated/entity-read-loaders.gen.ts",
+      source:
+        generatedHeader +
+        'import type { ListEntity } from "~/entity/generated/entity-lists.gen";\n' +
+        'import type { DetailEntity } from "~/entity/generated/entity-details.gen";\n' +
+        "const listLoaders = {\n" +
+        listEntitySpecs
+          .map(
+            ({ key }) =>
+              `  ${JSON.stringify(key)}: () => import("./entity-read.${key}.gen"),\n`,
+          )
+          .join("") +
+        "};\n" +
+        "const detailLoaders = {\n" +
+        detailEntities
+          .map(
+            ({ key }) =>
+              `  ${JSON.stringify(key)}: () => import("./entity-read.${key}.gen"),\n`,
+          )
+          .join("") +
+        "};\n" +
+        "export const loadEntityListSchemas = (entity: ListEntity) => listLoaders[entity]();\n" +
+        "export const loadEntityDetailSchemas = (entity: DetailEntity) => detailLoaders[entity]();\n",
     },
   ];
 };

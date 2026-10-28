@@ -1,7 +1,12 @@
 # Production migrations
 
 The GitHub production deployment applies pending committed migrations before
-deploying the already-built Worker. A migration failure stops deployment. The
+deploying the already-built Worker. A migration failure stops deployment. A
+migration marked `-- cubby:after-deploy` in its first statement and any pending
+successors wait until the matching Worker uploads successfully. The normal
+runner then applies the remaining journal prefix idempotently. Failed or skipped
+uploads never admit these migrations; retries resume from verified receipts.
+Once a marked migration is applied, it imposes no boundary on later releases. The
 runner uses only `PRODUCTION_DIRECT_DATABASE_URL` for production; it never
 falls back to `DATABASE_URL`. Ordinary migrations must work with the currently
 deployed code. Verify preservation with synthetic predecessor data before merge,
@@ -160,6 +165,21 @@ absent and both permanent identity constraints are validated. Report any checks
 not performed; migration success alone is not deployment verification.
 
 ## Derived values cutover
+
+### Product facts and prefix index (0053)
+
+0053 adds the WorkItem prefix index, declaration-generated Product fact/food
+invalidation triggers and initial work for every live Product. It preserves all
+member assignments and retained evidence. The predecessor deletes unfamiliar
+derived target names, so this migration carries `-- cubby:after-deploy` and the
+normal GitHub pipeline applies it only after the matching consumer is deployed.
+No manual production write, writer hold or environment-variable cutover is needed.
+
+Read back live Product populations against successful `product.readFacts` and
+`product.food` publications, then verify ready/error work and backlog drainage.
+A zero backlog without publication coverage does not establish success. Missing
+food (a valid null publication) counts as published; a missing result does not.
+Record catch-up duration separately from route latency.
 
 ### Remaining result materialization (0046)
 

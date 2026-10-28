@@ -13,7 +13,7 @@ import {
   anyShortcodeSchema,
   nonEmptyTuple,
 } from "./identifiers";
-import { shortcodeEntities } from "./entity-manifest";
+import { shortcodeEntities } from "./generated/entity-roster.gen";
 import { emailAccuracyRoster } from "./email-accuracy";
 import {
   statementTransactionApplication,

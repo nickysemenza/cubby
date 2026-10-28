@@ -3,7 +3,7 @@ import { z } from "zod";
 import { parseShortcode } from "@cubby/shared";
 
 import { entityRefSchema, entitySchema } from "./entity";
-import { shortcodeEntities } from "./entity-manifest";
+import { shortcodeEntities } from "./generated/entity-roster.gen";
 import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
 import { imageUrlSummary } from "./image-summary";
 

@@ -2,7 +2,7 @@ import type { FieldSuggestionsInput } from "@cubby/schemas/ai";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { assessmentSubjects } from "@cubby/schemas/assessment";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
-import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
+import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy";
 import type { SuggestionCorrectionSource } from "@cubby/schemas/suggestion-correction";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";

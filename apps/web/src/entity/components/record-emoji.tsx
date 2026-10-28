@@ -1,6 +1,6 @@
 import { recordEmojiInput } from "@cubby/schemas/emoji";
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 
 import { EntityIcon } from "~/entity/entities";
 import { readPathValue } from "~/entity/read-path";
@@ -20,7 +20,7 @@ export function RecordEmoji({
   size?: number;
   className?: string;
 }) {
-  const iconField = entitySummary[entity]?.recordIconEntityField;
+  const iconField = entityRoster[entity]?.recordIconEntityField;
   const icon = entitySchema.safeParse(
     iconField ? readPathValue(record, iconField) : null,
   );

@@ -1,10 +1,11 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import { humanize } from "@cubby/shared";
+import { useQueryClient } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
+import { entityMetadata } from "~/entity/metadata";
 import {
   type ListQueryState,
   useFilterFacets,
@@ -103,7 +104,8 @@ function useLedgerFilterState<TData extends RowData>({
   optionHints: OptionHints | undefined;
   query: ListQueryState | null;
 }) {
-  // TanStack v9 materializes leaf columns after the first table render. The
+  // TanStack v9 materializes leaf columns after the first table render.
+  const queryClient = useQueryClient();
   // table/options references stay stable across that boundary, so they cannot
   // by themselves invalidate this memo; include the resolved filter-column
   // signature so an initially empty query strip hydrates as soon as the
@@ -115,7 +117,7 @@ function useLedgerFilterState<TData extends RowData>({
     .join("|");
   const primarySearch =
     table.options.meta?.primarySearch ??
-    (entity ? entitySummary[entity].primarySearch : null);
+    (entity ? entityMetadata(queryClient, entity).summary.primarySearch : null);
   const declaredFields = useMemo(
     () => getLedgerFields(table, optionHints, primarySearch),
     // oxlint-disable-next-line react/exhaustive-deps -- filterColumnsKey is the late-materializing TanStack v9 signal described above
@@ -223,7 +225,15 @@ export function LedgerFilters<TData extends RowData>({
   const query = useListQuery(workbench ? entity : undefined);
   const { fields, draftFilters, handleChange, primarySearch, setOpenEditor } =
     useLedgerFilterState({ table, entity, optionHints, query });
-  const { total } = useViewCounts(query?.entity);
+  const [countsRequested, setCountsRequested] = useState(false);
+  const { total } = useViewCounts(query?.entity, countsRequested);
+  const openEditor = useCallback(
+    (key: string | null) => {
+      if (key !== null) setCountsRequested(true);
+      setOpenEditor(key);
+    },
+    [setOpenEditor],
+  );
 
   const pluralLower = pluralLowerOf(entity);
   const searchPlaceholder =
@@ -258,7 +268,7 @@ export function LedgerFilters<TData extends RowData>({
       searchKey={primarySearch?.key}
       searchPlaceholder={searchPlaceholder}
       chipsTarget={query ? query.chipsTarget : undefined}
-      onEditorChange={setOpenEditor}
+      onEditorChange={openEditor}
       editRequest={editRequest}
       resultCount={localResultCount(table, query, total, pluralLower)}
     />

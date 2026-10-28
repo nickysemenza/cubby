@@ -1,4 +1,4 @@
-import { galleryEntities } from "@cubby/schemas/entity-manifest";
+import { galleryEntities } from "@cubby/schemas/entity-roster";
 import {
   attachableImageEntity,
   attachmentRoleForEntity,

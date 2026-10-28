@@ -17,6 +17,7 @@ import { money, moneyNullable } from "./money";
 import { ingredientApplicabilityKey } from "./codec";
 import { recipeUsageOut } from "./recipe-fields";
 import { unitMappingOut, unitMappingWithMetadata } from "./unitmapping";
+import { productPricingOut } from "./product-fields";
 const locationAncestorFields = locationListRefOut.shape;
 const locationPathRefFields = locationListRefOut.shape;
 export const productQuantityLedgerOut = z.object({
@@ -124,6 +125,23 @@ export const productOwnershipEvidenceOut = z.object({
 export type ProductOwnershipEvidenceOut = z.infer<
   typeof productOwnershipEvidenceOut
 >;
+
+/** Published SQL/domain display facts; WASM results remain request-local. */
+export const productPickerOnHand = z.discriminatedUnion("state", [
+  z.object({ state: z.literal("none") }),
+  z.object({ state: z.literal("counted"), units: z.number() }),
+  z.object({ state: z.literal("mixed") }),
+]);
+export const productDisplayFactsState = z.object({
+  available: z.boolean(),
+  stale: z.boolean(),
+});
+export const productReadFacts = z.object({
+  ...productQuantityFields,
+  pricing: productPricingOut,
+  ownershipEvidence: productOwnershipEvidenceOut,
+  pickerOnHand: productPickerOnHand,
+});
 
 /**
  * Which nutrition a Product shows and how to caption it, chosen once on the

@@ -164,8 +164,8 @@ const queueQueryPlan: ListQueryOptionsFn<
   return {
     queryKey: options.queryKey,
     meta: options.meta,
-    execute: async (signal) => {
-      const result = await workQueue.queue.call(input, { signal });
+    execute: async (signal, consistency) => {
+      const result = await workQueue.queue.call(input, { signal, consistency });
       const grouping = result.meta.groups
         ? countedGroupPage({
             groups: result.meta.groups,
@@ -178,6 +178,9 @@ const queueQueryPlan: ListQueryOptionsFn<
         ...result,
         meta: {
           ...result.meta,
+          hasNextPage:
+            (result.meta.pageIndex + 1) * result.meta.pageSize <
+            result.meta.totalCount,
           groups: undefined,
           ...grouping,
           groupActions: Object.fromEntries(
@@ -636,7 +639,7 @@ export function WorkQueue({
             .map((row) => [row.id, true]),
         ),
       );
-      if (all.length < list.totalCount)
+      if (list.totalCount !== undefined && all.length < list.totalCount)
         toast.warning(
           `Selected the first ${formatCount(all.length)} of ${formatCount(list.totalCount)} — too many to select at once. Narrow the filters to cover the rest.`,
         );

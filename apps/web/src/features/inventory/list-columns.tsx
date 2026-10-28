@@ -2,6 +2,7 @@ import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useMemo } from "react";
 import type { z } from "zod";
@@ -103,6 +104,7 @@ export const inventoryListOverride = defineListOverride<
   InventoryFilters
 >({
   use() {
+    const queryClient = useQueryClient();
     const { categories } = useProductCategories();
     const filterOptions = useFilterOptions({
       productCategories: categories.map((category) => {
@@ -162,7 +164,7 @@ export const inventoryListOverride = defineListOverride<
           );
         }),
       // oxlint-disable-next-line react/exhaustive-deps -- updateMutation changes every render but is functionally stable
-      [],
+      [queryClient],
     );
 
     const compose = useMemo(
@@ -178,6 +180,7 @@ export const inventoryListOverride = defineListOverride<
               meta: {
                 columnGroup: "Catalog",
                 provenance: relationshipFieldProvenance(
+                  queryClient,
                   "inventory",
                   "product",
                   "reference",
@@ -204,6 +207,7 @@ export const inventoryListOverride = defineListOverride<
           );
           add(
             createSingleEntityInlineLinkColumn(
+              queryClient,
               columnHelper,
               "location",
               "location",
@@ -213,6 +217,7 @@ export const inventoryListOverride = defineListOverride<
                 mobile: { slot: "subtitle", priority: 20 },
                 filterConfig: { placeholder: "Filter location..." },
                 provenance: relationshipFieldProvenance(
+                  queryClient,
                   "inventory",
                   "location",
                   "reference",
@@ -240,6 +245,7 @@ export const inventoryListOverride = defineListOverride<
                 meta: {
                   columnGroup: "Catalog",
                   provenance: relationshipFieldProvenance(
+                    queryClient,
                     "inventory",
                     "product",
                   ),
@@ -259,7 +265,11 @@ export const inventoryListOverride = defineListOverride<
               filterFn: multiSelectFilterFn,
               meta: {
                 columnGroup: "Catalog",
-                provenance: relationshipFieldProvenance("inventory", "product"),
+                provenance: relationshipFieldProvenance(
+                  queryClient,
+                  "inventory",
+                  "product",
+                ),
                 className: "w-32",
                 mobile: { slot: "meta", priority: 75 },
                 filterConfig: {
@@ -274,7 +284,7 @@ export const inventoryListOverride = defineListOverride<
           rest();
         }),
       // oxlint-disable-next-line react/exhaustive-deps -- updateMutation changes every render but is functionally stable
-      [],
+      [queryClient],
     );
 
     const list = useMemo(

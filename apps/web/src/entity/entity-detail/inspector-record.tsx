@@ -1,6 +1,8 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { entitySummary } from "@cubby/schemas/entity-summary";
-import { useQuery } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
@@ -19,6 +21,7 @@ import {
 } from "~/entity/entities";
 import { isGeneratedBrowserCrudEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { PreviewQuery } from "~/entity/preview/preview-query";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
@@ -39,10 +42,12 @@ import {
 type FieldSection = { id: string; title: string; fields: readonly string[] };
 
 function presentationEditable(
+  queryClient: QueryClient,
   entity: GenericDetailEntity,
   hasOverride: boolean,
 ) {
-  const actions: readonly string[] = entitySummary[entity].detail.hero.actions;
+  const actions: readonly string[] = entityMetadata(queryClient, entity).summary
+    .detail.hero.actions;
   return (
     actions.includes("edit") &&
     (hasOverride || isGeneratedBrowserCrudEntity(entity))
@@ -81,7 +86,7 @@ function InspectorCheckSections({
   id: string;
   fieldSections: readonly string[];
 }) {
-  const sections = entitySummary[entity].detail.sections;
+  const sections = useEntityMetadata(entity).summary.detail.sections;
   return useQualityCheckSections()
     .filter((section) => !fieldSections.includes(section))
     .map((sectionId) => (
@@ -122,19 +127,26 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
   onRecordResolved: (record: EntityActionRow | undefined) => void;
   onNameResolved: (name: string) => void;
 }) {
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(entity);
   const [editing, setEditing] = useState(false);
   const EditOverride = detailEditOverrideFor(entity);
-  const editable = presentationEditable(entity, EditOverride !== undefined);
+  const editable = presentationEditable(
+    queryClient,
+    entity,
+    EditOverride !== undefined,
+  );
   // SAFETY: the generated CRUD guard proves this entity owns update:full;
   // the request builder uses the same entity's record and validated registry.
   const editRequest =
     isGeneratedBrowserCrudEntity(entity) && !EditOverride && editing
       ? (detailEditRequest(
+          queryClient,
           entity as EditableEntity,
           record as never,
         ) as EntityEditDialogRequest<EditableEntity>)
       : null;
-  const presentation = entitySummary[entity];
+  const presentation = entityMetadata(queryClient, entity).summary;
   const name = z.record(z.string(), z.unknown()).parse(record)[
     presentation.titleField
   ];
@@ -145,7 +157,7 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
   const fieldSections = presentation.detail.sections.filter(
     (section) => section.kind === "fields",
   );
-  const fields = entityFieldModels[entity].fields
+  const fields = metadata.fields.fields
     .filter((field) => field.display.detail)
     .map((field) => field.key);
   return (
@@ -223,11 +235,12 @@ export function InspectorRecord<E extends GenericDetailEntity>(props: {
   onRecordResolved: (record: EntityActionRow | undefined) => void;
   onNameResolved: (name: string) => void;
 }) {
+  const metadata = useEntityMetadata(props.entity);
   const query = useQuery(entityDetailFor(props.entity).queryOptions(props.id));
   return (
     <PreviewQuery
       query={query}
-      label={entitySummary[props.entity].singular}
+      label={metadata.summary.singular}
       onUnavailable={props.onRecordResolved}
     >
       {(record) => <ResolvedInspectorRecord {...props} record={record} />}

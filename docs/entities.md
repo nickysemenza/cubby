@@ -2127,7 +2127,7 @@ compiled from the entity's declared rollup. The shortcode table registry stays
 independent of repositories so identity writers can use it without a cycle.
 
 Each page is one `entity.list` request returning complete canonical rows and
-`meta.totalCount`, full-filter `meta.sums` / `meta.totalLabels`, grouping and
+`meta.hasNextPage`, full-filter `meta.sums` / `meta.totalLabels`, grouping and
 membership metadata. Governed values live only in each row's typed `fields`
 envelopes, with assignment/control facts, result provenance and background work.
 Stored metadata loads alongside
@@ -2141,6 +2141,15 @@ Public serialization reuses the scaffold's field-read contexts when available;
 otherwise, it batches missing root and nested codes through each entity's scaffold
 get and uses those reads' contexts.
 Inheritance resolutions produced during hydration contribute their provenance.
+
+List inputs default `includeCount` to true for API, MCP and native callers.
+Standalone browser rosters send `includeCount: false`: selection fetches at most
+one extra candidate, trims it before hydration, and reports continuation through
+`meta.hasNextPage` without a population or window count. Their `meta.totalCount`
+is absent, never zero or the loaded-row length. Exact relation pages retain
+counts; explicitly grouped pages retain complete population summaries and their
+exact counts. Existing view-count reads load exact totals on request, outside the
+opening roster request. Full-filter financial sums keep their complete semantics.
 
 Complete scaffold pages include full-population totals. Kernel-selected pages,
 including MCP summaries, also request those totals through the scaffold; raw
@@ -2760,6 +2769,15 @@ kernel binding with a lazy import. Each scored entity's evaluator lives in
 imported by domain repositories and reads quality synchronously, so it cannot
 depend on the repository registry, which imports every repository.
 
+Product reads use the stored `readFacts` publication for pricing, quantity ledger,
+placement and ownership evidence, and `food` for food summaries. Their field
+metadata carries the publication's stale/work status. Reads never refresh these
+facts. The existing USDA release activation action invalidates food publications
+even when linked IDs do not change. Recipe totals prepare a bounded batch of
+recipes through one shared costing context; the drain preserves tickets written
+during that preparation. WorkItem fanout lookup uses an indexed `COLLATE "C"`
+prefix range, including correlated target lookups.
+
 A stored result may declare `resultSchema` and supply several scalar fields through
 `model.derived.<field>.fromResult: { key, path }`. Generation checks each path and
 scalar type against that schema. These fields share the result's publication,
@@ -2956,11 +2974,12 @@ result's availability. The compiler evaluates both certain and
 possible membership; exclusions negate the opposite bound, so an unresolved
 include cannot become a known exclusion. `unresolvedWhere` selects possible
 matches that are not certain without loading the population into memory.
-For a requested filter bound to a result, the shared list read reports the
+For a requested filter bound to a result, explicit count reads report the
 additional candidates in `meta.unresolvedCount`; `meta.totalCount` remains the
-known-match count. No extra membership count query runs for filters without
-declared result dependencies. Published unknown-attribution portions are known
-outcomes, not unresolved computations.
+known-match count. Uncounted pages defer both population counts and keep Show
+unresolved available without substituting zero for an unavailable count. No extra
+membership count query runs for filters without declared result dependencies.
+Published unknown-attribution portions are known outcomes, not unresolved computations.
 `entity.list.resultMembership: "unresolved"` reads those candidates through the
 same filters, sorting, paging and field envelopes. The default `known` mode
 selects only certain matches. Selection-ID reads carry the same mode so bulk
@@ -2971,6 +2990,11 @@ Declared totals can bind `requiresResults` to the stored results needed for
 their contributions. A missing contribution or unresolved filter membership
 marks its sum keys in `meta.incompleteSums`; the numeric sums omit those keys,
 and total labels identify the available subtotal as known and incomplete.
+The existing full-filter aggregate checks missing required publications and
+unknown membership in the same SQL statement as its sums; unknown candidates
+establish completeness without entering the known subtotal. Numeric-only total
+reads withhold incomplete keys too. Missing completeness metadata never qualifies
+a displayed subtotal as complete.
 Current authoritative numeric assignments can settle a contribution immediately.
 An old own result suppressed after reset cannot make that contribution complete.
 List pages and record reads carry one typed envelope per governed field. A field whose public name differs from

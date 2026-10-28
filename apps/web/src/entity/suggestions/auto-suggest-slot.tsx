@@ -1,7 +1,8 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { useQueryClient } from "@tanstack/react-query";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 
 import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
+import { entityMetadata } from "~/entity/metadata";
 import { Button } from "~/ui/primitives/button";
 
 import { FieldSuggestionHint } from "./field-suggestion-hint";
@@ -70,9 +71,10 @@ export function AutoSuggestControls<TFieldValues extends FieldValues>({
   currentLabel?: string;
   disabled?: boolean;
 }) {
+  const queryClient = useQueryClient();
   const context = useFieldSuggestionContext();
   const definition = context
-    ? entityFieldModels[context.entity].fields.find(
+    ? entityMetadata(queryClient, context.entity).fields.fields.find(
         (item) => item.key === field,
       )
     : undefined;
@@ -115,6 +117,7 @@ function AutoSuggestHint({
   result: UseAutoFieldSuggestionResult;
   currentLabel?: string;
 }) {
+  const queryClient = useQueryClient();
   const context = useFieldSuggestionContext();
   return (
     <FieldSuggestionHint
@@ -122,6 +125,7 @@ function AutoSuggestHint({
         context
           ? (value, label) =>
               renderSuggestedListFieldValue(
+                queryClient,
                 context.entity,
                 { id: context.entityId ?? "" },
                 field,

@@ -1,17 +1,27 @@
 import { fieldSuggestionResolutionContext } from "@cubby/schemas/field-suggestion";
 import { describe, expect, it } from "vitest";
 
+import { createEditorTestQueryClient } from "#web/tests/editor-metadata.fixtures.ts";
+
 import { basisValueOf, suggestionRecordFieldValue } from "./field-suggestion";
+
+const queryClient = createEditorTestQueryClient(["product"]);
 
 it("distinguishes deferred intent-only references from loaded empty projections", () => {
   expect(
-    suggestionRecordFieldValue("product", {}, "ingredientId"),
+    suggestionRecordFieldValue(queryClient, "product", {}, "ingredientId"),
   ).toBeUndefined();
   expect(
-    suggestionRecordFieldValue("product", { ingredient: null }, "ingredientId"),
+    suggestionRecordFieldValue(
+      queryClient,
+      "product",
+      { ingredient: null },
+      "ingredientId",
+    ),
   ).toBeNull();
   expect(
     suggestionRecordFieldValue(
+      queryClient,
       "product",
       { ingredient: { id: "ING-2222" } },
       "ingredientId",
@@ -19,6 +29,7 @@ it("distinguishes deferred intent-only references from loaded empty projections"
   ).toBe("ING-2222");
   expect(
     suggestionRecordFieldValue(
+      queryClient,
       "product",
       { categoryId: "CAT-2222" },
       "categoryId",

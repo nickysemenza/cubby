@@ -4,7 +4,7 @@ import {
   mutationOptions as tanstackMutationOptions,
   queryOptions as tanstackQueryOptions,
   type UnusedSkipTokenOptions,
-  type UseInfiniteQueryOptions,
+  type UnusedSkipTokenInfiniteOptions,
   type UseMutationOptions,
 } from "@tanstack/react-query";
 import type { z } from "zod";
@@ -247,7 +247,7 @@ export type QueryDescriptor<
       ) => z.input<PageParamSchema> | undefined;
       initialPageParam: z.input<PageParamSchema>;
     },
-  ): UseInfiniteQueryOptions<
+  ): UnusedSkipTokenInfiniteOptions<
     z.output<Output>,
     Error,
     InfiniteData<z.output<Output>, z.input<PageParamSchema>>,
@@ -568,7 +568,13 @@ function buildQueryDescriptor<
       const policy = queryPolicy(input);
       return tanstackQueryOptions({
         queryKey: parsedQueryKey(input),
-        queryFn: ({ signal }) => operation.call(input, { signal }),
+        queryFn: ({ signal, client, queryKey }) =>
+          operation.call(input, {
+            signal,
+            ...(client.getQueryState(queryKey)?.isInvalidated
+              ? { consistency: "strong" as const }
+              : {}),
+          }),
         meta: policy.meta,
         ...policy.freshness,
       });
@@ -603,7 +609,7 @@ function buildQueryDescriptor<
         z.input<PageParamSchema>
       >({
         queryKey: infiniteKey,
-        queryFn: ({ pageParam, signal }) =>
+        queryFn: ({ pageParam, signal, client, queryKey }) =>
           operation.call(
             definition.input.parse(
               infiniteOptions.page(
@@ -611,7 +617,12 @@ function buildQueryDescriptor<
                 infiniteOptions.pageParamSchema.parse(pageParam),
               ),
             ),
-            { signal },
+            {
+              signal,
+              ...(client.getQueryState(queryKey)?.isInvalidated
+                ? { consistency: "strong" as const }
+                : {}),
+            },
           ),
         initialPageParam: infiniteOptions.initialPageParam,
         getNextPageParam: infiniteOptions.getNextPageParam,

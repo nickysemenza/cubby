@@ -7,6 +7,7 @@ import { sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { entitySummaryFields } from "~/contracts/mcp-projections";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { buildFiltersFromManifest } from "~/entity/filters";
@@ -35,8 +36,61 @@ import {
   seedReferenceUniverse,
 } from "./reference-universe.fixtures";
 
+const queryClient = await metadataQueryClient();
+
 describe("complete list composition", () => {
   const ctx = withTestDb();
+  it("keeps uncounted page continuation inside the requested live population", async () => {
+    const first = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic first",
+    });
+    const second = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic second",
+    });
+    const deleted = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic deleted",
+      deletedAt: new Date("2026-01-01T00:00:00Z"),
+    });
+    await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic outside scope",
+    });
+    const context = buildKernelContext(ctx.db);
+    const operation = listOperations("vendor");
+    const input = {
+      filters: { ids: [first.shortcode, second.shortcode, deleted.shortcode] },
+      sort: [{ orderBy: "name", direction: "asc" }],
+      includeCount: false,
+    };
+    for (const pageIndex of [0, 1, 2]) {
+      const page = await operation.listFields(
+        context,
+        {
+          ...input,
+          pagination: { pageIndex, pageSize: 1 },
+        },
+        ["id", "name"],
+      );
+      expect(page.meta.totalCount).toBeUndefined();
+      expect(page.meta.hasNextPage).toBe(pageIndex === 0);
+      expect(page.items.map((row) => row.id)).toEqual(
+        pageIndex === 0
+          ? [first.shortcode]
+          : pageIndex === 1
+            ? [second.shortcode]
+            : [],
+      );
+    }
+    const counted = await operation.listFields(
+      context,
+      {
+        ...input,
+        includeCount: true,
+        pagination: { pageIndex: 0, pageSize: 1 },
+      },
+      ["id", "name"],
+    );
+    expect(counted.meta).toMatchObject({ totalCount: 2, hasNextPage: true });
+  });
   it("returns a canonical keeper after a Vendor merge", async () => {
     const keeper = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic canonical keeper",
@@ -101,8 +155,8 @@ describe("complete list composition", () => {
     const context = buildKernelContext(ctx.db);
     for (const entity of ["task", "product"] as const) {
       const operation = listOperations(entity);
-      const specs = getEntityFilters(entity);
-      const views = viewsForEntity(entity).map((view) => {
+      const specs = getEntityFilters(queryClient, entity);
+      const views = viewsForEntity(queryClient, entity).map((view) => {
         const values = new Map(
           view.filters.map(({ id, value }) => [id, value]),
         );
@@ -226,6 +280,42 @@ describe("complete list composition", () => {
     ];
     const operation = listOperations("product");
     const context = buildKernelContext(ctx.db);
+    const uncounted = {
+      filters: {},
+      includeCount: false,
+      pagination: { pageIndex: 0, pageSize: 1 },
+    };
+    const partial = await operation.listFields(context, uncounted, [
+      "id",
+      "name",
+    ]);
+    expect(partial.meta.totalCount).toBeUndefined();
+    expect(partial.meta.unresolvedCount).toBeUndefined();
+    expect(partial.meta.incompleteSums).toEqual(["price"]);
+    expect(partial.meta.sums).not.toHaveProperty("price");
+    expect(partial.meta.totalLabels?.price).toBe("Incomplete · $10.00 known");
+    const known = await operation.listFields(
+      context,
+      { ...uncounted, filters: views[0]?.filters },
+      ["id", "name"],
+    );
+    expect(known.items).toEqual([]);
+    expect(known.meta.totalCount).toBeUndefined();
+    expect(known.meta.unresolvedCount).toBeUndefined();
+    expect(known.meta.incompleteSums).toEqual(["price", "expenseTotal"]);
+    expect(known.meta.sums).toEqual({});
+    const unresolved = await operation.listFields(
+      context,
+      {
+        ...uncounted,
+        filters: views[0]?.filters,
+        resultMembership: "unresolved",
+      },
+      ["id", "name"],
+    );
+    expect(unresolved.items).toHaveLength(1);
+    expect(unresolved.meta.hasNextPage).toBe(true);
+    expect(unresolved.meta.sums).toEqual({});
     const pending = await operation.viewCounts(context, { views });
     expect(pending.total).toBe(6);
     expect(pending.views.find((view) => view.id === "first")).toMatchObject({
@@ -234,6 +324,14 @@ describe("complete list composition", () => {
     });
     await drainStoredDerived(ctx.db);
     const counts = await operation.viewCounts(context, { views });
+    // Published empty prices are settled outcomes, unlike missing publications.
+    const complete = await operation.listFields(context, uncounted, [
+      "id",
+      "name",
+    ]);
+    expect(complete.meta.incompleteSums).toBeUndefined();
+    expect(complete.meta.sums?.price).toBe(10);
+    expect(complete.meta.totalLabels?.price).toBe("$10.00");
     expect(counts.total).toBe(6);
     expect(
       counts.views.every((view) => (view.unresolvedCount ?? 0) === 0),

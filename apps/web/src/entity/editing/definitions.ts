@@ -1,11 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
-import { entityFieldSchemaMaps } from "@cubby/schemas/entity-field-schema-maps";
-import {
-  entityFieldModels,
-  type EntityFieldModel,
-} from "@cubby/schemas/entity-fields";
-import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import {
   canClearExpenseDate,
   EXPENSE_DATE_REQUIRED_MESSAGE,
@@ -19,6 +13,7 @@ import { fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
 import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { isNutrientKey } from "@cubby/usda";
+import type { QueryClient } from "@tanstack/react-query";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
@@ -26,6 +21,7 @@ import type {
   EntityEditValue,
   EntityEditValueBag,
 } from "~/entity/editing/value-schema";
+import { entityMetadata } from "~/entity/metadata";
 import { householdLocalDate } from "~/lib/household-date";
 import {
   isCanonicalPriceMapping,
@@ -44,7 +40,6 @@ import {
   parseEntityEditCreateInput,
   parseEntityEditUpdateInput,
 } from "./mutation-data";
-import type { EntityEditRegistry } from "./registry";
 import { structuredSchemaFor } from "./structured-schema";
 import { blank, project, wireValue } from "./structured-value";
 import type {
@@ -105,6 +100,7 @@ const changed = (input: {
 
 /** Compatibility projections may omit the optional record identity field. */
 function absentRecordIdentity(
+  queryClient: QueryClient,
   entity: Entity,
   id: string,
   record: EntityEditRecord | undefined,
@@ -113,7 +109,7 @@ function absentRecordIdentity(
 ) {
   return (
     Boolean(record) &&
-    entitySummary[entity].recordEmojiField === id &&
+    entityMetadata(queryClient, entity).summary.recordEmojiField === id &&
     baseline === undefined &&
     value === null
   );
@@ -147,6 +143,7 @@ const imageIdList = (value: EntityEditValue): string[] | undefined => {
 };
 
 const multipleReferenceIdsFromRecord = <E extends EditableEntity>(
+  queryClient: QueryClient,
   entity: E,
   field: EntityFieldModel["fields"][number],
   record: EntityEditRecord,
@@ -156,8 +153,8 @@ const multipleReferenceIdsFromRecord = <E extends EditableEntity>(
   const projection =
     direct.length > 0
       ? direct
-      : entityFieldModels[entity].fields
-          .filter(
+      : entityMetadata(queryClient, entity)
+          .fields.fields.filter(
             (candidate) =>
               candidate.key !== field.key &&
               candidate.readKey !== null &&
@@ -312,40 +309,34 @@ const kindDefault = (
  * value always wins there, in `makeField`'s `initial` below.
  */
 const genericCreateDefault = <E extends EditableEntity>(
+  queryClient: QueryClient,
   entity: E,
   field: EntityFieldModel["fields"][number],
 ): EntityEditValue => {
   const initial = field.control?.initial;
   if (initial === "today") return householdLocalDate();
   if (initial !== null && initial !== undefined) return initial.value;
-  // SAFETY: `entityFieldSchemaMaps[entity].create` is keyed by every field
-  // this entity's create contract accepts; `field.key` names one of this
-  // same entity's own model fields, so the lookup is a schema for `field.key`
-  // or `undefined` for an editor-only pseudo field with no create contract.
-  const schema = (
-    entityFieldSchemaMaps[entity].create as Record<string, z.ZodTypeAny>
-  )[field.key];
-  if (schema instanceof z.ZodDefault) {
-    // SAFETY: every Zod schema this map holds validates one of
-    // `EntityEditValue`'s own primitive/array/object shapes — the generic
-    // editor's value bag was designed to be a superset of every field's
-    // create/update payload.
-    return schema.def.defaultValue as EntityEditValue;
-  }
+  const defaults = entityMetadata(queryClient, entity).createDefaults;
+  const declared = Object.entries(defaults).find(([key]) => key === field.key);
+  if (declared) return projectEntityEditRecordValue(declared[1]);
   return kindDefault(field);
 };
 
 const builderFor = <E extends EditableEntity>(
+  queryClient: QueryClient,
   entity: E,
 ): EntityEditBuilder<E> => {
   // Widened to a plain `string` key on purpose: `id` (a field id, an
   // editor-only pseudo field, or a shorthand override target) is never
   // narrowed to this entity's own field-key union at the call sites below.
   const fieldModelByKey = new Map<string, EntityFieldModel["fields"][number]>(
-    entityFieldModels[entity].fields.map((field) => [field.key, field]),
+    entityMetadata(queryClient, entity).fields.fields.map((field) => [
+      field.key,
+      field,
+    ]),
   );
   const resolutionFieldByMode = new Map<string, string>();
-  for (const field of entityFieldModels[entity].fields) {
+  for (const field of entityMetadata(queryClient, entity).fields.fields) {
     for (const [key, value] of Object.entries(field.resolution?.reset ?? {})) {
       if (value === "inherit") resolutionFieldByMode.set(key, field.key);
     }
@@ -369,7 +360,7 @@ const builderFor = <E extends EditableEntity>(
   const structuredSchemaOf = (id: string) =>
     fieldModelByKey.get(id)?.control?.renderer === "structured-field" ||
     fieldModelByKey.get(id)?.collection?.primary
-      ? structuredSchemaFor(entity, id)
+      ? structuredSchemaFor(queryClient, entity, id)
       : undefined;
   const recordValueFor = (id: string, record: EntityEditRecord | undefined) => {
     const raw = valueFor(record, id);
@@ -405,6 +396,7 @@ const builderFor = <E extends EditableEntity>(
       const field = fieldModelByKey.get(id);
       if (operation === "update" && record && field) {
         const referenceIds = multipleReferenceIdsFromRecord(
+          queryClient,
           entity,
           field,
           record,
@@ -415,7 +407,9 @@ const builderFor = <E extends EditableEntity>(
         return context.parentProjectId;
       }
       if (operation !== "create") return null;
-      const created = field ? genericCreateDefault(entity, field) : null;
+      const created = field
+        ? genericCreateDefault(queryClient, entity, field)
+        : null;
       const structured = structuredSchemaOf(id);
       // A non-nullable structured value starts as its blank (an empty list, an object of its
       // required keys; a variant stays unchosen) rather than a `null` the create input rejects.
@@ -533,7 +527,9 @@ const builderFor = <E extends EditableEntity>(
         options?.initial && record
           ? options.initial(input)
           : recordValueFor(id, record);
-      if (absentRecordIdentity(entity, id, record, baseline, value))
+      if (
+        absentRecordIdentity(queryClient, entity, id, record, baseline, value)
+      )
         return undefined;
       return changed({
         record,
@@ -549,7 +545,7 @@ const builderFor = <E extends EditableEntity>(
   return {
     fieldsFrom: (intents, overrides) => {
       const ids = new Set(
-        intents.flatMap((intent) => fieldsFor(entity, intent)),
+        intents.flatMap((intent) => fieldsFor(queryClient, entity, intent)),
       );
       return [...ids].map((id) => {
         const override = overrides?.[id];
@@ -566,17 +562,19 @@ const builderFor = <E extends EditableEntity>(
         return makeField(id, { ...defaults, ...override });
       });
     },
-    fieldsFor: (semanticIntent) => fieldsFor(entity, semanticIntent),
+    fieldsFor: (semanticIntent) =>
+      fieldsFor(queryClient, entity, semanticIntent),
   };
 };
 
 /** Fields an intent's editor refuses to leave blank beyond the schema's rule. */
 const intentRequiredFields = (
+  queryClient: QueryClient,
   entity: EditableEntity,
   semanticIntent: string,
 ): readonly string[] => {
   const required: Readonly<Record<string, readonly string[] | undefined>> =
-    generatedEntityEditIntents[entity].required;
+    entityMetadata(queryClient, entity).editIntents.required;
   return required[semanticIntent] ?? [];
 };
 
@@ -591,13 +589,14 @@ const isBlank = (value: EntityEditValue): boolean => {
  * `options.validate` is entity-specific.
  */
 const declaredIntentIssues = <E extends EditableEntity>(
+  queryClient: QueryClient,
   entity: E,
   semanticIntent: string,
   input: Parameters<NonNullable<EditIntent<E>["validate"]>>[0],
 ): readonly EntityEditIssue[] => {
   const { values } = input;
   const issues: EntityEditIssue[] = [];
-  for (const id of intentRequiredFields(entity, semanticIntent)) {
+  for (const id of intentRequiredFields(queryClient, entity, semanticIntent)) {
     if (isBlank(values[id]))
       issues.push({
         field: id,
@@ -614,20 +613,21 @@ const declaredIntentIssues = <E extends EditableEntity>(
  * beside the field they name, instead of re-stating its refinements in the
  * editor (a non-zero amount, a posted transaction's date).
  */
-const parseCanonical = <T>(
+const parseCanonical = async <T>(
+  queryClient: QueryClient,
   entity: EditableEntity,
-  parse: () => T,
-):
-  | { ok: true; value: T }
-  | { ok: false; issues: readonly EntityEditIssue[] } => {
+  parse: () => Promise<T>,
+): Promise<
+  { ok: true; value: T } | { ok: false; issues: readonly EntityEditIssue[] }
+> => {
   try {
-    return { ok: true, value: parse() };
+    return { ok: true, value: await parse() };
   } catch (error) {
     if (!(error instanceof z.ZodError)) throw error;
     return {
       ok: false,
       issues: error.issues.map((issue) => ({
-        field: entityFieldModels[entity].fields.some(
+        field: entityMetadata(queryClient, entity).fields.fields.some(
           (field) => field.key === issue.path[0] && field.kind === "dateRange",
         )
           ? String(issue.path[0])
@@ -642,21 +642,23 @@ const parseCanonical = <T>(
 };
 
 const makeIntent = <E extends EditableEntity>(
+  queryClient: QueryClient,
   entity: E,
   operation: EntityEditOperation,
   semanticIntent: string,
   options: IntentOptions<E>,
 ): EditIntent<E> => {
-  const fields = options.fields ?? fieldsFor(entity, semanticIntent);
+  const fields =
+    options.fields ?? fieldsFor(queryClient, entity, semanticIntent);
   return {
     fields,
     access: options.access ?? (() => editable),
     validate: (input) => [
-      ...declaredIntentIssues(entity, semanticIntent, input),
+      ...declaredIntentIssues(queryClient, entity, semanticIntent, input),
       ...(options.validate?.(input) ?? []),
     ],
     defaults: options.defaults,
-    build: ({ record, patch, context }) => {
+    build: async ({ record, patch, context }) => {
       const data = options.buildData
         ? options.buildData(patch, context)
         : patch;
@@ -666,7 +668,7 @@ const makeIntent = <E extends EditableEntity>(
       // edit submit. See `entities/editing/definitions.unit.test.ts`.
       const keys = Object.keys(data);
       if (operation === "create") {
-        const parsed = parseCanonical(entity, () =>
+        const parsed = await parseCanonical(queryClient, entity, () =>
           parseEntityEditCreateInput(entity, data),
         );
         if (!parsed.ok) return { ok: false, issues: parsed.issues };
@@ -693,7 +695,7 @@ const makeIntent = <E extends EditableEntity>(
         };
       }
       if (operation === "update") {
-        const parsed = parseCanonical(entity, () =>
+        const parsed = await parseCanonical(queryClient, entity, () =>
           parseEntityEditUpdateInput(entity, data),
         );
         if (!parsed.ok) return { ok: false, issues: parsed.issues };
@@ -738,6 +740,7 @@ const intentEntries = <E extends EditableEntity>(
 };
 
 const operationDefinition = <E extends EditableEntity>(
+  queryClient: QueryClient,
   entity: E,
   operation: EntityEditOperation,
   declared: IntentDeclaration<E>,
@@ -750,7 +753,7 @@ const operationDefinition = <E extends EditableEntity>(
     intents: Object.fromEntries(
       entries.map(([name, options]) => [
         name,
-        makeIntent(entity, operation, name, options),
+        makeIntent(queryClient, entity, operation, name, options),
       ]),
     ),
   };
@@ -778,10 +781,11 @@ interface EntityEditHooks<E extends EditableEntity> {
  * the field list, and the hooks' options attached by intent name.
  */
 const buildEntityDefinition = <E extends EditableEntity>(
+  queryClient: QueryClient,
   entity: E,
   hooks: EntityEditHooks<E> | undefined,
 ): EntityEditDefinition<E, EntityEditRecord> => {
-  const declared = generatedEntityEditIntents[entity];
+  const declared = entityMetadata(queryClient, entity).editIntents;
   const operationIntents = (
     operation: "create" | "update",
   ): IntentDeclaration<E> => {
@@ -797,7 +801,7 @@ const buildEntityDefinition = <E extends EditableEntity>(
   };
   return {
     entity,
-    fields: builderFor(entity).fieldsFrom(
+    fields: builderFor(queryClient, entity).fieldsFrom(
       Object.keys(declared.fields),
       hooks?.fields,
     ),
@@ -805,7 +809,7 @@ const buildEntityDefinition = <E extends EditableEntity>(
       delete: {
         defaultIntent: "delete",
         intents: {
-          delete: makeIntent(entity, "delete", "delete", {
+          delete: makeIntent(queryClient, entity, "delete", "delete", {
             fields: [],
             access: () => editable,
           }),
@@ -814,13 +818,19 @@ const buildEntityDefinition = <E extends EditableEntity>(
       ...(declared.create.length
         ? {
             create: operationDefinition(
+              queryClient,
               entity,
               "create",
               operationIntents("create"),
             ),
           }
         : {}),
-      update: operationDefinition(entity, "update", operationIntents("update")),
+      update: operationDefinition(
+        queryClient,
+        entity,
+        "update",
+        operationIntents("update"),
+      ),
     },
   };
 };
@@ -898,8 +908,12 @@ const normalizeFinancialTransaction = (
 };
 
 /** Field fragments per semantic intent come from the entity declaration. */
-const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
-  Object.entries(generatedEntityEditIntents[entity].fields).find(
+const fieldsFor = (
+  queryClient: QueryClient,
+  entity: EditableEntity,
+  semanticIntent: string,
+) =>
+  Object.entries(entityMetadata(queryClient, entity).editIntents.fields).find(
     ([intent]) => intent === semanticIntent,
   )?.[1] ?? [];
 
@@ -1135,22 +1149,10 @@ const editHooks: EditHooksMap = {
   },
 };
 
-const isEditableEntity = (entity: Entity): entity is EditableEntity =>
-  Object.hasOwn(generatedEntityEditIntents, entity);
-const editableEntities = entityKeys.filter(isEditableEntity);
-
-// SAFETY: `editableEntities` is the declared-intents roster, which the
-// `EditableEntity` type is asserted to match (types.ts); each entry is built
-// for its own entity key, so the per-key correlation the loop erases holds.
-const generatedRegistry = Object.fromEntries(
-  editableEntities.map((entity) => [
-    entity,
-    buildEntityDefinition(entity, editHooks[entity]),
-  ]),
-) as EntityEditRegistry;
-
-/**
- * One definition per standard editable entity, generated from its declared
- * `model.intents` plus its `editHooks` entry when it has one.
- */
-export const entityEditRegistry: EntityEditRegistry = generatedRegistry;
+/** Build only this query scope's requested entity; metadata is admitted by its caller. */
+export function getEntityEditDefinition<E extends EditableEntity>(
+  queryClient: QueryClient,
+  entity: E,
+): EntityEditDefinition<E, EntityEditRecord> {
+  return buildEntityDefinition(queryClient, entity, editHooks[entity]);
+}

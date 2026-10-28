@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { entitySchema, type Entity } from "./entity-core";
-import { imageEntities } from "./entity-manifest";
+import { entityRoster } from "./generated/entity-roster.gen";
+import { ENTITY_KEYS } from "@cubby/shared/entity-keys";
+
+type ImageBearingEntity = {
+  [E in Entity]: (typeof entityRoster)[E]["hasImages"] extends true ? E : never;
+}[Entity];
+const imageEntities = ENTITY_KEYS.filter(
+  (entity): entity is ImageBearingEntity => entityRoster[entity].hasImages,
+);
 import { nonEmptyTuple } from "./identifiers";
 
 export { entitySchema, type Entity } from "./entity-core";

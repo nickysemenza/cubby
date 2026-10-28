@@ -1,5 +1,4 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   fieldDecisionOf,
   fieldValueOf,
@@ -19,6 +18,7 @@ import {
 import { z } from "zod";
 
 import { resolutionActionClassName } from "~/entity/fields/field-resolution";
+import { useEntityMetadata } from "~/entity/metadata";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import { DecisionValue } from "~/ui/derived/decision-chain";
 import { ResolutionEvidence } from "~/ui/derived/resolution-evidence";
@@ -49,16 +49,33 @@ export function FormFieldResolution<TValues extends FieldValues>({
   entity?: Entity;
 }) {
   const context = useFieldSuggestionContext();
-  const [open, setOpen] = useState(false);
   const resolvedEntity = entity ?? context?.entity;
+  return resolvedEntity ? (
+    <BoundFormFieldResolution
+      form={form}
+      field={field}
+      entity={resolvedEntity}
+    />
+  ) : null;
+}
+
+function BoundFormFieldResolution<TValues extends FieldValues>({
+  form,
+  field,
+  entity: resolvedEntity,
+}: {
+  form: UseFormReturn<TValues>;
+  field: string;
+  entity: Entity;
+}) {
+  const context = useFieldSuggestionContext();
+  const metadata = useEntityMetadata(resolvedEntity);
+  const [open, setOpen] = useState(false);
   const policy = useMemo(
     () =>
-      resolvedEntity
-        ? entityFieldModels[resolvedEntity].fields.find(
-            (candidate) => candidate.key === field,
-          )?.resolution
-        : null,
-    [resolvedEntity, field],
+      metadata.fields.fields.find((candidate) => candidate.key === field)
+        ?.resolution,
+    [metadata, field],
   );
   // SAFETY: `field` comes from the mounted entity's declared form field model.
   const name = field as Path<TValues>;

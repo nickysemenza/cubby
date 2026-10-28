@@ -160,10 +160,6 @@ describe("category-based service Products", () => {
           decision: { outcome: { kind: "empty", reason: "not_applicable" } },
         },
       });
-      expect(canonical.pricing).not.toHaveProperty("cost");
-      expect(canonical.pricing).not.toHaveProperty("effectivePrice");
-      expect(canonical.pricing).not.toHaveProperty("derivedPrice");
-      expect(canonical.pricing).not.toHaveProperty("source");
       expect(canonical.fields.cost.result).toEqual({ kind: "missing" });
       expect(
         storedEffectivePrice(new Map(), {

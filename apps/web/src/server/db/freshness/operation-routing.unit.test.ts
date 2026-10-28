@@ -1,110 +1,182 @@
 import { buildActorContext } from "@cubby/schemas/context";
 import { testUserId } from "@cubby/schemas/testing";
-import { beforeEach, describe, expect, it } from "vitest";
+import { fromPartial } from "@total-typescript/shoehorn";
+import { signJWT } from "better-auth/crypto";
+import { describe, expect, it } from "vitest";
 
+import { withCfEnv } from "~/server/cf-env";
 import { createDatabase } from "~/server/db/database-runtime";
 import { readPolicyFor } from "~/server/db/read-policy";
+import { getAuthSecret } from "~/server/http/auth-configuration";
 import {
   requireActor,
   selectOperationContext,
-  type AuthenticatedRequestContext,
-  type DatabaseReadRouting,
 } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import type { DatabaseFreshness } from "./state";
-import { databaseFreshness } from "./state";
-
-let freshness: DatabaseFreshness | null = null;
+import { notifyDatabaseChanges } from "./client";
+import {
+  memberWriteCookie,
+  readMemberMarker,
+  recordDatabaseWrite,
+  registerFreshnessMember,
+  withMemberFreshness,
+} from "./member-marker";
 
 const db = createDatabase(() => {
   throw new Error("strong database must stay lazy");
 });
-const boundedStaleDb = createDatabase(() => {
+const cachedDb = createDatabase(() => {
   throw new Error("cached database must stay lazy");
 });
-const routing: DatabaseReadRouting = {
-  cachedDb: boundedStaleDb,
-  readFreshness: async () => freshness,
-};
-
-const user = (label: string) => testUserId(`freshness-${label}`);
-
-const authenticatedContext = (
-  channel: "web" | "api" | "mcp",
-  label: string,
-): AuthenticatedRequestContext => {
-  const id = user(label);
-  const context = requireActor(
-    createTestRequestContext(db, { auth: { userId: id } }),
-  );
+const routing = { cachedDb, readMarker: readMemberMarker };
+const context = (label: string, channel: "web" | "api" | "mcp" = "web") => {
+  const userId = testUserId(label);
   return {
-    ...context,
-    actorContext: buildActorContext(id, channel),
-    requestOrigin: channel === "web" ? "ui" : channel,
+    ...requireActor(createTestRequestContext(db, { auth: { userId } })),
+    actorContext: buildActorContext(userId, channel),
   };
 };
 
-beforeEach(() => {
-  freshness = databaseFreshness(0);
-});
-
-describe("shared database freshness operation routing", () => {
-  it("ordinary interactive reads never wait for the freshness service", async () => {
-    const context = authenticatedContext("api", "interactive");
-    const unavailable: DatabaseReadRouting = {
-      cachedDb: boundedStaleDb,
-      readFreshness: async () => {
-        throw new Error("freshness service must not be contacted");
-      },
-    };
-    for (const operation of [
-      "entity.list",
-      "entity.detail",
-      "search.global",
-      "expense.analytics",
-    ] as const) {
+// Member identity and financial reads are dangerous rules: an invalid or cross-member
+// marker cannot downgrade an authoritative decision or another member's reads.
+describe("member read routing", () => {
+  it("keeps API and MCP strong without a valid marker, while an idle browser can cache", async () => {
+    for (const channel of ["web", "api", "mcp"] as const) {
       const selected = await selectOperationContext(
-        context,
-        readPolicyFor(operation, "query"),
-        unavailable,
+        context(channel, channel),
+        "context",
+        routing,
       );
-      expect(selected.db).toBe(db);
+      expect(selected.db).toBe(channel === "web" ? cachedDb : db);
     }
   });
-  it("uses cached reads before a write, then makes every household caller strong until expiry", async () => {
-    const ui = authenticatedContext("web", "ui");
-    const api = authenticatedContext("api", "api");
-    const mcp = authenticatedContext("mcp", "mcp");
-
-    const warm = await selectOperationContext(ui, "context", routing);
-    expect(warm.db).toBe(boundedStaleDb);
-
-    freshness = databaseFreshness(Date.now());
-    const secondUser = await selectOperationContext(api, "context", routing);
-    const mcpRead = await selectOperationContext(mcp, "context", routing);
-    expect(secondUser.db).toBe(db);
-    expect(mcpRead.db).toBe(db);
-
-    freshness = databaseFreshness(Date.now() - 91_000);
-    const expired = await selectOperationContext(api, "context", routing);
-    expect(expired.db).toBe(boundedStaleDb);
-  });
-
-  it("keeps mutations strong and does not reuse a decision from an earlier operation", async () => {
-    const context = authenticatedContext("web", "sequential");
-
-    const cached = await selectOperationContext(context, "context", routing);
-    expect(cached.db).toBe(boundedStaleDb);
-
-    freshness = databaseFreshness(Date.now());
-    const mutation = await selectOperationContext(context, "strong", routing);
-    const laterRead = await selectOperationContext(context, "context", routing);
-    expect(mutation.db).toBe(db);
-    expect(mutation.readConsistency).toEqual({
-      consistency: "strong",
-      reason: "authoritative-operation",
+  it("validates signatures, member and session, and isolates one member's write from others", async () => {
+    const writer = context("writer");
+    const other = context("other");
+    const cookie = await withMemberFreshness(async () => {
+      registerFreshnessMember(writer.auth);
+      await recordDatabaseWrite("entity.mutate");
+      return memberWriteCookie();
     });
-    expect(laterRead.db).toBe(db);
+    if (!cookie) throw new Error("Expected signed write cookie");
+    expect(cookie).toContain("SameSite=Lax");
+    writer.headers.set("cookie", cookie.split(";")[0]!);
+    expect(
+      (await selectOperationContext(writer, "context", routing)).readConsistency
+        .reason,
+    ).toBe("fresh-after-write");
+    expect((await selectOperationContext(other, "context", routing)).db).toBe(
+      cachedDb,
+    );
+    other.headers.set("cookie", writer.headers.get("cookie")!);
+    expect(
+      (await selectOperationContext(other, "context", routing)).readConsistency
+        .reason,
+    ).toBe("invalid-marker");
+    const differentSession = {
+      ...writer,
+      auth: { ...writer.auth, sessionId: "other-session" },
+    };
+    expect(
+      (await selectOperationContext(differentSession, "context", routing))
+        .readConsistency.reason,
+    ).toBe("invalid-marker");
+    writer.headers.set("cookie", writer.headers.get("cookie")! + "tampered");
+    expect((await selectOperationContext(writer, "context", routing)).db).toBe(
+      db,
+    );
+  });
+  it("never lets a cached member context downgrade money entry, mutations or invalidation refetches", async () => {
+    const browser = context("financial");
+    expect(
+      (
+        await selectOperationContext(
+          browser,
+          readPolicyFor("entity.detail", "query", "expense"),
+          routing,
+        )
+      ).db,
+    ).toBe(db);
+    expect(
+      (
+        await selectOperationContext(
+          browser,
+          readPolicyFor("entity.mutate", "mutation"),
+          routing,
+        )
+      ).db,
+    ).toBe(db);
+    browser.headers.set("x-cubby-read-consistency", "strong");
+    expect(
+      (await selectOperationContext(browser, "context", routing))
+        .readConsistency.reason,
+    ).toBe("invalidation-refetch");
+  });
+  it("rejects future and expired claims and verifies against the current binding secret", async () => {
+    const member = context("marker-security");
+    const payload = {
+      purpose: "cubby-last-write",
+      ...member.auth,
+      lastWriteAt: Date.now(),
+    };
+    for (const token of [
+      await signJWT(
+        { ...payload, lastWriteAt: Date.now() + 60_000 },
+        getAuthSecret(),
+        90,
+      ),
+      await signJWT(payload, getAuthSecret(), -10),
+    ]) {
+      member.headers.set("x-cubby-read-marker", token);
+      expect(await readMemberMarker(member.headers, member.auth)).toEqual({
+        kind: "invalid",
+      });
+    }
+    member.headers.set(
+      "x-cubby-read-marker",
+      await signJWT(payload, getAuthSecret(), 90),
+    );
+    expect((await readMemberMarker(member.headers, member.auth)).kind).toBe(
+      "valid",
+    );
+    await withCfEnv(
+      fromPartial<Env>({
+        BETTER_AUTH_SECRET: "synthetic-rotated-auth-secret-for-markers",
+        NODE_ENV: "production",
+      }),
+      async () => {
+        expect(await readMemberMarker(member.headers, member.auth)).toEqual({
+          kind: "invalid",
+        });
+        await withMemberFreshness(async () => {
+          registerFreshnessMember(member.auth);
+          await recordDatabaseWrite("entity.mutate");
+          expect(await memberWriteCookie()).toContain("; Secure");
+        });
+      },
+    );
+  });
+  it("allows an API client to retain a signed marker past the strong-read window", async () => {
+    const api = context("idle-api-member", "api");
+    const lastWriteAt = Date.now() - 91_000;
+    const token = await signJWT(
+      { purpose: "cubby-last-write", ...api.auth, lastWriteAt },
+      getAuthSecret(),
+      86400,
+    );
+    api.headers.set("x-cubby-read-marker", token);
+    expect((await selectOperationContext(api, "context", routing)).db).toBe(
+      cachedDb,
+    );
+  });
+  it("background notifications have no member write marker", async () => {
+    await recordDatabaseWrite("derived.page");
+    expect(await memberWriteCookie()).toBeUndefined();
+    await withMemberFreshness(async () => {
+      registerFreshnessMember(context("notification-member").auth);
+      await notifyDatabaseChanges({ product: ["PRD-A3F2"] });
+      expect(await memberWriteCookie()).toBeUndefined();
+    });
   });
 });

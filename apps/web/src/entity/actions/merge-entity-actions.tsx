@@ -1,4 +1,4 @@
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import {
   parseShortcodeFor,
   type SpendingCategoryShortcode,
@@ -50,7 +50,7 @@ const BESPOKE_MERGE = new Set<string>([
 const isKernelMergeEntity = (
   entity: (typeof generatedBrowserCrudEntities)[number],
 ): entity is MergeCommand["entity"] =>
-  entitySummary[entity].merge && !BESPOKE_MERGE.has(entity);
+  entityRoster[entity].merge && !BESPOKE_MERGE.has(entity);
 
 /** Every kernel-merged entity without a bespoke handler gets the generic merge. */
 const kernelMergeEntities =

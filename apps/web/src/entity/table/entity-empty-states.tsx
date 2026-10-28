@@ -1,15 +1,12 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import {
-  type EntityPresentation,
-  entitySummary,
-} from "@cubby/schemas/entity-summary";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 
 import { createActionFor } from "~/entity/actions/action-items";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
+import { useEntityMetadata } from "~/entity/metadata";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 
@@ -22,10 +19,6 @@ import type { CubbyTable as Table } from "../../ui/data-table/table-features";
  * create label, and the drift guard in `actions/action-items.unit.test.ts`
  * still checks every `actionLabel` resolves to something to click.
  */
-type EntityEmptyConfig = EntityPresentation["emptyState"];
-
-const entityEmptyConfig = (entity: BrowserRoutedEntity): EntityEmptyConfig =>
-  entitySummary[entity].emptyState;
 
 interface EntityEmptyStateProps {
   entity: BrowserRoutedEntity;
@@ -38,11 +31,12 @@ export function EntityEmptyState({
   isFiltered = false,
   onClearFilters,
 }: EntityEmptyStateProps) {
+  const config = useEntityMetadata(entity).summary.emptyState;
+  const actionLabel = "actionLabel" in config ? config.actionLabel : undefined;
   if (isFiltered) {
     return <FilteredEmptyState onClearFilters={onClearFilters} />;
   }
 
-  const config = entityEmptyConfig(entity);
   const entityDef = entities[entity];
 
   if (!config || !entityDef) {
@@ -63,13 +57,13 @@ export function EntityEmptyState({
       icon={entityDef.phosphorIcon}
       description={config.description}
       action={
-        config.actionLabel && createTarget ? (
+        actionLabel && createTarget ? (
           <Link
             to={createTarget.to}
             search={createTarget.search}
             className={buttonVariants({ variant: "outline", size: "sm" })}
           >
-            {config.actionLabel}
+            {actionLabel}
           </Link>
         ) : undefined
       }

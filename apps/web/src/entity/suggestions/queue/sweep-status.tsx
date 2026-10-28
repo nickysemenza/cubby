@@ -1,28 +1,35 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import { runShortcode } from "@cubby/schemas/identifiers";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
+import { useEntityMetadata } from "~/entity/metadata";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Panel } from "~/ui/layout/panel";
 
 const POLL_MS = 3000;
-const RUNNING_SWEEPS = compileEntityListInput(
-  "run",
-  { purpose: "sweep", status: "running" },
-  { pageSize: 1 },
-);
 
 type StepRow = Extract<ReportBlock, { kind: "records" }>["rows"][number];
 
 /** The newest Sweep still running, when none was started from this page. */
 export function useRunningSweep(enabled: boolean): string | null {
+  const queryClient = useQueryClient();
+  useEntityMetadata("run");
+  const input = compileEntityListInput(
+    queryClient,
+    "run",
+    {
+      purpose: "sweep",
+      status: "running",
+    },
+    { pageSize: 1 },
+  );
   const list = entityListFor("run");
   const running = useQuery({
-    ...list.queryOptions(RUNNING_SWEEPS),
+    ...list.queryOptions(input),
     enabled,
     refetchInterval: POLL_MS * 4,
   });

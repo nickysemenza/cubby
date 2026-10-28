@@ -1,10 +1,12 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { PurchaseReconciliation } from "@cubby/schemas/purchase";
 import { reconcilePurchase } from "@cubby/schemas/purchase";
-import type { FC } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { type FC, useMemo } from "react";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { useEntityMetadata } from "~/entity/metadata";
 import { formatCurrency } from "~/lib/number-format";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
@@ -66,13 +68,17 @@ const reconciliationDelta = (purchase: {
 export const ReconciliationStatus: FC<{
   purchase: ReconciliationPurchase;
 }> = ({ purchase }) => {
+  const queryClient = useQueryClient();
+  useEntityMetadata("purchase");
+  const options = useMemo(
+    () => fieldEnumOptions(queryClient, "purchase", "reconciliation"),
+    [queryClient],
+  );
   const status = purchaseReconciliationStatus(purchase);
   const delta = reconciliationDelta(purchase);
 
   const presentation = STATUS_PRESENTATION[status];
-  const option = fieldEnumOptions("purchase", "reconciliation").find(
-    (candidate) => candidate.value === status,
-  );
+  const option = options.find((candidate) => candidate.value === status);
   return (
     <EnumPill
       optionRole={option?.role}

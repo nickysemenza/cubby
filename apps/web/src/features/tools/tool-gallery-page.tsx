@@ -788,9 +788,7 @@ export function ToolGalleryPage({
             pagination: { ...input.pagination, pageIndex },
           }),
           getNextPageParam: (lastPage) => {
-            const loaded =
-              (lastPage.meta.pageIndex + 1) * lastPage.meta.pageSize;
-            return loaded < lastPage.meta.totalCount
+            return lastPage.meta.hasNextPage
               ? lastPage.meta.pageIndex + 1
               : undefined;
           },

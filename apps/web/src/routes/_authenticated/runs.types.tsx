@@ -6,13 +6,15 @@ import {
   type RunPurpose,
 } from "@cubby/schemas/run-fields";
 import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo } from "react";
 import type { z } from "zod";
 
 import type { runCatalogActivityEntry } from "~/contracts/run.contract";
 import { EntityAuditLink } from "~/entity/components/entity-ref-link";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import { useEntityMetadata } from "~/entity/metadata";
 import { Page } from "~/entity/page/page";
 import {
   DefinedRunSteps,
@@ -61,10 +63,15 @@ const executionDescriptions = {
   mail_discovery: "run.execute drives mailbox discovery",
 } satisfies Record<NonNullable<RunKindDeclaration["execution"]>, string>;
 
-const statusOptions = fieldEnumOptions("run", "status");
 type ActivityEntry = z.infer<typeof runCatalogActivityEntry>;
 
 function RunActivity({ entry }: { entry: ActivityEntry | undefined }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("run");
+  const statusOptions = useMemo(
+    () => fieldEnumOptions(queryClient, "run", "status"),
+    [queryClient],
+  );
   if (!entry)
     return <p className="text-sm text-muted-foreground">No recorded run.</p>;
   const status = statusOptions.find((option) => option.value === entry.status);

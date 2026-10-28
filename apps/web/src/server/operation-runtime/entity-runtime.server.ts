@@ -9,10 +9,7 @@ import { entityInspectorHealthContract } from "~/contracts/entity-inspector-heal
 import { entityIntegrityContract } from "~/contracts/entity-integrity.contract";
 import { entityMutationContract } from "~/contracts/entity-mutation.contract";
 import { entityTimelineContract } from "~/contracts/entity-timeline.contract";
-import {
-  entityDetailInputSchema,
-  getEntityDetailOutputSchema,
-} from "~/entity/generated/entity-details.gen";
+import { entityDetailInputSchema } from "~/entity/generated/entity-details.gen";
 import { generatedEntityRelationListCommandSchema } from "~/entity/generated/entity-relation-lists.gen";
 import {
   entityTimelineInputSchema,
@@ -26,6 +23,7 @@ import {
 } from "~/server/entity-kernel/contracts";
 import { listEntityRecords } from "~/server/entity-kernel/repo/entity-records";
 import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
+import { loadEntityDetailSchemas } from "~/server/generated/entity-read-loaders.gen";
 import {
   getDetailActivity,
   getMonthlyExpenseSpend,
@@ -60,8 +58,8 @@ export const entityDetailHandlers = implementOperationDomain(
       // Query-default "context" policy: browser detail reads may ride the
       // bounded-stale handle; other contexts stay authoritative.
       input: entityDetailInputSchema,
-      output: (input) => getEntityDetailOutputSchema(input.entity).nullable(),
       run: async (context, input) => {
+        const schemas = await loadEntityDetailSchemas(input.entity);
         const result = await executeEntityAs(context, "get", {
           entity: input.entity,
           id: input.shortcode,
@@ -69,7 +67,7 @@ export const entityDetailHandlers = implementOperationDomain(
         });
         return result.item === null
           ? null
-          : getEntityDetailOutputSchema(input.entity).parse(result.item);
+          : schemas.detailOutput.parse(result.item);
       },
     },
   },

@@ -1,7 +1,15 @@
+import { z } from "zod";
+import { compileRelatedViewRegistry } from "@cubby/schemas/related-view";
+
+import { PROBLEM_CLASS } from "@cubby/schemas/problems";
+import { entitySchema } from "@cubby/schemas/entity";
+import { createConnectionCatalog } from "@cubby/schemas/connected-view-definitions";
+import { entityRelationshipSchema } from "@cubby/schemas/entity-integrity";
+
 import { compactLiteral, generatedHeader } from "../../artifacts.ts";
 import { declarationModules, EntityDeclarationError } from "../declarations.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
-import { renderRecord } from "./record.ts";
+import { renderMetadataProjection, renderRecord } from "./record.ts";
 import { browserRoutes } from "./routes.ts";
 import {
   bulkUpdateFor,
@@ -11,10 +19,85 @@ import {
 import { entityProjectionMaps } from "./capabilities.ts";
 import { kernelActionsFor } from "./capabilities.ts";
 import { entityReadDependents } from "../read-dependencies.ts";
+import { structuredSchemasForEntity } from "./structured-value-schemas.ts";
+import { governedFields } from "./field-envelopes.ts";
+import { scoredEntitiesFor } from "./data-quality.ts";
+
+const filterExpandRules = {
+  resolveDateRange: "dateRange",
+  resolveExpenseCount: "expenseCount",
+  resolveVendorPurchases: "vendorPurchases",
+  resolveLatestPurchaseDate: "latestPurchaseDate",
+  resolveVerifiedDate: "verifiedDate",
+  resolveProductPurchaseDateFilter: "productPurchaseDate",
+  resolveProductTaskFilter: "productTask",
+  resolveTaskDueFilter: "taskDue",
+  resolvePostedDate: "postedDate",
+  resolveCreatedDate: "createdDate",
+  resolveUpdatedDate: "updatedDate",
+} as const;
+
+const filterExpandRule = (name: string) => {
+  const entry = Object.entries(filterExpandRules).find(([key]) => key === name);
+  if (!entry)
+    throw new EntityDeclarationError(
+      `Unknown browser filter expansion ${name}`,
+    );
+  return entry[1];
+};
+
+const browserFilterDescriptors = (entity: CompiledEntity) =>
+  entity.filterDescriptors.map(
+    ({ optionsRef, expandRef, brandRef, ...descriptor }) => {
+      const optionField =
+        optionsRef?.export === "tradeOptions"
+          ? "trade"
+          : optionsRef?.export === "locationTypeOptionsWithTheme"
+            ? "type"
+            : null;
+      if (optionsRef && optionField === null)
+        throw new EntityDeclarationError(
+          `Unknown browser filter options ${optionsRef.export}`,
+        );
+      const options =
+        optionField === null
+          ? descriptor.options
+          : entity.fieldModel.fields.find(({ key }) => key === optionField)
+              ?.control?.options;
+      if (optionField !== null && !options)
+        throw new EntityDeclarationError(
+          `${entity.key}.${optionField} has no browser filter options`,
+        );
+      return {
+        ...descriptor,
+        options: options ?? null,
+        expandRule: expandRef ? filterExpandRule(expandRef.export) : null,
+        brand: brandRef,
+      };
+    },
+  );
 
 export const renderEntityMetadataArtifacts = (
   entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
+  const relationshipCatalog = entities.map((entity) => ({
+    key: entitySchema.parse(entity.key),
+    plural: entity.inspector.plural ?? entity.key,
+    relationships: z
+      .array(entityRelationshipSchema)
+      .parse(entity.descriptor.relationships),
+  }));
+  const connectionCatalog = createConnectionCatalog(relationshipCatalog);
+  const relatedViews = compileRelatedViewRegistry((source, key) => {
+    const relationship = relationshipCatalog
+      .find((entity) => entity.key === source)
+      ?.relationships.find((item) => item.key === key);
+    if (!relationship)
+      throw new EntityDeclarationError(
+        `Unknown related view relationship ${source}.${key}`,
+      );
+    return relationship;
+  });
   const projections = entityProjectionMaps(entities);
   const resultEntities = entities.filter((entity) =>
     Object.values(entity.fieldModel.stored).some(
@@ -223,7 +306,228 @@ export const renderEntityMetadataArtifacts = (
           ],
     ),
   );
+  const metadataSlices = entities.map((entity): EntityArtifacts => ({
+    relativePath: `packages/schemas/src/generated/entity-metadata.${entity.key}.gen.ts`,
+    source:
+      generatedHeader +
+      'import type { EntityDescriptor } from "../entity-manifest";\n' +
+      'import type { EntitySummary } from "./entity-summary.gen";\n' +
+      'import type { GeneratedEntityFieldModel } from "../entity-projection-types";\n' +
+      renderRecord({
+        name: "metadata",
+        entries: {
+          entity: entity.key,
+          dependencies: entities
+            .filter(
+              ({ key }) =>
+                key !== entity.key &&
+                (entity.relations.some(({ target }) => target === key) ||
+                  entity.fieldModel.fields.some(
+                    ({ reference }) => reference?.entity === key,
+                  )),
+            )
+            .map(({ key }) => key),
+          descriptor: entity.descriptor,
+          summary: {
+            ...entity.inspector,
+            primarySearch: resolvedPrimarySearch(entity),
+            bulkUpdate: bulkUpdateFor(entity),
+            merge: entity.operationOwners.merge === "kernel",
+          },
+          fields: fieldModels[entity.key],
+          envelopeFields: governedFields(entity).map(
+            ({ readKey, key }) => readKey ?? key,
+          ),
+          relatedViews: relatedViews.filter(
+            (view) => view.source === entity.key,
+          ),
+          connections: {
+            views: connectionCatalog.views(entity.key),
+            context: connectionCatalog.views(entity.key, "context"),
+          },
+          filterDescriptors: browserFilterDescriptors(entity),
+          createDefaults: Object.fromEntries(
+            entity.fieldModel.fields.flatMap((field) =>
+              field.validation.create instanceof z.ZodDefault
+                ? [
+                    [
+                      field.key,
+                      z.json().parse(field.validation.create.def.defaultValue),
+                    ],
+                  ]
+                : [],
+            ),
+          ),
+          structuredSchemas: structuredSchemasForEntity(entity, entities),
+          listFields: {
+            grouping: entity.listFields.grouping,
+            hierarchy: entity.listFields.hierarchy,
+            subtree: entity.listFields.subtree,
+            metrics: entity.listFields.metrics,
+          },
+          sort: entity.fieldModel.sort,
+          editIntents: entity.fieldModel.intents,
+        },
+        satisfies:
+          "{ entity: string; dependencies: readonly string[]; descriptor: EntityDescriptor; summary: EntitySummary; fields: GeneratedEntityFieldModel; envelopeFields: readonly string[]; relatedViews: unknown; connections: unknown; filterDescriptors: unknown; createDefaults: unknown; structuredSchemas: unknown; listFields: unknown; sort: unknown; editIntents: unknown }",
+      }),
+  }));
   return [
+    ...metadataSlices,
+    {
+      relativePath: "packages/schemas/src/generated/entity-roster.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "../entity-core";\n' +
+        renderRecord({
+          name: "entityRoster",
+          entries: Object.fromEntries(
+            entities.map((entity) => [
+              entity.key,
+              {
+                singular: entity.inspector.singular,
+                plural: entity.inspector.plural,
+                icons: entity.inspector.icons,
+                domain: entity.inspector.domain,
+                titleField: entity.inspector.titleField,
+                recordIconEntityField: entity.inspector.recordIconEntityField,
+                recordEmojiField: entity.inspector.recordEmojiField,
+                merge: entity.operationOwners.merge === "kernel",
+                graph:
+                  entity.descriptor.dbTable !== null &&
+                  "shortcodePrefix" in entity.descriptor,
+                shortcodePrefix: entity.shortcode,
+                browserRoutes: entity.descriptor.browserRoutes !== false,
+                hasImages: entity.descriptor.hasImages,
+                imageStorage: entity.descriptor.imageStorage,
+                searchable: entity.descriptor.searchable,
+                embeddable: entity.descriptor.embeddable,
+                auditable: entity.descriptor.auditable,
+                countable: entity.descriptor.countable,
+                displayImages: entity.descriptor.displayImages,
+              },
+            ]),
+          ),
+          satisfies:
+            "Record<Entity, { singular: string; plural: string | null; icons: { phosphor: string; sfSymbol: string; emoji: string }; domain: string | null; titleField: string; recordIconEntityField: string | null; recordEmojiField: string | null; merge: boolean; graph: boolean; shortcodePrefix: string | null; browserRoutes: boolean; hasImages: boolean; imageStorage: false | 'gallery' | 'cover' | 'logo'; searchable: boolean; embeddable: boolean; auditable: boolean; countable: boolean; displayImages: boolean }>",
+        }) +
+        'export { ENTITY_KEYS as entityKeys } from "@cubby/shared/entity-keys";\n' +
+        renderRecord({
+          name: "entityReadDependents",
+          entries: entityReadDependents(entities),
+          satisfies: "Record<Entity, readonly Entity[]>",
+        }) +
+        renderRecord({
+          name: "allEntities",
+          entries: entities.map(({ key }) => key),
+        }) +
+        renderRecord({
+          name: "suggestionEntities",
+          entries: entities
+            .filter(({ fieldModel }) =>
+              fieldModel.fields.some(({ control }) => control?.suggest != null),
+            )
+            .map(({ key }) => key),
+        }) +
+        renderRecord({ name: "problemClasses", entries: PROBLEM_CLASS }) +
+        renderRecord({
+          name: "scoredEntities",
+          entries: scoredEntitiesFor(entities).map(({ key }) => key),
+        }) +
+        (
+          [
+            "auditable",
+            "hasImages",
+            "displayImages",
+            "searchable",
+            "embeddable",
+            "countable",
+          ] as const
+        )
+          .map((trait) =>
+            renderRecord({
+              name: `${trait === "hasImages" ? "image" : trait === "displayImages" ? "displayImage" : trait}Entities`,
+              entries: entities
+                .filter(({ descriptor }) => descriptor[trait] === true)
+                .map(({ key }) => key),
+            }),
+          )
+          .join("") +
+        ["gallery", "cover", "logo"]
+          .map((storage) =>
+            renderRecord({
+              name: `${storage}Entities`,
+              entries: entities
+                .filter(({ descriptor }) => descriptor.imageStorage === storage)
+                .map(({ key }) => key),
+            }),
+          )
+          .join("") +
+        renderRecord({
+          name: "shortcodeEntities",
+          entries: entities
+            .filter(({ shortcode }) => shortcode !== null)
+            .map(({ key }) => key),
+        }) +
+        renderRecord({
+          name: "browserRoutedEntities",
+          entries: entities
+            .filter(({ descriptor }) => descriptor.browserRoutes !== false)
+            .map(({ key }) => key),
+        }) +
+        "export const isAuditableEntity = (entity: Entity): entity is (typeof auditableEntities)[number] => entityRoster[entity].auditable;\n" +
+        'export const isGalleryEntity = (entity: Entity): entity is (typeof galleryEntities)[number] => entityRoster[entity].imageStorage === "gallery";\n' +
+        renderRecord({
+          name: "homePinnedViews",
+          entries: entities.flatMap((entity) =>
+            entity.inspector.list.savedViews.flatMap((view) =>
+              view.pin?.surface === "home"
+                ? [{ entity: entity.key, view }]
+                : [],
+            ),
+          ),
+          satisfies: "readonly { entity: Entity; view: unknown }[]",
+        }),
+    },
+    {
+      relativePath:
+        "apps/web/src/entity/generated/entity-metadata-types.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "@cubby/schemas/entity";\n' +
+        entities
+          .map(
+            ({ key }, index) =>
+              `import type { metadata as metadata${index} } from "@cubby/schemas/compiler/generated/entity-metadata/${key}";\n`,
+          )
+          .join("") +
+        "export type EntityMetadataByEntity = {\n" +
+        entities
+          .map(
+            ({ key }, index) =>
+              `  ${JSON.stringify(key)}: typeof metadata${index};\n`,
+          )
+          .join("") +
+        "};\n" +
+        "export type EntityMetadataSlice = EntityMetadataByEntity[Entity];\n",
+    },
+    {
+      relativePath:
+        "apps/web/src/server/generated/entity-metadata-loaders.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "@cubby/schemas/entity";\n' +
+        'import { immutableMetadataSchema } from "~/server/entity-metadata/immutable-slice";\n' +
+        "export const entityMetadataLoaders = {\n" +
+        entities
+          .map(
+            ({ key }) =>
+              `  ${JSON.stringify(key)}: async () => { const { metadata } = await import("@cubby/schemas/compiler/generated/entity-metadata/${key}"); return immutableMetadataSchema(metadata).parse(metadata); },\n`,
+          )
+          .join("") +
+        "} satisfies Record<Entity, () => Promise<unknown>>;\n" +
+        'export type { EntityMetadataSlice } from "~/entity/generated/entity-metadata-types.gen";\n',
+    },
     {
       relativePath:
         "packages/schemas/src/generated/entity-manifest-data.gen.ts",
@@ -231,13 +535,11 @@ export const renderEntityMetadataArtifacts = (
         generatedHeader +
         'import type { Entity } from "../entity";\n' +
         'import type { EntityDescriptor } from "../entity-manifest";\n\n' +
-        renderRecord({
+        renderMetadataProjection({
           name: "generatedEntityManifest",
-          entries: Object.fromEntries(
-            entities.map(({ key, descriptor }) => [key, descriptor]),
-          ),
+          keys: entities.map(({ key }) => key),
+          property: "descriptor",
           satisfies: "Record<Entity, EntityDescriptor>",
-          comment: "// Generated data stays one entity per line.",
         }),
     },
     {
@@ -283,21 +585,11 @@ export const renderEntityMetadataArtifacts = (
         " */\n" +
         'export { ENTITY_KEYS as entityKeys } from "@cubby/shared/entity-keys";\n' +
         "\n" +
-        renderRecord({
+        renderMetadataProjection({
           name: "entitySummary",
-          entries: Object.fromEntries(
-            entities.map((entity) => [
-              entity.key,
-              {
-                ...entity.inspector,
-                primarySearch: resolvedPrimarySearch(entity),
-                bulkUpdate: bulkUpdateFor(entity),
-                merge: entity.operationOwners.merge === "kernel",
-              },
-            ]),
-          ),
+          keys: entities.map(({ key }) => key),
+          property: "summary",
           satisfies: "Record<Entity, EntitySummary>",
-          comment: "// Generated summary stays one entity per line.",
         }) +
         "\n" +
         'type GeneratedDetailSection<E extends Entity> = (typeof entitySummary)[E]["detail"]["sections"][number];\n' +
@@ -320,11 +612,11 @@ export const renderEntityMetadataArtifacts = (
         generatedHeader +
         'import type { GeneratedEntityFieldModel } from "../entity-projection-types";\nexport type { GeneratedEntityFieldKind, GeneratedEntityFieldControlKind, GeneratedEntityFieldModel, GeneratedEntityFieldProvenance } from "../entity-projection-types";\n' +
         'import type { Entity } from "../entity-core";\n\n' +
-        renderRecord({
+        renderMetadataProjection({
           name: "generatedEntityFieldModels",
-          entries: fieldModels,
+          keys: entities.map(({ key }) => key),
+          property: "fields",
           satisfies: "Record<Entity, GeneratedEntityFieldModel>",
-          comment: "// One authoritative field model per compiled entity.",
         }) +
         "\n" +
         'type GeneratedEntityField<E extends Entity> = (typeof generatedEntityFieldModels)[E]["fields"][number];\n' +

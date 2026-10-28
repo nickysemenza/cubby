@@ -1,18 +1,20 @@
-import { entityManifest } from "@cubby/schemas/entity-manifest";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import type {
   LocationShortcode,
   ProductShortcode,
   ShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 
 import { captureRequest } from "~/entity/editing/editor-requests";
 import type { EntityEditDialog as EntityEditDialogComponent } from "~/entity/editing/entity-edit-dialog";
 import { entityListFor, type EntityListParams } from "~/entity/entity-list";
 import { featureRegistry } from "~/entity/feature-registry";
+import { useEntityMetadata } from "~/entity/metadata";
 import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
 import { product } from "~/integrations/tanstack-query/generated/catalog/product.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
@@ -85,7 +87,7 @@ export interface SearchProviderProps<TId extends string = string> {
 export type EntitySearchEntity = Exclude<PickerSearchEntity, "vendor">;
 
 const detailPlaceholder = (entity: PickerSearchEntity) =>
-  `${entityManifest[entity].shortcodePrefix}2222`;
+  `${entityRoster[entity].shortcodePrefix}2222`;
 
 // --- create-from-picker resolution (hook-shaped: `useEntitySearchRows`
 // calls it unconditionally through the config). ---
@@ -116,6 +118,7 @@ type ManifestPickerEntity = Exclude<EntitySearchEntity, "location" | "product">;
  * Plantings have no name filter, so their candidates come only from scope.
  */
 function pickerListFilters(
+  queryClient: QueryClient,
   entity: ManifestPickerEntity,
   searchQuery: string,
   scope: EntitySearchScope | null | undefined,
@@ -123,7 +126,8 @@ function pickerListFilters(
   const own: [string, string | readonly string[]][] = [];
   if (entity === "ledgerParty") own.push(["kind", ["member"]]);
   // Plantings are found by scope (location, date), never by a typed name.
-  const nameKey = entity === "planting" ? null : resolveBlankFilterKey(entity);
+  const nameKey =
+    entity === "planting" ? null : resolveBlankFilterKey(queryClient, entity);
   if (nameKey) own.push([nameKey, searchQuery]);
   return Object.fromEntries([...own, ...Object.entries(scope ?? {})]);
 }
@@ -135,13 +139,15 @@ function manifestListSource<E extends ManifestPickerEntity>(entity: E) {
     enabled: boolean,
     scope?: EntitySearchScope | null,
   ) {
+    const queryClient = useQueryClient();
+    useEntityMetadata(entity);
     const { data, isLoading } = useQuery({
       ...entityListFor(entity).queryOptions(
         // SAFETY: every filter key comes from this entity's manifest filter
         // descriptors or its declared dependent-field scope; the route parser
         // validates the input again.
         {
-          filters: pickerListFilters(entity, searchQuery, scope),
+          filters: pickerListFilters(queryClient, entity, searchQuery, scope),
           pagination,
         } as EntityListParams<E>,
       ),
@@ -155,14 +161,16 @@ function manifestListSource<E extends ManifestPickerEntity>(entity: E) {
 }
 
 function manifestConfig<E extends ManifestPickerEntity>(
+  queryClient: QueryClient,
   entity: E,
   create: "dialog" | "none" = "none",
 ): UseEntitySearchConfig<ShortcodeFor<E>, PickerRecord, PickerRecord> {
-  const build = (row: PickerRecord) => buildRecordComboboxItem(entity, row);
+  const build = (row: PickerRecord) =>
+    buildRecordComboboxItem(queryClient, entity, row);
   return {
     detailPlaceholder: detailPlaceholder(entity),
     splitBlankTyped: true,
-    supportsGlobalSearch: entityManifest[entity].searchable,
+    supportsGlobalSearch: entityRoster[entity].searchable,
     useListSource: manifestListSource(entity),
     build,
     buildDetail: build,
@@ -255,30 +263,13 @@ const dialogCreateEntities = new Set<string>([
   "product",
 ]);
 
-/** One config per list-backed entity, built on first use: the manifest
- * supplies its list, filters, title, and row projection. */
-const manifestConfigs = new Map<
-  ManifestPickerEntity,
-  ReturnType<typeof manifestConfig<ManifestPickerEntity>>
->();
-
-function manifestConfigFor(entity: ManifestPickerEntity) {
-  const cached = manifestConfigs.get(entity);
-  if (cached) return cached;
-  const config = manifestConfig(
-    entity,
-    dialogCreateEntities.has(entity) ? "dialog" : "none",
-  );
-  manifestConfigs.set(entity, config);
-  return config;
-}
-
 const productConfigs = {
   reference: productConfig("reference"),
   stock: productConfig("stock"),
 };
 
 function pickerConfig<E extends EntitySearchEntity>(
+  queryClient: QueryClient,
   entity: E,
   intent: ProductPickerIntent,
 ): UseEntitySearchConfig<ShortcodeFor<E>, never, never> {
@@ -290,7 +281,11 @@ function pickerConfig<E extends EntitySearchEntity>(
       ? productConfigs[intent]
       : entity === "location"
         ? locationConfig
-        : manifestConfigFor(entity as ManifestPickerEntity);
+        : manifestConfig(
+            queryClient,
+            entity as ManifestPickerEntity,
+            dialogCreateEntities.has(entity) ? "dialog" : "none",
+          );
   // SAFETY: see above — `config` belongs to `entity`'s own id and rows.
   return config as never;
 }
@@ -309,7 +304,12 @@ export function useEntityListSource<E extends EntitySearchEntity>(
     scope,
   }: { intent?: ProductPickerIntent; scope?: EntitySearchScope | null } = {},
 ): EntitySearchResult<ShortcodeFor<E>> & { dialog: ReactNode } {
-  const config = pickerConfig(entity, intent);
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
+  const config = useMemo(
+    () => pickerConfig(queryClient, entity, intent),
+    [queryClient, entity, intent],
+  );
   const {
     items,
     isLoading,
@@ -335,7 +335,9 @@ export function useEntityListSource<E extends EntitySearchEntity>(
           onSuccess={(result) => {
             // Save receipts contain the normalized identity/title, not the
             // detail graph. Resolve before the dialog closes its pending choice.
-            resolveWithEntity(buildRecordComboboxItem(entity, result));
+            resolveWithEntity(
+              buildRecordComboboxItem(queryClient, entity, result),
+            );
           }}
         />
       </Suspense>

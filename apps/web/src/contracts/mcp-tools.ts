@@ -299,6 +299,7 @@ export const MCP_ACTION_OVERRIDES = {
         pageIndex: output.meta.pageIndex,
         pageSize: output.meta.pageSize,
         totalCount: output.meta.totalCount,
+        hasNextPage: output.meta.hasNextPage,
       },
       items: output.items.map(slimUsdaFoodListItem),
     }),

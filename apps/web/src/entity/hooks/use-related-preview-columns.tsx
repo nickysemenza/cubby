@@ -1,17 +1,16 @@
-import {
-  type BrowserRoutedEntity,
-  localRelationshipByKey,
-} from "@cubby/schemas/entity-manifest";
+import { type BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type {
   RelatedPreviewGroup,
   RelatedViewDefinition,
   RelatedViewKey,
 } from "@cubby/schemas/related-view";
+import { useQueryClient } from "@tanstack/react-query";
 import { type UseQueryResult, useQueries } from "@tanstack/react-query";
 import { type RefObject, useMemo, useRef } from "react";
 
 import { getSortableFields } from "~/entity/entities";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
+import { entityMetadata } from "~/entity/metadata";
 import { RelatedPreviewCell } from "~/entity/table/related-preview-cell";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog/relatedData.gen";
 import type {
@@ -77,12 +76,13 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
   supportsServerSorting: boolean;
   relatedStateRef: RefObject<RelatedPreviewState>;
 }): ColumnDef<TData>[] {
+  const queryClient = useQueryClient();
   return useMemo(
     () =>
       relatedViews.map((view) => {
         const columnId = `related:${view.key}`;
         const filterConfig = supportsServerSorting
-          ? manifestFilterConfig(entity, columnId, filterOptions)
+          ? manifestFilterConfig(queryClient, entity, columnId, filterOptions)
           : undefined;
         const meta: RelatedPreviewColumnMeta = {
           columnGroup: view.columnGroup,
@@ -95,7 +95,7 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
           size: 160,
           enableSorting:
             supportsServerSorting &&
-            getSortableFields(entity).includes(columnId),
+            getSortableFields(queryClient, entity).includes(columnId),
           meta,
           cell: (info) => {
             const state = relatedStateRef.current;
@@ -105,8 +105,12 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
                 source={entity}
                 relationship={
                   view.relationship &&
-                  localRelationshipByKey(entity, view.relationship)
-                    .cardinality === "many"
+                  entityMetadata(
+                    queryClient,
+                    entity,
+                  ).descriptor.relationships.find(
+                    (relationship) => relationship.key === view.relationship,
+                  )?.cardinality === "many"
                     ? view.relationship
                     : undefined
                 }
@@ -125,6 +129,7 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
       relatedStateRef,
       relatedViews,
       supportsServerSorting,
+      queryClient,
     ],
   );
 }

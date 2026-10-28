@@ -129,7 +129,11 @@ export async function assertMigrationBookkeeping(
 /** Advance through an inclusive journal boundary; omitted means every pending migration. */
 export async function migrateDatabase(
   db: NodePgDatabase,
-  options: { migrationsFolder?: string; through?: string } = {},
+  options: {
+    migrationsFolder?: string;
+    through?: string;
+    beforeDeploy?: boolean;
+  } = {},
 ): Promise<void> {
   const migrationsFolder = options.migrationsFolder ?? MIGRATIONS_FOLDER;
   const journal = readMigrationFiles({ migrationsFolder });
@@ -147,11 +151,11 @@ export async function migrateDatabase(
       );
     tags.add(entry.tag);
   });
-  const boundary =
+  const requestedBoundary =
     options.through === undefined
       ? journal.length - 1
       : entries.findIndex((entry) => entry.tag === options.through);
-  if (options.through !== undefined && boundary < 0)
+  if (options.through !== undefined && requestedBoundary < 0)
     throw new Error(
       `Refusing to migrate: --through=${options.through} is not an exact migration tag in the journal.`,
     );
@@ -160,9 +164,25 @@ export async function migrateDatabase(
     journal,
     migrationsFolder,
   );
-  if (appliedCount > boundary + 1)
+  if (appliedCount > requestedBoundary + 1)
     throw new Error(
       `Refusing to migrate: database is already beyond --through=${options.through}; last applied migration is ${entries[appliedCount - 1]?.tag}. No migrations were applied.`,
+    );
+  // A predecessor drain can discard unfamiliar durable targets. Stop the
+  // pre-deploy pass before their first pending migration; the successful
+  // matching upload is followed by the ordinary idempotent migration pass.
+  const deferred = options.beforeDeploy
+    ? journal.findIndex(
+        (migration, index) =>
+          index >= appliedCount &&
+          index <= requestedBoundary &&
+          migration.sql[0]?.includes("-- cubby:after-deploy"),
+      )
+    : -1;
+  const boundary = deferred < 0 ? requestedBoundary : deferred - 1;
+  if (deferred >= 0)
+    console.log(
+      `[db-migrate] deferring ${entries[deferred]?.tag} until Worker deployment`,
     );
   await ensureDbExtensions(db);
   // Reuse Drizzle's transaction and bookkeeping engine with only the allowed prefix.
@@ -236,19 +256,26 @@ export function resolveTargetUrl(target: string | undefined): string {
     return url;
   }
   throw new Error(
-    "Usage: db-migrate.ts --target=dev|production [--through=exact-journal-tag] (production also needs PRODUCTION_DIRECT_DATABASE_URL)",
+    "Usage: db-migrate.ts --target=dev|production [--through=exact-journal-tag] [--before-deploy] (production also needs PRODUCTION_DIRECT_DATABASE_URL)",
   );
 }
 
 async function main(): Promise<void> {
   const { values } = parseArgs({
-    options: { target: { type: "string" }, through: { type: "string" } },
+    options: {
+      target: { type: "string" },
+      through: { type: "string" },
+      "before-deploy": { type: "boolean" },
+    },
   });
   const pool = createPostgresPool({
     connectionString: resolveTargetUrl(values.target),
   });
   try {
-    await migrateDatabase(drizzle(pool), { through: values.through });
+    await migrateDatabase(drizzle(pool), {
+      through: values.through,
+      beforeDeploy: values["before-deploy"],
+    });
     console.log(
       `[db-migrate] ${values.target} database is current${values.through === undefined ? "" : ` through ${values.through}`}`,
     );

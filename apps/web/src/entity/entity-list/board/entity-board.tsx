@@ -1,8 +1,5 @@
 import type { EntityBoardListView } from "@cubby/schemas/entity-definitions/definition";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import type { ListGroupBy } from "@cubby/schemas/pagination";
 import {
@@ -30,10 +27,11 @@ import {
 } from "~/entity/filters";
 import {
   type ListEntity,
-  entityListInputSchema,
+  parseEntityListInput,
   entityListParamsFromParsed,
 } from "~/entity/generated/entity-lists.gen";
 import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
+import { useEntityMetadata } from "~/entity/metadata";
 import { useTableState } from "~/entity/table/use-table-state";
 import { Picker } from "~/ui/combobox/picker";
 import { FilterBar } from "~/ui/data-table/filter-bar";
@@ -73,7 +71,11 @@ function boardQuery(
     sort?: { orderBy: string; direction: "asc" | "desc" }[];
   },
 ) {
-  const parsed = entityListInputSchema.parse({ ...input, entity });
+  const parsed = parseEntityListInput(entity, {
+    ...input,
+    entity,
+    includeCount: Boolean(input.groupBy?.length),
+  });
   return entityListFor(entity).queryOptions(
     entityListParamsFromParsed(entity, parsed),
   );
@@ -85,15 +87,17 @@ export function EntityBoard({
   search,
   navigate,
 }: ListSlotProps & { entity: BoardEntity; view: EntityBoardListView }) {
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(entity);
   const choices = useMemo(
     () =>
-      generatedEntityListFields[entity].grouping.filter(
+      metadata.listFields.grouping.filter(
         (choice) =>
           view.groupings.includes(choice.key) &&
           choice.reason === null &&
           choice.filter,
       ),
-    [entity, view],
+    [metadata, view],
   );
   const choice =
     choices.find((choice) => choice.key === listGroupBy(search)?.[0]?.key) ??
@@ -102,12 +106,11 @@ export function EntityBoard({
     throw new Error(
       `Board ${entity}.${view.id} has no usable declared grouping`,
     );
-  const specs = getEntityFilters(entity);
-  const primarySearch = entitySummary[entity].primarySearch;
+  const specs = getEntityFilters(queryClient, entity);
+  const primarySearch = metadata.summary.primarySearch;
   const initialFilter = useMemo(
-    () =>
-      entitySummary[entity].list.initialFilter.map((filter) => ({ ...filter })),
-    [entity],
+    () => metadata.summary.list.initialFilter.map((filter) => ({ ...filter })),
+    [metadata],
   );
   const table = useTableState({
     filterSpecs: specs,
@@ -158,7 +161,6 @@ export function EntityBoard({
   const query = useQuery(boardQuery(entity, queryInput));
   const loading = useHydratedLoading(query.isLoading);
   const commands = useReportCommands();
-  const queryClient = useQueryClient();
   const sensors = useCubbyDndSensors({
     pointerDistance: 4,
     touchDelay: 250,
@@ -177,9 +179,7 @@ export function EntityBoard({
     () => choices.map((choice) => ({ value: choice.key, label: choice.label })),
     [choices],
   );
-  const spec = getEntityFilters(entity).find(
-    (spec) => spec.columnId === choice.filter?.columnId,
-  );
+  const spec = specs.find((spec) => spec.columnId === choice.filter?.columnId);
   const field = spec?.field ?? choice.filter.columnId;
   const move = (id: string, destination: Destination) => {
     if (!view.reorder || commands.pending) return;
@@ -199,9 +199,8 @@ export function EntityBoard({
     const targetGroup = groups.find((group) => group.key === key);
     if (!targetGroup) return;
     try {
-      const scoped = buildFiltersFromManifest(
-        getEntityFilters(entity),
-        (column) => (column === choice.filter?.columnId ? [key] : undefined),
+      const scoped = buildFiltersFromManifest(specs, (column) =>
+        column === choice.filter?.columnId ? [key] : undefined,
       );
       const input = boardGroupPage(
         view,
@@ -265,7 +264,7 @@ export function EntityBoard({
       {query.error && (
         <ErrorDisplay
           error={query.error}
-          title={entitySummary[entity].plural}
+          title={metadata.summary.plural}
           onRetry={() => void query.refetch()}
         />
       )}
@@ -365,6 +364,8 @@ function BoardGroup({
   pending: boolean;
   acceptsNoValue: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(entity);
   const [page, setPage] = useState(0);
   const input = boardGroupPage(
     view,
@@ -375,7 +376,7 @@ function BoardGroup({
     page,
   );
   const groupFilters = buildFiltersFromManifest(
-    getEntityFilters(entity),
+    getEntityFilters(queryClient, entity),
     (column) => (column === filterColumn ? [group.key] : undefined),
   );
   const scopedFilters = { ...input.filters };
@@ -462,7 +463,7 @@ function BoardGroup({
                   </Button>
                 )}
                 <Picker
-                  label={`Move ${String(row[entitySummary[entity].titleField] ?? row.id)}`}
+                  label={`Move ${String(row[metadata.summary.titleField] ?? row.id)}`}
                   options={groups
                     .filter(
                       (group) => group.key !== FILTER_NONE || acceptsNoValue,
@@ -535,6 +536,8 @@ function BoardCard({
   manualOrder: boolean;
   children: ReactNode;
 }) {
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(entity);
   const drag = useDraggable({
     id: row.id,
     disabled: disabled || !view.reorder,
@@ -561,7 +564,7 @@ function BoardCard({
             {...drag.attributes}
             tabIndex={-1}
             aria-hidden="true"
-            aria-label={`Drag ${String(row[entitySummary[entity].titleField] ?? row.id)}`}
+            aria-label={`Drag ${String(row[metadata.summary.titleField] ?? row.id)}`}
             className="min-h-11 px-2 text-muted-foreground md:min-h-7"
           >
             <ArrowsVerticalIcon aria-hidden="true" />
@@ -570,18 +573,20 @@ function BoardCard({
         <EntityRefLink
           entity={entity}
           id={row.id}
-          name={String(row[entitySummary[entity].titleField] ?? row.id)}
+          name={String(row[metadata.summary.titleField] ?? row.id)}
         />
       </div>
       <dl className="space-y-1">
         {view.cardFields.map((key) => {
-          const field = entityFieldModels[entity].fields.find(
+          const field = metadata.fields.fields.find(
             (field) => field.key === key,
           );
           return field ? (
             <div key={key} className="flex flex-wrap justify-between gap-1">
               <dt className="text-xs text-muted-foreground">{field.label}</dt>
-              <dd>{renderCompactFieldValue(entity, row, field)}</dd>
+              <dd>
+                {renderCompactFieldValue(queryClient, entity, row, field)}
+              </dd>
             </div>
           ) : null;
         })}

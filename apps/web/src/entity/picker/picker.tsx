@@ -1,4 +1,4 @@
-import { entityManifest } from "@cubby/schemas/entity-manifest";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 
 import { entityLabel } from "~/entity/entities";
 import { detailEntities } from "~/entity/generated/entity-details.gen";
@@ -46,7 +46,7 @@ export function recordSource(entity: PickerEntity): PickerRecordSource {
   const source: PickerRecordSource = {
     noun: entityLabel(entity),
     codeType: entity,
-    codePrefix: entityManifest[entity].shortcodePrefix,
+    codePrefix: entityRoster[entity].shortcodePrefix,
     useSelectedItems: (ids, held) => useSelectedPickerItems(entity, ids, held),
   };
   sources.set(entity, source);

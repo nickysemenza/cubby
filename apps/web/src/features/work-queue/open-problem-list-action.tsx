@@ -1,6 +1,9 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import { entityListHref } from "~/entity/entity-list-href";
-import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
+import { entityMetadataQueryOptions } from "~/entity/metadata";
+import { useProblemContinuation } from "~/entity/problems/problem-continuation";
 import {
   WorkActionLink,
   type WorkActionProps,
@@ -12,20 +15,22 @@ import {
  * `worklist` is context only; the encoded filters remain the membership.
  */
 export function OpenProblemListAction({ action, target }: WorkActionProps) {
-  if (target.scope !== "group") return null;
-  const query = problemQueryDeclarations().find(
-    (declaration) => declaration.key === target.reason,
+  const queryClient = useQueryClient();
+  const query = useProblemContinuation(
+    target.scope === "group" ? target.reason : undefined,
   );
-  if (
-    query?.source.kind !== "entity" ||
-    query.continuation.kind !== "entity-list" ||
-    !isBrowserRoutedEntity(query.source.entity)
-  )
+  const metadata = useQuery({
+    ...entityMetadataQueryOptions(query?.source.entity ?? "product"),
+    enabled: query !== undefined && query !== null,
+  });
+  if (metadata.error) throw metadata.error;
+  if (!query || !metadata.data || !isBrowserRoutedEntity(query.source.entity))
     return null;
   return (
     <WorkActionLink
       action={action}
       href={entityListHref(
+        queryClient,
         query.source.entity,
         { filters: query.source.filters, sort: query.source.sort },
         { worklist: query.key },

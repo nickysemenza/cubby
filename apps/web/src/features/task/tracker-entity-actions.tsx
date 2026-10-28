@@ -1,4 +1,4 @@
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { expenseFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/expense";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   parseShortcodeFor,
@@ -22,7 +22,7 @@ const ALREADY_PURCHASED = "Already purchased";
 const ADJUSTMENT_NOT_CLASSIFIED = "Adjustments aren't classified";
 
 const asExpense = (row: EntityActionRow): ExpenseOut | null => {
-  const parsed = entityFieldEnvelopeSchemas.expense.detail.safeParse(row);
+  const parsed = expenseFieldEnvelopeSchemas.detail.safeParse(row);
   return parsed.success ? parsed.data : null;
 };
 

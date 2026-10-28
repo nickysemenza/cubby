@@ -4,6 +4,7 @@ import type { ListRendererId } from "@cubby/schemas/entity-manifest";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { readRecordField } from "~/entity/entity-references";
@@ -13,6 +14,7 @@ import {
   RecipeSourceLink,
   sourceLabel,
 } from "~/entity/presentation/recipe-source";
+import { declaredColumnExplanation } from "~/entity/table/column-explanation";
 import { createImageColumn } from "~/entity/table/column-helpers";
 import { numberCellData } from "~/ui/data-table/cell-data";
 import {
@@ -172,12 +174,13 @@ const scoredCoverage = <E extends ScoredListEntity>() => ({
  * The image entity's own thumbnail: a row IS an image, shown only once its
  * file has finished uploading (an upload in flight has nothing to render).
  */
-const uploadedImageRenderer: ListRenderer<"image"> = (helper) =>
+const uploadedImageRenderer: ListRenderer<"image"> = (helper, queryClient) =>
   createCubbyColumnCollection((add) => {
     add(
       createImageColumn(helper, {
         id: "images",
         entity: "image",
+        explanation: declaredColumnExplanation(queryClient, "image", "images"),
         provenance: null,
         getImages: (row) => {
           const url = fieldValueOf(row.fields.url);
@@ -340,6 +343,7 @@ export const listRendererCoverage = () =>
  * entity's helper and receive the same entity's column collection.
  */
 export function listRendererColumns<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   renderer: string,
   helper: CubbyColumnHelper<TRecord>,
@@ -365,7 +369,7 @@ export function listRendererColumns<TRecord extends object>(
   // SAFETY: the generated `ListRendererId<E>` registry proves the renderer
   // and helper share `entity`; only the public generic column compiler erases
   // that entity-specific row association.
-  const rendered = disposition.implementation(helper as never);
+  const rendered = disposition.implementation(helper as never, queryClient);
   const erasedRendered: unknown = rendered;
   // SAFETY: the lookup above bound this renderer to the same TRecord helper
   // accepted by the generic column compiler.

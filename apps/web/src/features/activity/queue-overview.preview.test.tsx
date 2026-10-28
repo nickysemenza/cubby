@@ -8,12 +8,12 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { z } from "zod";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
-import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.gen";
 import { installFeatures } from "~/features/registry";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
+import { getEntityDetailOutputSchema } from "~/server/generated/entity-details.server.gen";
 
 import { QueueOverview, type QueueSearch } from "./queue-overview";
 
@@ -109,6 +109,7 @@ beforeEach(async () => {
             },
           })),
           meta: {
+            hasNextPage: false,
             pageIndex: 0,
             pageSize: entity === "run" ? 10 : 25,
             totalCount: entity === "run" ? 12 : 31,

@@ -18,6 +18,7 @@ import {
   startOperationTraceAttributes,
   startOperationTraceName,
 } from "~/lib/start-operation-observability";
+import { deferWasmMetrics } from "~/lib/wasm-metrics";
 import { runWithExecutionCtx, withCfEnv } from "~/server/cf-env";
 import { withRequestDb } from "~/server/db";
 import {
@@ -25,6 +26,10 @@ import {
   serverTimingHeader,
   withDatabaseRequestMetrics,
 } from "~/server/db/db-observability";
+import {
+  withMemberFreshness,
+  memberWriteCookie,
+} from "~/server/db/freshness/member-marker";
 import {
   reportServerError,
   withErrorReporting,
@@ -166,7 +171,15 @@ async function dispatchHttp(
         env.CUBBY_TEST_POOL_IDLE_TIMEOUT_MS,
       ),
     },
-    () => invokeApplication(request, url),
+    () =>
+      withMemberFreshness(async () => {
+        const response = await invokeApplication(request, url);
+        const cookie = await memberWriteCookie();
+        if (!cookie || response.status === 101) return response;
+        const marked = new Response(response.body, response);
+        marked.headers.append("set-cookie", cookie);
+        return marked;
+      }),
   );
 }
 
@@ -179,9 +192,11 @@ async function finishResponse(
   handlerStartedAt: number,
   invocationOrdinal: number,
 ): Promise<Response> {
+  const finishWasm = deferWasmMetrics();
   span.setAttribute("http.response.status_code", response.status);
   // Reconstructing an upgrade drops workerd's non-standard WebSocket slot.
   if (response.status === 101) {
+    finishWasm();
     endSpan();
     return response;
   }
@@ -225,6 +240,7 @@ async function finishResponse(
       ),
     );
   if (request.method === "HEAD") {
+    finishWasm();
     span.setAttributes({
       "cubby.response.body.outcome": "empty",
       "cubby.response.stream.duration_ms": 0,
@@ -236,6 +252,7 @@ async function finishResponse(
   // operations as they run, after this returns.
   const operations = requestOperations();
   return observeResponseBody(correlatedResponse, (observation) => {
+    finishWasm();
     if (operations.length > 0)
       span.setAttribute("cubby.operations", operations.join(" "));
     span.setAttributes({

@@ -4,6 +4,7 @@ import {
   type DetailBreadcrumb as DetailBreadcrumbProjection,
 } from "@cubby/schemas/entity-detail-summary";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { z } from "zod";
@@ -15,6 +16,7 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { useEntityMetadata } from "~/entity/metadata";
 import { getEntityNavGroup } from "~/entity/navigation/nav-items";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
@@ -172,6 +174,8 @@ export function DetailPageHeader({
   heroImages,
   heroDisplayImage,
 }: DetailPageHeaderProps) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
   const parsedRawData = detailRawDataSchema.safeParse(rawData);
   const createdAt = parsedRawData.success
     ? parsedRawData.data.createdAt
@@ -179,7 +183,7 @@ export function DetailPageHeader({
   const validCreatedAt =
     createdAt !== undefined && !Number.isNaN(new Date(createdAt).getTime());
   const when = parsedRawData.success
-    ? entityHeroWhen(entity, parsedRawData.data)
+    ? entityHeroWhen(queryClient, entity, parsedRawData.data)
     : null;
   const cover = heroImages?.[0];
   const facts = [

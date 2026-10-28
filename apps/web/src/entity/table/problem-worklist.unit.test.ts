@@ -6,6 +6,10 @@ import { problemWorklistState } from "./problem-worklist";
 
 describe("problemWorklistState", () => {
   const query = problemQuery("productsMissingPrice");
+  const continuation =
+    query?.source.kind === "entity"
+      ? { key: query.key, title: query.title, source: query.source }
+      : null;
 
   it("recognizes the exact filter and sort state without changing membership", () => {
     expect(query?.source.kind).toBe("entity");
@@ -14,11 +18,11 @@ describe("problemWorklistState", () => {
     expect(
       problemWorklistState(
         query.source.entity,
-        query.key,
+        continuation,
         [...query.source.filters],
         [...(query.source.sort ?? [])],
       ),
-    ).toMatchObject({ exact: true, query });
+    ).toMatchObject({ exact: true, query: continuation });
   });
 
   it("retains source context but marks it modified after a filter edit", () => {
@@ -26,13 +30,20 @@ describe("problemWorklistState", () => {
     if (query?.source.kind !== "entity") return;
 
     expect(
-      problemWorklistState(query.source.entity, query.key, [], []),
-    ).toMatchObject({ exact: false, query });
+      problemWorklistState(query.source.entity, continuation, [], []),
+    ).toMatchObject({ exact: false, query: continuation });
   });
 
   it("ignores a worklist that targets another entity", () => {
     expect(
-      problemWorklistState("vendor", "productsMissingPrice", [], []),
+      problemWorklistState(
+        "vendor",
+        query?.source.kind === "entity"
+          ? { key: query.key, title: query.title, source: query.source }
+          : null,
+        [],
+        [],
+      ),
     ).toBeUndefined();
   });
 });

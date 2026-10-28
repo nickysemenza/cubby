@@ -66,7 +66,10 @@ import {
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  resolveAllPresent,
+  resolveLiveShortcodes,
+} from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const toRecipeTotals = (totals: CalculateTotalsResult): RecipeTotals =>
@@ -166,6 +169,27 @@ export class RecipeCostingService {
   /** The handle this instance reads and writes through — the request's strong pool unless `bindTo` rebound it. */
   get database(): Database {
     return this.db;
+  }
+
+  /** A drain page shares its ingredient closure, USDA lookup and costing call. */
+  async computeStoredTotals(
+    ids: RecipeId[],
+  ): Promise<Map<string, RecipeTotals | null>> {
+    const recipes = await getRecipesByIDs(this.db, ids);
+    const identities = await resolveLiveShortcodes(
+      this.db,
+      recipes.map((recipe) => recipe.id),
+      "recipe",
+    );
+    const computed = await this.computeTotals(recipes);
+    const result = new Map<string, RecipeTotals | null>(
+      ids.map((id) => [id, null]),
+    );
+    for (const recipe of recipes) {
+      const id = identities.get(recipe.id);
+      if (id) result.set(id, computed.get(recipe.id)?.totals ?? null);
+    }
+    return result;
   }
 
   /** Fingerprint authoritative inputs before provider/WASM work can fail. */

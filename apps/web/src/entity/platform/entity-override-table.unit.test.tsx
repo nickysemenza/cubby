@@ -1,4 +1,4 @@
-import { allEntities } from "@cubby/schemas/entity-manifest";
+import { allEntities } from "@cubby/schemas/entity-roster";
 import {
   fireEvent,
   render,
@@ -8,14 +8,24 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { entityOverrideComparisons } from "~/entity/generated/entity-override-comparisons.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityOverrideTable } from "./entity-override-table";
-import { overridesFor } from "./entity-schema-model";
+import { schemaOverridesQueryOptions } from "./schema-presentation";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {
   harness = createBrowserTestHarness();
+  harness.queryClient.setQueryData(
+    schemaOverridesQueryOptions().queryKey,
+    allEntities.flatMap((entity) =>
+      entityOverrideComparisons[entity].map((comparison) => ({
+        entity,
+        ...comparison,
+      })),
+    ),
+  );
 });
 afterEach(() => harness.dispose());
 
@@ -61,7 +71,7 @@ describe("EntityOverrideTable", () => {
       (entity) => entity === cells[0]?.textContent,
     );
     if (!owner) throw new Error("Override owner is missing");
-    const comparison = overridesFor(owner).find(
+    const comparison = entityOverrideComparisons[owner].find(
       (entry) => entry.path === "presentation.detail.relationFilterOverrides",
     );
     if (!comparison) throw new Error("Override comparison is missing");

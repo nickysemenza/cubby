@@ -16,12 +16,13 @@ import { env } from "~/env";
 // Static on purpose: importing auth lazily inside a Worker request left the
 // purchase agent's MCP tool calls unanswered (#2536).
 import { getAuth } from "~/lib/auth";
+import { STRONG_READ_HEADER } from "~/lib/read-consistency";
 import type { NotionClient } from "~/server/clients/notion";
 import { createUpcLookupService } from "~/server/clients/upc";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { boundedStaleDb, db } from "~/server/db";
-import { readDatabaseFreshness } from "~/server/db/freshness/client";
+import { readMemberMarker } from "~/server/db/freshness/member-marker";
 import { getDb } from "~/server/db/helpers/core";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import {
@@ -258,15 +259,15 @@ export function requireActor(context: RequestContext) {
 
 export interface DatabaseReadRouting {
   cachedDb: Database;
-  readFreshness: typeof readDatabaseFreshness;
+  readMarker: typeof readMemberMarker;
 }
 
 const productionReadRouting: DatabaseReadRouting = {
   cachedDb: boundedStaleDb,
-  readFreshness: readDatabaseFreshness,
+  readMarker: readMemberMarker,
 };
 
-/** Resolve once per logical operation; later operations consult shared state again. */
+/** Resolve per logical operation without a household freshness RPC. */
 export async function selectOperationContext<
   Context extends ReturnType<typeof requireActor>,
 >(
@@ -279,7 +280,11 @@ export async function selectOperationContext<
       ? { consistency: "strong", reason: "authoritative-operation" }
       : decideReadConsistency({
           boundedStaleAvailable: routing.cachedDb !== context.db,
-          freshness: await routing.readFreshness(),
+          browser:
+            context.requestOrigin === "ui" &&
+            context.actorContext.channel === "web",
+          marker: await routing.readMarker(context.headers, context.auth),
+          forceStrong: context.headers.get(STRONG_READ_HEADER) === "strong",
         });
   const selected =
     readConsistency.consistency === "bounded-stale"
@@ -291,8 +296,7 @@ export async function selectOperationContext<
     readConsistency,
     services: {
       ...context.services,
-      availability: deferredRequestServices(selected, context.usdaClient)
-        .services.availability,
+      ...deferredRequestServices(selected, context.usdaClient).services,
     },
   };
 }

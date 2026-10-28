@@ -6,13 +6,13 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { fromAny } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import {
   entityReadFixture,
   fieldValueFixture,
 } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 
@@ -117,7 +117,7 @@ describe("editor presentation media hook", () => {
   function Harness() {
     const session = useEntityEditSession(request);
     const presentation = {
-      ...getEntityEditorPresentation(request),
+      ...getEntityEditorPresentation(harness.queryClient, request),
       media,
     };
     return (
@@ -192,7 +192,10 @@ describe("image block attachment roles", () => {
         <EntityEditorImages
           entity="product"
           operation="update"
-          presentation={getEntityEditorPresentation(request)}
+          presentation={getEntityEditorPresentation(
+            harness.queryClient,
+            request,
+          )}
           session={session}
           record={record}
           withRemoval
@@ -295,20 +298,26 @@ describe("static suggestion basis", () => {
   it("takes basis keys outside the intent roster off the record, and nothing when every key is rendered", () => {
     const productFields = ["name", "brandId", "model", "notes", "categoryId"];
     expect(
-      staticSuggestionBasisFor("product", productFields, {
+      staticSuggestionBasisFor(harness.queryClient, "product", productFields, {
         id: "PRD-TEST",
         classificationEvidence: "Ring-bound sketchbook, 9x12",
       }),
     ).toEqual({ classificationEvidence: "Ring-bound sketchbook, 9x12" });
     expect(
       staticSuggestionBasisFor(
+        harness.queryClient,
         "product",
         [...productFields, "classificationEvidence"],
         { id: "PRD-TEST", classificationEvidence: "evidence" },
       ),
     ).toBeUndefined();
     expect(
-      staticSuggestionBasisFor("product", productFields, undefined),
+      staticSuggestionBasisFor(
+        harness.queryClient,
+        "product",
+        productFields,
+        undefined,
+      ),
     ).toBeUndefined();
   });
 });

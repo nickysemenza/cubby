@@ -1,11 +1,13 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { CURRENT_MEMBER_FILTER, humanize } from "@cubby/shared";
+import type { QueryClient } from "@tanstack/react-query";
 import { match } from "ts-pattern";
 
 import { EntityIcon } from "~/entity/entities";
 import { isPickerEntity, recordSource } from "~/entity/picker/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { OptionGlyph } from "~/ui/common/option-glyph";
 import {
   barFieldFromConfig,
   type FilterBarField,
@@ -19,14 +21,15 @@ import {
   type RuntimeFilterOptions,
 } from "~/ui/hooks/filter-option-types";
 
+import * as behavior from "./filter-behavior";
 import {
   editableFilterSpecs,
   type FilterSpecCore,
+  type FilterPatch,
   isMultiFilterKind,
   nullableSentinelOptions,
 } from "./filters";
-import { generatedEntityFilters } from "./generated/entity-filter-bindings.gen";
-import { entityFilterFieldMaps } from "./generated/entity-filter-fields.gen";
+import { entityMetadata, type EntityMetadataFor } from "./metadata";
 
 export interface FilterSpec extends FilterSpecCore {
   unsupportedReason?: string;
@@ -37,10 +40,139 @@ export interface FilterSpec extends FilterSpecCore {
   label?: string;
 }
 
-export { entityFilterFieldMaps };
+type FilterDescriptor = EntityMetadataFor<Entity>["filterDescriptors"][number];
 
-export const getEntityFilters = (entity: Entity): readonly FilterSpec[] =>
-  generatedEntityFilters[entity];
+const expandRules = {
+  dateRange: behavior.resolveDateRange,
+  expenseCount: behavior.resolveExpenseCount,
+  vendorPurchases: behavior.resolveVendorPurchases,
+  latestPurchaseDate: behavior.resolveLatestPurchaseDate,
+  verifiedDate: behavior.resolveVerifiedDate,
+  productPurchaseDate: behavior.resolveProductPurchaseDateFilter,
+  productTask: behavior.resolveProductTaskFilter,
+  taskDue: behavior.resolveTaskDueFilter,
+  postedDate: behavior.resolvePostedDate,
+  createdDate: behavior.resolveCreatedDate,
+  updatedDate: behavior.resolveUpdatedDate,
+};
+
+/** Adapt only the requested compiler slice. Exact wire semantics stay server-owned. */
+export const getEntityFilters = (
+  queryClient: QueryClient,
+  entity: Entity,
+): readonly FilterSpec[] => {
+  const metadata = entityMetadata(queryClient, entity);
+  return metadata.filterDescriptors.map(
+    (descriptor: FilterDescriptor): FilterSpec => {
+      const presets = new Map<string, FilterPatch>(
+        (descriptor.options ?? []).flatMap((option) =>
+          !("expand" in option) ? [] : [[option.value, option.expand] as const],
+        ),
+      );
+      const wire = descriptor.wire;
+      const brand = descriptor.brand;
+      const dateRange =
+        descriptor.kind === "range" &&
+        wire.kind === "range" &&
+        (descriptor.range === null
+          ? wire.from.endsWith("From") && wire.to.endsWith("To")
+          : descriptor.range.kind === "date");
+      const spec: FilterSpec = {
+        columnId: descriptor.columnId,
+        kind: descriptor.kind,
+        placeholder: descriptor.placeholder,
+        ...(descriptor.field === null ? {} : { field: descriptor.field }),
+        ...(descriptor.urlKey === descriptor.columnId
+          ? {}
+          : { urlKey: descriptor.urlKey }),
+        ...(descriptor.options === null
+          ? {}
+          : {
+              options: descriptor.options.map((option): PickerOption => ({
+                value: option.value,
+                label: option.label,
+                ...("meta" in option ? { meta: option.meta } : {}),
+                ...("color" in option ? { color: option.color } : {}),
+                ...("role" in option ? { role: option.role } : {}),
+                ...("glyph" in option && option.glyph
+                  ? {
+                      glyph: option.glyph,
+                      icon: (
+                        <OptionGlyph
+                          name={option.glyph.phosphor}
+                          className="size-3.5"
+                        />
+                      ),
+                    }
+                  : {}),
+              })),
+            }),
+        ...(descriptor.optionsKey === null
+          ? {}
+          : { optionsKey: descriptor.optionsKey }),
+        ...(descriptor.label === null ? {} : { label: descriptor.label }),
+        ...(brand === null
+          ? {}
+          : {
+              referenceEntity: brand.entity,
+              ...("optionsKind" in brand && brand.optionsKind
+                ? { referenceOptionsKind: brand.optionsKind }
+                : {}),
+              brand: (value: string) => parseShortcodeFor(brand.entity, value),
+            }),
+        ...(descriptor.expandRule === null
+          ? {}
+          : { expand: expandRules[descriptor.expandRule] }),
+        ...(presets.size
+          ? { expand: (value: string) => presets.get(value) ?? {} }
+          : {}),
+        ...(descriptor.kind === "range" &&
+        wire.kind === "param" &&
+        descriptor.expandRule === null &&
+        !presets.size
+          ? { expand: (value: string) => ({ [wire.name]: value }) }
+          : {}),
+        ...(descriptor.kind === "range" && wire.kind === "range"
+          ? {
+              range: {
+                from: wire.from,
+                to: wire.to,
+                ...(dateRange
+                  ? {}
+                  : {
+                      number: {
+                        ...(descriptor.range?.nonnegative
+                          ? { nonnegative: true }
+                          : {}),
+                        ...(descriptor.range?.int ? { int: true } : {}),
+                        ...(descriptor.range?.describe
+                          ? { describe: descriptor.range.describe }
+                          : {}),
+                      },
+                    }),
+              },
+            }
+          : {}),
+        ...(descriptor.nullable === null
+          ? {}
+          : { nullable: descriptor.nullable }),
+        ...(descriptor.match === null ? {} : { match: descriptor.match }),
+        ...(descriptor.exclude === null ? {} : { exclude: descriptor.exclude }),
+        ...(descriptor.subtree === null ? {} : { subtree: descriptor.subtree }),
+        ...(descriptor.currentMember ? { currentMember: true } : {}),
+        ...(descriptor.singleValue === null ? {} : { singleValue: true }),
+        ...(descriptor.exclusiveGroup === null
+          ? {}
+          : { exclusiveGroup: descriptor.exclusiveGroup }),
+        ...(descriptor.aliasOf === null ? {} : { aliasOf: descriptor.aliasOf }),
+        ...(descriptor.sentinels === null
+          ? {}
+          : { sentinels: descriptor.sentinels }),
+      };
+      return { ...spec, group: filterGroup(spec, metadata.summary) };
+    },
+  );
+};
 
 /** One deferred source per reference filter, even when two fields target the same entity. */
 export const referenceFilterOptionsKey = (
@@ -173,13 +305,6 @@ const resolveSpecOptions = (
   ];
 };
 
-/** Which entity declares a generated spec, by identity: callers pass specs only. */
-const specEntity = new WeakMap<FilterSpec, Entity>(
-  entityKeys.flatMap((entity) =>
-    getEntityFilters(entity).map((spec) => [spec, entity] as const),
-  ),
-);
-
 /** What a declared filter's values are — the panel's glyph and editor. */
 export const filterValueType = (spec: FilterSpec): FilterValueType =>
   match(spec.kind)
@@ -200,17 +325,14 @@ export const filterValueType = (spec: FilterSpec): FilterValueType =>
  */
 export const filterGroup = (
   spec: FilterSpec,
-  entity: Entity | undefined,
+  summary?: EntityMetadataFor<Entity>["summary"],
 ): string => {
   const keys = [spec.columnId, spec.field].filter(Boolean);
-  const section =
-    entity === undefined
-      ? undefined
-      : entitySummary[entity].edit.sections.find(
-          (candidate) =>
-            candidate.title !== null &&
-            candidate.fields.some((key) => keys.includes(key)),
-        );
+  const section = summary?.edit.sections.find(
+    (candidate) =>
+      candidate.title !== null &&
+      candidate.fields.some((key) => keys.includes(key)),
+  );
   if (section?.title) return section.title;
   const type = filterValueType(spec);
   return type === "entity"
@@ -231,7 +353,6 @@ const specFilterConfig = (
   const deferred = optionsKey
     ? deferredFilterOptionSource(runtimeOptions?.[optionsKey])
     : undefined;
-  const entity = specEntity.get(spec);
   const reference = spec.referenceEntity;
   return {
     placeholder: spec.placeholder,
@@ -245,7 +366,7 @@ const specFilterConfig = (
           icon: <EntityIcon entity={reference} className="size-3.5" />,
         }
       : {}),
-    group: spec.group ?? filterGroup(spec, entity),
+    group: spec.group ?? filterGroup(spec),
     ...(isFreeText(spec, runtimeOptions) ? { freeText: true } : {}),
     ...(spec.exclusiveGroup ? { exclusiveGroup: spec.exclusiveGroup } : {}),
     options: resolveSpecOptions(spec, runtimeOptions),
@@ -265,11 +386,12 @@ const specFilterConfig = (
 };
 
 export function manifestFilterConfig(
+  queryClient: QueryClient,
   entity: Entity,
   columnId: string,
   runtimeOptions?: RuntimeFilterOptions,
 ): FilterConfig | undefined {
-  const specs = getEntityFilters(entity);
+  const specs = getEntityFilters(queryClient, entity);
   const spec = specs.find((candidate) => candidate.columnId === columnId);
   if (!spec) return undefined;
   return specFilterConfig(spec, specs, runtimeOptions);

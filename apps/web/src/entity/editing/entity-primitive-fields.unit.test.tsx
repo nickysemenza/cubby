@@ -3,16 +3,17 @@ import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { sleep } from "@cubby/shared/retry";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { renderWithEditorMetadata as render } from "#web/tests/editor-metadata.fixtures.ts";
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import type { EntitySuggestionsOperations } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { installFeatures } from "~/features/registry";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 
 import {

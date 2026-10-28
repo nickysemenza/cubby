@@ -4,12 +4,18 @@ import {
 } from "@cubby/schemas/product";
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fields";
 import type { ProductCategory } from "@cubby/shared";
+import { QueryClientProvider } from "@tanstack/react-query";
 import type { CellData } from "@tanstack/react-table";
-import { render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  render as testingRender,
+  screen,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 import { categorySummaryFixture } from "tooling/product-category-fixtures";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
 import {
@@ -19,6 +25,25 @@ import {
 } from "~/ui/data-table/table-features";
 
 import { createEntityDisplayColumns } from "./entity-display";
+
+let queryClient: Awaited<ReturnType<typeof metadataQueryClient>>;
+beforeEach(async () => {
+  queryClient = await metadataQueryClient();
+});
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
+
+function MetadataProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+function render(ui: ReactNode, options?: Parameters<typeof testingRender>[1]) {
+  return testingRender(ui, { wrapper: MetadataProvider, ...options });
+}
 
 installFeatures();
 
@@ -136,6 +161,7 @@ type ProductCellRow = ProductRow & {
 function buildProductColumns() {
   const helper = createCubbyColumnHelper<ProductCellRow>();
   return createEntityDisplayColumns(
+    queryClient,
     "product",
     helper,
     createCubbyColumnCollection<ProductCellRow>((add) => {

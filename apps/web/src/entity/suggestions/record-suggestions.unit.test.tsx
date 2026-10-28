@@ -7,8 +7,6 @@ import type {
   SettledSuggestionQuestion,
 } from "@cubby/schemas/ai";
 import { suggestionReviewRowSchema } from "@cubby/schemas/ai";
-import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { productTopLevelOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { parseShortcode } from "@cubby/shared";
@@ -26,13 +24,14 @@ import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
+import { entityMetadata } from "~/entity/metadata";
 import { installFeatures } from "~/features/registry";
 import { rippleFor } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";
 
@@ -88,10 +87,12 @@ function fixtureRecord<T extends { id: string }>(input: T) {
   if (!entity) throw new Error("Synthetic record identity missing");
   const row = z.looseObject({ id: z.string() }).parse(input);
   const fields = z.record(z.string(), z.unknown()).parse(row.fields ?? {});
-  for (const [key, stored] of Object.entries(
-    entityFieldEnvelopeFields[entity],
-  )) {
-    const field = entityFieldModels[entity].fields.find(
+  const metadata = entityMetadata(harness.queryClient, entity);
+  for (const key of metadata.envelopeFields) {
+    const field = entityMetadata(
+      harness.queryClient,
+      entity,
+    ).fields.fields.find(
       (candidate) => (candidate.readKey ?? candidate.key) === key,
     );
     const nestedKey = field?.key.replace(/Ids?$/u, "");
@@ -113,10 +114,17 @@ function fixtureRecord<T extends { id: string }>(input: T) {
       }
     }
     if (present && !Object.hasOwn(fields, key))
-      fields[key] = fixtureField(value, stored === null);
+      fields[key] = fixtureField(
+        value,
+        !field ||
+          !(
+            metadata.fields.create.some((key) => key === field.key) ||
+            metadata.fields.update.some((key) => key === field.key)
+          ),
+      );
   }
   const canonical = { ...input, fields };
-  for (const key of Object.keys(entityFieldEnvelopeFields[entity]))
+  for (const key of metadata.envelopeFields)
     Reflect.deleteProperty(canonical, key);
   return canonical;
 }
@@ -857,6 +865,7 @@ describe("record suggestions", () => {
   // list pages hundreds of ms of Worker CPU; suggestions only resolve in the
   // browser, so the server render must not create any.
   it("creates no suggestion queries while rendering on the server", () => {
+    const cachedQueries = harness.queryClient.getQueryCache().getAll();
     const suggestFields = vi.fn();
     const operations: EntitySuggestionsOperations = {
       suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
@@ -887,7 +896,7 @@ describe("record suggestions", () => {
         </RecordSuggestionsProvider>
       </Wrapper>,
     );
-    expect(harness.queryClient.getQueryCache().getAll()).toHaveLength(0);
+    expect(harness.queryClient.getQueryCache().getAll()).toEqual(cachedQueries);
     expect(suggestFields).not.toHaveBeenCalled();
     // The status line is already in place, so hydration does not shift the
     // table below it.
@@ -1555,8 +1564,9 @@ describe("record suggestions", () => {
   it("reads inventory's nested product reference as the location suggestion basis", () => {
     const productId = testShortcode("product", "second");
     const basis = fieldSuggestionBasisFromRecord(
+      harness.queryClient,
       "inventory",
-      suggestTargetsFor("inventory", ["locationId"]),
+      suggestTargetsFor(harness.queryClient, "inventory", ["locationId"]),
       {
         product: { id: productId, name: "Storage bin" },
         location: {
@@ -1575,13 +1585,25 @@ describe("record suggestions", () => {
 
   it("changes the authoritative basis when reference evidence is renamed", () => {
     const productId = testShortcode("product", "renamed");
-    const targets = suggestTargetsFor("inventory", ["locationId"]);
-    const before = fieldSuggestionBasisFromRecord("inventory", targets, {
-      product: { id: productId, name: "Storage bin" },
-    });
-    const after = fieldSuggestionBasisFromRecord("inventory", targets, {
-      product: { id: productId, name: "Garage tote" },
-    });
+    const targets = suggestTargetsFor(harness.queryClient, "inventory", [
+      "locationId",
+    ]);
+    const before = fieldSuggestionBasisFromRecord(
+      harness.queryClient,
+      "inventory",
+      targets,
+      {
+        product: { id: productId, name: "Storage bin" },
+      },
+    );
+    const after = fieldSuggestionBasisFromRecord(
+      harness.queryClient,
+      "inventory",
+      targets,
+      {
+        product: { id: productId, name: "Garage tote" },
+      },
+    );
 
     expect(after.productId).toBe(before.productId);
     expect(after.__referenceLabels).not.toBe(before.__referenceLabels);
@@ -2057,11 +2079,12 @@ it("reads effective governed suggestion values without falling back to stale pla
     tags: ["stale-plain-tag"],
     fields: { tags },
   };
-  expect(suggestionRecordFieldValue("product", record, "tags")).toEqual([
-    "effective-tag",
-  ]);
+  expect(
+    suggestionRecordFieldValue(harness.queryClient, "product", record, "tags"),
+  ).toEqual(["effective-tag"]);
   expect(
     fieldSuggestionBasisFromRecord(
+      harness.queryClient,
       "product",
       { targets: [], basisKeys: ["tags"] },
       record,
@@ -2069,6 +2092,7 @@ it("reads effective governed suggestion values without falling back to stale pla
   ).toBe('["effective-tag"]');
   expect(
     suggestionRecordFieldValue(
+      harness.queryClient,
       "product",
       {
         ...record,
@@ -2079,6 +2103,7 @@ it("reads effective governed suggestion values without falling back to stale pla
   ).toBeUndefined();
   expect(
     suggestionRecordFieldValue(
+      harness.queryClient,
       "product",
       {
         ...record,
@@ -2100,6 +2125,7 @@ it("reads effective governed suggestion values without falling back to stale pla
   ).toBeNull();
   expect(
     suggestionRecordFieldValue(
+      harness.queryClient,
       "product",
       { id: record.id, tags: record.tags },
       "tags",

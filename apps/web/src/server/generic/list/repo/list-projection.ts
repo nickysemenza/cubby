@@ -17,6 +17,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import pMap from "p-map";
 import { z } from "zod";
 
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
@@ -591,8 +592,9 @@ export function listReadPlan<Row>(
         );
       // Materialize only demanded to-one relation UUIDs; public values still go
       // through the same canonical resolver as stored foreign keys.
-      await Promise.all(
-        references.map(async (reference) => {
+      await pMap(
+        references,
+        async (reference) => {
           if (!referenceWanted(reference.key, reference.instruction)) return;
           if (
             "via" in reference &&
@@ -615,13 +617,15 @@ export function listReadPlan<Row>(
               if (!Object.hasOwn(source, reference.key))
                 source[reference.key] = source[reference.column];
           }
-        }),
+        },
+        { concurrency: 2 },
       );
       const [qualities, media, links] = await Promise.all([
         early.qualities,
         early.media,
-        Promise.all(
-          references.map(async (reference) => {
+        pMap(
+          references,
+          async (reference) => {
             const { instruction, key, target } = reference;
             if (
               instruction.kind !== "lookup" ||
@@ -655,9 +659,12 @@ export function listReadPlan<Row>(
               lookups.set(lookupKey, pending);
             }
             return pending;
-          }),
+          },
+          { concurrency: 2 },
         ),
-        Promise.all(admitted.map((binding) => binding.prepare?.(page))),
+        pMap(admitted, (binding) => binding.prepare?.(page), {
+          concurrency: 2,
+        }),
       ]);
       const images = media?.displayImages;
       const dateRanges = (model?.fields ?? []).flatMap((field) =>
@@ -669,8 +676,9 @@ export function listReadPlan<Row>(
           ? [{ key: field.key, ...field.dateRange }]
           : [],
       );
-      const mapped = await Promise.all(
-        sources.map(async ({ row, source, identity }) => {
+      const mapped = await pMap(
+        sources,
+        async ({ row, source, identity }) => {
           const result: ListReadRow = {
             id: parseShortcodeFor(entity, identity.shortcode),
           };
@@ -760,7 +768,8 @@ export function listReadPlan<Row>(
             )
               throw new Error(`Requested record field was not loaded: ${key}`);
           return { id: identity.id, value: result };
-        }),
+        },
+        { concurrency: 2 },
       );
       const completed = media
         ? await withDisplayImages(db, entity, mapped, (row) => row.value, media)

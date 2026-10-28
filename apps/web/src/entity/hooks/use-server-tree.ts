@@ -24,22 +24,27 @@ async function readScope<E extends ListEntity>(
   entity: E,
   input: EntityListParams<E>,
   nesting: ListNesting,
+  consistency?: "strong",
 ): Promise<EntityListRecord<E>[]> {
   const list = entityListFor(entity);
   const rows: EntityListRecord<E>[] = [];
   for (let pageIndex = 0; ; pageIndex++) {
-    const page = await queryClient.fetchQuery(
-      list.queryOptions({
+    const options = list.queryOptions(
+      {
         ...input,
         nesting,
         pagination: { pageIndex, pageSize: TREE_PAGE_SIZE },
-      }),
+      },
+      { consistency },
     );
+    const page = await queryClient.fetchQuery({
+      ...options,
+      ...(consistency === "strong" ? { staleTime: 0 } : {}),
+    });
     // SAFETY: entityListFor(entity) parses every page with entity E's list
     // output schema; TS cannot resolve the indexed type through generic E.
     rows.push(...(page.items as EntityListRecord<E>[]));
-    if (page.items.length === 0 || rows.length >= page.meta.totalCount)
-      return rows;
+    if (page.items.length === 0 || !page.meta.hasNextPage) return rows;
   }
 }
 
@@ -61,7 +66,9 @@ export function useServerTree<E extends ListEntity>(
   input: EntityListParams<E>,
 ) {
   const queryClient = useQueryClient();
-  const scopeKey = entityListFor(entity).queryKey(input);
+  const list = entityListFor(entity);
+  const scopeKey = list.queryKey(input);
+  const meta = list.listQueryPlan(input).meta;
   const keyFor = (parentId: string | null): QueryKey => [
     ...scopeKey,
     "__server_tree__",
@@ -98,7 +105,7 @@ export function useServerTree<E extends ListEntity>(
       ): ServerTreeRow<EntityListRecord<E>>[] =>
         rows.map((row) => {
           const nested = children.get(row.id);
-          return nested ? { ...row, subRows: visit(nested) } : row;
+          return { ...row, subRows: nested ? visit(nested) : undefined };
         });
       const roots = results[0]?.data;
       const failed = results.filter((result) => result.error);
@@ -117,7 +124,8 @@ export function useServerTree<E extends ListEntity>(
   const { tree, pending, error, retry } = useQueries({
     queries: [null, ...parentIds].map((parentId) => ({
       queryKey: keyFor(parentId),
-      queryFn: () =>
+      meta,
+      queryFn: ({ client, queryKey }) =>
         readScope(
           queryClient,
           entity,
@@ -125,6 +133,7 @@ export function useServerTree<E extends ListEntity>(
           parentId === null
             ? { scope: "roots" }
             : { scope: "children", parentId },
+          client.getQueryState(queryKey)?.isInvalidated ? "strong" : undefined,
         ),
     })),
     combine,

@@ -91,6 +91,7 @@ type EntityListInput<TFilters = unknown> = {
   groupBy?: ListGroupBy[];
   nesting?: unknown;
   resultMembership?: ListResultMembership;
+  includeCount?: boolean;
 };
 
 const DEFAULT_PAGINATION: PaginationParams = {
@@ -431,6 +432,7 @@ const buildEntityOperations = <
             groupBy: parseGroupBy(binding, input.groupBy),
             nesting: parseNesting(binding, input.nesting),
             resultMembership: input.resultMembership,
+            includeCount: input.includeCount,
           };
         })
         .call("page", async ({ context }, { validated }) => {
@@ -450,6 +452,10 @@ const buildEntityOperations = <
             ),
             validated.sorts,
             validated.pagination,
+            undefined,
+            "page",
+            undefined,
+            validated.includeCount,
           );
           return {
             ...page,
@@ -490,6 +496,7 @@ const buildEntityOperations = <
               withChildCounts(enveloped, mediaPage.data),
               mediaPage.count,
               {
+                hasNextPage: mediaPage.hasNextPage,
                 unresolvedCount:
                   "unresolvedCount" in mediaPage
                     ? z

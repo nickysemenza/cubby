@@ -102,7 +102,7 @@ public final class GenericEntityListModel {
 
     public var hasMore: Bool {
         guard let meta else { return false }
-        return page * meta.pageSize < (meta.membershipCount ?? meta.totalCount)
+        return meta.hasNextPage
     }
 
     /// Metadata is only presented as current while its last refresh succeeded.

@@ -358,7 +358,12 @@ export async function projectToolGallery(
   });
 
   return {
-    meta: { pageIndex, pageSize, totalCount: matching.length },
+    meta: {
+      pageIndex,
+      pageSize,
+      totalCount: matching.length,
+      hasNextPage: (pageIndex + 1) * pageSize < matching.length,
+    },
     items,
     groups: [...groupsByKey.values()],
     totals: {

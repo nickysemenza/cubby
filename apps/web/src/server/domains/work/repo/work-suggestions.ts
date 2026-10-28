@@ -15,7 +15,11 @@ import { alias } from "drizzle-orm/pg-core";
 import { getDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { outer } from "~/server/db/helpers/related";
-import { entityIdentity, assessmentState } from "~/server/db/schema";
+import {
+  entityIdentity,
+  assessmentState,
+  financialAccount,
+} from "~/server/db/schema";
 import { workExpenseSourceOwners } from "~/server/domains/expense/repo/work-owners";
 import { financialTransactionWorkOwners } from "~/server/domains/financial-transaction/repo/work-facts";
 import {
@@ -27,7 +31,6 @@ import { workRunReviewOwners } from "~/server/domains/run/repo/work-owners";
 import {
   pendingSuggestion,
   pendingStatementStateSql,
-  suggestionField,
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import { workRecordFactsFor } from "~/server/domains/work/repo/record-facts";
 import {
@@ -86,12 +89,22 @@ const source: WorkSource = {
     transfer_pair: "Pending transfer pairs",
   }).map(([family, label]) => ({ key: `suggestions:${family}`, label })),
   candidates: async (db, scope) => {
-    // Statement evidence is population-sized; unrelated record strips must
-    // never materialize it just to discard its rows later.
-    const statements =
-      !scope.record || scope.record.entity === "financialAccount";
     const target = (field: "entityId" | "entityKind") =>
       sql`prediction.target->>${field}`;
+    const subject = alias(entityIdentity, "work_subject");
+    const subjectId = scope.record
+      ? sql`(SELECT work_subject.id FROM "Entity" work_subject
+      WHERE work_subject.kind = ${scope.record.entity} AND work_subject.shortcode = ${scope.record.id}
+        AND ${notDeleted(subject)} AND work_subject."mergedIntoId" IS NULL)`
+      : undefined;
+    const stateScope = (alias: string) =>
+      scope.record
+        ? sql`${sql.identifier(alias)}.entity = ${scope.record.entity} AND ${sql.identifier(alias)}."recordId" = ${subjectId}`
+        : sql`true`;
+    const connectionScope = scope.record
+      ? sql`((root.kind = ${scope.record.entity} AND root.shortcode = ${scope.record.id})
+        OR (other.kind = ${scope.record.entity} AND other.shortcode = ${scope.record.id}))`
+      : sql`true`;
     const connectionWhere = sql`current.family = ${assessmentFamily.enum.recommendation} AND current.active AND current.status = ${suggestionStatus.enum.pending}
       AND prediction.subject->>'scope' LIKE 'connection.%'
       AND ${notDeleted(alias(entityIdentity, "root"))} AND root."mergedIntoId" IS NULL
@@ -101,7 +114,7 @@ const source: WorkSource = {
         AND hidden."recordId" = current."recordId" AND hidden.suppression->>'scope' = prediction.subject->>'scope'
         AND hidden.suppression->>'candidateKey' = prediction.subject->>'candidateKey'
         AND (hidden.suppression->>'fingerprint' IS NULL OR hidden.suppression->>'fingerprint' = prediction.fingerprint))
-      AND ${notDeleted(alias(entityIdentity, "other"))} AND other."mergedIntoId" IS NULL`;
+      AND ${notDeleted(alias(entityIdentity, "other"))} AND other."mergedIntoId" IS NULL AND ${connectionScope}`;
     const connectionFrom = sql`"AssessmentState" current
       JOIN work_connection_prediction prediction ON prediction.id = current.id
       JOIN "Entity" root ON root.id = current."recordId" AND root.kind = current.entity
@@ -118,17 +131,38 @@ const source: WorkSource = {
           assessmentState.active,
           sql`${assessmentState.status} = ${suggestionStatus.enum.pending}`,
           sql`${assessmentState.family} = ${assessmentFamily.enum.field}`,
+          scope.record
+            ? sql`${assessmentState.entity} = ${scope.record.entity} AND ${assessmentState.recordId} = ${subjectId}`
+            : undefined,
           reviewableSuggestionSql,
         ),
       );
+    const account = alias(financialAccount, "statement_account");
+    // One indexed, short-circuiting eligibility probe per admitted account.
+    // A Product detail never opens the statement population at all.
+    const statements =
+      !scope.record || scope.record.entity === "financialAccount"
+        ? sql`SELECT ${entitySchema.enum.financialAccount}::text, statement_account.id::text, ${"suggestions:statement_transaction"}::text
+          FROM "FinancialAccount" statement_account
+          CROSS JOIN LATERAL (
+            SELECT 1 FROM (${pendingStatementStateSql(sql`statement_account.id::text`)}) s
+            WHERE ${pendingSuggestion("s")} LIMIT 1
+          ) eligible
+          WHERE ${and(notDeleted(account), recordScope(scope, sql`statement_account.shortcode`))}`
+        : sql`SELECT NULL::text, NULL::text, NULL::text WHERE false`;
     const pending = sql`${field}
-      UNION ALL SELECT s.entity, s."recordId"::text, ${"suggestions:image_description"}::text FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE ${pendingImageDescriptionEligibility()}
-      UNION ALL SELECT root.kind, root.id::text, ${"suggestions:recommendation"}::text FROM ${connectionFrom} WHERE ${connectionWhere}
-      UNION ALL SELECT other.kind, other.id::text, ${"suggestions:recommendation"}::text FROM ${connectionFrom} WHERE ${connectionWhere}
-      ${statements ? sql`UNION ALL SELECT ${entitySchema.enum.financialAccount}::text, ${suggestionField("accountId")}, ${"suggestions:statement_transaction"}::text FROM work_statement_state s WHERE ${pendingSuggestion("s", { populationRead: !scope.record })}` : sql``}
+      UNION ALL SELECT s.entity, s."recordId"::text, ${"suggestions:image_description"}::text FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE ${pendingImageDescriptionEligibility()} AND ${stateScope("s")}
+      UNION ALL SELECT root_entity, root_id::text, ${"suggestions:recommendation"}::text FROM work_connection_suggestions
+      UNION ALL SELECT other_entity, other_id::text, ${"suggestions:recommendation"}::text FROM work_connection_suggestions
+      UNION ALL ${statements}
       UNION ALL SELECT refs.value->>'entity', refs.value->>'id', ${"suggestions:transfer_pair"}::text FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
         CROSS JOIN LATERAL jsonb_array_elements(${reviewFamilyDeclarations.transfer_pair.records}) refs(value)
-        WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.active AND s.status = ${suggestionStatus.enum.pending} AND a.served`;
+        WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.active AND s.status = ${suggestionStatus.enum.pending} AND a.served AND ${
+          scope.record
+            ? sql`refs.value->>'entity' = ${scope.record.entity} AND (refs.value->>'id' = ${scope.record.id} OR refs.value->>'id' = ${subjectId}::text)`
+            : sql`true`
+        }`;
+    const identity = alias(entityIdentity, "work_identity");
     const queries = shortcodeEntities
       .filter((entity) => !scope.record || scope.record.entity === entity)
       .map((entity) => {
@@ -138,16 +172,19 @@ const source: WorkSource = {
           id: sql`${table.shortcode}`,
           name: labelSql(entity, `"${getTableName(table)}"`),
           reason: "Pending suggestions",
-          reasonKeys: sql`ARRAY(SELECT DISTINCT pending.reason_key FROM work_pending_suggestions pending WHERE pending.entity = ${entity} AND (pending.record_id = ${outer(table.id)}::text OR pending.record_id = ${outer(table.shortcode)}::text) ORDER BY pending.reason_key)`,
+          reasonKeys: sql`pending.reason_keys`,
           ...recordAuthority(entity, outer(table.id)),
           ...workRecordFactsFor(entity),
         })
           .from(table)
+          .innerJoin(
+            sql`work_pending_records pending`,
+            sql`pending.entity = ${entity} AND pending.record_id = ${table.id}`,
+          )
           .where(
             and(
               "deletedAt" in table ? notDeleted(table) : undefined,
               recordScope(scope, sql`${table.shortcode}`),
-              sql`EXISTS (SELECT 1 FROM work_pending_suggestions pending WHERE pending.entity = ${entity} AND (pending.record_id = ${outer(table.id)}::text OR pending.record_id = ${outer(table.shortcode)}::text))`,
             ),
           );
       });
@@ -157,23 +194,38 @@ const source: WorkSource = {
         sql` UNION ALL `,
       ),
       ctes: [
-        ...(statements
-          ? [
-              {
-                name: "work_statement_state",
-                sql: pendingStatementStateSql(
-                  scope.record
-                    ? sql`s.data->>'accountId' = (SELECT account.id::text FROM "FinancialAccount" account WHERE account.shortcode = ${scope.record.id})`
-                    : undefined,
-                ),
-              },
-            ]
-          : []),
         {
           name: "work_connection_prediction",
-          sql: sql`SELECT a.id, a.subject, a.fingerprint, coalesce(s.data->'connectionTarget', a.evidence->'candidate'->${"target"}) AS target FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE a.served AND s.family = ${assessmentFamily.enum.recommendation} AND s.active AND s.status = ${suggestionStatus.enum.pending} AND a.subject->>'scope' LIKE 'connection.%'`,
+          sql: sql`SELECT a.id, a.subject, a.fingerprint, coalesce(s.data->'connectionTarget', a.evidence->'candidate'->${"target"}) AS target FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE a.served AND s.family = ${assessmentFamily.enum.recommendation} AND s.active AND s.status = ${suggestionStatus.enum.pending} AND a.subject->>'scope' LIKE 'connection.%' AND ${
+            scope.record
+              ? sql`((${stateScope("s")}) OR (coalesce(s.data->'connectionTarget', a.evidence->'candidate'->${"target"})->>'entityKind' = ${scope.record.entity}
+              AND coalesce(s.data->'connectionTarget', a.evidence->'candidate'->${"target"})->>'entityId' = ${scope.record.id}))`
+              : sql`true`
+          }`,
+        },
+        {
+          name: "work_connection_suggestions",
+          sql: sql`SELECT root.kind AS root_entity, root.id AS root_id, other.kind AS other_entity, other.id AS other_id
+            FROM ${connectionFrom} WHERE ${connectionWhere}`,
         },
         { name: "work_pending_suggestions", sql: pending },
+        {
+          name: "work_pending_records",
+          // Normalize both internal IDs and public codes once. Joining this
+          // compact identity set avoids rescanning pending work per live row.
+          sql: sql`SELECT identity.kind AS entity, identity.id AS record_id, array_agg(DISTINCT reason.reason_key ORDER BY reason.reason_key) AS reason_keys
+            FROM (SELECT entity, record_id, array_agg(DISTINCT reason_key) AS reason_keys
+              FROM work_pending_suggestions GROUP BY entity, record_id) pending
+            CROSS JOIN LATERAL (
+              SELECT id, kind FROM "Entity" work_identity
+              WHERE kind = pending.entity AND ${notDeleted(identity)} AND id = CASE WHEN pending.record_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN pending.record_id::uuid END
+              UNION ALL SELECT id, kind FROM "Entity" work_identity
+              WHERE kind = pending.entity AND ${notDeleted(identity)} AND shortcode = pending.record_id
+              LIMIT 1
+            ) identity
+            CROSS JOIN LATERAL unnest(pending.reason_keys) reason(reason_key)
+            GROUP BY identity.kind, identity.id`,
+        },
       ],
     };
   },

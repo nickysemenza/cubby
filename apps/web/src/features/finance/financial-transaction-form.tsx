@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import { useDebouncedValue } from "@tanstack/react-pacer";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { FormProvider, type UseFormReturn, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -18,6 +18,7 @@ import {
   requiredFieldModel,
 } from "~/entity/editing/entity-primitive-fields";
 import { PickerField } from "~/entity/forms/picker-field";
+import { useEntityMetadata } from "~/entity/metadata";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
 import { Row, Stack } from "~/ui/layout";
@@ -26,11 +27,6 @@ import { Button } from "~/ui/primitives/button";
 const AccountSearch = referenceEntitySearch("financialAccount");
 const PurchaseSearch = referenceEntitySearch("purchase");
 const SpendingCategorySearch = referenceEntitySearch("spendingCategory");
-
-const financialTransactionSourceRefsField = requiredFieldModel(
-  "financialTransaction",
-  "sourceRefs",
-);
 
 export const financialTransactionFormSchema = z
   .object({
@@ -113,6 +109,13 @@ export function FinancialTransactionFormFields({
   mode?: EditMode;
   loadVendorInference?: (merchant: string) => Promise<MerchantVendorInference>;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("financialTransaction");
+  const financialTransactionSourceRefsField = requiredFieldModel(
+    queryClient,
+    "financialTransaction",
+    "sourceRefs",
+  );
   const idPrefix = useId();
   const merchant = useWatch({ control: form.control, name: "merchant" }) ?? "";
   const [debouncedMerchant] = useDebouncedValue(merchant, { wait: 350 });
@@ -215,6 +218,7 @@ export function FinancialTransactionFormFields({
         section="details"
       />
       {renderIntentField({
+        queryClient,
         entity: "financialTransaction",
         field: financialTransactionSourceRefsField,
         // SAFETY: `renderIntentField` is shared across every entity's form

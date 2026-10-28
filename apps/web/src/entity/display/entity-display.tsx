@@ -14,19 +14,11 @@ import {
   entitySchema,
 } from "@cubby/schemas/entity";
 import { displayItems } from "@cubby/schemas/entity-definitions/label-field";
-import {
-  entityFieldModels,
-  type EntityFieldModel,
-} from "@cubby/schemas/entity-fields";
-import {
-  entityManifest,
-  type BrowserRoutedEntity,
-} from "@cubby/schemas/entity-manifest";
-import { entityPreviewFieldKeys } from "@cubby/schemas/entity-preview";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { fieldValueOf, fieldDecisionOf } from "@cubby/schemas/field-envelope";
 import { resolvedListSchema } from "@cubby/schemas/field-resolution";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { flexRender } from "@tanstack/react-table";
 import prettyBytes from "pretty-bytes";
 import { type ReactNode } from "react";
@@ -47,6 +39,7 @@ import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-displa
 import { NotApplicableField } from "~/entity/fields/field-applicability";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { filterUrlKey } from "~/entity/filters";
+import { entityMetadata } from "~/entity/metadata";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { RecordFieldSuggestion } from "~/entity/suggestions/record-suggestions";
@@ -162,8 +155,14 @@ function renderProseValue(value: ScalarDisplayValue, surface: DisplaySurface) {
   );
 }
 const explainedRecordSchema = z.object({ id: z.string() });
-const entityDisplayFields = (entity: Entity, surface: DisplaySurface) =>
-  entityFieldModels[entity].fields.filter((field) => field.display[surface]);
+const entityDisplayFields = (
+  queryClient: QueryClient,
+  entity: Entity,
+  surface: DisplaySurface,
+) =>
+  entityMetadata(queryClient, entity).fields.fields.filter(
+    (field) => field.display[surface],
+  );
 
 /**
  * Columns hidden by default (`display.listHidden`) but still toggleable via
@@ -175,17 +174,21 @@ const entityDisplayFields = (entity: Entity, surface: DisplaySurface) =>
  * `initialColumnVisibility` rather than replacing it outright.
  */
 export const entityListHiddenColumns = (
+  queryClient: QueryClient,
   entity: Entity,
 ): Record<string, boolean> =>
   Object.fromEntries(
-    entityDisplayFields(entity, "list")
+    entityDisplayFields(queryClient, entity, "list")
       .filter((field) => field.display.listHidden)
       .map((field) => [field.display.columnId ?? field.key, false]),
   );
 
 /** Declared `listOrder` first, ascending; unordered fields keep model order. */
-const orderedListFields = (entity: Entity): DisplayField[] =>
-  entityDisplayFields(entity, "list")
+const orderedListFields = (
+  queryClient: QueryClient,
+  entity: Entity,
+): DisplayField[] =>
+  entityDisplayFields(queryClient, entity, "list")
     .map((field, index) => ({ field, index }))
     .sort(
       (left, right) =>
@@ -266,6 +269,7 @@ function listItems(value: ScalarDisplayValue): readonly unknown[] | null {
  * value always short-circuits, regardless of format).
  */
 function renderFormattedScalar(
+  queryClient: QueryClient,
   format: DisplayField["display"]["format"],
   value: ScalarDisplayValue,
   surface: "list" | "detail" = "list",
@@ -274,7 +278,7 @@ function renderFormattedScalar(
   // Presence answers "is there one" — an empty value is a clear "no", not a dash.
   if (format === "presence") {
     const options = context?.field.display.valueOptions
-      ? enumFieldOptions(context.entity, context.field)
+      ? enumFieldOptions(queryClient, context.entity, context.field)
       : PRESENCE_OPTIONS;
     return renderOptionCell(isPresent(value) ? "yes" : "no", options);
   }
@@ -386,6 +390,7 @@ function renderFormattedScalar(
 /** A resolved field whose effective value is empty names what that means
  * (an owner field reads Household or Unknown, not a dash). */
 function resolutionEmptyLabel(
+  queryClient: QueryClient,
   entity: Entity,
   record: unknown,
   field: DisplayField,
@@ -396,7 +401,7 @@ function resolutionEmptyLabel(
   // Allocations have multiple reference values rather than one scalar value.
   if (fieldDecisionOf(resolution)?.provenance?.kind === "allocated")
     return null;
-  const labels = resolutionPolicyFor(entity, field.key)?.labels;
+  const labels = resolutionPolicyFor(queryClient, entity, field.key)?.labels;
   const label =
     resolution.current.assignment?.kind === "inherit"
       ? labels?.unresolved
@@ -449,6 +454,7 @@ const pathScalar = z.union([
 ]);
 /** A scalar read off a `display.readPath`, typed by what the row holds. */
 function pathScalarValue(
+  queryClient: QueryClient,
   entity: Entity,
   field: DisplayField,
   value: unknown,
@@ -458,19 +464,20 @@ function pathScalarValue(
   if (field.kind === "date") return { kind: "date", raw: scalar.raw };
   if (field.kind === "timestamp") return { kind: "timestamp", raw: scalar.raw };
   return field.display.valueOptions
-    ? enumDisplayValue(entity, field, scalar.raw)
+    ? enumDisplayValue(queryClient, entity, field, scalar.raw)
     : scalar;
 }
 
 /** An editable stored field with nothing in it: the detail page offers "Add…". */
 function isAddableEmpty<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   record: TRecord,
   field: DisplayField,
 ) {
   if (!field.control || (!field.readKey && field.display.readPath === null))
     return false;
-  const value = readScalarField(entity, record, field);
+  const value = readScalarField(queryClient, entity, record, field);
   return (
     value.kind === "empty" ||
     (value.kind === "text" && value.raw.trim() === "") ||
@@ -479,6 +486,7 @@ function isAddableEmpty<TRecord extends object>(
 }
 
 function readScalarField<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   record: TRecord,
   field: DisplayField,
@@ -508,14 +516,20 @@ function readScalarField<TRecord extends object>(
   // A path-backed value is projected off a nested row, so its runtime shape is
   // the authority; the declared kind only disambiguates dates and timestamps,
   // and a declared roster tints a string like any enum.
-  if (readPath !== null) return pathScalarValue(entity, field, value);
+  if (readPath !== null)
+    return pathScalarValue(queryClient, entity, field, value);
   switch (field.kind) {
     case "text": {
       const raw = z.string().parse(value);
       return { kind: "text", raw, label: raw };
     }
     case "enum":
-      return enumDisplayValue(entity, field, z.string().parse(value));
+      return enumDisplayValue(
+        queryClient,
+        entity,
+        field,
+        z.string().parse(value),
+      );
     case "number":
       return { kind: "number", raw: z.number().parse(value) };
     case "boolean":
@@ -546,11 +560,12 @@ function readScalarField<TRecord extends object>(
 }
 
 function copyScalarField<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   record: TRecord,
   field: DisplayField,
 ): string | null {
-  const value = readScalarField(entity, record, field);
+  const value = readScalarField(queryClient, entity, record, field);
   switch (value.kind) {
     case "empty":
       return null;
@@ -584,6 +599,7 @@ export function referenceMediaRefs<TRecord extends object>(
 }
 
 function referenceBrowse<TRecord extends object>(
+  queryClient: QueryClient,
   record: TRecord,
   field: DisplayField,
 ): ReactNode {
@@ -601,7 +617,7 @@ function referenceBrowse<TRecord extends object>(
   const data = z.record(z.string(), z.unknown()).parse(record);
   const search = new URLSearchParams();
   for (const binding of field.reference.scope) {
-    const spec = getEntityFilters(target).find(
+    const spec = getEntityFilters(queryClient, target).find(
       (item) =>
         item.field === binding.targetField ||
         item.columnId === binding.targetField,
@@ -649,6 +665,7 @@ function referenceLink(
  * list cell. Reference values resolve their human label through the shared
  * by-id link instead of exposing an internal UUID or public code. */
 export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
+  queryClient: QueryClient,
   entity: Entity,
   record: TRecord,
   fieldKey: string,
@@ -656,7 +673,7 @@ export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
   label?: string,
 ): ReactNode {
   if (value === null || value === "") return <NoneValue />;
-  const field = entityFieldModels[entity].fields.find(
+  const field = entityMetadata(queryClient, entity).fields.fields.find(
     (candidate) => candidate.key === fieldKey,
   );
   if (!field) return String(value ?? "—");
@@ -687,10 +704,12 @@ export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
   if (
     label &&
     !field.reference?.multiple &&
-    !enumFieldOptions(entity, field).some((option) => option.value === value)
+    !enumFieldOptions(queryClient, entity, field).some(
+      (option) => option.value === value,
+    )
   )
     return <span className="min-w-0 truncate">{label}</span>;
-  return renderCompactFieldValue(entity, proposedRecord, field, {
+  return renderCompactFieldValue(queryClient, entity, proposedRecord, field, {
     singleLine: true,
   });
 }
@@ -712,6 +731,7 @@ function readLabel<TRecord extends object>(
  * `detailLabelPath` prints the text the server composed for it; everything
  * else renders through its declared `display.format`. */
 export function renderDetailFieldValue<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   record: TRecord,
   field: DisplayField,
@@ -719,7 +739,13 @@ export function renderDetailFieldValue<TRecord extends object>(
   const refusal = classificationFieldDisplayRefusal(entity, record, field.key);
   if (refusal) return <NotApplicableField reason={refusal} />;
   if (field.kind === "dateRange") return renderDateRangeValue(record, field);
-  const emptyLabel = resolutionEmptyLabel(entity, record, field, true);
+  const emptyLabel = resolutionEmptyLabel(
+    queryClient,
+    entity,
+    record,
+    field,
+    true,
+  );
   if (emptyLabel) return emptyLabel;
   if (field.display.itemsPath) {
     const parsed = displayItems.safeParse(
@@ -766,7 +792,7 @@ export function renderDetailFieldValue<TRecord extends object>(
       );
     return (
       <>
-        {referenceBrowse(record, field)}
+        {referenceBrowse(queryClient, record, field)}
         <ReferencePreview
           items={reference.items}
           limit={field.display.referencePreviewLimit}
@@ -802,10 +828,14 @@ export function renderDetailFieldValue<TRecord extends object>(
     );
   }
   if (isProseField(field.key, field.control) && field.display.format === null)
-    return renderProseValue(readScalarField(entity, record, field), "detail");
+    return renderProseValue(
+      readScalarField(queryClient, entity, record, field),
+      "detail",
+    );
   return renderFormattedScalar(
+    queryClient,
     field.display.format,
-    readScalarField(entity, record, field),
+    readScalarField(queryClient, entity, record, field),
     "detail",
     { entity, field },
   );
@@ -813,6 +843,7 @@ export function renderDetailFieldValue<TRecord extends object>(
 
 /** Dense surfaces prefer a row-backed domain value before scalar fallback. */
 export function renderCompactFieldValue<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   record: TRecord,
   field: DisplayField,
@@ -822,7 +853,7 @@ export function renderCompactFieldValue<TRecord extends object>(
   const domainValue = domainRenderer?.(record);
   if (domainValue !== undefined) return domainValue;
   if (field.kind === "dateRange") return renderDateRangeValue(record, field);
-  const emptyLabel = resolutionEmptyLabel(entity, record, field);
+  const emptyLabel = resolutionEmptyLabel(queryClient, entity, record, field);
   if (emptyLabel) return emptyLabel;
   const reference = readDisplayReferenceField(record, field);
   if (reference !== null) {
@@ -839,14 +870,14 @@ export function renderCompactFieldValue<TRecord extends object>(
             reference.incomplete ? (
               <span className="text-muted-foreground">Partly unclassified</span>
             ) : (
-              referenceBrowse(record, field)
+              referenceBrowse(queryClient, record, field)
             )
           }
         />
       );
     return (
       <>
-        {referenceBrowse(record, field)}
+        {referenceBrowse(queryClient, record, field)}
         <ReferencePreview
           items={reference.items}
           limit={field.display.referencePreviewLimit}
@@ -858,13 +889,19 @@ export function renderCompactFieldValue<TRecord extends object>(
       </>
     );
   }
-  const value = readScalarField(entity, record, field);
+  const value = readScalarField(queryClient, entity, record, field);
   if (isProseField(field.key, field.control) && field.display.format === null)
     return renderProseValue(value, "list");
-  return renderFormattedScalar(field.display.format, value, "list", {
-    entity,
-    field,
-  });
+  return renderFormattedScalar(
+    queryClient,
+    field.display.format,
+    value,
+    "list",
+    {
+      entity,
+      field,
+    },
+  );
 }
 
 /** Real phone targets keep adjacent filter and explanation hit areas disjoint. */
@@ -878,10 +915,14 @@ const COHORT_FILTER_KINDS = new Set(["multiselect", "idMulti"]);
  * whose `field`/`columnId` names the field (or the key minus `Id` for a
  * reference, `ingredientId` → `ingredient`) and whose kind takes one value.
  */
-function cohortFilterSpecFor(entity: Entity, field: DisplayField) {
+function cohortFilterSpecFor(
+  queryClient: QueryClient,
+  entity: Entity,
+  field: DisplayField,
+) {
   const base = field.key.replace(/Ids?$/u, "");
   return (
-    getEntityFilters(entity).find(
+    getEntityFilters(queryClient, entity).find(
       (spec) =>
         COHORT_FILTER_KINDS.has(spec.kind) &&
         (spec.columnId === field.key ||
@@ -897,21 +938,31 @@ function cohortFilterSpecFor(entity: Entity, field: DisplayField) {
  * the same relation declares. The section is the only place the manifest
  * names that scope, so a count with no section stays a plain number.
  */
-function relationCountFilter(entity: Entity, field: DisplayField) {
+function relationCountFilter(
+  queryClient: QueryClient,
+  entity: Entity,
+  field: DisplayField,
+) {
   if (field.kind !== "number" || field.provenance?.kind !== "derived")
     return null;
   const [source, ...others] = field.provenance.sources;
   if (!source?.relation || others.length > 0) return null;
-  const section = entitySummary[entity].detail.sections.find(
+  const section = entityMetadata(
+    queryClient,
+    entity,
+  ).summary.detail.sections.find(
     (candidate) =>
       candidate.kind === "relation" && candidate.relation === source.relation,
   );
   if (section?.kind !== "relation") return null;
-  const target = entityManifest[entity].relationships.find(
+  const target = entityMetadata(
+    queryClient,
+    entity,
+  ).descriptor.relationships.find(
     (relation) => relation.key === source.relation,
   )?.target;
   if (target === undefined || !isBrowserRoutedEntity(target)) return null;
-  const spec = getEntityFilters(target).find(
+  const spec = getEntityFilters(queryClient, target).find(
     (candidate) => candidate.columnId === section.filter.descriptor,
   );
   return spec
@@ -934,11 +985,12 @@ function relationCountFilter(entity: Entity, field: DisplayField) {
  * with a multiselect filter links every value.
  */
 function cohortFilterAction<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   record: TRecord,
   field: DisplayField,
 ): ReactNode {
-  const countFilter = relationCountFilter(entity, field);
+  const countFilter = relationCountFilter(queryClient, entity, field);
   const recordId = explainedRecordSchema.safeParse(record);
   if (countFilter !== null && recordId.success) {
     return (
@@ -951,7 +1003,7 @@ function cohortFilterAction<TRecord extends object>(
     );
   }
   if (!isBrowserRoutedEntity(entity)) return undefined;
-  const spec = cohortFilterSpecFor(entity, field);
+  const spec = cohortFilterSpecFor(queryClient, entity, field);
   if (spec === null) return undefined;
   const urlKey = filterUrlKey(spec);
   const plural = entityPluralLabel(entity).toLocaleLowerCase();
@@ -972,7 +1024,7 @@ function cohortFilterAction<TRecord extends object>(
       ? linkTo(item.id, item.name ?? item.id)
       : undefined;
   }
-  const value = readScalarField(entity, record, field);
+  const value = readScalarField(queryClient, entity, record, field);
   switch (value.kind) {
     case "text":
     case "enum":
@@ -989,15 +1041,16 @@ function cohortFilterAction<TRecord extends object>(
 }
 
 /**
- * The detail fields a `fields` section of `entitySummary[entity].detail`
+ * The detail fields a `fields` section of `entityMetadata(queryClient, entity).summary.detail`
  * names, in declared order; without a section, every `display.detail` field
  * by `detailOrder`.
  */
 const entityDetailFields = (
+  queryClient: QueryClient,
   entity: Entity,
   fields?: readonly string[],
 ): DisplayField[] => {
-  const detail = entityDisplayFields(entity, "detail");
+  const detail = entityDisplayFields(queryClient, entity, "detail");
   if (fields === undefined)
     return [...detail].sort(
       (left, right) =>
@@ -1094,14 +1147,31 @@ const renderDateRangeValue = <TRecord extends object>(
  * and empty fields — a preview spends its few rows on what is known.
  */
 export function entityPreviewFacts<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   record: TRecord,
   limit = 4,
   options: { singleLine?: boolean } = {},
 ): { label: string; value: ReactNode }[] {
-  const { preview } = entitySummary[entity].detail;
-  const keys = entityPreviewFieldKeys(entity);
-  const fields = entityFieldModels[entity].fields;
+  const { preview } = entityMetadata(queryClient, entity).summary.detail;
+  const { detail, titleField } = entityMetadata(queryClient, entity).summary;
+  const section = detail.sections.find((item) => item.kind === "fields");
+  const keys = detail.preview.length
+    ? detail.preview
+    : [
+        ...new Set([
+          ...detail.summary.flatMap((slot) =>
+            slot.kind === "fields" ? slot.fields : [],
+          ),
+          ...(section?.kind === "fields" ? section.fields : []),
+        ]),
+      ].filter(
+        (key) =>
+          key !== titleField &&
+          key !== detail.hero.chip &&
+          key !== detail.hero.breadcrumb,
+      );
+  const fields = entityMetadata(queryClient, entity).fields.fields;
   const facts: { label: string; value: ReactNode }[] = [];
   for (const key of keys) {
     if (preview.length === 0 && facts.length >= limit) break;
@@ -1112,11 +1182,17 @@ export function entityPreviewFacts<TRecord extends object>(
     const known = reference
       ? reference.items.length > 0
       : field.readKey !== null &&
-        copyScalarField(entity, record, field) !== null;
+        copyScalarField(queryClient, entity, record, field) !== null;
     if (!known) continue;
     facts.push({
       label: field.label,
-      value: renderCompactFieldValue(entity, record, field, options),
+      value: renderCompactFieldValue(
+        queryClient,
+        entity,
+        record,
+        field,
+        options,
+      ),
     });
   }
   return facts;
@@ -1128,30 +1204,36 @@ export function entityPreviewFacts<TRecord extends object>(
  * the ingest `createdAt`.
  */
 export function entityHeroWhen<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   record: TRecord,
 ): { label: string; value: ReactNode } | null {
-  const when: { field: string; label?: string } | null =
-    entitySummary[entity].detail.hero.when;
+  const when: { field: string; label?: string } | null = entityMetadata(
+    queryClient,
+    entity,
+  ).summary.detail.hero.when;
   if (when === null) return null;
-  const field = entityFieldModels[entity].fields.find(
+  const field = entityMetadata(queryClient, entity).fields.fields.find(
     (candidate) => candidate.key === when.field,
   );
-  if (!field || copyScalarField(entity, record, field) === null) return null;
+  if (!field || copyScalarField(queryClient, entity, record, field) === null)
+    return null;
   return {
     label: when.label ?? field.label,
-    value: renderDetailFieldValue(entity, record, field),
+    value: renderDetailFieldValue(queryClient, entity, record, field),
   };
 }
 
 /** The field keys of one declared `fields` detail section. */
 export const entitySectionFields = (
+  queryClient: QueryClient,
   entity: Entity,
   sectionId: string,
 ): readonly string[] => {
-  const section = entitySummary[entity].detail.sections.find(
-    (candidate) => candidate.id === sectionId,
-  );
+  const section = entityMetadata(
+    queryClient,
+    entity,
+  ).summary.detail.sections.find((candidate) => candidate.id === sectionId);
   if (section === undefined || section.kind !== "fields")
     throw new Error(`${entity} declares no fields section ${sectionId}`);
   return section.fields;
@@ -1159,6 +1241,7 @@ export const entitySectionFields = (
 
 export type DetailFieldRenderer<TRecord extends object> = (
   record: TRecord,
+  queryClient: QueryClient,
 ) => Omit<Fact, "label"> & { label?: string };
 
 export function EntityBasicInfo<TRecord extends object>({
@@ -1186,7 +1269,8 @@ export function EntityBasicInfo<TRecord extends object>({
   header?: ReactNode;
   footer?: ReactNode;
 }) {
-  const fields = entityDetailFields(entity, fieldKeys);
+  const queryClient = useQueryClient();
+  const fields = entityDetailFields(queryClient, entity, fieldKeys);
   const explainedRecord = explainedRecordSchema.safeParse(record);
   const quality = useFieldQuality(
     entity,
@@ -1217,13 +1301,15 @@ export function EntityBasicInfo<TRecord extends object>({
             },
           ];
         const checks = fieldQualityChecks(quality?.checks ?? [], field.key);
-        const override = overrides[field.key]?.(record);
+        const override = overrides[field.key]?.(record, queryClient);
         const rendered = override ?? {
           value:
-            !refusal && onAdd && isAddableEmpty(entity, record, field) ? (
+            !refusal &&
+            onAdd &&
+            isAddableEmpty(queryClient, entity, record, field) ? (
               <AddFactValue label={field.label} onAdd={onAdd} />
             ) : (
-              renderDetailFieldValue(entity, record, field)
+              renderDetailFieldValue(queryClient, entity, record, field)
             ),
         };
         // A renderer that names `filterAction` (even as null) owns the
@@ -1232,7 +1318,7 @@ export function EntityBasicInfo<TRecord extends object>({
           "filterAction" in rendered
             ? rendered.filterAction
             : cohortLinks
-              ? cohortFilterAction(entity, record, field)
+              ? cohortFilterAction(queryClient, entity, record, field)
               : undefined;
         const explanation =
           (field.explanation || checks.length > 0) &&
@@ -1368,6 +1454,7 @@ type EditableFieldClipboard = EditableFieldBinding<
 
 /** The row-parametrized copy/paste descriptor for an editable field's column. */
 function editableFieldCellData<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   field: EditableField,
   read: (row: TRecord) => EditableFieldValue,
@@ -1401,7 +1488,7 @@ function editableFieldCellData<TRecord extends object>(
         kind: "select",
         data: selectCellData<TRecord>(
           text,
-          enumFieldOptions(entity, field),
+          enumFieldOptions(queryClient, entity, field),
           save,
         ),
       };
@@ -1425,6 +1512,7 @@ function editableFieldCellData<TRecord extends object>(
  * `specialized` controls are hand-rendered.
  */
 function renderEditableField<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   field: EditableField,
   value: EditableFieldValue,
@@ -1437,7 +1525,7 @@ function renderEditableField<TRecord extends object>(
 ): ReactNode {
   const refusal = classificationFieldRefusal(entity, record, field.key);
   if (refusal) {
-    const readField = entityDisplayFields(entity, surface).find(
+    const readField = entityDisplayFields(queryClient, entity, surface).find(
       (candidate) => candidate.key === field.key,
     );
     if (
@@ -1445,8 +1533,8 @@ function renderEditableField<TRecord extends object>(
       classificationFieldDisplayRefusal(entity, record, field.key) === null
     )
       return surface === "detail"
-        ? renderDetailFieldValue(entity, record, readField)
-        : renderCompactFieldValue(entity, record, readField);
+        ? renderDetailFieldValue(queryClient, entity, record, readField)
+        : renderCompactFieldValue(queryClient, entity, record, readField);
     return <NotApplicableField reason={refusal} />;
   }
   const { key, control } = field;
@@ -1459,14 +1547,14 @@ function renderEditableField<TRecord extends object>(
           : null,
       ) ?? null)
     : value;
-  const displayField = entityDisplayFields(entity, surface).find(
+  const displayField = entityDisplayFields(queryClient, entity, surface).find(
     (candidate) => candidate.key === field.key,
   );
   const displayed = (rendered: ReactNode) =>
     surface === "detail" && displayField
-      ? renderDetailFieldValue(entity, record, displayField)
+      ? renderDetailFieldValue(queryClient, entity, record, displayField)
       : resolution && displayField
-        ? renderCompactFieldValue(entity, record, displayField)
+        ? renderCompactFieldValue(queryClient, entity, record, displayField)
         : rendered;
   switch (clipboard.kind) {
     case "text":
@@ -1548,6 +1636,7 @@ function renderEditableField<TRecord extends object>(
               spanValue ??
                 (v ? (
                   renderFormattedScalar(
+                    queryClient,
                     format,
                     { kind: "date", raw: v, due: isOpenDeadline(key, record) },
                     surface,
@@ -1561,7 +1650,11 @@ function renderEditableField<TRecord extends object>(
       );
     }
     case "select": {
-      const options: PickerOption[] = enumFieldOptions(entity, field);
+      const options: PickerOption[] = enumFieldOptions(
+        queryClient,
+        entity,
+        field,
+      );
       return (
         <EditableCell
           value={asText(editValue)}
@@ -1569,7 +1662,7 @@ function renderEditableField<TRecord extends object>(
             type: "select",
             options,
             clearable: field.nullable,
-            suggest: enumFieldSuggestSource(entity, field, record),
+            suggest: enumFieldSuggestSource(queryClient, entity, field, record),
           }}
           clipboard={clipboard.data}
           onSave={save}
@@ -1621,6 +1714,7 @@ function renderEditableField<TRecord extends object>(
  * that extra logic stays hand-written next to this call.
  */
 export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
+  queryClient: QueryClient,
   entity: Entity,
   record: TRecord,
   keys: readonly string[],
@@ -1629,7 +1723,7 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
     data: Record<string, EditableFieldValue>;
   }) => Promise<TResult>,
 ): Record<string, () => { value: ReactNode }> {
-  const fields = entityDisplayFields(entity, "detail");
+  const fields = entityDisplayFields(queryClient, entity, "detail");
   return Object.fromEntries(
     keys.map((key) => {
       const field = fields.find((candidate) => candidate.key === key);
@@ -1642,7 +1736,7 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
               field &&
               classificationFieldDisplayRefusal(entity, record, key) ===
                 null ? (
-                renderDetailFieldValue(entity, record, field)
+                renderDetailFieldValue(queryClient, entity, record, field)
               ) : (
                 <NotApplicableField reason={refusal} />
               ),
@@ -1675,7 +1769,7 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
                 clearable={field.nullable}
                 trigger="pencil"
                 renderValue={() =>
-                  renderDetailFieldValue(entity, record, field)
+                  renderDetailFieldValue(queryClient, entity, record, field)
                 }
               />
             ),
@@ -1721,6 +1815,7 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
         ] as const;
       }
       const binding = editableFieldCellData(
+        queryClient,
         entity,
         { ...field, control },
         () => value,
@@ -1753,6 +1848,7 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
         }
         return {
           value: renderEditableField(
+            queryClient,
             entity,
             { ...field, control },
             value,
@@ -1774,6 +1870,7 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
  * like the field's own kind (number or text), so it has no dedicated branch.
  */
 function cellDataForField<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   field: DisplayField,
 ) {
@@ -1781,16 +1878,16 @@ function cellDataForField<TRecord extends object>(
     case "currency":
     case "signedCurrency":
       return numberCellData<TRecord>("currency", (record) => {
-        const value = readScalarField(entity, record, field);
+        const value = readScalarField(queryClient, entity, record, field);
         return value.kind === "number" ? value.raw : null;
       });
     case "plainDate":
       return dateCellData<TRecord>((record) =>
-        copyScalarField(entity, record, field),
+        copyScalarField(queryClient, entity, record, field),
       );
     case "timestamp":
       return timestampCellData<TRecord>((record) => {
-        const value = readScalarField(entity, record, field);
+        const value = readScalarField(queryClient, entity, record, field);
         return value.kind === "timestamp" ? value.raw : null;
       });
     case "external-link":
@@ -1805,32 +1902,32 @@ function cellDataForField<TRecord extends object>(
       if (field.kind === "enum" && field.display.format === null)
         return selectCellData<TRecord>(
           (record) => {
-            const value = readScalarField(entity, record, field);
+            const value = readScalarField(queryClient, entity, record, field);
             return value.kind === "enum" ? value.raw : null;
           },
-          enumFieldOptions(entity, field),
+          enumFieldOptions(queryClient, entity, field),
         );
       if (field.kind === "timestamp" && field.display.format === null)
         return timestampCellData<TRecord>((record) => {
-          const value = readScalarField(entity, record, field);
+          const value = readScalarField(queryClient, entity, record, field);
           return value.kind === "timestamp" ? value.raw : null;
         });
       if (field.kind === "date" && field.display.format === null)
         return dateCellData<TRecord>((record) =>
-          copyScalarField(entity, record, field),
+          copyScalarField(queryClient, entity, record, field),
         );
       if (field.kind === "boolean")
         return booleanCellData<TRecord>((record) => {
-          const value = readScalarField(entity, record, field);
+          const value = readScalarField(queryClient, entity, record, field);
           return value.kind === "boolean" ? value.raw : null;
         });
       return field.kind === "number"
         ? numberCellData<TRecord>("number", (record) => {
-            const value = readScalarField(entity, record, field);
+            const value = readScalarField(queryClient, entity, record, field);
             return value.kind === "number" ? value.raw : null;
           })
         : textCellData<TRecord>("text", (record) =>
-            copyScalarField(entity, record, field),
+            copyScalarField(queryClient, entity, record, field),
           );
   }
 }
@@ -1838,6 +1935,7 @@ function cellDataForField<TRecord extends object>(
 /** Specialized columns retain their cell behavior and table metadata. Declared
  * membership, field accessors, and plain headers belong to the entity model. */
 export function createEntityDisplayColumns<TRecord extends object>(
+  queryClient: QueryClient,
   entity: Entity,
   helper: CubbyColumnHelper<TRecord>,
   overrides?: CubbyColumnCollection<TRecord>,
@@ -1866,18 +1964,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
     ) => Promise<void>;
   } = {},
 ): CubbyColumnCollection<TRecord> {
-  // SAFETY: `generatedEntitySort` is `as const satisfies Partial<Record<Entity,
-  // ...>>`, so its inferred type carries only the entity keys actually present
-  // (e.g. "cookbook" and "usda-food" have no sort roster at all) — indexing it
-  // with a generic `Entity` needs the wider Partial view reinstated here, not
-  // the narrower literal TS would otherwise reject for those missing keys. The
-  // `?? []` just below is what makes an absent roster safe: an entity with no
-  // sort declaration then sorts no generated column, rather than throwing.
-  const sortRoster = (
-    generatedEntitySort as Partial<
-      Record<Entity, { fields: readonly string[] }>
-    >
-  )[entity];
+  const sortRoster = entityMetadata(queryClient, entity).sort;
   const sortableColumnIds: readonly string[] = sortRoster?.fields ?? [];
   const { only, skipSpecialized, onSaveFields } = options;
   const onSaveField =
@@ -1893,9 +1980,10 @@ export function createEntityDisplayColumns<TRecord extends object>(
     onSaveFields && data.applyPaste
       ? { ...data, rowWrite: { field, save: onSaveFields } }
       : data;
-  const titleField = entitySummary[entity].titleField;
-  const updateFields: readonly string[] = entityFieldModels[entity].update;
-  const listFields = orderedListFields(entity);
+  const titleField = entityMetadata(queryClient, entity).summary.titleField;
+  const updateFields: readonly string[] = entityMetadata(queryClient, entity)
+    .fields.update;
+  const listFields = orderedListFields(queryClient, entity);
   const selected =
     only === undefined
       ? listFields
@@ -1987,9 +2075,15 @@ export function createEntityDisplayColumns<TRecord extends object>(
               context.row.original,
               field.key,
             ) === null ? (
-              renderCompactFieldValue(entity, context.row.original, field, {
-                singleLine: true,
-              })
+              renderCompactFieldValue(
+                queryClient,
+                entity,
+                context.row.original,
+                field,
+                {
+                  singleLine: true,
+                },
+              )
             ) : (
               <NotApplicableField reason={refusal} />
             );
@@ -2061,7 +2155,12 @@ export function createEntityDisplayColumns<TRecord extends object>(
             );
           }
         });
-        const rendered = listRendererColumns(entity, namedRenderer, helper);
+        const rendered = listRendererColumns(
+          queryClient,
+          entity,
+          namedRenderer,
+          helper,
+        );
         let count = 0;
         rendered.visit((column) => {
           const id =
@@ -2203,9 +2302,15 @@ export function createEntityDisplayColumns<TRecord extends object>(
                       entity,
                       field.key,
                     )?.(row.original) ??
-                    renderCompactFieldValue(entity, row.original, field, {
-                      singleLine: true,
-                    })
+                    renderCompactFieldValue(
+                      queryClient,
+                      entity,
+                      row.original,
+                      field,
+                      {
+                        singleLine: true,
+                      },
+                    )
                   );
                 }}
               />
@@ -2224,7 +2329,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             helper,
             (record) =>
               field.readKey !== null || field.display.readPath !== null
-                ? readScalarField(entity, record, field).raw
+                ? readScalarField(queryClient, entity, record, field).raw
                 : labelOf(record),
             {
               id: columnId,
@@ -2288,9 +2393,15 @@ export function createEntityDisplayColumns<TRecord extends object>(
             }),
             cell: ({ row }) =>
               readable ? (
-                renderCompactFieldValue(entity, row.original, field, {
-                  singleLine: true,
-                })
+                renderCompactFieldValue(
+                  queryClient,
+                  entity,
+                  row.original,
+                  field,
+                  {
+                    singleLine: true,
+                  },
+                )
               ) : (
                 <NoneValue />
               ),
@@ -2308,12 +2419,13 @@ export function createEntityDisplayColumns<TRecord extends object>(
       ) {
         const editableField = { ...field, control };
         const read = (row: TRecord): EditableFieldValue => {
-          const value = readScalarField(entity, row, field);
+          const value = readScalarField(queryClient, entity, row, field);
           if (value.kind === "number" || value.kind === "boolean")
             return value.raw;
-          return copyScalarField(entity, row, field);
+          return copyScalarField(queryClient, entity, row, field);
         };
         const binding = editableFieldCellData(
+          queryClient,
           entity,
           editableField,
           read,
@@ -2342,11 +2454,12 @@ export function createEntityDisplayColumns<TRecord extends object>(
               },
               cellData: withRowWrite(field.key, cellData),
               renderValue: (row) =>
-                renderCompactFieldValue(entity, row, field, {
+                renderCompactFieldValue(queryClient, entity, row, field, {
                   singleLine: true,
                 }),
               renderEditable: (row, _value, clipboard) =>
                 renderEditableField(
+                  queryClient,
                   entity,
                   editableField,
                   read(row),
@@ -2382,11 +2495,11 @@ export function createEntityDisplayColumns<TRecord extends object>(
         }
         continue;
       }
-      const countFilter = relationCountFilter(entity, field);
+      const countFilter = relationCountFilter(queryClient, entity, field);
       add(
         createEditableAccessorColumn(
           helper,
-          (record) => readScalarField(entity, record, field).raw,
+          (record) => readScalarField(queryClient, entity, record, field).raw,
           {
             id: columnId,
             header: field.label,
@@ -2409,9 +2522,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
                   : undefined,
               mobile: toMobileColumnMeta(field.display.mobile),
             },
-            cellData: cellDataForField<TRecord>(entity, field),
+            cellData: cellDataForField<TRecord>(queryClient, entity, field),
             renderValue: (row) => {
-              const read = readScalarField(entity, row, field);
+              const read = readScalarField(queryClient, entity, row, field);
               const value =
                 read.kind === "date" && isOpenDeadline(field.key, row)
                   ? { ...read, due: true }
@@ -2423,7 +2536,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
               const rendered = domainValue ??
                 (isProseField(field.key, field.control) && format === null
                   ? renderProseValue(value, "list")
-                  : renderFormattedScalar(format, value, "list", {
+                  : renderFormattedScalar(queryClient, format, value, "list", {
                       entity,
                       field,
                     })) ?? <NoneValue />;

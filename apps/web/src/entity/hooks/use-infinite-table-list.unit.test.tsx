@@ -31,7 +31,12 @@ const page = (
   totalCount: number,
 ): ListQueryResponse<TestRow> => ({
   items: [{ id }],
-  meta: { pageIndex, pageSize: 1, totalCount },
+  meta: {
+    pageIndex,
+    pageSize: 1,
+    totalCount,
+    hasNextPage: pageIndex + 1 < totalCount,
+  },
 });
 
 const clients: QueryClient[] = [];
@@ -159,6 +164,7 @@ describe("useInfiniteTableList", () => {
           pageIndex: 0,
           pageSize: 1,
           totalCount: 1,
+          hasNextPage: false,
           sums: { count: 3 },
           totalLabels: { count: "3 records" },
         },
@@ -171,7 +177,7 @@ describe("useInfiniteTableList", () => {
     expect(execute).toHaveBeenCalledOnce();
   });
 
-  it("coalesces overlapping next-page requests", async () => {
+  it("coalesces overlapping next-page requests without a population count", async () => {
     const calls = new Map<number, number>();
     const queryOptions = vi.fn(
       ({ pagination }: { pagination: { pageIndex: number } }) => ({
@@ -181,7 +187,14 @@ describe("useInfiniteTableList", () => {
             pagination.pageIndex,
             (calls.get(pagination.pageIndex) ?? 0) + 1,
           );
-          return page(`row-${pagination.pageIndex}`, pagination.pageIndex, 3);
+          return {
+            items: [{ id: `row-${pagination.pageIndex}` }],
+            meta: {
+              pageIndex: pagination.pageIndex,
+              pageSize: 1,
+              hasNextPage: pagination.pageIndex < 2,
+            },
+          };
         },
       }),
     );
@@ -197,6 +210,7 @@ describe("useInfiniteTableList", () => {
     );
 
     await waitFor(() => expect(result.current.data).toEqual([{ id: "row-0" }]));
+    expect(result.current.totalCount).toBeUndefined();
     act(() => {
       result.current.infiniteScroll.fetchNextPage();
       result.current.infiniteScroll.fetchNextPage();
@@ -206,6 +220,12 @@ describe("useInfiniteTableList", () => {
       expect(result.current.data).toEqual([{ id: "row-0" }, { id: "row-1" }]),
     );
     expect(calls.get(1)).toBe(1);
+    await act(async () => {
+      await result.current.infiniteScroll.loadAllPages();
+    });
+    await waitFor(() => expect(result.current.data).toHaveLength(3));
+    expect(result.current.infiniteScroll.hasNextPage).toBe(false);
+    expect(result.current.totalCount).toBeUndefined();
   });
 
   it("keeps stale rows visible but blocks pagination until the new first page swaps in", async () => {
@@ -259,7 +279,13 @@ describe("useInfiniteTableList", () => {
     act(() =>
       nextFirstPage.resolve({
         ...page("new-0", 0, 2),
-        meta: { pageIndex: 0, pageSize: 1, totalCount: 2, sums: { cost: -10 } },
+        meta: {
+          pageIndex: 0,
+          pageSize: 1,
+          totalCount: 2,
+          hasNextPage: true,
+          sums: { cost: -10 },
+        },
       }),
     );
     await waitFor(() => {
