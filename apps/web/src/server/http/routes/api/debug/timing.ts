@@ -1,13 +1,20 @@
 import { getErrorMessage } from "@cubby/shared";
 
+import { env } from "~/env";
 import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 import type { TimingResult } from "~/lib/perf/timing.contract";
+import { lookupUPCitemdb } from "~/server/clients/upc/upcitemdb";
 import { db } from "~/server/db";
 import { requestUsdaRelease } from "~/server/domains/usda-release/service/client";
 import {
   countProducts as countProductsRepo,
   pingDb,
 } from "~/server/entity-kernel/repo/debug";
+import {
+  authenticate,
+  BROWSER_AUTH,
+  isChallenge,
+} from "~/server/http/authenticate";
 
 async function measure(
   label: string,
@@ -27,14 +34,18 @@ async function measure(
 }
 
 export const handlers: HttpRouteHandlers<Record<never, never>, "GET"> = {
-  GET: async () => {
-    // This endpoint leaks DB latencies and upstream service URLs (topology),
-    // so it is a dev-only diagnostic. Gate on the same PROD signal the app
-    // uses elsewhere (router.tsx); return 404 in production so it is
-    // indistinguishable from a nonexistent route.
-    if (import.meta.env.PROD) {
-      return new Response("Not Found", { status: 404 });
-    }
+  GET: async ({ request }) => {
+    // Production diagnostics expose infrastructure details only to members.
+    const authenticated = await authenticate(request, BROWSER_AUTH);
+    const headers = new Headers({ "Cache-Control": "private, no-store" });
+    if (isChallenge(authenticated))
+      return Response.json(
+        { error: authenticated.message },
+        { status: authenticated.status, headers },
+      );
+    authenticated.responseHeaders.forEach((value, key) =>
+      headers.append(key, value),
+    );
 
     const overallStart = performance.now();
 
@@ -50,13 +61,26 @@ export const handlers: HttpRouteHandlers<Record<never, never>, "GET"> = {
       durationMs: dbParallelMs,
     };
 
-    const release = requestUsdaRelease();
-    const [usdaStatus, usdaBatch] = await Promise.all([
-      measure("usda release: status()", () => release.status().then(() => {})),
+    const [usdaStatus, usdaBatch, upcLookup] = await Promise.all([
+      measure("usda release: status()", async () => {
+        await requestUsdaRelease().status();
+      }),
       // An empty batch measures the Durable Object round trip alone.
-      measure("usda release: lookupBatch([])", () =>
-        release.lookupBatch([]).then(() => {}),
-      ),
+      measure("usda release: lookupBatch([])", async () => {
+        await requestUsdaRelease().lookupBatch([]);
+      }),
+      measure("upc: upstream lookup", async () => {
+        if (env.UPC_UPSTREAM_DISABLED === "true")
+          throw new Error("UPC upstream lookup is disabled");
+        // A synthetic code probes the provider without cache writes or AI work.
+        // A definitive miss is a successful round trip; transient failures are not.
+        const result = await lookupUPCitemdb("000000000000", {
+          fetch,
+          timeoutSignal: AbortSignal.timeout,
+          decideOfferComparability: async () => "unknown",
+        });
+        if (result.status === "error") throw result.error;
+      }),
     ]);
 
     const results: TimingResult[] = [
@@ -65,13 +89,11 @@ export const handlers: HttpRouteHandlers<Record<never, never>, "GET"> = {
       dbParallelResult,
       usdaStatus,
       usdaBatch,
+      upcLookup,
     ];
 
     const totalMs = Math.round(performance.now() - overallStart);
 
-    return new Response(JSON.stringify({ results, totalMs }, null, 2), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return Response.json({ results, totalMs }, { headers });
   },
 };
