@@ -31,7 +31,7 @@ may do any lane. Keep to three lanes to limit repeated setup and coordination.
 | --------------------------------------------------------------------- | --------------------------------- | -------------------- |
 | Default: implementation, diagnosis, identity and money judgment, docs | opus (Opus 5.5) / medium          | `gpt-6.1-sol` / low  |
 | Search and extraction whose raw output would flood the main context   | haiku (Haiku 5.5) / low           | `gpt-6-luna` / low   |
-| Independent review, when selected                                     | fable (`claude-fable-5-1`) / high | `gpt-6.1-sol` / high |
+| Independent review, when selected                                     | fable (`claude-fable-5-1`) / high | `gpt-6-astra` / high |
 
 Raise effort before changing model: the default lane runs at high (opus) or
 medium-to-high (Sol) for production financial writes, identity merges,
@@ -41,27 +41,34 @@ Use independent review when the user requests it or the change carries material
 correctness risk: production financial writes, identity merges, migrations,
 security boundaries, concurrency enforcement, or major infrastructure. Routine
 UI, icon, token, and behavior-preserving cleanup can finish with main-agent
-self-review and focused validation. Do not automatically send every change to
-Astra or Fable, or add review rounds because a provider is unavailable. An
-explicit user instruction can waive a review; preserve it across the task.
+self-review and focused validation. An explicit user instruction can waive a
+review; preserve it across the task.
 
-When independent review is selected, the reviewer is a different model from the implementer; prefer the other
-provider when both are available (an Opus implementation gets a Sol review, a
-Sol implementation gets a Fable review). From T3 use `delegate_task` with the
-reviewer's provider and model, role `review`; from plain Claude Code reach Sol
-through the `codex:codex-rescue` agent (`/codex:rescue`). Give it a
-self-contained brief (goal, diff range, risks) and address its real findings.
+When independent review is selected, use one reviewer by default. Prefer Fable /
+high for Codex sessions and Astra / high for Claude sessions, preserving any
+explicit user reviewer choice. The reviewer must differ from the implementer;
+if the preferred reviewer implemented the change, use the other review model.
+Cross-provider review supplies another perspective, not a guarantee of better
+findings. From T3 use `delegate_task` with the reviewer's provider and model,
+role `review`; from plain Claude Code reach Astra through the
+`codex:codex-rescue` agent (`/codex:rescue`) with the explicit model and effort.
+If the requested route is unavailable, report it instead of adding review rounds.
+Give the reviewer a self-contained brief (goal, diff range, risks) and address its real findings.
 The brief tells the reviewer to load `code-review`, whose standards sources are
 `AGENTS.md`, [generic paths](generic-paths.md), [domain rules](domain-rules.md),
 and [validation](validation.md); a diff touching visible web UI also loads
 `impeccable` (critique) against `apps/web/DESIGN.md`.
 Follow-up review targets fixes and unresolved objections; expand the scope when
-a fix changes another contract. Reuse unchanged validation evidence.
-A production migration or major infrastructure change (CI, deploy, the Worker
-topology, the test harness, or auth) adds a second review by the other
-provider's reviewer, or `gpt-6-astra` / high. When implementation and review
-disagree on something material, fable / high rules on both positions and the
-evidence.
+a fix changes another contract. Reuse unchanged validation evidence. Minor fixes
+do not automatically require another review round.
+
+Add another reviewer only for a concrete unresolved correctness risk or an
+explicit user request. Migrations and major infrastructure changes warrant
+independent review, but do not automatically require both Fable and Astra.
+Resolve disagreements against the code, contracts, and validation evidence
+first. If a material question remains, give the additional reviewer that
+question, both positions, and the evidence; model preference alone does not
+decide correctness.
 
 For bounded work, `gpt-6.1-terra` / medium is an optional alternative to Sol:
 browser operations with a defined saved outcome, screenshot inspection,
