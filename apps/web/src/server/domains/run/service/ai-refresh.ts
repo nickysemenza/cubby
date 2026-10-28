@@ -32,6 +32,22 @@ import { decisionCatalogRows } from "~/server/ai/decision-catalog";
 import { settleDecisionWorkItems } from "~/server/ai/decision-model";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import {
+  AiEvaluationAttemptObsoleteError,
+  continueAiEvaluationPage,
+  publishAiEvaluation,
+  storeAiEvaluationResult,
+  type ClaimedAiEvaluation,
+} from "~/server/ai/evaluation/repo/ai-evaluation";
+import { enqueueAiEvaluations } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import type {
+  EvaluationPageAdapter,
+  EvaluationPageTarget,
+  EvaluationPagePreparation,
+  EvaluationPageOutcome,
+  EvaluationPagePublication,
+  PreparedEvaluationPage,
+} from "~/server/ai/evaluation/repo/evaluation-page";
+import {
   suggestFields,
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
@@ -50,25 +66,10 @@ import {
   type PreparedProductIdentityPageOutcome,
 } from "~/server/ai/product-identity";
 import {
-  AiEvaluationAttemptObsoleteError,
-  continueAiEvaluationPage,
-  publishAiEvaluation,
-  storeAiEvaluationResult,
-  type ClaimedAiEvaluation,
-} from "~/server/ai/repo/ai-evaluation";
-import { enqueueAiEvaluations } from "~/server/ai/repo/ai-evaluation-requests";
-import {
   readAiRefreshActivation,
   readAiDiscoveryCursor,
   saveAiDiscoveryCursor,
 } from "~/server/ai/repo/ai-refresh";
-import type {
-  EvaluationPageAdapter,
-  EvaluationPageTarget,
-  EvaluationPagePreparation,
-  EvaluationPageOutcome,
-  EvaluationPagePublication,
-} from "~/server/ai/repo/evaluation-page";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { productIdentityEvidenceFences } from "~/server/domains/product/repo/match/product-identity-fence";
@@ -95,7 +96,7 @@ import {
   fieldInputFingerprintIfLive,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import { currentJobExecution } from "~/server/generic/jobs/context";
+import type { DrainContext } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
@@ -999,13 +1000,15 @@ type ProductPageOutcome =
 function inEvaluationContext<T>(
   db: Database,
   target: EvaluationPageTarget,
+  context: DrainContext,
   work: () => Promise<T>,
 ): Promise<T> {
   return withWorkflowExecution(
     {
       runId: target.evaluation.runId,
-      attempt: currentJobExecution()?.claim.generation ?? 0,
+      attempt: context.claim.generation,
       database: db,
+      job: context,
     },
     work,
   );
@@ -1224,26 +1227,13 @@ function productEvaluationPageAdapter(
 }
 
 /** One drain page's evaluated outcomes; the drain publishes them in fenced chunks. */
-export type PreparedAiRefreshPage = {
-  /** Targets with an evaluated outcome and their publication weight. */
-  ready: Map<string, { target: EvaluationPageTarget; weight: number }>;
-  /** Business writes for guarded targets; one validity/receipt per target. */
-  publish(
-    tx: Database,
-    ids: readonly string[],
-  ): Promise<EvaluationPagePublication[]>;
-  /** Per-target errors for the drain's failure mapping. */
-  failures: Map<string, unknown>;
-  /** Evidence over the per-target bound can never fit a page. */
-  oversized: Map<string, string>;
-  /** Targets past this page's evidence budget stay due for the next page. */
-  overflow: string[];
-};
+export type PreparedAiRefreshPage = PreparedEvaluationPage;
 
 /** A finite decision scope; each continuation captures its own target authority. */
 async function evaluateAiRefreshPage<P, O>(
   db: Database,
   targets: readonly EvaluationPageTarget[],
+  context: DrainContext,
   adapter: EvaluationPageAdapter<P, O>,
   stage?: (
     db: Database,
@@ -1323,7 +1313,7 @@ async function evaluateAiRefreshPage<P, O>(
   const settled = await settleDecisionWorkItems(
     ready,
     (entry) =>
-      inEvaluationContext(db, entry.target, async () => ({
+      inEvaluationContext(db, entry.target, context, async () => ({
         target: entry.target,
         evidenceDigest: entry.evidenceDigest,
         outcome: await adapter.evaluate(db, entry, usageFor(entry.target)),
@@ -1372,18 +1362,20 @@ async function evaluateAiRefreshPage<P, O>(
 export async function prepareAiRefreshPage(
   db: Database,
   targets: readonly EvaluationPageTarget[],
-  context: JobContext,
+  context: DrainContext,
   ports: AiRefreshPorts = {},
 ): Promise<PreparedAiRefreshPage> {
   if (targets.every((entry) => entry.target.kind === "connection"))
     return evaluateAiRefreshPage(
       db,
       targets,
+      context,
       connectionEvaluationPageAdapter(ports),
     );
   return evaluateAiRefreshPage(
     db,
     targets,
+    context,
     productEvaluationPageAdapter(ports),
     (database, ready) =>
       stageProductEnrollment(database, ready, context, ports),

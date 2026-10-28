@@ -3,11 +3,11 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
+import { enqueueAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import { aiEvaluationItem } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluation } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { aiEvaluationItem } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import {
   createProductIdentityFixture,
   makeProductInput,

@@ -1,8 +1,8 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, desc, eq, inArray } from "drizzle-orm";
 
-import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
-import { aiEvaluationAttemptLive } from "~/server/ai/repo/ai-evaluation-work";
+import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import { aiEvaluationAttemptLive } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import { type Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {

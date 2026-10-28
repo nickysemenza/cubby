@@ -44,7 +44,7 @@ const cursorSchema = z.object({
  */
 export const connectionDiscoveryJobHandler = defineJobHandler(
   z.object({}),
-  async (db, claim) => {
+  async (db, claim, _input, context) => {
     const activation = await readAiRefreshActivation(db);
     if (!activation?.enabled || !activation.manifest["entity-connections"])
       return { page: { done: true, result: { outcome: "disabled" } } };
@@ -62,7 +62,7 @@ export const connectionDiscoveryJobHandler = defineJobHandler(
           waitReason: jobWaitReason.enum.rate_limit,
         },
       };
-    const page = await prepareConnectionDiscoveryPage(db, {
+    const page = await prepareConnectionDiscoveryPage(context.fenced, {
       runId: previous.runId,
       replacing: previous.replacing,
       after: previous.after,

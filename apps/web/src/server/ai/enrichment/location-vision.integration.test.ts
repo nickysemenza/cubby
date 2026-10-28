@@ -9,9 +9,10 @@ import { deleteImages } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { withJobExecution } from "~/server/generic/jobs/context";
-import { claimJob } from "~/server/generic/jobs/repo/external-claim";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { claimJob } from "~/server/generic/jobs/repo/queue";
+import { claimContext } from "~/server/generic/jobs/service/jobs";
 import {
   createImageFixture,
   createLocationFixture,
@@ -80,7 +81,13 @@ describe("describeLocation previous description", () => {
       };
       await expect(
         withJobExecution(ctx.db, claim, () =>
-          describeLocation(ctx.db, location.entityId, runId, ai),
+          describeLocation(
+            ctx.db,
+            location.entityId,
+            runId,
+            ai,
+            claimContext(ctx.db, claim).fenced,
+          ),
         ),
       ).rejects.toThrow(
         change === "cancelled"
@@ -139,6 +146,7 @@ describe("describeLocation previous description", () => {
         location.entityId,
         runId,
         portSaying("Synthetic removed-photo answer"),
+        claimContext(ctx.db, claim).fenced,
       ),
     ).then(
       () => {

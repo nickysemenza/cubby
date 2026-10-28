@@ -129,6 +129,14 @@ test("repo stays off ai/ and services stay off the schema and helpers", () => {
     ),
     undefined,
   );
+  assert.equal(
+    violation(
+      `${S}/domains/run/repo/ai-work-state.ts`,
+      `${S}/ai/evaluation/repo/ai-evaluation`,
+      false,
+    ),
+    undefined,
+  );
 });
 
 test("ai/repo ranks as repo and ai/policy stays free of model code", () => {

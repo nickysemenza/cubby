@@ -83,13 +83,14 @@ import {
 } from "~/server/generic/assessment/repo/suggestion-list";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { renewJob } from "~/server/generic/jobs/repo/external-claim";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
+import { renewJob } from "~/server/generic/jobs/repo/queue";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   captureBackgroundQueue,
   withJobFixtureExecution,
 } from "~/server/testing/background-queue";
+import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
 import {
   getSourceTransactionRecordSummary,
@@ -3602,14 +3603,19 @@ describe("statement Transaction suggestions", () => {
               kind: "synthetic.no-action",
               input: {},
             },
-            async () => {
+            async (context) => {
               const owner = currentJobExecution();
               if (!owner) throw new Error("Expected real Job execution");
               if (failure === "cancelled")
                 await cancelJob(ctx.db, owner.claim.id);
-              return statementSuggestionsRepo.completeNoActionStatementPrefix(
-                ctx.db,
-                targets,
+              // Sweep steps run inside the Run's workflow, which carries the fence.
+              return withWorkflowExecution(
+                { runId: crypto.randomUUID(), attempt: 1, job: context },
+                () =>
+                  statementSuggestionsRepo.completeNoActionStatementPrefix(
+                    ctx.db,
+                    targets,
+                  ),
               );
             },
           ),
@@ -3841,14 +3847,19 @@ describe("statement Transaction suggestions", () => {
               kind: "synthetic.label-batch",
               input: {},
             },
-            async () => {
+            async (context) => {
               const owner = currentJobExecution();
               if (!owner) throw new Error("Expected real Job execution");
               if (failure === "cancelled")
                 await cancelJob(ctx.db, owner.claim.id);
-              return statementSuggestionsRepo.publishCompleteStatementLabels(
-                ctx.db,
-                entries,
+              // Sweep steps run inside the Run's workflow, which carries the fence.
+              return withWorkflowExecution(
+                { runId: crypto.randomUUID(), attempt: 1, job: context },
+                () =>
+                  statementSuggestionsRepo.publishCompleteStatementLabels(
+                    ctx.db,
+                    entries,
+                  ),
               );
             },
           ),

@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import type { DeviceBacklog } from "~/contracts/job.contract";
 import type { Database } from "~/server/db";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import { jobDue } from "~/server/generic/jobs/repo/queue";
+import { externalJobDue } from "~/server/generic/jobs/repo/external-claim";
 
 const DEVICE_LANE = "image.device";
 
@@ -33,7 +33,7 @@ export async function readDeviceBacklog(
   }>(sql`
     SELECT
       (SELECT count(*)::int FROM "Job"
-        WHERE kind = ${DEVICE_LANE} AND ${jobDue(now)}) AS waiting,
+        WHERE kind = ${DEVICE_LANE} AND ${externalJobDue(now)}) AS waiting,
       (SELECT count(DISTINCT p."runId")::int FROM "Job"
         JOIN "ImageProcessingJob" p ON "Job".key = 'image-processing:' || p.id::text
         WHERE "Job".kind = ${DEVICE_LANE}

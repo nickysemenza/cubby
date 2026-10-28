@@ -2,19 +2,21 @@ import { job } from "~/server/db/retained-tables";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
 import { pauseJob } from "~/server/generic/jobs/repo/operator";
+import { postponeWorkRefs } from "~/server/generic/jobs/repo/work-items";
+import { AI_EVALUATION_TARGET } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { run } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
-import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   advanceAiWorkRun,
   aiWorkItems,
   type AiWorkPorts,
 } from "~/server/domains/run/service/ai-work";
-import { aiEvaluationJobHandler } from "~/server/domains/run/service/ai-evaluation-drain";
+import { aiEvaluationJobHandler } from "~/server/ai/evaluation/service/ai-evaluation-drain";
+import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { reclassifyEmails } from "~/server/domains/purchase-import/service/gmail/reclassify";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { emailReclassifyResults } from "@cubby/schemas/email-actions";
@@ -65,7 +67,7 @@ export async function driveAiWork(
         return { page: { done: !pending?.length } };
       },
     },
-    "ai.evaluation": aiEvaluationJobHandler(ports),
+    "ai.evaluation": aiEvaluationJobHandler(runAiEvaluationExecution(ports)),
   };
   for (let cycle = 0; cycle < 205; cycle++) {
     const [execution] = await getDb(db)
@@ -105,13 +107,19 @@ export async function driveAiWork(
               ports.sweep.pauseAfter - (items.length - pending.length),
             ),
           );
-    const drains = await getDb(db).execute<{ drain: string }>(sql`
-      UPDATE "WorkItem"
-         SET "readyAt" = CASE WHEN ref = ANY(${uuidArrayParam(released.map((item) => item.id))})
-           THEN now() ELSE now() + interval '1 hour' END
-       WHERE target = 'ai.evaluation' AND ref = ANY(${uuidArrayParam(pending.map((item) => item.id))})
-      RETURNING drain`);
-    for (const key of new Set(drains.rows.map((row) => row.drain))) {
+    const drains = await postponeWorkRefs(
+      db,
+      AI_EVALUATION_TARGET,
+      pending.map((item) => item.id),
+      new Date(Date.now() + 60 * 60_000),
+    );
+    await postponeWorkRefs(
+      db,
+      AI_EVALUATION_TARGET,
+      released.map((item) => item.id),
+      new Date(),
+    );
+    for (const key of drains) {
       const [target] = await getDb(db)
         .select()
         .from(job)

@@ -4,11 +4,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { describeJobWaitingOn } from "@cubby/schemas/job";
 import { inArray } from "drizzle-orm";
 
-import {
-  databaseForTransaction,
-  isTransaction,
-  unwrapDb,
-} from "~/server/db/helpers";
+import { unwrapDb } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
 import { resolveEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
@@ -60,12 +56,7 @@ const read = {
     runId: { kind: "lookup", missing: "null", includeDeleted: true },
   },
   bindings: (bind) => {
-    const waiting = bind.batch(({ db, rows }) =>
-      loadJobWaitingOn(
-        isTransaction(db) ? databaseForTransaction(db) : db,
-        rows,
-      ),
-    );
+    const waiting = bind.batch(async ({ rows }) => loadJobWaitingOn(rows));
     const subjects = bind.batch(async ({ db, rows }) => {
       const [images, locations] = await Promise.all([
         lookupEntityReferences(

@@ -19,9 +19,10 @@ import {
 } from "~/server/domains/image/service/image-metadata-extraction.service";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { withJobExecution } from "~/server/generic/jobs/context";
-import { claimJob } from "~/server/generic/jobs/repo/external-claim";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { claimJob } from "~/server/generic/jobs/repo/queue";
+import { claimContext } from "~/server/generic/jobs/service/jobs";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 // ---------------------------------------------------------------------------
@@ -213,7 +214,12 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
       };
       await expect(
         withJobExecution(ctx.db, claim, () =>
-          extractAndStoreImageMetadata(ctx.db, imageId, ports),
+          extractAndStoreImageMetadata(
+            ctx.db,
+            imageId,
+            ports,
+            claimContext(ctx.db, claim).fenced,
+          ),
         ),
       ).rejects.toThrow(
         change === "cancelled"

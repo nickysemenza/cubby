@@ -10,8 +10,10 @@ import { JobSupersededError } from "~/server/generic/jobs/errors";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
 import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
 import {
+  assertJobClaim,
   claimJob,
   dueJobs,
+  fenceJob,
   failJob,
   fencedJobTransaction,
   pauseClaimedJob,
@@ -50,6 +52,22 @@ export function defineJobHandler<S extends z.ZodType>(
   return {
     prepare: (db, claim, context) =>
       prepare(db, claim, schema.parse(claim.input), context),
+  };
+}
+
+/** The fences a claim lends its page; the executor and Job fixtures build it the same way. */
+export function claimContext(
+  db: Database,
+  claim: JobClaim,
+  signal: AbortSignal = new AbortController().signal,
+): JobContext & { claim: JobClaim } {
+  return {
+    claim,
+    signal,
+    fenced: (work, options) =>
+      fencedJobTransaction(db, claim, work, options?.isolationLevel),
+    fence: (tx) => fenceJob(tx, claim),
+    check: () => assertJobClaim(db, claim),
   };
 }
 
@@ -113,11 +131,7 @@ async function executeClaim(
         renewing = undefined;
       });
   }, JOB_HEARTBEAT_MS);
-  const context: JobContext = {
-    signal: lease.signal,
-    fenced: (work, options) =>
-      fencedJobTransaction(db, claimed, work, options?.isolationLevel),
-  };
+  const context = claimContext(db, claimed, lease.signal);
   try {
     const prepared = await withJobExecution(
       db,

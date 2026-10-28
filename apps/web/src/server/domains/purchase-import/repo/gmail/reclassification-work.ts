@@ -7,9 +7,9 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { enqueueAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import { aiEvaluationAttemptLive } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
-import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
-import { aiEvaluationAttemptLive } from "~/server/ai/repo/ai-evaluation-work";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { aiEvaluation, email, run } from "~/server/db/schema";

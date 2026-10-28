@@ -14,12 +14,12 @@ import {
   imageProcessingAttempt,
   imageProcessingJob,
 } from "~/server/db/schema";
+import { readDeviceBacklog } from "~/server/domains/image-processing/repo/device-backlog";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
-import { readDeviceBacklog } from "~/server/generic/jobs/repo/device-backlog";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {

@@ -7,7 +7,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
+import { enqueueAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import { type Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {

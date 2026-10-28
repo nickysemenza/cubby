@@ -6,13 +6,12 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { job, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { withJobExecution } from "~/server/generic/jobs/context";
-import {
-  claimJob,
-  publishJobPage,
-} from "~/server/generic/jobs/repo/external-claim";
 import { pauseJob } from "~/server/generic/jobs/repo/operator";
+import { claimJob, publishJobPage } from "~/server/generic/jobs/repo/queue";
+import { claimContext } from "~/server/generic/jobs/service/jobs";
 
 import { controlWorkflowRun } from "./control";
+import { withWorkflowExecution } from "./execution";
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
 
 describe("Run Job admission", () => {
@@ -84,19 +83,35 @@ describe("Run Job admission", () => {
     if (!claim) throw new Error("Missing claim");
     await expect(
       withJobExecution(ctx.db, claim, () =>
-        recordRunProgress(ctx.db, id, "working", "Synthetic page", {
-          attempt: claim.generation,
-          sequence: 1,
-        }),
+        withWorkflowExecution(
+          {
+            runId: id,
+            attempt: claim.generation,
+            job: claimContext(ctx.db, claim),
+          },
+          () =>
+            recordRunProgress(ctx.db, id, "working", "Synthetic page", {
+              attempt: claim.generation,
+              sequence: 1,
+            }),
+        ),
       ),
     ).resolves.toEqual({ recorded: true });
     await pauseJob(ctx.db, execution.id);
     await expect(
       withJobExecution(ctx.db, claim, () =>
-        recordRunProgress(ctx.db, id, "late", "Synthetic stale page", {
-          attempt: claim.generation,
-          sequence: 2,
-        }),
+        withWorkflowExecution(
+          {
+            runId: id,
+            attempt: claim.generation,
+            job: claimContext(ctx.db, claim),
+          },
+          () =>
+            recordRunProgress(ctx.db, id, "late", "Synthetic stale page", {
+              attempt: claim.generation,
+              sequence: 2,
+            }),
+        ),
       ),
     ).rejects.toThrow("Job generation or lease is obsolete");
     const [owner] = await getDb(ctx.db)

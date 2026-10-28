@@ -15,7 +15,8 @@ import { getDb } from "~/server/db/helpers";
 import { aiEvaluation, job, run, task } from "~/server/db/schema";
 import { claimDerivedDiscovery } from "~/server/domains/run/repo/derived-discovery";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
-import { claimJob } from "~/server/generic/jobs/repo/external-claim";
+import { claimJob } from "~/server/generic/jobs/repo/queue";
+import { claimContext } from "~/server/generic/jobs/service/jobs";
 
 import { SUPERSEDED_RUN_FAILURE } from "./ai-refresh-state";
 import * as discoveryRepo from "./connection-refresh";
@@ -482,7 +483,7 @@ describe("connection discovery pacing", () => {
         ...claim,
         cursor: { after: null, runId: cancelled },
       },
-      fromPartial({ signal: new AbortController().signal }),
+      claimContext(ctx.db, claim),
     );
     expect(prepared.page).toMatchObject({
       done: false,

@@ -8,7 +8,8 @@ import { job, workItem } from "~/server/db/retained-tables";
 import { defineDrain } from "../service/drain";
 import { advanceJob } from "../service/jobs";
 import { enqueueJob } from "./producer";
-import { claimWork, markWork } from "./work-items";
+import { claimWork } from "./work-claims";
+import { markWork } from "./work-items";
 
 describe("generic WorkItems", () => {
   const ctx = withTestDb();
@@ -170,5 +171,82 @@ describe("generic WorkItems", () => {
         .from(workItem)
         .where(inArray(workItem.ref, [...sqlStates.keys()])),
     ).toEqual([]);
+  });
+
+  it("keeps items the lock declines, backs off a long failure without overflow, then idles", async () => {
+    const { drain, jobId } = await createDrain("synthetic.work-lock");
+    const [published, declined, failing] = [
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+    ];
+    await markWork(
+      ctx.db,
+      drain,
+      [published, declined, failing].map((ref) => ({
+        target: "synthetic",
+        ref,
+      })),
+    );
+    await getDb(ctx.db)
+      .update(workItem)
+      .set({ attempts: 60 })
+      .where(eq(workItem.ref, failing));
+    const publishedRefs: string[] = [];
+    let idled = 0;
+    const handler = defineDrain({
+      limit: 10,
+      prepare: async (_db, items) => ({
+        prepared: null,
+        failed: new Map(
+          items
+            .filter((item) => item.ref === failing)
+            .map((item) => [item, new Error("Synthetic compute failure")]),
+        ),
+      }),
+      // A busy source (another writer's lock) leaves its item for a later page.
+      lock: async (_tx, items) => items.filter((item) => item.ref !== declined),
+      publish: async (_tx, items) => {
+        publishedRefs.push(...items.map((item) => item.ref));
+      },
+      idle: async () => {
+        idled++;
+      },
+    });
+    const handlers = { [drain.kind]: handler };
+
+    await expect(advanceJob(ctx.db, jobId, handlers)).resolves.toBe(
+      "succeeded",
+    );
+    expect(publishedRefs).toEqual([published]);
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(workItem)
+      .where(eq(workItem.drain, drain.key));
+    expect(rows.find((row) => row.ref === declined)).toMatchObject({
+      attempts: 0,
+      lastError: null,
+    });
+    const backedOff = rows.find((row) => row.ref === failing);
+    expect(backedOff).toMatchObject({
+      attempts: 61,
+      lastError: expect.stringContaining("Synthetic compute failure"),
+    });
+    // The server kind's 60 s cap, not 2^60 times the base.
+    expect(backedOff!.readyAt.getTime()).toBeLessThanOrEqual(
+      Date.now() + 65_000,
+    );
+    expect(rows.map((row) => row.ref)).not.toContain(published);
+    expect(idled).toBe(0);
+
+    await getDb(ctx.db).delete(workItem).where(eq(workItem.drain, drain.key));
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(0) })
+      .where(eq(job.id, jobId));
+    await expect(advanceJob(ctx.db, jobId, handlers)).resolves.toBe(
+      "succeeded",
+    );
+    expect(idled).toBe(1);
   });
 });

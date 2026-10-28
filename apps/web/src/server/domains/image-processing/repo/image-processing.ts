@@ -82,6 +82,11 @@ import {
   preferredImageDescriptionPolicy,
 } from "~/server/domains/image-processing/repo/description-policy";
 import {
+  deviceBackfillTurn,
+  lockDeviceAdmission,
+  type DeviceAdmission,
+} from "~/server/domains/image-processing/repo/device-admission";
+import {
   imageRepresentationRowsSql,
   imageRepresentationRow,
   imageRepresentationsFromRows,
@@ -93,19 +98,20 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobSupersededError } from "~/server/generic/jobs/errors";
 import {
-  deviceBackfillTurn,
-  lockDeviceAdmission,
-  type DeviceAdmission,
-} from "~/server/generic/jobs/repo/device-admission";
-import {
-  claimJob,
-  externalJobClaim,
-  publishJobPage,
-  failJob,
-  releaseJobClaim,
-  assertJobClaim,
-  jobRunOwned,
-  type JobClaim,
+  assertExternalClaim,
+  claimExternal,
+  endExternalWaits,
+  externalLeaseHeld,
+  externalRunOwned,
+  failExternalClaim,
+  heldExternalClaim,
+  rearmExternalLeases,
+  releaseExternalClaim,
+  renewExternalLease,
+  restartExternalJobs,
+  retireExternalJobs,
+  settleExternalClaim,
+  type ExternalClaim,
 } from "~/server/generic/jobs/repo/external-claim";
 import { retryJobsNow } from "~/server/generic/jobs/repo/operator";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
@@ -565,24 +571,9 @@ export async function retireObsoleteImageProcessingJobs(
   const ids = result.rows.map((row) => row.id);
   if (!ids.length) return 0;
   if (!scoped)
-    await dbc
-      .update(durableJob)
-      .set({
-        state: "completed",
-        generation: sql`${durableJob.generation} + 1`,
-        result: { outcome: "skipped" },
-        waitReason: null,
-        waitUntil: null,
-        leaseToken: null,
-        leaseExpiresAt: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          inArray(durableJob.key, ids.map(imageProcessingJobKey)),
-          inArray(durableJob.state, ["queued", "retry_wait", "running"]),
-        ),
-      );
+    await retireExternalJobs(db, ids.map(imageProcessingJobKey), {
+      outcome: "skipped",
+    });
   await recordChange(db, {
     kind: "projection",
     categories: ["imageJob"],
@@ -678,7 +669,7 @@ export async function claimImageProcessingJob(
           throw new Error(
             "Image processing requires its own universal Job claim",
           );
-        await assertJobClaim(
+        await assertExternalClaim(
           databaseForTransaction(tx),
           currentExecution.claim,
           "update",
@@ -768,8 +759,8 @@ export async function claimImageProcessingJob(
               runOwned === undefined
                 ? undefined
                 : runOwned
-                  ? jobRunOwned()
-                  : not(jobRunOwned()),
+                  ? externalRunOwned()
+                  : not(externalRunOwned()),
               inArray(imageProcessingJob.kind, [...input.kinds]),
               eq(imageProcessingJob.state, "pending"),
               currentImageProcessingProcessor(),
@@ -825,7 +816,11 @@ export async function claimImageProcessingJob(
           )
           .orderBy(
             ...(devicePull
-              ? [backfillTurn ? asc(jobRunOwned()) : desc(jobRunOwned())]
+              ? [
+                  backfillTurn
+                    ? asc(externalRunOwned())
+                    : desc(externalRunOwned()),
+                ]
               : []),
             ...(ranOnThisDevice ? [asc(ranOnThisDevice)] : []),
             asc(durableJob.availableAt),
@@ -861,7 +856,7 @@ export async function claimImageProcessingJob(
 
       const execution =
         currentExecution?.claim ??
-        (await claimJob(
+        (await claimExternal(
           databaseForTransaction(tx),
           candidate.executionId,
           input.leaseMs,
@@ -959,28 +954,16 @@ export async function finalizeCompanionImageLeases(
   const now = new Date();
   const expires = new Date(now.getTime() + input.leaseMs);
   if (!input.claims.length) return expires;
-  const renewed = await getDb(db)
-    .update(durableJob)
-    .set({
-      leaseExpiresAt: expires,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(durableJob.kind, "image.device"),
-        eq(durableJob.state, "running"),
-        or(
-          ...input.claims.map((claim) =>
-            and(
-              eq(durableJob.key, imageProcessingJobKey(claim.jobId)),
-              eq(durableJob.leaseToken, claim.attemptId),
-            ),
-          ),
-        ),
-      ),
-    )
-    .returning({ id: durableJob.id });
-  if (renewed.length !== input.claims.length)
+  const renewed = await rearmExternalLeases(
+    db,
+    "image.device",
+    input.claims.map((claim) => ({
+      key: imageProcessingJobKey(claim.jobId),
+      leaseToken: claim.attemptId,
+    })),
+    expires,
+  );
+  if (renewed !== input.claims.length)
     throw new Error(
       "Companion image batch lost a prepared lease before hand-off",
     );
@@ -993,7 +976,10 @@ export async function finalizeCompanionImageLeases(
  * adopted rather than dropped; a reclaim replaces the token atomically.
  */
 const attemptOwnsExecution = (attemptId: string) =>
-  sql<boolean>`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${attemptId}::uuid)`;
+  externalLeaseHeld(
+    sql`'image-processing:' || ${imageProcessingJob.id}::text`,
+    sql`${attemptId}::uuid`,
+  );
 
 /** Read the one output key bound to the current attempt before validating its bytes. */
 export async function getLeasedImageProcessingOutputKey(
@@ -1083,7 +1069,7 @@ export async function releaseImageProcessingLease(
   },
 ): Promise<boolean> {
   return withTransaction(db, async (tx) => {
-    const execution = await externalJobClaim(
+    const execution = await heldExternalClaim(
       tx,
       imageProcessingJobKey(input.jobId),
       input.attemptId,
@@ -1127,7 +1113,7 @@ export async function releaseImageProcessingLease(
           eq(imageProcessingAttempt.state, "running"),
         ),
       );
-    await releaseJobClaim(databaseForTransaction(tx), execution, {
+    await releaseExternalClaim(databaseForTransaction(tx), execution, {
       availableAt: new Date(Date.now() + (input.delayMs ?? 0)),
     });
     // Released device work goes to another companion: ring at once, and
@@ -1311,25 +1297,7 @@ export async function repairImageProcessingExecution(
       )!,
     );
     // A finished or paused execution of open work restarts too.
-    await getDb(db)
-      .update(durableJob)
-      .set({
-        state: "queued",
-        attempts: 0,
-        generation: sql`${durableJob.generation} + 1`,
-        availableAt: new Date(),
-        waitReason: null,
-        waitUntil: null,
-        leaseToken: null,
-        leaseExpiresAt: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          inArray(durableJob.key, keys),
-          inArray(durableJob.state, ["completed", "paused"]),
-        ),
-      );
+    await restartExternalJobs(db, keys);
     for (const row of stranded) await enqueueImageProcessingExecution(db, row);
   }
   return {
@@ -1349,18 +1317,12 @@ export async function bringImageProcessingForward(
   db: Database,
   imageId: ImageId,
 ) {
-  await getDb(db)
-    .update(durableJob)
-    .set({ availableAt: new Date(), waitReason: null, waitUntil: null })
-    .where(
-      and(
-        eq(durableJob.subjectKind, "image"),
-        eq(durableJob.subjectId, imageId),
-        inArray(durableJob.kind, ["image.cloud", "image.device"]),
-        eq(durableJob.state, "queued"),
-        eq(durableJob.waitReason, "device"),
-      ),
-    );
+  await endExternalWaits(
+    db,
+    { kind: "image", id: imageId },
+    ["image.cloud", "image.device"],
+    "device",
+  );
 }
 
 type DescriptionAnalysisIdentity = {
@@ -1477,10 +1439,10 @@ async function settleImageProcessingFailure(
   input: {
     reason: string;
     set: Partial<typeof imageProcessingJob.$inferInsert>;
-    execution: JobClaim;
+    execution: ExternalClaim;
   },
 ): Promise<void> {
-  await failJob(
+  await failExternalClaim(
     databaseForTransaction(tx),
     input.execution,
     new Error(input.reason),
@@ -1498,7 +1460,7 @@ async function adoptFailedCompletion(
   tx: DrizzleTransaction,
   job: CompletionJob,
   input: CompletionInput,
-  execution: JobClaim,
+  execution: ExternalClaim,
 ): Promise<boolean> {
   const outcome = input.result.outcome;
   if (outcome.status !== "failed") return false;
@@ -1635,7 +1597,7 @@ export async function completeImageProcessingJob(
   const completion = await withTransaction(db, async (tx) => {
     // A result after lease expiry is still adopted while no newer attempt
     // has claimed the Job (the token is unchanged).
-    const execution = await externalJobClaim(
+    const execution = await heldExternalClaim(
       tx,
       imageProcessingJobKey(input.result.jobId),
       input.result.attemptId,
@@ -1742,7 +1704,7 @@ export async function completeImageProcessingJob(
       details: outcome,
     });
     if (outcome.status !== "failed") {
-      const published = await publishJobPage(
+      const published = await settleExternalClaim(
         databaseForTransaction(tx),
         execution,
         {
@@ -2156,7 +2118,7 @@ export async function renewAssignedImageProcessingLease(
   | { ok: false; reason: "lease_lost" | "job_obsolete" }
 > {
   return withTransaction(db, async (tx) => {
-    const execution = await externalJobClaim(
+    const execution = await heldExternalClaim(
       tx,
       imageProcessingJobKey(input.jobId),
       input.attemptId,
@@ -2182,26 +2144,12 @@ export async function renewAssignedImageProcessingLease(
         ),
       );
     if (!source) return { ok: false as const, reason: "job_obsolete" as const };
-    const [renewed] = await tx
-      .update(durableJob)
-      .set({
-        leaseExpiresAt: new Date(Date.now() + DEVICE_LEASE_RENEWAL_MS),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(durableJob.id, execution.id),
-          eq(durableJob.state, "running"),
-          eq(durableJob.leaseToken, input.attemptId),
-          eq(durableJob.generation, execution.generation),
-        ),
-      )
-      .returning({ leaseExpiresAt: durableJob.leaseExpiresAt });
-    if (!renewed?.leaseExpiresAt)
-      return { ok: false as const, reason: "lease_lost" as const };
-    return {
-      ok: true as const,
-      leaseExpiresAt: renewed.leaseExpiresAt.toISOString(),
-    };
+    const renewed = await renewExternalLease(
+      databaseForTransaction(tx),
+      { ...execution, leaseToken: input.attemptId },
+      new Date(Date.now() + DEVICE_LEASE_RENEWAL_MS),
+    );
+    if (!renewed) return { ok: false as const, reason: "lease_lost" as const };
+    return { ok: true as const, leaseExpiresAt: renewed.toISOString() };
   });
 }

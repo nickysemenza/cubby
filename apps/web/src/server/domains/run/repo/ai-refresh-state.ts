@@ -28,8 +28,8 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import { evaluationSlotKey } from "~/server/ai/repo/ai-evaluation-requests";
-import { markAiEvaluationWork } from "~/server/ai/repo/ai-evaluation-work";
+import { evaluationSlotKey } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import { markAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type { Database } from "~/server/db";
 import {
   getDb,

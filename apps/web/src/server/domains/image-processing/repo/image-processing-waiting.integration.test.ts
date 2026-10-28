@@ -99,7 +99,7 @@ describe("device work waits parked and records no attempt", () => {
     expect(afterDrain).toMatchObject({ state: "queued", attempts: 0 });
     expect(await attemptsOf(jobId)).toHaveLength(0);
     expect((await jobOf(jobId)).attempts).toBe(0);
-    const waiting = await loadJobWaitingOn(ctx.db, [execution]);
+    const waiting = loadJobWaitingOn([execution]);
     expect(waiting.get(execution.id)).toMatchObject({
       reason: "waiting_device",
       lane: "apple_device",

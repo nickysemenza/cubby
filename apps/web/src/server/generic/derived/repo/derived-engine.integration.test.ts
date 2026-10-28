@@ -8,8 +8,9 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { seedEntity, TEST_ACTOR, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import type { Database } from "~/server/db";
 import {
   getDb,
   databaseForTransaction,
@@ -40,20 +41,29 @@ import {
   publishAssessment,
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
+import * as changes from "~/server/generic/changes/repo/change";
 import { derivedSink } from "~/server/generic/derived/repo/compute";
 import {
-  claimDerivedMarks,
+  DERIVED_DRAIN_JOB_KEY,
   markAllStoredDerived,
-  prepareDerivedPage,
-  publishDerivedPage,
 } from "~/server/generic/derived/repo/drain";
 import { explainLiveDerived } from "~/server/generic/derived/repo/explain";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { attachLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { withJobExecution } from "~/server/generic/jobs/context";
-import { claimJob } from "~/server/generic/jobs/repo/external-claim";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { claimJob } from "~/server/generic/jobs/repo/queue";
+import {
+  drainItems,
+  dropWork,
+  lockWork,
+  workItemStates,
+} from "~/server/generic/jobs/repo/work-items";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  drainDerivedPage,
+  drainStoredDerived,
+} from "~/server/testing/background-queue";
 import {
   makeLocationInput,
   makeProductInput,
@@ -108,30 +118,25 @@ describe("stored derived values", () => {
     );
     return parseEntityId("inventory", await resolved(entry.id, "inventory"));
   };
+  const pending = (db: Database = ctx.db) =>
+    drainItems(db, DERIVED_DRAIN_JOB_KEY);
   const marks = async (target: string) =>
-    (
-      await getDb(ctx.db).execute(
-        sql`SELECT ref::text AS ref FROM "WorkItem" WHERE target = ${target} ORDER BY ref`,
-      )
-    ).rows.map((row) => String((row as { ref: string }).ref));
+    (await pending())
+      .filter((item) => item.target === target)
+      .map((item) => item.ref)
+      .sort();
   const fanoutMarks = async (target: string) =>
-    (
-      await getDb(ctx.db).execute(
-        sql`SELECT target, ref::text AS ref FROM "WorkItem" WHERE target LIKE ${`${target}@%`}`,
-      )
-    ).rows.map((row) => ({
-      target: String((row as { target: string }).target),
-      ref: String((row as { ref: string }).ref),
-    }));
-  const drain = async () => {
-    for (let page = 0; page < 20; page++) {
-      const claimed = await claimDerivedMarks(ctx.db);
-      if (claimed.length === 0) return;
-      const plan = await prepareDerivedPage(ctx.db, derivedComputes, claimed);
-      await publishDerivedPage(ctx.db, plan);
-    }
-    throw new Error("Derived drain did not settle");
+    (await pending())
+      .filter((item) => item.target.startsWith(`${target}@`))
+      .map(({ target, ref }) => ({ target, ref }));
+  const failure = async (target: string, ref: string) =>
+    (await workItemStates(ctx.db, target, [ref]))[0];
+  // Isolate source capture from fixture creation, without invoking compute adapters.
+  const clearMarks = async () => {
+    for (const item of await pending())
+      await dropWork(ctx.db, item.target, [item.ref]);
   };
+  const drain = () => drainStoredDerived(ctx.db);
   const valuation = async (id: InventoryId) =>
     (await loadStoredDerived(ctx.db, "inventory", [id], ["valuation"]))
       .get(id)
@@ -243,8 +248,7 @@ describe("stored derived values", () => {
   it("claims newer member edits before older background source writes without demoting member work", async () => {
     const background = await makeProduct("Synthetic background source", 2);
     const member = await makeProduct("Synthetic member source", 3);
-    // Isolate source capture from fixture creation, without invoking compute adapters.
-    await getDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
+    await clearMarks();
     const saved = await enqueueJob(ctx.db, {
       key: "synthetic:derived-source-priority",
       kind: "image.cloud",
@@ -259,31 +263,29 @@ describe("stored derived values", () => {
     await withJobExecution(ctx.db, claim, () =>
       rename(background, "Synthetic background source changed"),
     );
-    const backgroundMarks = await claimDerivedMarks(ctx.db);
+    const backgroundMarks = await pending();
     expect(backgroundMarks.length).toBeGreaterThan(0);
     expect(
       backgroundMarks.map(({ target, priority }) => ({ target, priority })),
     ).toEqual(backgroundMarks.map(({ target }) => ({ target, priority: 1 })));
 
     await rename(member, "Synthetic member source changed");
-    expect((await claimDerivedMarks(ctx.db, 1))[0]?.ref).toBe(member);
+    expect((await pending())[0]?.ref).toBe(member);
     await withJobExecution(ctx.db, claim, () =>
       rename(member, "Synthetic background follow-up"),
     );
     expect(
-      (await claimDerivedMarks(ctx.db))
+      (await pending())
         .filter((mark) => mark.ref === member)
         .every((mark) => mark.priority === 0),
     ).toBe(true);
     await rename(background, "Synthetic member promotion");
-    expect(
-      (await claimDerivedMarks(ctx.db)).every((mark) => mark.priority === 0),
-    ).toBe(true);
+    expect((await pending()).every((mark) => mark.priority === 0)).toBe(true);
   });
 
   it("keeps caller-owned member transactions at member priority inside a Job scope", async () => {
     const item = await makeProduct("Synthetic nested priority", 2);
-    await getDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
+    await clearMarks();
     const saved = await enqueueJob(ctx.db, {
       key: "synthetic:derived-nested-priority",
       kind: "image.cloud",
@@ -302,14 +304,14 @@ describe("stored derived values", () => {
         ),
       );
     });
-    const pending = await claimDerivedMarks(ctx.db);
-    expect(pending.length).toBeGreaterThan(0);
-    expect(pending.every((mark) => mark.priority === 0)).toBe(true);
+    const nested = await pending();
+    expect(nested.length).toBeGreaterThan(0);
+    expect(nested.every((mark) => mark.priority === 0)).toBe(true);
   });
 
   it("inherits background priority through savepoints and clears it after rollback", async () => {
     const item = await makeProduct("Synthetic batch priority", 2);
-    await getDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
+    await clearMarks();
     await expect(
       withJobExecution(fromPartial({}), fromPartial({}), () =>
         withTransaction(ctx.db, async (outer) => {
@@ -320,61 +322,23 @@ describe("stored derived values", () => {
               .set({ name: "Synthetic batch change" })
               .where(eq(product.id, item)),
           );
-          const pending = await claimDerivedMarks(db);
-          expect(pending.length).toBeGreaterThan(0);
-          expect(pending.every((mark) => mark.priority === 1)).toBe(true);
+          const batch = await pending(db);
+          expect(batch.length).toBeGreaterThan(0);
+          expect(batch.every((mark) => mark.priority === 1)).toBe(true);
           throw new Error("Synthetic batch rollback");
         }),
       ),
     ).rejects.toThrow("Synthetic batch rollback");
-    expect(await claimDerivedMarks(ctx.db)).toEqual([]);
+    expect(await pending()).toEqual([]);
     await withTransaction(ctx.db, (tx) =>
       tx
         .update(product)
         .set({ name: "Synthetic member after rollback" })
         .where(eq(product.id, item)),
     );
-    const pending = await claimDerivedMarks(ctx.db);
-    expect(pending.length).toBeGreaterThan(0);
-    expect(pending.every((mark) => mark.priority === 0)).toBe(true);
-  });
-
-  it("backs off a long-failing target without overflowing the delay", async () => {
-    const beans = await makeProduct("Synthetic failing beans", 2);
-    await drain();
-    await getDb(ctx.db).execute(sql`
-      INSERT INTO "WorkItem" (target, ref, priority, attempts)
-      VALUES ('product.price', ${beans}, 0, 60)
-      ON CONFLICT (target, ref) DO UPDATE SET attempts = 60`);
-    const failing = {
-      ...derivedComputes,
-      "product.price": async () => {
-        throw new Error(`Synthetic query wrapper ${"x".repeat(2200)}`, {
-          cause: new Error("Synthetic compute failure"),
-        });
-      },
-    };
-    await publishDerivedPage(
-      ctx.db,
-      await prepareDerivedPage(
-        ctx.db,
-        failing,
-        await claimDerivedMarks(ctx.db),
-      ),
-    );
-    const [row] = (
-      await getDb(ctx.db).execute(sql`
-        SELECT attempts, "lastError", "readyAt" <= now() + interval '15 minutes' AS bounded
-          FROM "WorkItem" WHERE target = 'product.price' AND ref = ${beans}`)
-    ).rows;
-    expect(row).toMatchObject({
-      attempts: 61,
-      lastError: expect.stringContaining("Synthetic compute failure"),
-      bounded: true,
-    });
-    expect(row).toMatchObject({
-      lastError: expect.stringContaining("Synthetic query wrapper"),
-    });
+    const member = await pending();
+    expect(member.length).toBeGreaterThan(0);
+    expect(member.every((mark) => mark.priority === 0)).toBe(true);
   });
 
   it("rings readers with the shortcodes of the records it published", async () => {
@@ -383,28 +347,31 @@ describe("stored derived values", () => {
       makeProductInput({ name: "Synthetic ringing beans", price: 2 }),
       TEST_ACTOR,
     );
-    const publication = await publishDerivedPage(
-      ctx.db,
-      await prepareDerivedPage(
-        ctx.db,
-        derivedComputes,
-        await claimDerivedMarks(ctx.db),
-      ),
-    );
-    expect(publication.categories).toContain("product");
-    expect(publication.changes.product).toContain(created.id);
+    const recorded = vi.spyOn(changes, "recordChange");
+    try {
+      await drain();
+      expect(recorded).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          kind: "projection",
+          categories: expect.arrayContaining(["product"]),
+          changes: expect.objectContaining({
+            product: expect.arrayContaining([created.id]),
+          }),
+        }),
+      );
+    } finally {
+      recorded.mockRestore();
+    }
   });
 
   it("backs off a malformed decision while publishing other value targets", async () => {
     const beans = await makeProduct("Synthetic invalid decision", 2);
-    const claimed = (await claimDerivedMarks(ctx.db)).filter(
-      (mark) =>
+    await drainDerivedPage(ctx.db, {
+      only: (mark) =>
         mark.target === "product.price" ||
         mark.target === "product.ledgerExpectedQuantity",
-    );
-    const plan = await prepareDerivedPage(
-      ctx.db,
-      {
+      computes: {
         ...derivedComputes,
         "product.price": async () =>
           new Map([
@@ -421,12 +388,7 @@ describe("stored derived values", () => {
             ],
           ]),
       },
-      claimed,
-    );
-    expect(plan.failed.get("product.price")).toContain(
-      "Derived outcome does not match",
-    );
-    await publishDerivedPage(ctx.db, plan);
+    });
     const stored = await loadStoredDerived(
       ctx.db,
       "product",
@@ -436,12 +398,7 @@ describe("stored derived values", () => {
     expect(stored.get(beans)?.get("price")?.resultExists).toBe(false);
     expect(stored.get(beans)?.get("ledgerExpectedQuantity")?.value).toBe(0);
     expect(await marks("product.ledgerExpectedQuantity")).not.toContain(beans);
-    const [failure] = (
-      await getDb(ctx.db).execute(sql`
-      SELECT attempts, "lastError" FROM "WorkItem" WHERE target = 'product.price' AND ref = ${beans}
-    `)
-    ).rows;
-    expect(failure).toMatchObject({
+    expect(await failure("product.price", beans)).toMatchObject({
       attempts: 1,
       lastError: expect.stringContaining("Derived outcome does not match"),
     });
@@ -465,31 +422,14 @@ describe("stored derived values", () => {
           },
         }),
       };
-      for (let page = 0; page < 20; page++) {
-        const claimed = await claimDerivedMarks(ctx.db);
-        if (claimed.every((mark) => mark.target === "product.searchDocument"))
-          break;
-        await publishDerivedPage(
-          ctx.db,
-          await prepareDerivedPage(ctx.db, rejecting, claimed),
-        );
-      }
+      // Failed items back off, so the drain settles with them pending.
+      await drainStoredDerived(ctx.db, 1_000, rejecting);
       expect((await valuation(entry))?.value).toBe(6);
-      const [failed] = (
-        await getDb(ctx.db).execute(sql`
-        SELECT attempts, "lastError" FROM "WorkItem"
-         WHERE target = 'product.searchDocument' AND ref = ${beans}`)
-      ).rows;
-      expect(failed).toMatchObject({
+      expect(await failure("product.searchDocument", beans)).toMatchObject({
         attempts: 1,
         lastError: expect.stringContaining("invalid input syntax"),
       });
-      const [rejectedValue] = (
-        await unwrapDb(ctx.db).execute(sql`
-      SELECT attempts, "lastError" FROM "WorkItem"
-       WHERE target = 'product.price' AND ref = ${beans}`)
-      ).rows;
-      expect(rejectedValue).toMatchObject({
+      expect(await failure("product.price", beans)).toMatchObject({
         attempts: 1,
         lastError: expect.stringContaining("SyntheticPriceRejected"),
       });
@@ -548,14 +488,11 @@ describe("stored derived values", () => {
       await held;
     });
     await rowLocked;
-    const claimed = (await claimDerivedMarks(ctx.db)).filter(
-      (mark) => mark.target === "recipe.totals",
-    );
-    expect(claimed.map((mark) => mark.ref)).toContain(recipeId);
-    await publishDerivedPage(
-      ctx.db,
-      await prepareDerivedPage(ctx.db, rowWriting, claimed),
-    );
+    expect(await marks("recipe.totals")).toContain(recipeId);
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target === "recipe.totals",
+      computes: rowWriting,
+    });
     // The locked record was skipped, not waited on; its mark stays pending.
     expect(await marks("recipe.totals")).toContain(recipeId);
     release();
@@ -581,24 +518,15 @@ describe("stored derived values", () => {
       .update(product)
       .set({ deletedAt: new Date() })
       .where(eq(product.id, removed));
-    const plan = await prepareDerivedPage(
-      ctx.db,
-      derivedComputes,
-      (await claimDerivedMarks(ctx.db)).filter(
-        (mark) =>
-          mark.target === "product.price" ||
-          mark.target === "product.ledgerExpectedQuantity",
-      ),
-    );
-    expect(
-      plan.marks.filter((mark) => mark.target === "product.price"),
-    ).toHaveLength(3);
     const locked = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
+    // Another writer holds the busy item; publication skips it, never waits.
     const writer = withTransaction(ctx.db, async (tx) => {
-      await tx.execute(
-        sql`SELECT ref FROM "WorkItem" WHERE target = 'product.price' AND ref = ${busy}::uuid FOR UPDATE`,
+      const held = await lockWork(
+        databaseForTransaction(tx),
+        await workItemStates(ctx.db, "product.price", [busy]),
       );
+      expect(held).toHaveLength(1);
       locked.resolve();
       await release.promise;
     });
@@ -611,9 +539,10 @@ describe("stored derived values", () => {
         ["price", "ledgerExpectedQuantity"],
       );
     try {
-      await withTransaction(ctx.db, async (tx) => {
-        await tx.execute(sql`SET LOCAL statement_timeout = '500ms'`);
-        await publishDerivedPage(databaseForTransaction(tx), plan);
+      await drainDerivedPage(ctx.db, {
+        only: (mark) =>
+          mark.target === "product.price" ||
+          mark.target === "product.ledgerExpectedQuantity",
       });
       const stored = await prices();
       expect(stored.get(busy)?.get("price")?.value).toBe(2);
@@ -631,15 +560,8 @@ describe("stored derived values", () => {
       release.resolve();
       await writer;
     }
-    // Replaying the plan may publish the skipped ticket, but cannot restore cleared values.
-    await publishDerivedPage(ctx.db, plan);
-    const stored = await prices();
-    expect(stored.get(busy)?.get("price")?.value).toBe(5);
-    expect(stored.get(available)?.get("price")?.value).toBe(6);
-    expect(stored.get(removed)?.get("price")).toMatchObject({
-      resultExists: false,
-      computedAt: null,
-    });
+    await drain();
+    expect((await prices()).get(busy)?.get("price")?.value).toBe(5);
     expect(await marks("product.price")).toEqual([]);
   });
 
@@ -668,14 +590,15 @@ describe("stored derived values", () => {
       .update(inventoryEntry)
       .set({ amountValue: 3 })
       .where(eq(inventoryEntry.id, entry));
-    const claimed = await claimDerivedMarks(ctx.db);
-    const plan = await prepareDerivedPage(ctx.db, derivedComputes, claimed);
-    // A save lands after the compute read its inputs.
-    await getDb(ctx.db)
-      .update(inventoryEntry)
-      .set({ amountValue: 5 })
-      .where(eq(inventoryEntry.id, entry));
-    await publishDerivedPage(ctx.db, plan);
+    await drainDerivedPage(ctx.db, {
+      // A save lands after the compute read its inputs.
+      during: async () => {
+        await getDb(ctx.db)
+          .update(inventoryEntry)
+          .set({ amountValue: 5 })
+          .where(eq(inventoryEntry.id, entry));
+      },
+    });
     expect(await marks("inventory.valuation")).toEqual([entry]);
     await drain();
     expect((await valuation(entry))?.value).toBe(5);
@@ -691,25 +614,23 @@ describe("stored derived values", () => {
       .update(inventoryEntry)
       .set({ amountValue: 3 })
       .where(eq(inventoryEntry.id, entry));
-    const claimed = (await claimDerivedMarks(ctx.db)).filter(
-      (mark) => mark.target === "inventory.valuation" && mark.ref === entry,
-    );
-    const plan = await prepareDerivedPage(ctx.db, derivedComputes, claimed);
-    await getDb(ctx.db).insert(productUnitMappings).values({
-      productId: cord,
-      aValue: 1,
-      aUnit: "each",
-      bValue: 10,
-      bUnit: "m",
+    await drainDerivedPage(ctx.db, {
+      only: (mark) =>
+        mark.target === "inventory.valuation" && mark.ref === entry,
+      during: async () => {
+        await getDb(ctx.db).insert(productUnitMappings).values({
+          productId: cord,
+          aValue: 1,
+          aUnit: "each",
+          bValue: 10,
+          bUnit: "m",
+        });
+        // The save has not expanded its dependent tickets yet.
+        expect(
+          (await fanoutMarks("inventory.valuation")).length,
+        ).toBeGreaterThan(0);
+      },
     });
-    // The save has not expanded its dependent tickets yet.
-    expect((await fanoutMarks("inventory.valuation")).length).toBeGreaterThan(
-      0,
-    );
-    expect(await claimDerivedMarks(ctx.db)).toEqual(
-      expect.arrayContaining(claimed),
-    );
-    await publishDerivedPage(ctx.db, plan);
     expect(await marks("inventory.valuation")).toContain(entry);
     expect((await valuation(entry))?.value).toEqual(previous?.value);
     await drain();
@@ -720,18 +641,16 @@ describe("stored derived values", () => {
     const location = await makeLocation("Attic box");
     const nails = await makeProduct("Synthetic nails", 1);
     const entry = await makeEntry(nails, location, 1);
-    const claimed = (await claimDerivedMarks(ctx.db)).filter(
-      (mark) => mark.ref === entry,
-    );
-    const plan = await prepareDerivedPage(ctx.db, derivedComputes, claimed);
-    // Delete and re-create the same mark: a fresh sequence ticket.
-    await getDb(ctx.db).execute(
-      sql`DELETE FROM "WorkItem" WHERE target = 'inventory.valuation' AND ref = ${entry}`,
-    );
-    await getDb(ctx.db).execute(
-      sql`SELECT derived_mark('inventory.valuation', ARRAY[${entry}::uuid])`,
-    );
-    await publishDerivedPage(ctx.db, plan);
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.ref === entry,
+      // Delete and re-create the same mark: a fresh sequence ticket.
+      during: async () => {
+        await dropWork(ctx.db, "inventory.valuation", [entry]);
+        await getDb(ctx.db).execute(
+          sql`SELECT derived_mark('inventory.valuation', ARRAY[${entry}::uuid])`,
+        );
+      },
+    });
     expect(await marks("inventory.valuation")).toEqual([entry]);
   });
 
@@ -774,14 +693,9 @@ describe("stored derived values", () => {
     expect((await fanoutMarks("inventory.valuation")).length).toBeGreaterThan(
       1,
     );
-    const plan = await prepareDerivedPage(
-      ctx.db,
-      derivedComputes,
-      (await claimDerivedMarks(ctx.db)).filter((mark) =>
-        mark.target.includes("@"),
-      ),
-    );
-    await publishDerivedPage(ctx.db, plan);
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target.includes("@"),
+    });
     expect(await marks("inventory.valuation")).toContain(entry);
     await drain();
     expect(await fanoutMarks("inventory.valuation")).toEqual([]);
@@ -800,27 +714,22 @@ describe("stored derived values", () => {
       .update(product)
       .set({ price: 3 })
       .where(eq(product.id, item));
-    const plan = await prepareDerivedPage(
-      ctx.db,
-      derivedComputes,
-      (await claimDerivedMarks(ctx.db)).filter((mark) =>
-        mark.target.startsWith("inventory.valuation@"),
-      ),
+    const fanout = (await pending()).filter(
+      (mark) =>
+        mark.target.startsWith("inventory.valuation@") && mark.ref === item,
     );
-    expect(plan.marks.length).toBeGreaterThan(0);
+    expect(fanout.length).toBeGreaterThan(0);
     const held = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const writer = withTransaction(ctx.db, async (tx) => {
-      await tx.execute(sql`SELECT ref FROM "WorkItem"
-        WHERE target LIKE 'inventory.valuation@%' AND ref = ${item}::uuid FOR UPDATE`);
+      await lockWork(databaseForTransaction(tx), fanout);
       held.resolve();
       await release.promise;
     });
     await held.promise;
     try {
-      await withTransaction(ctx.db, async (tx) => {
-        await tx.execute(sql`SET LOCAL statement_timeout = '500ms'`);
-        await publishDerivedPage(databaseForTransaction(tx), plan);
+      await drainDerivedPage(ctx.db, {
+        only: (mark) => mark.target.startsWith("inventory.valuation@"),
       });
       expect((await fanoutMarks("inventory.valuation")).length).toBeGreaterThan(
         0,
@@ -858,29 +767,21 @@ describe("stored derived values", () => {
           parseEntityId("product", await resolved(kettle.id, "product")),
         ),
       );
-    // Expand in a background transaction; member priority must survive the Job.
-    while ((await fanoutMarks("task.searchDocument")).length > 0) {
-      const plan = await prepareDerivedPage(
-        ctx.db,
-        derivedComputes,
-        (await claimDerivedMarks(ctx.db, 10_000)).filter((mark) =>
-          mark.target.startsWith("task.searchDocument@"),
-        ),
-      );
-      await withJobExecution(fromPartial({}), fromPartial({}), () =>
-        withTransaction(ctx.db, (tx) =>
-          publishDerivedPage(databaseForTransaction(tx), plan),
-        ),
-      );
-    }
+    // Expansion runs in the drain Job; member priority must survive it.
+    while ((await fanoutMarks("task.searchDocument")).length > 0)
+      await drainDerivedPage(ctx.db, {
+        only: (mark) => mark.target.startsWith("task.searchDocument@"),
+      });
     expect(await marks("task.searchDocument")).toEqual(
       [parent, child].map((task) => task.entityId).sort(),
     );
     // An edit's dependents keep its priority instead of queuing behind backfill.
-    const priorities = await getDb(ctx.db).execute(
-      sql`SELECT DISTINCT priority FROM "WorkItem" WHERE target = 'task.searchDocument'`,
+    const priorities = new Set(
+      (await pending())
+        .filter((mark) => mark.target === "task.searchDocument")
+        .map((mark) => mark.priority),
     );
-    expect(priorities.rows).toEqual([{ priority: 0 }]);
+    expect([...priorities]).toEqual([0]);
   });
 
   it("marks JSON subject references and follows Feedback to its Email", async () => {
@@ -929,13 +830,9 @@ describe("stored derived values", () => {
     expect(
       (await fanoutMarks("email.dataQuality")).map((mark) => mark.ref),
     ).toContain(assessment.id);
-    const claimed = (await claimDerivedMarks(ctx.db)).filter((mark) =>
-      mark.target.startsWith("email.dataQuality@"),
-    );
-    await publishDerivedPage(
-      ctx.db,
-      await prepareDerivedPage(ctx.db, derivedComputes, claimed),
-    );
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target.startsWith("email.dataQuality@"),
+    });
     expect(await marks("email.dataQuality")).toContain(emailId);
 
     // Historical evidence can be malformed; extraction must skip it without

@@ -21,8 +21,8 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
+import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
-import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {

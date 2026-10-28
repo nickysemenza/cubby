@@ -11,8 +11,8 @@ import type { ESTree } from "@oxlint/plugins";
  * entry points `http/`, `mcp/`, `worker/`, and `workflows/` import like `operations` but
  * are imported as platform infrastructure. Roles
  * import only the same or a lower role (`operations` → `service` → `repo` →
- * `db`), in any domain; `ai/repo/` ranks as `repo`. `repo` never imports
- * `ai/` except `ai/repo/` and `ai/policy/`, and `ai/policy/` value-imports
+ * `db`), in any domain; `ai/repo/` and `ai/<x>/repo/` rank as `repo`. `repo`
+ * never imports `ai/` except those and `ai/policy/`, and `ai/policy/` value-imports
  * only itself and packages, so a repo never reaches model code. A `service`
  * value-imports nothing from `db/` but `db/freshness/` and never imports a
  * schema or `db/helpers`; other platform code and `generic/*` never import a
@@ -42,7 +42,7 @@ const ENTRY_PATH =
 const isRole = (value: string | undefined): value is Role =>
   value === "repo" || value === "service" || value === "operations";
 
-const AI_REPO_PATH = /^apps\/web\/src\/server\/ai\/repo(?:[./]|$)/u;
+const AI_REPO_PATH = /^apps\/web\/src\/server\/ai\/(?:[^/]+\/)?repo(?:[./]|$)/u;
 const AI_POLICY_PATH = /^apps\/web\/src\/server\/ai\/policy(?:[./]|$)/u;
 
 function roleOf(path: string): { area: string; role: Role } | undefined {

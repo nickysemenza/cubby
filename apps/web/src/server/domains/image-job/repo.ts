@@ -15,12 +15,7 @@ import { describeJobWaitingOn, jobState } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  databaseForTransaction,
-  isTransaction,
-  notDeleted,
-  unwrapDb,
-} from "~/server/db/helpers";
+import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
 import { job } from "~/server/db/retained-tables";
 import { device, imageProcessingJob } from "~/server/db/schema";
@@ -208,10 +203,7 @@ const imageJobRead = {
         .from(job)
         .where(inArray(job.key, [...keyOf.keys()]));
       const [waiting, holders] = await Promise.all([
-        loadJobWaitingOn(
-          isTransaction(db) ? databaseForTransaction(db) : db,
-          jobs,
-        ),
+        loadJobWaitingOn(jobs),
         loadLeaseDevices(
           db,
           jobs.flatMap((entry) =>

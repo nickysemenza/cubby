@@ -13,7 +13,7 @@ import { z } from "zod";
 import {
   enqueueAiEvaluation,
   evaluationSlotKey,
-} from "~/server/ai/repo/ai-evaluation-requests";
+} from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluation, product, run } from "~/server/db/schema";

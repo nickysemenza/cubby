@@ -23,12 +23,10 @@ import {
 } from "~/server/db/helpers/core";
 import { run as runTable, job } from "~/server/db/retained-tables";
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
-import {
-  assertCurrentJob,
-  currentJobExecution,
-} from "~/server/generic/jobs/repo/execution";
+import { currentJobExecution } from "~/server/generic/jobs/context";
 import { retryJob } from "~/server/generic/jobs/repo/operator";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
 
 import { type WorkflowRunParams, type ExecutedRunPurpose } from "./contract";
 
@@ -167,7 +165,7 @@ export async function launchWorkflowRun(
         WHERE e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.result_ready})
           AND (e."runId"=${input.runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${input.runId}::uuid AND r."cancelledAt" IS NULL))`);
       const { markAiEvaluationWork } =
-        await import("~/server/ai/repo/ai-evaluation-work");
+        await import("~/server/ai/evaluation/repo/ai-evaluation-work");
       await markAiEvaluationWork(
         tx,
         pending.rows.map((row) => row.id),
@@ -197,7 +195,7 @@ export async function claimWorkflowRun(
   params: WorkflowRunParams,
   projection?: "id",
 ) {
-  await assertCurrentJob(db);
+  await assertWorkflowEffect(db);
   const current = currentJobExecution();
   if (
     !current ||
@@ -236,7 +234,7 @@ export async function failWorkflowRun(
 ): Promise<boolean> {
   if (!currentJobExecution())
     throw new Error("Run failure requires its universal Job claim");
-  await assertCurrentJob(db);
+  await assertWorkflowEffect(db);
   const [failed] = await getDb(db)
     .update(runTable)
     .set({

@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
-import { failJob, claimJob } from "~/server/generic/jobs/repo/external-claim";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { failJob, claimJob } from "~/server/generic/jobs/repo/queue";
 
 import { JobDeferredError, JobPausedError } from "../errors";
 import { advanceJob } from "../service/jobs";

@@ -1,6 +1,6 @@
 import type { ActivityExecutor } from "@cubby/schemas/activity";
 import type { ImageId, ImageJobId, DeviceId } from "@cubby/schemas/identifiers";
-import { jobState, type JobWaitReason } from "@cubby/schemas/job";
+import type { JobWaitReason } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -25,10 +25,12 @@ import { getDeviceParticipation } from "~/server/domains/device/repo/device-part
 import {
   recordDeviceService,
   type DeviceAdmission,
-} from "~/server/generic/jobs/repo/device-admission";
+} from "~/server/domains/image-processing/repo/device-admission";
 import {
-  externalJobClaim,
-  releaseJobClaim,
+  externalLeaseHeld,
+  heldExternalClaim,
+  recordLeaseHolder,
+  releaseExternalClaim,
 } from "~/server/generic/jobs/repo/external-claim";
 
 import { armDeviceWake } from "./image-processing-ring";
@@ -128,7 +130,11 @@ export async function assignImageProcessingExecutor(
             eq(imageProcessingJob.state, "pending"),
             // Wall time, not now(): a device hand-off assigns inside the
             // transaction that claimed, and now() stays at its start.
-            sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">clock_timestamp())`,
+            externalLeaseHeld(
+              sql`'image-processing:' || ${imageProcessingJob.id}::text`,
+              sql`${input.attemptId}::uuid`,
+              { live: true },
+            ),
           ),
         )
         .for("update");
@@ -160,6 +166,14 @@ export async function assignImageProcessingExecutor(
         diagnostics: input.diagnostics,
       });
       if (number === null) return false;
+      await recordLeaseHolder(
+        databaseForTransaction(tx),
+        {
+          key: `image-processing:${input.jobId}`,
+          leaseToken: input.attemptId,
+        },
+        { name: executor.name ?? null, deviceId: executor.deviceId ?? null },
+      );
       // A device's committed hand-off is one service for pull fairness.
       if (executor.kind === "device") {
         const ownedStreak = await recordDeviceService(
@@ -286,7 +300,7 @@ export async function deferImageProcessingJob(
   },
 ): Promise<boolean> {
   return withTransaction(db, async (tx) => {
-    const execution = await externalJobClaim(
+    const execution = await heldExternalClaim(
       tx,
       `image-processing:${input.jobId}`,
       input.attemptId,
@@ -305,7 +319,7 @@ export async function deferImageProcessingJob(
       )
       .returning({ id: imageProcessingJob.id });
     if (!rows.length) return false;
-    await releaseJobClaim(databaseForTransaction(tx), execution, {
+    await releaseExternalClaim(databaseForTransaction(tx), execution, {
       availableAt: input.until,
       waitReason: input.waitReason,
     });

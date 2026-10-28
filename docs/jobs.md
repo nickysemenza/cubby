@@ -54,19 +54,30 @@ An item holds only scheduling state: `drain` (its owning Job key), a fresh
 `ticket` per mark, `priority` (0 for member and Run demand, 1 for automatic
 work), `readyAt`, `attempts` and `lastError`. Domain rows keep outcomes.
 `markWork` upserts items in the producer's transaction and wakes the drain
-Job; a re-mark during a page takes a new ticket, so the page clears only the
-ticket it claimed and the item stays owed. The drain Job's lease fences every
-item it claimed; items have no leases of their own.
+Job; `markWorkFrom` marks the rows a SQL source selects in one statement,
+returning per-target counts (and a bounded ref sample) so a large fanout never
+reaches the Worker. A re-mark during a page takes a new ticket, so the page
+clears only the ticket it claimed and the item stays owed. The drain Job's
+lease fences every item it claimed; items have no leases of their own.
+`work-items.ts` is the producer and adapter interface (marking, pending and
+ticket predicates, backlog); claiming, clearing and backoff
+(`repo/work-claims.ts`) belong to `defineDrain` alone.
 
 `defineDrain` (`generic/jobs/service/drain.ts`) is the one claim → prepare →
 publish helper. It claims items by priority, readiness and ticket; prepares
 them outside a transaction; settles per-item preparation failures (backoff
 from the kind policy, or the drain's `exhaust` at `maxAttempts`); then
 publishes at most 25 weighted items per fenced transaction (SERIALIZABLE where
-the drain declares it). A chunk that fails on a target error or SQLSTATE class
-22, 23 or 54 splits in halves until the failing item settles alone; its
-siblings publish. A drain with nothing ready completes, or waits until its
-next item's `readyAt`. Paid results that must survive a later publication
+the drain declares it). A drain's `lock` takes its domain locks first and may
+narrow the chunk: items it declines (a source row another writer holds) stay
+owed, untouched, for a later page. A chunk that fails on a target error or
+SQLSTATE class 22, 23 or 54 splits in halves until the failing item settles
+alone; its siblings publish. `publish` may `retain` items it could not apply
+(a derived target behind a newer fanout). An item's `lastError` keeps each
+cause, capped so the database's own message survives. A drain with nothing
+ready runs its `idle` publication (derived clock expiry) and completes, or
+waits until its next item's `readyAt`; a `repeats` drain (derived, re-armed
+each minute by `repeatJob`) completes even while items back off. Paid results that must survive a later publication
 failure are written through `ctx.fenced` before publication (an evaluation's
 `result_ready`). `postponeWork` waits without spending an attempt.
 
@@ -114,7 +125,9 @@ waits on; every client (web, Apple, CLI, MCP) and every rollup reads it.
 - `waiting_funding`: an `ai_funding_window` wait until the window resets.
 - `leased`: an executor holds it, named with its device installation id
   (`executorDeviceId`, null for cloud) and `leasedAt` (the claim time);
-  `expired` once the lease lapsed unreclaimed.
+  `expired` once the lease lapsed unreclaimed. The holder is `Job.leaseHolder`
+  (`{name, deviceId}`), which an external executor records at hand-off;
+  generic code never reads a domain's attempt rows.
 - `backing_off`: a failure backoff or provider wait (`cause`) until a time.
 - `blocked`: waiting on other work, such as a device preparing AVIF input.
 - `paused`: stopped by a member or its Run.
@@ -191,7 +204,7 @@ in-flight provider call may cross it and still publish. A drain that stops
 with due work left publishes another wake.
 
 Device pulls apply the same two classes to each command in a batch
-(`generic/jobs/repo/device-admission.ts`): an active, member-visible Run's
+(`domains/image-processing/repo/device-admission.ts`): an active, member-visible Run's
 parked work leads, and after `DEVICE_OWNED_STREAK` (`1 / DEVICE_BACKFILL_SHARE -
 1`) run-owned device services in a row, the next command serves backfill. The
 owed class is chosen first; a device's preference for work another device
@@ -221,8 +234,15 @@ everything else:
 - **Fence.** `publish` runs in a transaction that takes the handler's domain
   locks first, then one `FOR UPDATE` on the Job just before commit, and
   commits only while the claim's token, generation and lease still hold.
-  `ctx.fenced(work)` applies the same fence to an intermediate write. There is
-  no early `FOR SHARE`; a lost race fails the fence, never deadlocks.
+  `ctx.fenced(work)` applies the same fence to an intermediate write,
+  `ctx.fence(tx)` to a caller's open transaction and `ctx.check()` before
+  another provider batch. There is no early `FOR SHARE`; a lost race fails the
+  fence, never deadlocks.
+- **Explicit fences.** A fence is passed, never looked up. Run workflow code
+  receives the claim's `fence`/`check` through `withWorkflowExecution`
+  (`assertWorkflowEffect`, `assertWorkflowCurrent`); a single-record handler
+  passes `ctx.fenced` to its publication, and member or maintenance callers of
+  the same publication pass `outsideJob(db)`, an ordinary transaction.
 - **Failure.** One classifier walks the cause chain: a pause stops the Job; a
   deferral (`JobDeferredError`, funding, provider capacity) waits without an
   attempt; a superseded claim ends quietly; a target error isolates one item
@@ -230,9 +250,15 @@ everything else:
 
 The external-claim interface (`repo/external-claim.ts`) lets an executor
 outside the server drain, an Apple device pull, hold the same lease and settle
-through the same fences. Producers use `repo/producer.ts`, member and Run
-controls `repo/operator.ts`; the queue core and selection are private, and
-oxlint's `no-restricted-imports` keeps them so.
+through the same fences: claim, hold, release, fail and settle a claim; renew
+or re-arm leases; record the lease holder; retire, restart or end the waits of
+external Jobs. Image processing is its one caller and owns device admission,
+backlog and leases (`domains/image-processing/repo/device-*.ts`). Producers use
+`repo/producer.ts`, member and Run controls `repo/operator.ts`, drains
+`defineDrain` and `repo/work-items.ts`. The queue core, selection and item
+claiming (`repo/queue.ts`, `repo/work-claims.ts`) and the `WorkItem` and
+invalidation capture tables are private to `generic/jobs`; oxlint's
+`no-restricted-imports` keeps them so outside tests and test support.
 
 ## Wakes
 
@@ -357,7 +383,8 @@ Run for the member, who can continue without those photos; the coordinator
 never starts on a photo it has no description for.
 
 Each image job reads `leaseDeviceId` (the `DEV-` code whose attempt holds
-the lease, live or expired) and `leaseExpiresAt`. Its saved views are
+the lease, live or expired) and `leaseExpiresAt`. Assigning an executor
+records it as the Job's `leaseHolder` in the same transaction. Its saved views are
 `waiting-for-apple` and `processing` (live leases).
 
 ## Diagnostics and repair
@@ -500,7 +527,11 @@ funding caps.
 
 ## AI evaluation drains
 
-Each feature has one drain Job, `ai-evaluation:<feature>`, over items keyed by
+`ai/evaluation` owns the drain, its items and evaluation pages. Run authority
+(live Run checks, pausing, funding resumption, the workflow fence around one
+evaluation) comes in through the `AiEvaluationExecution` port that
+`domains/run/service/ai-evaluation-execution.ts` provides; the drain itself
+knows no Run tables. Each feature has one drain Job, `ai-evaluation:<feature>`, over items keyed by
 evaluation id (priority 0 when the owner or an uncancelled requester is a
 running, member-visible Run nobody scheduled; otherwise 1). An attempt is the
 drain lease plus the item's ticket (`aiEvaluationAttemptToken`): a lost lease,
@@ -524,7 +555,7 @@ Product identity and connection features prepare a page of up to 100 items
 together and publish it in fenced chunks; other features run up to 8 items, two
 at a time, each in its own guarded transactions under the drain lease.
 
-`EvaluationPageAdapter` in `ai/repo/evaluation-page.ts` owns finite feature
+`EvaluationPageAdapter` in `ai/evaluation/repo/evaluation-page.ts` owns finite feature
 preparation, decision evaluation and publication results. Every target carries
 its own evidence digest. Each preparation/provider continuation runs in the
 drain Job's execution context. The executor interns one usage context

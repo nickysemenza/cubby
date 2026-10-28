@@ -1,7 +1,6 @@
 import type { Database } from "~/server/db";
-import { withTransactionDatabase } from "~/server/db/helpers";
-import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
 import { repeatJob } from "~/server/generic/jobs/repo/producer";
+import type { Fenced } from "~/server/generic/jobs/types";
 
 import { prepareConnectionDiscoveryRoster } from "./connection-refresh";
 
@@ -18,10 +17,6 @@ export const claimDerivedDiscovery = (db: Database) =>
   );
 
 export const prepareConnectionDiscoveryPage = (
-  db: Database,
+  fenced: Fenced,
   input: Parameters<typeof prepareConnectionDiscoveryRoster>[1],
-) =>
-  withTransactionDatabase(db, async (tx) => {
-    await assertCurrentJob(tx);
-    return prepareConnectionDiscoveryRoster(tx, input);
-  });
+) => fenced((tx) => prepareConnectionDiscoveryRoster(tx, input));

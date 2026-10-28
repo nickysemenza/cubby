@@ -2,11 +2,14 @@ import type { BackgroundTask } from "@cubby/schemas/background-tasks";
 import { runEntityId, type ImageId } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
+import { outsideJob } from "~/server/generic/jobs/outside-job";
+import type { Fenced } from "~/server/generic/jobs/types";
 export type BackgroundTaskOutcome = "succeeded" | "skipped";
 
 type ExtractImageMetadataPort = (
   db: Database,
   imageId: ImageId,
+  fenced: Fenced,
 ) => Promise<BackgroundTaskOutcome>;
 
 /** Lazily imports the real service — keeps it out of the request-time bundle
@@ -16,10 +19,16 @@ type ExtractImageMetadataPort = (
 const productionExtractImageMetadata: ExtractImageMetadataPort = async (
   db,
   imageId,
+  fenced,
 ) => {
   const { extractAndStoreImageMetadata } =
     await import("~/server/domains/image/service/image-metadata-extraction.service");
-  const outcome = await extractAndStoreImageMetadata(db, imageId);
+  const outcome = await extractAndStoreImageMetadata(
+    db,
+    imageId,
+    undefined,
+    fenced,
+  );
   return outcome === "succeeded" ? "succeeded" : "skipped";
 };
 
@@ -61,6 +70,8 @@ export async function handleBackgroundTask(
   db: Database,
   task: ExecutableBackgroundTask,
   ports: BackgroundTaskPorts = productionBackgroundTaskPorts,
+  /** The executing Job's fence for each branch's publication. */
+  fenced: Fenced = outsideJob(db),
 ): Promise<BackgroundTaskOutcome> {
   switch (task.kind) {
     case "location-ai.description.refresh": {
@@ -77,7 +88,7 @@ export async function handleBackgroundTask(
           (await ensureRun(db, systemActor(), {
             purpose: "background",
           }));
-        await describeLocation(db, task.locationId, runId);
+        await describeLocation(db, task.locationId, runId, undefined, fenced);
       } catch (error) {
         if (isLocationHasNoImagesToAnalyzeError(error)) return "skipped";
         throw error;
@@ -95,7 +106,14 @@ export async function handleBackgroundTask(
           (await ensureRun(db, systemActor(), {
             purpose: "background",
           }));
-        await detectInventoryItems(db, task.locationId, runId);
+        await detectInventoryItems(
+          db,
+          task.locationId,
+          runId,
+          undefined,
+          undefined,
+          fenced,
+        );
       } catch (error) {
         if (isLocationHasNoImagesToAnalyzeError(error)) return "skipped";
         throw error;
@@ -103,7 +121,7 @@ export async function handleBackgroundTask(
       return "succeeded";
     }
     case "image-metadata.extract":
-      return ports.extractImageMetadata(db, task.imageId);
+      return ports.extractImageMetadata(db, task.imageId, fenced);
     case "maintenance.purchase-discovery": {
       const { discoverPurchases } = await import("~/server/workflows/catch-up");
       await discoverPurchases(db);

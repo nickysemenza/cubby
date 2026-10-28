@@ -16,12 +16,10 @@ import {
 } from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
+import { deviceOwnedStreak } from "~/server/domains/image-processing/repo/device-admission";
+import { DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE } from "~/server/domains/image-processing/repo/device-admission";
 import { claimCompanionImageCommands } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import {
-  deviceOwnedStreak,
-  DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE,
-} from "~/server/generic/jobs/repo/device-admission";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
 import {

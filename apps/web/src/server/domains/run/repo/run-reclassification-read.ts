@@ -16,7 +16,7 @@ import { z } from "zod";
 import {
   requestedAiEvaluations,
   PENDING_AI_STATES,
-} from "~/server/ai/repo/ai-evaluation-requests";
+} from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";

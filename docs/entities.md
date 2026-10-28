@@ -2997,19 +2997,17 @@ including deferred fanout retries. Only changed values propagate to declared
 dependents, so cascades stop at the first unchanged hop. Sink adapters
 return only records whose output or readiness changed; a recipe recalculation
 that only advances its computation timestamp does not propagate. A failing
-target backs off (30 seconds doubling to 15 minutes) and other targets publish.
-Value targets publish together in one savepoint and one statement. Each input
-row carries its target, value key and observed ticket; locks skip busy tickets,
-and publication, removal and clearing all use that locked set. Busy or replaced
-marks keep their previous values and remain pending. If the database rejects
-the batch for its data (SQLSTATE classes 22, 23, 54), the savepoint rolls back
-and the same groups retry in individual savepoints. Only rejected targets back
-off, with the database's message; healthy targets publish. Transaction-level
-failures retry the page. Sink targets keep individual savepoints because they
-publish through their own repository writers.
-Preparation and publication failures retain the same bounded cause chain,
-innermost message first, so a long query wrapper cannot hide the underlying
-database or adapter error in the stored retry diagnostic.
+item backs off by the `derived.drain` kind policy (30 seconds doubling to 15
+minutes) and other items publish. The drain runs on `defineDrain`
+([Durable Jobs](jobs.md#coarse-jobs-and-work-items)): each fenced chunk first
+expands its fanout marks, then locks sink sources without waiting, then locks
+its items' unchanged tickets, skipping busy ones. Value targets in a chunk
+publish in one statement; busy or replaced marks keep their previous values
+and remain pending. A chunk the database rejects for its data (SQLSTATE
+classes 22, 23, 54) splits in halves until the rejected item backs off alone,
+with the database's message; healthy items publish. Transaction-level
+failures retry the page. Stored retry diagnostics keep each cause, capped so a
+long query wrapper cannot hide the underlying database or adapter error.
 Sink adapters retain their source-row
 locking and repository writers for their own tables (search documents with
 embedding admission, recipe totals, conversion coverage). Search publication uses one sorted upsert across live documents and

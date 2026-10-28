@@ -9,12 +9,13 @@ import { jobWaitReason, type JOB_KIND_POLICY } from "@cubby/schemas/job";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
+import { aiEvaluationJobHandler } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import { getPurchaseDispatchHostEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { deviceWakeHandler } from "~/server/domains/image-processing/service/device-wake";
 import { imageProcessingJobHandler } from "~/server/domains/image-processing/service/dispatch";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
-import { aiEvaluationJobHandler } from "~/server/domains/run/service/ai-evaluation-drain";
+import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
 import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
 import {
@@ -44,10 +45,15 @@ const background = defineJobHandler(
     maintenancePurchaseDiscoveryTaskSchema,
     calendarFeedMarkDirtyTaskSchema,
   ]),
-  async (db, claim, task) => {
+  async (db, claim, task, context) => {
     if (task.kind !== claim.kind)
       throw new Error(`Job kind ${claim.kind} does not match ${task.kind}`);
-    const outcome = await handleBackgroundTask(db, task);
+    const outcome = await handleBackgroundTask(
+      db,
+      task,
+      undefined,
+      context.fenced,
+    );
     return { page: { done: true, result: { outcome } } };
   },
 );
@@ -70,7 +76,7 @@ export const productionJobHandlers: JobHandlers = {
   // `image.device` has no server handler: Apple devices claim it by pull.
   "image.cloud": imageProcessingJobHandler,
   "run.execute": runJobHandler,
-  "ai.evaluation": aiEvaluationJobHandler(),
+  "ai.evaluation": aiEvaluationJobHandler(runAiEvaluationExecution()),
   "ai-refresh.activate": aiRefreshActivationHandler,
   "image.device.wake": deviceWakeHandler,
   "jobs.maintenance": jobMaintenanceHandler,

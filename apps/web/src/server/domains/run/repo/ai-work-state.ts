@@ -2,8 +2,8 @@ import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
 import { and, eq, inArray, lt, notExists, or, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
-import { guardAiEvaluation } from "~/server/ai/repo/ai-evaluation";
-import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
+import { guardAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation";
+import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -12,10 +12,8 @@ import {
 } from "~/server/db/helpers";
 import { aiEvaluation, run } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import {
-  currentJobExecution,
-  assertCurrentJob,
-} from "~/server/generic/jobs/repo/execution";
+import { currentJobExecution } from "~/server/generic/jobs/context";
+import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
 
 export type RunRow = typeof run.$inferSelect;
 export type AiEvaluationRow = typeof aiEvaluation.$inferSelect;
@@ -97,7 +95,7 @@ export async function writeRunningAttemptProgress(
     return written.length > 0;
   };
   return withTransactionDatabase(db, async (tx) => {
-    await assertCurrentJob(tx);
+    await assertWorkflowEffect(tx);
     // Under READ COMMITTED an UPDATE that waits on the Run row rechecks only that
     // row, not its NOT EXISTS subquery. Taking the lock first gives the guarded
     // UPDATE a fresh snapshot that sees work discovery committed under the lock.

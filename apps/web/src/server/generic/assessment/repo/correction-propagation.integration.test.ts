@@ -16,6 +16,7 @@ import { z } from "zod";
 
 import { decisionCatalogRows } from "~/server/ai/decision-catalog";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
+import { drainAiEvaluations } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import {
   dependencyStamps,
@@ -39,7 +40,6 @@ import {
 } from "~/server/db/schema";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { systemActor, ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { drainAiEvaluations } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { scheduleSavedFieldQuestion } from "~/server/domains/run/service/ai-refresh";
 import {
   startSuggestionSweep as queueSuggestionSweep,

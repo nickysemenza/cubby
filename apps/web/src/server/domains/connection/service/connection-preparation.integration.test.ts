@@ -7,6 +7,10 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import {
+  aiEvaluationItem,
+  drainAiEvaluations,
+} from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
@@ -24,10 +28,6 @@ import { publishPreparedEntityConnections } from "~/server/domains/connection/re
 import { publishProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
-import {
-  aiEvaluationItem,
-  drainAiEvaluations,
-} from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import {
   kernelCtx,
   PRIMARY_MODEL,

@@ -8,16 +8,22 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import {
   publishAiEvaluation,
   settleAiEvaluations,
-} from "~/server/ai/repo/ai-evaluation";
+} from "~/server/ai/evaluation/repo/ai-evaluation";
 import {
   enqueueAiEvaluation,
   enqueueAiEvaluations,
-} from "~/server/ai/repo/ai-evaluation-requests";
-import { markAiEvaluationWork } from "~/server/ai/repo/ai-evaluation-work";
+} from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import { markAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
+import { aiEvaluationJobHandler } from "~/server/ai/evaluation/service/ai-evaluation-drain";
+import {
+  aiEvaluationItem,
+  drainAiEvaluations,
+  withClaimedAiEvaluation,
+} from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
+import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
@@ -28,12 +34,7 @@ import {
 } from "~/server/db/schema";
 import { readAiRefreshWorkSummary } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { aiEvaluationJobHandler } from "~/server/domains/run/service/ai-evaluation-drain";
-import {
-  aiEvaluationItem,
-  drainAiEvaluations,
-  withClaimedAiEvaluation,
-} from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
+import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 
@@ -233,7 +234,7 @@ describe("AI evaluation drain publication", () => {
       kind: "ai.evaluation",
       input: {},
     });
-    const handler = aiEvaluationJobHandler();
+    const handler = aiEvaluationJobHandler(runAiEvaluationExecution());
     let resumed = false;
     const outcome = await advanceJob(ctx.db, execution.id, {
       "ai.evaluation": {

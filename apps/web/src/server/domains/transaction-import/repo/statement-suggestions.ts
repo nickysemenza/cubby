@@ -100,9 +100,7 @@ import {
   importOnlyStatementRuleStamps,
   matchStatementRules,
 } from "~/server/generic/assessment/repo/automatic-rules";
-import { currentJobExecution } from "~/server/generic/jobs/context";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
-import { fenceJob } from "~/server/generic/jobs/repo/external-claim";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   assertWorkflowEffect,
@@ -3085,8 +3083,6 @@ export async function recordStatementLabelCheckpoint(
   const save = async (
     tx: Database,
   ): Promise<"saved" | "settled" | "moved" | "out_of_scope"> => {
-    const owner = currentJobExecution();
-    if (owner) await fenceJob(tx, owner.claim);
     await assertWorkflowEffect(tx);
     if (input.scope) {
       const { rows } = await unwrapDb(tx).execute<{ id: string }>(sql`

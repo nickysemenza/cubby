@@ -358,6 +358,8 @@ export const JOB_KIND_POLICY = {
   },
   "derived.drain": {
     ...MAINTENANCE,
+    // Each failed mark backs off on its own row; the Job itself never stops.
+    backoff: { baseMs: 30_000, maxMs: 15 * 60_000 },
     label: "Update derived values",
     purpose: "Recomputes outstanding declared derived fields.",
     trigger: "Changes that invalidate derived values.",

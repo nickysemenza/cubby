@@ -4,8 +4,7 @@ import {
   type BackgroundTaskMessage,
 } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, inArray, sql } from "drizzle-orm";
-import { z } from "zod";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
@@ -13,17 +12,28 @@ import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
 import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
 import {
+  type DerivedAdapter,
   type DerivedComputes,
   derivedSink,
+  isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
 import {
-  claimDerivedMarks,
+  DERIVED_DRAIN,
+  DERIVED_DRAIN_JOB_KEY,
   markAllStoredDerived,
-  prepareDerivedPage,
-  publishDerivedPage,
 } from "~/server/generic/derived/repo/drain";
+import { derivedDrainHandler } from "~/server/generic/derived/service/drain-job";
+import { wakeJob } from "~/server/generic/jobs/repo/producer";
+import {
+  drainItems,
+  drainReady,
+  postponeWorkRefs,
+  workItemsFor,
+  workTicketsWhere,
+  type WorkItem,
+} from "~/server/generic/jobs/repo/work-items";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
-import type { JobHandlers } from "~/server/generic/jobs/types";
+import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
 import { derivedComputes } from "~/server/workflows/derived-computes";
 
 const frontierDrains = new WeakMap<Database, Promise<void>>();
@@ -42,40 +52,128 @@ export function drainDerivedRefreshFrontier(
   return pending;
 }
 
-/** Drain every ready derived mark through the production compute adapters. */
+/**
+ * Drain every ready derived mark through the real `derived.drain` handler and
+ * the production compute adapters (or `computes`). Stops once no mark is
+ * ready; a failed page throws.
+ */
 export async function drainStoredDerived(
   db: Database,
   maxPages = 1_000,
   computes: DerivedComputes = derivedComputes,
 ): Promise<void> {
   for (let page = 0; page < maxPages; page++) {
-    const marks = await claimDerivedMarks(db);
-    if (marks.length === 0) return;
-    const plan = await prepareDerivedPage(db, computes, marks);
-    await publishDerivedPage(db, plan);
+    if (!(await drainReady(db, DERIVED_DRAIN_JOB_KEY))) return;
+    await advanceDerivedPage(db, derivedDrainHandler(computes));
   }
   throw new Error(`Stored derived drain exceeded ${maxPages} pages`);
+}
+
+/**
+ * One real derived drain page. `only` postpones every other ready item for
+ * the page; `during` runs once after the page's first compute read its
+ * inputs and before publication, the window in which a concurrent write
+ * re-tickets or locks a prepared item.
+ */
+export async function drainDerivedPage(
+  db: Database,
+  {
+    only,
+    during,
+    computes = derivedComputes,
+  }: {
+    only?: (item: WorkItem) => boolean;
+    during?: () => Promise<void>;
+    computes?: DerivedComputes;
+  } = {},
+): Promise<void> {
+  let pending = during;
+  const after = async <T>(read: Promise<T>) => {
+    const result = await read;
+    const run = pending;
+    pending = undefined;
+    await run?.();
+    return result;
+  };
+  const observed: DerivedComputes = Object.fromEntries(
+    Object.entries(computes).map(([key, adapter]): [string, DerivedAdapter] => [
+      key,
+      isDerivedSink(adapter)
+        ? { ...adapter, prepare: (tx, ids) => after(adapter.prepare(tx, ids)) }
+        : (tx, ids) => after(adapter(tx, ids)),
+    ]),
+  );
+  const held = only
+    ? (await drainItems(db, DERIVED_DRAIN_JOB_KEY)).filter(
+        (item) => !only(item),
+      )
+    : [];
+  const byTarget = new Map<string, WorkItem[]>();
+  for (const item of held)
+    byTarget.set(item.target, [...(byTarget.get(item.target) ?? []), item]);
+  for (const [target, items] of byTarget)
+    await postponeWorkRefs(
+      db,
+      target,
+      items.map((item) => item.ref),
+      new Date(Date.now() + 60 * 60_000),
+    );
+  try {
+    await advanceDerivedPage(db, derivedDrainHandler(observed));
+    if (pending) throw new Error("The derived page computed nothing");
+  } finally {
+    for (const [target, items] of byTarget)
+      await postponeWorkRefs(
+        db,
+        target,
+        items.map((item) => item.ref),
+        new Date(),
+      );
+  }
+}
+
+async function advanceDerivedPage(db: Database, handler: JobHandler) {
+  await wakeJob(db, { ...DERIVED_DRAIN, input: {} });
+  // Job retries and waits end now: the helper drains what is ready.
+  const [drain] = await getDb(db)
+    .update(job)
+    .set({ availableAt: new Date(0), waitReason: null, waitUntil: null })
+    .where(eq(job.key, DERIVED_DRAIN_JOB_KEY))
+    .returning({ id: job.id });
+  if (!drain) throw new Error("Derived drain Job is missing");
+  const outcome = await advanceJob(db, drain.id, {
+    [DERIVED_DRAIN.kind]: handler,
+  });
+  if (outcome !== "succeeded") {
+    const [failed] = await getDb(db)
+      .select({ error: job.error })
+      .from(job)
+      .where(eq(job.id, drain.id));
+    throw new Error(
+      `Derived drain page ${outcome}: ${JSON.stringify(failed?.error)}`,
+    );
+  }
 }
 
 /**
  * Pending derived marks for `target` (and one record), for invalidation
  * assertions. Without `ref`, fanout marks (`<target>@<input>`) count too.
  */
-export async function derivedMarkTickets(
+export const derivedMarkTickets = (
   db: Database,
   target: string,
   ref?: string,
-): Promise<number[]> {
-  const rows = await getDb(db).execute(
-    ref
-      ? sql`SELECT ticket FROM "WorkItem" WHERE target = ${target} AND ref = ${ref}`
-      : sql`SELECT ticket FROM "WorkItem" WHERE target = ${target} OR target LIKE ${`${target}@%`}`,
-  );
-  return z
-    .array(z.object({ ticket: z.coerce.number() }))
-    .parse(rows.rows)
-    .map((row) => row.ticket);
-}
+): Promise<number[]> =>
+  ref
+    ? workItemsFor(db, target, [ref]).then((items) =>
+        items.map((item) => item.ticket),
+      )
+    : workTicketsWhere(
+        db,
+        DERIVED_DRAIN_JOB_KEY,
+        (column) =>
+          sql`(${column} = ${target} OR ${column} LIKE ${`${target}@%`})`,
+      );
 
 /** Settle derived marks with an optional recipe costing seam (a USDA fixture). */
 export async function drainRecipeRefreshJobs(
@@ -182,25 +280,48 @@ export function captureBackgroundQueue() {
   };
 }
 
-/** Domain regression seams execute under the same persisted Job ownership as a worker. */
+/**
+ * Domain regression seams execute under the same persisted Job ownership as a
+ * worker: `work` receives the claim's context, and a Run Job's work also runs
+ * in its Run workflow context, as `run.execute` does.
+ */
 export async function withJobFixtureExecution<T>(
   db: Database,
   input: import("@cubby/schemas/job").EnqueueJobInput,
-  work: () => Promise<T>,
+  work: (
+    context: import("~/server/generic/jobs/service/drain").DrainContext,
+  ) => Promise<T>,
   options: { releaseClaim?: true } = {},
 ) {
   const { enqueueJob } = await import("~/server/generic/jobs/repo/producer");
   const { externalJobClaim, claimJob, releaseJobClaim } =
-    await import("~/server/generic/jobs/repo/external-claim");
+    await import("~/server/generic/jobs/repo/queue");
+  const { claimContext } = await import("~/server/generic/jobs/service/jobs");
+  const { withJobExecution } = await import("~/server/generic/jobs/context");
   const saved = await enqueueJob(db, input);
   const existing = await externalJobClaim(db, saved.key);
   const claim = existing ?? (await claimJob(db, saved.id));
   if (!claim)
     throw new Error(`Synthetic execution ${saved.key} is ${saved.state}`);
+  const context = claimContext(db, claim);
+  const runId =
+    input.kind === "run.execute" &&
+    typeof input.input === "object" &&
+    input.input !== null &&
+    "runId" in input.input
+      ? String(input.input.runId)
+      : null;
   try {
-    return await (
-      await import("~/server/generic/jobs/repo/execution")
-    ).withJobExecution(db, claim, work);
+    return await withJobExecution(db, claim, async () =>
+      runId
+        ? (
+            await import("~/server/workflows/runs/execution")
+          ).withWorkflowExecution(
+            { runId, attempt: claim.generation, database: db, job: context },
+            () => work(context),
+          )
+        : work(context),
+    );
   } finally {
     // Completed fixture work can free admission capacity. Multi-step fence
     // fixtures retain their token by default; borrowed claims stay with their caller.

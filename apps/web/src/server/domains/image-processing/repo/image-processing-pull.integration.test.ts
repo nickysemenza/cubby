@@ -21,6 +21,8 @@ import {
   run,
 } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
+import { deviceOwnedStreak } from "~/server/domains/image-processing/repo/device-admission";
+import { DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE } from "~/server/domains/image-processing/repo/device-admission";
 import * as companionDispatch from "~/server/domains/image-processing/service/dispatch";
 import {
   claimCompanionImageCommands,
@@ -28,10 +30,6 @@ import {
 } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import {
-  deviceOwnedStreak,
-  DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE,
-} from "~/server/generic/jobs/repo/device-admission";
 import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
 
 import {

@@ -20,7 +20,7 @@ import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import {
   PENDING_AI_STATES,
   requestedAiEvaluations,
-} from "~/server/ai/repo/ai-evaluation-requests";
+} from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {

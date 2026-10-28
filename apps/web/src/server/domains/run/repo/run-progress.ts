@@ -16,7 +16,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { run, job } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
-import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
+import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
 
 /** The small, durable progress read shared by every Run detail page. */
 export async function getRunLiveProgress(db: Database, shortcode: string) {
@@ -98,7 +98,7 @@ export async function recordRunProgress(
   const id = runEntityId.parse(input.runId);
   return withTransactionDatabase(db, async (database) => {
     const owner = currentJobExecution();
-    if (owner) await assertCurrentJob(database);
+    await assertWorkflowEffect(database);
     const tx = getDb(database);
     const [current] = await tx
       .select()

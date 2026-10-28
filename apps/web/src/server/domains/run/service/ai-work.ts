@@ -14,11 +14,11 @@ import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
   aiEvaluationProgress,
   type ClaimedAiEvaluation,
-} from "~/server/ai/repo/ai-evaluation";
+} from "~/server/ai/evaluation/repo/ai-evaluation";
 import {
   requestedAiEvaluations,
   PENDING_AI_STATES,
-} from "~/server/ai/repo/ai-evaluation-requests";
+} from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import {
   executeReclassificationTarget,

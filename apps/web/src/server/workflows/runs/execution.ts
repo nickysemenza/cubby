@@ -2,16 +2,16 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
+import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobSupersededError } from "~/server/generic/jobs/errors";
-import {
-  assertCurrentJob,
-  currentJobExecution,
-} from "~/server/generic/jobs/repo/execution";
+import type { JobContext } from "~/server/generic/jobs/types";
 
 type WorkflowExecution = Readonly<{
   runId: string;
   attempt: number;
   database?: Database;
+  /** The executing Job's fence, handed in by the handler that owns the claim. */
+  job: Pick<JobContext, "fence" | "check">;
 }>;
 const execution = new AsyncLocalStorage<WorkflowExecution>();
 export const hasWorkflowExecution = () =>
@@ -46,14 +46,10 @@ export const withWorkflowExecution = <T>(
 
 /** Check current ownership before starting another provider batch; no connection spans inference. */
 export async function assertWorkflowCurrent(): Promise<void> {
-  if (execution.getStore() && !currentJobExecution())
-    throw new WorkflowInterruptedError("superseded");
-  await assertCurrentJob();
+  await execution.getStore()?.job.check();
 }
 
 /** Effect ownership comes solely from the current Job token and generation. */
 export async function assertWorkflowEffect(db: Database): Promise<void> {
-  if (execution.getStore() && !currentJobExecution())
-    throw new WorkflowInterruptedError("superseded");
-  await assertCurrentJob(db);
+  await execution.getStore()?.job.fence(db);
 }

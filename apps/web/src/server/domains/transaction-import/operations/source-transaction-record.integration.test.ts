@@ -22,8 +22,8 @@ import {
   saveMailboxMetadata,
 } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import * as changes from "~/server/generic/changes/repo/change";
-import { claimJob, renewJob } from "~/server/generic/jobs/repo/external-claim";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { claimJob, renewJob } from "~/server/generic/jobs/repo/queue";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { derivedMarkTickets } from "~/server/testing/background-queue";
 

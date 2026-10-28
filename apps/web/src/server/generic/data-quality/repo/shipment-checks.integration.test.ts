@@ -32,14 +32,10 @@ import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-id
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { scoreSql } from "~/server/generic/data-quality/repo/sql";
 import { DERIVED_COMPUTE_BATCH } from "~/server/generic/derived/repo/drain";
-import {
-  claimDerivedMarks,
-  markAllStoredDerived,
-  prepareDerivedPage,
-  publishDerivedPage,
-} from "~/server/generic/derived/repo/drain";
+import { markAllStoredDerived } from "~/server/generic/derived/repo/drain";
 import {
   derivedMarkTickets,
+  drainDerivedPage,
   drainStoredDerived,
 } from "~/server/testing/background-queue";
 import {
@@ -47,7 +43,6 @@ import {
   storedQualityIds,
 } from "~/server/testing/quality.fixtures";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
-import { derivedComputes } from "~/server/workflows/derived-computes";
 
 import {
   shipmentChecks,
@@ -562,25 +557,23 @@ describe("Shipment evidence quality", () => {
   it("publishes the latest verdict when a write lands during preparation", async () => {
     const parcel = await seed([shipped, delivered]);
     const timeline = await readShipmentTimeline(ctx.db, parcel.code);
-    const plan = await prepareDerivedPage(
-      ctx.db,
-      derivedComputes,
-      await claimDerivedMarks(ctx.db),
-    );
-    await editShipmentObservation(
-      ctx.db,
-      {
-        shipmentId: parcel.code,
-        observationId: timeline.observations.find(
-          (o) => o.kind === "delivered",
-        )!.observationId,
-        patch: { time: instant("2026-06-01T12:00:00Z") },
-      },
-      ctx.actor,
-    );
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target === "shipment.dataQuality",
+      during: () =>
+        editShipmentObservation(
+          ctx.db,
+          {
+            shipmentId: parcel.code,
+            observationId: timeline.observations.find(
+              (o) => o.kind === "delivered",
+            )!.observationId,
+            patch: { time: instant("2026-06-01T12:00:00Z") },
+          },
+          ctx.actor,
+        ).then(() => undefined),
+    });
     // The edit re-ticketed the mark, so the stale page cannot clear it; the
     // next drain publishes the edit's verdict (ADR 0021).
-    await publishDerivedPage(ctx.db, plan);
     expect(
       await derivedMarkTickets(ctx.db, "shipment.dataQuality", parcel.row.id),
     ).toHaveLength(1);

@@ -1,8 +1,8 @@
 import { buildActorContext } from "@cubby/schemas/context";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
-import { postponeAiEvaluationWork } from "~/server/ai/repo/ai-evaluation";
-import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
+import { postponeAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation";
+import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import {

@@ -6,13 +6,18 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { publishAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation";
+import {
+  aiEvaluationItem,
+  drainAiEvaluations,
+  withClaimedAiEvaluation,
+} from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import {
   evaluateProductIdentity,
   retrieveProductIdentityCandidates,
 } from "~/server/ai/product-identity";
-import { publishAiEvaluation } from "~/server/ai/repo/ai-evaluation";
 import {
   activateAiRefresh,
   saveAiDiscoveryCursor,
@@ -52,11 +57,6 @@ import { getProductMatchQueue } from "~/server/domains/product/repo/match/produc
 import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import {
-  aiEvaluationItem,
-  drainAiEvaluations,
-  withClaimedAiEvaluation,
-} from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { discoverAiRefresh } from "~/server/domains/run/service/ai-refresh";
 import {
   kernelCtx,

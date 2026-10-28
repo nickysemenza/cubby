@@ -35,7 +35,7 @@ import {
   type SearchableEntityText,
 } from "~/server/generic/embedding/repo/entity-embedding";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
-import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
+import { workPendingIn } from "~/server/generic/jobs/repo/work-items";
 
 interface SearchDocumentSource {
   entityKind: SearchableEntity;
@@ -663,7 +663,6 @@ export async function publishPreparedSearchDocuments(
   db: Database | DrizzleTransaction,
   prepared: Awaited<ReturnType<typeof prepareSearchDocuments>>,
 ): Promise<SearchDocumentRefreshResult[]> {
-  await assertCurrentJob(db);
   const entries = [...prepared.entries].sort((a, b) =>
     entityRefKey(a.source.entityKind, a.source.entityId).localeCompare(
       entityRefKey(b.source.entityKind, b.source.entityId),
@@ -833,14 +832,7 @@ export async function searchCoverageIncomplete(
       : [];
   });
   const result = await unwrapDb(db).execute(sql`SELECT ${
-    targets.length
-      ? sql`EXISTS (
-          SELECT 1 FROM "WorkItem" d WHERE d.target IN (${sql.join(
-            targets.map((target) => sql`${target}`),
-            sql`, `,
-          )}) LIMIT 1
-        ) OR `
-      : sql``
+    targets.length ? sql`${workPendingIn(targets)} OR ` : sql``
   }EXISTS (
     SELECT 1 ${unembeddedDocumentsSql(config)}
       AND sd."entityKind" IN (${sql.join(

@@ -21,7 +21,6 @@ import { getDb, unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run, runStep } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
-import { fenceJob } from "~/server/generic/jobs/repo/external-claim";
 import {
   assertWorkflowEffect,
   hasWorkflowExecution,
@@ -124,8 +123,6 @@ export async function recordRunStepPage(
 ) {
   if (!hasWorkflowExecution()) return writeRunStepPage(db, runId, key, page);
   return withTransactionDatabase(db, async (tx) => {
-    const owner = currentJobExecution();
-    if (owner) await fenceJob(tx, owner.claim);
     await assertWorkflowEffect(tx);
     return writeRunStepPage(tx, runId, key, page);
   });

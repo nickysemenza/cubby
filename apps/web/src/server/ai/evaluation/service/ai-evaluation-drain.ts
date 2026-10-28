@@ -1,26 +1,25 @@
-/**
- * The `ai.evaluation` drain (docs/jobs.md#ai-evaluation-drains): one Job per feature pages
- * through evaluation items. Product and connection refresh evaluate a whole
- * page and publish it in fenced chunks; other features run each item's own
- * guarded transactions under the drain lease. Domain authority (live Run,
- * activation, pending state, generation) is checked here; the drain owns
- * leases, attempts and backoff.
- */
 import { aiEvaluationTarget } from "@cubby/schemas/ai-evaluation";
 
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { findErrorCause, scrubErrorMessage } from "~/lib/error-diagnostics";
+/**
+ * The `ai.evaluation` drain (docs/jobs.md#ai-evaluation-drains): one Job per feature pages
+ * through evaluation items. Product and connection refresh evaluate a whole
+ * page and publish it in fenced chunks; other features run each item's own
+ * guarded transactions under the drain lease. Activation, pending state and
+ * generation are checked here; requester Runs and feature execution arrive
+ * through `AiEvaluationExecution`; `defineDrain` owns leases, attempts and
+ * backoff.
+ */
+import type { UnparsedError } from "~/lib/error-utils";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { aiWorkDeferral } from "~/server/ai/cooperative-work";
-import {
-  compiledRefreshManifest,
-  dependenciesCurrent,
-} from "~/server/ai/policy/refresh-manifest";
 import {
   AiEvaluationAttemptObsoleteError,
   AiEvaluationUnauthorizedError,
   aiEvaluationAuthorizations,
   claimAiEvaluation,
+  type ClaimedAiEvaluation,
   failAiEvaluations,
   fenceAiEvaluationPage,
   guardAiEvaluationPage,
@@ -28,38 +27,53 @@ import {
   readAiEvaluations,
   settleAiEvaluations,
   withAiEvaluationSavepoint,
-} from "~/server/ai/repo/ai-evaluation";
-import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
-import { markAiEvaluationWork } from "~/server/ai/repo/ai-evaluation-work";
-import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
+} from "~/server/ai/evaluation/repo/ai-evaluation";
+import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import { markAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type {
   EvaluationPagePublication,
   EvaluationPageTarget,
-} from "~/server/ai/repo/evaluation-page";
+  PreparedEvaluationPage,
+} from "~/server/ai/evaluation/repo/evaluation-page";
+import {
+  compiledRefreshManifest,
+  dependenciesCurrent,
+} from "~/server/ai/policy/refresh-manifest";
+import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { ConnectionEvidenceInvalidatedError } from "~/server/domains/connection/repo/entity-connections";
 import { JobDeferredError, JobTargetError } from "~/server/generic/jobs/errors";
-import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
 import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
-import { defineDrain } from "~/server/generic/jobs/service/drain";
-import type { JobContext, JobHandler } from "~/server/generic/jobs/types";
-import { withWorkflowExecution } from "~/server/workflows/runs/execution";
-
 import {
-  pauseRunForAiWork,
-  readAiEvaluation,
-  readRunStatus,
-  resumeFundingStoppedRuns,
-} from "../repo/ai-work-state";
-import {
-  executeAiRefreshTarget,
-  prepareAiRefreshPage,
-  type AiRefreshPorts,
-  type PreparedAiRefreshPage,
-} from "./ai-refresh";
-import { executeAiWorkTarget, type AiWorkPorts } from "./ai-work";
+  defineDrain,
+  type DrainContext,
+  stopsDrainPage,
+} from "~/server/generic/jobs/service/drain";
+import type { JobHandler } from "~/server/generic/jobs/types";
 
-export type AiEvaluationPorts = AiRefreshPorts & AiWorkPorts;
+/**
+ * Feature execution and requester-Run authority, supplied by the Run domain.
+ * The drain owns items, attempts and fences; an adapter never sees the queue.
+ */
+export type AiEvaluationExecution = {
+  /** One evaluation through its own guarded transactions under the drain's fence. */
+  execute(
+    db: Database,
+    evaluation: ClaimedAiEvaluation,
+    context: DrainContext,
+  ): Promise<void>;
+  /** A page of a paged feature (product identity, connections). */
+  preparePage(
+    db: Database,
+    targets: readonly EvaluationPageTarget[],
+    context: DrainContext,
+  ): Promise<PreparedEvaluationPage>;
+  /** Domain evidence that changed during inference: the evaluation settles obsolete. */
+  evidenceInvalidated(error: UnparsedError): boolean;
+  pauseRun(db: Database, runId: string, message: string): Promise<void>;
+  runPaused(db: Database, runId: string): Promise<boolean>;
+  /** The page runs once its funding window opened: resume Runs a budget stop paused. */
+  resumeFundingStopped(db: Database, runIds: readonly string[]): Promise<void>;
+};
 
 /** Features whose evaluations share one page preparation and decision wave. */
 const PAGE_FEATURES = new Set(["product-identity", "entity-connections"]);
@@ -83,7 +97,7 @@ type Entry =
 type Prepared = {
   targets: Map<string, EvaluationPageTarget>;
   entries: Map<string, Entry>;
-  page?: PreparedAiRefreshPage;
+  page?: PreparedEvaluationPage;
 };
 
 const OBSOLETE =
@@ -92,12 +106,8 @@ const OBSOLETE =
 const errorMessage = (error: unknown) =>
   scrubErrorMessage(error instanceof Error ? error.message : String(error));
 
-const evidenceObsolete = (error: unknown) =>
-  !!findErrorCause(
-    error,
-    (cause): cause is ConnectionEvidenceInvalidatedError =>
-      cause instanceof ConnectionEvidenceInvalidatedError,
-  ) || OBSOLETE.test(errorMessage(error));
+const evidenceObsolete = (execution: AiEvaluationExecution, error: unknown) =>
+  execution.evidenceInvalidated(error) || OBSOLETE.test(errorMessage(error));
 
 /**
  * Domain failures at the drain seam: evidence changes settle obsolete,
@@ -106,6 +116,7 @@ const evidenceObsolete = (error: unknown) =>
  */
 async function mapFailure(
   db: Database,
+  execution: AiEvaluationExecution,
   target: EvaluationPageTarget,
   error: unknown,
 ): Promise<{ entry: Entry } | { failed: unknown }> {
@@ -113,7 +124,7 @@ async function mapFailure(
     findErrorCause(error, (cause): cause is E => cause instanceof type);
   if (is(AiEvaluationAttemptObsoleteError)) return { entry: { kind: "skip" } };
   if (is(AiEvaluationUnauthorizedError)) return { entry: { kind: "park" } };
-  if (stopsPage(classifyJobFailure(error))) return { failed: error };
+  if (stopsDrainPage(error)) return { failed: error };
   const message = errorMessage(error);
   const budget = is(AiBudgetExhaustedError);
   if (budget)
@@ -141,15 +152,15 @@ async function mapFailure(
         "rate_limit",
       ),
     };
-  if (evidenceObsolete(error))
+  if (evidenceObsolete(execution, error))
     return { entry: { kind: "obsolete", reason: message } };
   const { evaluation } = target;
   if (evaluation.executionKind !== "ai_refresh") {
     if (/mailbox.*connected/i.test(message)) {
-      await pauseRunForAiWork(db, evaluation.runId, message);
+      await execution.pauseRun(db, evaluation.runId, message);
       return { entry: { kind: "park" } };
     }
-    if ((await readRunStatus(db, evaluation.runId)) === "paused")
+    if (await execution.runPaused(db, evaluation.runId))
       return { entry: { kind: "park" } };
   }
   return { failed: error };
@@ -158,30 +169,23 @@ async function mapFailure(
 async function prepareItems(
   db: Database,
   runnable: readonly EvaluationPageTarget[],
-  context: JobContext,
-  ports: AiEvaluationPorts,
+  context: DrainContext,
+  execution: AiEvaluationExecution,
   settle: (target: EvaluationPageTarget, error: unknown) => Promise<void>,
   entries: Map<string, Entry>,
-  generation: number,
 ) {
   const limiter = createConcurrencyLimiter(ITEM_CONCURRENCY);
   await Promise.allSettled(
     runnable.map((target) =>
       limiter.run(async () => {
         try {
-          const claimed = await claimAiEvaluation(db, target.item);
+          const claimed = await claimAiEvaluation(context, target.item);
           if (!claimed) {
             entries.set(target.item.ref, { kind: "skip" });
             return;
           }
-          await withWorkflowExecution(
-            { runId: claimed.runId, attempt: generation, database: db },
-            () =>
-              claimed.executionKind === "ai_refresh"
-                ? executeAiRefreshTarget(db, claimed, ports)
-                : executeAiWorkTarget(db, claimed, ports),
-          );
-          const settled = await readAiEvaluation(db, claimed.id);
+          await execution.execute(db, claimed, context);
+          const [settled] = await readAiEvaluations(db, [claimed.id]);
           // A re-marked item keeps its newer ticket, so this never clears it.
           if (settled && PENDING_AI_STATES.includes(settled.state))
             throw new Error("AI evaluation returned without a durable outcome");
@@ -195,7 +199,10 @@ async function prepareItems(
   if (context.signal.aborted) throw context.signal.reason;
 }
 
-function aiEvaluationDrainSpec(ports: AiEvaluationPorts, paged: boolean) {
+function aiEvaluationDrainSpec(
+  execution: AiEvaluationExecution,
+  paged: boolean,
+) {
   return defineDrain<Prepared>({
     limit: paged ? 100 : ITEM_PAGE_LIMIT,
     isolationLevel: "serializable",
@@ -270,7 +277,7 @@ function aiEvaluationDrainSpec(ports: AiEvaluationPorts, paged: boolean) {
       const current = live.filter((entry) => !entries.has(entry.item.ref));
       // The drain deferred until the funding window, so running again is the
       // window opening for the Runs a budget stop paused.
-      await resumeFundingStoppedRuns(db, [
+      await execution.resumeFundingStopped(db, [
         ...new Set(current.map((entry) => entry.evaluation.runId)),
       ]);
       const authorization = await aiEvaluationAuthorizations(
@@ -285,24 +292,16 @@ function aiEvaluationDrainSpec(ports: AiEvaluationPorts, paged: boolean) {
         authorization.has(entry.evaluation.id),
       );
       const settle = async (target: EvaluationPageTarget, error: unknown) => {
-        const mapped = await mapFailure(db, target, error);
+        const mapped = await mapFailure(db, execution, target, error);
         if ("entry" in mapped) entries.set(target.item.ref, mapped.entry);
         else failed.set(target.item, mapped.failed);
       };
       if (!paged) {
-        await prepareItems(
-          db,
-          runnable,
-          context,
-          ports,
-          settle,
-          entries,
-          context.claim.generation,
-        );
+        await prepareItems(db, runnable, context, execution, settle, entries);
         return { prepared: { targets, entries }, failed };
       }
       if (!runnable.length) return { prepared: { targets, entries }, failed };
-      const page = await prepareAiRefreshPage(db, runnable, context, ports);
+      const page = await execution.preparePage(db, runnable, context);
       const overflow = new Set(page.overflow);
       for (const target of runnable) {
         const id = target.evaluation.id;
@@ -375,7 +374,7 @@ function aiEvaluationDrainSpec(ports: AiEvaluationPorts, paged: boolean) {
           // Evidence that changed during inference settles obsolete. The
           // drain splits a chunk on target errors, so a change obsoletes only
           // its own evaluation and its siblings still publish.
-          if (!evidenceObsolete(error)) throw error;
+          if (!evidenceObsolete(execution, error)) throw error;
           if (ids.length > 1)
             throw new JobTargetError(errorMessage(error), { cause: error });
           published = [];
@@ -433,10 +432,10 @@ function aiEvaluationDrainSpec(ports: AiEvaluationPorts, paged: boolean) {
 
 /** Product and connection features page; other features run item by item. */
 export function aiEvaluationJobHandler(
-  ports: AiEvaluationPorts = {},
+  execution: AiEvaluationExecution,
 ): JobHandler {
-  const paged = aiEvaluationDrainSpec(ports, true);
-  const single = aiEvaluationDrainSpec(ports, false);
+  const paged = aiEvaluationDrainSpec(execution, true);
+  const single = aiEvaluationDrainSpec(execution, false);
   return {
     prepare: (db, claim, context) =>
       (PAGE_FEATURES.has(claim.key.slice("ai-evaluation:".length))

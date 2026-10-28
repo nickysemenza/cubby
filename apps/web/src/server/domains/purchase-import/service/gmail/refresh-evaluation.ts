@@ -1,8 +1,8 @@
 import { userId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
+import type { ClaimedAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation";
 import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
-import type { ClaimedAiEvaluation } from "~/server/ai/repo/ai-evaluation";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {
