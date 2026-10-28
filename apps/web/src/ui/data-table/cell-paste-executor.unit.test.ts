@@ -71,14 +71,15 @@ describe("buildCopyGrid", () => {
     ]);
   });
 
-  it("emits a plain empty text cell for a column with no cellData", () => {
+  it("copies the full accessor text for a column with no cellData", () => {
     const rect: CellRect = { top: 0, left: 0, bottom: 0, right: 1 };
     const grid = buildCopyGrid({
       rect,
       rows,
       columnCellData: [null, qtyCol()],
+      getCellText: (row) => rows[row]?.name ?? null,
     });
-    expect(grid[0]?.[0]).toEqual({ kind: "text", text: "", json: null });
+    expect(grid[0]?.[0]).toEqual({ kind: "text", text: "Alpha", json: null });
     expect(grid[0]?.[1]).toEqual({ kind: "number", text: "1", json: 1 });
   });
 });

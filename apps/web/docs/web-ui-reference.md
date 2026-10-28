@@ -121,6 +121,11 @@ Three layers — pick by what the surface is, never hand-roll table styling:
   - Two defaults are tuned for `<RTable>`'s explicitly-sized columns: `<Table>` is **`table-fixed`** and `<TableCell>` is **`whitespace-nowrap`**. For content-sized columns pass `className="table-auto"`; for wrapping prose cells add `whitespace-normal`. Suppress an unwanted row divider with `border-b-0` (e.g. grouped/`rowSpan` clusters). Keep the bordered-card wrapper via `containerClassName`.
 - **Raw `<table>`** only when those defaults actively fight the layout: **matrices / cross-tabs** (entities as columns, sticky panes, per-cell heatmap/stat styling — e.g. `RecipeCompareGrid`, `IngredientComponentGrid`), **dev/debug-only** surfaces (`perf-overlay`, costing-debug card), and **external-content** rendering (`markdown.tsx`).
 
+Text highlighted in a table uses native browser copy. Cell selection copies the
+complete value even when the visible cell is clipped. Scalar accessor columns
+without a typed clipboard declaration copy as read-only text; explicit typed
+clipboard contracts retain precedence.
+
 ### Row height
 
 - **`<RTable>` rows are one fixed height (`ROW_DENSITY` in `ui/data-table/density.ts`).** The virtualizer and the fast-scroll ghost rows place rows at `rowHeight`; a taller painted row makes scrolling jump. `DesktopDataRow` holds every cell's content to that height and clips overflow, so a stacked cell gets cut off rather than stretching the row. A cell holds at most two lines that fit the row: `StackedValue` (`ui/common/stacked-value.tsx`) sets a 15px value over a 13px muted line, which desktop dates and timestamps use automatically, and `ChipCluster` (`ui/common/chip-cluster.tsx`) wraps chips to two lines and counts the rest as "+N" (including a bounded preview's unsent items, `more`) instead of an expander, dropping chips whose painted lines would overflow the row. Keep the first named chip visible, truncating it beside the remaining count when necessary; a populated cell must not collapse to only "+1". An explicit zero preview limit still hides all chips. Related-record previews use it too.

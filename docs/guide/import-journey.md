@@ -81,7 +81,9 @@ coverage retains its existing Vendor context.
 Each connected mailbox receives its own bounded sample before any mailbox
 filter is applied, so newer receipts in one mailbox cannot hide another's
 originals. Mobile discovery and shared-sender rows retain their key summaries;
-their Details disclosures expose every remaining field and Run link.
+discovery Details and the shared-sender inspector expose every remaining field
+and Run link. Shared senders support search, status views and column controls;
+the default view keeps source identity, search state and key outcomes visible.
 
 Vendor coverage, alongside Emails and linked from Settings, shows every known
 Vendor in each connected member mailbox. Existing Vendor Accounts provide the

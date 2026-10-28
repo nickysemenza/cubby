@@ -194,12 +194,14 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
       `GET /gmail/v1/users/me/messages/${messageId}`,
     ]),
   );
+  const sharedSender =
+    "receipts+synthetic-cafe-receipt-confirmation-mailbox@order.online";
   await retainedMailFixture(db, {
     ledgerPartyId: member.id,
     mailboxId: connected.accountId,
     messageId: `synthetic-platform-${token}`,
     checksum: "c".repeat(64),
-    sender: "Synthetic Cafe <noreply@order.online>",
+    sender: `Synthetic Cafe <${sharedSender}>`,
     subject: "Synthetic Cafe receipt",
   });
   await gotoAuthenticatedPage(page, "/settings");
@@ -256,22 +258,75 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     .first()
     .click();
   await expect(
-    senderRegion
-      .getByText('from:"noreply@order.online"', { exact: true })
+    page
+      .getByText(`from:"${sharedSender}"`, { exact: true })
       .filter({ visible: true })
       .first(),
   ).toBeVisible();
+  await test.info().attach("Shared sender phone inspector", {
+    body: await page.screenshot(),
+    contentType: "image/png",
+  });
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
   await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(
+    senderRegion.getByPlaceholder("Search senders, mailboxes, or queries"),
+  ).toBeVisible();
+  await expect(
+    senderRegion.getByRole("columnheader", {
+      name: "Historical search",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await test.info().attach("Shared sender desktop coverage", {
+    body: await senderRegion.screenshot(),
+    contentType: "image/png",
+  });
+  const senderCell = senderRegion.getByRole("cell", {
+    name: sharedSender,
+    exact: true,
+  });
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await senderCell.click();
+  await page.keyboard.press("ControlOrMeta+c");
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe(sharedSender);
+  await senderCell.evaluate((cell) => {
+    const range = document.createRange();
+    const text = document
+      .createTreeWalker(cell, NodeFilter.SHOW_TEXT)
+      .nextNode();
+    if (!text) throw new Error("Sender cell must contain source text");
+    range.setStart(text, 0);
+    range.setEnd(text, 8);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.keyboard.press("ControlOrMeta+c");
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe(sharedSender.slice(0, 8));
+  await page.evaluate(() => window.getSelection()?.removeAllRanges());
   const row = coverage.getByRole("row").filter({ hasText: vendorName });
   await expect(row).toBeVisible();
   await expect(
     coverage.getByRole("columnheader", { name: /Queue/ }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: /Never searched/ }).click();
+  await page
+    .getByRole("tab", { name: /Never searched/ })
+    .last()
+    .click();
   await expect(page).toHaveURL(/view=never_searched/);
   await expect(row).toBeVisible();
   await page.getByRole("tab", { name: /All coverage/ }).click();
-  await page.getByRole("button", { name: /^Columns/ }).click();
+  await page
+    .getByRole("button", { name: /^Columns/ })
+    .last()
+    .click();
   await page
     .getByRole("button", { name: "Show Search coverage", exact: true })
     .click();

@@ -67,6 +67,30 @@ describe("useCellSelection", () => {
       anchor: { row: 0, col: 0 },
       focus: { row: 1, col: 1 },
     });
+
+    render(
+      <section
+        aria-label="Copy table"
+        {...result.current.selection.containerProps}
+      >
+        <span>Selected receipt text</span>
+      </section>,
+    );
+    // A previous table interaction can leave a collapsed browser range.
+    window.getSelection()?.collapse(document.body, 0);
+    const range = document.createRange();
+    range.selectNodeContents(screen.getByText("Selected receipt text"));
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    expect(window.getSelection()?.toString()).toBe("Selected receipt text");
+    // A retained cell range must not swallow the browser's text-copy gesture.
+    expect(
+      fireEvent.keyDown(screen.getByRole("region", { name: "Copy table" }), {
+        key: "c",
+        metaKey: true,
+      }),
+    ).toBe(true);
+    window.getSelection()?.removeAllRanges();
   });
 
   it("retries only failed rows against their original identities after reordering", async () => {
