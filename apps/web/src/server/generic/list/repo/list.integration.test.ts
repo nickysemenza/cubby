@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { email, task } from "~/server/db/schema";
+import { emailScaffold } from "~/server/domains/email/repo/email";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -168,17 +169,7 @@ describe("list selection and relation loading", () => {
         status: "pending",
       });
     await publishQualityFixtures(ctx.db, "email");
-    const reader = listScaffold("email", email, {
-      derived: {
-        linkState: sql`0`,
-        scopeLinkState: sql`NULL`,
-        linked: sql`false`,
-        reviewConflict: sql`false`,
-        purchaseId: () => undefined,
-        vendorId: () => undefined,
-        vendorAccountId: () => undefined,
-      },
-    });
+    const reader = emailScaffold;
     for (const pageIndex of [0, 1, 4]) {
       const request = {
         filters: { dataGap: ["email_original_missing"] },

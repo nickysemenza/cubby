@@ -659,7 +659,15 @@ export const { definition, readSchemas } = defineEntityModel({
         inputs: EMAIL_RELATIONSHIP_INPUTS,
       },
     },
+    rows: {
+      coverageCandidates: {
+        label: "Mail coverage",
+        repository: { vendor: { reference: "vendor" }, stage: "text" },
+      },
+    },
     derived: {
+      coverageVendorId: { via: "coverageCandidates.vendor" },
+      coverageStage: { via: "coverageCandidates.stage" },
       // Linked, then suggested, then unlinked; newest first within one.
       linkState: { type: "enum", options: [...emailLinkState.options] },
       // The link state the list shows, relative to its scope record.
@@ -783,6 +791,25 @@ export const { definition, readSchemas } = defineEntityModel({
   filters: {
     schema: { module: "@cubby/schemas/email", export: "emailFilterFields" },
     descriptors: [
+      {
+        columnId: "coverageVendorId",
+        label: "Coverage Vendor",
+        kind: "idMulti",
+        placeholder: "Candidates or evidence for Vendor...",
+        brandRef: { entity: "vendor" },
+        singleValue: { reason: "One Mail coverage row" },
+      },
+      {
+        columnId: "coverageStage",
+        kind: "multiselect",
+        placeholder: "Coverage stage...",
+        options: [
+          { value: "known", label: "Known Emails" },
+          { value: "classified", label: "Classified Emails" },
+          { value: "retained", label: "Content saved" },
+          { value: "linked", label: "Linked Emails" },
+        ],
+      },
       {
         columnId: "sender",
         kind: "text",

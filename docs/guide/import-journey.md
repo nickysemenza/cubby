@@ -72,6 +72,32 @@ Emails may come from earlier or manual imports even before a current query has
 completed. Color reinforces the text: completed searches are positive,
 missing recorded classifications and unfinished searches warn, and zeros are muted.
 
+The sortable Queue column follows the mailbox cursor's targeted-query order,
+including unmatched-charge searches in its positions. Running now requires a
+recorded active page or controlled import; a partial historical cursor alone
+never proves active execution. New-mail checks can run between targeted queries,
+so positions are not start-time promises. Paused imports and discovery recovery
+retain their reason and actual Run link. Turning automatic imports off does not
+stop discovery from classifying mail. Search checkpoints record their committing
+Run going forward; older checkpoints without provenance say Run not recorded.
+Completed controlled all-history receipts can identify their own Run after the
+request cursor is pruned. Never substitute the mailbox's newest unrelated Run.
+
+Coverage views are URL-addressable: All coverage, Running & queued, Never
+searched, Incomplete and Needs attention. Their counts respect the linked-record
+context. Selection and date drafts live above the responsive inspector, and
+polling updates existing rows without remounting the table. Compact defaults
+keep diagnostic counts in the column menu. Last searched is the latest recorded
+completion among current query definitions; it is not a new-mail freshness or
+Purchase-import guarantee. Import next uses the existing controlled-import
+command and does not interrupt active work.
+
+Email count drilldowns use the same union as the coverage report: sender/domain
+candidates, sender-proof attribution and accepted Purchase evidence. The Email
+list's Mail coverage row set keeps the Vendor and stage on the same membership,
+with the selected mailbox/member retained in the route. Linked Purchase counts
+open the distinct linked Purchase records rather than a broader Vendor list.
+
 Each search records its finish time, retained Email count and newly tracked
 message count (`completedAt`, `emailCount`, `messageCount`). Older checkpoints
 retain unknown counts. No matches means every current search finished with a

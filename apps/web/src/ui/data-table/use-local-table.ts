@@ -26,6 +26,7 @@ export function useLocalTable<T extends RowData>({
   rowContentVersion,
   totalCount = rows.length,
   selection,
+  initialVisibility,
 }: {
   rows: readonly T[];
   columns: CubbyColumnCollection<T>;
@@ -36,6 +37,7 @@ export function useLocalTable<T extends RowData>({
   rowContentVersion?: unknown;
   /** A larger source total suppresses local counts that could imply full coverage. */
   totalCount?: number;
+  initialVisibility?: ColumnVisibilityState;
   selection?: {
     rowSelection: RowSelectionState;
     onRowSelectionChange: OnChangeFn<RowSelectionState>;
@@ -61,10 +63,10 @@ export function useLocalTable<T extends RowData>({
     });
   }, [columns, search]);
   const initialColumnVisibility = useMemo(() => {
-    const visibility: ColumnVisibilityState = {};
+    const visibility: ColumnVisibilityState = { ...initialVisibility };
     if (search) visibility._search = false;
     return visibility;
-  }, [search]);
+  }, [search, initialVisibility]);
   const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns: searchableColumns,
     initialColumnVisibility,

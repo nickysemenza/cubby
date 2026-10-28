@@ -4,10 +4,20 @@ import { plainDate } from "./base-entity";
 import {
   ledgerPartyShortcode,
   runShortcode,
+  purchaseShortcode,
   vendorAccountShortcode,
   vendorShortcode,
 } from "./identifiers";
 import { runStatus } from "./run-fields";
+
+export const mailCoverageView = z.enum([
+  "all",
+  "activity",
+  "never_searched",
+  "incomplete",
+  "attention",
+]);
+export type MailCoverageView = z.infer<typeof mailCoverageView>;
 
 const count = z.number().int().nonnegative();
 
@@ -47,8 +57,16 @@ export const mailCoverageRow = z.strictObject({
       query: z.string(),
       state: z.enum(["not_started", "in_progress", "complete"]),
       completedAt: z.iso.datetime().nullable(),
+      runId: runShortcode.nullable(),
+      queuePosition: count.nullable(),
     }),
   ),
+  queue: z.strictObject({
+    state: z.enum(["running", "queued", "paused", "idle"]),
+    position: count.nullable(),
+    runId: runShortcode.nullable(),
+    reason: z.string().nullable(),
+  }),
   lastSearchedAt: z.iso.datetime().nullable(),
   controlledRun: z
     .strictObject({
@@ -60,6 +78,7 @@ export const mailCoverageRow = z.strictObject({
       to: plainDate.nullable(),
       imports: z.strictObject({
         running: count,
+        paused: count,
         needsReview: count,
         failed: count,
         completed: count,
@@ -75,6 +94,7 @@ export const mailCoverageRow = z.strictObject({
   linkedRetainedEmails: count,
   /** Distinct linked Purchases; several Emails can link the same Purchase. */
   linkedPurchases: count,
+  linkedPurchaseIds: z.array(purchaseShortcode),
 });
 
 export const mailCoverage = z.strictObject({

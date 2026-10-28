@@ -23,8 +23,17 @@ const oneScopeValue = <T extends z.ZodTypeAny>(code: T) =>
  * owned by the account's member. `linkState` narrows by the scope-relative
  * state the list shows.
  */
+export const mailCoverageStage = z.enum([
+  "known",
+  "classified",
+  "retained",
+  "linked",
+]);
+
 export const emailFilterFields = {
   ...emailBaseFilterFields,
+  coverageVendorId: oneScopeValue(vendorShortcode).optional(),
+  coverageStage: oneOrMany(mailCoverageStage).optional(),
   purchaseId: oneScopeValue(purchaseShortcode).optional(),
   vendorId: oneScopeValue(vendorShortcode).optional(),
   vendorAccountId: oneScopeValue(vendorAccountShortcode).optional(),

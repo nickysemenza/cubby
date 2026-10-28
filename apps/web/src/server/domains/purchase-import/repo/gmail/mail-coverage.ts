@@ -7,11 +7,14 @@ import {
 } from "@cubby/schemas/mail-coverage";
 import {
   mailboxCoverage,
+  mergeMailboxQueries,
   currentScopedPosition,
   mailboxDiscoveryInput,
+  mailboxDiscoveryProgress,
 } from "@cubby/schemas/mailbox-research";
 import { runPurpose } from "@cubby/schemas/run-fields";
-import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
+import { and, desc, eq, isNotNull, isNull, inArray, sql } from "drizzle-orm";
 
 import { distinctSenderDomain, senderAddress } from "~/lib/vendor/domains";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
@@ -31,9 +34,76 @@ import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purc
 import { completedControlledSearches } from "~/server/domains/purchase-import/repo/controlled-mail-import";
 import { readMailImportSettings } from "~/server/domains/purchase-import/repo/mail-import-settings";
 
-import { listMemberMailboxes } from "./targets";
+import { listMemberMailboxes, listGmailSyncTargets } from "./targets";
 import { vendorSearchTerms } from "./vendor-identity";
 import { vendorMailQueries } from "./vendor-mail-scope";
+
+/** Queue activity and import admission are distinct from historical search coverage. */
+function summarizeQueue({
+  controlledRun,
+  running,
+  position,
+  active,
+  pause,
+  enabled,
+  searchTerms,
+}: {
+  controlledRun: MailCoverageRow["controlledRun"];
+  running: boolean;
+  position: number | null;
+  active: { id: string; status: string } | undefined;
+  pause: boolean;
+  enabled: boolean;
+  searchTerms: readonly string[];
+}): MailCoverageRow["queue"] {
+  const controlledActive =
+    controlledRun &&
+    (new Set<string>(ACTIVE_RUN_STATUSES).has(controlledRun.status) ||
+      controlledRun.imports.running > 0 ||
+      controlledRun.imports.paused > 0);
+  const controlledRunning =
+    controlledActive &&
+    !controlledRun.queued &&
+    (controlledRun.status === "running" || controlledRun.imports.running > 0);
+  const controlledPaused =
+    controlledActive && !controlledRunning && !controlledRun.queued;
+  return mailCoverageRow.shape.queue.parse({
+    state:
+      running || controlledRunning
+        ? "running"
+        : controlledActive && controlledRun.queued
+          ? "queued"
+          : controlledPaused ||
+              (position !== null &&
+                (pause || (active && active.status !== "running")))
+            ? "paused"
+            : position !== null
+              ? "queued"
+              : "idle",
+    position: controlledActive && controlledRun.queued ? 1 : position,
+    runId: controlledActive
+      ? controlledRun.id
+      : running || (position !== null && active?.status !== "running")
+        ? (active?.id ?? null)
+        : null,
+    reason:
+      searchTerms.length === 0
+        ? "Add a website or verified sender to the Vendor."
+        : controlledPaused
+          ? "Selected work is paused; open its Run for recovery."
+          : pause && !controlledActive
+            ? "Other imports are paused until you resume this mailbox; automatic searches may still classify mail."
+            : !enabled && !controlledActive
+              ? "Automatic import is off; discovery can still search and classify mail."
+              : active && active.status !== "running"
+                ? `Discovery is ${active.status.replaceAll("_", " ")}; open its Run for recovery.`
+                : controlledActive && controlledRun.queued
+                  ? "Waiting for active work to finish."
+                  : position !== null
+                    ? "Position among pending targeted queries in this mailbox; new-mail checks may run between searches."
+                    : null,
+  });
+}
 
 /** Complete household report; grouped metadata avoids a query per Vendor/mailbox row. */
 export async function readMailCoverage(
@@ -50,6 +120,8 @@ export async function readMailCoverage(
     controls,
     cursorRows,
     importRuns,
+    discoveryRuns,
+    targets,
   ] = await Promise.all([
     listMemberMailboxes(db),
     getDb(db)
@@ -120,7 +192,7 @@ export async function readMailCoverage(
             Number,
           ),
         emails: sql<number>`count(DISTINCT ${email.id})`.mapWith(Number),
-        purchaseIds: sql<string[]>`array_agg(DISTINCT ${purchase.id})`,
+        purchaseIds: sql<string[]>`array_agg(DISTINCT ${purchase.shortcode})`,
       })
       .from(email)
       .leftJoin(
@@ -150,6 +222,7 @@ export async function readMailCoverage(
       .select({
         id: run.shortcode,
         internalId: run.id,
+        shortcode: run.shortcode,
         vendorId: run.vendorId,
         ledgerPartyId: run.ledgerPartyId,
         mailboxId: sql<string>`${run.input}->>'mailboxId'`,
@@ -192,6 +265,31 @@ export async function readMailCoverage(
         ),
       )
       .groupBy(run.parentRunId, run.status),
+    getDb(db)
+      .select({
+        id: run.shortcode,
+        mailboxId: sql<string>`${run.input}->>'mailboxId'`,
+        status: run.status,
+        failureCode: run.failureCode,
+        input: run.input,
+        progress: run.progress,
+      })
+      .from(run)
+      .where(
+        and(
+          eq(run.purpose, runPurpose.enum.mail_discovery),
+          isNull(run.retiredAt),
+          inArray(run.status, [
+            "running",
+            "paused",
+            "paused_auth",
+            "paused_offline",
+          ]),
+          notDeleted(run),
+        ),
+      )
+      .orderBy(desc(run.startedAt), desc(run.id)),
+    listGmailSyncTargets(db),
   ]);
   const terms = new Map(vendors.map((row) => [row.id, vendorSearchTerms(row)]));
   const identities = new Map<string, Set<string>>();
@@ -288,12 +386,16 @@ export async function readMailCoverage(
               .filter(
                 (child) =>
                   child.parentId === control.internalId &&
-                  [
-                    "running",
-                    "paused",
-                    "paused_auth",
-                    "paused_offline",
-                  ].includes(child.status),
+                  child.status === "running",
+              )
+              .reduce((total, child) => total + child.total, 0),
+            paused: importRuns
+              .filter(
+                (child) =>
+                  child.parentId === control.internalId &&
+                  ["paused", "paused_auth", "paused_offline"].includes(
+                    child.status,
+                  ),
               )
               .reduce((total, child) => total + child.total, 0),
             needsReview: importRuns
@@ -350,6 +452,36 @@ export async function readMailCoverage(
   const rows = members.flatMap((member) => {
     const coverage =
       cursors.get(`${member.ledgerPartyId}/${member.mailboxId}`) ?? null;
+    const target = targets.find(
+      (entry) =>
+        entry.mailboxId === member.mailboxId &&
+        entry.ledgerPartyId === member.ledgerPartyId,
+    );
+    const active = discoveryRuns.find(
+      (entry) =>
+        entry.mailboxId === member.mailboxId &&
+        entry.failureCode !== "controlled_mail_queued",
+    );
+
+    const ordered = coverage
+      ? mergeMailboxQueries(coverage, target?.scopedQueries ?? []).scoped
+      : (target?.scopedQueries ?? []).map((query) => ({
+          ...query,
+          completed: false,
+          pageToken: null,
+        }));
+    // Positions count all pending targeted queries, including unmatched-charge queries.
+    const pending = ordered.filter(
+      (entry) =>
+        !entry.completed &&
+        target?.scopedQueries.some(
+          (query) => query.key === entry.key && query.query === entry.query,
+        ),
+    );
+    const pause = settings.controlledPauses.some(
+      (entry) => entry.mailboxId === member.mailboxId,
+    );
+    const enabled = settings.enabledMailboxes.includes(member.mailboxId);
     return vendors.map((row) => {
       const searchTerms = terms.get(row.id) ?? [];
       const queries = vendorMailQueries(row.id, searchTerms);
@@ -390,6 +522,34 @@ export async function readMailCoverage(
                 )
               ? "in_progress"
               : "not_started";
+      const controlledRun =
+        controlRuns.get(key(row.id, member.ledgerPartyId, member.mailboxId)) ??
+        null;
+      const queued = queries.flatMap((query) => {
+        const index = pending.findIndex(
+          (entry) => entry.key === query.key && entry.query === query.query,
+        );
+        return index < 0 ? [] : [index + 1];
+      });
+      const position = queued.length ? Math.min(...queued) : null;
+      const progress = mailboxDiscoveryProgress.safeParse(active?.progress);
+      // A pending cursor is not proof that the worker is processing this query now.
+      const activeQueryKey = progress.success
+        ? progress.data.page?.scopedKey
+        : undefined;
+      const running =
+        active?.status === "running" &&
+        !!activeQueryKey &&
+        queries.some((query) => query.key === activeQueryKey);
+      const queue = summarizeQueue({
+        controlledRun,
+        running,
+        position,
+        active,
+        pause,
+        enabled,
+        searchTerms,
+      });
       const dates = searched
         .flatMap((entry) => (entry?.completedAt ? [entry.completedAt] : []))
         .sort();
@@ -418,12 +578,18 @@ export async function readMailCoverage(
                 ? "in_progress"
                 : "not_started",
             completedAt: position?.completedAt ?? null,
+            runId: position?.runId ?? null,
+            queuePosition: (() => {
+              const index = pending.findIndex(
+                (entry) =>
+                  entry.key === query.key && entry.query === query.query,
+              );
+              return index < 0 ? null : index + 1;
+            })(),
           };
         }),
-        lastSearchedAt:
-          complete === queries.length && dates.length === queries.length
-            ? (dates.at(-1) ?? null)
-            : null,
+        queue,
+        lastSearchedAt: dates.at(-1) ?? null,
         controlledRun:
           controlRuns.get(
             key(row.id, member.ledgerPartyId, member.mailboxId),
@@ -432,6 +598,7 @@ export async function readMailCoverage(
         linkedEmails: associated?.emails ?? 0,
         linkedRetainedEmails: associated?.retained ?? 0,
         linkedPurchases: associated?.purchases.size ?? 0,
+        linkedPurchaseIds: [...(associated?.purchases ?? [])].sort(),
       };
     });
   });

@@ -1,5 +1,6 @@
 import {
   parseEntityId,
+  runShortcode,
   type RunId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
@@ -58,7 +59,7 @@ type CompletedSearches = Map<string, Map<string, MailboxScopedPosition>>;
 type SearchReceipt = Pick<
   typeof run.$inferSelect,
   "vendorId" | "ledgerPartyId" | "input" | "status" | "endedAt"
->;
+> & { shortcode?: string };
 
 /** Completed all-history requests prove coverage even after request cursors are pruned. */
 export function completedControlledSearches(
@@ -86,6 +87,9 @@ export function completedControlledSearches(
           pageToken: null,
           completed: true,
           completedAt: row.endedAt?.toISOString(),
+          ...(row.shortcode
+            ? { runId: runShortcode.parse(row.shortcode) }
+            : {}),
         });
     }
     result.set(key, queries);
@@ -101,6 +105,7 @@ export async function readCompletedControlledSearches(
   return completedControlledSearches(
     await getDb(db)
       .select({
+        shortcode: run.shortcode,
         vendorId: run.vendorId,
         ledgerPartyId: run.ledgerPartyId,
         input: run.input,
