@@ -57,6 +57,20 @@ linked Emails and distinct linked Purchases. Several Emails can describe one
 Purchase. Local sender/domain matches are candidates, not Vendor attribution
 or a Gmail-wide total. Domains shared by Vendors can contribute candidates to
 more than one row, so row counts are not additive.
+Local counts include the union of sender/domain candidates, sender-proof Vendor
+attribution and accepted Purchase links, counting each Email once per Vendor
+and mailbox. Content saved counts currently retained originals. Purchase links
+survive content clearing, so linked Emails can exceed content saved; the linked
+Email cell breaks down saved content versus metadata-only evidence. Account
+labels are the current Vendor and member names, resolved in the report batch.
+
+Search coverage is completed query definitions out of current query definitions,
+not an Email count or a Run count. Each cell opens its sender/domain queries,
+individual completion states and recorded finish times. These are full-history
+checkpoints; date-limited runs remain visible as controlled imports. Existing
+Emails may come from earlier or manual imports even before a current query has
+completed. Color reinforces the text: completed searches are positive,
+missing recorded classifications and unfinished searches warn, and zeros are muted.
 
 Each search records its finish time, retained Email count and newly tracked
 message count (`completedAt`, `emailCount`, `messageCount`). Older checkpoints
@@ -72,6 +86,9 @@ per mailbox.
 Choose a coverage row to import only that Vendor's mail from the selected
 mailbox. The shared date picker accepts dates such as `1 year ago`. From is
 unbounded and Through defaults to household today; clear both for all history.
+Range shortcuts reuse the historical filters' month, 30/90-day, year-to-date
+and 12-month choices. Applying one sets both dates together and replaces any
+uncommitted date text. All history clears both bounds.
 Check Gmail matches reads the same union of sender/domain queries and date
 bounds without importing or pausing anything. After the first check, committed
 date changes refresh it. A complete first page is an exact message count;

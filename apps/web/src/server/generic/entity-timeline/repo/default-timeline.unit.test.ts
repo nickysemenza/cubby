@@ -1,6 +1,7 @@
 import { displayImagesField } from "@cubby/schemas/display-images";
 import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
@@ -75,7 +76,7 @@ describe("lifecycleRows", () => {
   });
 });
 
-it("uses governed preferred lifecycle covers and never revives a retired URL", () => {
+it("uses governed lifecycle titles and preferred covers without reviving retired values", () => {
   const snapshot = [
     {
       id: "IMG-4K7M",
@@ -97,9 +98,17 @@ it("uses governed preferred lifecycle covers and never revives a retired URL", (
     const input = {
       ...record({ season: { start: "2026-03-01", end: "2026-06-01" } }),
       displayImages: snapshot,
-      fields: { displayImages: fieldValueFixture(schema, value) },
+      displayName: "Stale flat title",
+      fields: {
+        displayImages: fieldValueFixture(schema, value),
+        displayName: fieldValueFixture(
+          computedFieldEnvelope(z.string()),
+          "Synthetic governed title",
+        ),
+      },
     };
     const [row] = lifecycleRows("planting", [input], lifecycle, window);
     expect(row?.imageUrl).toBe(expected);
+    expect(row?.name).toBe("Synthetic governed title");
   }
 });

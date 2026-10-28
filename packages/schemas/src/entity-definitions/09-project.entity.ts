@@ -1,5 +1,9 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
+import {
+  historicalDateRangePresets,
+  dateRangeSchema,
+  storedDateRangeSchema,
+} from "../date-range";
 import { imageAssociationStorage } from "./image-associations";
 import { recordEmojiField } from "../emoji";
 import { type DerivedStoredInput, defineEntity } from "./definition.js";
@@ -1409,14 +1413,9 @@ Rules:
         kind: "range",
         wire: { kind: "range", from: "dateFrom", to: "dateTo" },
         placeholder: "Filter by project activity...",
-        options: [
-          { value: "30d", label: "Last 30 days" },
-          { value: "90d", label: "Last 90 days" },
-          { value: "ytd", label: "Year to date" },
-          { value: "1y", label: "Last 12 months" },
-        ],
+        options: [...historicalDateRangePresets],
         expandRef: {
-          module: "~/entity/filter-behavior",
+          module: "~/lib/date-range-presets",
           export: "resolveDateRange",
         },
       },

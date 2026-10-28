@@ -7,6 +7,7 @@ import { getDb, notDeleted } from "~/server/db/helpers";
 import { setMemberLoginParty } from "~/server/http/member-login";
 import { account as googleAccount } from "~/server/db/auth.schema";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
+import { resolveDateRange } from "~/lib/date-range-presets";
 import { householdLocalDate } from "~/lib/household-date";
 import { formatCalendarDay } from "~/lib/date-format";
 import { createGmailApiClient } from "~/server/domains/purchase-import/repo/gmail/client";
@@ -209,6 +210,20 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
   });
   const row = coverage.getByRole("row").filter({ hasText: vendorName });
   await expect(row).toBeVisible();
+  await row.getByRole("button", { name: /^Search coverage for/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Search coverage", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(`from:${sender}`, { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await row.getByRole("button", { name: /^Linked Emails for/ }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Emails linked to Purchases",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
   await row.click();
   await expect(
     page.getByRole("button", { name: "Start controlled import", exact: true }),
@@ -246,4 +261,28 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
   await expect(
     page.getByText("1 matching message", { exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Range shortcuts", exact: true })
+    .click();
+  await page
+    .getByRole("menuitem", { name: "All history", exact: true })
+    .click();
+  await expect(from).toHaveValue("");
+  await expect(page.getByLabel("Through", { exact: true })).toHaveValue("");
+  await page
+    .getByRole("button", { name: "Range shortcuts", exact: true })
+    .click();
+  await page.getByRole("menuitem", { name: "Past month", exact: true }).click();
+  const monthStart = resolveDateRange("1m").dateFrom;
+  if (!monthStart) throw new Error("Past month must have a start date");
+  await expect(from).toHaveValue(formatCalendarDay(monthStart, "dateShort"));
+  await from.fill("invalid draft");
+  await from.press("Enter");
+  await expect(from).toHaveAttribute("aria-invalid", "true");
+  await page
+    .getByRole("button", { name: "Range shortcuts", exact: true })
+    .click();
+  await page.getByRole("menuitem", { name: "Past month", exact: true }).click();
+  await expect(from).toHaveValue(formatCalendarDay(monthStart, "dateShort"));
+  await expect(from).toHaveAttribute("aria-invalid", "false");
 });

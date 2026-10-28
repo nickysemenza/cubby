@@ -1,3 +1,4 @@
+import { historicalDateRangePresets } from "../date-range";
 import { PRODUCT_OWNERSHIP_INPUTS } from "./ownership-inputs";
 import { storedProductOwnership } from "@cubby/schemas/inventory-ownership";
 import { PRODUCT_PRICING_INPUTS } from "./product-pricing-inputs";
@@ -3139,10 +3140,7 @@ Rules:
           options: [
             { value: "has", label: "Has purchase date", meta: true },
             { value: "none", label: "(none)", meta: true },
-            { value: "30d", label: "Last 30 days" },
-            { value: "90d", label: "Last 90 days" },
-            { value: "ytd", label: "Year to date" },
-            { value: "1y", label: "Last 12 months" },
+            ...historicalDateRangePresets,
           ],
           expandRef: {
             module: "~/entity/filter-behavior",

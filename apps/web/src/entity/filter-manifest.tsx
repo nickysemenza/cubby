@@ -6,6 +6,7 @@ import { match } from "ts-pattern";
 
 import { EntityIcon } from "~/entity/entities";
 import { isPickerEntity, recordSource } from "~/entity/picker/picker";
+import { resolveDateRange } from "~/lib/date-range-presets";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { OptionGlyph } from "~/ui/common/option-glyph";
 import {
@@ -43,7 +44,7 @@ export interface FilterSpec extends FilterSpecCore {
 type FilterDescriptor = EntityMetadataFor<Entity>["filterDescriptors"][number];
 
 const expandRules = {
-  dateRange: behavior.resolveDateRange,
+  dateRange: resolveDateRange,
   expenseCount: behavior.resolveExpenseCount,
   vendorPurchases: behavior.resolveVendorPurchases,
   latestPurchaseDate: behavior.resolveLatestPurchaseDate,

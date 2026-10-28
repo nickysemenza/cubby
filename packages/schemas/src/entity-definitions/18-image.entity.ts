@@ -1,3 +1,4 @@
+import { historicalDateRangePresets } from "../date-range";
 import { imageReadSchemas } from "../image-processing";
 import { imageChildren } from "../child-tables/image.js";
 import {
@@ -960,12 +961,7 @@ export default defineEntity(
           columnId: "createdAt",
           kind: "range",
           placeholder: "Filter by created date...",
-          options: [
-            { value: "30d", label: "Last 30 days" },
-            { value: "90d", label: "Last 90 days" },
-            { value: "ytd", label: "Year to date" },
-            { value: "1y", label: "Last 12 months" },
-          ],
+          options: [...historicalDateRangePresets],
           expandRef: {
             module: "~/entity/filter-behavior",
             export: "resolveCreatedDate",
@@ -976,12 +972,7 @@ export default defineEntity(
           columnId: "updatedAt",
           kind: "range",
           placeholder: "Filter by updated date...",
-          options: [
-            { value: "30d", label: "Last 30 days" },
-            { value: "90d", label: "Last 90 days" },
-            { value: "ytd", label: "Year to date" },
-            { value: "1y", label: "Last 12 months" },
-          ],
+          options: [...historicalDateRangePresets],
           expandRef: {
             module: "~/entity/filter-behavior",
             export: "resolveUpdatedDate",
@@ -1057,12 +1048,7 @@ export default defineEntity(
           deriveSchema: true,
           stored: true,
           range: { kind: "date" },
-          options: [
-            { value: "30d", label: "Last 30 days" },
-            { value: "90d", label: "Last 90 days" },
-            { value: "ytd", label: "Year to date" },
-            { value: "1y", label: "Last 12 months" },
-          ],
+          options: [...historicalDateRangePresets],
         },
         {
           columnId: "capturedByPartyId",

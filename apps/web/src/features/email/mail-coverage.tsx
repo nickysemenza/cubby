@@ -22,11 +22,17 @@ import {
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { DatePickerInput } from "~/ui/date-picker-input";
+import { DateRangeShortcuts } from "~/ui/date-range-shortcuts";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 import { StatusText } from "~/ui/primitives/status-text";
 
 const activeRunStatuses = new Set<string>(ACTIVE_RUN_STATUSES);
@@ -40,6 +46,124 @@ const states = {
   matches_found: "Matches found",
   complete: "Search complete",
 } satisfies Record<MailCoverageRow["state"], string>;
+
+function SearchCoverageCell({ row }: { row: MailCoverageRow }) {
+  const tone =
+    row.searchesTotal === 0
+      ? "muted"
+      : row.searchesCompleted === row.searchesTotal
+        ? "positive"
+        : "warning";
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-1 font-mono tabular-nums"
+          />
+        }
+        aria-label={`Search coverage for ${row.vendorName}: ${row.searchesCompleted} of ${row.searchesTotal} complete`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <StatusText tone={tone}>
+          {row.searchesCompleted}/{row.searchesTotal}
+        </StatusText>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-96 max-w-[calc(100vw-2rem)] space-y-3"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h3 className="text-sm font-semibold">Search coverage</h3>
+        <p className="text-xs text-muted-foreground">
+          Completed full-history Gmail queries for this Vendor’s current domains
+          and verified senders. This counts query definitions, not Emails or
+          import Runs.
+        </p>
+        {row.searches.length ? (
+          <ul className="space-y-3">
+            {row.searches.map((search) => (
+              <li key={search.query} className="space-y-1">
+                <code className="block text-xs break-words">
+                  {search.query}
+                </code>
+                <Badge
+                  variant={
+                    search.state === "complete"
+                      ? "positive"
+                      : search.state === "in_progress"
+                        ? "warning"
+                        : "secondary"
+                  }
+                >
+                  {search.state === "complete"
+                    ? "Complete"
+                    : search.state === "in_progress"
+                      ? "In progress"
+                      : "Not searched"}
+                </Badge>
+                {search.completedAt ? (
+                  <DateDisplay timestamp={search.completedAt} />
+                ) : search.state === "complete" ? (
+                  <p className="text-xs text-muted-foreground">
+                    Completion time not recorded
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs">
+            Add a website or verified sender to the Vendor to enable searches.
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Existing Emails can come from earlier or manual imports. Date-limited
+          runs are shown under Controlled import.
+        </p>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function LinkedEmailCell({ row }: { row: MailCoverageRow }) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="link"
+            size="sm"
+            className="px-1 font-mono tabular-nums"
+          />
+        }
+        aria-label={`Linked Emails for ${row.vendorName}: ${row.linkedEmails}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {row.linkedEmails === 0 ? <StatusText>0</StatusText> : row.linkedEmails}
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-80 max-w-[calc(100vw-2rem)] space-y-2 text-sm"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h3 className="font-semibold">Emails linked to Purchases</h3>
+        <p>
+          {countLabel(row.linkedRetainedEmails, "Email")} with content saved
+        </p>
+        <p>
+          {countLabel(row.linkedEmails - row.linkedRetainedEmails, "Email")}{" "}
+          with metadata only
+        </p>
+        <p className="text-xs text-muted-foreground">
+          An Email’s Purchase link remains if its original content is cleared.
+          Content saved counts currently retained originals; it is not a
+          required step before an Email can stay linked.
+        </p>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 function controlledStatus(row: MailCoverageRow): string {
   const control = row.controlledRun;
@@ -99,7 +223,12 @@ function ControlledRunStatus({ row }: { row: MailCoverageRow }) {
 }
 
 function initialControlledMailDraft() {
-  return { from: "", to: householdLocalDate(), previewEnabled: false };
+  return {
+    from: "",
+    to: householdLocalDate(),
+    previewEnabled: false,
+    revision: 0,
+  };
 }
 
 function ControlledMailImport({
@@ -188,6 +317,18 @@ function ControlledMailImport({
           <ControlledRunStatus row={row} />
         </output>
       ) : null}
+      <DateRangeShortcuts
+        allLabel="All history"
+        disabled={!canPreview || control.isPending}
+        onSelect={(bounds) =>
+          onDraftChange({
+            ...draft,
+            from: bounds.dateFrom ?? "",
+            to: bounds.dateTo ?? "",
+            revision: draft.revision + 1,
+          })
+        }
+      />
       <form
         id={`${formId}-range`}
         className="flex flex-wrap items-end gap-3"
@@ -205,6 +346,7 @@ function ControlledMailImport({
         <div className="space-y-1 text-xs max-sm:w-full">
           <label htmlFor={`${formId}-from`}>From</label>
           <DatePickerInput
+            key={`from-${draft.revision}`}
             id={`${formId}-from`}
             value={from || null}
             max={to || undefined}
@@ -219,6 +361,7 @@ function ControlledMailImport({
         <div className="space-y-1 text-xs max-sm:w-full">
           <label htmlFor={`${formId}-to`}>Through</label>
           <DatePickerInput
+            key={`to-${draft.revision}`}
             id={`${formId}-to`}
             value={to || null}
             min={from || undefined}
@@ -411,10 +554,14 @@ function CoverageTable({
           helper.accessor("vendorAccountId", {
             header: "Vendor account",
             size: 180,
-            cell: ({ getValue }) => {
+            cell: ({ row, getValue }) => {
               const id = getValue();
               return id ? (
-                <EntityRefLink entity="vendorAccount" id={id} />
+                <EntityRefLink
+                  entity="vendorAccount"
+                  id={id}
+                  name={row.original.vendorAccountName}
+                />
               ) : (
                 <span className="text-muted-foreground">None</span>
               );
@@ -442,10 +589,14 @@ function CoverageTable({
               <Badge
                 variant={
                   getValue() === "in_progress"
-                    ? "default"
+                    ? "warning"
                     : getValue() === "no_search_identity"
                       ? "warning"
-                      : "secondary"
+                      : getValue() === "complete" ||
+                          getValue() === "matches_found" ||
+                          getValue() === "no_matches"
+                        ? "positive"
+                        : "secondary"
                 }
               >
                 {states[getValue()]}
@@ -459,20 +610,16 @@ function CoverageTable({
               row.searchesTotal ? row.searchesCompleted / row.searchesTotal : 0,
             {
               id: "searches",
-              header: "Searches",
-              size: 90,
-              cell: ({ row }) => (
-                <span className="font-mono tabular-nums">
-                  {row.original.searchesCompleted}/{row.original.searchesTotal}
-                </span>
-              ),
+              header: "Search coverage",
+              size: 140,
+              cell: ({ row }) => <SearchCoverageCell row={row.original} />,
             },
           ),
         );
         for (const [key, label] of [
-          ["scanned", "Scanned Emails"],
+          ["scanned", "Known Emails"],
           ["classified", "Classified Emails"],
-          ["retained", "Retained Emails"],
+          ["retained", "Content saved"],
           ["linkedEmails", "Linked Emails"],
           ["linkedPurchases", "Linked Purchases"],
         ] satisfies [
@@ -496,9 +643,45 @@ function CoverageTable({
                     ? "Linked evidence"
                     : "Local Emails",
               }),
-              cell: ({ getValue }) => (
-                <span className="font-mono tabular-nums">{getValue()}</span>
-              ),
+              cell: ({ row, getValue }) => {
+                if (key === "linkedEmails")
+                  return <LinkedEmailCell row={row.original} />;
+                const value = getValue();
+                const remaining =
+                  row.original.scanned - row.original.classified;
+                const tone =
+                  value === 0
+                    ? "muted"
+                    : key === "classified"
+                      ? remaining > 0
+                        ? "warning"
+                        : "positive"
+                      : key === "linkedPurchases"
+                        ? "positive"
+                        : null;
+                return tone ? (
+                  <StatusText
+                    tone={tone}
+                    className="font-mono tabular-nums"
+                    title={
+                      key === "classified" && remaining > 0
+                        ? `${remaining} Emails have no recorded classification`
+                        : undefined
+                    }
+                  >
+                    {value}
+                    {key === "classified" && remaining > 0 ? (
+                      <span className="sr-only">
+                        {" "}
+                        of {row.original.scanned}; {remaining} await
+                        classification
+                      </span>
+                    ) : null}
+                  </StatusText>
+                ) : (
+                  <span className="font-mono tabular-nums">{value}</span>
+                );
+              },
             }),
           );
         }

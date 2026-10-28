@@ -120,11 +120,11 @@ export function ByIdRefLink({
         emoji={record.success ? record.data.emoji : undefined}
         name={
           record.success
-            ? z
-                .string()
-                .catch("")
-                .parse(record.data[entityRoster[entityKind].titleField]) ||
-              `Untitled ${entityLabel(entityKind).toLowerCase()}`
+            ? readRecordField(
+                record.data,
+                entityRoster[entityKind].titleField,
+                z.string().catch(""),
+              ) || `Untitled ${entityLabel(entityKind).toLowerCase()}`
             : `Missing ${entityLabel(entityKind).toLowerCase()}`
         }
         // Absent stays `undefined` so the chip falls back to the surrounding

@@ -1,10 +1,9 @@
 import { entitySchema } from "@cubby/schemas/entity";
-import { format, startOfYear, subDays, subMonths } from "date-fns";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
+import { resolveDateRange } from "~/lib/date-range-presets";
 
-import { resolveDateRange } from "./filter-behavior";
 import { getEntityFilters } from "./filter-manifest";
 
 const queryClient = await metadataQueryClient();
@@ -83,24 +82,38 @@ describe("resolveDateRange", () => {
     expect(resolveDateRange("bogus")).toEqual({});
   });
 
-  it("resolves each preset to an inclusive window ending today", () => {
-    const today = new Date();
-    const dateTo = format(today, "yyyy-MM-dd");
-    expect(resolveDateRange("30d")).toEqual({
-      dateFrom: format(subDays(today, 30), "yyyy-MM-dd"),
-      dateTo,
+  it.each([
+    ["1m", "2026-02-28"],
+    ["30d", "2026-03-01"],
+    ["90d", "2025-12-31"],
+    ["ytd", "2026-01-01"],
+    ["1y", "2025-03-31"],
+  ])("resolves %s into inclusive household dates", (preset, dateFrom) => {
+    expect(resolveDateRange(preset, "2026-03-31")).toEqual({
+      dateFrom,
+      dateTo: "2026-03-31",
     });
-    expect(resolveDateRange("90d")).toEqual({
-      dateFrom: format(subDays(today, 90), "yyyy-MM-dd"),
-      dateTo,
+  });
+  it("clamps calendar months and years over leap days", () => {
+    expect(resolveDateRange("1m", "2024-03-31")).toEqual({
+      dateFrom: "2024-02-29",
+      dateTo: "2024-03-31",
     });
-    expect(resolveDateRange("ytd")).toEqual({
-      dateFrom: format(startOfYear(today), "yyyy-MM-dd"),
-      dateTo,
+    expect(resolveDateRange("1y", "2024-02-29")).toEqual({
+      dateFrom: "2023-02-28",
+      dateTo: "2024-02-29",
     });
-    expect(resolveDateRange("1y")).toEqual({
-      dateFrom: format(subMonths(today, 12), "yyyy-MM-dd"),
-      dateTo,
-    });
+  });
+  it("anchors today to the household day across UTC midnight", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-01-01T04:00:00Z"));
+      expect(resolveDateRange("ytd")).toEqual({
+        dateFrom: "2025-01-01",
+        dateTo: "2025-12-31",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

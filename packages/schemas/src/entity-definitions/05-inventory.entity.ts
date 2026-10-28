@@ -1,3 +1,4 @@
+import { historicalDateRangePresets } from "../date-range";
 import { INVENTORY_OWNERSHIP_INPUTS } from "./ownership-inputs";
 import { storedInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import { productPricingInputsFor } from "./product-pricing-inputs";
@@ -959,10 +960,7 @@ export default defineEntity(
           options: [
             { value: "has", label: "Has verification", meta: true },
             { value: "none", label: "(none)", meta: true },
-            { value: "30d", label: "Last 30 days" },
-            { value: "90d", label: "Last 90 days" },
-            { value: "ytd", label: "Year to date" },
-            { value: "1y", label: "Last 12 months" },
+            ...historicalDateRangePresets,
           ],
           expandRef: {
             module: "~/entity/filter-behavior",

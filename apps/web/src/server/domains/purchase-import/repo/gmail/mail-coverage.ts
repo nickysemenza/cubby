@@ -14,6 +14,7 @@ import { runPurpose } from "@cubby/schemas/run-fields";
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { distinctSenderDomain, senderAddress } from "~/lib/vendor/domains";
+import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
@@ -67,6 +68,7 @@ export async function readMailCoverage(
         vendorId: vendorAccount.vendorId,
         memberId: vendorAccount.ledgerPartyId,
         shortcode: vendorAccount.shortcode,
+        name: vendorAccountLabelSql,
       })
       .from(vendorAccount)
       .where(notDeleted(vendorAccount)),
@@ -107,10 +109,27 @@ export async function readMailCoverage(
         mailboxId: email.mailboxId,
         memberId: email.ledgerPartyId,
         vendorId: purchase.vendorId,
+        sender: email.sender,
+        attributedVendorId: orderMail.vendorId,
+        classified:
+          sql<number>`count(DISTINCT ${email.id}) FILTER (WHERE ${email.classification} IS NOT NULL)`.mapWith(
+            Number,
+          ),
+        retained:
+          sql<number>`count(DISTINCT ${email.id}) FILTER (WHERE ${orderMail.id} IS NOT NULL AND ${email.contentClearedAt} IS NULL)`.mapWith(
+            Number,
+          ),
         emails: sql<number>`count(DISTINCT ${email.id})`.mapWith(Number),
-        purchases: sql<number>`count(DISTINCT ${purchase.id})`.mapWith(Number),
+        purchaseIds: sql<string[]>`array_agg(DISTINCT ${purchase.id})`,
       })
       .from(email)
+      .leftJoin(
+        orderMail,
+        and(
+          eq(orderMail.id, email.orderMailId),
+          eq(orderMail.ledgerPartyId, email.ledgerPartyId),
+        ),
+      )
       .innerJoin(
         sql`LATERAL (${emailPurchaseEvidenceSql()}) evidence`,
         sql`evidence.kind IN (${emailLinkEvidenceKind.enum.accepted}, ${emailLinkEvidenceKind.enum.linked})`,
@@ -120,7 +139,13 @@ export async function readMailCoverage(
         and(sql`${purchase.id} = evidence."purchaseId"`, notDeleted(purchase)),
       )
       .where(notDeleted(email))
-      .groupBy(email.mailboxId, email.ledgerPartyId, purchase.vendorId),
+      .groupBy(
+        email.mailboxId,
+        email.ledgerPartyId,
+        purchase.vendorId,
+        email.sender,
+        orderMail.vendorId,
+      ),
     getDb(db)
       .select({
         id: run.shortcode,
@@ -183,15 +208,21 @@ export async function readMailCoverage(
   >();
   const key = (vendorId: string, memberId: string, mailboxId: string) =>
     `${vendorId}/${memberId}/${mailboxId}`;
-  for (const row of observed) {
-    const address = senderAddress(row.sender);
+  const matchingVendors = (
+    sender: string | null,
+    attributedVendorId: string | null,
+  ) => {
+    const address = senderAddress(sender);
     const domain = address ? distinctSenderDomain(address) : null;
-    // Sender matches are discovery candidates, never Vendor attribution.
-    const matching = new Set([
+    // Discovery hints and explicit sender proof are not the only evidence: accepted links also establish scope below.
+    return new Set([
       ...(address ? (identities.get(address) ?? []) : []),
       ...(domain ? (identities.get(domain) ?? []) : []),
-      ...(row.vendorId ? [row.vendorId] : []),
+      ...(attributedVendorId ? [attributedVendorId] : []),
     ]);
+  };
+  for (const row of observed) {
+    const matching = matchingVendors(row.sender, row.vendorId);
     for (const vendorId of matching) {
       const id = key(vendorId, row.memberId, row.mailboxId);
       const current = observedCounts.get(id) ?? {
@@ -205,9 +236,37 @@ export async function readMailCoverage(
       observedCounts.set(id, current);
     }
   }
-  const links = new Map(
-    linked.map((row) => [key(row.vendorId, row.memberId, row.mailboxId), row]),
-  );
+  const links = new Map<
+    string,
+    { emails: number; retained: number; purchases: Set<string> }
+  >();
+  for (const row of linked) {
+    const id = key(row.vendorId, row.memberId, row.mailboxId);
+    const associated = links.get(id) ?? {
+      emails: 0,
+      retained: 0,
+      purchases: new Set<string>(),
+    };
+    associated.emails += row.emails;
+    associated.retained += row.retained;
+    for (const purchaseId of row.purchaseIds)
+      associated.purchases.add(purchaseId);
+    links.set(id, associated);
+    // Each Email has one sender/proof group. Add authoritative linked evidence only if discovery matching did not already count it.
+    if (
+      !matchingVendors(row.sender, row.attributedVendorId).has(row.vendorId)
+    ) {
+      const counts = observedCounts.get(id) ?? {
+        scanned: 0,
+        classified: 0,
+        retained: 0,
+      };
+      counts.scanned += row.emails;
+      counts.classified += row.classified;
+      counts.retained += row.retained;
+      observedCounts.set(id, counts);
+    }
+  }
   const controlRuns = new Map<string, MailCoverageRow["controlledRun"]>();
   const completedSearches = completedControlledSearches(controls);
   for (const control of controls) {
@@ -263,7 +322,7 @@ export async function readMailCoverage(
       );
   }
   const accountCodes = new Map(
-    accounts.map((row) => [`${row.vendorId}/${row.memberId}`, row.shortcode]),
+    accounts.map((row) => [`${row.vendorId}/${row.memberId}`, row]),
   );
   const cursors = new Map(
     cursorRows.map((row) => [
@@ -339,13 +398,28 @@ export async function readMailCoverage(
         vendorId: row.shortcode,
         vendorName: row.name,
         vendorAccountId:
-          accountCodes.get(`${row.id}/${member.ledgerPartyId}`) ?? null,
+          accountCodes.get(`${row.id}/${member.ledgerPartyId}`)?.shortcode ??
+          null,
+        vendorAccountName:
+          accountCodes.get(`${row.id}/${member.ledgerPartyId}`)?.name ?? null,
         mailboxId: member.mailboxId,
         memberId: member.memberShortcode,
         searchTerms,
         state,
         searchesCompleted: complete,
         searchesTotal: queries.length,
+        searches: queries.map((query, index) => {
+          const position = searched[index];
+          return {
+            query: query.query,
+            state: position?.completed
+              ? "complete"
+              : position && position.pageToken !== null
+                ? "in_progress"
+                : "not_started",
+            completedAt: position?.completedAt ?? null,
+          };
+        }),
         lastSearchedAt:
           complete === queries.length && dates.length === queries.length
             ? (dates.at(-1) ?? null)
@@ -356,7 +430,8 @@ export async function readMailCoverage(
           ) ?? null,
         ...counts,
         linkedEmails: associated?.emails ?? 0,
-        linkedPurchases: associated?.purchases ?? 0,
+        linkedRetainedEmails: associated?.retained ?? 0,
+        linkedPurchases: associated?.purchases.size ?? 0,
       };
     });
   });

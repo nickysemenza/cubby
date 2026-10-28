@@ -1,3 +1,4 @@
+import { historicalDateRangePresets } from "../date-range";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { financialTransactionReadSchemas } from "../financial-transaction-fields";
 import { financialTransactionChildren } from "../child-tables/financialTransaction.js";
@@ -1501,12 +1502,7 @@ export default defineEntity(
           placeholder: "Filter by posted date...",
           deriveSchema: true,
           stored: true,
-          options: [
-            { value: "30d", label: "Last 30 days" },
-            { value: "90d", label: "Last 90 days" },
-            { value: "ytd", label: "Year to date" },
-            { value: "1y", label: "Last 12 months" },
-          ],
+          options: [...historicalDateRangePresets],
           expandRef: {
             module: "~/entity/filter-behavior",
             export: "resolvePostedDate",

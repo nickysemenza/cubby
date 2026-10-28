@@ -1,3 +1,4 @@
+import { historicalDateRangePresets } from "../date-range";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { labelField } from "./label-field.js";
@@ -1637,14 +1638,9 @@ export default defineEntity({
             upper: "Inclusive upper bound on purchase date",
           },
         },
-        options: [
-          { value: "30d", label: "Last 30 days" },
-          { value: "90d", label: "Last 90 days" },
-          { value: "ytd", label: "Year to date" },
-          { value: "1y", label: "Last 12 months" },
-        ],
+        options: [...historicalDateRangePresets],
         expandRef: {
-          module: "~/entity/filter-behavior",
+          module: "~/lib/date-range-presets",
           export: "resolveDateRange",
         },
       },

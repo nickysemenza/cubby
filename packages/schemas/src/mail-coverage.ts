@@ -35,12 +35,20 @@ export const mailCoverageRow = z.strictObject({
   vendorId: vendorShortcode,
   vendorName: z.string(),
   vendorAccountId: vendorAccountShortcode.nullable(),
+  vendorAccountName: z.string().nullable(),
   mailboxId: z.string(),
   memberId: ledgerPartyShortcode,
   searchTerms: z.array(z.string()),
   state: mailCoverageState,
   searchesCompleted: count,
   searchesTotal: count,
+  searches: z.array(
+    z.strictObject({
+      query: z.string(),
+      state: z.enum(["not_started", "in_progress", "complete"]),
+      completedAt: z.iso.datetime().nullable(),
+    }),
+  ),
   lastSearchedAt: z.iso.datetime().nullable(),
   controlledRun: z
     .strictObject({
@@ -63,6 +71,8 @@ export const mailCoverageRow = z.strictObject({
   classified: count,
   retained: count,
   linkedEmails: count,
+  /** Linked Emails whose original content is still retained. */
+  linkedRetainedEmails: count,
   /** Distinct linked Purchases; several Emails can link the same Purchase. */
   linkedPurchases: count,
 });

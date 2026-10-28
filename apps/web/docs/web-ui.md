@@ -1,5 +1,21 @@
 # Web UI contracts
 
+Reference labels read their declared title field through `readRecordField`,
+including derived values in field envelopes. Report rows that already resolve
+related labels include them in the batch rather than fetching each label from
+a mounted cell. A Vendor Account's title is derived from Vendor and member;
+it has no editable account name.
+
+Historical date filters share `historicalDateRangePresets` in the date-range
+schema module and `resolveDateRange` in `lib/date-range-presets.ts`. Tables and
+charts consuming those filters use the same preset keys, labels and inclusive
+household-day arithmetic; saved record filters retain relative keys. Timeline
+viewing windows and imports use `DateRangeShortcuts` and freeze the resolved
+bounds when a shortcut is selected. Past month and 12 months use
+calendar months with month-end clamping, rather than fixed day counts. Clearing
+a historical range removes both bounds. Deadline editors keep their future
+date semantics and do not inherit historical shortcuts.
+
 Plain-date editors use `DatePickerInput`: typed calendar dates and English
 expressions such as `1 year ago`, with a calendar alternative. Relative days,
 months and years resolve at commit time in local calendar time; month ends and
