@@ -20,6 +20,7 @@ import type {
 import {
   useEntityListPresentation,
   useEntityListPresentationState,
+  useEntityListColumnVisibility,
 } from "./use-entity-list-presentation";
 import { useEntityPreview } from "./use-entity-preview";
 import { ListBulkActionBar } from "./use-list-bulk-actions";
@@ -187,12 +188,16 @@ export function useClientEntityList<TData extends BaseListRow>({
   const locallySearchedData = useMemo(() => {
     return filterClientRows(data, primarySearchQuery, matchesSearch);
   }, [data, matchesSearch, primarySearchQuery]);
+  const visibility = useEntityListColumnVisibility({
+    entity,
+    initialColumnVisibility,
+  });
   const presentation = useEntityListPresentation<TData>({
     entity,
     data: locallySearchedData,
     columns: customColumns,
     filters,
-    initialColumnVisibility,
+    visibility,
     state: presentationState,
     supportsServerSorting: false,
     hiddenFilterColumns,

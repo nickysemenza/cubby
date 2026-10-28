@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { timestampedFields } from "./base-entity";
+import { storedProjectionVersionsSchema } from "./field-envelope";
 import {
   mealRecipeId,
   mealShortcode,
@@ -32,7 +33,10 @@ export const rawMealRecipeSummary = rawRecipeTopLevel
     servings: true,
     yield: true,
   })
-  .extend({ totals: recipeTotals.nullish() });
+  .extend({
+    totals: recipeTotals.nullish(),
+    storedProjectionVersions: storedProjectionVersionsSchema,
+  });
 
 export const rawMealRecipeOut = z.object({
   id: mealRecipeId,

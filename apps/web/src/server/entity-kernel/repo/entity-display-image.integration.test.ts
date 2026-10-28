@@ -1,5 +1,5 @@
 import { entityRefKey } from "@cubby/schemas/entity";
-import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { rawLocationList } from "@cubby/schemas/location-raw-read";
 import { eq, sql } from "drizzle-orm";
@@ -8,6 +8,8 @@ import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
+import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { getDb, mapImages } from "~/server/db/helpers";
 import {
@@ -55,6 +57,7 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { listOperations } from "~/server/entity-kernel/list-operations";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   listReadPlan,
@@ -1650,6 +1653,28 @@ describe("entity display image resolver", () => {
         expectedDisplayImage(olderImg),
         expectedDisplayImage(productImg),
       ]);
+      // The browser injects an image column even though Planting declares no
+      // image field; its selected request must keep the borrowed cover.
+      const queryClient = await metadataQueryClient();
+      const fields = declaredListReadProjection(queryClient, "planting");
+      if (!fields) throw new Error("Missing planting list projection");
+      const context = entityKernelContextSchema.parse(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      );
+      const selected = await listOperations("planting").listFields(
+        context,
+        {
+          filters: { ids: [planted.id] },
+          pagination: { pageIndex: 0, pageSize: 1 },
+        },
+        fields,
+      );
+      const envelope = fieldEnvelopeFor(selected.items[0], "displayImages");
+      expect(envelope).toBeDefined();
+      if (!envelope) throw new Error("Missing selected planting cover");
+      expect(fieldValueOf(envelope)).toEqual(rows[0]?.displayImages);
     });
 
     it("falls back to the seed product's photo when there are no journal entries", async () => {

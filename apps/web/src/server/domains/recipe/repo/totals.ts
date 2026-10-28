@@ -64,7 +64,8 @@ const updateRecipeTotalsBatch = async (
     UPDATE ${recipe}
     SET
       ${sql.identifier("totals")} = v.totals,
-      ${sql.identifier("totalsComputedAt")} = ${computedAt}
+      ${sql.identifier("totalsComputedAt")} = ${computedAt},
+      ${sql.identifier("totalsPublishedAt")} = ${computedAt}
     FROM input v, previous
     WHERE ${recipe.id} = v.id AND previous.id = v.id
     RETURNING "Recipe".id, (previous.totals IS DISTINCT FROM v.totals OR previous.stale) AS changed
@@ -86,6 +87,7 @@ const markRecipeTotalsFresh = async (
   ids: RecipeId[],
 ): Promise<RecipeId[]> => {
   if (ids.length === 0) return [];
+  const computedAt = new Date();
   const changed = await unwrapDb(db).execute<{
     id: RecipeId;
     changed: boolean;
@@ -100,7 +102,8 @@ const markRecipeTotalsFresh = async (
       FOR NO KEY UPDATE OF ${recipe}
     )
     UPDATE ${recipe}
-    SET ${sql.identifier("totalsComputedAt")} = ${new Date()}
+    SET ${sql.identifier("totalsComputedAt")} = ${computedAt},
+      ${sql.identifier("totalsPublishedAt")} = ${computedAt}
     FROM previous
     WHERE ${recipe.id} = previous.id
     RETURNING "Recipe".id, previous.stale AS changed

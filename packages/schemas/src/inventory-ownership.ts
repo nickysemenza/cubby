@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { fieldDecisionStep } from "./field-explanation-evidence";
 import {
   fieldResolutionSourceSchema,
   resolvedListSchema,
@@ -60,9 +61,35 @@ export type EffectiveInventoryOwnership = z.infer<
   typeof effectiveInventoryOwnership
 >;
 
+const inventoryOwnershipStep = fieldDecisionStep
+  .pick({ reason: true, effect: true, observed: true })
+  .extend({
+    source: z.enum([
+      "acquisition",
+      "inherited_beneficiary",
+      "inherited_vendor_account",
+      "inherited_payment_account",
+    ]),
+    owner: inventoryOwner.nullable(),
+    decides: z.boolean(),
+    ref: z
+      .object({
+        entityKind: z.enum([
+          "purchase",
+          "expense",
+          "vendorAccount",
+          "financialAccount",
+        ]),
+        entityId: z.string(),
+      })
+      .nullable(),
+  });
+
 /** Disposable ownership output; confirmation always resolves live evidence. */
 export const storedInventoryOwnership = z.object({
   ownership: effectiveInventoryOwnership,
+  // Existing publications lack steps until their next targeted recompute.
+  steps: z.array(inventoryOwnershipStep).optional(),
   effectiveOwnerId: ledgerPartyShortcode.nullable(),
   ownerFilter: z.string(),
   inheritedFilter: z.string(),

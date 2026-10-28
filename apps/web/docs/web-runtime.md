@@ -303,7 +303,7 @@ mount and detail loaders refetch those invalidated baselines before reuse.
 The first ring refreshes immediately; further rings accumulate into at most one
 refresh every five seconds, with a final trailing refresh. A slow read completes
 before starting another. Own mutations retain their immediate local invalidation.
-Subscription recovery on open/resume bypasses the ring throttle. Background
+Subscription recovery on reconnect/resume bypasses the ring throttle. Background
 refetch feedback appears in the reserved sidebar status slot (or a BottomNav
 spinner on mobile) only after 300ms; it never inserts a row into page content.
 Inline refresh errors retain their data and Retry. Native workspace routes have
@@ -312,8 +312,9 @@ Declared reference and projection-path consumers add their own cache roots to
 the hint's ripple. This uses generated read dependencies without recursively
 expanding mutation ripples. Projection completion uses the same notification
 path as edits; timestamp-only periodic updates do not imply changed output.
-Subscription establishment, reconnect and app resume resync cache-backed queries
-to recover missed hints. Logout unmounts the subscription; delivery requires
+Initial subscription reuses the SSR/cache baseline without a blanket refetch.
+Reconnect and app resume resync cache-backed queries to recover missed hints.
+Logout unmounts the subscription; delivery requires
 reauthentication after its five-minute lease expires.
 
 The derived backlog badge and its overview consume these change notifications,
@@ -321,12 +322,15 @@ including reconnect/resume resync, without a fixed polling interval. Workflow
 progress polling stays local to its workflow; query defaults pause intervals
 while the browser tab is hidden.
 
-This replaces fixed post-mutation refresh timers. Delivery is not a durable event
-log: a Worker can die after database commit but before publishing, even while a
-browser remains connected. Such a tab has no bounded catch-up guarantee until
-resume, reconnect or explicit refresh. Notification failures are logged separately
+This replaces fixed post-mutation refresh timers. Delivery is best-effort: a Worker
+can die after commit but before publishing, or a change can precede subscription.
+A continuously open page may then remain stale indefinitely; this is accepted
+display behavior. There are no durable change counters or periodic recovery
+checks. Notifications that clear pending or failed work still matter even when
+the displayed value is unchanged. Notification failures are logged separately
 and never make an accepted save fail. Existing workflow progress polling remains
-owned by its workflow and is not a guarantee that every derived value is current.
+owned by its workflow. Strong reads observe the latest publication; they never
+wait for or trigger derived computation.
 
 Receiving dialogs reuse the Product label already present on the Expense detail
 or Purchase line. Do not fetch a full Product detail solely for that label; fall
@@ -366,12 +370,20 @@ for public row codes. Analysis includes live Product labels and verified
 correction receipts without dependent reader queries; embedded-media callers
 can still select the same readers by public Image codes.
 Stored metadata uses internal page IDs. Columns,
-actions, captions and providers consume complete rows; no client field-readiness
+captions and providers consume the shared page projection; actions reload complete
+records. There is no client field-readiness
 tracking, enrichment patches, generation retries or separate summary requests.
 Loading and errors apply to the whole page. Normal query cancellation, stale
 page protection, infinite pagination and lazy tree expansion remain page-level
-concerns. Tree children and selected-record action reads use the same complete
-list contract. A detail relation section's count is its own list read's
+concerns. Named renderers declare additional canonical envelopes through
+`display.readFields`, shared by SSR and mounted projection demand. Previous
+pages may bridge filter changes only when their projection covers the newly
+visible columns. Bulk actions reload complete selected records strongly before
+checking availability, including selections already loaded in the roster.
+Identity-only navigation such as Inspect can open from loaded roster rows;
+it does not evaluate field eligibility or mutate those projections.
+Tree children and selected-record action reads use the complete list contract.
+A detail relation section's count is its own list read's
 `meta.totalCount` ([detail sections](../../../docs/entities.md#one-declaration-several-consumers)),
 and default columns come from declared `listHidden`
 ([column defaults](../../../docs/entities.md#bulk-edit)); add no count or

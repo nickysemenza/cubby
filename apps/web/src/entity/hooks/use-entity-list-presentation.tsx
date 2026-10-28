@@ -144,62 +144,17 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
   };
 }
 
-/**
- * Shared presentation half for server and client list adapters: persisted
- * layout, standard/related columns, delete/bulk actions, and preview data.
- * Query membership, server pagination/grouping/select-all, and client-tree
- * expansion remain in their adapters because their behavior is not shared.
- */
-export function useEntityListPresentation<TData extends BaseListRow>({
+export function useEntityListColumnVisibility({
   entity,
-  data,
-  columns: customColumns,
-  filters,
-  filterOptions,
   initialColumnVisibility,
   transientColumnVisibility,
   revealColumns,
-  state,
-  supportsServerSorting,
-  mappingsMap = null,
-  hasUnitMappings = false,
-  nameClassName,
-  nameEditable,
-  nameSuffix,
-  namePrefix,
-  hiddenFilterColumns,
-  expandable,
-  rowLink,
-  rowActionGuard,
-  subject,
 }: {
   entity: BrowserRoutedEntity;
-  data: readonly { id: string }[];
-  columns: CubbyColumnCollection<TData>;
-  filters?: FilterInput[];
-  filterOptions?: RuntimeFilterOptions;
   initialColumnVisibility?: Record<string, boolean>;
   transientColumnVisibility?: Record<string, boolean>;
   revealColumns?: { key: string; visibility: Record<string, boolean> };
-  state: ReturnType<typeof useEntityListPresentationState<TData>>;
-  supportsServerSorting: boolean;
-  mappingsMap?: Record<string, UnitMapping[]> | null;
-  hasUnitMappings?: boolean;
-  nameClassName?: string;
-  nameEditable?: {
-    onSave: (newValue: string, row: TData) => Promise<void>;
-    getValue?: (row: TData) => string | null;
-  };
-  nameSuffix?: (row: TData) => ReactNode;
-  namePrefix?: (row: TData) => ReactNode;
-  hiddenFilterColumns?: string[];
-  expandable?: boolean;
-  rowLink?: RowLinkResolver<TData>;
-  rowActionGuard?: (row: TData) => boolean;
-  /** What each row is about, when that is a different record. */
-  subject?: (row: TData) => EntityActionSubject | null;
 }) {
-  const columnHelper = useMemo(() => createCubbyColumnHelper<TData>(), []);
   const relatedViews = useEntityMetadata(entity).relatedViews;
   const relatedInitialVisibility = useMemo(
     () =>
@@ -225,6 +180,70 @@ export function useEntityListPresentation<TData extends BaseListRow>({
       transientColumnVisibility,
     ],
   );
+  const [columnVisibility, setColumnVisibility] =
+    useState<ColumnVisibilityState>(mergedInitialColumnVisibility);
+  useRevealTableColumnsOnce(setColumnVisibility, revealColumns);
+  return {
+    columnVisibility,
+    setColumnVisibility,
+    initialColumnVisibility: mergedInitialColumnVisibility,
+  };
+}
+
+/**
+ * Shared presentation half for server and client list adapters: persisted
+ * layout, standard/related columns, delete/bulk actions, and preview data.
+ * Query membership, server pagination/grouping/select-all, and client-tree
+ * expansion remain in their adapters because their behavior is not shared.
+ */
+export function useEntityListPresentation<TData extends BaseListRow>({
+  entity,
+  data,
+  columns: customColumns,
+  filters,
+  filterOptions,
+  visibility,
+  state,
+  supportsServerSorting,
+  mappingsMap = null,
+  hasUnitMappings = false,
+  nameClassName,
+  nameEditable,
+  nameSuffix,
+  namePrefix,
+  hiddenFilterColumns,
+  expandable,
+  rowLink,
+  rowActionGuard,
+  subject,
+}: {
+  entity: BrowserRoutedEntity;
+  data: readonly { id: string }[];
+  columns: CubbyColumnCollection<TData>;
+  filters?: FilterInput[];
+  filterOptions?: RuntimeFilterOptions;
+  visibility: ReturnType<typeof useEntityListColumnVisibility>;
+  state: ReturnType<typeof useEntityListPresentationState<TData>>;
+  supportsServerSorting: boolean;
+  mappingsMap?: Record<string, UnitMapping[]> | null;
+  hasUnitMappings?: boolean;
+  nameClassName?: string;
+  nameEditable?: {
+    onSave: (newValue: string, row: TData) => Promise<void>;
+    getValue?: (row: TData) => string | null;
+  };
+  nameSuffix?: (row: TData) => ReactNode;
+  namePrefix?: (row: TData) => ReactNode;
+  hiddenFilterColumns?: string[];
+  expandable?: boolean;
+  rowLink?: RowLinkResolver<TData>;
+  rowActionGuard?: (row: TData) => boolean;
+  /** What each row is about, when that is a different record. */
+  subject?: (row: TData) => EntityActionSubject | null;
+}) {
+  const columnHelper = useMemo(() => createCubbyColumnHelper<TData>(), []);
+  const relatedViews = useEntityMetadata(entity).relatedViews;
+  const { columnVisibility, setColumnVisibility } = visibility;
   const sourceIds = useMemo(() => {
     const ids: string[] = [];
     const visit = (rows: readonly ListTreeNode[]) => {
@@ -287,9 +306,6 @@ export function useEntityListPresentation<TData extends BaseListRow>({
   // table exists, to decide which related columns are worth fetching preview
   // data for. The caller feeds `columnVisibility`/`setColumnVisibility` back
   // into `useTableConfig` as its controlled visibility state.
-  const [columnVisibility, setColumnVisibility] =
-    useState<ColumnVisibilityState>(mergedInitialColumnVisibility);
-  useRevealTableColumnsOnce(setColumnVisibility, revealColumns);
   const visibleRelatedKeys = useMemo(
     () =>
       relatedViews
@@ -307,7 +323,7 @@ export function useEntityListPresentation<TData extends BaseListRow>({
     allColumns,
     columnVisibility,
     setColumnVisibility,
-    initialColumnVisibility: mergedInitialColumnVisibility,
+    initialColumnVisibility: visibility.initialColumnVisibility,
     rowContentVersion,
   };
 }

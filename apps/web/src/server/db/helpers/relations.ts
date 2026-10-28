@@ -670,6 +670,7 @@ export const relations = {
                 yield: true,
                 totals: true,
                 totalsComputedAt: true,
+                totalsPublishedAt: true,
                 // Read by mealRecipeFields: the LINK's deletedAt says the recipe was
                 // unplanned, the RECIPE's says it no longer exists. Filtering
                 // only the former kept a deleted recipe in the meal and summed

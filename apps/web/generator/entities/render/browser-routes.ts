@@ -60,6 +60,9 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
     'import { listPage } from "~/entity/routing/list-page";',
     'import { ensureEntityMetadata } from "~/entity/metadata";',
     ...(entity.route.listColumns ? [importLine(entity.route.listColumns)] : []),
+    ...(entity.route.listReadProjection
+      ? [importLine(entity.route.listReadProjection)]
+      : []),
     ...(entity.route.create === "page"
       ? ['import { Button } from "~/ui/primitives/button";']
       : []),
@@ -81,6 +84,11 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
     (entity.route.listColumns
       ? `  override: ${entity.route.listColumns.export},\n`
       : "") +
+    (entity.route.listReadProjection
+      ? `  readProjection: ${entity.route.listReadProjection.export},\n`
+      : entity.route.listColumns
+        ? "  readProjection: null,\n"
+        : "") +
     (createAction === null ? "" : `  actions: () => ${createAction},\n`) +
     "});\n\n" +
     `export const Route = createFileRoute(${JSON.stringify(`/_authenticated/${basePath}/`)})({\n` +
@@ -91,7 +99,7 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
     // list read; a client-paged roster (cookbook) fetches on mount.
     (listed
       ? "  loaderDeps: ({ search }) => search,\n" +
-        `  loader: entityListLoader(${JSON.stringify(entity.key)}),\n`
+        `  loader: entityListLoader(${JSON.stringify(entity.key)}${entity.route.listReadProjection ? `, ${entity.route.listReadProjection.export}` : entity.route.listColumns ? ", null" : ""}),\n`
       : "") +
     `  head: () => ({ meta: [{ title: pageTitle(${JSON.stringify(plural)}) }] }),\n` +
     `  component: ${page},\n` +

@@ -67,4 +67,20 @@ it("publishes only schema-admitted list filter names", () => {
   expect(metadata.declaredFields).not.toContain("fieldResolutions");
   expect(metadata.declaredFields).not.toContain("derived");
   expect(JSON.stringify(metadata)).not.toContain("synthetic-");
+  expect(
+    requestedReadMetadata("entity.list", {
+      entity: "product",
+      fields: ["name", "price"],
+    }),
+  ).toMatchObject({
+    projection: "selected",
+    declaredFields: ["name", "fields.price"],
+    loadedDependencies: null,
+  });
+  expect(
+    requestedReadMetadata("entity.list", {
+      entity: "product",
+      fields: ["name", "synthetic-private-field"],
+    }),
+  ).toBeNull();
 });

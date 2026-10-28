@@ -13,6 +13,8 @@ import type { TableStateReturn } from "../../entity/table/use-table-state";
 export interface ListQueryResponse<TData> {
   items: TData[];
   meta: z.output<typeof paginatedMetaSchema>;
+  /** Present only when canonical rows intentionally omit other envelopes. */
+  selectedFields?: readonly string[];
 }
 
 /**
@@ -52,6 +54,7 @@ export type ListQueryOptionsFn<
   nesting?: ListNesting;
   resultMembership?: ListResultMembership;
   includeCount?: boolean;
+  fields?: string[];
 }) => ListQueryPlan<TData, TPage>;
 
 interface UsePaginatedTableCoreOptions<

@@ -3,6 +3,7 @@ import { onDetailSurface } from "@cubby/schemas/entity-detail-summary";
 import { type EntityFieldModel } from "@cubby/schemas/entity-fields";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { isGalleryEntity } from "@cubby/schemas/entity-roster";
+import { fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
@@ -312,6 +313,7 @@ function declaredSections<E extends GenericDetailEntity>(
                 entity={entity}
                 id={bag.id}
                 field={section.explanationField}
+                resolution={fieldEnvelopeFor(record, section.explanationField)}
                 label={title}
               />
             ) : undefined,

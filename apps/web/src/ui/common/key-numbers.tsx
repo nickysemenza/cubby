@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode, useId } from "react";
 
 import { cn } from "~/lib/utils";
+import { ChangedValue, type ValueChange } from "~/ui/derived/value-change";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
 import type { RecordTone } from "./record-list";
@@ -11,6 +12,8 @@ export interface KeyNumber {
   id?: string;
   label: string;
   value: ReactNode;
+  /** Semantic value and scope for change feedback. */
+  change?: ValueChange;
   /** Strip only: a quiet line under the number ("8 days ago"). */
   context?: ReactNode;
   /** Money reads in mono inline (CurrencyValue's `.money` does the same). */
@@ -222,7 +225,8 @@ function InlineNumber({ item }: { item: KeyNumber }) {
  */
 function Value({ item, labelId }: { item: KeyNumber; labelId: string }) {
   const valueId = useId();
-  if (!item.onSelect) return item.value;
+  const value = <ChangedValue change={item.change}>{item.value}</ChangedValue>;
+  if (!item.onSelect) return value;
   return (
     <button
       type="button"
@@ -232,7 +236,7 @@ function Value({ item, labelId }: { item: KeyNumber; labelId: string }) {
       aria-labelledby={`${labelId} ${valueId}`}
       className="rounded-sm text-inherit outline-none after:absolute after:inset-0 after:content-[''] focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
     >
-      {item.value}
+      {value}
     </button>
   );
 }

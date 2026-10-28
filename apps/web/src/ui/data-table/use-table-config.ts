@@ -66,6 +66,7 @@ interface UseTableConfigOptions<TData extends RowData> {
    * RTable forwards it to its memoized desktop and mobile row renderers.
    */
   rowContentVersion?: unknown;
+  valueChangeScope?: string;
   /** Group by choices the column header menus offer; see `CubbyTableMeta`. */
   grouping?: CubbyTableMeta["grouping"];
   /**
@@ -110,6 +111,7 @@ export function useTableConfig<TData extends RowData>({
   serverTotals,
   filterFields,
   rowContentVersion,
+  valueChangeScope,
   grouping,
   getSubRows,
   filterFromLeafRows,
@@ -164,6 +166,9 @@ export function useTableConfig<TData extends RowData>({
     }
     if (rowContentVersion !== undefined) {
       Object.assign(meta, { rowContentVersion });
+    }
+    if (valueChangeScope !== undefined) {
+      Object.assign(meta, { valueChangeScope });
     }
     if (grouping) {
       Object.assign(meta, { grouping });
@@ -269,6 +274,7 @@ export function useTableConfig<TData extends RowData>({
     serverTotals,
     filterFields,
     rowContentVersion,
+    valueChangeScope,
     grouping,
     getRowId,
     enableRowSelection,

@@ -355,7 +355,8 @@ export const setRecipeTotalsFixtureRaw = async (
 ): Promise<void> => {
   await getDb(db).execute(sql`UPDATE ${recipe}
     SET "totals" = ${totals == null ? null : JSON.stringify(totals)}::jsonb,
-        "totalsComputedAt" = ${computedAt}
+        "totalsComputedAt" = ${computedAt},
+        "totalsPublishedAt" = ${computedAt}
     WHERE ${recipe.id} = ${id}`);
 };
 

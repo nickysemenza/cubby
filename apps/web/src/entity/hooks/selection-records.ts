@@ -23,7 +23,7 @@ export async function loadSelectionRecords<
       filters: { ...filters, ids: batch },
       pagination: { pageIndex: 0, pageSize: 100 },
     });
-    const page = await plan.execute(signal);
+    const page = await plan.execute(signal, "strong");
     const byId = new Map(page.items.map((row) => [row.id, row]));
     if (byId.size !== batch.length || batch.some((id) => !byId.has(id))) {
       throw new Error(

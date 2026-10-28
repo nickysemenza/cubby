@@ -120,6 +120,7 @@ function explainedCellContent<TItem extends RowData>(
   const resolution = fieldResolutionFor(
     cell.row.original,
     explanation?.field ?? cell.column.id,
+    explanation?.path,
   );
   const rowIdentity = dataRowIdentitySchema.safeParse(cell.row.original);
   // Every rail overlays the active row; a derived value reads muted, and an
@@ -128,6 +129,7 @@ function explainedCellContent<TItem extends RowData>(
     <FieldRecordValue
       record={cell.row.original}
       field={explanation?.field ?? cell.column.id}
+      resolution={resolution}
     >
       {content}
     </FieldRecordValue>

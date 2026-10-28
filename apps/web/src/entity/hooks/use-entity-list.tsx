@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { browserEntityDefinition, entities } from "~/entity/entities";
+import type { ListReadProjection } from "~/entity/entity-list/list-read-demand";
 import {
   getEntityFilters,
   manifestFilterFields,
@@ -71,6 +72,7 @@ import {
 import {
   useEntityListPresentation,
   useEntityListPresentationState,
+  useEntityListColumnVisibility,
 } from "./use-entity-list-presentation";
 import {
   useEntityPreview,
@@ -162,6 +164,9 @@ export interface UseEntityListOptions<
   entity: BrowserRoutedEntity;
   /** The descriptor-bound plan that supplies this table's exact row type. */
   queryOptions: ListQueryOptionsFn<TFilters, TRow>;
+  /** An honest selected-row adapter; selection action reloads retain queryOptions. */
+  selectedQueryOptions?: ListQueryOptionsFn<TFilters, TRow>;
+  readProjection?: ListReadProjection | null;
   buildFilters?: (tableState: TableStateReturn) => TFilters;
   /**
    * Contextual scope imposed by the surrounding page (for example, expenses
@@ -344,6 +349,8 @@ export function useEntityList<
 >({
   entity,
   queryOptions,
+  selectedQueryOptions,
+  readProjection,
   buildFilters,
   scopeFilters,
   columns: customColumns,
@@ -497,10 +504,29 @@ export function useEntityList<
     ),
   );
 
+  const worklistColumns = worklistColumnPresentation(worklist);
+  const visibility = useEntityListColumnVisibility({
+    entity,
+    initialColumnVisibility,
+    ...worklistColumns,
+  });
+  const requestedFields = useMemo(
+    () => readProjection?.(queryClient, entity, visibility.columnVisibility),
+    [entity, queryClient, readProjection, visibility.columnVisibility],
+  );
+  const pageQueryOptions = useMemo(
+    (): ListQueryOptionsFn<TFilters, TRow> =>
+      requestedFields && selectedQueryOptions
+        ? (params) =>
+            selectedQueryOptions({ ...params, fields: requestedFields })
+        : queryOptions,
+    [queryOptions, requestedFields, selectedQueryOptions],
+  );
   const [resultMembership, setResultMembership] =
     useState<ListResultMembership>("known");
   const infiniteResult = useInfiniteTableList<TFilters, TRow>({
-    queryOptions,
+    queryOptions: pageQueryOptions,
+    requiredFields: requestedFields,
     buildFilters: effectiveBuildFilters,
     tableState,
     groupBy,
@@ -713,15 +739,13 @@ export function useEntityList<
   // A server tree's status row (loading, error, Load more) is no record.
   const rowActionsGuard =
     tree?.rowIsEntity ?? (serverTree ? isServerTreeRecord : undefined);
-  const worklistColumns = worklistColumnPresentation(worklist);
   const presentation = useEntityListPresentation<TData>({
     entity,
     data,
     columns: customColumns,
     filters,
     filterOptions: resolvedFilterOptions,
-    initialColumnVisibility,
-    ...worklistColumns,
+    visibility,
     state: presentationState,
     supportsServerSorting: true,
     mappingsMap: effectiveMappingsMap,
@@ -879,6 +903,7 @@ export function useEntityList<
         }
       : undefined;
   const table = useTableConfig({
+    valueChangeScope: selectionScope,
     data: tableData,
     columns: allColumns,
     tableState,

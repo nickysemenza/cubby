@@ -406,19 +406,10 @@
                   }
                 },
                 "result": {
-                  "kind": "live",
-                  "decision": {
-                    "outcome": {
-                      "kind": "empty",
-                      "reason": "unset"
-                    },
-                    "provenance": {
-                      "kind": "computed"
-                    }
-                  }
+                  "kind": "missing"
                 },
                 "work": {
-                  "kind": "idle"
+                  "kind": "pending"
                 }
               }
             }

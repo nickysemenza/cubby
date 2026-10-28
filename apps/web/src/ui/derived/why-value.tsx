@@ -15,7 +15,7 @@ import {
 import { resolvedListSchema } from "@cubby/schemas/field-resolution";
 import { humanize, parseShortcode } from "@cubby/shared";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { z } from "zod";
 
@@ -25,7 +25,9 @@ import { isBrowserRoutedEntity } from "~/entity/entities";
 import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
 import { useEntityMetadata } from "~/entity/metadata";
 import { useListQuery } from "~/entity/table/list-query-context";
+import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatCurrency } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -411,9 +413,13 @@ type ExplainedCheck = NonNullable<
 function QualityCheckRow({
   check,
   entityId,
+  controls = true,
+  controlCheck,
 }: {
   check: ExplainedCheck;
   entityId: string;
+  controls?: boolean;
+  controlCheck?: ExplainedCheck;
 }) {
   return (
     <LedgerRow
@@ -447,7 +453,12 @@ function QualityCheckRow({
         </LedgerCell>
       ) : null}
       <LedgerCell as="div" slot="actions">
-        <ExceptionControls entityId={entityId} check={check} />
+        {controls ? (
+          <ExceptionControls
+            entityId={entityId}
+            check={controlCheck ?? check}
+          />
+        ) : null}
       </LedgerCell>
     </LedgerRow>
   );
@@ -456,9 +467,11 @@ function QualityCheckRow({
 function QualityCalculation({
   breakdown,
   entityId,
+  currentControls,
 }: {
   breakdown: NonNullable<FieldExplanationOutput["qualityBreakdown"]>;
   entityId: string;
+  currentControls?: readonly ExplainedCheck[];
 }) {
   return (
     <section className="grid gap-2 border-t border-border pt-2">
@@ -494,6 +507,13 @@ function QualityCalculation({
             key={check.check}
             check={check}
             entityId={entityId}
+            controls={
+              currentControls === undefined ||
+              currentControls.some((current) => current.check === check.check)
+            }
+            controlCheck={currentControls?.find(
+              (current) => current.check === check.check,
+            )}
           />
         ))}
       </Ledger>
@@ -524,6 +544,7 @@ export function WhyValue({
   surface = "detail",
   scope,
   onSet,
+  resolution,
 }: WhyValueProps) {
   const [open, setOpen] = useState(false);
   return (
@@ -559,6 +580,7 @@ export function WhyValue({
             surface={surface}
             scope={scope}
             onSet={onSet}
+            resolution={resolution}
           />
         ) : null}
       </PopoverContent>
@@ -577,7 +599,16 @@ export function WhyValueContents({
   qualityChecks,
   pendingSuggestion,
   scope,
+  resolution,
 }: WhyValueProps) {
+  const queryClient = useQueryClient();
+  const [diagnostic, setDiagnostic] = useState(false);
+  const refresh = useMutation({
+    mutationFn: async () => {
+      setDiagnostic(false);
+      await invalidateOperationTags(queryClient, entityRipple(entity));
+    },
+  });
   const metadata = useEntityMetadata(entity);
   const listQuery = useListQuery(entity);
   const bindings = z
@@ -612,11 +643,28 @@ export function WhyValueContents({
       entityId: id,
       field,
       surface,
+      ...(resolution
+        ? {
+            displayedResult: fieldExplanationInput.shape.displayedResult
+              .unwrap()
+              .parse(resolution.result),
+          }
+        : {}),
+      ...(diagnostic ? { diagnostic: true } : {}),
       ...(contextualScope ? { scope: contextualScope } : {}),
     }),
     staleTime: 0,
     refetchOnMount: "always",
   });
+  const currentQualityControls =
+    result.data?.currentQualityControls?.filter(
+      (check) =>
+        (check.exception ||
+          (check.state === "gap" && check.exceptionReasons.length > 0)) &&
+        !result.data?.qualityBreakdown?.checks.some(
+          (published) => published.check === check.check,
+        ),
+    ) ?? [];
   // Long rule identifiers must wrap inside the viewport-bounded popover.
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-3 p-3">
@@ -642,6 +690,21 @@ export function WhyValueContents({
           >
             Retry explanation
           </Button>
+        </Stack>
+      ) : result.data.publication?.kind === "superseded" ? (
+        <Stack gap="sm">
+          <p className="text-xs leading-5">{result.data.publication.reason}</p>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={refresh.isPending}
+            onClick={() => refresh.mutate()}
+          >
+            Refresh value and explanation
+          </Button>
+          {refresh.isError ? (
+            <ErrorDisplay error={refresh.error} title="refreshing this value" />
+          ) : null}
         </Stack>
       ) : (
         <>
@@ -691,6 +754,21 @@ export function WhyValueContents({
           result.data.resolutionEvidence ? (
             <p className="text-xs font-medium">Current resolution evidence</p>
           ) : null}
+          {result.data.publication?.kind === "unavailable" ? (
+            <p className="text-xs leading-5 text-muted-foreground">
+              {result.data.publication.reason}
+            </p>
+          ) : null}
+          {result.data.envelope.result.kind === "cached" && !diagnostic ? (
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={result.isFetching}
+              onClick={() => setDiagnostic(true)}
+            >
+              Compare with current inputs
+            </Button>
+          ) : null}
           <ResolutionEvidence evidence={result.data.resolutionEvidence} />
           {result.data.imageChain ? (
             <ImageChain chain={result.data.imageChain} />
@@ -699,7 +777,21 @@ export function WhyValueContents({
             <QualityCalculation
               breakdown={result.data.qualityBreakdown}
               entityId={id}
+              currentControls={result.data.currentQualityControls}
             />
+          ) : null}
+          {currentQualityControls.length > 0 ? (
+            <section className="grid gap-2 border-t border-border pt-2">
+              <h3 className={sectionLabelClassName}>
+                Current exception controls
+              </h3>
+              {currentQualityControls.map((check) => (
+                <div key={check.check} className="grid gap-1 text-xs">
+                  <p>{check.label}</p>
+                  <ExceptionControls entityId={id} check={check} />
+                </div>
+              ))}
+            </section>
           ) : null}
           {!result.data.qualityBreakdown && qualityChecks?.length ? (
             <Ledger>

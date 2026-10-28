@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -6,6 +7,9 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { recipe, expense } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
+import { markRecipesStale } from "~/server/domains/recipe/repo/totals";
+import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import {
   drainDerivedPage,
   drainStoredDerived,
@@ -19,12 +23,68 @@ import {
   makeProductInput,
   ingredientRef,
 } from "~/server/testing/repo.fixtures";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 // Recipe output must survive lost wakes and reject a prepared superseded page.
 describe("recipe Job publication", () => {
   const ctx = withTestDb();
   const drain = () => drainStoredDerived(ctx.db);
   const invalidateRecipes = () => reconcileDerivedRefreshInputs(ctx.db);
+
+  it("retains stale totals and explains their publication without making nutrition fresh", async () => {
+    const subject = await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({ name: "Synthetic retained totals" }),
+      ctx.actor,
+    );
+    await drain();
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
+    const request = {
+      entityKind: "recipe" as const,
+      entityId: subject.id,
+      field: "costTotal",
+      surface: "list" as const,
+    };
+    const published = await explainField(context, request);
+    expect(published.envelope.result.kind).toBe("cached");
+    expect(published.sources).not.toEqual([]);
+    await markRecipesStale(ctx.db, [subject.entityId]);
+    const stale = await explainField(context, {
+      ...request,
+      displayedResult: published.envelope.result,
+    });
+    expect(stale.envelope.result).toMatchObject({
+      kind: "cached",
+      freshness: "stale",
+    });
+    expect(fieldValueOf(stale.envelope)).toEqual(
+      fieldValueOf(published.envelope),
+    );
+    expect(stale.sources).toEqual(published.sources);
+    const row = await getDb(ctx.db).query.recipe.findFirst({
+      where: eq(recipe.id, subject.entityId),
+    });
+    expect(row?.totalsComputedAt).toBeNull();
+    expect(row?.totalsPublishedAt?.toISOString()).toEqual(
+      published.envelope.result.kind === "cached"
+        ? published.envelope.result.computedAt
+        : null,
+    );
+    await drain();
+    expect(
+      await derivedMarkTickets(ctx.db, "recipe.totals", subject.entityId),
+    ).toEqual([]);
+    const superseded = await explainField(context, {
+      ...request,
+      displayedResult: published.envelope.result,
+    });
+    expect(superseded.publication?.kind).toBe("superseded");
+    expect(superseded.sources).toEqual([]);
+  });
 
   it("rejects prepared totals after a later authoritative save", async () => {
     const subject = await createRecipeFixture(

@@ -87,6 +87,7 @@ export type GeneratedEntityFieldModel<E extends string = Entity> = {
       listOrder: number | null;
       width: "xs" | "sm" | "md" | "lg" | "xl" | null;
       readPath: string | null;
+      readFields?: readonly string[];
       labelPath: string | null;
       emptyLabel?: string | null;
       detailLabelPath?: string | null;

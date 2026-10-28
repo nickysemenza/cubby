@@ -92,6 +92,7 @@ type MealRow = {
       yield: RawMealRecipeOut["recipe"]["yield"];
       totals: StoredRecipeTotals | null;
       totalsComputedAt: Date | null;
+      totalsPublishedAt: Date | null;
       deletedAt: Date | null;
     };
   }>;
@@ -117,6 +118,9 @@ export const mealRecipeFields = (
         servings: mr.recipe.servings,
         yield: mr.recipe.yield,
         totals: mr.recipe.totals ? withMacros(mr.recipe.totals) : null,
+        storedProjectionVersions: {
+          totals: mr.recipe.totalsPublishedAt?.toISOString() ?? null,
+        },
       },
       scale: mr.scale,
       sortOrder: mr.sortOrder,

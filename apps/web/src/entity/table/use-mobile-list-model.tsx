@@ -245,10 +245,13 @@ function collectMobileSlots<TItem extends RowData>(
       meta?.explanation,
       row.original,
       colId,
+      "summary",
     );
+    const field = explanation?.field ?? colId;
     const resolution = fieldResolutionFor(
       row.original,
-      explanation?.field ?? colId,
+      field,
+      explanation?.path,
     );
     const valueUnavailable = meta?.valueUnavailable?.(row.original) ?? false;
     if (
@@ -303,7 +306,8 @@ function collectMobileSlots<TItem extends RowData>(
     const resolutionValue = (
       <FieldRecordValue
         record={row.original}
-        field={explanation?.field ?? colId}
+        field={field}
+        resolution={resolution}
       >
         {inspectedValue}
       </FieldRecordValue>

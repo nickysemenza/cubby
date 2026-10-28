@@ -734,6 +734,19 @@ export const renderEntityMetadataArtifacts = (
                         {
                           table: entity.descriptor.dbTable,
                           match: { id: "id" },
+                          // Publication bookkeeping cannot change searchable content.
+                          except: Object.values(
+                            entity.fieldModel.stored,
+                          ).flatMap((stored) =>
+                            stored.recordSource
+                              ? [
+                                  stored.recordSource.computedAt,
+                                  ...(stored.recordSource.freshAt
+                                    ? [stored.recordSource.freshAt]
+                                    : []),
+                                ]
+                              : [],
+                          ),
                         },
                         {
                           table: "EntityAttachment",

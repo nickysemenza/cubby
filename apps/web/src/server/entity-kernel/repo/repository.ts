@@ -88,10 +88,7 @@ import type { ListReader } from "~/server/generic/list/repo/field-compiler";
 import type { EntityListScaffold } from "~/server/generic/list/repo/list";
 import { type RemovableEntity } from "~/server/generic/removal/repo/core";
 import { executeDeleteWithEffects } from "~/server/generic/removal/repo/delete-effects";
-import {
-  deleteByPolicy,
-  type DeleteHooks,
-} from "~/server/generic/removal/repo/dispositions";
+import type { DeleteHooks } from "~/server/generic/removal/repo/dispositions";
 import {
   resolveLiveShortcode,
   resolveOrThrow,
@@ -693,6 +690,10 @@ export function defineRepository<
         detachedImageKeys: outcome?.detachedImageKeys,
       };
     }
+    // Removal loads entity repositories; importing it while readers initialize
+    // creates a repository -> removal -> image -> repository cycle.
+    const { deleteByPolicy } =
+      await import("~/server/generic/removal/repo/dispositions");
     const result = await deleteByPolicy(ctx.db, {
       entity: removable,
       policy: lifecycle.delete,

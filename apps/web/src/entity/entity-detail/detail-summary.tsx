@@ -45,7 +45,11 @@ import { readPathValue } from "../read-path";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { useDetailFieldOverrides } from "./entity-record-fields";
 import { ReportRowText, ReportTimeDisplay } from "./records-ledger";
-import { LIVE_REPORT_POLL_MS, ReportBlocks } from "./report-slot";
+import {
+  LIVE_REPORT_POLL_MS,
+  ReportBlocks,
+  reportBlockKey,
+} from "./report-slot";
 import { MonthlySpendChart } from "./spend-chart";
 
 type Field = EntityFieldModel["fields"][number];
@@ -130,9 +134,11 @@ function SummaryCell({
 export function CompactSummaryReport({
   blocks,
   title,
+  scope,
 }: {
   blocks: readonly ReportBlock[];
   title?: string;
+  scope?: string;
 }) {
   const hydrated = useHydrated();
   const projection = summaryReportProjection(blocks);
@@ -155,7 +161,7 @@ export function CompactSummaryReport({
   return (
     <EntityDisplayImagesProvider refs={reportImageRefs(displayed)}>
       <div className="space-y-1">
-        {displayed.map((block) => {
+        {displayed.map((block, index) => {
           if (block.kind === "records") {
             const more = block.rows.filter(
               (row) => row.entity === null && row.listLink,
@@ -278,7 +284,11 @@ export function CompactSummaryReport({
             block.kind === "note"
           )
             return (
-              <ReportBlocks key={JSON.stringify(block)} blocks={[block]} />
+              <ReportBlocks
+                key={reportBlockKey(block, index)}
+                scope={scope === undefined ? undefined : `${scope}:${index}`}
+                blocks={[block]}
+              />
             );
           const _exhaustive: never = block;
           return _exhaustive;
@@ -576,7 +586,11 @@ function SummaryReport({
         />
       ) : null}
       {report.blocks.length ? (
-        <CompactSummaryReport blocks={report.blocks} title={slot.title} />
+        <CompactSummaryReport
+          blocks={report.blocks}
+          title={slot.title}
+          scope={`${id}:${slot.slot}`}
+        />
       ) : null}
     </>
   );

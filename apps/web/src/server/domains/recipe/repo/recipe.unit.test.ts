@@ -55,6 +55,7 @@ const baseRecipe = {
   notes: null,
   totals: null,
   totalsComputedAt: null,
+  totalsPublishedAt: null,
   activeMinutes: null,
   totalMinutes: null,
   meta: null,

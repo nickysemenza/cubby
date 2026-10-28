@@ -435,18 +435,21 @@ export const { definition, readSchemas } = defineEntityModel(
               summary: "ownerLedgerPartyId",
             },
             sourceDependencies: [
-              { path: "storedResult", label: "Published ownership snapshot" },
+              {
+                path: "storedResult",
+                label: "Published ownership and evidence",
+              },
               {
                 path: "fields.ownerLedgerPartyId.result.decision.provenance",
-                label: "Source",
+                label: "Current source",
               },
               {
                 path: "fields.ownerLedgerPartyId.current.assignment.value",
-                label: "Stored override",
+                label: "Current override",
               },
               {
                 path: "fields.ownerLedgerPartyId.current.controls.reset.preview.result.decision.outcome.value",
-                label: "Inherited value",
+                label: "Current inherited value",
               },
             ],
           },

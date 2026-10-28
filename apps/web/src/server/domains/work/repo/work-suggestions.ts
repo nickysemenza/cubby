@@ -196,10 +196,12 @@ const source: WorkSource = {
       ctes: [
         {
           name: "work_connection_prediction",
-          sql: sql`SELECT a.id, a.subject, a.fingerprint, coalesce(s.data->'connectionTarget', a.evidence->'candidate'->${"target"}) AS target FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE a.served AND s.family = ${assessmentFamily.enum.recommendation} AND s.active AND s.status = ${suggestionStatus.enum.pending} AND a.subject->>'scope' LIKE 'connection.%' AND ${
+          // Migration 0042 and connection publication own this compact target.
+          // Reverse-target reads must not reopen immutable evidence per candidate.
+          sql: sql`SELECT a.id, a.subject, a.fingerprint, s.data->'connectionTarget' AS target FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE a.served AND s.family = ${assessmentFamily.enum.recommendation} AND s.active AND s.status = ${suggestionStatus.enum.pending} AND a.subject->>'scope' LIKE 'connection.%' AND ${
             scope.record
-              ? sql`((${stateScope("s")}) OR (coalesce(s.data->'connectionTarget', a.evidence->'candidate'->${"target"})->>'entityKind' = ${scope.record.entity}
-              AND coalesce(s.data->'connectionTarget', a.evidence->'candidate'->${"target"})->>'entityId' = ${scope.record.id}))`
+              ? sql`((${stateScope("s")}) OR (s.data->'connectionTarget'->>'entityKind' = ${scope.record.entity}
+              AND s.data->'connectionTarget'->>'entityId' = ${scope.record.id}))`
               : sql`true`
           }`,
         },

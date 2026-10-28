@@ -76,6 +76,11 @@ export interface StoredDerivedDeclaration {
    * recipe totals), so readers read that table.
    */
   readonly publishes: "derivedValue" | "ownTable";
+  readonly recordSource: {
+    readonly value: string;
+    readonly computedAt: string;
+    readonly freshAt?: string;
+  } | null;
   readonly sort: DerivedSortType;
   readonly inputs: readonly DerivedInput[];
   readonly dependsOn: readonly DerivedDependency[];
@@ -99,6 +104,13 @@ const storedEntry = z.object({
   publishes: z.enum(["derivedValue", "ownTable"]),
   stored: z.object({
     compute: z.string(),
+    recordSource: z
+      .object({
+        value: z.string(),
+        computedAt: z.string(),
+        freshAt: z.string().optional(),
+      })
+      .optional(),
     clock: z.literal("householdDay").optional(),
     inputs: z.array(
       z.object({
@@ -175,6 +187,7 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
           compute: entry.stored.compute,
           clock: entry.stored.clock ?? null,
           publishes: entry.publishes,
+          recordSource: entry.stored.recordSource ?? null,
           sort: sortTypeOf(entry.type),
           inputs: entry.stored.inputs.map((input) => {
             const [tableColumn, entityColumn] = onePair(input.match);

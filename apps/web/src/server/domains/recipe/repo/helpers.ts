@@ -199,9 +199,9 @@ type RecipeShallowOut = Omit<
 >;
 
 export const recipeTotalsFields = (
-  recipeData: Pick<RecipeSelect, "totals" | "totalsComputedAt">,
+  recipeData: Pick<RecipeSelect, "totals" | "totalsPublishedAt">,
 ) => {
-  const totals = totalsForRead(recipeData.totals, recipeData.totalsComputedAt);
+  const totals = totalsForRead(recipeData.totals, recipeData.totalsPublishedAt);
   return { totals, ...totalsPreview(totals) };
 };
 

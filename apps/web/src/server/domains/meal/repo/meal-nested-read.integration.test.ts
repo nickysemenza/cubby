@@ -4,6 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createRecipeFixture,
   makeRecipeInput,
@@ -30,6 +31,7 @@ describe("Meal nested Recipe envelopes", () => {
       }),
       ctx.actor,
     );
+    await drainStoredDerived(ctx.db);
     const first = await addRecipeToMeal(
       ctx.db,
       meal.entityId,
@@ -82,10 +84,20 @@ describe("Meal nested Recipe envelopes", () => {
           occurrence.recipe.fields.servings.current.assignment,
         ).toMatchObject({ kind: "value", value: 6 });
         expect(fieldValueOf(occurrence.recipe.fields.servings)).toBe(6);
-        expect(occurrence.recipe.fields.totals).toHaveProperty("result.kind");
+        expect(occurrence.recipe.fields.totals.result.kind).toBe("cached");
+        expect(fieldValueOf(occurrence.recipe.fields.totals)).toEqual(
+          raw.recipes[index]?.recipe.totals,
+        );
+        expect(occurrence.recipe.fields.totals.result).toMatchObject({
+          computedAt:
+            raw.recipes[index]?.recipe.storedProjectionVersions?.totals,
+        });
         expect(occurrence.recipe).not.toHaveProperty("servings");
         expect(occurrence.recipe).not.toHaveProperty("totals");
         expect(occurrence.recipe).not.toHaveProperty("fieldResolutions");
+        expect(occurrence.recipe).not.toHaveProperty(
+          "storedProjectionVersions",
+        );
         expect(occurrence.recipe).not.toHaveProperty("sections");
         expect(occurrence.recipe.yield).toEqual(
           raw.recipes[index]?.recipe.yield,

@@ -26,6 +26,7 @@ import {
   type EntityListParseInput,
   type EntityListParamsByEntity,
   type EntityListResultByEntity,
+  type EntitySelectedListResultByEntity,
   entityListParamsFromParsed,
   entityListInputFor,
   type ListEntity,
@@ -42,6 +43,7 @@ interface CompileEntityListOptions {
   groupBy?: ListGroupBy[];
   /** A nested table's root scope (`listNested`). */
   nesting?: ListNesting;
+  fields?: string[];
 }
 
 /**
@@ -73,6 +75,7 @@ export function compileEntityListInput<E extends ListEntity>(
       pageSize: options.pageSize ?? defaultPagination.pageSize,
     },
     includeCount: options.includeCount ?? false,
+    fields: options.fields,
   };
   // Omitted rather than an empty array: server list search recognizes the
   // absence of a user sort and opens in lexical relevance order. A URL sort
@@ -124,10 +127,33 @@ export function entityListFor<E extends ListEntity>(
     signal?: AbortSignal,
     consistency?: "strong",
   ): Promise<EntityListResultByEntity[E]> => {
-    return correlateEntityList(
-      entity,
-      await operation.call(input, { signal, consistency }),
-    );
+    if (input.fields !== undefined)
+      throw new Error(
+        "Selected list fields require the selected list query plan",
+      );
+    const result = await operation.call(input, { signal, consistency });
+    if ("selectedFields" in result)
+      throw new Error("A complete list returned a selected projection");
+    return correlateEntityList(entity, result);
+  };
+  const selectedCall = async (
+    input: EntityListInputByEntity[E],
+    signal?: AbortSignal,
+    consistency?: "strong",
+  ): Promise<EntitySelectedListResultByEntity[ListEntity]> => {
+    const result = await operation.call(input, { signal, consistency });
+    if (!("selectedFields" in result))
+      throw new Error("A selected list returned no projection witness");
+    if (
+      result.selectedFields.length !== input.fields?.length ||
+      result.selectedFields.some(
+        (field, index) => field !== input.fields?.[index],
+      )
+    )
+      throw new Error(
+        "A selected list returned different fields than requested",
+      );
+    return result;
   };
   const keyInputFor = (wireInput: EntityListInputByEntity[E]) => {
     try {
@@ -185,6 +211,50 @@ export function entityListFor<E extends ListEntity>(
             call(parseEntityListInput(entity, wireInput), signal, consistency),
           ),
       };
+    },
+    selectedListQueryPlan: (input: EntityListParams<E>) => {
+      if (input.fields === undefined)
+        throw new Error("A selected list query requires fields");
+      const parsed = parseEntityListInput(entity, wireInputFor(input));
+      const policy = operation.policy(parsed);
+      return {
+        queryKey: queryKeyFor(parsed),
+        meta: policy.meta,
+        execute: (signal: AbortSignal, consistency?: "strong") =>
+          selectedCall(parsed, signal, consistency),
+      };
+    },
+    browserInfiniteQueryOptions: (input: EntityListParams<E>) => {
+      const firstPage = firstPageOf(input);
+      const parsed = parseEntityListInput(entity, wireInputFor(firstPage));
+      const policy = operation.policy(parsed);
+      return infiniteQueryOptions({
+        queryKey: infiniteOperationQueryKey(queryKeyFor(parsed)),
+        queryFn: async ({
+          pageParam,
+          signal,
+          client,
+          queryKey,
+        }): Promise<
+          | EntityListResultByEntity[E]
+          | EntitySelectedListResultByEntity[ListEntity]
+        > =>
+          (input.fields === undefined ? call : selectedCall)(
+            parseEntityListInput(entity, {
+              ...parsed,
+              pagination: { ...firstPage.pagination, pageIndex: pageParam },
+            }),
+            signal,
+            client.getQueryState(queryKey)?.isInvalidated
+              ? "strong"
+              : undefined,
+          ),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage) =>
+          lastPage.meta.hasNextPage ? lastPage.meta.pageIndex + 1 : undefined,
+        meta: policy.meta,
+        ...policy.freshness,
+      });
     },
     /** Query options shared by SSR loaders and the mounted infinite table. */
     infiniteQueryOptions: (input: EntityListParams<E>) => {

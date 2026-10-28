@@ -38,6 +38,7 @@ type ParsedEntityRoute = {
   create?: "dialog" | "page";
   list: true | null;
   listColumns?: SourceRef;
+  listReadProjection?: SourceRef;
   detail: true | null;
 };
 /** The list-route query parameter(s) a filter descriptor binds to. */

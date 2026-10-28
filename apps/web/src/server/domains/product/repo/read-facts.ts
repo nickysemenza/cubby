@@ -114,6 +114,12 @@ export const computeProductReadFacts: DerivedCompute = async (db, ids) => {
               : { state: "counted", units: quantity.onHandUnits },
         primaryPlacement: row.primaryPlacement,
         ownershipEvidence,
+        stockEvidence: {
+          inventoryAmounts: inventory.map((entry) => entry.amount),
+          stockTracked:
+            tracking === true ? true : tracking === false ? false : null,
+          service,
+        },
         ...productStockContext({
           category: row.category,
           quantityLedger: row.quantityLedger,

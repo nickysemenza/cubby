@@ -62,6 +62,16 @@ feedback never inserts progress rows above
 headers, in tables, or in previews. Retained-data refresh errors and Retry stay
 inline. Native workspace routes have no shell feedback.
 
+Actual value changes use one quiet info-surface tint across table cells, detail
+facts and summary figures. It holds briefly and fades within two seconds without
+moving content. Initial render, hydration and remount establish a quiet baseline;
+unchanged reads, formatting-only changes and status/timestamp updates never flash.
+Identity includes the record, field and semantic filter or projection scope.
+An optimistic value followed by its identical server result highlights once.
+Selection, focus and validation remain visible. Blue Updating dots and failure
+indicators retain their independent meaning; work finishing with the same value
+clears its dot without a value highlight. There is no new motion setting.
+
 Mail coverage is a flat Vendor × mailbox RTable beside Emails, with canonical
 Vendor and Vendor Account links, explicit coverage states and separate local
 Email and Purchase counts. Selecting a row opens the shared table inspector

@@ -1,4 +1,5 @@
 import { optionalFieldResolutionsSchema } from "../field-resolution";
+import { storedProjectionVersionsSchema } from "../field-envelope";
 import {
   detailSummarySchema,
   detailSurfacesSchema,
@@ -478,6 +479,8 @@ const buildMetadataSchemas = () => {
        * `sourceRefs[].source`, `category.path[0].name`).
        */
       readPath: nonEmptyString().nullable().optional().default(null),
+      /** Additional canonical envelopes consumed by the list renderer. */
+      readFields: z.array(nonEmptyString()).optional(),
       /**
        * Where a list row carries the human-readable text of this field's
        * value, in `readPath`'s grammar (a `[]` projection joins its strings
@@ -611,6 +614,7 @@ const buildMetadataSchemas = () => {
         listOrderOverride,
         width,
         readPath,
+        readFields,
         labelPath,
         emptyLabel,
         detailLabelPath,
@@ -636,6 +640,7 @@ const buildMetadataSchemas = () => {
         listOrder: listOrderOverride,
         width,
         readPath,
+        readFields,
         labelPath,
         emptyLabel,
         detailLabelPath,
@@ -1311,6 +1316,15 @@ const buildMetadataSchemas = () => {
           derivedStoreSchema.extend({
             /** Checked at generation; adapters validate the same payload before publication. */
             resultSchema: declaredZodSchema.optional(),
+            /** A sink publication already stored on the entity's own row. */
+            recordSource: z
+              .object({
+                value: nonEmptyString(),
+                computedAt: nonEmptyString(),
+                freshAt: nonEmptyString().optional(),
+              })
+              .strict()
+              .optional(),
             publishes: z
               .enum(["derivedValue", "ownTable"])
               .optional()
@@ -1376,6 +1390,8 @@ const buildMetadataSchemas = () => {
       list: z.literal(true).nullable().optional().default(true),
       /** Specialist columns are imported only by this route component. */
       listColumns: sourceRefMetadataSchema.optional(),
+      /** Pure list demand shared by SSR and a specialist browser roster. */
+      listReadProjection: sourceRefMetadataSchema.optional(),
       /**
        * Which detail page renders: `true` the generic page over the kernel
        * `get` (the default), or `null` a hand-written detail route.
@@ -1390,6 +1406,7 @@ const buildMetadataSchemas = () => {
         createOverride,
         list,
         listColumns,
+        listReadProjection,
         detail,
       }) => ({
         basePath,
@@ -1397,6 +1414,7 @@ const buildMetadataSchemas = () => {
         create: createOverride,
         list,
         listColumns,
+        listReadProjection,
         detail,
       }),
     );
@@ -3285,11 +3303,8 @@ type OwnCheckId<D> = D extends {
 export type ReadSchemaFacts<D> = Readonly<{
   ownDataCheck: z.ZodEnum<{ [Id in OwnCheckId<D>]: Id }>;
 }>;
-const storedProjectionVersions = z
-  .record(z.string(), z.string().nullable())
-  .optional();
 type BaseReadFields<D> = {
-  storedProjectionVersions: typeof storedProjectionVersions;
+  storedProjectionVersions: typeof storedProjectionVersionsSchema;
   fieldResolutions: typeof optionalFieldResolutionsSchema;
 } & (D extends ReadableDeclaration ? ReadFieldSchemas<D> : {}) &
   (D extends { capabilities: { dataQuality: object } }
@@ -3343,7 +3358,7 @@ export function defaultReadSchemas<
   const base = z.object({
     // Resolver evidence is internal to raw reads, never an entity field descriptor.
     fieldResolutions: optionalFieldResolutionsSchema,
-    storedProjectionVersions,
+    storedProjectionVersions: storedProjectionVersionsSchema,
     ...fields,
     ...(declaration.capabilities?.dataQuality ? { dataQuality } : {}),
   }) as BaseReadSchema<D>;

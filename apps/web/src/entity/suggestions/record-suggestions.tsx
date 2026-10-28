@@ -20,7 +20,11 @@ import {
 } from "@cubby/schemas/classification-field-policy";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
+import {
+  fieldEnvelope,
+  fieldEnvelopeFor,
+  fieldValueOf,
+} from "@cubby/schemas/field-envelope";
 import {
   usesSavedFieldSuggestionContext,
   fieldSuggestionResolutionContext,
@@ -2131,6 +2135,7 @@ function ResolvedFieldSuggestion({
                   field={field}
                   label={definition.label}
                   pendingSuggestion={pending}
+                  resolution={fieldEnvelopeFor(row.record, field)}
                 />
               )
             : undefined

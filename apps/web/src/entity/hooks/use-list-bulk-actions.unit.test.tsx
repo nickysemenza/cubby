@@ -1,4 +1,12 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,7 +20,7 @@ import {
   EntityActionClipboardProvider,
   type EntityActionClipboardPort,
 } from "../actions/entity-actions";
-import { useListBulkActions } from "./use-list-bulk-actions";
+import { ListBulkActionBar, useListBulkActions } from "./use-list-bulk-actions";
 
 installFeatures();
 
@@ -68,6 +76,54 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe("useListBulkActions", () => {
+  it("resolves complete records before admitting an action on fully loaded display rows", async () => {
+    const displayed = rows("PRJ-SYNTHETIC");
+    const complete = [
+      fromPartial<Row<TestRow>>({
+        id: "PRJ-SYNTHETIC",
+        original: { id: "PRJ-SYNTHETIC", fields: { locations: [] } },
+      }),
+    ];
+    const resolve = vi.fn(async () => complete);
+    const executeAction = vi.fn(async () => undefined);
+    const availability = vi.fn((selected: Row<TestRow>[]) => {
+      expect(selected).toBe(complete);
+      return { status: "available" } as const;
+    });
+    const action: BulkAction<TestRow> = {
+      ...noop,
+      label: "Use inherited values",
+      availability,
+    };
+    type Props = Parameters<typeof ListBulkActionBar<TestRow>>[0];
+    const state = fromPartial<Props["state"]>({
+      rowSelection: { "PRJ-SYNTHETIC": true },
+      selectedCount: 1,
+      executeAction,
+      getAvailableActions: () => {
+        throw new Error("Display projections cannot establish eligibility");
+      },
+    });
+    render(
+      <ListBulkActionBar
+        table={fromPartial<Props["table"]>({
+          getSelectedRowModel: () => fromPartial({ rows: displayed }),
+          getVisibleLeafColumns: () => [],
+        })}
+        config={{ actions: [action] }}
+        state={state}
+        resolveSelectedRows={resolve}
+      />,
+    );
+    expect(availability).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Use inherited values" }),
+    );
+    await waitFor(() =>
+      expect(executeAction).toHaveBeenCalledWith(action, complete),
+    );
+    expect(resolve).toHaveBeenCalledWith(["PRJ-SYNTHETIC"]);
+  });
   it("offers Copy codes on a shortcode entity with no other actions", () => {
     // Read-only Runs isolate Copy codes from the mutable entity actions.
     const { result } = renderHook(
