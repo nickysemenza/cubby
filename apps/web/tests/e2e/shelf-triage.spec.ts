@@ -50,7 +50,9 @@ test("shelf triage stocks with the ledger default, parks in Unknown, and discard
     shelfName,
   );
   await expect(stock.getByLabel("Qty", { exact: true })).toHaveValue("3");
-  await stock.getByRole("button", { name: /Add 1 to inventory/ }).click();
+  await stock
+    .getByRole("button", { name: /Add 1 product to inventory/ })
+    .click();
   await expect(queueItem(stockName)).toContainText("done", {
     timeout: 15000,
   });

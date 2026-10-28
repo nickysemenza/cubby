@@ -11,6 +11,10 @@ black small shirt share one Product; their inventory quantity records the
 copies. A Product can exist before Cubby knows its purchase, before it has a
 photo, or before anyone decides where it is kept.
 
+Add to inventory counts Products in its submit label, explicitly naming that
+unit. Each Product row's quantity and unit determine the stock added; adding
+four copies of one Product still submits one Product.
+
 The goal is simple: starting from a photo, a retailer order, an email, a card
 transaction, or a manual entry, a person can reach **one well-identified
 Product** with the right evidence attached. The entry point and sequence do
