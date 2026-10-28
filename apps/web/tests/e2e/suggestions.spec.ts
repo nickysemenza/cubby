@@ -769,6 +769,7 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
   await expect(status).toBeVisible();
   await status.getByRole("link").first().click();
   await expect(page).toHaveURL(/\/runs\/RUN-/);
+  await page.locator("section#steps").scrollIntoViewIfNeeded();
   await expect(
     page.getByRole("heading", { name: "Execution steps", exact: true }),
   ).toBeVisible();

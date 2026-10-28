@@ -29,6 +29,7 @@ async function seedLabelReview(page: Page, objectStorageUrl: string) {
   await attachProductImagePrerequisite(page, label.id, product.id, "label");
   const imageCode = await seedDetectedLabelNutrition(name);
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
+  await page.locator("#labels").scrollIntoViewIfNeeded();
   const dialog = page.getByRole("dialog");
   const review = page.getByRole("button", {
     name: "Review detected nutrition",

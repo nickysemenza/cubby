@@ -331,6 +331,10 @@ function declaredSections<E extends GenericDetailEntity>(
   return ordered.map((section) => {
     const declared = sections.find((candidate) => candidate.id === section.id);
     if (declared?.kind === "fields") return section;
+    // Work slots own review actions and deep links into their record content.
+    // Their targets must mount before the browser can scroll to them.
+    if (declared?.kind === "slot" && section.workspace === "work")
+      return section;
     if (declared?.kind === "relation" && !streamedRelation) {
       streamedRelation = true;
       return section;
