@@ -1,17 +1,18 @@
 import { fieldSuggestionsInput } from "@cubby/schemas/ai";
 import { aiSmokeInputs, type AiSmokeScenario } from "@cubby/schemas/ai-smoke";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { projectKindValues } from "@cubby/schemas/project-fields";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
 import { entityListFor } from "~/entity/entity-list";
+import { useEntityMetadata } from "~/entity/metadata";
 import type { PickerSearchEntity } from "~/entity/picker/entity-search-hooks";
 import { Picker } from "~/entity/picker/picker";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { QuerySection } from "~/ui/feedback/query-section";
 import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
@@ -375,8 +376,7 @@ function FieldSuggestionFields({
   const entity = fieldSuggestionsInput.shape.entity
     .catch("product")
     .parse(value.entity);
-  const model = entityFieldModels[entity];
-  const fields = model?.fields ?? [];
+  const fields = useEntityMetadata(entity).fields.fields;
   const targets = fields.filter((field) => field.control?.suggest);
   const selected = z.array(z.string()).catch([]).parse(value.targets);
   const basisKeys = [
@@ -531,7 +531,15 @@ export function AiSmokeForm({
   onChange: (next: SmokeFormValue) => void;
 }) {
   if (scenario === "fieldSuggestions")
-    return <FieldSuggestionFields value={value} onChange={onChange} />;
+    return (
+      <QuerySection
+        title="field suggestions"
+        resetKey={String(value.entity)}
+        fallback={<output>Loading fields…</output>}
+      >
+        <FieldSuggestionFields value={value} onChange={onChange} />
+      </QuerySection>
+    );
   const form = smokeObjectSchema.parse(schema);
   return (
     <div className="grid gap-3">

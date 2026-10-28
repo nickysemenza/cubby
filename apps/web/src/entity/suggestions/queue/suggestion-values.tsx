@@ -1,7 +1,6 @@
 import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
-import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import type { StatementSuggestionOut } from "@cubby/schemas/statement-suggestion";
 import type { StatementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { suggestionListFamily } from "@cubby/schemas/suggestion-list";
@@ -13,10 +12,12 @@ import type {
 } from "@cubby/schemas/suggestion-list";
 import type { TransferPairJudgment } from "@cubby/schemas/transfer-pair-suggestion";
 import { humanize, mapRecord } from "@cubby/shared";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { match } from "ts-pattern";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { ChipCluster } from "~/ui/common/chip-cluster";
@@ -163,8 +164,30 @@ export function RecordLink({
   return <EntityRefLink entity={record.entity} id={record.id} name={name} />;
 }
 
-export const fieldLabel = (entity: ShortcodeEntity, field: string) =>
-  entityFieldByKey(entity, field)?.label ?? field;
+const fieldLabel = (
+  queryClient: QueryClient,
+  entity: ShortcodeEntity,
+  field: string,
+) =>
+  entityMetadata(queryClient, entity).fields.fields.find(
+    (candidate) => candidate.key === field,
+  )?.label ?? field;
+
+export function FieldSummary({
+  entity,
+  field,
+}: {
+  entity: ShortcodeEntity;
+  field: string;
+}) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
+  return (
+    <>
+      {entityRoster[entity].singular} · {fieldLabel(queryClient, entity, field)}
+    </>
+  );
+}
 
 /**
  * A stored or proposed field value as its list cell renders it: a category
@@ -184,6 +207,8 @@ export function FieldValue({
   value: unknown;
   suggested?: boolean;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
   if (value === null || value === undefined || value === "")
     return <NoneValue />;
   return (
@@ -195,11 +220,12 @@ export function FieldValue({
       )}
     >
       {renderSuggestedListFieldValue(
+        queryClient,
         entity,
         { id: recordId },
         field,
         // SAFETY: a stored field value is JSON by the evidence schema.
-        value as Parameters<typeof renderSuggestedListFieldValue>[3],
+        value as Parameters<typeof renderSuggestedListFieldValue>[4],
       )}
     </span>
   );
@@ -226,8 +252,7 @@ export function WhatChanges({ row }: { row: SuggestionListRow }) {
     .with({ family: "field" }, ({ evidence }) => (
       <span className="inline-flex min-w-0 items-center gap-1.5">
         <span className="shrink-0 text-muted-foreground">
-          {entitySummary[evidence.entity].singular} ·{" "}
-          {fieldLabel(evidence.entity, evidence.field)}
+          <FieldSummary entity={evidence.entity} field={evidence.field} />
         </span>
         {evidence.kind === "correction" ? (
           <>

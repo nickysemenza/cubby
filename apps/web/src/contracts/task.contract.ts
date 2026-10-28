@@ -1,4 +1,4 @@
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { taskFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/task";
 import * as schemas from "@cubby/schemas/project";
 import { z } from "zod";
 
@@ -13,18 +13,18 @@ export const taskContract = defineContract(
         "Unblocked tasks you can act on now — live, not done, and blocked by nothing — plus blocked tasks with transitive why-chains explaining what's in the way (a manual blocked flag, a blocking task, or a blocking project, nearest blocker first).",
       input: schemas.taskFiltersSchema.optional(),
       output: schemas.actionableTasksOut.extend({
-        next: z.array(entityFieldEnvelopeSchemas.task.detail),
-        later: z.array(entityFieldEnvelopeSchemas.task.detail),
+        next: z.array(taskFieldEnvelopeSchemas.detail),
+        later: z.array(taskFieldEnvelopeSchemas.detail),
         blocked: z.array(
           schemas.blockedTaskOut.extend({
-            task: entityFieldEnvelopeSchemas.task.detail,
+            task: taskFieldEnvelopeSchemas.detail,
           }),
         ),
       }),
     }),
     chartData: query({
       input: schemas.taskFiltersSchema,
-      output: z.array(entityFieldEnvelopeSchemas.task.detail),
+      output: z.array(taskFieldEnvelopeSchemas.detail),
     }),
     summary: query({
       exposure: "capability",
@@ -36,7 +36,7 @@ export const taskContract = defineContract(
     timeline: query({
       input: schemas.taskFiltersSchema,
       output: schemas.taskTimelineOut.extend({
-        tasks: z.array(entityFieldEnvelopeSchemas.task.detail),
+        tasks: z.array(taskFieldEnvelopeSchemas.detail),
       }),
     }),
     bulkReorder: mutation({
@@ -44,7 +44,7 @@ export const taskContract = defineContract(
       command: { label: "Reorder tasks", confirmation: null },
       input: schemas.taskBulkReorderInput,
       output: schemas.taskBulkMutationOut.extend({
-        items: z.array(entityFieldEnvelopeSchemas.task.detail),
+        items: z.array(taskFieldEnvelopeSchemas.detail),
       }),
       invalidates: ["task"],
     }),

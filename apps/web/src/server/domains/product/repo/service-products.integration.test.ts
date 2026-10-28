@@ -89,6 +89,22 @@ describe("category-based service Products", () => {
           }),
         );
       }
+      const kernel = entityKernelContextSchema.parse(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      );
+      const pending = await executeEntity(kernel, {
+        action: "get",
+        entity: "product",
+        id: service.id,
+        missing: "error",
+      });
+      expect(
+        entityFieldEnvelopeSchemas.product.detail.parse(pending.item).fields
+          .cost.result,
+      ).toEqual({ kind: "missing" });
+      await drainStoredDerived(ctx.db);
       const detail = await getProductWithFood(
         ctx.db,
         { findFood: async () => null },
@@ -139,14 +155,12 @@ describe("category-based service Products", () => {
         ledgerExpectedQuantityLabel: null,
       });
       const valued = [{ id: service.entityId, price: 123 }];
-      const read = await executeEntity(
-        entityKernelContextSchema.parse(
-          createTestRequestContext(ctx.db, {
-            auth: { userId: ctx.actor.userId },
-          }),
-        ),
-        { action: "get", entity: "product", id: service.id, missing: "error" },
-      );
+      const read = await executeEntity(kernel, {
+        action: "get",
+        entity: "product",
+        id: service.id,
+        missing: "error",
+      });
       const canonical = entityFieldEnvelopeSchemas.product.detail.parse(
         read.item,
       );
@@ -160,11 +174,16 @@ describe("category-based service Products", () => {
           decision: { outcome: { kind: "empty", reason: "not_applicable" } },
         },
       });
-      expect(canonical.pricing).not.toHaveProperty("cost");
-      expect(canonical.pricing).not.toHaveProperty("effectivePrice");
-      expect(canonical.pricing).not.toHaveProperty("derivedPrice");
-      expect(canonical.pricing).not.toHaveProperty("source");
-      expect(canonical.fields.cost.result).toEqual({ kind: "missing" });
+      expect(canonical.fields.cost.result).toMatchObject({
+        kind: "cached",
+        freshness: "fresh",
+        decision: {
+          outcome: {
+            kind: "value",
+            value: { kind: "service_charge", amount: 65, chargeCount: 2 },
+          },
+        },
+      });
       expect(
         storedEffectivePrice(new Map(), {
           id: service.entityId,

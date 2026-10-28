@@ -16,11 +16,12 @@ import type {
 } from "@cubby/schemas/suggestion-list";
 import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
-import { useQuery } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo, type ReactNode } from "react";
 import { match } from "ts-pattern";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import { useEntityMetadata } from "~/entity/metadata";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker as RecordPicker } from "~/entity/picker/picker";
 import { WithVendorShortcodeSearch } from "~/entity/picker/with-vendor-search";
@@ -60,8 +61,6 @@ import {
   RecordLink,
   providerCategories,
 } from "./suggestion-values";
-
-const KIND_OPTIONS = fieldEnumOptions("financialTransaction", "kind");
 
 function SpendingResultFacts({
   row,
@@ -497,6 +496,12 @@ type SourceTransactionRecord = Extract<
 
 /** The kind a created transaction takes; a change stays a draft until review. */
 function KindPicker({ row }: { row: SourceTransactionRecord }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("financialTransaction");
+  const KIND_OPTIONS = useMemo(
+    () => fieldEnumOptions(queryClient, "financialTransaction", "kind"),
+    [queryClient],
+  );
   const { draft, setDraft, outcome } = useSuggestionReview();
   const kind = draft(row.id).kind ?? row.evidence.create?.kind ?? null;
   return (
@@ -523,6 +528,13 @@ function TransactionPreviewFacts({
   preview: StatementSuggestionPreviewOut | undefined;
   fallback?: StatementSuggestionOut;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("financialTransaction");
+  const KIND_OPTIONS = fieldEnumOptions(
+    queryClient,
+    "financialTransaction",
+    "kind",
+  );
   if (!preview && !fallback?.create) return null;
   return (
     <EvidenceFacts
@@ -862,6 +874,8 @@ function StatementEvidence({ row }: { row: SourceTransactionRecord }) {
 type FieldRow = Extract<SuggestionListRow, { family: "field" }>;
 
 function FieldEvidence({ row }: { row: FieldRow }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(row.evidence.entity);
   const suggestion = row.evidence;
   const { review, outcome } = useSuggestionReview();
   const state = outcome(row.id);
@@ -901,7 +915,11 @@ function FieldEvidence({ row }: { row: FieldRow }) {
                 probability: suggestion.runnerUpConfidence,
               }
         }
-        basis={suggestionBasisLabels(suggestion.entity, suggestion.field)}
+        basis={suggestionBasisLabels(
+          queryClient,
+          suggestion.entity,
+          suggestion.field,
+        )}
         provenance={{
           model: suggestion.model,
           runId: suggestion.runId,

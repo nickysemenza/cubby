@@ -2,25 +2,25 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
-import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   basisValueOf,
   usesSavedFieldSuggestionContext,
 } from "@cubby/schemas/field-suggestion";
-
-import { readPathValue } from "~/entity/read-path";
-export { basisValueOf } from "@cubby/schemas/field-suggestion";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { parseShortcode } from "@cubby/shared";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { readReferenceField } from "~/entity/entity-references";
+import { entityMetadata } from "~/entity/metadata";
+import { readPathValue } from "~/entity/read-path";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 
 import { type SuggestTargets } from "./suggestion-targets";
+
+export { basisValueOf } from "@cubby/schemas/field-suggestion";
 
 /**
  * User's call, snappy by design: every typing pause longer than this fires
@@ -32,24 +32,27 @@ import { type SuggestTargets } from "./suggestion-targets";
  */
 export const FIELD_SUGGEST_DEBOUNCE_MS = 100;
 
-type ManifestField =
-  (typeof entityFieldModels)[ShortcodeEntity]["fields"][number];
+type ManifestField = EntityFieldModel["fields"][number];
 
 function fieldByKey(
+  queryClient: QueryClient,
   entity: ShortcodeEntity,
   key: string,
 ): ManifestField | undefined {
-  return entityFieldModels[entity].fields.find((field) => field.key === key);
+  return entityMetadata(queryClient, entity).fields.fields.find(
+    (field) => field.key === key,
+  );
 }
 
 /** Saved records distinguish an unavailable governed result from a successful empty outcome. */
 export function suggestionRecordFieldValue<TRecord extends object>(
+  queryClient: QueryClient,
   entity: ShortcodeEntity,
   record: TRecord,
   key: string,
   // oxlint-disable-next-line anti-slop/no-unknown-returns -- Declared suggestion paths cross heterogeneous field types; callers parse the value or normalize it with basisValueOf.
 ): unknown {
-  const field = fieldByKey(entity, key);
+  const field = fieldByKey(queryClient, entity, key);
   if (field?.readKey === null) {
     const path = field.display.readPath;
     if (!path) return undefined;
@@ -61,7 +64,11 @@ export function suggestionRecordFieldValue<TRecord extends object>(
     return root && readPathValue(record, root) === null ? null : undefined;
   }
   const readKey = field?.readKey ?? key;
-  if (Object.hasOwn(entityFieldEnvelopeFields[entity], readKey)) {
+  if (
+    entityMetadata(queryClient, entity).envelopeFields.some(
+      (key) => key === readKey,
+    )
+  ) {
     const envelope = fieldEnvelopeFor(record, readKey);
     return envelope && envelope.result.kind !== "missing"
       ? fieldValueOf(envelope)
@@ -77,6 +84,7 @@ export function suggestionRecordFieldValue<TRecord extends object>(
  * inline editors, table cells, bulk edit's single-row basis).
  */
 export function fieldSuggestionBasisFromRecord<TRecord extends object>(
+  queryClient: QueryClient,
   entity: ShortcodeEntity,
   targets: SuggestTargets,
   record: TRecord,
@@ -91,8 +99,8 @@ export function fieldSuggestionBasisFromRecord<TRecord extends object>(
   const referenceLabels: Record<string, { id: string; name: string | null }> =
     {};
   for (const key of targets.basisKeys) {
-    const field = fieldByKey(entity, key);
-    const value = suggestionRecordFieldValue(entity, record, key);
+    const field = fieldByKey(queryClient, entity, key);
+    const value = suggestionRecordFieldValue(queryClient, entity, record, key);
     const reference = field?.reference
       ? readReferenceField(record, field)?.items[0]
       : undefined;
@@ -120,6 +128,7 @@ export function fieldSuggestionBasisFromRecord<TRecord extends object>(
  * client and the two product-reference targets can't drift apart.
  */
 export function isBasisSufficient(
+  queryClient: QueryClient,
   entity: ShortcodeEntity,
   targets: SuggestTargets,
   basis: Record<string, string | null>,
@@ -141,7 +150,7 @@ export function isBasisSufficient(
   for (const key of targets.basisKeys) {
     const value = basis[key];
     if (!value) continue;
-    const field = fieldByKey(entity, key);
+    const field = fieldByKey(queryClient, entity, key);
     if (field?.reference) return true;
     if (value.length >= minTextLength) return true;
   }

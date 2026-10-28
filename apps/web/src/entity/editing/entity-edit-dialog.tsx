@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { z } from "zod";
 
 import { entityDetailFor } from "~/entity/entity-detail";
+import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Overlay } from "~/ui/overlays/overlay";
 
@@ -60,6 +61,33 @@ export function EntityEditDialog<E extends EditableEntity>(
   props: EntityEditDialogProps<E>,
 ) {
   if (!props.open) return null;
+  return <OpenEntityEditDialog {...props} />;
+}
+
+/** Picker/calendar dialogs admit their own entity without suspending the action host. */
+function OpenEntityEditDialog<E extends EditableEntity>(
+  props: EntityEditDialogProps<E>,
+) {
+  const metadata = useQuery(entityMetadataQueryOptions(props.request.entity));
+  if (!metadata.data)
+    return (
+      <Overlay
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+        title="Loading editor…"
+      >
+        {metadata.error ? (
+          <ErrorDisplay
+            error={metadata.error}
+            onRetry={() => {
+              void metadata.refetch();
+            }}
+          />
+        ) : (
+          <output>Loading editor…</output>
+        )}
+      </Overlay>
+    );
   // A scoped correction owns its reviewed field projection, not a full baseline.
   if (
     props.request.operation === "update" &&

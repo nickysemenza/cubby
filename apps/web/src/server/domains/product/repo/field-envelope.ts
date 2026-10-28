@@ -57,7 +57,10 @@ export function projectProductFieldEnvelopes({
   let output = built;
   // Selected reads already bind unit quotes against the selected valuation.
   // Their omitted conversion inputs must not be reconstructed as a full row.
-  if (needsUnitPrice && !Object.hasOwn(row, "unitMappings")) {
+  if (
+    needsUnitPrice &&
+    (!Object.hasOwn(row, "unitMappings") || Object.hasOwn(row, "unitPrice"))
+  ) {
     for (const key of unitFields) {
       const original = fieldEnvelopeFor(built, key);
       if (original) selectedFields[key] = { ...original, work: price.work };

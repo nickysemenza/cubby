@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { type FieldValues, useForm } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 
 import { useRowEnumSuggestion } from "./use-row-enum-suggestion";
 

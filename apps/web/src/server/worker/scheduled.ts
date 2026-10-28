@@ -22,19 +22,22 @@ export async function handleScheduledInvocation(
           return;
         }
         if (controller.cron === CRON_SCHEDULES.backgroundRecovery) {
-          await withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
-            const [{ recoverMissedWork }, { publishAiRefreshActivation }] =
-              await Promise.all([
-                import("~/server/workflows/catch-up"),
-                import("~/server/workflows/ai-refresh-startup"),
-              ]);
-            await publishAiRefreshActivation(
-              db,
-              env.CF_VERSION_METADATA.id,
-              getSourceRelease(env).commit,
-            );
-            await recoverMissedWork(db);
-          });
+          await withInvocationDb(
+            env.HYPERDRIVE_BACKGROUND.connectionString,
+            async () => {
+              const [{ recoverMissedWork }, { publishAiRefreshActivation }] =
+                await Promise.all([
+                  import("~/server/workflows/catch-up"),
+                  import("~/server/workflows/ai-refresh-startup"),
+                ]);
+              await publishAiRefreshActivation(
+                db,
+                env.CF_VERSION_METADATA.id,
+                getSourceRelease(env).commit,
+              );
+              await recoverMissedWork(db);
+            },
+          );
           return;
         }
         if (controller.cron !== CRON_SCHEDULES.dailyMaintenance)
@@ -45,7 +48,7 @@ export async function handleScheduledInvocation(
             // The cron only launches the pass; its steps drain each backlog
             // page by page through run.execute Jobs, one active pass at a time.
             await withInvocationDb(
-              env.HYPERDRIVE.connectionString,
+              env.HYPERDRIVE_BACKGROUND.connectionString,
               async () => {
                 const [
                   { launchMaintenanceRun },

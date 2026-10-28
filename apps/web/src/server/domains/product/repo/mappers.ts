@@ -201,6 +201,7 @@ const mapDbProductToPickerItem = (
     price: RawProductPickerItem["price"];
     quantityLedger: RawProductPickerItem["quantityLedger"];
     onHand: RawProductPickerItem["onHand"];
+    displayFacts: RawProductPickerItem["displayFacts"];
   },
 ): RawProductPickerItem => ({
   id: parseShortcodeFor("product", productData.shortcode),
@@ -213,6 +214,7 @@ const mapDbProductToPickerItem = (
   coverImageUrl: productData.coverImageUrl,
   quantityLedger: productData.quantityLedger,
   onHand: productData.onHand,
+  displayFacts: productData.displayFacts,
 });
 
 export const dbProductToPickerItemAPI = (
@@ -227,6 +229,7 @@ export const dbProductToPickerItemAPI = (
     price: RawProductPickerItem["price"];
     quantityLedger: RawProductPickerItem["quantityLedger"];
     onHand: RawProductPickerItem["onHand"];
+    displayFacts: RawProductPickerItem["displayFacts"];
   },
 ): RawProductPickerItem => {
   const result = mapDbProductToPickerItem(productData);

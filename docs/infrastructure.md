@@ -326,7 +326,8 @@ Neon owns the PostgreSQL database. Production compute is autoscaling
 an idle gap waits for compute start (about 0.5 s median, 0.9 s p90), visible
 as a long `db.connect.phase.startup` on `db.client.connect`. This range belongs to the production endpoint: changing the project's
 default compute range does not resize an existing endpoint. The Hyperdrive
-origin connection caps below are 30 uncached + 12 cached. Both configurations share origin
+origin connection caps are 30 strong + 12 cached + 10 background.
+All three configurations share origin
 compute; the cached pool needs headroom for short reads while expensive reads
 are running. Pool caps are soft limits, not interactive connection reservations.
 Keep them below database capacity and measure origin waits and query execution
@@ -341,17 +342,20 @@ concurrency remains 1. Purchase dispatch starts coordinator work outside Job del
 queue cap does not bound active coordinator database work. That workload policy
 remains separate.
 
-The uncached cap was raised from 12 to 30 on 2026-10-26 after a synthetic
-production save spent 4.0 seconds waiting at `BEGIN`, followed by 9–17 ms
-statements. Observational Hyperdrive windows showed average uncached
-connection latency falling from 286 to 22 ms and query latency from 366 to
-157 ms. Origin-read latency rose from 80 to 135 ms; traffic and query mix
-differ, so these are not isolated benchmarks. Synthetic create timings improved
-from 2.07–4.54 seconds to 0.73–1.27 seconds, but dependent freshness still
-exceeded 30 seconds. The cached cap, origin and caching settings were unchanged.
-Revert the uncached `origin_connection_limit` to 12 if additional origin
-pressure outweighs the admission benefit; verify both configurations afterward.
-The cap is provider-side state, not an optimum or a freshness guarantee.
+The background configuration was created as an authorized operator action;
+the existing strong and cached configurations were left unchanged. Builds and
+deployments do not manage these caps. Neither the existing caps nor the separate
+background configuration establishes the cause of the measured multi-second connect
+startup tail; ordinal-1 connects were slow too. Keep measuring connect startup,
+origin admission and SQL execution separately. This change adds no PostgreSQL
+role or `statement_timeout` and preserves Neon's compute bounds.
+
+Each HTTP invocation lazily opens at most three strong and one cached database
+sockets. Background invocations use the same bounded client leasing policy on
+the background binding, close their pools at scope completion and preserve
+independent concurrent transactions. Four database sockets leave two of the
+Worker's six outbound connection slots for provider/DO/storage/telemetry calls.
+One Worker continues to serve all events.
 
 Editing Neon's autoscaling bounds restarts the endpoint and disconnects active
 sessions; automatic resizing within those bounds does not. Apply a range change
@@ -360,35 +364,20 @@ Reverting the range also restarts the endpoint. See
 [Neon compute management](https://neon.com/docs/manage/computes) and
 [Hyperdrive pool tuning](https://developers.cloudflare.com/hyperdrive/configuration/tune-connection-pool/).
 
-Cloudflare has two Hyperdrive configurations pointing at the same direct Neon
-connection string:
+Runtime database roles use Hyperdrive bindings to the same direct Neon origin:
 
-| Binding             | Hyperdrive ID                      | Contract                                                                                              |
-| ------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `HYPERDRIVE`        | `adc9757dfffd45bc94d5c2a66b2ad410` | Authoritative reads and writes; caching disabled; origin connection limit 30                          |
-| `HYPERDRIVE_CACHED` | `427dd7a2876c4dccbe056d37fa7374ff` | Cache-eligible reads; 60-second max age, 15-second stale-while-revalidate; origin connection limit 12 |
+| Binding                 | Purpose                                                              |
+| ----------------------- | -------------------------------------------------------------------- |
+| `HYPERDRIVE`            | Authoritative reads and writes; caching disabled.                    |
+| `HYPERDRIVE_CACHED`     | Ordinary bounded-stale display reads.                                |
+| `HYPERDRIVE_BACKGROUND` | `withInvocationDb` queue/cron/DO/coordinator work; caching disabled. |
 
-The IDs are checked into `apps/web/cloudflare.config.ts`; the origin connection
-string and cache/connection-limit settings are provider-side state. Recreate
-with direct Neon origin credentials, never a pooled hostname. Prepare private
-JSON request files with `name`, `origin` (`scheme`, `host`, `port`, `database`,
-`user`, `password`), and `origin_connection_limit`; keep those files outside Git
-and command output:
-
-```bash
-pnpm --dir apps/web exec cf hyperdrive create --body @/private/path/strong.json
-pnpm --dir apps/web exec cf hyperdrive create --body @/private/path/cached.json
-```
-
-After recreation, update the checked-in IDs and reapply the connection limits
-and cached binding policy. Inspect live state before deployment:
-
-```bash
-pnpm --dir apps/web exec cf hyperdrive get \
-  adc9757dfffd45bc94d5c2a66b2ad410
-pnpm --dir apps/web exec cf hyperdrive get \
-  427dd7a2876c4dccbe056d37fa7374ff
-```
+Hyperdrive configurations and their origin/cache limits are operator-managed.
+Builds and deployments do not create configurations, tune pools, restart them or
+change credentials. The background binding must reference an existing approved
+configuration before release. Local/test profiles substitute the guarded checkout
+URL for all three bindings. The per-invocation code budget reserves connection
+slots for non-database subrequests independently of provider pool settings.
 
 Local `.env` and CI use `DATABASE_URL`. Deployed Worker code receives the
 database URLs from Hyperdrive and does not need a `DATABASE_URL` secret.

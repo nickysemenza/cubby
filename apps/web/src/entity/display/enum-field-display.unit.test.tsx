@@ -1,13 +1,37 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import {
+  cleanup,
+  render as testingRender,
+  screen,
+} from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { afterEach, describe, expect, it } from "vitest";
+import type { ReactNode } from "react";
+import { beforeEach, afterEach, describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { renderOptionCell } from "~/entity/table/column-helpers";
 
 import { financialAccountDetailFields } from "./detail-field-renderers/financial-account";
 import { fieldEnumOptions } from "./enum-field-display";
 
-afterEach(cleanup);
+let queryClient: Awaited<ReturnType<typeof metadataQueryClient>>;
+beforeEach(async () => {
+  queryClient = await metadataQueryClient();
+});
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
+
+function MetadataProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+function render(ui: ReactNode, options?: Parameters<typeof testingRender>[1]) {
+  return testingRender(ui, { wrapper: MetadataProvider, ...options });
+}
 
 const pillFor = (label: string) => {
   const pill = screen.getByText(label).closest("[data-enum-role]");
@@ -22,6 +46,7 @@ describe("declared value rosters (display.valueOptions)", () => {
     render(
       financialAccountDetailFields["financial-account-identity"](
         fromPartial({ identity: { kind: "stored_value" } }),
+        queryClient,
       ).value,
     );
 
@@ -34,7 +59,10 @@ describe("declared value rosters (display.valueOptions)", () => {
 
   it("tones a derived status from the declaration", () => {
     render(
-      renderOptionCell("acquired", fieldEnumOptions("wish", "acquiredAt")),
+      renderOptionCell(
+        "acquired",
+        fieldEnumOptions(queryClient, "wish", "acquiredAt"),
+      ),
     );
 
     expect(pillFor("Acquired")).toHaveAttribute("data-enum-role", "status");
@@ -47,7 +75,7 @@ describe("declared value rosters (display.valueOptions)", () => {
     render(
       renderOptionCell(
         "ambiguous",
-        fieldEnumOptions("image", "captureAttribution"),
+        fieldEnumOptions(queryClient, "image", "captureAttribution"),
       ),
     );
     expect(pillFor("Ambiguous")).toHaveClass(
@@ -58,10 +86,12 @@ describe("declared value rosters (display.valueOptions)", () => {
 
   it("serves a read-only enum's roster without a select control", () => {
     expect(
-      fieldEnumOptions("image", "status").map(({ value }) => value),
+      fieldEnumOptions(queryClient, "image", "status").map(
+        ({ value }) => value,
+      ),
     ).toEqual(["PENDING", "UPLOADED", "FAILED"]);
     expect(
-      fieldEnumOptions("purchase", "financialReconciliation").find(
+      fieldEnumOptions(queryClient, "purchase", "financialReconciliation").find(
         ({ value }) => value === "mismatch",
       )?.color,
     ).toBe("var(--destructive)");

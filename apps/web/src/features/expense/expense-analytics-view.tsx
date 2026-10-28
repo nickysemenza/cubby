@@ -5,6 +5,7 @@ import {
   type Trade,
 } from "@cubby/schemas/project";
 import { ChartBarIcon } from "@phosphor-icons/react/dist/csr/ChartBar";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useMemo, useState } from "react";
@@ -16,6 +17,7 @@ import {
   filterGetterFromSearch,
   soleValue,
 } from "~/entity/filters";
+import { useEntityMetadata } from "~/entity/metadata";
 import {
   type IndexedSection,
   IndexedSections,
@@ -73,9 +75,10 @@ const ExpenseAggregateExplorer = lazy(() =>
 );
 
 function parseExpenseFilters<TSearch extends {}>(
+  queryClient: QueryClient,
   search: TSearch,
 ): ExpenseFilters {
-  const specs = getEntityFilters("expense");
+  const specs = getEntityFilters(queryClient, "expense");
   return expenseFiltersSchema.parse(
     buildFiltersFromManifest(specs, filterGetterFromSearch(specs, search)),
   );
@@ -93,9 +96,14 @@ function parseExpenseFilters<TSearch extends {}>(
  * params (switching to Ledger afterwards shows the matching rows).
  */
 export function ExpenseAnalyticsView() {
+  const queryClient = useQueryClient();
+  useEntityMetadata("expense");
   const search = route.useSearch();
   const navigate = route.useNavigate();
-  const filters = useMemo(() => parseExpenseFilters(search), [search]);
+  const filters = useMemo(
+    () => parseExpenseFilters(queryClient, search),
+    [search, queryClient],
+  );
   // The generated search carries the analyzer keys as plain strings (the
   // slot's `searchKeys`); the analyzer's own enums validate them here.
   const analyzeConfig = useMemo(
@@ -185,8 +193,13 @@ export function ExpenseAnalyticsView() {
  */
 export function ProjectExpenseAnalytics({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  useEntityMetadata("expense");
   const scope = useMemo(() => ({ project: projectId }), [projectId]);
-  const filters = useMemo(() => parseExpenseFilters(scope), [scope]);
+  const filters = useMemo(
+    () => parseExpenseFilters(queryClient, scope),
+    [scope, queryClient],
+  );
   const [analyzeConfig, setAnalyzeConfig] = useState(
     DEFAULT_EXPENSE_ANALYZE_CONFIG,
   );

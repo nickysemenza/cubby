@@ -1,28 +1,25 @@
 import type { AuditLogListOut } from "@cubby/schemas/audit";
 import { humanize } from "@cubby/shared";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { differenceInCalendarDays, parseISO } from "date-fns";
 import { uniqBy } from "es-toolkit";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useMemo } from "react";
 
 import { summarizeChanges } from "~/entity/audit-log/audit-log-entry";
 import { foldAuditEntries } from "~/entity/audit-log/audit-log-fold";
-import type {
-  AuditLogListOperations,
-  AuditLogSession,
-} from "~/entity/audit-log/audit-log-list";
+import type { AuditLogListOperations } from "~/entity/audit-log/audit-log-list";
 import { EntityAuditLink } from "~/entity/components/entity-ref-link";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { auditLog } from "~/integrations/tanstack-query/generated/catalog/auditLog.gen";
-import { authClient } from "~/lib/auth-client";
 import { formatCalendarDay } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { DateDisplay } from "~/ui/common/date-display";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { QuerySection } from "~/ui/feedback/query-section";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
 import { Skeleton } from "~/ui/primitives/skeleton";
@@ -31,84 +28,46 @@ type AuditEntry = AuditLogListOut["entries"][number];
 
 export interface RecentActivityFeedOperations {
   readonly auditLog: AuditLogListOperations;
-  readonly session: AuditLogSession;
 }
-
-export interface ViewportObservationPort {
-  observe(host: Element, onEnter: () => void): () => void;
-}
-
-const browserViewportObservation: ViewportObservationPort = {
-  observe(host, onEnter) {
-    const Observer = globalThis.IntersectionObserver;
-    if (Observer === undefined) {
-      onEnter();
-      return () => undefined;
-    }
-    const observer = new Observer(
-      (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
-        onEnter();
-        observer.disconnect();
-      },
-      { rootMargin: "500px" },
-    );
-    observer.observe(host);
-    return () => observer.disconnect();
-  },
-};
 
 const GUTTER = "grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 max-sm:grid-cols-1";
 
 /**
  * Home's "What changed": the latest recorded changes grouped by household
  * day, the day in a quiet gutter, then one line per change. The audit read
- * waits until the section nears the viewport.
+ * streams independently with the authenticated route's first screen.
  */
 export function RecentActivityFeed({
   limit = 6,
   operations,
-  viewport = browserViewportObservation,
 }: {
   /** Entries per page; "Show older" reads the next page. */
   limit?: number;
-  /** Audit operation/auth boundaries for browser tests. */
+  /** Audit operation boundary for browser tests. */
   operations?: RecentActivityFeedOperations;
-  /** Browser viewport observation, injected only where the DOM API is absent. */
-  viewport?: ViewportObservationPort;
 }) {
-  const hostRef = useRef<HTMLElement>(null);
-  const [enabled, setEnabled] = useState(false);
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    return viewport.observe(host, () => setEnabled(true));
-  }, [viewport]);
-
   return (
     <Section
-      ref={hostRef}
       title="What changed"
       headingAs="h2"
       actions={<Link to="/activity">View all</Link>}
     >
-      {enabled ? (
-        <ChangesByDay
-          limit={limit}
-          operations={operations?.auditLog}
-          session={operations?.session}
-        />
-      ) : (
-        <div className="space-y-1.5 pt-1" data-testid="activity-placeholder">
-          {Array.from({ length: 3 }, (_, index) => (
-            <Skeleton
-              key={index}
-              data-testid="activity-placeholder-row"
-              className="h-4.5 w-full"
-            />
-          ))}
-        </div>
-      )}
+      <QuerySection
+        title="recent activity"
+        fallback={
+          <div className="space-y-1.5 pt-1" data-testid="activity-placeholder">
+            {Array.from({ length: 3 }, (_, index) => (
+              <Skeleton
+                key={index}
+                data-testid="activity-placeholder-row"
+                className="h-4.5 w-full"
+              />
+            ))}
+          </div>
+        }
+      >
+        <ChangesByDay limit={limit} operations={operations?.auditLog} />
+      </QuerySection>
     </Section>
   );
 }
@@ -116,22 +75,14 @@ export function RecentActivityFeed({
 function ChangesByDay({
   limit,
   operations = { list: auditLog.list },
-  session: suppliedSession,
 }: {
   limit: number;
   operations?: AuditLogListOperations;
-  session?: AuditLogSession;
 }) {
-  const authSession = authClient.useSession();
   const hydrated = useHydrated();
-  const session = suppliedSession ?? {
-    isAuthenticated: hydrated && !!authSession.data?.user,
-    isPending: authSession.isPending,
-  };
-  const activity = useInfiniteQuery({
-    ...cursorQueryOptions(operations.list, { limit }),
-    enabled: session.isAuthenticated,
-  });
+  const activity = useSuspenseInfiniteQuery(
+    cursorQueryOptions(operations.list, { limit }),
+  );
   const days = useMemo(() => {
     const entries = uniqBy(
       activity.data?.pages.flatMap((page) => page.entries) ?? [],
@@ -207,7 +158,7 @@ function ChangesByDay({
               onClick={() =>
                 void activity.fetchNextPage({ cancelRefetch: false })
               }
-              disabled={activity.isFetchingNextPage}
+              disabled={!hydrated || activity.isFetchingNextPage}
               className="col-start-2 justify-self-start rounded-sm text-xs text-link outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring disabled:text-muted-foreground max-md:min-h-11 max-sm:col-start-1"
             >
               {activity.isFetchingNextPage ? "Loading…" : "Show older"}

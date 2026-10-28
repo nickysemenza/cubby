@@ -225,7 +225,9 @@ final class PhotoEntityChooserModel {
         }
         return EntityListPageSource(id: captureDate) { page in
             guard let filters, key != nil else {
-                return ListPage(items: [], meta: ListPageMeta(pageIndex: page, pageSize: 25, totalCount: 0))
+                return ListPage(
+                    items: [],
+                    meta: ListPageMeta(pageIndex: page, pageSize: 25, totalCount: 0, hasNextPage: false))
             }
             return try await loader(filters, nil, page, "-updatedAt")
         }

@@ -1,6 +1,6 @@
 import type { suggestionRecordCountsOut } from "@cubby/schemas/automatic-decision";
 import type { Entity } from "@cubby/schemas/entity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import { parseShortcode } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQueries, type UseQueryResult } from "@tanstack/react-query";
@@ -87,7 +87,7 @@ export function ProposalCount({
   const code = row.success ? parseShortcode(row.data.id) : null;
   if (
     !code ||
-    (field !== undefined && field !== entitySummary[code.type].titleField)
+    (field !== undefined && field !== entityRoster[code.type].titleField)
   )
     return children;
   return (

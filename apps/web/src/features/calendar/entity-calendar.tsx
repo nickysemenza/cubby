@@ -2,10 +2,8 @@ import type {
   CalendarItemKind,
   CalendarSourceKind,
 } from "@cubby/schemas/calendar";
-import {
-  calendarFiltersInput,
-  calendarSourceEntity,
-} from "@cubby/schemas/calendar";
+import { calendarSourceEntity } from "@cubby/schemas/calendar";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import type { ListSlotProps } from "~/entity/entity-list/list-slot-types";
@@ -14,6 +12,7 @@ import {
   filterGetterFromSearch,
 } from "~/entity/filters";
 import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
+import { useEntityMetadata } from "~/entity/metadata";
 import { ManifestFilterBar } from "~/entity/table/manifest-filter-bar";
 import { CopyLastWeekButton } from "~/features/meal/copy-meals";
 
@@ -27,23 +26,27 @@ export function entityCalendar(kind: CalendarItemKind) {
   const source: CalendarSourceKind =
     kind === "expense" || kind === "purchase" ? "spending" : kind;
   const kinds: CalendarSourceKind[] = [source];
-  const specs = calendarEntityFilterSpecs[source]!;
   return function EntityCalendar({ search, navigate }: ListSlotProps) {
+    const queryClient = useQueryClient();
+    useEntityMetadata(calendarSourceEntity(source));
+    const specs = useMemo(
+      () => calendarEntityFilterSpecs(queryClient, source),
+      [queryClient],
+    );
     const period = calendarPeriodParam.parse(search.period) ?? "month";
     const filterOptions = useDeferredReferenceFilterOptions(
       calendarSourceEntity(source),
     );
     const filters = useMemo(
-      () =>
-        calendarFiltersInput.parse({
-          filters: {
-            [source]: buildFiltersFromManifest(
-              specs,
-              filterGetterFromSearch(specs, search),
-            ),
-          },
-        }),
-      [search],
+      () => ({
+        filters: {
+          [source]: buildFiltersFromManifest(
+            specs,
+            filterGetterFromSearch(specs, search),
+          ),
+        },
+      }),
+      [search, specs],
     );
     const onSearchChange = useCallback(
       (patch: Record<string, string | undefined>) => navigate(patch, REPLACE),

@@ -1,7 +1,7 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 
 import { listOverrides } from "./list-overrides.fixtures";
 import type { ListOverrideContext } from "./types";

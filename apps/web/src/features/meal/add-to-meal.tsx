@@ -11,6 +11,7 @@ import {
 import { countLabel } from "@cubby/shared/pluralize";
 import { CalendarPlusIcon } from "@phosphor-icons/react/dist/csr/CalendarPlus";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
@@ -21,6 +22,7 @@ import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import { entities, entityDetailParams } from "~/entity/entities";
+import { useEntityMetadata } from "~/entity/metadata";
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { Picker } from "~/entity/picker/picker";
 import { useEntitySuggestionsQuery } from "~/entity/suggestions/field-suggestion";
@@ -120,6 +122,16 @@ export function AddToMeal({
   const [target, setTarget] = useState(NEW_MEAL);
   const [mealType, setMealType] = useState<MealType | null>(slotForNow);
   const [mealKind, setMealKind] = useState<MealKind>("cooked");
+  const queryClient = useQueryClient();
+  useEntityMetadata("meal");
+  const mealTypeOptions = useMemo(
+    () => fieldEnumOptions(queryClient, "meal", "mealType"),
+    [queryClient],
+  );
+  const mealKindOptions = useMemo(
+    () => fieldEnumOptions(queryClient, "meal", "mealKind"),
+    [queryClient],
+  );
   const [switchToCooked, setSwitchToCooked] = useState(true);
   const dateInputId = useId();
   const switchId = useId();
@@ -158,7 +170,11 @@ export function AddToMeal({
         });
         // The picture only: the day is already chosen, so the row's date
         // projection would repeat it.
-        const { id, shortcode, thumb } = buildRecordComboboxItem("meal", meal);
+        const { id, shortcode, thumb } = buildRecordComboboxItem(
+          queryClient,
+          "meal",
+          meal,
+        );
         return {
           id,
           shortcode,
@@ -172,7 +188,7 @@ export function AddToMeal({
         };
       }) ?? []),
     ],
-    [existingMeals.data],
+    [existingMeals.data, queryClient],
   );
 
   const selectedMeal: MealOut | undefined =
@@ -294,7 +310,7 @@ export function AddToMeal({
                   <Label>Meal type</Label>
                   <Picker
                     mode="choose"
-                    options={fieldEnumOptions("meal", "mealType")}
+                    options={mealTypeOptions}
                     value={mealType}
                     onValueChange={(value) =>
                       setMealType(mealTypeFromPicker(value))
@@ -305,6 +321,7 @@ export function AddToMeal({
                   <FieldSuggestionHint
                     renderValue={(value) =>
                       renderSuggestedListFieldValue(
+                        queryClient,
                         "meal",
                         { id: "" },
                         "mealType",
@@ -315,7 +332,7 @@ export function AddToMeal({
                     applied={false}
                     currentValue={mealType}
                     currentLabel={
-                      fieldEnumOptions("meal", "mealType").find(
+                      mealTypeOptions.find(
                         (option) => option.value === mealType,
                       )?.label
                     }
@@ -333,7 +350,7 @@ export function AddToMeal({
                   <Label>Kind</Label>
                   <Picker
                     mode="choose"
-                    options={fieldEnumOptions("meal", "mealKind")}
+                    options={mealKindOptions}
                     value={mealKind}
                     onValueChange={(value) =>
                       setMealKind(mealKindFromPicker(value))
@@ -343,6 +360,7 @@ export function AddToMeal({
                   <FieldSuggestionHint
                     renderValue={(value) =>
                       renderSuggestedListFieldValue(
+                        queryClient,
                         "meal",
                         { id: "" },
                         "mealKind",

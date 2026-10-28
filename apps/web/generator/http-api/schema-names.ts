@@ -28,8 +28,8 @@ const WEB_SCHEMA_MODULES = [
   "contracts/entity-kernel-wire.ts",
   "server/entity-kernel/contracts.ts",
   "server/generated/entity-bindings.gen.ts",
-  "entity/generated/entity-lists.gen.ts",
-  "entity/generated/entity-details.gen.ts",
+  "server/generated/entity-lists.server.gen.ts",
+  "server/generated/entity-details.server.gen.ts",
 ] as const;
 
 const packageExports = z.object({

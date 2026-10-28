@@ -3,9 +3,8 @@ import {
   listPresentationLabel,
   listViewId,
 } from "@cubby/schemas/entity-definitions/definition";
-import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import type { ListGroupBy } from "@cubby/schemas/pagination";
 import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
@@ -15,6 +14,7 @@ import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
 import { RowsIcon } from "@phosphor-icons/react/dist/csr/Rows";
 import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import type { Icon } from "@phosphor-icons/react/lib";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ComponentType, type ReactNode, useState } from "react";
 
@@ -28,6 +28,7 @@ import {
   useListSearch,
 } from "~/entity/entity-list/generic-entity-list";
 import { resolveListView } from "~/entity/entity-list/resolve-list-view";
+import { useEntityMetadata } from "~/entity/metadata";
 import { Page } from "~/entity/page/page";
 import type { PageLayout } from "~/ui/layout/page-wrapper";
 import { Button } from "~/ui/primitives/button";
@@ -109,7 +110,7 @@ const groupLevelLabel = (level: number) =>
 function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
   const { search, navigate } = useListSearch();
   const { density, setDensity } = useEntityListCardDensity();
-  const { views, view } = resolveListView(entity, search);
+  const { views, view } = resolveListView(useQueryClient(), entity, search);
   if (views.length < 2) return null;
   const options = views.flatMap((candidate) => {
     const id = listViewId(candidate);
@@ -190,8 +191,8 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
  */
 function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
   const { search, navigate } = useListSearch();
-  const { view } = resolveListView(entity, search);
-  const choices = generatedEntityListFields[entity].grouping;
+  const { view } = resolveListView(useQueryClient(), entity, search);
+  const choices = useEntityMetadata(entity).listFields.grouping;
   if (choices.length === 0) return null;
   const timeline =
     view === "timeline" || (typeof view === "object" && view.id === "calendar");
@@ -381,7 +382,9 @@ function ListWorkbenchMenus({ entity }: { entity: BrowserRoutedEntity }) {
 /** A table sits flush to the viewport edge; every other renderer wants the gutter. */
 function useListBodyGutter(entity: BrowserRoutedEntity): "none" | "standard" {
   const { search } = useListSearch();
-  return resolveListView(entity, search).view === "table" ? "none" : "standard";
+  return resolveListView(useQueryClient(), entity, search).view === "table"
+    ? "none"
+    : "standard";
 }
 
 /**
@@ -395,7 +398,7 @@ export function listPage({
   operations,
   override,
 }: EntityListPageOptions) {
-  const { singular, plural, list } = entitySummary[entity];
+  const { singular, plural } = entityRoster[entity];
   return listChromePage({
     entity,
     title: plural ?? singular,
@@ -410,22 +413,33 @@ export function listPage({
     bodyGutter: function useBodyGutter() {
       return useListBodyGutter(entity);
     },
-    actions: () => (
-      <>
-        {list.links.map((link) => (
-          <Button
-            key={link.path}
-            variant="outline"
-            render={<Link to={link.path} />}
-            nativeButton={false}
-          >
-            {link.label}
-          </Button>
-        ))}
-        {actions?.()}
-      </>
-    ),
+    actions: () => <DeclaredListActions entity={entity} actions={actions} />,
   });
+}
+
+function DeclaredListActions({
+  entity,
+  actions,
+}: {
+  entity: BrowserRoutedEntity;
+  actions?: () => ReactNode;
+}) {
+  const { summary } = useEntityMetadata(entity);
+  return (
+    <>
+      {summary.list.links.map((link) => (
+        <Button
+          key={link.path}
+          variant="outline"
+          render={<Link to={link.path} />}
+          nativeButton={false}
+        >
+          {link.label}
+        </Button>
+      ))}
+      {actions?.()}
+    </>
+  );
 }
 
 interface ListChromeOptions {

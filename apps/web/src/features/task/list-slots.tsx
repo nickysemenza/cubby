@@ -1,4 +1,5 @@
 import type { ListSlotId } from "@cubby/schemas/entity-manifest";
+import { useQueryClient } from "@tanstack/react-query";
 
 import type {
   ListSlotComponent,
@@ -10,6 +11,7 @@ import {
   filterGetterFromSearch,
   type FilterSearch,
 } from "~/entity/filters";
+import { useEntityMetadata } from "~/entity/metadata";
 import { entityCalendar } from "~/features/calendar/entity-calendar";
 import { Stack } from "~/ui/layout";
 
@@ -18,7 +20,9 @@ import { TasksStatsStrip } from "./tasks-stats-strip";
 
 /** The renderers take the manifest filters, read straight from the URL. */
 const useRendererFilters = (search: ListSlotProps["search"]) => {
-  const specs = getEntityFilters("task");
+  const queryClient = useQueryClient();
+  useEntityMetadata("task");
+  const specs = getEntityFilters(queryClient, "task");
   // SAFETY: the route validated `search` through the task's generated schema.
   return buildFiltersFromManifest(
     specs,

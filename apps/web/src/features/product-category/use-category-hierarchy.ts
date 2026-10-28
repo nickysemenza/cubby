@@ -1,8 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { compileEntityListInput } from "~/entity/entity-list";
 import { useServerTree } from "~/entity/hooks/use-server-tree";
+import { useEntityMetadata } from "~/entity/metadata";
 import { getFeatureColor } from "~/entity/presentation/category-theme";
 import { product } from "~/integrations/tanstack-query/generated/catalog/product.gen";
 
@@ -11,15 +16,20 @@ import {
   type CategoryHierarchyNode,
 } from "./category-tree";
 
-const CATEGORY_TREE_INPUT = compileEntityListInput(
-  "productCategory",
-  {},
-  { defaultSort: { orderBy: "sortOrder", direction: "asc" } },
-);
+const categoryTreeInput = (queryClient: QueryClient) =>
+  compileEntityListInput(
+    queryClient,
+    "productCategory",
+    {},
+    { defaultSort: { orderBy: "sortOrder", direction: "asc" } },
+  );
 
 /** The server-nested category tree, joined with each category's own products. */
 export function useCategoryHierarchy() {
-  const categories = useServerTree("productCategory", CATEGORY_TREE_INPUT);
+  const queryClient = useQueryClient();
+  useEntityMetadata("productCategory");
+  const input = useMemo(() => categoryTreeInput(queryClient), [queryClient]);
+  const categories = useServerTree("productCategory", input);
   const distribution = useQuery(product.categoryDistribution.queryOptions());
   const data = useMemo(() => {
     if (!categories.tree || !distribution.data) return null;

@@ -1,4 +1,4 @@
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { inventoryFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/inventory";
 import {
   bulkMovePayload,
   inventoryBulkAddOut,
@@ -31,7 +31,7 @@ import {
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
-const inventoryItemsRead = z.array(entityFieldEnvelopeSchemas.inventory.detail);
+const inventoryItemsRead = z.array(inventoryFieldEnvelopeSchemas.detail);
 
 export const inventoryContract = defineContract(
   "inventory",
@@ -42,7 +42,7 @@ export const inventoryContract = defineContract(
       command: { label: "Receive inventory", confirmation: null },
       input: inventoryReceiveExpenseInput,
       output: inventoryReceiveExpenseOut.extend({
-        item: entityFieldEnvelopeSchemas.inventory.detail,
+        item: inventoryFieldEnvelopeSchemas.detail,
       }),
       invalidates: ["inventory", "product", "purchase", "problems"],
     }),

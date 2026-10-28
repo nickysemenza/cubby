@@ -658,6 +658,7 @@ describe("primary placement", () => {
       .update(inventoryEntry)
       .set({ updatedAt: new Date("2026-02-01") })
       .where(eq(inventoryEntry.id, newer.entityId));
+    await drainStoredDerived(ctx.db);
     const load = () =>
       loadProductPlacementFacts(ctx.db, [prod.entityId, absent.entityId]);
     let facts = await load();
@@ -733,6 +734,7 @@ describe("primary placement", () => {
       }),
       ctx.actor,
     );
+    await drainStoredDerived(ctx.db);
     expect(
       await read({
         action: "get",

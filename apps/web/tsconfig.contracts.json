@@ -3,6 +3,7 @@
   "include": ["src/server/http/routes/**/*.ts"],
   "exclude": ["**/*.impl.ts", "**/*.test.ts"],
   "files": [
+    "src/server/entity-metadata/read.boundary.ts",
     "src/server/generic/changes/repo/change.ts",
     "src/features/ai/server-functions/ai-smoke.ts",
     "src/server/operation-runtime/start-operation-dispatch.boundary.ts",

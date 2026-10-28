@@ -5,7 +5,7 @@ import {
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 
 import { Page, usePageCount } from "./page";
 

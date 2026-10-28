@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { fieldDecisionOf, fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -10,6 +10,7 @@ import {
   resolutionPolicyFor,
 } from "~/entity/fields/field-resolution";
 import { compactFieldText } from "~/entity/fields/field-text";
+import { useEntityMetadata } from "~/entity/metadata";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Button } from "~/ui/primitives/button";
 
@@ -25,16 +26,30 @@ export function DecisionValue({
   field?: string;
   value: unknown;
 }) {
-  const model =
-    entity && field
-      ? entityFieldModels[entity].fields.find(
-          (candidate) => candidate.key === field,
-        )
-      : null;
-  const label =
-    entity && model
-      ? compactFieldText(entity, { [model.key]: value }, model)
-      : null;
+  return entity && field ? (
+    <EntityDecisionValue entity={entity} field={field} value={value} />
+  ) : (
+    <ReadableExplanationValue value={z.json().parse(value)} />
+  );
+}
+
+function EntityDecisionValue({
+  entity,
+  field,
+  value,
+}: {
+  entity: Entity;
+  field: string;
+  value: unknown;
+}) {
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(entity);
+  const model = metadata.fields.fields.find(
+    (candidate) => candidate.key === field,
+  );
+  const label = model
+    ? compactFieldText(queryClient, entity, { [model.key]: value }, model)
+    : null;
   return label && label !== value ? (
     <span className="break-words">{label}</span>
   ) : (
@@ -51,8 +66,10 @@ function DecisionResult({
   entity: Entity;
   field: string;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
   const decision = fieldDecisionOf({ result });
-  const labels = resolutionPolicyFor(entity, field)?.labels;
+  const labels = resolutionPolicyFor(queryClient, entity, field)?.labels;
   if (!decision)
     return <span className="text-xs text-muted-foreground">Updating…</span>;
   if (decision.outcome.kind === "empty")
@@ -92,10 +109,12 @@ export function DecisionChain({
   pending?: ReactNode;
   onSet?: () => void;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(data.subject.entityKind);
   const decision = fieldDecisionOf(data.envelope);
   const noneLabel =
-    resolutionPolicyFor(data.subject.entityKind, data.field)?.labels?.none ??
-    "None";
+    resolutionPolicyFor(queryClient, data.subject.entityKind, data.field)
+      ?.labels?.none ?? "None";
   const provenance = decision?.provenance;
   const source =
     provenance?.kind === "inherited" || provenance?.kind === "default"
@@ -222,14 +241,42 @@ export function DerivedFreshness({
   envelope: FieldExplanationOutput["envelope"];
   context?: Pick<FieldExplanationOutput, "subject" | "field">;
 }) {
+  return _context ? (
+    <ContextualDerivedFreshness envelope={envelope} context={_context} />
+  ) : (
+    <Freshness envelope={envelope} />
+  );
+}
+
+function ContextualDerivedFreshness({
+  envelope,
+  context,
+}: {
+  envelope: FieldExplanationOutput["envelope"];
+  context: Pick<FieldExplanationOutput, "subject" | "field">;
+}) {
+  const metadata = useEntityMetadata(context.subject.entityKind);
+  const field = metadata.fields.fields.find(
+    (candidate) => candidate.key === context.field,
+  );
+  return (
+    <Freshness
+      envelope={envelope}
+      contextual={Boolean(
+        field && "storedProjection" in field && field.storedProjection,
+      )}
+    />
+  );
+}
+
+function Freshness({
+  envelope,
+  contextual = false,
+}: {
+  envelope: FieldExplanationOutput["envelope"];
+  contextual?: boolean;
+}) {
   const result = envelope.result;
-  const field = _context
-    ? entityFieldModels[_context.subject.entityKind].fields.find(
-        (candidate) => candidate.key === _context.field,
-      )
-    : undefined;
-  const contextual =
-    field && "storedProjection" in field && field.storedProjection;
   return (
     <div className="grid gap-1 text-xs text-muted-foreground">
       {result.kind === "cached" ? (

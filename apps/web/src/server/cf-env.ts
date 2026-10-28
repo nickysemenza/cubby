@@ -174,6 +174,10 @@ export const getVectorIndex = (): VectorizeIndexBinding | undefined => {
 
 export const getDatabaseFreshnessNamespace = () => currentEnv()?.DB_FRESHNESS;
 
+/** Invocation work never competes for the interactive Hyperdrive origin pool. */
+export const getBackgroundDatabaseConnectionString = () =>
+  currentEnv()?.HYPERDRIVE_BACKGROUND?.connectionString;
+
 export const getAiResponseCacheNamespace = () =>
   currentEnv()?.AI_RESPONSE_CACHE;
 export const getChatGptPlanNamespace = () => currentEnv()?.CHATGPT_PLAN;

@@ -10,7 +10,6 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { seedEntity, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.gen";
 import {
   getDb,
   databaseForTransaction,
@@ -36,6 +35,7 @@ import { attachProductComponents } from "~/server/domains/product/repo/product-c
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
+import { getEntityDetailOutputSchema } from "~/server/generated/entity-details.server.gen";
 import {
   publishAssessment,
   recordFeedback,

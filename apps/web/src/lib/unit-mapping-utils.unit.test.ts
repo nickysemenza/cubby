@@ -7,6 +7,7 @@ import { convertAmountToPrice, safeConvertAmount } from "~/lib/recipe-costing";
 
 import {
   getAllUnitMappingsFromProduct,
+  getProductDisplays,
   servingBasisUnit,
   toWFoodInput,
   unitMappingsFromFood,
@@ -67,6 +68,9 @@ describe("createServingMapping bare-count guard (serving/whole conflation)", () 
     const fiftyGrams = convertAmountToPrice({ value: 50, unit: "g" }, mappings);
     // Pre-fix this resolved to ~$90.27 (50 g ÷ 22.15 g/serving × $39.99/each).
     expect(fiftyGrams.isErr()).toBe(true);
+    const [display] = getProductDisplays([promixProduct("2 SCOOPS")]);
+    expect(display?.unitPrice.perGram).toBeNull();
+    expect(display?.unitPrice.natural).toEqual({ unit: "each", price: 39.99 });
   });
 
   it("scoops still convert to grams (weight↔serving intact)", () => {

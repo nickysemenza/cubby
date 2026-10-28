@@ -10,17 +10,17 @@ import {
 import { afterEach, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
-import {
-  productListItem,
-  taskListItem,
-} from "~/entity/generated/entity-lists.gen";
 import { listOverrides } from "~/entity/list-columns/list-overrides.fixtures";
 import { listPage } from "~/entity/routing/list-page";
 import { installFeatures } from "~/features/registry";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
+import {
+  productListItem,
+  taskListItem,
+} from "~/server/generated/entity-lists.server.gen";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 
 installFeatures();
@@ -71,11 +71,6 @@ const product = mock(productListItem, {
     name: productName,
 
     externalIds: [],
-
-    pricing: {
-      knownExpenseCount: 0,
-      partial: false,
-    },
   },
 });
 
@@ -88,7 +83,12 @@ async function mount(path: string, empty = false) {
       requests.push(params);
       return {
         items: rows,
-        meta: { pageIndex: 0, pageSize: 100, totalCount: rows.length },
+        meta: {
+          hasNextPage: false,
+          pageIndex: 0,
+          pageSize: 100,
+          totalCount: rows.length,
+        },
       };
     },
   });
@@ -297,12 +297,18 @@ it("bulk-edits all matching identities including an unloaded record", async () =
       if ("ids" in params.filters)
         return {
           items: [...selected].reverse(),
-          meta: { pageIndex: 0, pageSize: 100, totalCount: 3 },
+          meta: {
+            hasNextPage: false,
+            pageIndex: 0,
+            pageSize: 100,
+            totalCount: 3,
+          },
         };
       if (params.pagination.pageIndex > 0) await nextPage;
       return {
         items: params.pagination.pageIndex > 0 ? [unloaded] : [first, second],
         meta: {
+          hasNextPage: params.pagination.pageIndex === 0,
           pageIndex: params.pagination.pageIndex,
           pageSize: 2,
           totalCount: 3,

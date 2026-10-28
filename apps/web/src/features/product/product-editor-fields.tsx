@@ -11,6 +11,7 @@ import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { redundantTokens } from "@cubby/shared/redundant-tokens";
 import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { useQueryClient } from "@tanstack/react-query";
 import { useId, useMemo, useRef, useState } from "react";
 import {
   type FieldValues,
@@ -177,11 +178,13 @@ export function ProductExternalIdsField({
     control: form.control,
     name: ["name", "brandName"],
   });
-  const schema = structuredSchemaFor(entity, field.key);
+  const queryClient = useQueryClient();
+  const schema = structuredSchemaFor(queryClient, entity, field.key);
   const collection = "collection" in field ? field.collection : undefined;
   if (
     !schema ||
     !collection ||
+    collection.key === "value" ||
     !("primary" in collection) ||
     !collection.primary
   )

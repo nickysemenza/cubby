@@ -619,7 +619,6 @@ export const productHandlers = implementOperationDomain(productContract, {
     const rows = await listKitComponentRows(
       context.db,
       await productShortcodes.all(context.db, input.parentProductIds),
-      context.usdaClient,
     );
     const products = await readPublicEntityRows({
       db: context.db,

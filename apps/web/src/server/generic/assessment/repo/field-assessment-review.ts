@@ -6,7 +6,7 @@ import {
   type AiProvenance,
 } from "@cubby/schemas/ai-evaluation";
 import type { AiRefreshManifest } from "@cubby/schemas/ai-evaluation";
-import { fieldSuggestionIdentityBasis } from "@cubby/schemas/field-suggestion";
+import { fieldSuggestionIdentityBasis } from "@cubby/schemas/field-suggestion-policy";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 

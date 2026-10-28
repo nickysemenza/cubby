@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 
-import { generatedSortRoster } from "../sortable-fields";
 import { withProblemActionCapabilities } from "./problem-actions";
 import { compileProblemFilters } from "./problem-filter-semantics";
 import type { DiagnosticKey, ProblemQuery } from "./problem-query";
@@ -16,7 +16,7 @@ import {
 // `satisfies Record<BrowserRoutedEntity, …>`, so its keys are this set.
 const routedEntities: ReadonlySet<Entity> = new Set(browserRoutedEntities);
 const sortableFields = (entity: Entity): readonly string[] =>
-  routedEntities.has(entity) ? (generatedSortRoster(entity)?.fields ?? []) : [];
+  routedEntities.has(entity) ? (generatedEntitySort[entity]?.fields ?? []) : [];
 
 type RuntimeCapabilities = {
   listEntities?: ReadonlySet<Entity>;

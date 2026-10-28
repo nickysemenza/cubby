@@ -1,10 +1,17 @@
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
+import {
+  createEditorTestQueryClient,
+  renderWithEditorMetadata as render,
+} from "#web/tests/editor-metadata.fixtures.ts";
 
 import { KindVotes, kindAgreement } from "./statement-kind-votes";
 
+const queryClient = createEditorTestQueryClient(["financialTransaction"]);
+
 const create = (
-  votes: Parameters<typeof kindAgreement>[0]["votes"],
+  votes: Parameters<typeof kindAgreement>[1]["votes"],
   kind: "purchase" | "income" = "purchase",
 ) => ({
   kind,
@@ -32,16 +39,21 @@ describe("kindAgreement", () => {
   it("names agreeing sources and each dissent", () => {
     expect(
       kindAgreement(
+        queryClient,
         create({ rule: "purchase", label: null, history: "purchase" }),
       ).reason,
     ).toBe("2 of 3 agree: rule + history");
     expect(
       kindAgreement(
+        queryClient,
         create({ rule: "purchase", label: "purchase", history: "mixed" }),
       ).reason,
     ).toBe("2 of 3 agree: rule + label; history says mixed");
     expect(
-      kindAgreement(create({ rule: null, label: null, history: null })),
+      kindAgreement(
+        queryClient,
+        create({ rule: null, label: null, history: null }),
+      ),
     ).toMatchObject({ recorded: false, reason: "From the rule" });
   });
 });

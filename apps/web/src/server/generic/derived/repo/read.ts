@@ -10,6 +10,7 @@ import { fieldDecision, fieldProvenance } from "@cubby/schemas/field-envelope";
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { householdLocalDate } from "~/lib/household-date";
 import {
   storedDerived,
   storedDerivedDeclarations,
@@ -23,6 +24,8 @@ import type {
   StoredDerivedRead,
   CurrentReadFacts,
 } from "~/server/generic/derived/repo/read-context";
+
+import { fanoutTargetMatches } from "./fanout";
 export type {
   PageStoredMeta,
   StoredDerivedRead,
@@ -207,7 +210,7 @@ export async function loadStoredDerived(
     WITH keys AS MATERIALIZED (
       SELECT declared.*, EXISTS (
         SELECT 1 FROM "WorkItem" fanout
-         WHERE starts_with(fanout.target, declared.target || '@')
+         WHERE ${fanoutTargetMatches(sql`fanout.target`, sql`declared.target`)}
       ) AS "fanoutPending"
       FROM jsonb_to_recordset(${JSON.stringify(
         declarations.map(({ key, target, clock }) => ({ key, target, clock })),
@@ -216,7 +219,7 @@ export async function loadStoredDerived(
     SELECT i.id AS "entityId", k.key, v.value, v."decidedBy", v."computedAt",
            (d.ref IS NOT NULL OR k."fanoutPending") AS pending,
            (d.ref IS NOT NULL OR k."fanoutPending" OR (k.clock = 'householdDay' AND
-             ${householdDaySql(sql`v."computedAt"`)} < ${householdDaySql(sql`now() AT TIME ZONE 'UTC'`)})) IS TRUE AS stale,
+             ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date)) IS TRUE AS stale,
            d."lastError" AS error, d."readyAt" AS "retryAt"
       FROM unnest(${uuidArrayParam(ids)}) AS i(id)
      CROSS JOIN keys k

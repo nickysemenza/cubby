@@ -177,6 +177,26 @@ export const getAllUnitMappingsFromProduct = (product: {
     })
     .map(toUnitMapping);
 
+/** Page display uses one WASM call; authored inputs remain available to editors. */
+export const getProductDisplays = (
+  products: readonly Parameters<typeof getAllUnitMappingsFromProduct>[0][],
+) =>
+  wasm
+    .product_display_batch(
+      products.map((product) => ({
+        id: product.id,
+        price: product.price,
+        ...productWasmInputs(product),
+      })),
+    )
+    .map((display) => ({
+      unitPriceMappings: display.mappings.map(toUnitMapping),
+      unitPrice: {
+        natural: display.natural ?? null,
+        perGram: display.per_gram ?? null,
+      },
+    }));
+
 /**
  * Aggregates unit mappings from all products for an entity with multiple products
  * (e.g., an ingredient that has multiple linked products)

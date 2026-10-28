@@ -1,8 +1,5 @@
 import { entitySchema } from "@cubby/schemas/entity";
-import {
-  entityFieldModels,
-  type EntityFieldModel,
-} from "@cubby/schemas/entity-fields";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import {
   fieldEnvelopeFor,
   fieldValueOf,
@@ -10,7 +7,7 @@ import {
 } from "@cubby/schemas/field-envelope";
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { isEqual } from "es-toolkit";
 import { useMemo, useState } from "react";
@@ -21,6 +18,7 @@ import { useEntityCommands } from "~/entity/editing/use-entity-commands";
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
+import { entityMetadata } from "~/entity/metadata";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import { Button } from "~/ui/primitives/button";
@@ -28,8 +26,12 @@ import { Button } from "~/ui/primitives/button";
 const resolutionPatchSchema = z.record(z.string(), z.json());
 type ResolutionPatch = z.output<typeof resolutionPatchSchema>;
 
-function redundantResetCandidates(entity: StandardEntity, record: unknown) {
-  return entityFieldModels[entity].fields.filter((field) => {
+function redundantResetCandidates(
+  queryClient: QueryClient,
+  entity: StandardEntity,
+  record: unknown,
+) {
+  return entityMetadata(queryClient, entity).fields.fields.filter((field) => {
     const envelope = fieldEnvelopeFor(record, field.readKey ?? field.key);
     return (
       field.resolution?.redundancy === "eligible" &&
@@ -68,7 +70,7 @@ export function useRedundantOverrideBulkAction<TData extends { id: string }>(
   return useMemo(() => {
     if (
       !entity ||
-      !entityFieldModels[entity].fields.some(
+      !entityMetadata(queryClient, entity).fields.fields.some(
         (field) => field.resolution?.redundancy === "eligible",
       )
     )
@@ -79,7 +81,8 @@ export function useRedundantOverrideBulkAction<TData extends { id: string }>(
       icon: <ArrowCounterClockwiseIcon />,
       availability: (rows) =>
         rows.some(
-          (row) => redundantResetCandidates(entity, row.original).length,
+          (row) =>
+            redundantResetCandidates(queryClient, entity, row.original).length,
         )
           ? { status: "available" }
           : { status: "hidden" },
@@ -89,7 +92,7 @@ export function useRedundantOverrideBulkAction<TData extends { id: string }>(
             const patch: ResolutionPatch = {};
             // Lists carry current eligibility; exact equality is checked only on execution.
             const previews = await Promise.all(
-              redundantResetCandidates(entity, row.original).map(
+              redundantResetCandidates(queryClient, entity, row.original).map(
                 async (field) => ({
                   field,
                   explanation: await queryClient.fetchQuery({
@@ -117,7 +120,7 @@ export function useRedundantOverrideBulkAction<TData extends { id: string }>(
               operation: "update",
               intent: "full",
               id: row.original.id,
-              data: parseEntityEditUpdateInput(entity, patch),
+              data: await parseEntityEditUpdateInput(entity, patch),
             });
             return true;
           }),
@@ -142,13 +145,14 @@ export function fieldResolutionFor(
 
 /** The manifest's resolution policy for a field, when it declares one. */
 export function resolutionPolicyFor(
+  queryClient: QueryClient,
   entity: string,
   field: string,
 ): EntityFieldModel["fields"][number]["resolution"] {
   const parsed = entitySchema.safeParse(entity);
   if (!parsed.success) return null;
   return (
-    entityFieldModels[parsed.data].fields.find(
+    entityMetadata(queryClient, parsed.data).fields.fields.find(
       (candidate) => candidate.key === field,
     )?.resolution ?? null
   );
@@ -186,11 +190,12 @@ export function FieldResolutionEntityActions({
   field: string;
   resolution: ReadableFieldEnvelope;
 }) {
+  const queryClient = useQueryClient();
   const entity = generatedBrowserCrudEntities.find(
     (candidate) => candidate === candidateEntity,
   );
   if (!entity) return null;
-  const policy = resolutionPolicyFor(entity, field);
+  const policy = resolutionPolicyFor(queryClient, entity, field);
   if (!policy) return null;
   const actions: Array<{ label: string; patch: ResolutionPatch }> = [];
   const controls = resolution.current.controls;
@@ -242,7 +247,7 @@ function BoundFieldResolutionActions({
         operation: "update",
         intent: "full",
         id,
-        data: parseEntityEditUpdateInput(entity, patch),
+        data: await parseEntityEditUpdateInput(entity, patch),
       });
       // An ownership change can fold the record into the one already in its
       // slot; a detail page then follows the survivor.

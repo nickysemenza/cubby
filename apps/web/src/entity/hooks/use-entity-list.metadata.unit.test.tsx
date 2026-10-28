@@ -9,9 +9,9 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { createTextColumn } from "~/entity/table/column-helpers";
 import { installFeatures } from "~/features/registry";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { FilterBar } from "~/ui/data-table/filter-bar";
 import {
   barFieldFromConfig,
@@ -56,7 +56,7 @@ const queryOptions = () => ({
         brandId: "VEN-22222",
       },
     ],
-    meta: { pageIndex: 0, pageSize: 25, totalCount: 1 },
+    meta: { hasNextPage: false, pageIndex: 0, pageSize: 25, totalCount: 1 },
   }),
 });
 

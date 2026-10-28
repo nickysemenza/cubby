@@ -3,13 +3,15 @@ import { plainDate, projectKindSchema } from "@cubby/schemas/project";
 import { getErrorMessage } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useRef, useId, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useId, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { useEntityMetadata } from "~/entity/metadata";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { project } from "~/integrations/tanstack-query/generated/catalog/project.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
@@ -53,6 +55,12 @@ export function CreateProjectFromTasksDialog({
   onOpenChange,
   taskIds,
 }: CreateProjectFromTasksDialogProps) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("project");
+  const kindOptions = useMemo(
+    () => fieldEnumOptions(queryClient, "project", "kind"),
+    [queryClient],
+  );
   const count = taskIds.length;
   const formId = useId();
   const [submitting, setSubmitting] = useState(false);
@@ -135,7 +143,7 @@ export function CreateProjectFromTasksDialog({
             form={form}
             name="kind"
             label="Kind"
-            options={fieldEnumOptions("project", "kind")}
+            options={kindOptions}
             nullable
             suggestField="kind"
           />

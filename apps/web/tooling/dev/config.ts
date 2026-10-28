@@ -25,7 +25,13 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
     telemetry: `${name}-${suffix(queueIdentities.telemetry)}`,
   };
   const env = { ...production.env };
-  for (const key of ["AI", "VECTORIZE", "HYPERDRIVE", "HYPERDRIVE_CACHED"])
+  for (const key of [
+    "AI",
+    "VECTORIZE",
+    "HYPERDRIVE",
+    "HYPERDRIVE_CACHED",
+    "HYPERDRIVE_BACKGROUND",
+  ])
     delete env[key];
   for (const [key, value] of Object.entries(env)) {
     if (value && value.type === "secret") delete env[key];
@@ -71,6 +77,10 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
         dev: { connectionString: profile.databaseUrl },
       }),
       HYPERDRIVE_CACHED: bindings.hyperdrive({
+        id: "00000000000000000000000000000000",
+        dev: { connectionString: profile.databaseUrl },
+      }),
+      HYPERDRIVE_BACKGROUND: bindings.hyperdrive({
         id: "00000000000000000000000000000000",
         dev: { connectionString: profile.databaseUrl },
       }),

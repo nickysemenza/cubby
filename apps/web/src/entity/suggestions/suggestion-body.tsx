@@ -1,8 +1,9 @@
 import { formatConfidence, type Confidence } from "@cubby/schemas/ai";
-import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import type { QueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
+import { entityMetadata } from "~/entity/metadata";
 import { getAppErrorDetails } from "~/lib/error-utils";
 import { DateDisplay } from "~/ui/common/date-display";
 import { DecisionLevels } from "~/ui/derived/decision-levels";
@@ -19,11 +20,20 @@ import {
 /** The manifest fields a field's decision reads: Jev and Clef return no
  * prose, so these, the runner-up and provenance are the suggestion's "why". */
 export function suggestionBasisLabels(
+  queryClient: QueryClient,
   entity: ShortcodeEntity,
   field: string,
 ): string[] {
-  const basis = entityFieldByKey(entity, field)?.control?.suggest?.basis ?? [];
-  return basis.map((key) => entityFieldByKey(entity, key)?.label ?? key);
+  const basis =
+    entityMetadata(queryClient, entity).fields.fields.find(
+      (candidate) => candidate.key === field,
+    )?.control?.suggest?.basis ?? [];
+  return basis.map(
+    (key) =>
+      entityMetadata(queryClient, entity).fields.fields.find(
+        (candidate) => candidate.key === key,
+      )?.label ?? key,
+  );
 }
 
 export interface SuggestionProvenance {

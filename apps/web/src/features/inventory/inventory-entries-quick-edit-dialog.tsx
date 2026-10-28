@@ -1,9 +1,11 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { ProductListInventoryEntryOut } from "@cubby/schemas/product";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
+import { useEntityMetadata } from "~/entity/metadata";
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import {
   useEntityListSource,
@@ -60,6 +62,8 @@ export function InventoryEntriesQuickEditDialog({
   productName,
   entries,
 }: InventoryEntriesQuickEditDialogProps) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("location");
   const updateInventoryMutation = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("inventory", "update"),
     entity: "inventory",
@@ -99,7 +103,11 @@ export function InventoryEntriesQuickEditDialog({
                 </FieldRecordValue>
                 <span className="text-muted-foreground/50">@</span>
                 <EditableEntityCell
-                  value={buildRecordComboboxItem("location", entry.location)}
+                  value={buildRecordComboboxItem(
+                    queryClient,
+                    "location",
+                    entry.location,
+                  )}
                   label="location"
                   SearchProvider={LocationSearchProvider}
                   onSave={async (newLocationId) => {

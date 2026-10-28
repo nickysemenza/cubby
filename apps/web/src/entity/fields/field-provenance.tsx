@@ -1,8 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
-import { localRelationshipByKey } from "@cubby/schemas/entity-manifest";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
+import type { QueryClient } from "@tanstack/react-query";
 import type React from "react";
+
+import { entityMetadata } from "~/entity/metadata";
 
 import { EntityIcon, entityLabel, entityPluralLabel } from "../entities";
 
@@ -10,11 +12,19 @@ type ProvenanceSource = EntityFieldProvenance["sources"][number];
 
 /** Build specialist-column metadata from the same declared relationship graph. */
 export function relationshipFieldProvenance(
+  queryClient: QueryClient,
   sourceEntity: Entity,
   relationKey: string,
   kind: "derived" | "reference" | "relation" = "derived",
 ): EntityFieldProvenance {
-  const relation = localRelationshipByKey(sourceEntity, relationKey);
+  const relation = entityMetadata(
+    queryClient,
+    sourceEntity,
+  ).descriptor.relationships.find((candidate) => candidate.key === relationKey);
+  if (!relation || relation.provenance.kind !== "local-path")
+    throw new Error(
+      `Unknown local relationship ${sourceEntity}.${relationKey}`,
+    );
   return {
     kind,
     sources: [

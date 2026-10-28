@@ -35,12 +35,7 @@ export type ImmutableWasm<T> = {
  */
 const CACHEABLE_METHODS = [
   "parse_ingredient",
-  // Batch sibling of parse_ingredient — one call per array of lines, output
-  // order matching input. The cache key is the *whole* lines array
-  // (`JSON.stringify`), which only hits on an identical batch, not per-line;
-  // that's fine because every call site is a paste/import/report surface that
-  // re-renders with the same lines (not a per-keystroke surface — those stay
-  // on single `parse_ingredient`, which still gets its own fine-grained entries).
+  // Object inputs bypass the cache; these methods retain readonly result types.
   "parse_ingredient_lines",
   "decompose_ingredient",
   "parse_rich_text",
@@ -48,14 +43,8 @@ const CACHEABLE_METHODS = [
   "conv_amount_explain",
   "format_amount",
   "format_amount_labeled",
-  // Mapping synthesis from product/food data — pure, called per product per
-  // render (table mapping columns, detail pages) with identical args.
   "unit_mappings_from_food",
   "product_unit_mappings",
-  // One yield + a short amounts array, so the key is tiny. Worth caching where
-  // its sibling `expand_recipe_needs` isn't: the recipe tree has no memo, so a
-  // sub-recipe referenced from two places re-expands and asks this the same
-  // question each time.
   "recipe_yield_fraction",
   // Pure ISBN validation/normalization, called on every keystroke of the
   // product forms' ISBN field (live preview + the book-category inference) —
@@ -63,10 +52,7 @@ const CACHEABLE_METHODS = [
   "normalize_isbn",
   "isbn_from_gtin",
 ] as const;
-// NOTE: cost_recipes and expand_recipe_needs are deliberately NOT cached —
-// their args are whole recipe closures (multi-KB stringify keys, fresh object
-// identities every render); React useMemo + the persisted-totals service
-// already dedupe the calls.
+// Page-sized objects are batched instead of serialized into cache keys.
 /** Source of truth shared by the runtime cache and the `ImmutableWasm` types. */
 type CacheableMethod = (typeof CACHEABLE_METHODS)[number];
 const cacheableMethods = new Set<string>(CACHEABLE_METHODS);
@@ -87,11 +73,26 @@ const resultCache = new LRUCache<string, NonNullable<WasmResult>>({
   max: 2048,
 });
 
+// Object-heavy work is batched by the caller. Primitive keys avoid allocating
+// and retaining a serialized copy of each page's input graph.
+const primitiveCacheKey = (
+  name: string,
+  args: WasmParameters,
+): string | undefined => {
+  let key = name;
+  for (const arg of args) {
+    if (arg !== null && typeof arg === "object") return undefined;
+    const value = String(arg);
+    key += `:${typeof arg}:${value.length}:${value}`;
+  }
+  return key;
+};
+
 /** Cache and trace both typed capability surfaces with the same policy. */
 export function instrumentWasm<T extends WasmType>(instance: T): T {
   /**
    * WASM module with execution timing and a result cache for pure methods.
-   * WASM is guaranteed loaded at module init. Most methods are synchronous;
+   * The Worker initializes WASM on first use. Most methods are synchronous;
    * driver methods measure completion when their returned Promise settles.
    */
   return new Proxy(instance, {
@@ -111,7 +112,8 @@ export function instrumentWasm<T extends WasmType>(instance: T): T {
         return (...args: WasmParameters) => executeWasm(name, fn, args);
       }
       return (...args: WasmParameters) => {
-        const key = `${name}:${JSON.stringify(args)}`;
+        const key = primitiveCacheKey(name, args);
+        if (key === undefined) return executeWasm(name, fn, args);
         const cached = resultCache.get(key); // updates recency on hit
         if (cached !== undefined) {
           if (FLAGS.perfOverlay) recordWasmCache(name, true, resultCache.size);

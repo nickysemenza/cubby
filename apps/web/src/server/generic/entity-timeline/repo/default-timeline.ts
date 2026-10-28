@@ -141,7 +141,7 @@ async function loadRecords(
   });
   return {
     records: result.items.map((item) => timelineRowSchema.parse(item)),
-    totalCount: result.meta.totalCount,
+    totalCount: z.number().parse(result.meta.totalCount),
   };
 }
 

@@ -1,10 +1,19 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import type { RecipeSource } from "@cubby/schemas/recipe-shared";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { flexRender } from "@tanstack/react-table";
-import { fireEvent, render, renderHook, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import {
+  cleanup,
+  fireEvent,
+  render as testingRender,
+  renderHook,
+  screen,
+} from "@testing-library/react";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
 import {
@@ -16,6 +25,25 @@ import {
 
 import { detailFieldRenderersFor } from "./detail-field-renderers";
 import { createEntityDisplayColumns } from "./entity-display";
+
+let queryClient: Awaited<ReturnType<typeof metadataQueryClient>>;
+beforeEach(async () => {
+  queryClient = await metadataQueryClient();
+});
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
+
+function MetadataProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+function render(ui: ReactNode, options?: Parameters<typeof testingRender>[1]) {
+  return testingRender(ui, { wrapper: MetadataProvider, ...options });
+}
 
 installFeatures();
 
@@ -77,6 +105,7 @@ const RECIPE_ROW: RecipeRow = {
 function buildRecipeColumns() {
   const helper = createCubbyColumnHelper<RecipeRow>();
   return createEntityDisplayColumns(
+    queryClient,
     "recipe",
     helper,
     createCubbyColumnCollection<RecipeRow>((add) => {
@@ -161,6 +190,7 @@ describe("recipe list display columns", () => {
     const helper = createCubbyColumnHelper<RecipeRow>();
     expect(() =>
       createEntityDisplayColumns(
+        queryClient,
         "recipe",
         helper,
         createCubbyColumnCollection((add) => {
@@ -185,9 +215,9 @@ describe("recipe list display columns", () => {
   });
 
   it("resolves the fuller detail Recipe Source renderer from the manifest", () => {
-    const renderer = detailFieldRenderersFor("recipe")?.source;
+    const renderer = detailFieldRenderersFor(queryClient, "recipe")?.source;
     if (!renderer) throw new Error("Expected recipe.source detail renderer");
-    const rendered = renderer(RECIPE_ROW as never);
+    const rendered = renderer(RECIPE_ROW as never, queryClient);
     render(<>{rendered.value}</>);
     expect(screen.getByRole("link", { name: /example\.com/i })).toHaveAttribute(
       "href",

@@ -16,8 +16,8 @@ import {
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type {
   InventoryEntryBase,
   InventoryRelatedEntity,

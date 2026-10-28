@@ -57,27 +57,11 @@ export const valueSchemaForField = (
 export const renderStructuredValueSchemas = (
   entities: readonly CompiledEntity[],
 ) => {
-  const entityForPrefix = entityPrefixLookup(entities);
   const schemas = Object.fromEntries(
     entities.flatMap((entity) =>
-      entity.fieldModel.fields.flatMap((field) => {
-        const id = `${entity.key}.${field.key}`;
-        const normalSchema = valueSchemaForField(
-          entity.key,
-          field,
-          id,
-          entityForPrefix,
-        );
-        const collection = entity.bulkUpdateFields?.includes(field.key)
-          ? collectionArraySchema(
-              field.validation.create ?? field.validation.update,
-            )
-          : null;
-        const schema =
-          normalSchema ??
-          (collection ? valueSchemaOf(collection, id, entityForPrefix) : null);
-        return schema === null ? [] : [[id, schema] as const];
-      }),
+      Object.entries(structuredSchemasForEntity(entity, entities)).map(
+        ([key, schema]) => [`${entity.key}.${key}`, schema],
+      ),
     ),
   );
   return [
@@ -96,4 +80,32 @@ export const renderStructuredValueSchemas = (
         }),
     },
   ];
+};
+
+/** The same compiler output feeds the scoped browser slice and native catalog. */
+export const structuredSchemasForEntity = (
+  entity: CompiledEntity,
+  entities: readonly CompiledEntity[],
+) => {
+  const entityForPrefix = entityPrefixLookup(entities);
+  return Object.fromEntries(
+    entity.fieldModel.fields.flatMap((field) => {
+      const id = `${entity.key}.${field.key}`;
+      const normalSchema = valueSchemaForField(
+        entity.key,
+        field,
+        id,
+        entityForPrefix,
+      );
+      const collection = entity.bulkUpdateFields?.includes(field.key)
+        ? collectionArraySchema(
+            field.validation.create ?? field.validation.update,
+          )
+        : null;
+      const schema =
+        normalSchema ??
+        (collection ? valueSchemaOf(collection, id, entityForPrefix) : null);
+      return schema === null ? [] : [[field.key, schema] as const];
+    }),
+  );
 };

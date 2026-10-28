@@ -1,3 +1,4 @@
+import { bulkSchemaFor } from "./edit-validation.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import { EntityDeclarationError } from "../declarations.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
@@ -49,35 +50,6 @@ export const renderEntitySchemaArtifacts = (
         `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
     )
     .join("\n");
-  const bulkSchemaFor = (entity: CompiledEntity): string => {
-    if (entity.bulkUpdateFields === null) return "null";
-    const update = entity.contract?.update;
-    if (!update)
-      throw new EntityDeclarationError(
-        `${entity.key}.bulkUpdate requires an update contract.`,
-      );
-    const fields = entity.bulkUpdateFields
-      .map((key) => {
-        const field = entity.fieldModel.fields.find(
-          (candidate) => candidate.key === key,
-        );
-        const original = `${update.export}.shape[${JSON.stringify(key)}]`;
-        const schema =
-          field?.collection || field?.reference?.multiple === true
-            ? `bulkCollectionPatchSchema(${original},${JSON.stringify(field?.collection?.key ?? "value")},${JSON.stringify(`${entity.key}${key}BulkCollection`)}).optional()`
-            : original;
-        return `${JSON.stringify(key)}:${schema}`;
-      })
-      .join(",");
-    const collections = entity.fieldModel.fields
-      .filter(
-        (field) =>
-          entity.bulkUpdateFields?.includes(field.key) &&
-          (field.collection || field.reference?.multiple === true),
-      )
-      .map((field) => field.key);
-    return `bulkUpdateInputSchema(${update.export},{${fields}},${JSON.stringify(collections)})`;
-  };
   const schemaEntitySpecs = projections.schema;
   const schemaBindings = schemaEntitySpecs
     .map((entity) => {

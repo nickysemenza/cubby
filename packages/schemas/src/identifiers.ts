@@ -7,7 +7,7 @@ import type {
   AppErrorReason,
   ShortcodeType as ShortcodeEntity,
 } from "@cubby/shared";
-import { entitySummary } from "./generated/entity-summary.gen";
+import { entityRoster } from "./generated/entity-roster.gen";
 export * from "./identifier-fields";
 
 /**
@@ -35,7 +35,7 @@ export const ENTITY_NOT_FOUND_REASON = mapRecord(
  * casing when it leads (`"USDA Food"` → `"USDA food"`).
  */
 const sentenceCaseEntityLabel = (entity: ShortcodeEntity): string =>
-  entitySummary[entity].singular
+  entityRoster[entity].singular
     .split(" ")
     .map((word, index) => (index === 0 ? word : word.toLowerCase()))
     .join(" ");

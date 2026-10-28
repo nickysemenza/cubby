@@ -1456,6 +1456,7 @@ test("a member creates a Product from own item and label photos without an impor
   });
   expect(saved).toBeDefined();
   await gotoAuthenticatedPage(page, `/products/${saved!.shortcode}`);
+  await page.locator("#images").scrollIntoViewIfNeeded();
   await expect(
     page
       .locator("#images")

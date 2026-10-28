@@ -1,17 +1,19 @@
 import { displayImagesField } from "@cubby/schemas/display-images";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   preferredImageUrl,
   publicImageUrl,
   publicImageUrlSummary,
 } from "@cubby/schemas/image-summary";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { entities, entityDetailParams } from "~/entity/entities";
 import type { InfiniteScrollControls } from "~/entity/hooks/use-infinite-table-list";
+import { useEntityMetadata } from "~/entity/metadata";
 import { EntityEmptyState } from "~/entity/table/entity-empty-states";
 import { ShelfCard, ShelfGrid } from "~/entity/table/shelf";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
@@ -30,7 +32,7 @@ type ShelfRow = z.infer<typeof shelfRowSchema>;
 /** The record's title, the manifest's `titleField` (a non-nullable text read field). */
 function shelfTitle(entity: BrowserRoutedEntity, row: ShelfRow): string {
   return (
-    z.string().catch("").parse(row[entitySummary[entity].titleField]) || row.id
+    z.string().catch("").parse(row[entityRoster[entity].titleField]) || row.id
   );
 }
 
@@ -92,6 +94,8 @@ export function EntityShelf<TRow extends { id: string }>({
   currentRowId?: string;
   onRetry?: () => void;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
   return (
     <ShelfGrid
       items={items}
@@ -119,7 +123,7 @@ export function EntityShelf<TRow extends { id: string }>({
             image={images[0]?.url}
             extraCount={images.length - 1}
             title={shelfTitle(entity, row)}
-            subtitle={recordCaption(entity, row)}
+            subtitle={recordCaption(queryClient, entity, row)}
             entity={entity}
             compact={compact}
             onInspect={onInspect ? () => onInspect(record) : undefined}

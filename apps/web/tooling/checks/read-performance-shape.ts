@@ -5,7 +5,7 @@ import {
   entityListInputSchema,
   listEntities,
   ENTITY_LIST_READ_SCHEMAS,
-} from "~/entity/generated/entity-lists.gen";
+} from "~/server/generated/entity-lists.server.gen";
 /** Operator assertions, not inferred deployment facts. No free-form labels. */
 export const workloadContextSchema = z
   .object({

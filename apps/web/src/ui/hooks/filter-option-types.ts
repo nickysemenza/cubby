@@ -4,7 +4,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 export interface DeferredFilterOptionSource {
   options: PickerOption[];
   onActivate: (selectedIds?: readonly string[]) => void;
-  onSearchChange: (query: string) => void;
+  onSearchChange?: (query: string) => void;
   isLoading: boolean;
   /** A roster of one entity's records: its pickers run in record mode. */
   records?: PickerRecordSource;

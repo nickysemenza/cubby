@@ -5,7 +5,6 @@ import {
   dataQualityException,
 } from "@cubby/schemas/data-quality";
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { fieldDecisionOf, fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
 import {
@@ -24,6 +23,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { ResolvedListValue } from "~/entity/display/resolved-list-value";
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
+import { useEntityMetadata } from "~/entity/metadata";
 import { useListQuery } from "~/entity/table/list-query-context";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
@@ -364,7 +364,8 @@ function UnassessedQualityExplanation({
   entity,
   id,
 }: Pick<WhyValueProps, "entity" | "id">) {
-  const rule = entityFieldModels[entity].fields.find(
+  const metadata = useEntityMetadata(entity);
+  const rule = metadata.fields.fields.find(
     (field) => field.key === "dataQuality",
   )?.explanation;
 
@@ -577,13 +578,13 @@ export function WhyValueContents({
   pendingSuggestion,
   scope,
 }: WhyValueProps) {
+  const metadata = useEntityMetadata(entity);
   const listQuery = useListQuery(entity);
   const bindings = z
     .object({ scopeFilters: z.record(z.string(), z.string()).optional() })
     .parse(
-      entityFieldModels[entity].fields.find(
-        (candidate) => candidate.key === field,
-      )?.explanation ?? {},
+      metadata.fields.fields.find((candidate) => candidate.key === field)
+        ?.explanation ?? {},
     ).scopeFilters;
   const filters = z
     .record(z.string(), z.unknown())

@@ -24,9 +24,9 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
   FIELD_SUGGEST_DEBOUNCE_MS,

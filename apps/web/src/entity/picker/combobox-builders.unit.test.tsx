@@ -4,10 +4,13 @@ import { locationPickerAncestorOut } from "@cubby/schemas/location";
 import { productResolveCandidateOut } from "@cubby/schemas/product";
 import type { SearchHit } from "@cubby/schemas/search";
 import { testShortcode } from "@cubby/schemas/testing";
-import { render } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, render as testingRender } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { categoryReadFixture } from "tooling/product-category-fixtures";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import {
@@ -17,6 +20,25 @@ import {
   buildSearchHitComboboxItem,
   buildVendorComboboxItem,
 } from "./combobox-builders";
+
+let queryClient: Awaited<ReturnType<typeof metadataQueryClient>>;
+beforeEach(async () => {
+  queryClient = await metadataQueryClient();
+});
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
+
+function MetadataProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+function render(ui: ReactNode, options?: Parameters<typeof testingRender>[1]) {
+  return testingRender(ui, { wrapper: MetadataProvider, ...options });
+}
 
 function locationSearchHit(overrides: Partial<SearchHit> = {}): SearchHit {
   const base: SearchHit = {
@@ -44,7 +66,7 @@ describe("entity picker value adapters", () => {
 
     // The manifest's `titleField` names the row; declared aliases stay searchable.
     expect(
-      buildRecordComboboxItem("ingredient", {
+      buildRecordComboboxItem(queryClient, "ingredient", {
         id: ingredientId,
         name: "Scallion",
         aliases: ["green onion"],
@@ -56,7 +78,7 @@ describe("entity picker value adapters", () => {
       aliases: ["green onion"],
     });
     expect(
-      buildRecordComboboxItem("plant", {
+      buildRecordComboboxItem(queryClient, "plant", {
         id: "PLANT-4ABC",
         displayName: "Tomato",
       }),
@@ -124,7 +146,7 @@ describe("generic record picture", () => {
   it("uses the record's cover and keeps the glyph as its fallback", () => {
     const recipe = testShortcode("recipe", "RCP-2ABC");
     const cover = "https://images.example.test/stew.jpg";
-    const item = buildRecordComboboxItem("recipe", {
+    const item = buildRecordComboboxItem(queryClient, "recipe", {
       id: recipe,
       name: "Winter stew",
       fields: {
@@ -137,8 +159,10 @@ describe("generic record picture", () => {
     expect(item.thumb?.imageUrl).toBe(cover);
     expect(item.thumb?.fallback).toBeTruthy();
     expect(
-      buildRecordComboboxItem("recipe", { id: recipe, name: "Plain soup" })
-        .thumb?.imageUrl,
+      buildRecordComboboxItem(queryClient, "recipe", {
+        id: recipe,
+        name: "Plain soup",
+      }).thumb?.imageUrl,
     ).toBeNull();
   });
 });
@@ -358,7 +382,7 @@ it.each([{ images: undefined }, { images: [] }])(
       },
     ];
     expect(
-      buildRecordComboboxItem("recipe", {
+      buildRecordComboboxItem(queryClient, "recipe", {
         id: "RCP-4K7M",
         name: "Synthetic stew",
         fields,

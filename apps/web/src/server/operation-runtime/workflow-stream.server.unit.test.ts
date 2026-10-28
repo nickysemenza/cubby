@@ -3,6 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { createDatabase } from "~/server/db/database-runtime";
+import {
+  withMemberFreshness,
+  readMemberMarker,
+  recordDatabaseWrite as recordMemberWrite,
+} from "~/server/db/freshness/member-marker";
 import { withErrorReporting } from "~/server/errors/report-error";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
@@ -92,6 +97,37 @@ describe("workflow stream freshness notifications", () => {
     authenticate.mockResolvedValue(
       systemPrincipal(context, { channel: "browser", credential: "cookie" }),
     );
+  });
+
+  it("delivers a signed session marker for commits after the last progress event", async () => {
+    await withMemberFreshness(async () => {
+      const response = await workflowStream(
+        {
+          request: request(),
+          input: {},
+          operation: "ai.backfillLocationDescriptions",
+          inputSchema: z.object({}),
+          eventSchema: z.object({ n: z.number() }),
+          run: async function* () {
+            yield { n: 1 };
+          },
+        },
+        { ...runtime, recordDatabaseWrite: recordMemberWrite },
+      );
+      const values = await collect(response);
+      const last = values.at(-1);
+      expect(last?.readMarker).toBeDefined();
+      expect(last).toMatchObject({ ok: true, data: undefined });
+      const cookie = last?.readMarker?.split(";")[0];
+      if (!cookie) throw new Error("Missing final signed marker");
+      const headers = new Headers({ cookie });
+      // Validate outside this invocation's in-memory read-your-writes scope.
+      await withMemberFreshness(async () => {
+        expect((await readMemberMarker(headers, context.auth)).kind).toBe(
+          "valid",
+        );
+      });
+    });
   });
 
   it("notifies before progress and again during mutation stream finalization", async () => {

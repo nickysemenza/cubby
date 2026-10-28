@@ -147,6 +147,9 @@ export const productionWorker = defineWorker({
     HYPERDRIVE_CACHED: bindings.hyperdrive({
       id: "427dd7a2876c4dccbe056d37fa7374ff",
     }),
+    HYPERDRIVE_BACKGROUND: bindings.hyperdrive({
+      id: "ae175626356f4317bdfd88f2ce1faa8f",
+    }),
     USDA_RELEASES: bindings.r2({
       name: "cubby-usda-releases",
     }),

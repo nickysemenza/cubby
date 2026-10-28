@@ -50,10 +50,19 @@ export function entityTimelineFor<E extends TimelineEntity>(
       const policy = operation.policy(wireInput);
       return queryOptions({
         queryKey: queryKeyFor(wireInput),
-        queryFn: async ({ signal }): Promise<EntityTimelineOut> => {
+        queryFn: async ({
+          signal,
+          client,
+          queryKey,
+        }): Promise<EntityTimelineOut> => {
           const result = await operation.call(
             parseEntityTimelineInput(entity, wireInput),
-            { signal },
+            {
+              signal,
+              consistency: client.getQueryState(queryKey)?.isInvalidated
+                ? "strong"
+                : undefined,
+            },
           );
           return getEntityTimelineOutputSchema(entity).parse(result);
         },

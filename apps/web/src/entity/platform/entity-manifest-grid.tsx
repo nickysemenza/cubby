@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { allEntities, photoCategories } from "@cubby/schemas/entity-manifest";
-import { useQuery } from "@tanstack/react-query";
+import { allEntities } from "@cubby/schemas/entity-roster";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo } from "react";
 
 import { EntityIcon } from "~/entity/entities";
@@ -15,6 +15,7 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useLocalTable } from "~/ui/data-table/use-local-table";
+import { QuerySection } from "~/ui/feedback/query-section";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";
 import { Badge } from "~/ui/primitives/badge";
 import { StaticTable } from "~/ui/primitives/static-table";
@@ -35,13 +36,10 @@ import {
   CRUD_SLOTS,
   RELATION_STATUS_LEGEND,
   type SchemaRow,
-  abbrev,
-  extendedManifest,
-  relationDetailStatus,
+  type SchemaOverview,
   relationStatusClass,
-  schemaRow,
-  schemaTotals,
 } from "./entity-schema-model";
+import { schemaOverviewQueryOptions } from "./schema-presentation";
 import { type SchemaSheet, schemaSheetSchema } from "./schema-sheet";
 
 const dash = <span className="text-muted-foreground/40">—</span>;
@@ -420,7 +418,13 @@ function SchemaTable({
  * its target; each dot is one declared relationship, colored by whether its
  * detail table is declared, derived, or missing — the place coverage gaps
  * stay visible at a glance instead of hiding in 27 separate panels. */
-function RelationsMatrix({ onSelect }: { onSelect: (entity: Entity) => void }) {
+function RelationsMatrix({
+  onSelect,
+  graph,
+}: {
+  onSelect: (entity: Entity) => void;
+  graph: SchemaOverview["graph"];
+}) {
   return (
     <div className="space-y-2">
       <Table
@@ -432,19 +436,19 @@ function RelationsMatrix({ onSelect }: { onSelect: (entity: Entity) => void }) {
             <TableHead className={cn(gridHead, "sticky left-0 z-10 h-6")}>
               from \ to
             </TableHead>
-            {allEntities.map((target) => (
+            {graph.map(({ entity: target, abbreviation }) => (
               <TableHead
                 key={target}
                 title={target}
                 className={cn(gridHead, "h-6 text-center")}
               >
-                {abbrev(target)}
+                {abbreviation}
               </TableHead>
             ))}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {allEntities.map((source) => (
+          {graph.map(({ entity: source, abbreviation, relationships }) => (
             <TableRow key={source} className="group/row">
               <TableHead
                 scope="row"
@@ -459,25 +463,21 @@ function RelationsMatrix({ onSelect }: { onSelect: (entity: Entity) => void }) {
                   onClick={() => onSelect(source)}
                   className="size-full px-2 text-left hover:underline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                 >
-                  {abbrev(source)}
+                  {abbreviation}
                 </button>
               </TableHead>
               {allEntities.map((target) => {
-                const relations = extendedManifest(source).relationships.filter(
+                const details = relationships.filter(
                   (relation) => relation.target === target,
                 );
-                const details = relations.map((relation) => ({
-                  relation,
-                  detail: relationDetailStatus(source, relation),
-                }));
                 return (
                   <TableCell
                     key={target}
                     title={
                       details
                         .map(
-                          ({ relation, detail }) =>
-                            `${relation.key}: ${detail.status}${detail.reason ? ` — ${detail.reason}` : ""}`,
+                          ({ key, detail }) =>
+                            `${key}: ${detail.status}${detail.reason ? ` — ${detail.reason}` : ""}`,
                         )
                         .join("\n") || undefined
                     }
@@ -486,15 +486,15 @@ function RelationsMatrix({ onSelect }: { onSelect: (entity: Entity) => void }) {
                       "h-6 bg-card px-1 text-center group-hover/row:bg-muted",
                     )}
                   >
-                    {details.map(({ relation, detail }) => (
+                    {details.map(({ key, cardinality, detail }) => (
                       <span
-                        key={relation.key}
+                        key={key}
                         className={cn(
                           "mx-px",
                           relationStatusClass(detail.status),
                         )}
                       >
-                        {relation.cardinality === "many" ? "●" : "○"}
+                        {cardinality === "many" ? "●" : "○"}
                       </span>
                     ))}
                   </TableCell>
@@ -516,12 +516,16 @@ function RelationsMatrix({ onSelect }: { onSelect: (entity: Entity) => void }) {
   );
 }
 
-function PhotoCategoriesTable() {
+function PhotoCategoriesTable({
+  photos,
+}: {
+  photos: SchemaOverview["photos"];
+}) {
   return (
     <StaticTable
       containerClassName="overflow-auto border-t border-l border-border"
       className="w-full table-auto border-separate border-spacing-0 text-xs"
-      rows={Object.values(photoCategories)}
+      rows={photos}
       rowKey={(category) => category.key}
       columns={[
         {
@@ -569,7 +573,7 @@ function PhotoCategoriesTable() {
   );
 }
 
-function SummaryBar({ totals }: { totals: ReturnType<typeof schemaTotals> }) {
+function SummaryBar({ totals }: { totals: SchemaOverview["totals"] }) {
   const stats: readonly [string, ReactNode][] = [
     ["declared", totals.declared],
     ["generic CRUD", totals.crud],
@@ -600,7 +604,7 @@ function SummaryBar({ totals }: { totals: ReturnType<typeof schemaTotals> }) {
   );
 }
 
-export function EntityManifestGrid({
+function ManifestGrid({
   selected,
   onSelect,
   sheet = "entities",
@@ -613,6 +617,7 @@ export function EntityManifestGrid({
   onSheetChange: (sheet: SchemaSheet) => void;
   active?: boolean;
 }) {
+  const { data: overview } = useSuspenseQuery(schemaOverviewQueryOptions());
   const session = authClient.useSession();
   const { data: health } = useQuery({
     ...entityInspectorHealth.inspectorHealth.queryOptions(null),
@@ -620,10 +625,14 @@ export function EntityManifestGrid({
   });
   const counts: EntityInspectorHealth["counts"] | undefined = health?.counts;
   const rows = useMemo(
-    () => allEntities.map((entity) => schemaRow(entity, counts)),
-    [counts],
+    () =>
+      overview.rows.map((row) => ({
+        ...row,
+        rows: row.countable ? counts?.[row.entity] : undefined,
+      })),
+    [overview, counts],
   );
-  const totals = useMemo(schemaTotals, []);
+  const totals = overview.totals;
   const openEntity = (entity: Entity) => {
     onSheetChange("entities");
     onSelect(entity);
@@ -666,15 +675,24 @@ export function EntityManifestGrid({
           <EntityOverrideTable onSelectEntity={openEntity} />
         </TabsContent>
         <TabsContent value="relations">
-          <RelationsMatrix onSelect={openEntity} />
+          <RelationsMatrix onSelect={openEntity} graph={overview.graph} />
         </TabsContent>
         <TabsContent value="photos">
-          <PhotoCategoriesTable />
+          <PhotoCategoriesTable photos={overview.photos} />
         </TabsContent>
         <TabsContent value="graph">
           {sheet === "graph" && <EntityReferenceGraph />}
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export function EntityManifestGrid(props: Parameters<typeof ManifestGrid>[0]) {
+  if (props.active === false) return null;
+  return (
+    <QuerySection title="Entity schema" fallback={null}>
+      <ManifestGrid {...props} />
+    </QuerySection>
   );
 }

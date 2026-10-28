@@ -1,4 +1,4 @@
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import type { WorkQueueRow } from "@cubby/schemas/work-queue";
 import { Link } from "@tanstack/react-router";
 
@@ -41,7 +41,7 @@ export function workRowHref(row: WorkRowSource) {
 
 /** The record's singular label; a diagnostic count has none. */
 export function workRowType(row: Pick<WorkQueueRow, "entity">) {
-  return row.entity ? entitySummary[row.entity].singular : null;
+  return row.entity ? entityRoster[row.entity].singular : null;
 }
 
 const LINK_CLASS =

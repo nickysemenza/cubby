@@ -1,7 +1,4 @@
-import {
-  entityFieldModels,
-  type EntityFieldModel,
-} from "@cubby/schemas/entity-fields";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import {
   isCancelledError,
   type Query,
@@ -11,7 +8,8 @@ import { z } from "zod";
 
 import { entityDetailFor } from "~/entity/entity-detail";
 import { removeCachedListItems } from "~/entity/hooks/optimistic-list";
-import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
+import { ensureEntityMetadata } from "~/entity/metadata";
+import { mutationReceiptSchema } from "~/entity/mutation-receipt";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 const envelope = z
@@ -28,16 +26,14 @@ const container = z
 
 /** Adapters preserve the complete receipt even when their public result is narrower. */
 export function mutationReceipt(value: unknown) {
-  const direct = entityBrowserMutationResultSchema.safeParse(value);
+  const direct = mutationReceiptSchema.safeParse(value);
   if (direct.success) return direct.data;
   const outer = envelope.safeParse(value);
   if (!outer.success) return;
-  const receipt = entityBrowserMutationResultSchema.safeParse(
-    outer.data.receipt,
-  );
+  const receipt = mutationReceiptSchema.safeParse(outer.data.receipt);
   if (receipt.success) return receipt.data;
   const inner = envelope.safeParse(outer.data.result);
-  const nested = entityBrowserMutationResultSchema.safeParse(
+  const nested = mutationReceiptSchema.safeParse(
     inner.success
       ? (inner.data.receipt ?? outer.data.result)
       : outer.data.result,
@@ -119,7 +115,7 @@ export async function settleReceiptProjection(
   receipt: ReturnType<typeof mutationReceipt>,
 ) {
   if (!receipt || receipt.action !== "update") return;
-  const model: EntityFieldModel = entityFieldModels[receipt.entity];
+  const model = (await ensureEntityMetadata(client, receipt.entity)).fields;
   if (
     !receipt.appliedFields.some((key) => {
       const field = model.fields.find((field) => field.key === key);
@@ -162,13 +158,13 @@ export async function settleReceiptProjection(
 }
 
 /** Apply only confirmed scalars with the same declared stored/read representation. */
-export function reconcileMutationReceipt(
+export async function reconcileMutationReceipt(
   client: QueryClient,
   receipt: ReturnType<typeof mutationReceipt>,
 ) {
   if (!receipt) return;
   if (receipt.action === "create" || receipt.action === "update") {
-    const model: EntityFieldModel = entityFieldModels[receipt.entity];
+    const model = (await ensureEntityMetadata(client, receipt.entity)).fields;
     const fields = new Map<string, unknown>();
     for (const key of receipt.appliedFields) {
       const field = model.fields.find((field) => field.key === key);

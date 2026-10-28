@@ -14,7 +14,7 @@ import {
 } from "./assessment";
 import { dataCheck } from "./data-quality";
 import { connectionProposal } from "./entity-connections";
-import { shortcodeEntities } from "./entity-manifest";
+import { shortcodeEntities } from "./generated/entity-roster.gen";
 import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
 import {
   financialAccountShortcode,

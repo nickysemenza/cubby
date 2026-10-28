@@ -17,13 +17,13 @@ import { purchaseFilterFields } from "./purchase";
 import { recipeFilterFields } from "./recipe";
 import {
   relatedFilterPrefix,
-  relatedViewPaths,
   relatedSummaryInput,
   relatedSummaryOutput,
   relatedSummaryRelationKeys,
   type RelatedViewDefinition,
-  relatedViewRegistry,
 } from "./related-view";
+import { relatedViewPaths, relatedViewRegistry } from "./related-view-registry";
+
 import { vendorFilterFields } from "./vendor";
 import { vendorAccountFilterFields } from "./vendor-account";
 import { wishFilterFields } from "./wish";

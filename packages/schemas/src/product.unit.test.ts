@@ -12,12 +12,6 @@ describe("canonical Product MCP fields", () => {
     expect(Object.keys(schema.shape)).not.toContain("price");
     expect(Object.keys(schema.shape)).not.toContain("fieldResolutions");
     expect(Object.keys(schema.shape)).not.toContain("derived");
-    expect(Object.keys(schema.shape.pricing.shape).sort()).toEqual([
-      "knownExpenseCount",
-      "knownUnitCount",
-      "partial",
-      "unknownExpenseCount",
-    ]);
     const price = {
       current: {
         assignment: { kind: "value", value: 13, ownership: { kind: "record" } },

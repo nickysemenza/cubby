@@ -46,7 +46,7 @@ describe("DatabaseRuntimeResolver", () => {
     expect(calls).toEqual([
       {
         connectionString: "postgresql://strong.example/cubby",
-        maxConnections: 5,
+        maxConnections: 3,
         role: "strong",
       },
       {

@@ -1,11 +1,13 @@
 import { fieldDecisionOf } from "@cubby/schemas/field-envelope";
 import type { ExpenseFilters } from "@cubby/schemas/project";
+import { useQueryClient } from "@tanstack/react-query";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
+import { useEntityMetadata } from "~/entity/metadata";
 import { ExpenseSummaryStrip } from "~/features/expense/expense-summary-strip";
 import {
   expenseOrderIdColumn,
@@ -105,6 +107,8 @@ export const expenseListOverride = defineListOverride<
   ExpenseFilters
 >({
   use() {
+    const queryClient = useQueryClient();
+    useEntityMetadata("expense");
     const updateExpenseMutation = useUpdateMutation({
       mutationFn: entityMutationOptionsFactory("expense", "update"),
       entity: "expense",
@@ -116,6 +120,7 @@ export const expenseListOverride = defineListOverride<
           // linked Purchase as the primary accounting relationship.
           add(
             expenseVendorColumn(
+              queryClient,
               columnHelper,
               async (vendor, row) => {
                 await updateExpenseMutation.mutateAsync({
@@ -132,6 +137,7 @@ export const expenseListOverride = defineListOverride<
           );
           add(
             expenseOrderIdColumn(
+              queryClient,
               columnHelper,
               async (orderId, row) => {
                 await updateExpenseMutation.mutateAsync({
@@ -144,7 +150,7 @@ export const expenseListOverride = defineListOverride<
           );
         }),
       // oxlint-disable-next-line react/exhaustive-deps -- updateExpenseMutation changes every render but is functionally stable
-      [],
+      [queryClient],
     );
 
     const list = useMemo(

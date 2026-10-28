@@ -4,14 +4,13 @@ import type {
   CompiledEditSection,
   CompiledEntityPresentation,
 } from "@cubby/schemas/entity-definitions/definition";
-import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import {
-  entityFieldModels,
+  type EntityFieldModel,
   type EntityFieldProvenance,
 } from "@cubby/schemas/entity-fields";
 import type { ControlRendererId } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
   type ComponentType,
@@ -33,6 +32,7 @@ import { enumFieldOptions } from "~/entity/display/enum-field-display";
 import { featureRegistry } from "~/entity/feature-registry";
 import { FieldProvenance } from "~/entity/fields/field-provenance";
 import { PickerField } from "~/entity/forms/picker-field";
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import type { EntitySearchScope } from "~/entity/picker/entity-search-hooks";
 import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import {
@@ -112,8 +112,7 @@ type PrimitiveFieldOptions = {
   description?: ReactNode;
 };
 
-export type PrimitiveFieldModel =
-  (typeof entityFieldModels)[Entity]["fields"][number];
+export type PrimitiveFieldModel = EntityFieldModel["fields"][number];
 
 /** A singular reference's search provider, keyed by its target entity. The
  * production lookup is `requireReferenceEntitySearch`; a test injects a fake
@@ -237,13 +236,14 @@ function selectDescriptionFor(
 }
 
 function selectOptionsFor(
+  queryClient: QueryClient,
   entity: Entity,
   field: PrimitiveFieldModel,
   mode: EditMode,
   overrides: readonly EntitySelectOption[] | undefined,
 ) {
   if (mode === "edit" && overrides === undefined)
-    return enumFieldOptions(entity, field);
+    return enumFieldOptions(queryClient, entity, field);
   return presentEntitySelectOptions(
     entity,
     field.key,
@@ -260,7 +260,45 @@ function selectOptionsFor(
  * Never called with `presentation.control.kind === "specialized"` — callers
  * dispatch that case themselves before reaching here.
  */
+/** Keep the picker roster stable within this mounted control's metadata scope. */
+function PrimitiveSelectField({
+  queryClient,
+  entity,
+  field,
+  mode,
+  fieldOptions,
+  ...props
+}: {
+  queryClient: QueryClient;
+  entity: Entity;
+  field: PrimitiveFieldModel;
+  mode: EditMode;
+  fieldOptions: PrimitiveFieldOptions;
+  form: UseFormReturn<FieldValues>;
+  name: string;
+  label: string;
+  placeholder?: string;
+  description?: ReactNode;
+}) {
+  const overrides = fieldOptions.options;
+  const options = useMemo(
+    () => selectOptionsFor(queryClient, entity, field, mode, overrides),
+    [queryClient, entity, field, mode, overrides],
+  );
+  return (
+    <PickerField
+      {...props}
+      store="option"
+      options={options}
+      nullable={field.nullable}
+      disabled={fieldOptions.disabled}
+      suggestField={suggestFieldFor(Boolean(field.control?.suggest), field.key)}
+    />
+  );
+}
+
 function renderPrimitiveField({
+  queryClient,
   entity,
   field,
   presentation,
@@ -273,6 +311,7 @@ function renderPrimitiveField({
   costName = "cost",
   assignment,
 }: {
+  queryClient: QueryClient;
   entity: Entity;
   field: PrimitiveFieldModel;
   presentation: EntityFieldPresentation;
@@ -410,18 +449,18 @@ function renderPrimitiveField({
   }
   if (control.kind === "select") {
     return (
-      <PickerField
-        store="option"
+      <PrimitiveSelectField
         key={field.key}
+        queryClient={queryClient}
+        entity={entity}
+        field={field}
+        mode={mode}
+        fieldOptions={fieldOptions}
         form={form}
         name={name}
         label={presentation.label}
-        options={selectOptionsFor(entity, field, mode, fieldOptions.options)}
         placeholder={placeholder ?? undefined}
-        nullable={field.nullable}
-        disabled={fieldOptions.disabled}
         description={description}
-        suggestField={suggestFieldFor(Boolean(control.suggest), field.key)}
       />
     );
   }
@@ -541,14 +580,16 @@ export function EntityPrimitiveFields({
 }) {
   const form = useFormContext<FieldValues>();
   const idPrefix = useId();
-  const model = entityFieldModels[entity];
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(entity);
+  const model = metadata.fields;
   const editable: readonly string[] =
     mode === "create" ? model.create : model.update;
   const sectionFields =
     section === undefined
       ? undefined
       : new Set<string>(
-          entitySummary[entity].edit.sections.find(
+          metadata.summary.edit.sections.find(
             (candidate) => candidate.id === section,
           )?.fields,
         );
@@ -575,10 +616,16 @@ export function EntityPrimitiveFields({
   return (
     <>
       {fields.map((field) => {
-        const presentation = entityFieldPresentation(entity, field.key, mode);
+        const presentation = entityFieldPresentation(
+          queryClient,
+          entity,
+          field.key,
+          mode,
+        );
         const fieldOptions = options[field.key] ?? {};
         const name = paths[field.key] ?? field.key;
         return renderPrimitiveField({
+          queryClient,
           entity,
           field,
           presentation,
@@ -691,7 +738,8 @@ function StructuredFieldRenderer({
   form,
   mode,
 }: SpecializedIntentRendererProps) {
-  const schema = structuredSchemaFor(entity, field.key);
+  const queryClient = useQueryClient();
+  const schema = structuredSchemaFor(queryClient, entity, field.key);
   if (schema === undefined)
     throw new Error(
       `${entity}.${field.key} is a structured-field with no valueSchema; classify it in nativeCoverage.structuredField`,
@@ -800,10 +848,11 @@ function specializedRendererFor(
  * load-time invariant, not a per-render null check: the generator would have
  * already failed (`pnpm generate`) had the manifest dropped this key. */
 export function requiredFieldModel(
+  queryClient: QueryClient,
   entity: Entity,
   key: string,
 ): PrimitiveFieldModel {
-  const field = entityFieldModels[entity].fields.find(
+  const field = entityMetadata(queryClient, entity).fields.fields.find(
     (candidate) => candidate.key === key,
   );
   if (!field) {
@@ -901,6 +950,7 @@ function renderSingularReference({
  * can't reproduce. Bulk edit renders each declared field through here too,
  * wrapped in its own assignment modes (see {@link FieldAssignmentPolicy}). */
 export function renderIntentField({
+  queryClient,
   entity,
   field,
   form,
@@ -910,6 +960,7 @@ export function renderIntentField({
   scopedValueRecord,
   assignment,
 }: {
+  queryClient: QueryClient;
   entity: Entity;
   field: PrimitiveFieldModel;
   form: UseFormReturn<FieldValues>;
@@ -928,7 +979,12 @@ export function renderIntentField({
       scopedValueRecord,
       assignment,
     });
-  const presentation = entityFieldPresentation(entity, field.key, mode);
+  const presentation = entityFieldPresentation(
+    queryClient,
+    entity,
+    field.key,
+    mode,
+  );
   if (presentation.control.kind === "specialized") {
     const Renderer = specializedRendererFor(
       presentation.control.renderer ?? "",
@@ -979,6 +1035,7 @@ export function renderIntentField({
     fieldOptions.focusOnMount = true;
   }
   const rendered = renderPrimitiveField({
+    queryClient,
     record,
     entity,
     field,
@@ -1125,27 +1182,20 @@ export function EntityIntentFields({
   const form = useFormContext<FieldValues>();
   const fieldScope = useContext(EntityEditFieldScopeContext);
   const idPrefix = useId();
-  const model = entityFieldModels[entity];
-  // SAFETY: `generatedEntityEditIntents` only declares the entities that
-  // opted into standard editing (`EditableEntity`, a subset of `Entity`);
-  // callers only ever pass one of those, but this component's `entity` prop
-  // stays the broader `Entity` to match `EntityPrimitiveFields`.
-  const declaredIntents = (
-    generatedEntityEditIntents as Record<
-      string,
-      { fields: Record<string, readonly string[]> } | undefined
-    >
-  )[entity];
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(entity);
+  const model = metadata.fields;
+  const declaredIntents = metadata.editIntents;
   const declaredFieldKeys: readonly string[] =
-    declaredIntents?.fields[intent] ?? [];
+    Object.entries(declaredIntents?.fields ?? {}).find(
+      ([key]) => key === intent,
+    )?.[1] ?? [];
   const intentFieldKeys = fieldScope
     ? declaredFieldKeys.filter((key) => key === fieldScope)
     : declaredFieldKeys;
-  // `entitySummary` is compiled `as const`; indexed by the broad `Entity`
-  // union, each entity's literal `hiddenWhen` narrows only through the
-  // schema-level type, so read it through that annotation.
+  // Read conditional visibility through the compiled presentation contract.
   const hiddenWhen: CompiledEntityPresentation["edit"]["hiddenWhen"] =
-    entitySummary[entity].edit.hiddenWhen;
+    metadata.summary.edit.hiddenWhen;
   const hiddenWhenFields = useMemo(
     () => hiddenWhen.map((rule) => rule.field),
     [hiddenWhen],
@@ -1246,7 +1296,7 @@ export function EntityIntentFields({
     [scopedFieldKeys, scopedValues],
   );
   const declaredSections: readonly CompiledEditSection[] =
-    entitySummary[entity].edit.sections;
+    metadata.summary.edit.sections;
   // `fields` already reflects this render's `hiddenWhen`/`projectIsAllocated`
   // state, so the grouping has to be recomputed with it every render — no
   // `useMemo` (a stale memo would leave a newly (in)visible field in the
@@ -1259,6 +1309,7 @@ export function EntityIntentFields({
       {groups.map((group, index) => {
         const renderField = (field: PrimitiveFieldModel) => {
           return renderIntentField({
+            queryClient,
             entity,
             field,
             form,

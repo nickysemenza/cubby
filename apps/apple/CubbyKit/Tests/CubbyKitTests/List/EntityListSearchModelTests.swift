@@ -79,11 +79,11 @@ struct EntityListSearchModelTests {
                 if page == 1 {
                     return ListPage(
                         items: [Self.row("first")],
-                        meta: ListPageMeta(pageIndex: 1, pageSize: 1, totalCount: 2))
+                        meta: ListPageMeta(pageIndex: 1, pageSize: 1, totalCount: 2, hasNextPage: true))
                 }
                 return ListPage(
                     items: [Self.row("first"), Self.row(query)],
-                    meta: ListPageMeta(pageIndex: 2, pageSize: 1, totalCount: 2))
+                    meta: ListPageMeta(pageIndex: 2, pageSize: 1, totalCount: 2, hasNextPage: false))
             })
         model.setQuery("second")
         await model.settled()
@@ -104,7 +104,7 @@ struct EntityListSearchModelTests {
                 if page == 2 { return Self.page(Self.row(query)) }
                 return ListPage(
                     items: [Self.row("first")],
-                    meta: ListPageMeta(pageIndex: 1, pageSize: 1, totalCount: 2))
+                    meta: ListPageMeta(pageIndex: 1, pageSize: 1, totalCount: 2, hasNextPage: true))
             })
         model.setQuery("second")
         await model.settled()
@@ -154,7 +154,7 @@ struct EntityListSearchModelTests {
                 ListPage(
                     items: [Self.row("old")],
                     meta: ListPageMeta(
-                        pageIndex: 1, pageSize: 25, totalCount: 1,
+                        pageIndex: 1, pageSize: 25, totalCount: 1, hasNextPage: false,
                         sums: ["price": 25]))
             })
         model.setQuery("sample")
@@ -177,7 +177,8 @@ struct EntityListSearchModelTests {
     }
 
     private nonisolated static func page(_ row: EntityRow) -> ListPage<EntityRow> {
-        ListPage(items: [row], meta: ListPageMeta(pageIndex: 1, pageSize: 25, totalCount: 1))
+        ListPage(
+            items: [row], meta: ListPageMeta(pageIndex: 1, pageSize: 25, totalCount: 1, hasNextPage: false))
     }
 
     private enum TestFailure: Error { case failed }

@@ -1,6 +1,7 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 
 import { entitySearch } from "~/entity/generated/entity-search.gen";
+import { ensureEntityMetadata } from "~/entity/metadata";
 import { listChromePage } from "~/entity/routing/list-page";
 import { USDAFoodList } from "~/features/usda-food/usdafoodlist";
 import { pageTitle } from "~/lib/page-title";
@@ -15,6 +16,10 @@ const USDAPage = listChromePage({
 });
 
 export const Route = createFileRoute("/_authenticated/usda/")({
+  beforeLoad: ({ context }) =>
+    ensureEntityMetadata(context.queryClient, "usda-food").then(
+      () => undefined,
+    ),
   validateSearch: entitySearch["usda-food"].schema,
   search: {
     middlewares: [stripSearchParams(entitySearch["usda-food"].defaults)],

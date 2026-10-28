@@ -5,21 +5,26 @@ import { createActionFor } from "~/entity/actions/action-items";
 import { Page } from "~/entity/page/page";
 import { getHomeAsOfWindow } from "~/features/home/home-as-of-window";
 import { HomeKeyNumbers } from "~/features/home/home-key-numbers";
+import { HomeRowsLoading } from "~/features/home/home-list";
 import { HomeMoney } from "~/features/home/home-money";
 import { HomePantry } from "~/features/home/home-pantry";
 import { TodayAttention } from "~/features/home/house-card";
 import { TodayMeals } from "~/features/home/meals-card";
-import { NeedsYou } from "~/features/home/needs-you";
+import { NeedsYou, NEEDS_YOU_INPUT } from "~/features/home/needs-you";
 import { PinnedViews } from "~/features/home/pinned-views";
 import { RecentActivityFeed } from "~/features/home/recent-activity-feed";
 import { TodayNutrition } from "~/features/meal/daily-nutrition";
 import { installFeatures } from "~/features/registry";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
+import { auditLog } from "~/integrations/tanstack-query/generated/catalog/auditLog.gen";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
 import { expense } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
 import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
 import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
+import { workQueue } from "~/integrations/tanstack-query/generated/catalog/workQueue.gen";
 import { formatCalendarDay } from "~/lib/date-format";
+import { QuerySection } from "~/ui/feedback/query-section";
+import { VisibleContent } from "~/ui/hooks/visible-content";
 import { Section } from "~/ui/layout";
 import { PageHeader } from "~/ui/layout/page-header";
 import { Button } from "~/ui/primitives/button";
@@ -47,25 +52,28 @@ export const Route = createFileRoute("/")({
       });
     }
   },
-  loader: async ({ context }) => {
+  loader: ({ context }) => {
     const asOf = getHomeAsOfWindow();
-    await Promise.allSettled([
-      context.queryClient.ensureQueryData(
-        meal.getNutrition.queryOptions({ date: asOf.meals.from }),
+    void Promise.allSettled([
+      context.queryClient.prefetchQuery(
+        workQueue.queue.queryOptions(NEEDS_YOU_INPUT),
       ),
-      context.queryClient.ensureInfiniteQueryData(
+      context.queryClient.prefetchInfiniteQuery(
+        cursorQueryOptions(auditLog.list, { limit: 6 }),
+      ),
+      context.queryClient.prefetchInfiniteQuery(
         cursorQueryOptions(entityReport.get, {
           slot: "task.briefing",
           scope: { kind: "list", entity: "task", filters: {} },
         }),
       ),
-      context.queryClient.ensureQueryData(
+      context.queryClient.prefetchQuery(
         meal.upcomingSummary.queryOptions(asOf.meals),
       ),
-      context.queryClient.ensureQueryData(
+      context.queryClient.prefetchQuery(
         location.valuationSummary.queryOptions(),
       ),
-      context.queryClient.ensureQueryData(
+      context.queryClient.prefetchQuery(
         expense.monthlySummary.queryOptions(asOf.spend.filters),
       ),
     ]);
@@ -114,7 +122,14 @@ function Home() {
           the wide breakpoint, follows the main column. */}
       <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-4 pb-8 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
-          <HomeKeyNumbers asOf={asOf} />
+          <QuerySection
+            title="household key numbers"
+            fallback={
+              <HomeRowsLoading label="Loading household key numbers" rows={1} />
+            }
+          >
+            <HomeKeyNumbers asOf={asOf} />
+          </QuerySection>
           <div className="grid grid-cols-1 items-start gap-x-5 gap-y-4 md:grid-cols-2">
             <TodayAttention />
             <NeedsYou />
@@ -163,7 +178,11 @@ function Home() {
         >
           <TodayMeals asOf={asOf} />
           <HomeMoney asOf={asOf} />
-          <TodayNutrition initialDate={asOf.meals.from} />
+          <VisibleContent
+            fallback={<HomeRowsLoading label="Loading nutrition" rows={2} />}
+          >
+            <TodayNutrition initialDate={asOf.meals.from} />
+          </VisibleContent>
           <HomePantry />
           <PinnedViews />
         </aside>

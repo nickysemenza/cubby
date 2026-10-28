@@ -1,11 +1,12 @@
 import type { RunOut } from "@cubby/schemas/run";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 
 import type { RunDetail } from "~/contracts/run.contract";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import { useEntityMetadata } from "~/entity/metadata";
 import { runHref } from "~/entity/routing/purchase-import-links";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
 import { Row } from "~/ui/layout";
@@ -48,8 +49,14 @@ export function RunLink({
   publicId: string;
   status?: RunDetail["status"];
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("run");
+  const statusOptions = useMemo(
+    () => fieldEnumOptions(queryClient, "run", "status"),
+    [queryClient],
+  );
   const option = status
-    ? fieldEnumOptions("run", "status").find((entry) => entry.value === status)
+    ? statusOptions.find((entry) => entry.value === status)
     : undefined;
   return (
     <Row wrap gap="sm" align="center" justify="between" className="text-sm">

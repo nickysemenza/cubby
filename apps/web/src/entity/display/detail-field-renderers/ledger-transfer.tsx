@@ -6,14 +6,14 @@ import { renderOptionCell } from "~/entity/table/column-helpers";
 import type { EntityDetailFieldRenderers } from "./index";
 
 export const ledgerTransferDetailFields = {
-  "ledger-transfer-classification": (transfer) => {
+  "ledger-transfer-classification": (transfer, queryClient) => {
     const effectiveTransferClassification = fieldValueOf(
       transfer.fields.classification,
     );
     return {
       value: renderOptionCell(
         effectiveTransferClassification,
-        fieldEnumOptions("ledgerTransfer", "classification"),
+        fieldEnumOptions(queryClient, "ledgerTransfer", "classification"),
       ),
     };
   },

@@ -27,9 +27,10 @@ import type { z } from "zod";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { entityDetailLink } from "~/entity/entities";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { useEntityMetadata } from "~/entity/metadata";
 import { Picker } from "~/entity/picker/picker";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
-import { tradeOptions } from "~/entity/presentation/trade-options";
+import { useTradeOptions } from "~/entity/presentation/trade-options";
 import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
 import { purchase } from "~/integrations/tanstack-query/generated/catalog/purchase.gen";
 import { formatCurrency } from "~/lib/number-format";
@@ -116,6 +117,17 @@ function SplitPartCard({
   onKeepProduct: (keep: boolean) => void;
   onRemove: () => void;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("expense");
+  const tradeOptions = useTradeOptions();
+  const lineKindOptions = useMemo(
+    () => fieldEnumOptions(queryClient, "expense", "lineKind"),
+    [queryClient],
+  );
+  const costTypeOptions = useMemo(
+    () => fieldEnumOptions(queryClient, "expense", "costType"),
+    [queryClient],
+  );
   return (
     <Stack gap="xs" className="border border-[var(--border)] p-2">
       <Row align="center" justify="between" gap="sm">
@@ -151,7 +163,7 @@ function SplitPartCard({
       <Row align="center" gap="sm" wrap>
         <Picker
           mode="choose"
-          options={fieldEnumOptions("expense", "lineKind")}
+          options={lineKindOptions}
           value={part.lineKind ?? null}
           onValueChange={(next) => {
             const parsed = expenseLineKindSchema.nullable().safeParse(next);
@@ -166,7 +178,7 @@ function SplitPartCard({
         />
         <Picker
           mode="choose"
-          options={fieldEnumOptions("expense", "costType")}
+          options={costTypeOptions}
           value={part.costType}
           onValueChange={(next) => {
             // Required enum — a cleared picker is a no-op.

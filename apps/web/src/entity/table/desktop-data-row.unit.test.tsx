@@ -1,7 +1,9 @@
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
-import { fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { fireEvent, renderHook, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
+import { renderWithEditorMetadata as render } from "#web/tests/editor-metadata.fixtures.ts";
 
 import { StackedValue } from "../../ui/common/stacked-value";
 import { CellEditTrigger } from "../../ui/data-table/cell-edit-trigger";

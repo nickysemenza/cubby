@@ -1,12 +1,13 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { DetailRendererId } from "@cubby/schemas/entity-manifest";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { QueryClient } from "@tanstack/react-query";
 
 import type {
   DetailRecordOf,
   GenericDetailEntity,
 } from "~/entity/entity-detail/detail-record";
 import { featureRegistry } from "~/entity/feature-registry";
+import { entityMetadata } from "~/entity/metadata";
 import {
   implemented,
   type PresentationCoverage,
@@ -176,20 +177,23 @@ const detailCoverageFor = (
 
 /** The renderers for one entity, read through the erased map the page walks. */
 export const detailFieldRenderersFor = (
+  queryClient: QueryClient,
   entity: GenericDetailEntity,
 ): Readonly<Record<string, DetailFieldRenderer<never>>> | undefined => {
   const coverage = detailCoverageFor(entity);
-  const entries = entityFieldModels[entity].fields.flatMap((field) => {
-    const renderer = field.display.renderer?.detail;
-    if (renderer === null || renderer === undefined) return [];
-    const disposition = coverage?.[renderer];
-    if (disposition === undefined) {
-      throw new Error(`No web detail renderer coverage for ${renderer}`);
-    }
-    if (disposition.kind !== "implemented") {
-      throw new Error(`Web detail renderer ${renderer} is not implemented`);
-    }
-    return [[field.key, disposition.implementation] as const];
-  });
+  const entries = entityMetadata(queryClient, entity).fields.fields.flatMap(
+    (field) => {
+      const renderer = field.display.renderer?.detail;
+      if (renderer === null || renderer === undefined) return [];
+      const disposition = coverage?.[renderer];
+      if (disposition === undefined) {
+        throw new Error(`No web detail renderer coverage for ${renderer}`);
+      }
+      if (disposition.kind !== "implemented") {
+        throw new Error(`Web detail renderer ${renderer} is not implemented`);
+      }
+      return [[field.key, disposition.implementation] as const];
+    },
+  );
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 };

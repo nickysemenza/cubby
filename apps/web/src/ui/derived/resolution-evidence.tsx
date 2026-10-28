@@ -1,7 +1,7 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 
 import { RecordsBlockView } from "~/entity/entity-detail/records-block";
+import { useEntityMetadata } from "~/entity/metadata";
 import { Disclosure } from "~/ui/layout/disclosure";
 
 import { SourceStack } from "./source-stack";
@@ -187,28 +187,12 @@ function FieldEvaluationInputs({ evidence }: { evidence: Evidence }) {
                         />
                       ) : null}
                     </div>
-                    {observation.entity
-                      ? observation.fields?.map((key) => {
-                          const target = observation.entity!;
-                          const sourceField = entityFieldModels[
-                            target.entityKind
-                          ].fields.find((candidate) => candidate.key === key);
-                          return sourceField?.explanation ? (
-                            <span
-                              key={key}
-                              className="inline-flex items-center gap-1"
-                            >
-                              <span>{sourceField.label}</span>
-                              <WhyValue
-                                entity={target.entityKind}
-                                id={target.entityId}
-                                field={key}
-                                label={sourceField.label}
-                              />
-                            </span>
-                          ) : null;
-                        })
-                      : null}
+                    {observation.entity && observation.fields ? (
+                      <ObservedFieldLinks
+                        target={observation.entity}
+                        fields={observation.fields}
+                      />
+                    ) : null}
                     <ReadableExplanationValue value={observation.value} />
                   </div>
                 ))}
@@ -225,4 +209,32 @@ function FieldEvaluationInputs({ evidence }: { evidence: Evidence }) {
       ) : null}
     </div>
   );
+}
+
+function ObservedFieldLinks({
+  target,
+  fields,
+}: {
+  target: NonNullable<
+    NonNullable<Evidence["steps"]>[number]["observed"][number]["entity"]
+  >;
+  fields: readonly string[];
+}) {
+  const metadata = useEntityMetadata(target.entityKind);
+  return fields.map((key) => {
+    const field = metadata.fields.fields.find(
+      (candidate) => candidate.key === key,
+    );
+    return field?.explanation ? (
+      <span key={key} className="inline-flex items-center gap-1">
+        <span>{field.label}</span>
+        <WhyValue
+          entity={target.entityKind}
+          id={target.entityId}
+          field={key}
+          label={field.label}
+        />
+      </span>
+    ) : null;
+  });
 }

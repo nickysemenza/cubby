@@ -2,9 +2,9 @@ import { financialAccountOut } from "@cubby/schemas/financial-account";
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 

@@ -1,14 +1,14 @@
-"use client";
-
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { type LocationShortcode } from "@cubby/schemas/identifiers";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import {
   EntityRefLink,
   EntityRefList,
 } from "~/entity/components/entity-ref-link";
+import { useEntityMetadata } from "~/entity/metadata";
 import { useDenseCell } from "~/ui/common/stacked-value";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { Stack } from "~/ui/layout";
@@ -86,6 +86,8 @@ function InventoryEntriesCellBody<
   inlineEdit,
   context,
 }: InventoryEntriesCellProps<T, TEntry, TEntity>) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("location");
   const displayImages = useEntityDisplayImageMap();
   // A dense cell stacks the amount under the name instead of "1 each @".
   const dense = useDenseCell();
@@ -184,7 +186,7 @@ function InventoryEntriesCellBody<
       const entry = entries[0]!;
       const related = getRelatedEntity(entry);
       const current = related
-        ? buildRecordComboboxItem("location", related)
+        ? buildRecordComboboxItem(queryClient, "location", related)
         : null;
 
       return (

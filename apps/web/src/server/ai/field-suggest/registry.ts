@@ -369,7 +369,7 @@ async function loadSpendingCategoryRoster(
       projection: ["id", "name", "parentId"],
     });
     rows.push(...spendingRosterRow.array().parse(page.data));
-    if (rows.length >= page.count || page.data.length === 0) break;
+    if (!page.hasNextPage || page.data.length === 0) break;
   }
   const byId = new Map(rows.map((row) => [row.id, row]));
   return rows.map((row) => {

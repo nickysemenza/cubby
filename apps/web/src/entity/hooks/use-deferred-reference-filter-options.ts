@@ -1,5 +1,6 @@
 import { type BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { useDebouncedValue } from "@tanstack/react-pacer";
+import { useQueryClient } from "@tanstack/react-query";
 import { useQueries } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 
@@ -24,9 +25,10 @@ import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 export function useDeferredReferenceFilterOptions(
   entity: BrowserRoutedEntity,
 ): RuntimeFilterOptions {
+  const queryClient = useQueryClient();
   const references = useMemo(
     () =>
-      getEntityFilters(entity).flatMap((spec) => {
+      getEntityFilters(queryClient, entity).flatMap((spec) => {
         if (!spec.referenceEntity) return [];
         const key = referenceFilterOptionsKey(spec);
         return key
@@ -39,7 +41,7 @@ export function useDeferredReferenceFilterOptions(
             ]
           : [];
       }),
-    [entity],
+    [entity, queryClient],
   );
   return useDeferredEntityRosters(references);
 }

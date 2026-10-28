@@ -1,5 +1,5 @@
 import { entitySchema } from "@cubby/schemas/entity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
 import { humanize } from "@cubby/shared/text-case";
@@ -38,7 +38,7 @@ const live = (status: string) =>
 
 const kindLabel = (entity: string | null) => {
   const parsed = entitySchema.safeParse(entity);
-  return parsed.success ? entitySummary[parsed.data].singular : "Other";
+  return parsed.success ? entityRoster[parsed.data].singular : "Other";
 };
 
 type Outcome = RunEvaluationsOut["recent"][number];

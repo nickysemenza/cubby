@@ -1,13 +1,13 @@
-import { connectionCatalog } from "@cubby/schemas/connected-views";
 import { entitySchema } from "@cubby/schemas/entity";
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { z } from "zod";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { ConnectedRecordsTable } from "~/entity/entity-detail/connected-records-table";
+import { ensureEntityMetadata, entityMetadata } from "~/entity/metadata";
 import { Page } from "~/entity/page/page";
 import { EntityConnectionContext } from "~/entity/relationships/entity-connection-context";
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
@@ -29,11 +29,16 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/_authenticated/connections")({
   validateSearch: searchSchema,
+  beforeLoad: async ({ context, search }) => {
+    if (search.source)
+      await ensureEntityMetadata(context.queryClient, search.source);
+  },
   head: () => ({ meta: [{ title: pageTitle("Connections") }] }),
   component: ConnectionsPage,
 });
 
 function ConnectionsPage() {
+  const queryClient = useQueryClient();
   const {
     source,
     id,
@@ -53,13 +58,16 @@ function ConnectionsPage() {
   );
   const relation =
     source && view?.startsWith("relation:")
-      ? entityManifest[source].relationships.find(
+      ? entityMetadata(queryClient, source).descriptor.relationships.find(
           (item) => item.key === view.slice(9) && item.cardinality === "many",
         )
       : undefined;
   const curated = source
     ? view
-      ? connectionCatalog.resolve(source, view)
+      ? [
+          ...entityMetadata(queryClient, source).connections.views,
+          ...entityMetadata(queryClient, source).connections.context,
+        ].find((candidate) => candidate.key === view)
       : undefined
     : undefined;
   const target = relation?.target ?? curated?.target;

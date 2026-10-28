@@ -1,8 +1,14 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import type { CellData } from "@tanstack/react-table";
-import { render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  render as testingRender,
+  screen,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { installFeatures } from "~/features/registry";
 import {
   createCubbyColumnCollection,
@@ -11,6 +17,25 @@ import {
 } from "~/ui/data-table/table-features";
 
 import { createEntityDisplayColumns } from "./entity-display";
+
+let queryClient: Awaited<ReturnType<typeof metadataQueryClient>>;
+beforeEach(async () => {
+  queryClient = await metadataQueryClient();
+});
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
+
+function MetadataProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+function render(ui: ReactNode, options?: Parameters<typeof testingRender>[1]) {
+  return testingRender(ui, { wrapper: MetadataProvider, ...options });
+}
 
 installFeatures();
 
@@ -101,6 +126,7 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
 function buildFinancialTransactionColumns() {
   const helper = createCubbyColumnHelper<FinancialTransactionRow>();
   return createEntityDisplayColumns(
+    queryClient,
     "financialTransaction",
     helper,
     createCubbyColumnCollection<FinancialTransactionRow>((add) => {

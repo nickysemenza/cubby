@@ -2,6 +2,8 @@ import { QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { seedEditorTestMetadata } from "#web/tests/editor-metadata.fixtures.ts";
+
 import { entityRipple, ripple } from "./cache-tags";
 import { matchesTags } from "./operation-cache";
 import type { CubbyOperationMeta, OperationCacheTag } from "./operation-meta";
@@ -59,6 +61,7 @@ async function invalidatedTagsFor<Variables>(
 describe("root MutationCache invalidation", () => {
   it("publishes a canonical receipt across views without awaiting refresh and evicts inactive baselines", async () => {
     const { queryClient: client } = getContext();
+    seedEditorTestMetadata(client);
     const key = ["synthetic-task-page"];
     const detail = ["synthetic-task-detail"];
     const inactive = ["synthetic-task-baseline"];

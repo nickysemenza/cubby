@@ -5,8 +5,10 @@ import type {
 import { countLabel } from "@cubby/shared/pluralize";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useEntityMetadata } from "~/entity/metadata";
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { Picker } from "~/entity/picker/picker";
 import { formatDateSpan } from "~/lib/date-span";
@@ -451,20 +453,30 @@ function PortionDraftRow({
   onRemove: () => void;
   onUpdate: (patch: Partial<PortionDraft>) => void;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("meal");
+  useEntityMetadata("ledgerParty");
   const suggestedUnits = useMemo(
     () => (source.recipeYield ? [source.recipeYield.unit] : []),
     [source.recipeYield],
   );
   const eaterItems = useMemo(
-    () => eaters.map((eater) => buildRecordComboboxItem("ledgerParty", eater)),
-    [eaters],
+    () =>
+      eaters.map((eater) =>
+        buildRecordComboboxItem(queryClient, "ledgerParty", eater),
+      ),
+    [eaters, queryClient],
   );
   const mealItems = useMemo(
     () =>
       targetMeals.map((meal) => {
         // `mealLabel` already names the day; the row's date projection would
         // repeat it.
-        const { id, shortcode, thumb } = buildRecordComboboxItem("meal", meal);
+        const { id, shortcode, thumb } = buildRecordComboboxItem(
+          queryClient,
+          "meal",
+          meal,
+        );
         return {
           id,
           shortcode,
@@ -478,7 +490,7 @@ function PortionDraftRow({
             : {}),
         };
       }),
-    [targetMeals],
+    [targetMeals, queryClient],
   );
   return (
     <div className="space-y-2 border border-[var(--border)] bg-card p-3">

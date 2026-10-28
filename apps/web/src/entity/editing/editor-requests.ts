@@ -1,4 +1,3 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { EXPENSE_DISPOSITION_COST_TYPE } from "@cubby/schemas/expense-fields";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
@@ -9,9 +8,11 @@ import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventor
 import type { InfLocation } from "@cubby/schemas/location";
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import type { WishOut } from "@cubby/schemas/wish";
+import type { QueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { entityMetadata } from "~/entity/metadata";
 
 import { readReferenceField } from "../entity-references";
 import type { EntityEditDraft } from "./intent-types";
@@ -292,6 +293,7 @@ const bespokeEditRequestFor = (
  * object needs no per-entity seed; a bespoke builder above still wins.
  */
 export function detailEditRequest<E extends EditableEntity>(
+  queryClient: QueryClient,
   entity: E,
   record: { id: string },
   fieldScope?: string,
@@ -306,7 +308,7 @@ export function detailEditRequest<E extends EditableEntity>(
     return built;
   }
   const seed: Partial<Record<string, string | null>> = {};
-  for (const field of entityFieldModels[entity].fields) {
+  for (const field of entityMetadata(queryClient, entity).fields.fields) {
     if (field.reference === null || field.reference.multiple) continue;
     const reference = readReferenceField(record, field);
     if (reference === null) continue;

@@ -898,6 +898,7 @@ describe("derived field explanations against canonical records", () => {
       makeExpenseInput({ productId: product.id, cost: 12, productQuantity: 2 }),
       ctx.actor,
     );
+    await drainStoredDerived(ctx.db);
     const requestContext = context();
     const record = await executeEntity(requestContext, {
       action: "get",

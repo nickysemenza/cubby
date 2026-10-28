@@ -86,13 +86,26 @@ describe("list selection and relation loading", () => {
     };
     expect(await read("page")).toEqual({
       count: 2,
+      hasNextPage: false,
+      unresolvedCount: undefined,
+      fieldReads: undefined,
       data: [
         { name: "Test Alpha", parent: "Test Parent" },
         { name: "Test Zulu", parent: "Test Parent" },
       ],
     });
-    expect(await read("count")).toEqual({ count: 2, data: [] });
-    expect(await read("page", 5)).toEqual({ count: 2, data: [] });
+    expect(await read("count")).toEqual({
+      count: 2,
+      data: [],
+      hasNextPage: false,
+      unresolvedCount: undefined,
+    });
+    expect(await read("page", 5)).toEqual({
+      count: 2,
+      data: [],
+      hasNextPage: false,
+      unresolvedCount: undefined,
+    });
     expect(
       await scaffold.raw(
         ctx.db,
@@ -104,7 +117,12 @@ describe("list selection and relation loading", () => {
           },
         },
       ),
-    ).toEqual({ count: 0, data: [] });
+    ).toEqual({
+      count: 0,
+      data: [],
+      hasNextPage: false,
+      unresolvedCount: undefined,
+    });
   });
 
   it("counts an aliased table through its real FROM relation", async () => {

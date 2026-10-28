@@ -1,9 +1,12 @@
 import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { testShortcode } from "@cubby/schemas/testing";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import {
+  renderWithEditorMetadata as render,
+  createEditorBrowserTestHarness as createBrowserTestHarness,
+} from "#web/tests/editor-metadata.fixtures.ts";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 
 import { FieldResolutionEntityActions } from "./field-resolution";

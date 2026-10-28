@@ -5,9 +5,9 @@ import { publicImageUrlSummary } from "@cubby/schemas/image-summary";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { ShelfGrid } from "~/entity/table/shelf";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityShelf } from "./entity-shelf";
 

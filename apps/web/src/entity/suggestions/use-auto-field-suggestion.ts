@@ -1,7 +1,6 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import {
   type FieldValues,
@@ -13,6 +12,7 @@ import {
 import { z } from "zod";
 
 import { enumFieldLabel } from "~/entity/display/enum-field-display";
+import { entityMetadata } from "~/entity/metadata";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 
 import { basisValueOf } from "./field-suggestion";
@@ -212,6 +212,7 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
   disabled?: boolean;
   valueKind?: "id" | "item";
 }): UseAutoFieldSuggestionResult {
+  const queryClient = useQueryClient();
   const context = useFieldSuggestionContext();
   // Subscribed only so this re-renders when dirtiness changes — `setValue`
   // without options never touches `dirtyFields`, so the silent auto-fill
@@ -243,7 +244,9 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       !context ||
       disabled ||
       context.mode !== "create" ||
-      requiresSuggestionReview(context.entity, field) ||
+      entityMetadata(queryClient, context.entity).fields.fields.find(
+        (candidate) => candidate.key === field,
+      )?.control?.suggest?.reviewRequired ||
       suggestion?.financeReview ||
       isDirty ||
       context.isFetching ||
@@ -281,6 +284,7 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
     }
     context.markAutoFilled(field, suggestion.value);
   }, [
+    queryClient,
     context,
     disabled,
     isDirty,
@@ -308,7 +312,9 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       !context ||
       disabled ||
       context.mode !== "create" ||
-      requiresSuggestionReview(context.entity, field) ||
+      entityMetadata(queryClient, context.entity).fields.fields.find(
+        (candidate) => candidate.key === field,
+      )?.control?.suggest?.reviewRequired ||
       suggestion?.financeReview ||
       isDirty ||
       context.isFetching ||
@@ -327,7 +333,7 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       );
     }
     context.clearAutoFilled(field);
-  }, [context, disabled, isDirty, suggestion, form, name, field]);
+  }, [queryClient, context, disabled, isDirty, suggestion, form, name, field]);
 
   const apply = useCallback(async () => {
     if (
@@ -410,10 +416,15 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
 
   return {
     currentLabel:
-      (entityFieldModels[context.entity].fields.find(
+      (entityMetadata(queryClient, context.entity).fields.fields.find(
         (candidate) => candidate.key === field,
       )?.kind === "enum"
-        ? enumFieldLabel(context.entity, field, basisValueOf(current))
+        ? enumFieldLabel(
+            queryClient,
+            context.entity,
+            field,
+            basisValueOf(current),
+          )
         : null) ??
       z.object({ name: z.string() }).safeParse(current).data?.name ??
       basisValueOf(current),

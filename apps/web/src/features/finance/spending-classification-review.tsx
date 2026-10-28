@@ -8,10 +8,12 @@ import type {
   SpendingClassificationReviewInput,
   SpendingClassificationReviewPreview,
 } from "@cubby/schemas/spending-classification-review";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { useEntityMetadata } from "~/entity/metadata";
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
@@ -228,6 +230,8 @@ export function ProductCategoryClassification({
 }: {
   record: ProductCategoryOut;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("spendingCategory");
   const effectiveRecordSpendingCategoryId = fieldValueOf(
     record.fields.spendingCategoryId,
   );
@@ -236,7 +240,7 @@ export function ProductCategoryClassification({
     <ClassificationReview
       initialCategory={
         effectiveRecordSpendingCategoryId
-          ? buildRecordComboboxItem("spendingCategory", {
+          ? buildRecordComboboxItem(queryClient, "spendingCategory", {
               id: effectiveRecordSpendingCategoryId,
               name: record.spendingCategoryName,
               emoji: record.spendingCategoryEmoji,
@@ -267,6 +271,8 @@ export function SpendingCategoryMergeReview({
   );
 }
 export function VendorClassification({ record }: { record: VendorOut }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("spendingCategory");
   const effectiveRecordDefaultSpendingCategoryId = fieldValueOf(
     record.fields.defaultSpendingCategoryId,
   );
@@ -278,7 +284,7 @@ export function VendorClassification({ record }: { record: VendorOut }) {
     <ClassificationReview
       initialCategory={
         effectiveRecordDefaultSpendingCategoryId
-          ? buildRecordComboboxItem("spendingCategory", {
+          ? buildRecordComboboxItem(queryClient, "spendingCategory", {
               id: effectiveRecordDefaultSpendingCategoryId,
               name: record.defaultSpendingCategoryName,
               emoji: record.defaultSpendingCategoryEmoji,

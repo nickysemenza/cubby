@@ -1,5 +1,5 @@
 import { plainDate } from "@cubby/schemas/base-entity";
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { mealFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/meal";
 import {
   ledgerPartyShortcode,
   mealShortcode,
@@ -137,7 +137,7 @@ export const mealContract = defineContract(
       exposure: "view",
       note: "entity_read.list on meals filtered by mealDate",
       input: schemas.mealDateRange,
-      output: z.array(entityFieldEnvelopeSchemas.meal.list),
+      output: z.array(mealFieldEnvelopeSchemas.list),
     }),
     upcomingSummary: query({
       exposure: "view",
@@ -180,7 +180,7 @@ export const mealContract = defineContract(
         ],
       },
       input: schemas.mealAddRecipeInput,
-      output: entityFieldEnvelopeSchemas.meal.list,
+      output: mealFieldEnvelopeSchemas.list,
       invalidates: ["meal"],
     }),
     updateRecipe: mutation({
@@ -200,14 +200,14 @@ export const mealContract = defineContract(
         ],
       },
       input: schemas.mealUpdateRecipeInput,
-      output: entityFieldEnvelopeSchemas.meal.list,
+      output: mealFieldEnvelopeSchemas.list,
       invalidates: ["meal"],
     }),
     removeRecipe: mutation({
       description: "Remove a planned recipe from its meal.",
       command: { label: "Remove recipe", confirmation: null },
       input: schemas.mealRecipeIdInput,
-      output: entityFieldEnvelopeSchemas.meal.list,
+      output: mealFieldEnvelopeSchemas.list,
       invalidates: ["meal"],
     }),
     // Copies are plans: planned portions, no images, appended to the target days.
@@ -216,7 +216,7 @@ export const mealContract = defineContract(
         "Copy a Meal and its food entries to the requested date. The new Meal is a separate record; inspect it before further edits.",
       command: { label: "Duplicate meal", confirmation: null },
       input: mealDuplicateInput,
-      output: entityFieldEnvelopeSchemas.meal.list,
+      output: mealFieldEnvelopeSchemas.list,
       invalidates: ["meal"],
     }),
     copyRange: mutation({

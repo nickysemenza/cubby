@@ -242,6 +242,8 @@ export function mcpTestPrincipal(
       // A pool-bound stand-in: the runner's after-commit work runs at once.
       db: {},
       auth: { userId: actorContext.userId, sessionId: null },
+      headers: new Headers(),
+      requestOrigin: "mcp",
       ...merged,
       actorContext,
     }),

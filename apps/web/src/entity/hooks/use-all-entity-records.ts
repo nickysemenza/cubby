@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 
 import {
@@ -10,6 +10,7 @@ import type {
   EntityListResultByEntity,
   ListEntity,
 } from "~/entity/generated/entity-lists.gen";
+import { useEntityMetadata } from "~/entity/metadata";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 
 import { flattenUniquePageItems } from "../../ui/hooks/infinite-page-utils";
@@ -47,9 +48,12 @@ export function useAllEntityRecords<E extends ListEntity>(
   input?: EntityListParams<E>,
   { enabled = true }: { enabled?: boolean } = {},
 ) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
   const query = useInfiniteQuery({
     ...entityListFor(entity).infiniteQueryOptions(
-      input ?? compileEntityListInput(entity, {}, { pageSize: 500 }),
+      input ??
+        compileEntityListInput(queryClient, entity, {}, { pageSize: 500 }),
     ),
     enabled,
   });

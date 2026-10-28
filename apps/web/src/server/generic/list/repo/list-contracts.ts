@@ -10,7 +10,8 @@ export type { ListProjection } from "~/entity/model/list-read-fields";
 
 export interface ListReadPage<T = ListReadRow> {
   data: T[];
-  count: number;
+  count?: number;
+  hasNextPage: boolean;
   unresolvedCount?: number;
   incompleteSums?: string[];
   fieldReads?: PageFieldReadContexts;

@@ -1,3 +1,5 @@
+import type { QueryClient } from "@tanstack/react-query";
+
 import type {
   EntityListResultByEntity,
   ListEntity,
@@ -18,4 +20,5 @@ export type ListRowOf<E extends ListEntity> =
  */
 export type ListRenderer<E extends ListEntity> = (
   helper: CubbyColumnHelper<ListRowOf<E>>,
+  queryClient: QueryClient,
 ) => CubbyColumnCollection<ListRowOf<E>>;

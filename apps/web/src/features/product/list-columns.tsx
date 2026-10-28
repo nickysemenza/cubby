@@ -1,8 +1,10 @@
 import type { EntityFieldEnvelopeRead } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { type ProductFilters } from "@cubby/schemas/product";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { ProductCostValue } from "~/entity/display/product-cost-value";
+import { useEntityMetadata } from "~/entity/metadata";
 type ProductListItem = EntityFieldEnvelopeRead<"product", "list">;
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import { useQuery } from "@tanstack/react-query";
@@ -73,18 +75,31 @@ const columnHelper = createCubbyColumnHelper<ProductTreeRow>();
 // declared column hides itself through `display.listHidden`.
 // A function, not a module-level const: entity-display imports the list renderers
 // that import this module, so evaluating it at load hits the import cycle.
-const productInitialColumnVisibility = () => ({
+const productInitialColumnVisibility = (queryClient: QueryClient) => ({
   components: false,
-  ...entityListHiddenColumns("product"),
+  ...entityListHiddenColumns(queryClient, "product"),
 });
 
 function useProductFilterOptions() {
+  const [active, setActive] = useState<Record<string, boolean>>({});
+  const activate = useCallback((key: string) => {
+    setActive((current) =>
+      current[key] ? current : { ...current, [key]: true },
+    );
+  }, []);
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
-  const { options: tagOptions } = useTagOptions("product");
-  const { categories } = useProductCategories();
-  const externalIdSourceOptionsQuery = useQuery(
-    productOperations.externalIdSourceOptions.queryOptions(),
+  const { options: tagOptions, isLoading: tagsLoading } = useTagOptions(
+    "product",
+    active.tags === true,
   );
+  const { categories, isLoading: categoriesLoading } = useProductCategories(
+    active.productCategories === true ||
+      active.productCategoryFamilies === true,
+  );
+  const externalIdSourceOptionsQuery = useQuery({
+    ...productOperations.externalIdSourceOptions.queryOptions(),
+    enabled: active.externalIdSources === true,
+  });
   const externalIdSourceOptions = useMemo<PickerOption[]>(
     () =>
       externalIdSourceOptionsQuery.data?.map(({ source, count }) => ({
@@ -97,18 +112,20 @@ function useProductFilterOptions() {
   // The graph owns these picklists: their count is distinct matching
   // Products, and keying by the relation offers only Vendors/Purchases that
   // can match a Product.
-  const vendorOptionsQuery = useQuery(
-    relatedData.options.queryOptions({
+  const vendorOptionsQuery = useQuery({
+    ...relatedData.options.queryOptions({
       relationKey: "product.vendors",
       limit: 100,
     }),
-  );
-  const purchaseOptionsQuery = useQuery(
-    relatedData.options.queryOptions({
+    enabled: active.productVendors === true,
+  });
+  const purchaseOptionsQuery = useQuery({
+    ...relatedData.options.queryOptions({
       relationKey: "product.purchases",
       limit: 100,
     }),
-  );
+    enabled: active.productPurchases === true,
+  });
   const vendorOptions = useMemo<PickerOption[]>(
     () =>
       vendorOptionsQuery.data?.map(({ id, label, count }) => ({
@@ -127,7 +144,7 @@ function useProductFilterOptions() {
       })) ?? NO_FILTER_OPTIONS,
     [purchaseOptionsQuery.data],
   );
-  return useFilterOptions({
+  const options = {
     tags: tagOptions,
     productCategories: treePickerItems(categories, {
       idOf: (category) => category.id,
@@ -157,7 +174,29 @@ function useProductFilterOptions() {
     productVendors: vendorOptions,
     productPurchases: purchaseOptions,
     externalIdSources: externalIdSourceOptions,
-  });
+  };
+  return useFilterOptions(
+    Object.fromEntries(
+      Object.entries(options).map(([key, options]) => [
+        key,
+        {
+          options,
+          onActivate: () => activate(key),
+          isLoading:
+            active[key] === true &&
+            (key === "tags"
+              ? tagsLoading
+              : key === "externalIdSources"
+                ? externalIdSourceOptionsQuery.isFetching
+                : key === "productVendors"
+                  ? vendorOptionsQuery.isFetching
+                  : key === "productPurchases"
+                    ? purchaseOptionsQuery.isFetching
+                    : categoriesLoading),
+        },
+      ]),
+    ),
+  );
 }
 
 export const productListOverride = defineListOverride<
@@ -166,6 +205,8 @@ export const productListOverride = defineListOverride<
   ProductListItem
 >({
   use() {
+    const queryClient = useQueryClient();
+    useEntityMetadata("product");
     const filterOptions = useProductFilterOptions();
     const updateProductMutation = useUpdateMutation({
       mutationFn: entityMutationOptionsFactory("product", "update"),
@@ -335,6 +376,7 @@ export const productListOverride = defineListOverride<
           place("categoryId");
           add(
             createSingleEntityInlineLinkColumn(
+              queryClient,
               columnHelper,
               "ingredient",
               "ingredient",
@@ -345,6 +387,7 @@ export const productListOverride = defineListOverride<
                 mobile: { slot: "meta", priority: 45, interactive: true },
                 enableSorting: true,
                 provenance: relationshipFieldProvenance(
+                  queryClient,
                   "product",
                   "ingredient",
                   "reference",
@@ -402,7 +445,11 @@ export const productListOverride = defineListOverride<
                 },
                 enableSorting: true,
                 mobile: { slot: "meta", priority: 40, interactive: true },
-                provenance: relationshipFieldProvenance("product", "inventory"),
+                provenance: relationshipFieldProvenance(
+                  queryClient,
+                  "product",
+                  "inventory",
+                ),
                 onQuickEdit: (product) => setQuickEditProductId(product.id),
                 inlineEdit: {
                   SearchProvider: (props) => {
@@ -439,7 +486,7 @@ export const productListOverride = defineListOverride<
           place("expenseCount");
           rest();
         }),
-      [createInventory, updateInventory, updateProduct],
+      [createInventory, queryClient, updateInventory, updateProduct],
     );
 
     // Kits on the currently loaded pages, fetched for the whole page rather
@@ -479,9 +526,9 @@ export const productListOverride = defineListOverride<
         deletable: true as const,
         filterOptions,
         nameEditable,
-        initialColumnVisibility: productInitialColumnVisibility(),
+        initialColumnVisibility: productInitialColumnVisibility(queryClient),
       }),
-      [filterOptions, nameEditable],
+      [filterOptions, nameEditable, queryClient],
     );
 
     return {

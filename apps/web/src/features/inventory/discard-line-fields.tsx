@@ -21,7 +21,7 @@ import {
  * discard-line caller to remember.
  */
 import { PickerField } from "~/entity/forms/picker-field";
-import { tradeOptions } from "~/entity/presentation/trade-options";
+import { useTradeOptions } from "~/entity/presentation/trade-options";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 
 import { PlainDateField, UnifiedTextField } from "../../ui/forms/form-utils";
@@ -47,6 +47,7 @@ export function DiscardLineFields<TFieldValues extends DiscardLineFieldValues>({
   productName?: string;
   receiptHandler?: { current: ((recordId: string) => Promise<void>) | null };
 }) {
+  const tradeOptions = useTradeOptions();
   // SAFETY: `TFieldValues extends DiscardLineFieldValues` guarantees `date`
   // is a `string | null` path; the generic form helpers can't see that from
   // a type parameter, only from a concrete one.

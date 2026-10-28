@@ -311,7 +311,7 @@ export async function rosterSuggestionTargets(
       );
     const items = z.array(sweepListRowSchema).parse(listed.items);
     rowsSeen += items.length;
-    totalCount = listed.meta.totalCount;
+    totalCount = z.number().parse(listed.meta.totalCount);
     const recordIds = await resolveLiveShortcodes(
       db,
       items.map((row) => row.id),

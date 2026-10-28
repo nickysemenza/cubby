@@ -22,6 +22,7 @@ import type {
 } from "@cubby/schemas/purchase";
 import { and, asc, count, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { z } from "zod";
 
 import { comparePlainDatesDescending } from "~/lib/household-date";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -43,7 +44,9 @@ import {
   getProductCoverImageUrlsByProductIds,
   pageProductRelationTargets,
 } from "~/server/domains/product/repo/crud";
-import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
+import { storedProductPrice } from "~/server/domains/product/repo/pricing";
+import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
+import { loadStoredProductDisplay } from "~/server/domains/product/repo/stored-display";
 import { pagePurchaseRelationTargets } from "~/server/domains/purchase/repo/purchase";
 import {
   type RelationListPageInput,
@@ -217,6 +220,8 @@ export async function listPurchaseProducts(
     productCode: product.shortcode,
     productName: product.name,
     brandName: productBrandNameSql(product.brandId),
+    price: product.price,
+    service: serviceCategorySql(sql`${product.categoryId}`),
   };
 
   const [linkRows, expenseRows] = await Promise.all([
@@ -284,8 +289,8 @@ export async function listPurchaseProducts(
   );
 
   const productIds = rows.map((row) => row.productId);
-  const [prices, coverImageUrls, componentCounts] = await Promise.all([
-    loadEffectiveProductPricesById(db, productIds),
+  const [display, coverImageUrls, componentCounts] = await Promise.all([
+    loadStoredProductDisplay(db, productIds),
     getProductCoverImageUrlsByProductIds(db, productIds),
     loadComponentCountsByProductId(dbc, productIds),
   ]);
@@ -294,7 +299,15 @@ export async function listPurchaseProducts(
     productId: parseShortcodeFor("product", row.productCode),
     productName: row.productName,
     brandName: row.brandName,
-    price: prices.get(row.productId) ?? null,
+    price: storedProductPrice(display.stored, {
+      id: row.productId,
+      price: row.price,
+      service: row.service,
+    }),
+    displayFacts: {
+      available: display.facts.get(row.productId)?.value != null,
+      stale: display.facts.get(row.productId)?.stale ?? false,
+    },
     coverImageUrl: coverImageUrls.get(row.productId) ?? null,
     source: row.source,
     linkAttachedAt: row.linkAttachedAt,
@@ -439,7 +452,7 @@ async function selectPairPage(
         [sql`${purchase.date} DESC NULLS LAST`, asc(purchase.id)],
         page,
       );
-  return { items: selected.data, totalCount: selected.count };
+  return { items: selected.data, totalCount: z.number().parse(selected.count) };
 }
 
 export async function listPurchaseProductsPage(

@@ -1,6 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
+
+import { renderWithEditorMetadata as render } from "#web/tests/editor-metadata.fixtures.ts";
 
 import {
   FinancialSettlementStatus,

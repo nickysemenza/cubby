@@ -11,11 +11,13 @@ import type {
 } from "./entities/declarations.ts";
 import {
   ARTIFACT_MANIFEST,
+  generatedHeader,
   removeExtraArtifacts,
   writeArtifacts,
 } from "./artifacts.ts";
 import { EntityDeclarationError } from "./entities/source.ts";
 import { renderShortcodeRegistryArtifacts } from "./entities/shortcode-registry.ts";
+import { renderRecord } from "./entities/render/record.ts";
 
 // Traversable relationship provenance kinds; the schema module itself
 // imports generated files, which do not exist yet when this validation runs.
@@ -143,6 +145,18 @@ const main = async () => {
     ...renderSearchArtifacts(entities),
     ...renderTimelineArtifacts(entities),
     ...renderBrowserRouteArtifacts(entities),
+  ]);
+  // Detector schemas depend on the entity artifacts above. Emit their lean
+  // browser classification only after those canonical schemas can initialize.
+  const { PROBLEM_CLASS } = await import("@cubby/schemas/problems");
+  await settle([
+    {
+      relativePath:
+        "packages/schemas/src/generated/problem-classification.gen.ts",
+      source:
+        generatedHeader +
+        renderRecord({ name: "PROBLEM_CLASS", entries: PROBLEM_CLASS }),
+    },
   ]);
   const missingRoutes = missingBrowserRouteFiles(entities);
   if (missingRoutes.length > 0) {

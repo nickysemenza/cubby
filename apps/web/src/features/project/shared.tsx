@@ -1,6 +1,7 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ProjectStatus, TaskStatus } from "@cubby/schemas/project";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
+import { type QueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { z } from "zod";
 
@@ -60,6 +61,7 @@ const vendorIdFilterFn: FilterFn<ExpenseOut> = (row, columnId, filterValue) =>
  * uses id-valued options supplied by each list surface.
  */
 export function expenseVendorColumn(
+  queryClient: QueryClient,
   helper: ColumnHelper<ExpenseOut>,
   save: (vendor: string | null, expense: ExpenseOut) => Promise<void>,
   opts?: {
@@ -96,6 +98,7 @@ export function expenseVendorColumn(
         className: opts?.asPurchase ? "w-56" : "w-40",
         mobile: opts?.mobile,
         filterConfig: manifestFilterConfig(
+          queryClient,
           "expense",
           opts?.id ?? "vendor",
           opts?.vendorOptions ? { vendor: opts.vendorOptions } : undefined,
@@ -161,6 +164,7 @@ export function expenseVendorColumn(
 
 /** Presence-filtered order id; its link scopes through the unique Purchase id. */
 export function expenseOrderIdColumn(
+  queryClient: QueryClient,
   helper: ColumnHelper<ExpenseOut>,
   save: (orderId: string | null, expense: ExpenseOut) => Promise<void>,
   opts?: { mobile?: MobileColumnMeta },
@@ -170,7 +174,7 @@ export function expenseOrderIdColumn(
     placeholder: "Vendor order #",
     className: "w-32",
     mobile: opts?.mobile,
-    filterConfig: manifestFilterConfig("expense", "orderId"),
+    filterConfig: manifestFilterConfig(queryClient, "expense", "orderId"),
     trigger: "pencil",
     renderValue: (v, expense) => {
       const effectiveExpenseOrderUrl = expense.orderUrl;

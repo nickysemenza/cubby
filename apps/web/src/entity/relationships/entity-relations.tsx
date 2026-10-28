@@ -7,7 +7,7 @@ import {
   type EntityGraphNode,
   type EntityGraphOutput,
 } from "@cubby/schemas/entity-graph";
-import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { allEntities, entityRoster } from "@cubby/schemas/entity-roster";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
@@ -25,6 +25,7 @@ import {
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { useEntityMetadata } from "~/entity/metadata";
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { formatCurrency } from "~/lib/number-format";
@@ -63,10 +64,7 @@ const DEPTH_OPTIONS: readonly PickerOption[] = [
   { value: "4", label: "4" },
 ];
 export function supportsEntityGraph(entity: Entity) {
-  return (
-    entityManifest[entity].dbTable !== null &&
-    "shortcodePrefix" in entityManifest[entity]
-  );
+  return entityRoster[entity].graph;
 }
 
 const ENTITY_KIND_OPTIONS: readonly PickerOption[] = [
@@ -887,10 +885,11 @@ function graphFacts(node: EntityGraphNode): string[] {
     ? [`${quantity}${unit ? ` ${unit}` : ""}`, ...values]
     : values;
 }
-function graphSourceLabel(edge: EntityGraphEdge) {
-  const relationship = entityManifest[
-    edge.source.entityKind
-  ].relationships.find((candidate) => candidate.key === edge.relationshipKey);
+function GraphSourceLabel({ edge }: { edge: EntityGraphEdge }) {
+  const metadata = useEntityMetadata(edge.source.entityKind);
+  const relationship = metadata.descriptor.relationships.find(
+    (candidate) => candidate.key === edge.relationshipKey,
+  );
   return (
     relationship?.sources.find((source) => source.key === edge.sourceKey)
       ?.label ??
@@ -922,7 +921,7 @@ function EdgeInspector({
         {edge.source.entityId} → {edge.target.entityId}
       </p>
       <p className="text-xs text-muted-foreground">
-        Evidence: {graphSourceLabel(edge)}
+        Evidence: <GraphSourceLabel edge={edge} />
         {edge.provenance.length ? ` · ${edge.provenance.join(" · ")}` : ""}
       </p>
     </Panel>

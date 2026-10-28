@@ -7,7 +7,7 @@ import {
 } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
@@ -16,6 +16,7 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
+import type { QueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { uniqBy } from "es-toolkit";
@@ -90,7 +91,7 @@ import type {
   CubbyColumnDef,
   CubbyColumnHelper as ColumnHelper,
 } from "../../ui/data-table/table-features";
-import { declaredColumnExplanation } from "../../ui/data-table/table-meta";
+import type { ColumnExplanation } from "../../ui/data-table/table-meta";
 import {
   attachCubbyColumnMeta,
   type FilterConfig,
@@ -257,15 +258,14 @@ export function createNameColumn<T extends BaseRow>(
     footer: (info: {
       table: {
         getFilteredRowModel: () => { rows: unknown[] };
-        options: { meta?: { serverTotals?: { totalCount: number } } };
+        options: { meta?: { serverTotals?: { totalCount?: number } } };
       };
     }) => {
       // Prefer the server's full-filtered-set count — client rows only cover
       // the loaded pages on server-paginated/infinite tables.
-      const count =
-        info.table.options.meta?.serverTotals?.totalCount ??
-        info.table.getFilteredRowModel().rows.length;
-      return `${count} ${count === 1 ? singularLabel : pluralLabel}`;
+      const population = info.table.options.meta?.serverTotals?.totalCount;
+      const count = population ?? info.table.getFilteredRowModel().rows.length;
+      return `${count} ${population === undefined ? "loaded " : ""}${count === 1 ? singularLabel : pluralLabel}`;
     },
     cell: (info: CellContext<T, string>) => {
       // NOT `String(info.getValue())` — that renders a null name as the literal
@@ -279,7 +279,7 @@ export function createNameColumn<T extends BaseRow>(
       const suffix = options?.nameSuffix?.(info.row.original);
       const recordEmoji = recordEmojiSchema.parse(info.row.original).emoji;
       const prefix =
-        recordEmoji || entitySummary[entity].recordIconEntityField ? (
+        recordEmoji || entityRoster[entity].recordIconEntityField ? (
           <RecordEmoji
             entity={entity}
             emoji={recordEmoji}
@@ -467,6 +467,7 @@ export function createTimestampColumn<T extends BaseRow>(
 }
 
 interface CreateImageColumnOptions<T> {
+  explanation?: ColumnExplanation;
   /** Entity type for colored placeholder icon when no image */
   entity?: Entity;
   /** Per-row placeholder entity for a table whose rows name different
@@ -564,9 +565,7 @@ export function createImageColumn<T extends object>(
     // the 32px row; layout normalization adds any explanation rail beside it.
     meta: attachCubbyColumnMeta<T>({
       provenance: options.provenance,
-      explanation: entity
-        ? declaredColumnExplanation(entity, options.id ?? "image")
-        : undefined,
+      explanation: options.explanation,
       entityColumnRole: "image",
       entityRefs: options.imageRef
         ? (row: T) => {
@@ -1243,6 +1242,7 @@ const singleEntitySchemas = {
 type SingleEntityAdapter = {
   /** Validates a row's relation summary once before constructing its UI data. */
   parse: (
+    queryClient: QueryClient,
     value: unknown,
   ) => { item: ComboboxItem<string> | null; link: ReactNode } | null;
   /** A collection parser derived from this adapter's singular schema. */
@@ -1253,7 +1253,7 @@ type SingleEntityAdapter = {
 function defineSingleEntityAdapter<TData>(
   schema: z.ZodType<TData>,
   options: {
-    buildItem?: (data: TData) => ComboboxItem<string>;
+    buildItem?: (queryClient: QueryClient, data: TData) => ComboboxItem<string>;
     renderLink: (data: TData) => ReactNode;
     renderCollection?: (items: TData[]) => ReactNode;
     collectionId?: (item: TData) => string;
@@ -1263,11 +1263,11 @@ function defineSingleEntityAdapter<TData>(
   const collectionSchema = z.array(schema);
   return {
     SearchProvider: options.SearchProvider,
-    parse: (value) => {
+    parse: (queryClient, value) => {
       const parsed = schema.safeParse(value);
       if (!parsed.success) return null;
       return {
-        item: options.buildItem?.(parsed.data) ?? null,
+        item: options.buildItem?.(queryClient, parsed.data) ?? null,
         link: options.renderLink(parsed.data),
       };
     },
@@ -1293,7 +1293,8 @@ function defineSingleEntityAdapter<TData>(
  */
 const singleEntityAdapters = {
   ingredient: defineSingleEntityAdapter(ingredientInlineSchema, {
-    buildItem: (data) => buildRecordComboboxItem("ingredient", data),
+    buildItem: (queryClient, data) =>
+      buildRecordComboboxItem(queryClient, "ingredient", data),
     renderLink: (data) => (
       <CanonicalSingleEntityLink entity="ingredient" data={data} />
     ),
@@ -1310,7 +1311,8 @@ const singleEntityAdapters = {
     SearchProvider: referenceEntitySearch("ingredient"),
   }),
   product: defineSingleEntityAdapter(productInlineSchema, {
-    buildItem: (data) => buildRecordComboboxItem("product", data),
+    buildItem: (queryClient, data) =>
+      buildRecordComboboxItem(queryClient, "product", data),
     renderLink: (data) => (
       <CanonicalSingleEntityLink entity="product" data={data} />
     ),
@@ -1327,7 +1329,8 @@ const singleEntityAdapters = {
     SearchProvider: referenceEntitySearch("product"),
   }),
   recipe: defineSingleEntityAdapter(recipeInlineSchema, {
-    buildItem: (data) => buildRecordComboboxItem("recipe", data),
+    buildItem: (queryClient, data) =>
+      buildRecordComboboxItem(queryClient, "recipe", data),
     renderLink: (data) => (
       <CanonicalSingleEntityLink entity="recipe" data={data} />
     ),
@@ -1344,7 +1347,8 @@ const singleEntityAdapters = {
     SearchProvider: referenceEntitySearch("recipe"),
   }),
   location: defineSingleEntityAdapter(locationInlineSchema, {
-    buildItem: (data) => buildRecordComboboxItem("location", data),
+    buildItem: (queryClient, data) =>
+      buildRecordComboboxItem(queryClient, "location", data),
     renderLink: (data) => (
       <CanonicalSingleEntityLink entity="location" data={data} />
     ),
@@ -1368,24 +1372,27 @@ const singleEntityAdapters = {
 } satisfies Record<SingleEntityColumnData["entity"], SingleEntityAdapter>;
 
 function parseSingleEntity(
+  queryClient: QueryClient,
   entity: SingleEntityColumnData["entity"],
   data: Exclude<SingleEntityColumnData["data"], null>,
 ) {
-  return singleEntityAdapters[entity].parse(data);
+  return singleEntityAdapters[entity].parse(queryClient, data);
 }
 
 function buildSingleEntityItem(
+  queryClient: QueryClient,
   entity: EditableSingleEntity,
   data: Exclude<SingleEntityColumnData["data"], null>,
 ) {
-  return parseSingleEntity(entity, data)?.item ?? null;
+  return parseSingleEntity(queryClient, entity, data)?.item ?? null;
 }
 
 function renderSingleEntityLink(
+  queryClient: QueryClient,
   entity: SingleEntityColumnData["entity"],
   data: Exclude<SingleEntityColumnData["data"], null>,
 ) {
-  return parseSingleEntity(entity, data)?.link ?? <NoneValue />;
+  return parseSingleEntity(queryClient, entity, data)?.link ?? <NoneValue />;
 }
 
 /**
@@ -1417,6 +1424,7 @@ export function createSingleEntityInlineLinkColumn<
   K extends PropertyKey,
   T extends object,
 >(
+  queryClient: QueryClient,
   columnHelper: ColumnHelper<T>,
   accessor: K,
   entity: TEntity,
@@ -1450,7 +1458,7 @@ export function createSingleEntityInlineLinkColumn<
           (row) => {
             const item = valueFor(row);
             if (!item) return null;
-            return buildSingleEntityItem(entity, item);
+            return buildSingleEntityItem(queryClient, entity, item);
           },
           editableConfig
             ? (row, id) => editableConfig.onSave(id, row)
@@ -1491,7 +1499,9 @@ export function createSingleEntityInlineLinkColumn<
         const SearchProvider = singleEntityAdapters[entity].SearchProvider;
         if (!SearchProvider) return <NoneValue />;
         const row = info.row.original;
-        const current = item ? buildSingleEntityItem(entity, item) : null;
+        const current = item
+          ? buildSingleEntityItem(queryClient, entity, item)
+          : null;
         const suggestConfig = editable.suggest;
         const suggest = suggestConfig
           ? {
@@ -1499,8 +1509,11 @@ export function createSingleEntityInlineLinkColumn<
               entity: suggestConfig.entity,
               targets: [suggestConfig.field],
               basis: fieldSuggestionBasisFromRecord(
+                queryClient,
                 suggestConfig.entity,
-                suggestTargetsFor(suggestConfig.entity, [suggestConfig.field]),
+                suggestTargetsFor(queryClient, suggestConfig.entity, [
+                  suggestConfig.field,
+                ]),
                 row,
               ),
             }
@@ -1528,11 +1541,11 @@ export function createSingleEntityInlineLinkColumn<
               // (`id in item` is a type guard only — usda-food, the one
               // id-less member, can't reach the editable branch.)
               const currentItem = item
-                ? buildSingleEntityItem(entity, item)
+                ? buildSingleEntityItem(queryClient, entity, item)
                 : null;
               const currentId = currentItem?.id ?? null;
               if (item && v.id === currentId) {
-                return renderSingleEntityLink(entity, item);
+                return renderSingleEntityLink(queryClient, entity, item);
               }
               return <span className="truncate">{v.name}</span>;
             }}
@@ -1541,7 +1554,7 @@ export function createSingleEntityInlineLinkColumn<
       }
 
       if (!item) return <NoneValue />;
-      return renderSingleEntityLink(entity, item);
+      return renderSingleEntityLink(queryClient, entity, item);
     },
   });
 }

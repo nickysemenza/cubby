@@ -1,6 +1,10 @@
 import { productCategoryFeature } from "./product-category-fields";
 import { positiveMoneyNullable } from "./money";
-import { productQuantityLedgerOut } from "./product-read-fields";
+import {
+  productQuantityLedgerOut,
+  productPickerOnHand,
+  productDisplayFactsState,
+} from "./product-read-fields";
 /** Repository/compiler projections. Public entity reads use generated field envelopes. */
 import productDefinition from "./entity-definitions/00-product.entity";
 import { z } from "zod";
@@ -69,12 +73,12 @@ export const rawProductResolveCandidate = z.object({
   coverImageUrl: z.string().nullable(),
 });
 export const rawProductPickerItem = rawProductResolveCandidate.extend({
-  quantityLedger: productQuantityLedgerOut,
-  onHand: z.discriminatedUnion("state", [
-    z.object({ state: z.literal("none") }),
-    z.object({ state: z.literal("counted"), units: z.number() }),
-    z.object({ state: z.literal("mixed") }),
+  quantityLedger: productQuantityLedgerOut.nullable(),
+  onHand: z.union([
+    productPickerOnHand,
+    z.object({ state: z.literal("unavailable") }),
   ]),
+  displayFacts: productDisplayFactsState,
 });
 export type RawProductPickerItem = z.output<typeof rawProductPickerItem>;
 export type RawProductResolveCandidate = z.output<

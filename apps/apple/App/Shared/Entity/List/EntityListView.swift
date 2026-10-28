@@ -605,7 +605,8 @@ struct EntityListView: View {
     }
 
     private func countSummary(_ meta: ListPageMeta) -> String {
-        let count = ValueFormat.count(Double(meta.totalCount))
+        guard let totalCount = meta.totalCount else { return "Count unavailable" }
+        let count = ValueFormat.count(Double(totalCount))
         if model?.resultMembership == .unresolved { return "\(count) unresolved" }
         if (meta.unresolvedCount ?? 0) > 0 { return "\(count) known" }
         return count
@@ -1775,7 +1776,7 @@ private struct EntityTablePreviewHost: View {
         let source = EntityListPageSource(id: "synthetic-table-preview") { page in
             ListPage(
                 items: rows,
-                meta: ListPageMeta(pageIndex: page, pageSize: 50, totalCount: rows.count))
+                meta: ListPageMeta(pageIndex: page, pageSize: 50, totalCount: rows.count, hasNextPage: false))
         }
         _appModel = State(initialValue: appModel)  // state-init-ok: constant synthetic preview fixture
         _model = State(  // state-init-ok: constant synthetic preview fixture

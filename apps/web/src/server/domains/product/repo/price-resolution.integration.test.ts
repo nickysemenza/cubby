@@ -83,6 +83,9 @@ describe("Product valuation price resolution on canonical reads", () => {
         productQuantity: 4,
       }),
     );
+    const pendingPrice = priceRead.parse(await readProduct(ctx.db, product.id));
+    expect(pendingPrice.pricing.derivedPrice).toBeNull();
+    await drainStoredDerived(ctx.db);
     const mixed = priceRead.parse(await readProduct(ctx.db, product.id));
     expect(mixed.pricing.derivedPrice).toBe(5);
   });
@@ -105,6 +108,7 @@ describe("Product valuation price resolution on canonical reads", () => {
         productQuantity: 0.41,
       }),
     );
+    await drainStoredDerived(ctx.db);
     const detail = await readProduct(ctx.db, product.id);
     expect(detail?.pricing).toMatchObject({
       knownUnitCount: 0.41,
@@ -142,6 +146,7 @@ describe("Product valuation price resolution on canonical reads", () => {
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
     const read = async () => {
+      await drainStoredDerived(ctx.db);
       const detail = priceRead.parse(await readProduct(ctx.db, product.id));
       const list = await listProductsFixture(ctx.db, {}, [], {
         pageIndex: 0,

@@ -3,6 +3,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductFixture as createProduct,
   makeExpenseInput,
@@ -52,6 +53,7 @@ describe("Product ownership evidence scope", () => {
     );
     await movement(part.id, "2025-01-01", 100, 1);
     await movement(kit.id, "2025-02-01", -80, -1);
+    await drainStoredDerived(ctx.db);
     const result = await getProductWithFood(ctx.db, food, part.entityId);
     expect(result.quantityLedger.expectedQuantity).toBe(0);
     expect(result.ownershipEvidence).toMatchObject({
@@ -80,6 +82,7 @@ describe("Product ownership evidence scope", () => {
     await movement(part.id, "2025-01-01", 100, 1);
     await movement(part.id, "2025-02-01", -80, -1);
     await movement(kit.id, "2025-03-01", 120);
+    await drainStoredDerived(ctx.db);
     const result = await getProductWithFood(ctx.db, food, part.entityId);
     expect(result.quantityLedger.expectedQuantity).toBe(0);
     expect(result.ownershipEvidence).toMatchObject({
@@ -95,11 +98,13 @@ describe("Product ownership evidence scope", () => {
       ctx.actor,
     );
     await movement(part.id, "2025-01-01", 100, 1);
+    await drainStoredDerived(ctx.db);
     expect(
       (await getProductWithFood(ctx.db, food, part.entityId)).ownershipEvidence
         .state,
     ).toBe("owned");
     await movement(part.id, "2025-02-01", -80, -1);
+    await drainStoredDerived(ctx.db);
     expect(
       (await getProductWithFood(ctx.db, food, part.entityId)).ownershipEvidence,
     ).toMatchObject({ state: "exited", exitedAt: "2025-02-01" });

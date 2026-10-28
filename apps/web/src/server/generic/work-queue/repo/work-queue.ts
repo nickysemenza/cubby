@@ -14,7 +14,6 @@ import { oneOrManyValues } from "@cubby/schemas/pagination";
 import type { ProjectAttentionReport } from "@cubby/schemas/project";
 import {
   workExecutor,
-  workQueueGapChecks,
   workQueueGapViews,
   workQueueInput,
   workQueueList,
@@ -23,6 +22,7 @@ import {
   type WorkQueueInput,
   type WorkQueueRow,
 } from "@cubby/schemas/work-queue";
+import { workQueueGapChecks } from "@cubby/schemas/work-queue-policy";
 import { parseShortcode } from "@cubby/shared";
 import { and, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { z } from "zod";

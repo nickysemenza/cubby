@@ -7,15 +7,16 @@ import {
   onDetailSurface,
   type DetailSummarySlot,
 } from "@cubby/schemas/entity-detail-summary";
-import {
-  entityFieldModels,
-  type EntityFieldModel,
-} from "@cubby/schemas/entity-fields";
-import type { ReportBlock } from "@cubby/schemas/entity-report";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
+import type { ReportSlot, ReportBlock } from "@cubby/schemas/entity-report";
 import { summaryReportProjection } from "@cubby/schemas/entity-summary-report";
 import { fieldDecisionOf } from "@cubby/schemas/field-envelope";
-import { useQueries } from "@tanstack/react-query";
+import {
+  useQueries,
+  useSuspenseQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 
@@ -27,6 +28,7 @@ import {
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { fieldResolutionFor } from "~/entity/fields/field-resolution";
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { ConnectionPaths } from "~/entity/relationships/connection-paths";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
@@ -34,6 +36,8 @@ import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { QuerySection } from "~/ui/feedback/query-section";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -51,12 +55,14 @@ type Field = EntityFieldModel["fields"][number];
  * the record's field sections where the member can still fill it in.
  */
 export function isEmptySummaryCell<E extends GenericDetailEntity>(
+  queryClient: QueryClient,
   entity: E,
   record: DetailRecordOf<E>,
   slot: DetailSummarySlot,
 ): boolean {
   if (slot.kind !== "fields" || slot.fields.length !== 1) return false;
-  const fields: readonly Field[] = entityFieldModels[entity].fields;
+  const fields: readonly Field[] = entityMetadata(queryClient, entity).fields
+    .fields;
   const field = fields.find((field) => field.key === slot.fields[0]);
   return (
     field !== undefined &&
@@ -128,6 +134,7 @@ export function CompactSummaryReport({
   blocks: readonly ReportBlock[];
   title?: string;
 }) {
+  const hydrated = useHydrated();
   const projection = summaryReportProjection(blocks);
   const [expanded, setExpanded] = useState(false);
   const preview = projection.blocks.filter(
@@ -281,6 +288,7 @@ export function CompactSummaryReport({
             variant="ghost"
             size="sm"
             aria-expanded={expanded}
+            disabled={!hydrated}
             onClick={() => setExpanded((value) => !value)}
           >
             {expanded ? "Show less" : "Show more"}
@@ -300,20 +308,24 @@ export function DetailSummary<E extends GenericDetailEntity>({
   record: DetailRecordOf<E>;
   compact?: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const metadata = useEntityMetadata(entity);
+  const hydrated = useHydrated();
   const declared: readonly DetailSummarySlot[] =
-    entitySummary[entity].detail.summary;
+    metadata.summary.detail.summary;
   const slots = declared.filter((slot) => onDetailSurface(slot, "web"));
   const id = record.id;
   const [showContext, setShowContext] = useState(false);
   const records = slots.filter((slot) => slot.kind === "records");
   const recordQueries = useQueries({
-    queries: records.map((slot) =>
-      entityGraph.connectedRecords.queryOptions({
+    queries: records.map((slot) => ({
+      ...entityGraph.connectedRecords.queryOptions({
         source: { entityKind: entity, entityId: id },
         viewKey: slot.viewKey,
         limit: 2,
       }),
-    ),
+      enabled: false,
+    })),
   });
   const reports = slots.filter((slot) => slot.kind === "report");
   const reportInputs = reports.length
@@ -323,16 +335,14 @@ export function DetailSummary<E extends GenericDetailEntity>({
     queries: reportInputs.map((input) => {
       const options: ReturnType<typeof entityReport.getMany.queryOptions> = {
         ...entityReport.getMany.queryOptions(input),
-        refetchInterval: (state) =>
-          state.state.data?.reports.some((entry) => entry.report.live)
-            ? LIVE_REPORT_POLL_MS
-            : false,
+        enabled: false,
       };
       return options;
     }),
   });
   const reportQuery = reportQueries[0];
-  const fields: readonly Field[] = entityFieldModels[entity].fields;
+  const fields: readonly Field[] = entityMetadata(queryClient, entity).fields
+    .fields;
   const fieldKeys = slots.flatMap((slot) =>
     slot.kind === "fields" ? slot.fields : [],
   );
@@ -398,7 +408,8 @@ export function DetailSummary<E extends GenericDetailEntity>({
         {slots.map((slot) => {
           let content: ReactNode;
           if (slot.kind === "fields") {
-            if (isEmptySummaryCell(entity, record, slot)) return null;
+            if (isEmptySummaryCell(queryClient, entity, record, slot))
+              return null;
             content = (
               <dl className="space-y-1">
                 {slot.fields.map((key) => {
@@ -410,7 +421,7 @@ export function DetailSummary<E extends GenericDetailEntity>({
                       record,
                       field.key,
                     ) === null
-                      ? overrides[field.key]?.(record)?.value
+                      ? overrides[field.key]?.(record, queryClient)?.value
                       : undefined;
                   const allocated =
                     (fieldResolutionFor(record, field.key)
@@ -452,7 +463,12 @@ export function DetailSummary<E extends GenericDetailEntity>({
                             field.key,
                           ) === null
                             ? "Not recorded"
-                            : renderDetailFieldValue(entity, record, field))}
+                            : renderDetailFieldValue(
+                                queryClient,
+                                entity,
+                                record,
+                                field,
+                              ))}
                       </dd>
                     </div>
                   );
@@ -461,100 +477,43 @@ export function DetailSummary<E extends GenericDetailEntity>({
             );
           } else if (slot.kind === "chart")
             content = (
-              <MonthlySpendChart
-                entity={entity}
-                id={id}
-                viewKey={slot.viewKey}
-                compact
-              />
+              <QuerySection
+                title={slot.title}
+                resetKey={`${id}:${slot.id}`}
+                fallback={<Skeleton className="h-12 w-full" />}
+              >
+                <MonthlySpendChart
+                  entity={entity}
+                  id={id}
+                  viewKey={slot.viewKey}
+                  compact
+                />
+              </QuerySection>
             );
           else if (slot.kind === "report") {
-            if (!reportQuery || reportQuery.isPending)
-              content = <Skeleton className="h-12 w-full" />;
-            else if (reportQuery.isError)
-              content = (
-                <ErrorDisplay
-                  error={reportQuery.error}
-                  title={slot.title}
-                  onRetry={() => void reportQuery.refetch()}
+            content = (
+              <QuerySection
+                title={slot.title}
+                resetKey={`${id}:${slot.id}`}
+                fallback={<Skeleton className="h-12 w-full" />}
+              >
+                <SummaryReport
+                  id={id}
+                  slot={slot}
+                  slots={reports.map((report) => report.slot)}
                 />
-              );
-            else {
-              const report = reportQuery.data.reports.find(
-                (report) => report.slot === slot.slot,
-              )?.report;
-              if (!report)
-                throw new Error(`Missing summary report ${slot.slot}`);
-              if (!report.blocks.length) return null;
-              content = (
-                <CompactSummaryReport
-                  blocks={report.blocks}
-                  title={slot.title}
-                />
-              );
-            }
+              </QuerySection>
+            );
           } else {
-            const query =
-              recordQueries[
-                records.findIndex((record) => record.id === slot.id)
-              ];
-            if (!query || query.isPending)
-              content = <Skeleton className="h-12 w-full" />;
-            else if (query.isError)
-              content = (
-                <ErrorDisplay
-                  error={query.error}
-                  title={slot.title}
-                  onRetry={() => void query.refetch()}
-                />
-              );
-            else {
-              if (!query.data.totalCount) return null;
-              content = (
-                <>
-                  <RecordList>
-                    {query.data.items.map((item) => (
-                      <RecordRow
-                        key={item.target.entityId}
-                        clip={false}
-                        stacked
-                        primary={
-                          isBrowserRoutedEntity(item.target.entityKind) ? (
-                            <EntityRefLink
-                              entity={item.target.entityKind}
-                              id={item.target.entityId}
-                              name={item.target.label}
-                              emoji={null}
-                            />
-                          ) : (
-                            item.target.label
-                          )
-                        }
-                        secondary={
-                          item.paths.some((path) => path.length > 2) ? (
-                            <ConnectionPaths paths={item.paths} compact />
-                          ) : null
-                        }
-                      />
-                    ))}
-                  </RecordList>
-                  {query.data.totalCount > query.data.items.length ? (
-                    <Link
-                      to="/connections"
-                      search={{
-                        source: entity,
-                        id,
-                        view: slot.viewKey,
-                        mode: "records",
-                      }}
-                      className="mt-2 inline-block text-link hover:underline"
-                    >
-                      View all {query.data.totalCount}
-                    </Link>
-                  ) : null}
-                </>
-              );
-            }
+            content = (
+              <QuerySection
+                title={slot.title}
+                resetKey={`${id}:${slot.id}`}
+                fallback={<Skeleton className="h-12 w-full" />}
+              >
+                <SummaryRecords entity={entity} id={id} slot={slot} />
+              </QuerySection>
+            );
           }
           return (
             <SummaryCell
@@ -562,7 +521,7 @@ export function DetailSummary<E extends GenericDetailEntity>({
               title={slot.title}
               hidden={secondary.has(slot.id) && !showContext}
             >
-              {content}
+              {secondary.has(slot.id) && !showContext ? null : content}
             </SummaryCell>
           );
         })}
@@ -572,6 +531,7 @@ export function DetailSummary<E extends GenericDetailEntity>({
               variant="ghost"
               size="sm"
               aria-expanded={showContext}
+              disabled={!hydrated}
               onClick={() => setShowContext((value) => !value)}
             >
               {showContext ? "Less context" : "More context"}
@@ -580,5 +540,116 @@ export function DetailSummary<E extends GenericDetailEntity>({
         ) : null}
       </div>
     </EntityDisplayImagesProvider>
+  );
+}
+
+function SummaryReport({
+  id,
+  slot,
+  slots,
+}: {
+  id: string;
+  slot: Extract<DetailSummarySlot, { kind: "report" }>;
+  slots: ReportSlot[];
+}) {
+  const query = useSuspenseQuery({
+    ...entityReport.getMany.queryOptions({ id, slots }),
+    refetchInterval: (state) =>
+      state.state.data?.reports.some((entry) => entry.report.live)
+        ? LIVE_REPORT_POLL_MS
+        : false,
+  });
+  const report = query.data.reports.find(
+    (report) => report.slot === slot.slot,
+  )?.report;
+  if (!report) throw new Error(`Missing summary report ${slot.slot}`);
+  if (!report.blocks.length && !query.error) return null;
+  return (
+    <>
+      {query.error ? (
+        <ErrorDisplay
+          error={query.error}
+          title={slot.title}
+          onRetry={() => {
+            void query.refetch();
+          }}
+        />
+      ) : null}
+      {report.blocks.length ? (
+        <CompactSummaryReport blocks={report.blocks} title={slot.title} />
+      ) : null}
+    </>
+  );
+}
+
+function SummaryRecords({
+  entity,
+  id,
+  slot,
+}: {
+  entity: GenericDetailEntity;
+  id: string;
+  slot: Extract<DetailSummarySlot, { kind: "records" }>;
+}) {
+  const query = useSuspenseQuery(
+    entityGraph.connectedRecords.queryOptions({
+      source: { entityKind: entity, entityId: id },
+      viewKey: slot.viewKey,
+      limit: 2,
+    }),
+  );
+  if (!query.data.totalCount && !query.error) return null;
+  return (
+    <>
+      {query.error ? (
+        <ErrorDisplay
+          error={query.error}
+          title={slot.title}
+          onRetry={() => {
+            void query.refetch();
+          }}
+        />
+      ) : null}
+      <RecordList>
+        {query.data.items.map((item) => (
+          <RecordRow
+            key={item.target.entityId}
+            clip={false}
+            stacked
+            primary={
+              isBrowserRoutedEntity(item.target.entityKind) ? (
+                <EntityRefLink
+                  entity={item.target.entityKind}
+                  id={item.target.entityId}
+                  name={item.target.label}
+                  emoji={null}
+                />
+              ) : (
+                item.target.label
+              )
+            }
+            secondary={
+              item.paths.some((path) => path.length > 2) ? (
+                <ConnectionPaths paths={item.paths} compact />
+              ) : null
+            }
+          />
+        ))}
+      </RecordList>
+      {query.data.totalCount > query.data.items.length ? (
+        <Link
+          to="/connections"
+          search={{
+            source: entity,
+            id,
+            view: slot.viewKey,
+            mode: "records",
+          }}
+          className="mt-2 inline-block text-link hover:underline"
+        >
+          View all {query.data.totalCount}
+        </Link>
+      ) : null}
+    </>
   );
 }

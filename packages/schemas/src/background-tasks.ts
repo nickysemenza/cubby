@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { searchableEntities } from "./entity-manifest";
+import { searchableEntities } from "./generated/entity-roster.gen";
 import { imageId, locationId, parseEntityRef } from "./identifiers";
 
 /** Domain admission inputs. Publishers persist Job intent; transport carries only a wake. */

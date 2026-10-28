@@ -4,6 +4,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
+import { getBackgroundDatabaseConnectionString } from "./cf-env";
 import { Database } from "./db/database";
 import {
   createDatabase,
@@ -86,8 +87,9 @@ export const withRequestDb = async <T>(
 };
 
 /**
- * Background work leases independent clients from the same bounded pools as
- * requests. A standalone client cannot isolate concurrent transactions by
+ * Background work leases independent clients through HYPERDRIVE_BACKGROUND
+ * inside a Worker; non-Worker tests/scripts use the supplied connection string.
+ * A standalone client cannot isolate concurrent transactions by
  * serializing individual statements. Close every opened pool when the awaited
  * invocation or Workflow step finishes; never carry clients across steps.
  */
@@ -95,10 +97,12 @@ export const withInvocationDb = async <T>(
   connectionString: string,
   fn: () => Promise<T>,
 ): Promise<T> => {
+  const invocationConnection =
+    getBackgroundDatabaseConnectionString() ?? connectionString;
   const holder: RequestDatabaseRuntimeScope = {
     connections: {
-      strong: connectionString,
-      boundedStale: connectionString,
+      strong: invocationConnection,
+      boundedStale: invocationConnection,
     },
     runtimes: {},
   };

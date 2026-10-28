@@ -2,6 +2,7 @@ import type { FinancialTransactionFilters } from "@cubby/schemas/financial-trans
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import { createEntityDisplayColumns } from "~/entity/display/entity-display";
@@ -9,6 +10,7 @@ import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import { entityListFor } from "~/entity/entity-list";
 import { useEntityList } from "~/entity/hooks/use-entity-list";
 import { useEntityFieldSave } from "~/entity/hooks/use-update-mutation";
+import { useEntityMetadata } from "~/entity/metadata";
 import { ListWorkbench } from "~/entity/table/list-workbench";
 import { formatCurrency } from "~/lib/number-format";
 import {
@@ -95,6 +97,8 @@ export function LinkedTransactions({
   onAddTransaction?: () => void;
   onEditTransaction?: (transaction: FinancialTransactionOut) => void;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("financialTransaction");
   const onSaveField = useEntityFieldSave("financialTransaction");
   const listQueryOptions = useCallback(
     (params: Parameters<LinkedTransactionsOperations["list"]>[0]) =>
@@ -119,6 +123,7 @@ export function LinkedTransactions({
     () =>
       createCubbyColumnCollection<FinancialTransactionOut>((add) => {
         createEntityDisplayColumns(
+          queryClient,
           "financialTransaction",
           helper,
           createCubbyColumnCollection<FinancialTransactionOut>((override) =>
@@ -171,7 +176,15 @@ export function LinkedTransactions({
           );
         }
       }),
-    [accountId, amounts, helper, onEditTransaction, onSaveField, purchaseId],
+    [
+      accountId,
+      amounts,
+      helper,
+      onEditTransaction,
+      onSaveField,
+      purchaseId,
+      queryClient,
+    ],
   );
   const list = useEntityList<
     FinancialTransactionOut,

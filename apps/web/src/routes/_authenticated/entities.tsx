@@ -133,7 +133,8 @@ function EntitiesRoute() {
         search: (previous) => ({
           ...searchSchema.parse(previous),
           ...filters,
-          recordsDirection: direction ?? previous.recordsDirection,
+          recordsDirection:
+            direction ?? searchSchema.parse(previous).recordsDirection,
           tab: "records",
         }),
       });

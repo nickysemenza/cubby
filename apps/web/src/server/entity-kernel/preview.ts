@@ -2,10 +2,8 @@ import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
-import {
-  basisValueOf,
-  requiresSuggestionReview,
-} from "@cubby/schemas/field-suggestion";
+import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy";
 import { z } from "zod";
 
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";

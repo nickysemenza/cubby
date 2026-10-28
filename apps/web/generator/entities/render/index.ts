@@ -1,5 +1,6 @@
 import type { ChildTableDeclaration } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
+import { renderEntityEditValidationArtifacts } from "./edit-validation.ts";
 import { renderFieldSchemaArtifacts } from "./field-schemas.ts";
 import { renderFieldEnvelopeArtifacts } from "./field-envelopes.ts";
 import { renderEntityMetadataArtifacts } from "./metadata.ts";
@@ -40,6 +41,7 @@ export const renderEntityArtifacts = (
   ...renderFieldEnvelopeArtifacts(entities),
   ...renderEntityReadArtifacts(entities),
   ...renderEntitySchemaArtifacts(entities),
+  ...renderEntityEditValidationArtifacts(entities),
   renderOptionGlyphs(entities),
   ...renderSwiftEntityCatalog(entities),
   ...renderStructuredValueSchemas(entities),

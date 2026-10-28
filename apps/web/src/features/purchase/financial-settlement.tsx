@@ -1,6 +1,6 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
@@ -14,6 +14,7 @@ import {
   type EntityEditDialogRequest,
 } from "~/entity/editing/entity-edit-dialog";
 import { formatFieldProvenance } from "~/entity/fields/field-provenance";
+import { useEntityMetadata } from "~/entity/metadata";
 import { formatCurrency } from "~/lib/number-format";
 import { TableCellWorkbench } from "~/ui/data-table/table-cell-workbench";
 import { Row, Stack } from "~/ui/layout";
@@ -24,26 +25,20 @@ import { LinkedTransactions } from "../finance/linked-transactions";
 import { MatchStatementButton } from "./match-statement";
 
 type FinancialPurchase = Pick<ListRowOf<"purchase">, "id" | "fields">;
-const settlementField = entityFieldModels.purchase.fields.find(
-  (field) => field.key === "financialReconciliation",
-);
-if (!settlementField?.provenance) {
-  throw new Error("Purchase financial settlement requires provenance");
-}
-const settlementProvenanceDescription = formatFieldProvenance(
-  settlementField.provenance,
-);
-
 export function FinancialSettlementStatus({
   purchase,
 }: {
   purchase: FinancialPurchase;
 }) {
+  const queryClient = useQueryClient();
+  useEntityMetadata("purchase");
   const settlement = fieldValueOf(purchase.fields.financialReconciliation);
   if (!settlement) return null;
-  const option = fieldEnumOptions("purchase", "financialReconciliation").find(
-    (candidate) => candidate.value === settlement.status,
-  );
+  const option = fieldEnumOptions(
+    queryClient,
+    "purchase",
+    "financialReconciliation",
+  ).find((candidate) => candidate.value === settlement.status);
   return (
     <EnumPill
       optionRole={option?.role}
@@ -121,6 +116,15 @@ export function FinancialSettlementCell({
 }: {
   purchase: FinancialPurchase;
 }) {
+  const metadata = useEntityMetadata("purchase");
+  const settlementField = metadata.fields.fields.find(
+    (field) => field.key === "financialReconciliation",
+  );
+  if (!settlementField?.provenance)
+    throw new Error("Purchase financial settlement requires provenance");
+  const settlementProvenanceDescription = formatFieldProvenance(
+    settlementField.provenance,
+  );
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [dialogRequest, setDialogRequest] =
     useState<EntityEditDialogRequest<"financialTransaction"> | null>(null);

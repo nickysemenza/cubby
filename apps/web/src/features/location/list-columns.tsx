@@ -1,4 +1,5 @@
 import type { LocationListItemOut } from "@cubby/schemas/location";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { entityListHiddenColumns } from "~/entity/display/entity-display";
@@ -6,6 +7,7 @@ import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
 import type { EntityListParamsByEntity } from "~/entity/generated/entity-lists.gen";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
+import { useEntityMetadata } from "~/entity/metadata";
 import {
   createEntityInlineLinkColumn,
   createSingleEntityInlineLinkColumn,
@@ -26,10 +28,10 @@ const columnHelper = createCubbyColumnHelper<LocationListItemOut>();
 // `children`/`inventoryEntries` are relation/computed columns outside the
 // field model.
 // A function for the same import-cycle reason as product.
-const locationInitialColumnVisibility = () => ({
+const locationInitialColumnVisibility = (queryClient: QueryClient) => ({
   children: false,
   inventoryEntries: false,
-  ...entityListHiddenColumns("location"),
+  ...entityListHiddenColumns(queryClient, "location"),
 });
 
 export const locationListOverride = defineListOverride<
@@ -37,6 +39,8 @@ export const locationListOverride = defineListOverride<
   LocationFilters
 >({
   use() {
+    const queryClient = useQueryClient();
+    useEntityMetadata("location");
     const updateLocationMutation = useUpdateMutation({
       mutationFn: entityMutationOptionsFactory("location", "update"),
       entity: "location",
@@ -52,11 +56,16 @@ export const locationListOverride = defineListOverride<
               columnGroup: "Hierarchy",
               className: "w-40",
               mobile: { slot: "meta", priority: 55 },
-              provenance: relationshipFieldProvenance("location", "children"),
+              provenance: relationshipFieldProvenance(
+                queryClient,
+                "location",
+                "children",
+              ),
             }),
           );
           add(
             createSingleEntityInlineLinkColumn(
+              queryClient,
               columnHelper,
               "parent",
               "location",
@@ -66,6 +75,7 @@ export const locationListOverride = defineListOverride<
                 className: "w-56",
                 mobile: { slot: "subtitle", priority: 20 },
                 provenance: relationshipFieldProvenance(
+                  queryClient,
                   "location",
                   "parent",
                   "reference",
@@ -95,6 +105,7 @@ export const locationListOverride = defineListOverride<
                 enableSorting: true,
                 mobile: { slot: "meta", priority: 80 },
                 provenance: relationshipFieldProvenance(
+                  queryClient,
                   "location",
                   "inventory",
                 ),
@@ -103,15 +114,15 @@ export const locationListOverride = defineListOverride<
           );
         }),
       // oxlint-disable-next-line react/exhaustive-deps -- updateLocationMutation changes every render but is functionally stable
-      [],
+      [queryClient],
     );
 
     const list = useMemo(
       () => ({
         deletable: true as const,
-        initialColumnVisibility: locationInitialColumnVisibility(),
+        initialColumnVisibility: locationInitialColumnVisibility(queryClient),
       }),
-      [],
+      [queryClient],
     );
     return { compose, list };
   },

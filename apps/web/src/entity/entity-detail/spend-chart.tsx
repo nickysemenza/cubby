@@ -1,6 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
@@ -10,8 +12,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
-
-import { useMonthlyExpenseSpend } from "./use-detail-data";
 
 const monthLabel = (month: string) =>
   formatCalendarDay(`${month}-01`, "monthShort");
@@ -34,10 +34,12 @@ export function MonthlySpendChart({
   viewKey?: string;
   compact?: boolean;
 }) {
-  const spend = useMonthlyExpenseSpend({
-    source: { entityKind: entity, entityId: id },
-    viewKey,
-  });
+  const spend = useSuspenseQuery(
+    entityGraph.monthlyExpenseSpend.queryOptions({
+      source: { entityKind: entity, entityId: id },
+      viewKey,
+    }),
+  );
   const [focusedMonth, setFocusedMonth] = useState(0);
   const monthElements = useRef<(HTMLElement | null)[]>([]);
   if (spend.isError)

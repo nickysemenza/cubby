@@ -4,7 +4,7 @@ import {
   scoredEntities,
 } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { shortcodeEntities } from "@cubby/schemas/entity-roster";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { countLabel } from "@cubby/shared/pluralize";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";

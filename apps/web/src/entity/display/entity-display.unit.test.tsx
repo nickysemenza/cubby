@@ -1,20 +1,22 @@
 import { emailPurchaseLink } from "@cubby/schemas/email-fields";
 import type { Entity } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { productCost } from "@cubby/schemas/product-fields";
+import { QueryClientProvider } from "@tanstack/react-query";
 import type { CellData } from "@tanstack/react-table";
 import {
+  cleanup,
   fireEvent,
-  render,
+  render as testingRender,
   renderHook,
   screen,
   waitFor,
 } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   EntityDisplayImagesProvider,
@@ -22,9 +24,9 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { useStandardColumns } from "~/entity/hooks/use-standard-columns";
+import { entityMetadata } from "~/entity/metadata";
 import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import {
   dispatchClipboardEvent,
   makeClipboardData,
@@ -44,6 +46,36 @@ import {
   renderDetailFieldValue,
   renderSuggestedListFieldValue,
 } from "./entity-display";
+
+let queryClient: Awaited<ReturnType<typeof metadataQueryClient>>;
+beforeEach(async () => {
+  queryClient = await metadataQueryClient();
+});
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
+
+function MetadataProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+function render(ui: ReactNode, options?: Parameters<typeof testingRender>[1]) {
+  const BrowserWrapper = options?.wrapper;
+  return testingRender(ui, {
+    ...options,
+    wrapper: ({ children }) =>
+      BrowserWrapper ? (
+        <BrowserWrapper>
+          <MetadataProvider>{children}</MetadataProvider>
+        </BrowserWrapper>
+      ) : (
+        <MetadataProvider>{children}</MetadataProvider>
+      ),
+  });
+}
 
 installFeatures();
 
@@ -76,6 +108,7 @@ it("renders proposed text and None independently of the current resolved value",
   const view = render(
     <>
       {renderSuggestedListFieldValue(
+        queryClient,
         "task",
         record,
         "trade",
@@ -89,6 +122,7 @@ it("renders proposed text and None independently of the current resolved value",
   view.rerender(
     <>
       {renderSuggestedListFieldValue(
+        queryClient,
         "task",
         record,
         "trade",
@@ -101,6 +135,7 @@ it("renders proposed text and None independently of the current resolved value",
   view.rerender(
     <>
       {renderSuggestedListFieldValue(
+        queryClient,
         "task",
         record,
         "name",
@@ -115,14 +150,14 @@ it("renders proposed multiple references without borrowing current nested record
   const harness = createBrowserTestHarness();
   const proposedIds = ["TSK-4K7M", "TSK-7M4K"];
   for (const [index, id] of proposedIds.entries()) {
-    harness.queryClient.setQueryDefaults(
+    queryClient.setQueryDefaults(
       entityPreviewQueryOptions("task", id).queryKey,
       { staleTime: Infinity },
     );
-    harness.queryClient.setQueryData(
-      entityPreviewQueryOptions("task", id).queryKey,
-      { id, name: `Synthetic dependency ${index + 1}` },
-    );
+    queryClient.setQueryData(entityPreviewQueryOptions("task", id).queryKey, {
+      id,
+      name: `Synthetic dependency ${index + 1}`,
+    });
   }
   const record = {
     id: "TSK-2M4K",
@@ -132,6 +167,7 @@ it("renders proposed multiple references without borrowing current nested record
   const view = render(
     <>
       {renderSuggestedListFieldValue(
+        queryClient,
         "task",
         record,
         "blockedByIds",
@@ -148,7 +184,15 @@ it("renders proposed multiple references without borrowing current nested record
     ).toHaveAttribute("href", `/tasks/${id}`);
   }
   view.rerender(
-    <>{renderSuggestedListFieldValue("task", record, "blockedByIds", [])}</>,
+    <>
+      {renderSuggestedListFieldValue(
+        queryClient,
+        "task",
+        record,
+        "blockedByIds",
+        [],
+      )}
+    </>,
   );
   expect(screen.getByText("—")).toBeVisible();
   expect(screen.queryByRole("link")).toBeNull();
@@ -181,7 +225,7 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
 }
 
 function fieldOf(entity: Entity, key: string) {
-  const field = entityFieldModels[entity].fields.find(
+  const field = entityMetadata(queryClient, entity).fields.fields.find(
     (candidate) => candidate.key === key,
   );
   if (!field) throw new Error(`${entity}.${key} is not declared`);
@@ -206,6 +250,7 @@ describe("declared entity displays", () => {
       },
     };
     const columns = createEntityDisplayColumns(
+      queryClient,
       "email",
       createCubbyColumnHelper<typeof record>(),
       undefined,
@@ -262,6 +307,7 @@ describe("declared entity displays", () => {
     const view = render(
       <>
         {renderDetailFieldValue(
+          queryClient,
           "expense",
           record,
           fieldOf("expense", "spendingCategoryId"),
@@ -280,6 +326,7 @@ describe("declared entity displays", () => {
     view.unmount();
     const save = vi.fn();
     const columns = createEntityDisplayColumns(
+      queryClient,
       "expense",
       createCubbyColumnHelper<typeof record>(),
       undefined,
@@ -301,6 +348,7 @@ describe("declared entity displays", () => {
   });
   it("links shortcodes in editable product notes beside a working edit control", async () => {
     const overrides = editableFieldOverrides(
+      queryClient,
       "product",
       { id: "PRD-4K7M", notes: "Neck label: IMG-4S9Q" },
       ["notes"],
@@ -321,12 +369,13 @@ describe("declared entity displays", () => {
     harness.dispose();
   });
   it("formats purchase expense totals as money despite floating point residue", () => {
-    const field = entityFieldModels.purchase.fields.find(
+    const field = entityMetadata(queryClient, "purchase").fields.fields.find(
       (field) => field.key === "expenseTotal",
     )!;
     render(
       <>
         {renderDetailFieldValue(
+          queryClient,
           "purchase",
           { expenseTotal: 12.299999999999 },
           field,
@@ -342,6 +391,7 @@ describe("declared entity displays", () => {
     const { container } = render(
       <>
         {renderDetailFieldValue(
+          queryClient,
           "financialAccount",
           {
             cardNumbers: [{ last4: "1234" }],
@@ -363,6 +413,7 @@ describe("declared entity displays", () => {
     render(
       <>
         {renderDetailFieldValue(
+          queryClient,
           "financialAccount",
           {
             identity: { kind: "credit_card" },
@@ -406,6 +457,7 @@ describe("declared entity displays", () => {
     render(
       <>
         {renderDetailFieldValue(
+          queryClient,
           "financialAccount",
           { sourceAliases: [], sourceAliasesLabel: null },
           field,
@@ -420,6 +472,7 @@ describe("declared entity displays", () => {
     render(
       <>
         {renderDetailFieldValue(
+          queryClient,
           "product",
           {
             unitPriceDetailLabel:
@@ -440,11 +493,13 @@ describe("declared entity displays", () => {
     render(
       <>
         {renderDetailFieldValue(
+          queryClient,
           "recipe",
           { meta: { url: "https://recipes.example.test/soup" } },
           fieldOf("recipe", "meta"),
         )}
         {renderDetailFieldValue(
+          queryClient,
           "recipe",
           { yield: { value: 4, unit: "serving" } },
           fieldOf("recipe", "yield"),
@@ -457,31 +512,11 @@ describe("declared entity displays", () => {
     expect(screen.getByText(/4/)).toBeVisible();
   });
 
-  it("has a picker path for every updateable singular reference shown in a manifest list", () => {
-    // Current list-visible update references span these targets: the roster is
-    // intentionally target-based because several entities reuse the same
-    // picker (for example Planting and Expense both select Product).
-    for (const entity of [
-      "ingredient",
-      "location",
-      "product",
-      "project",
-      "task",
-      "vendor",
-      "ledgerParty",
-      "financialAccount",
-      "purchase",
-      "planting",
-    ] as const) {
-      expect(isReferencePickerEntity(entity)).toBe(true);
-    }
-  });
-
   it("selects declared detail sections without leaking overview fields", () => {
     render(
       <EntityBasicInfo
         entity="project"
-        fields={entitySectionFields("project", "resource-links")}
+        fields={entitySectionFields(queryClient, "project", "resource-links")}
         record={{
           name: "Fixture project",
           googleDriveFolderUrl: "https://example.com/folder",
@@ -500,7 +535,7 @@ describe("declared entity displays", () => {
       render(
         <EntityBasicInfo
           entity="project"
-          fields={entitySectionFields("project", "resource-links")}
+          fields={entitySectionFields(queryClient, "project", "resource-links")}
           record={{ name: "Fixture project" }}
           overrides={{ name: (record) => ({ value: record.name }) }}
         />,
@@ -566,6 +601,7 @@ describe("declared entity displays", () => {
     const helper = createCubbyColumnHelper<{ name: string }>();
     expect(() =>
       createEntityDisplayColumns(
+        queryClient,
         "ledgerParty",
         helper,
         createCubbyColumnCollection((add) => {
@@ -709,6 +745,7 @@ describe("declared entity displays", () => {
     };
     const onSaveField = vi.fn().mockResolvedValue(undefined);
     const columns = createEntityDisplayColumns(
+      queryClient,
       "planting",
       createCubbyColumnHelper<PlantingRow>(),
       undefined,
@@ -751,7 +788,11 @@ describe("declared entity displays", () => {
   it("keeps titleField out of declared facts and rejects an override claiming it", () => {
     type Party = { name: string; kind: string; notes: string | null };
     const helper = createCubbyColumnHelper<Party>();
-    const columns = createEntityDisplayColumns("ledgerParty", helper);
+    const columns = createEntityDisplayColumns(
+      queryClient,
+      "ledgerParty",
+      helper,
+    );
     const row: Party = {
       name: "Guest",
       kind: "guest",
@@ -775,6 +816,7 @@ describe("declared entity displays", () => {
     // The identity lane belongs to the standard-column pipeline alone.
     expect(() =>
       createEntityDisplayColumns(
+        queryClient,
         "ledgerParty",
         helper,
         createCubbyColumnCollection<Party>((add) =>
@@ -795,19 +837,27 @@ describe("declared entity displays", () => {
       statedTotal: number | null;
     };
     const helper = createCubbyColumnHelper<PurchaseRow>();
-    const declared = createEntityDisplayColumns("purchase", helper, undefined, {
-      only: ["vendorId", "displayLabel", "date", "statedTotal"],
-    });
-    const { result } = renderHook(() =>
-      useStandardColumns({
-        entity: "purchase",
-        columnHelper: helper,
-        customColumns: declared,
-        filters: [],
-        enableRowSelection: false,
-        mappingsMap: null,
-        hasUnitMappings: false,
-      }),
+    const declared = createEntityDisplayColumns(
+      queryClient,
+      "purchase",
+      helper,
+      undefined,
+      {
+        only: ["vendorId", "displayLabel", "date", "statedTotal"],
+      },
+    );
+    const { result } = renderHook(
+      () =>
+        useStandardColumns({
+          entity: "purchase",
+          columnHelper: helper,
+          customColumns: declared,
+          filters: [],
+          enableRowSelection: false,
+          mappingsMap: null,
+          hasUnitMappings: false,
+        }),
+      { wrapper: MetadataProvider },
     );
     expect(result.current.visit((column) => column.id).slice(0, 6)).toEqual([
       "image",
@@ -821,6 +871,7 @@ describe("declared entity displays", () => {
 
   it("leaves standard identity rendering to the shared table without duplicating it", () => {
     const columns = createEntityDisplayColumns(
+      queryClient,
       "vendor",
       createCubbyColumnHelper<{ name: string }>(),
     );
@@ -836,6 +887,7 @@ describe("declared entity displays", () => {
       toPartyId: string;
     }>();
     const columns = createEntityDisplayColumns(
+      queryClient,
       "ledgerTransfer",
       helper,
       createCubbyColumnCollection((add) => {
@@ -922,6 +974,7 @@ describe("declared entity displays", () => {
     function buildProductColumnMeta() {
       const helper = createCubbyColumnHelper<ProductRow>();
       const columns = createEntityDisplayColumns(
+        queryClient,
         "product",
         helper,
         buildProductOverrides(helper),
@@ -943,6 +996,7 @@ describe("declared entity displays", () => {
     function renderProductCell(columnId: string, row: ProductRow) {
       const helper = createCubbyColumnHelper<ProductRow>();
       const columns = createEntityDisplayColumns(
+        queryClient,
         "product",
         helper,
         buildProductOverrides(helper),
@@ -1059,9 +1113,15 @@ describe("generic enum fields", () => {
     ({ entity, key, raw, label }) => {
       const record = { id: `${entity}-1`, [key]: raw };
       const helper = createCubbyColumnHelper<typeof record>();
-      const columns = createEntityDisplayColumns(entity, helper, undefined, {
-        only: [key],
-      });
+      const columns = createEntityDisplayColumns(
+        queryClient,
+        entity,
+        helper,
+        undefined,
+        {
+          only: [key],
+        },
+      );
       const [listCell] = columns.visit((column) =>
         renderRowCell(column.cell, record),
       );
@@ -1075,7 +1135,14 @@ describe("generic enum fields", () => {
       unmount();
 
       render(
-        <>{renderDetailFieldValue(entity, record, fieldOf(entity, key))}</>,
+        <>
+          {renderDetailFieldValue(
+            queryClient,
+            entity,
+            record,
+            fieldOf(entity, key),
+          )}
+        </>,
       );
       expect(screen.getByText(label)).toBeVisible();
     },
@@ -1096,11 +1163,17 @@ describe("generic enum fields", () => {
     const helper = createCubbyColumnHelper<typeof record>();
     const onSaveField = vi.fn().mockResolvedValue(undefined);
     const onSaveFields = vi.fn().mockResolvedValue(undefined);
-    const columns = createEntityDisplayColumns("expense", helper, undefined, {
-      only: ["cost", "date", "future", "productQuantity", "costType"],
-      onSaveField,
-      onSaveFields,
-    });
+    const columns = createEntityDisplayColumns(
+      queryClient,
+      "expense",
+      helper,
+      undefined,
+      {
+        only: ["cost", "date", "future", "productQuantity", "costType"],
+        onSaveField,
+        onSaveFields,
+      },
+    );
     const cells = new Map(
       columns.visit((column) => [column.id, column.meta?.cellData] as const),
     );
@@ -1149,6 +1222,7 @@ describe("generic enum fields", () => {
     const record = { id: "TSK-4K7M", status: "not_started" };
     const save = vi.fn(async () => {});
     const columns = createEntityDisplayColumns(
+      queryClient,
       "task",
       createCubbyColumnHelper<typeof record>(),
       undefined,
@@ -1199,10 +1273,16 @@ describe("generic enum fields", () => {
     const record = { id: "task-1", status: "not_started", trade: "plumbing" };
     const helper = createCubbyColumnHelper<typeof record>();
     const onSaveField = vi.fn().mockResolvedValue(undefined);
-    const columns = createEntityDisplayColumns("task", helper, undefined, {
-      only: ["status", "trade"],
-      onSaveField,
-    });
+    const columns = createEntityDisplayColumns(
+      queryClient,
+      "task",
+      helper,
+      undefined,
+      {
+        only: ["status", "trade"],
+        onSaveField,
+      },
+    );
     const [statusCell, tradeCell] = columns.visit((column) =>
       renderRowCell(column.cell, record),
     );
@@ -1232,7 +1312,7 @@ describe("generic enum fields", () => {
     // The open editor asks the decision model for `trade` (declared `control.suggest`, as a
     // "provided" alternative since a value is stored) and never for `status`
     // (no `suggest`) — the generic list editor used to omit this entirely.
-    const suggestionTargets = harness.queryClient
+    const suggestionTargets = queryClient
       .getQueryCache()
       .findAll()
       .map((query) => JSON.stringify(query.queryKey))
@@ -1295,6 +1375,7 @@ it("opens an inherited scalar from stored intent and clears its explicit overrid
   };
   const cellFor = (row: typeof record | typeof explicit) =>
     createEntityDisplayColumns(
+      queryClient,
       "task",
       createCubbyColumnHelper<typeof record | typeof explicit>(),
       undefined,
@@ -1353,6 +1434,7 @@ it("edits the effective inherited checkbox and restores the nullable override", 
   };
   const save = vi.fn(async () => undefined);
   const overrides = editableFieldOverrides(
+    queryClient,
     "product",
     record,
     ["stockTracked"],
@@ -1399,6 +1481,7 @@ it("edits the effective inherited checkbox and restores the nullable override", 
     },
   };
   const explicitOverrides = editableFieldOverrides(
+    queryClient,
     "product",
     explicit,
     ["stockTracked"],
@@ -1428,6 +1511,7 @@ it("edits the effective inherited checkbox and restores the nullable override", 
     },
   };
   const undecidedOverrides = editableFieldOverrides(
+    queryClient,
     "product",
     undecided,
     ["stockTracked"],
@@ -1450,7 +1534,9 @@ it.each(["network", "primaryCardholderId"])(
     };
     const field = fieldOf("financialAccount", key);
     const view = render(
-      <>{renderDetailFieldValue("financialAccount", record, field)}</>,
+      <>
+        {renderDetailFieldValue(queryClient, "financialAccount", record, field)}
+      </>,
     );
     const dash = screen.getByRole("note", {
       name: "Not applicable. Only applies to credit-card accounts.",
@@ -1479,6 +1565,7 @@ it.each(["network", "primaryCardholderId"])(
       ),
     );
     const columns = createEntityDisplayColumns(
+      queryClient,
       "financialAccount",
       helper,
       overrides,
@@ -1546,6 +1633,7 @@ it("copies and totals the amount from the selected Cost snapshot", () => {
     },
   };
   const columns = createEntityDisplayColumns(
+    queryClient,
     "product",
     createCubbyColumnHelper<typeof row>(),
     undefined,

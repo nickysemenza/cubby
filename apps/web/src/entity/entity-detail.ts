@@ -4,11 +4,11 @@ import { queryOptions } from "@tanstack/react-query";
 import { entityDetail } from "~/integrations/tanstack-query/generated/catalog/entityDetail.gen";
 import type { OperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 
+import { correlateEntityDetail } from "./entity-read-result";
 import {
   type DetailEntity,
   type EntityDetailInputByEntity,
   entityDetailInputFor,
-  getEntityDetailOutputSchema,
   parseEntityDetailInput,
 } from "./generated/entity-details.gen";
 
@@ -53,10 +53,9 @@ export function entityDetailFor<E extends DetailEntity>(entity: E) {
       const input = inputFor(shortcode);
       const result = await operation.call(
         parseEntityDetailInput(entity, input),
+        { consistency: "strong" },
       );
-      return result === null
-        ? null
-        : getEntityDetailOutputSchema(entity).parse(result);
+      return correlateEntityDetail(entity, result);
     },
     queryOptions: (
       shortcode: string,
@@ -69,14 +68,17 @@ export function entityDetailFor<E extends DetailEntity>(entity: E) {
         // Some conditional detail queries use an empty placeholder while
         // disabled. Validate when React Query actually executes, not while
         // rendering options.
-        queryFn: async ({ signal }) => {
+        queryFn: async ({ signal, client, queryKey }) => {
           const result = await operation.call(
             parseEntityDetailInput(entity, input),
-            { signal },
+            {
+              signal,
+              consistency: client.getQueryState(queryKey)?.isInvalidated
+                ? "strong"
+                : undefined,
+            },
           );
-          return result === null
-            ? null
-            : getEntityDetailOutputSchema(entity).parse(result);
+          return correlateEntityDetail(entity, result);
         },
         meta: policy.meta,
         ...policy.freshness,

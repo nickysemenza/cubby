@@ -1,11 +1,13 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { type QueryClient } from "@tanstack/react-query";
+
+import { entityMetadata } from "~/entity/metadata";
 
 const DEFAULT_IDENTITY_WIDTH = "w-64";
 
 export function identityWidthClassName(
-  width: (typeof entityFieldModels)[BrowserRoutedEntity]["fields"][number]["display"]["width"],
+  width: EntityFieldModel["fields"][number]["display"]["width"],
 ): string {
   switch (width) {
     case "xs":
@@ -34,14 +36,15 @@ export interface IdentityListConfig {
  * generated CRUD list may write the same non-null text field that it reads.
  */
 export function identityListConfig(
+  queryClient: QueryClient,
   entity: BrowserRoutedEntity,
   options: {
     generatedCrud: boolean;
     flatRows: boolean;
   },
 ): IdentityListConfig {
-  const titleField = entitySummary[entity].titleField;
-  const field = entityFieldModels[entity].fields.find(
+  const titleField = entityMetadata(queryClient, entity).summary.titleField;
+  const field = entityMetadata(queryClient, entity).fields.fields.find(
     (candidate) => candidate.key === titleField,
   );
   const canAutoEdit =
@@ -50,7 +53,9 @@ export function identityListConfig(
     field?.kind === "text" &&
     field.readKey === titleField &&
     !field.nullable &&
-    entityFieldModels[entity].update.some((key) => key === titleField);
+    entityMetadata(queryClient, entity).fields.update.some(
+      (key) => key === titleField,
+    );
 
   return {
     titleField,

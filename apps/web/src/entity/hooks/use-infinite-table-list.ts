@@ -42,6 +42,7 @@ interface UseInfiniteTableListOptions<
   /** A declared tree's scope for the paged rows (`roots` when nested). */
   nesting?: ListNesting;
   resultMembership?: ListResultMembership;
+  includeCount?: boolean;
 }
 
 export interface InfiniteScrollControls<
@@ -68,7 +69,7 @@ interface UseInfiniteTableListReturn<
   /** Full page responses retain source-owned metadata, even for empty pages. */
   pages: readonly TPage[] | undefined;
   data: TData[];
-  totalCount: number;
+  totalCount: number | undefined;
   unresolvedCount?: number;
   /** Server-computed full-filtered-set column sums (footer totals). */
   sums?: Record<string, number>;
@@ -109,6 +110,7 @@ function useInfiniteTableListPlan<
   groupBy,
   nesting,
   resultMembership,
+  includeCount = false,
 }: UseInfiniteTableListOptions<TFilters, TData, TPage>) {
   const { filters, sortParams, pagination, queryParams } =
     usePaginatedTableCore<TFilters, TData, TPage>({
@@ -116,6 +118,7 @@ function useInfiniteTableListPlan<
       buildFilters,
       tableState,
       groupBy,
+      includeCount,
     });
 
   const pageInputFor = useCallback(
@@ -127,6 +130,7 @@ function useInfiniteTableListPlan<
           pagination: { pageIndex, pageSize: pagination.pageSize },
           filters,
         };
+      if (includeCount !== undefined) params.includeCount = includeCount;
       if (queryParams.sort !== undefined) params.sort = sortParams;
       if (groupBy) params.groupBy = groupBy;
       if (nesting) params.nesting = nesting;
@@ -136,6 +140,7 @@ function useInfiniteTableListPlan<
     },
     [
       filters,
+      includeCount,
       groupBy,
       nesting,
       resultMembership,
@@ -146,7 +151,11 @@ function useInfiniteTableListPlan<
   );
   const scopedPlan = useCallback(
     (scope: ListNesting, pageIndex: number) =>
-      queryOptions({ ...pageInputFor(pageIndex), nesting: scope }),
+      queryOptions({
+        ...pageInputFor(pageIndex),
+        nesting: scope,
+        includeCount: true,
+      }),
     [pageInputFor, queryOptions],
   );
 
@@ -206,6 +215,7 @@ export function useInfiniteTableList<
   groupBy,
   nesting,
   resultMembership,
+  includeCount = false,
 }: UseInfiniteTableListOptions<
   TFilters,
   TData,
@@ -220,6 +230,7 @@ export function useInfiniteTableList<
       groupBy,
       nesting,
       resultMembership,
+      includeCount,
     });
 
   // SAFETY: this adapter narrows TanStack's observer result to the exact
@@ -245,18 +256,17 @@ export function useInfiniteTableList<
     // the descriptor metadata so root mutation invalidation can still match
     // its entity/cache tags; omitting it left every list permanently stale.
     meta: firstPageOptions.meta,
-    queryFn: async ({ pageParam, signal }) => {
+    queryFn: async ({ pageParam, signal, client, queryKey }) => {
       const options = pageOptions(pageParam);
-      return options.execute(signal);
+      return options.execute(
+        signal,
+        client.getQueryState(queryKey)?.isInvalidated ? "strong" : undefined,
+      );
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage: TPage) => {
       const meta = lastPage.meta;
-      const count = meta.membershipCount ?? meta.totalCount;
-      if (!count || !meta.pageSize) return undefined;
-      const pageIndex = meta.pageIndex;
-      const loaded = (pageIndex + 1) * meta.pageSize;
-      return loaded < count ? pageIndex + 1 : undefined;
+      return meta.hasNextPage ? meta.pageIndex + 1 : undefined;
     },
   });
 
@@ -269,7 +279,7 @@ export function useInfiniteTableList<
 
   // Every page carries the same full-set aggregates; the latest page's are
   // the freshest after mutations invalidate/refetch.
-  const totalCount = infiniteData?.pages[0]?.meta?.totalCount ?? 0;
+  const totalCount = infiniteData?.pages[0]?.meta?.totalCount;
   const lastMeta = infiniteData?.pages.at(-1)?.meta;
   const groups = infiniteData?.pages[0]?.meta?.groups;
   const memberships = useMemo(() => {

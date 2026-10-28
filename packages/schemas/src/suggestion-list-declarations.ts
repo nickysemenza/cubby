@@ -1,8 +1,8 @@
 import { humanize } from "@cubby/shared";
 import type { z } from "zod";
 import { connectionRelation } from "./entity-connections";
-import { shortcodeEntities } from "./entity-manifest";
-import { entitySummary } from "./generated/entity-summary.gen";
+import { shortcodeEntities } from "./generated/entity-roster.gen";
+import { entityRoster } from "./generated/entity-roster.gen";
 import { generatedFinancialTransactionKindValues } from "./generated/entity-field-schemas.financialTransaction.gen";
 import {
   defineRelationList,
@@ -15,7 +15,7 @@ const options = (values: readonly string[]) =>
   values.map((value) => ({ value, label: humanize(value) }));
 const entities = shortcodeEntities.map((value) => ({
   value,
-  label: entitySummary[value].singular,
+  label: entityRoster[value].singular,
 }));
 const strength = {
   columnId: "strength",

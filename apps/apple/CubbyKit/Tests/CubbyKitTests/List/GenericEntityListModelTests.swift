@@ -22,7 +22,8 @@ struct GenericEntityListModelTests {
     @Test func unresolvedMembershipReplaysBaseAndSearchWithoutChangingFilters() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         let requests = Mutex<[JSONValue]>([])
-        let meta = ListPageMeta(pageIndex: 0, pageSize: 50, totalCount: 0, unresolvedCount: 1)
+        let meta = ListPageMeta(
+            pageIndex: 0, pageSize: 50, totalCount: 0, hasNextPage: false, unresolvedCount: 1)
         let body = try JSONEncoder().encode(
             JSONValue.object([
                 "items": .array([]), "meta": try JSONValue(encoding: meta),
@@ -574,7 +575,7 @@ struct GenericEntityListModelTests {
         let list = try productPage(id: "PRD-2345", name: "Base", page: 1, total: 1)
         let timeline = Data(
             (#"{"groups":[],"stats":[],"notes":[],"#
-                + #""meta":{"totalCount":0,"pageIndex":0,"pageSize":200}}"#).utf8)
+                + #""meta":{"totalCount":0,"pageIndex":0,"pageSize":200,"hasNextPage":false}}"#).utf8)
         ListStub.handler.withLock { handler in
             handler = { request in
                 guard request.url!.path == "/api/operations/entity.timeline" else { return (200, list) }
@@ -702,7 +703,9 @@ struct GenericEntityListModelTests {
     nonisolated private static func page(_ items: [EntityRow], page: Int, total: Int)
         -> ListPage<EntityRow>
     {
-        ListPage(items: items, meta: ListPageMeta(pageIndex: page, pageSize: 1, totalCount: total))
+        ListPage(
+            items: items,
+            meta: ListPageMeta(pageIndex: page, pageSize: 1, totalCount: total, hasNextPage: page < total))
     }
 
     /// The 1-based native page of an `entity.list` body (its `pageIndex` is 0-based).
@@ -760,6 +763,7 @@ struct GenericEntityListModelTests {
         meta["pageIndex"] = page
         meta["pageSize"] = 1
         meta["totalCount"] = total
+        meta["hasNextPage"] = page < total
         if let sums { meta["sums"] = sums }
         object["meta"] = meta
         return try JSONSerialization.data(withJSONObject: object)

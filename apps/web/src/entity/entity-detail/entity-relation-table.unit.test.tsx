@@ -6,20 +6,23 @@ import {
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import {
-  type EntityListInputByEntity,
-  productListItem,
-  purchaseListItem,
-  taskListItem,
-} from "~/entity/generated/entity-lists.gen";
+  createEditorBrowserTestHarness as createBrowserTestHarness,
+  createEditorTestQueryClient,
+} from "#web/tests/editor-metadata.fixtures.ts";
+import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
+import type { EntityListInputByEntity } from "~/entity/generated/entity-lists.gen";
 import { installFeatures } from "~/features/registry";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
+import {
+  productListItem,
+  purchaseListItem,
+  taskListItem,
+} from "~/server/generated/entity-lists.server.gen";
 
 import {
   EntityRelationTable,
@@ -28,6 +31,7 @@ import {
 } from "./entity-relation-table";
 
 installFeatures();
+const queryClient = createEditorTestQueryClient();
 
 const relationSection = (entity: keyof typeof entitySummary, id: string) => {
   const section = entitySummary[entity].detail.sections.find(
@@ -39,7 +43,7 @@ const relationSection = (entity: keyof typeof entitySummary, id: string) => {
 };
 
 const planFor = (entity: keyof typeof entitySummary, id: string) =>
-  planRelationSection(entity as never, relationSection(entity, id));
+  planRelationSection(queryClient, entity, relationSection(entity, id));
 
 describe("planRelationSection", () => {
   it("scopes the target list by the descriptor's field key and links Open all by its url key", () => {
@@ -157,13 +161,9 @@ describe("EntityRelationTable", () => {
     harness.dispose();
   });
 
-  // Relation data is only ever fetched in the browser, so the server render is
-  // a skeleton; building the full list stack for it cost each detail page
-  // ~14 table setups of SSR CPU.
-  it("server-renders a skeleton without starting any list machinery", () => {
-    const list = entityList.list.withTransport(async () => {
-      throw new Error("no read during server render");
-    });
+  it("server-renders its loading boundary while the relation's first page is pending", () => {
+    const read = vi.fn(async () => new Promise<never>(() => {}));
+    const list = entityList.list.withTransport(read);
     const Wrapper = harness.wrapper;
     const html = renderToString(
       <Wrapper>
@@ -175,7 +175,7 @@ describe("EntityRelationTable", () => {
         />
       </Wrapper>,
     );
-    expect(harness.queryClient.getQueryCache().getAll()).toHaveLength(0);
+    expect(read).toHaveBeenCalledOnce();
     expect(html).toContain('aria-busy="true"');
   });
 
@@ -193,7 +193,13 @@ describe("EntityRelationTable", () => {
     );
     const list = entityList.list.withTransport(async () => ({
       items: rows,
-      meta: { pageIndex: 0, pageSize: 50, totalCount: 3, sums: {} },
+      meta: {
+        hasNextPage: false,
+        pageIndex: 0,
+        pageSize: 50,
+        totalCount: 3,
+        sums: {},
+      },
     }));
     let reads = 0;
     const relation = entityGraph.relation.withTransport(async ({ input }) => {
@@ -258,7 +264,13 @@ describe("EntityRelationTable", () => {
     });
     const list = entityList.list.withTransport(async () => ({
       items: [row],
-      meta: { pageIndex: 0, pageSize: 50, totalCount: 1, sums: {} },
+      meta: {
+        hasNextPage: false,
+        pageIndex: 0,
+        pageSize: 50,
+        totalCount: 1,
+        sums: {},
+      },
     }));
     const relation = entityGraph.relation.withTransport(async () => ({
       entity: "product",
@@ -296,7 +308,13 @@ describe("EntityRelationTable", () => {
       inputs.push(input as EntityListInputByEntity["task"]);
       return {
         items: [],
-        meta: { pageIndex: 0, pageSize: 50, totalCount: 0, sums: {} },
+        meta: {
+          hasNextPage: false,
+          pageIndex: 0,
+          pageSize: 50,
+          totalCount: 0,
+          sums: {},
+        },
       };
     });
     render(
@@ -324,7 +342,13 @@ describe("EntityRelationTable", () => {
   it("keeps the journal's own single-line empty copy instead of the generic sentence", async () => {
     const list = entityList.list.withTransport(async () => ({
       items: [],
-      meta: { pageIndex: 0, pageSize: 50, totalCount: 0, sums: {} },
+      meta: {
+        hasNextPage: false,
+        pageIndex: 0,
+        pageSize: 50,
+        totalCount: 0,
+        sums: {},
+      },
     }));
     render(
       <EntityRelationTable
@@ -356,7 +380,13 @@ describe("EntityRelationTable", () => {
     };
     const list = entityList.list.withTransport(async () => ({
       items: [task],
-      meta: { pageIndex: 0, pageSize: 50, totalCount: 1, sums: {} },
+      meta: {
+        hasNextPage: false,
+        pageIndex: 0,
+        pageSize: 50,
+        totalCount: 1,
+        sums: {},
+      },
     }));
     const commands: unknown[] = [];
     const mutationPort = createEntityMutationPort({

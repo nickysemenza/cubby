@@ -1,7 +1,9 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
+import { useQueryClient } from "@tanstack/react-query";
 import { useContext } from "react";
 
 import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
+import { useEntityMetadata } from "~/entity/metadata";
 import { assessment } from "~/integrations/tanstack-query/generated/catalog/assessment.gen";
 
 import {
@@ -34,7 +36,8 @@ export function FieldSuggestionApply(props: ApplyProps) {
     props.source?.targets.every((target) => row.sourceByField.has(target))
   )
     return null;
-  return <StandaloneSuggestion {...props} />;
+  if (!props.source) return null;
+  return <StandaloneSuggestion {...props} source={props.source} />;
 }
 
 function StandaloneSuggestion({
@@ -42,7 +45,9 @@ function StandaloneSuggestion({
   currentValue,
   onApply,
   operations,
-}: ApplyProps) {
+}: ApplyProps & { source: FieldSuggestionSource }) {
+  useEntityMetadata(source.entity);
+  const queryClient = useQueryClient();
   const financeApply = useFinanceCategoryApply(operations);
   const { suggestions, outcomes, isFetching, refetch } =
     useEntitySuggestionsQuery({
@@ -62,6 +67,7 @@ function StandaloneSuggestion({
         source && targetKey
           ? (value, label) =>
               renderSuggestedListFieldValue(
+                queryClient,
                 source.entity,
                 { id: source.entityId ?? "" },
                 targetKey,

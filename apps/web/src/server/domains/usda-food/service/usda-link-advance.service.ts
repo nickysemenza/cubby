@@ -8,6 +8,7 @@ import { updateProductWithSideEffects } from "~/server/domains/product/repo/writ
 import { createProductWriteActions } from "~/server/domains/product/repo/write/product-writes";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import { invalidateProductFoodsForRelease } from "~/server/domains/usda-food/repo/release";
 
 // Bounds each lookupBatch response; a full FoodSummary is a few KB.
 const LOOKUP_CHUNK = 200;
@@ -47,6 +48,9 @@ export async function advanceProductUsdaLinks(
         });
     });
   }
+  // Release activation also changes facts for stable IDs and UPC lookups.
+  // Mark before applying advances so an interrupted run cannot leave them fresh.
+  await invalidateProductFoodsForRelease(db);
   if (advances.length === 0) return [];
 
   const services = {

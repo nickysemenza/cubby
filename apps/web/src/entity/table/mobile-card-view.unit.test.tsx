@@ -1,7 +1,8 @@
-import { fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { fireEvent, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { renderWithEditorMetadata as render } from "#web/tests/editor-metadata.fixtures.ts";
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 
 import {
   createCubbyColumnCollection,

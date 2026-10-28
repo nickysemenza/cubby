@@ -13,16 +13,16 @@ import {
 import { categoryReadFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
-import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.gen";
-import { inventoryListItem } from "~/entity/generated/entity-lists.gen";
 import { installFeatures } from "~/features/registry";
 import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
 import { entityMedia } from "~/integrations/tanstack-query/generated/catalog/entityMedia.gen";
 import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog/entityTimeline.gen";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
+import { getEntityDetailOutputSchema } from "~/server/generated/entity-details.server.gen";
+import { inventoryListItem } from "~/server/generated/entity-lists.server.gen";
 import { buildQualityBreakdown } from "~/server/generic/data-quality/repo/hydrate";
 
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
@@ -90,7 +90,13 @@ const operations = {
   list: {
     list: entityList.list.withTransport(async () => ({
       items: [],
-      meta: { pageIndex: 0, pageSize: 50, totalCount: 0, sums: {} },
+      meta: {
+        hasNextPage: false,
+        pageIndex: 0,
+        pageSize: 50,
+        totalCount: 0,
+        sums: {},
+      },
     })),
   },
   timeline: {
@@ -435,6 +441,7 @@ describe("GenericEntityDetail", () => {
         return {
           items,
           meta: {
+            hasNextPage: false,
             pageIndex: 0,
             pageSize: 50,
             totalCount: items.length,

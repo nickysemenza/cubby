@@ -3,11 +3,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { installFeatures } from "~/features/registry";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 

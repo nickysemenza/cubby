@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -10,11 +10,11 @@ import {
   executeEntityMutationCommand,
   type EntityMutationTransport,
 } from "~/entity/entity-mutation-command";
+import { ensureEntityMetadata } from "~/entity/metadata";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
 import type { StandardEntity } from "../entity-contracts";
-import { entityEditRegistry } from "./definitions";
 import type { EntityEditDraft, EntityEditIntent } from "./intent-types";
 import {
   buildEntityEdit,
@@ -256,6 +256,8 @@ export function useEntityCommands<E extends EditableEntity>(
   entity: E,
   options?: EntityCommandsOptions,
 ): EntityCommands<E> {
+  const queryClient = useQueryClient();
+  const [buildingCount, setBuildingCount] = useState(0);
   const productionPort = useEntityMutationPort();
   const port = options?.mutationPort ?? productionPort;
   const [issues, setIssues] = useState<readonly EntityEditIssue[]>([]);
@@ -434,26 +436,32 @@ export function useEntityCommands<E extends EditableEntity>(
       context?: RuntimeEntityEditRequest<E>["context"];
       surface?: "create-page" | "dialog" | "quick-create";
     }): Promise<EntityEditResult<E>> => {
-      const request: RuntimeEntityEditRequest<E> = {
-        entity,
-        operation: "create",
-        intent,
-        surface,
-        context,
-      };
-      const resolved = resolveEntityEdit(entityEditRegistry, request);
-      if (!isResolvedEntityEdit(resolved)) {
-        setIssues(resolved.issues);
-        return { ok: false, issues: resolved.issues };
+      setBuildingCount((count) => count + 1);
+      try {
+        const request: RuntimeEntityEditRequest<E> = {
+          entity,
+          operation: "create",
+          intent,
+          surface,
+          context,
+        };
+        await ensureEntityMetadata(queryClient, entity);
+        const resolved = resolveEntityEdit(queryClient, request);
+        if (!isResolvedEntityEdit(resolved)) {
+          setIssues(resolved.issues);
+          return { ok: false, issues: resolved.issues };
+        }
+        return await commit(
+          await buildEntityEdit(resolved, request, {
+            ...initialEntityEditValues(resolved, request),
+            ...values,
+          }),
+        );
+      } finally {
+        setBuildingCount((count) => count - 1);
       }
-      return await commit(
-        buildEntityEdit(resolved, request, {
-          ...initialEntityEditValues(resolved, request),
-          ...values,
-        }),
-      );
     },
-    [commit, entity],
+    [commit, entity, queryClient],
   );
 
   const commitFieldValues = useCallback(
@@ -468,43 +476,51 @@ export function useEntityCommands<E extends EditableEntity>(
       intent?: string;
       surface?: "cell" | "detail" | "preview" | "calendar";
     }): Promise<EntityEditResult<E>> => {
-      const request: RuntimeEntityEditRequest<E> = {
-        entity,
-        operation: "update",
-        intent,
-        surface,
-        record,
-      };
-      const resolved = resolveEntityEdit(entityEditRegistry, request);
-      if (!isResolvedEntityEdit(resolved)) {
-        setIssues(resolved.issues);
-        return { ok: false, issues: resolved.issues };
+      setBuildingCount((count) => count + 1);
+      try {
+        const request: RuntimeEntityEditRequest<E> = {
+          entity,
+          operation: "update",
+          intent,
+          surface,
+          record,
+        };
+        await ensureEntityMetadata(queryClient, entity);
+        const resolved = resolveEntityEdit(queryClient, request);
+        if (!isResolvedEntityEdit(resolved)) {
+          setIssues(resolved.issues);
+          return { ok: false, issues: resolved.issues };
+        }
+        const parsedValues = entityEditValueBagSchema.parse(values);
+        const requestedFields = Object.keys(parsedValues);
+        const selected = resolved.fields.filter(({ id }) => id in parsedValues);
+        const missing = requestedFields.filter(
+          (fieldId) => !selected.some(({ id }) => id === fieldId),
+        );
+        if (missing.length > 0) {
+          const nextIssues = [
+            {
+              field: missing[0],
+              message: `${entity}'s ${resolved.intent} intent does not expose ${missing.join(", ")}.`,
+              source: "client" as const,
+            },
+          ];
+          setIssues(nextIssues);
+          return { ok: false, issues: nextIssues };
+        }
+        const fieldsResolved = { ...resolved, fields: selected };
+        const nextValues = {
+          ...initialEntityEditValues(fieldsResolved, request),
+          ...parsedValues,
+        };
+        return await commit(
+          await buildEntityEdit(fieldsResolved, request, nextValues),
+        );
+      } finally {
+        setBuildingCount((count) => count - 1);
       }
-      const parsedValues = entityEditValueBagSchema.parse(values);
-      const requestedFields = Object.keys(parsedValues);
-      const selected = resolved.fields.filter(({ id }) => id in parsedValues);
-      const missing = requestedFields.filter(
-        (fieldId) => !selected.some(({ id }) => id === fieldId),
-      );
-      if (missing.length > 0) {
-        const nextIssues = [
-          {
-            field: missing[0],
-            message: `${entity}'s ${resolved.intent} intent does not expose ${missing.join(", ")}.`,
-            source: "client" as const,
-          },
-        ];
-        setIssues(nextIssues);
-        return { ok: false, issues: nextIssues };
-      }
-      const fieldsResolved = { ...resolved, fields: selected };
-      const nextValues = {
-        ...initialEntityEditValues(fieldsResolved, request),
-        ...parsedValues,
-      };
-      return await commit(buildEntityEdit(fieldsResolved, request, nextValues));
     },
-    [commit, entity],
+    [commit, entity, queryClient],
   );
 
   const commitFields = useCallback(
@@ -537,7 +553,8 @@ export function useEntityCommands<E extends EditableEntity>(
   );
 
   return {
-    isPending: mutation.isPending || bulkMutation.isPending,
+    isPending:
+      buildingCount > 0 || mutation.isPending || bulkMutation.isPending,
     issues,
     commit,
     submit,
@@ -565,7 +582,7 @@ export function useEntityActionCommands<E extends StandardEntity>(
       const execution = await commands.submit({
         operation: "create",
         intent,
-        data: parseEntityEditCreateInput(entity, data),
+        data: await parseEntityEditCreateInput(entity, data),
       });
       if (execution.operation !== "create") {
         throw new Error(`${entity} create returned ${execution.operation}.`);
@@ -584,7 +601,7 @@ export function useEntityActionCommands<E extends StandardEntity>(
         operation: "update",
         intent,
         id: z.string().parse(variables.id),
-        data: parseEntityEditUpdateInput(entity, variables.data),
+        data: await parseEntityEditUpdateInput(entity, variables.data),
       });
       if (execution.operation !== "update") {
         throw new Error(`${entity} update returned ${execution.operation}.`);
@@ -604,7 +621,7 @@ export function useEntityActionCommands<E extends StandardEntity>(
   const bulkUpdateAction = useCallback(
     async (variables: EntityActionVariables<E, "bulkUpdate">) => {
       const ids = z.array(z.string()).parse(variables.ids);
-      const data = parseEntityEditBulkUpdateInput(entity, variables.data);
+      const data = await parseEntityEditBulkUpdateInput(entity, variables.data);
       // SAFETY: `data` is parsed by `entity`'s own bulk-update schema from
       // the editing intent catalog; `commands.bulkUpdate` types its `data`
       // through the wire contract's bulk-update command instead. The entity

@@ -1,9 +1,11 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
+import type { QueryClient } from "@tanstack/react-query";
 
 import type { EntityEditValueBag } from "~/entity/editing/value-schema";
+import { entityMetadata } from "~/entity/metadata";
 
 import { collectionDraft, collectionEditSchema } from "./collection-edit";
-import { type EntityEditRegistry, getEntityEditDefinition } from "./registry";
+import { getEntityEditDefinition } from "./definitions";
 import type {
   EditableEntity,
   EntityEditAccess,
@@ -32,6 +34,7 @@ const isDefaultsFactory = (
 
 export interface ResolvedEntityEdit<E extends EditableEntity = EditableEntity> {
   definition: EntityEditDefinition<E, EntityEditRecord>;
+  fieldModel: EntityFieldModel;
   operation: EntityEditOperationDefinition<E, EntityEditRecord>;
   intentDefinition: EntityEditIntentDefinition<E, EntityEditRecord>;
   intent: string;
@@ -49,10 +52,10 @@ const denied = (access: EntityEditAccess): EntityEditIssue =>
 
 /** Resolve all declarative choices before draft creation or mutation work. */
 export function resolveEntityEdit<E extends EditableEntity>(
-  registry: EntityEditRegistry,
+  queryClient: QueryClient,
   request: RuntimeEntityEditRequest<E>,
 ): ResolvedEntityEdit<E> | { issues: readonly EntityEditIssue[] } {
-  const definition = getEntityEditDefinition(registry, request.entity);
+  const definition = getEntityEditDefinition(queryClient, request.entity);
   const operation = definition.operations[request.operation];
   if (!operation) {
     return {
@@ -80,7 +83,7 @@ export function resolveEntityEdit<E extends EditableEntity>(
   const hasCollectionControl = scopedFields.some(
     (key) =>
       definition.fields.some((field) => field.id === key) &&
-      entityFieldModels[request.entity]?.fields.some(
+      entityMetadata(queryClient, request.entity).fields?.fields.some(
         (field) =>
           field.key === key &&
           "collection" in field &&
@@ -92,7 +95,7 @@ export function resolveEntityEdit<E extends EditableEntity>(
     request.operation === "update" && hasCollectionControl
       ? scopedFields.filter(
           (key) =>
-            entityFieldModels[request.entity]?.fields.find(
+            entityMetadata(queryClient, request.entity).fields?.fields.find(
               (field) => field.key === key,
             )?.control?.renderer !== "upc-lookup",
         )
@@ -121,6 +124,7 @@ export function resolveEntityEdit<E extends EditableEntity>(
 
   return {
     definition,
+    fieldModel: entityMetadata(queryClient, request.entity).fields,
     operation,
     intentDefinition,
     intent,
@@ -175,11 +179,11 @@ export function initialEntityEditValues<E extends EditableEntity>(
  * Normalize and validate all selected semantic fields, then let the entity
  * intent build its server command. No UI code gets to hand-shape a patch.
  */
-export function buildEntityEdit<E extends EditableEntity>(
+export async function buildEntityEdit<E extends EditableEntity>(
   resolved: ResolvedEntityEdit<E>,
   request: RuntimeEntityEditRequest<E>,
   values: EntityEditValueSource<E>,
-): EntityEditBuildResult<E> {
+): Promise<EntityEditBuildResult<E>> {
   const parsedValues = entityEditValueBagSchema.parse(values);
   const intent = resolved.intentDefinition;
   const operationAccess = intent.access({
@@ -210,7 +214,7 @@ export function buildEntityEdit<E extends EditableEntity>(
     }
     try {
       let value = parsedValues[field.id];
-      const model = entityFieldModels[request.entity]?.fields.find(
+      const model = resolved.fieldModel?.fields.find(
         (model) => model.key === field.id,
       );
       const collection =

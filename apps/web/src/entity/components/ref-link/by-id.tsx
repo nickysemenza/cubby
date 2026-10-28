@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import { imageUrlSummary } from "@cubby/schemas/image-summary";
 import { skipToken, useQuery } from "@tanstack/react-query";
@@ -123,7 +123,7 @@ export function ByIdRefLink({
             ? z
                 .string()
                 .catch("")
-                .parse(record.data[entitySummary[entityKind].titleField]) ||
+                .parse(record.data[entityRoster[entityKind].titleField]) ||
               `Untitled ${entityLabel(entityKind).toLowerCase()}`
             : `Missing ${entityLabel(entityKind).toLowerCase()}`
         }

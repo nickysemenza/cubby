@@ -57,16 +57,17 @@ const NO_TAG_OPTIONS: Array<{ value: string; label: string }> = [];
  * count is what exposes a near-duplicate ("M18 (13)" next to a stray "m18
  * (1)") before it spreads. Replaces `recipe.getAllTags`/`product.tagOptions`.
  */
-export function useTagOptions(entity: "recipe" | "product") {
-  const query = useQuery(
-    entityFilterOptions.filterOptions.queryOptions({
+export function useTagOptions(entity: "recipe" | "product", enabled = true) {
+  const query = useQuery({
+    ...entityFilterOptions.filterOptions.queryOptions({
       source: "tags",
       entity,
       search: "",
       selectedIds: [],
       limit: 1000,
     }),
-  );
+    enabled,
+  });
   const options = useMemo(
     () =>
       query.data?.items.map((item) => ({

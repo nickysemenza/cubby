@@ -9,6 +9,7 @@
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
 import { inventoryEntry } from "~/server/db/schema";
@@ -44,13 +45,20 @@ const ingredientPage = (
  * fallback order keeps each row on exactly one page.
  */
 const readPages = async <T>(
-  read: (pageIndex: number) => Promise<{ data: T[]; count: number }>,
+  read: (
+    pageIndex: number,
+  ) => Promise<{ data: T[]; count?: number; hasNextPage?: boolean }>,
 ) => {
   const rows: T[] = [];
   for (let pageIndex = 0; pageIndex < 10; pageIndex++) {
     const result = await read(pageIndex);
     rows.push(...result.data);
-    if (result.data.length === 0 || rows.length >= result.count) break;
+    if (
+      result.hasNextPage === false ||
+      (result.hasNextPage === undefined &&
+        rows.length >= z.number().parse(result.count))
+    )
+      break;
   }
   return rows;
 };
@@ -323,7 +331,8 @@ describe("custom list readers", () => {
     expect(await read(0, "count")).toEqual({
       data: [],
       count: 3,
-      sums: undefined,
+      hasNextPage: true,
+      unresolvedCount: undefined,
     });
 
     // Five entries of one product tie on product and amount, so the
@@ -417,7 +426,12 @@ describe("custom list readers", () => {
     expect(await projectScaffold.totals(ctx.db, { search: "Paging" })).toEqual({
       costEstimate: 60,
     });
-    expect(await read(0, "count")).toEqual({ data: [], count: 3 });
+    expect(await read(0, "count")).toEqual({
+      data: [],
+      count: 3,
+      hasNextPage: true,
+      unresolvedCount: undefined,
+    });
 
     // Four rows tie on cost and status, so the shortcode decides.
     const lead = await insertWithShortcode(ctx.db, "project", {

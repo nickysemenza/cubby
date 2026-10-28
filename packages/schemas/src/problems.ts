@@ -1,3 +1,5 @@
+import { duplicateProductIdentitySchema } from "./problem-identities";
+export { duplicateProductIdentitySchema } from "./problem-identities";
 import { withFieldEnvelopes } from "./field-envelope";
 import {
   productFieldEnvelopeFields,
@@ -23,12 +25,12 @@ import {
   expenseFieldEnvelopeFields,
   expensePublicReadFields,
 } from "./generated/entity-field-envelope-fields.expense.gen";
-import { assessmentChildHandle } from "./assessment-reference";
 import { z } from "zod";
 import { locationRefOut } from "./location-fields";
 import { amount, baseKind } from "./codec";
 import { money, moneyNullable } from "./money";
-import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
+import { type ShortcodeEntity } from "./entity-manifest";
+import { shortcodeEntities } from "./generated/entity-roster.gen";
 import { entityConnectionItem } from "./entity-connections";
 import { referentialLivenessViolationSchema } from "./entity-integrity";
 import {
@@ -221,30 +223,6 @@ export const toolUsedOutsideOwnershipSchema = withFieldEnvelopes(
   { brandName: productFieldEnvelopeFields.brandName },
   productPublicReadFields,
 );
-
-export const duplicateProductIdentitySchema = z.object({
-  assessmentId: assessmentChildHandle,
-  fingerprint: z.string().nullable(),
-  identityConflict: z.boolean(),
-  pairs: z.array(
-    z.object({
-      assessmentId: assessmentChildHandle,
-      fingerprint: z.string().nullable(),
-      identityConflict: z.boolean(),
-      productIds: z.tuple([productShortcode, productShortcode]),
-    }),
-  ),
-  brandName: z.string().nullable(),
-  model: z.string(),
-  products: z.array(
-    z.object({
-      id: productShortcode,
-      name: z.string(),
-      gtins: z.array(z.string()),
-      sources: z.array(z.string()),
-    }),
-  ),
-});
 
 export const rawProductWithoutMappingsSchema = z.object({
   ...productProblemFields,

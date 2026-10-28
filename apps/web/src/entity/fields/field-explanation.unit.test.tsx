@@ -3,8 +3,8 @@ import { render, screen, within } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { DecisionChain } from "~/ui/derived/decision-chain";
 import {
   ReadableExplanationValue,

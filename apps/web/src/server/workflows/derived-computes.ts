@@ -2,8 +2,7 @@
  * Every stored derived value's compute adapter, by the `compute` id its
  * declaration names (ADR 0021). The drain looks adapters up here only.
  */
-import type { ProductId, RecipeId } from "@cubby/schemas/identifiers";
-import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
+import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import {
   type SearchableEntity,
   searchableEntities,
@@ -15,9 +14,13 @@ import { expenseDerivedComputes } from "~/server/domains/expense/repo/derived";
 import { inventoryDerivedComputes } from "~/server/domains/inventory/repo/derived";
 import { locationDerivedComputes } from "~/server/domains/location/repo/derived";
 import { productDerivedComputes } from "~/server/domains/product/repo/derived";
+import {
+  computeProductReadFacts,
+  productFoodCompute,
+} from "~/server/domains/product/repo/read-facts";
 import { projectDerivedComputes } from "~/server/domains/project/repo/derived";
+import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
-import { prepareRecipeRefresh } from "~/server/domains/run/service/derived-refresh";
 import { shipmentDerivedComputes } from "~/server/domains/shipment/repo/event-summary";
 import { requestUsdaRelease } from "~/server/domains/usda-release/service/client";
 import { qualityDerivedComputes } from "~/server/generic/data-quality/repo/derived";
@@ -65,20 +68,26 @@ const searchSink = (entity: SearchableEntity) =>
 /** Recipe cost and nutrition totals, prepared with USDA outside publication. */
 const recipeTotalsSink = derivedSink({
   prepare: async (db, ids) => {
-    const totals = new Map<string, RecipeTotals | null>();
-    for (const id of ids)
-      // SAFETY: the drain passes ids of `recipe.totals` marks only.
-      totals.set(
-        id,
-        await (await prepareRecipeRefresh(db, id as RecipeId)).compute(),
-      );
+    // Per-record preparation repeats the same closure hundreds of times and
+    // can outlive the page's lease before any work is published.
+    const service = new RecipeCostingService(db, {
+      findFoodsBatch: (lookups) =>
+        new USDAClient(requestUsdaRelease()).findFoodsBatch(lookups),
+    });
+    const totals: Awaited<ReturnType<typeof service.computeStoredTotals>> =
+      new Map();
+    // Bound the ingredient graph retained at once; a page can contain 500 marks.
+    for (let start = 0; start < ids.length; start += 20)
+      for (const [id, value] of await service.computeStoredTotals(
+        ids.slice(start, start + 20).map((id) => parseEntityId("recipe", id)),
+      ))
+        totals.set(id, value);
     return totals;
   },
   publish: async (tx, ids, totals) => {
     const updates = ids.flatMap((id) => {
       const value = totals.get(id);
-      // SAFETY: the drain passes ids of `recipe.totals` marks only.
-      return value ? [{ id: id as RecipeId, totals: value }] : [];
+      return value ? [{ id: parseEntityId("recipe", id), totals: value }] : [];
     });
     return commitRecipeTotals(tx, { updates, freshOnlyIds: [] });
   },
@@ -101,6 +110,12 @@ const searchComputes: Record<string, DerivedAdapter> = Object.fromEntries(
 
 export const derivedComputes: DerivedComputes = {
   ...productDerivedComputes,
+  "product.readFacts": computeProductReadFacts,
+  "product.food": (db, ids) =>
+    productFoodCompute({
+      findFoodsBatch: (lookups) =>
+        new USDAClient(requestUsdaRelease()).findFoodsBatch(lookups),
+    })(db, ids),
   ...inventoryDerivedComputes,
   ...expenseDerivedComputes,
   ...emailDerivedComputes,

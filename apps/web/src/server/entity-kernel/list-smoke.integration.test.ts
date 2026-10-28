@@ -238,7 +238,7 @@ describe("entity list smoke — shared selection/count FROM context", () => {
 
     const runListCase = async (
       label: string,
-      run: () => Promise<{ items: unknown; meta: { totalCount: number } }>,
+      run: () => Promise<{ items: unknown; meta: { totalCount?: number } }>,
     ) => {
       caseCount += 1;
       try {
@@ -247,7 +247,8 @@ describe("entity list smoke — shared selection/count FROM context", () => {
           failures.push(`${label}: items was not an array`);
           return;
         }
-        if (result.items.length > result.meta.totalCount) {
+        const totalCount = z.number().parse(result.meta.totalCount);
+        if (result.items.length > totalCount) {
           failures.push(
             `${label}: items.length (${result.items.length}) exceeded meta.totalCount (${result.meta.totalCount})`,
           );

@@ -5,12 +5,11 @@ import {
   inventoryPublicReadFields,
 } from "./generated/entity-field-envelope-fields.inventory.gen";
 import { z } from "zod";
+import { type EmbeddableEntity, type ShortcodeEntity } from "./entity-manifest";
 import {
   embeddableEntities,
-  type EmbeddableEntity,
   searchableEntities,
-  type ShortcodeEntity,
-} from "./entity-manifest";
+} from "./generated/entity-roster.gen";
 import { anyShortcodeSchema, nonEmptyTuple } from "./identifiers";
 import {
   activeRelatednessPairKeys,
@@ -18,7 +17,10 @@ import {
   relatednessPairRegistry,
 } from "./relatedness";
 
-export { embeddableEntities, searchableEntities } from "./entity-manifest";
+export {
+  embeddableEntities,
+  searchableEntities,
+} from "./generated/entity-roster.gen";
 export type { EmbeddableEntity } from "./entity-manifest";
 
 export const searchableEntitySchema = z.enum(searchableEntities);

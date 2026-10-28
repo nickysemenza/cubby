@@ -66,7 +66,10 @@ import { answering } from "~/server/domains/transaction-import/repo/statement-de
 import * as statementSuggestionsRepo from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import * as statementLabelService from "~/server/domains/transaction-import/service/statement-suggestion-labels";
-import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
+import {
+  readWorkQueue,
+  readRecordWorkQueue,
+} from "~/server/domains/work/service/work-queue-read";
 import * as assessmentRepo from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
@@ -191,7 +194,7 @@ const card = async (ctx: Ctx) => {
       name: "Synthetic statement spending",
     },
   );
-  return createRepoIdentity(ctx, "financialAccount", {
+  const account = await createRepoIdentity(ctx, "financialAccount", {
     name: "Synthetic Card",
     ledgerPartyId: owner.output.id,
 
@@ -204,6 +207,7 @@ const card = async (ctx: Ctx) => {
       },
     ],
   });
+  return { ...account, ledgerPartyId: owner.output.id };
 };
 
 const generate = async (ctx: Ctx) => {
@@ -1434,7 +1438,12 @@ describe("statement Transaction suggestions", () => {
   // one observation leaves the other on the worklist; re-generation republishes
   // unchanged evidence.
   it("publishes one suggestion per charge and inherits decisions across observations", async () => {
-    await card(ctx);
+    const account = await card(ctx);
+    const unrelatedAccount = await createRepoIdentity(ctx, "financialAccount", {
+      name: "Synthetic unrelated card",
+      ledgerPartyId: account.ledgerPartyId,
+      identity: { kind: "credit_card", network: "visa" },
+    });
     const grocery = rowInput({
       providerTransactionId: "synthetic-grocery-record",
     });
@@ -1487,6 +1496,26 @@ describe("statement Transaction suggestions", () => {
         reason: "Pending suggestions",
       }),
     ]);
+    const recordWork = await readRecordWorkQueue(ctx.db, {
+      id: account.output.id,
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(
+      recordWork.items.some((row) =>
+        row.reasonKeys.includes("suggestions:statement_transaction"),
+      ),
+    ).toBe(true);
+    const unrelatedWork = await readRecordWorkQueue(ctx.db, {
+      id: unrelatedAccount.output.id,
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(
+      unrelatedWork.items.some((row) =>
+        row.reasonKeys.includes("suggestions:statement_transaction"),
+      ),
+    ).toBe(false);
     const [first] = (await suggestions(ctx)).filter(
       (row) => row.merchant === "Example Cafe",
     );

@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
@@ -8,9 +9,9 @@ import {
   browserEntityDefinition,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import { viewsForEntity } from "~/entity/model/view-manifest";
 import { cn } from "~/lib/utils";
 import { Facts as SharedFacts } from "~/ui/common/facts";
+import { QuerySection } from "~/ui/feedback/query-section";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
 import { Badge } from "~/ui/primitives/badge";
@@ -20,13 +21,10 @@ import { StaticTable } from "~/ui/primitives/static-table";
 import {
   DETAIL_STATUS_LABEL,
   type OverrideComparison,
-  extendedManifest,
-  metadataFor,
-  overridesFor,
-  relationDetailStatus,
+  type SchemaEntity,
   relationStatusClass,
-  schemaRow,
 } from "./entity-schema-model";
+import { schemaEntityQueryOptions } from "./schema-presentation";
 
 const dash = <span className="text-muted-foreground/40">—</span>;
 const cell = "border-b border-border/60 px-2 py-1 align-top";
@@ -72,8 +70,8 @@ function Heading({ title, count }: { title: string; count?: number }) {
   );
 }
 
-function SavedViewChips({ entity }: { entity: Entity }) {
-  const views = viewsForEntity(entity);
+function SavedViewChips({ presentation }: { presentation: SchemaEntity }) {
+  const views = presentation.savedViews;
   if (views.length === 0) return dash;
   return (
     <div className="flex flex-wrap gap-1">
@@ -87,13 +85,19 @@ function SavedViewChips({ entity }: { entity: Entity }) {
 }
 
 /** A two-column property sheet: label column, value column, hairline rows. */
-function SchemaFacts({ entity, wide }: { entity: Entity; wide?: boolean }) {
-  const row = schemaRow(entity, undefined);
-  const metadata = metadataFor(entity);
+function SchemaFacts({
+  presentation,
+  wide,
+}: {
+  presentation: SchemaEntity;
+  wide?: boolean;
+}) {
+  const row = presentation.row;
+  const entity = row.entity;
   const route = isBrowserRoutedEntity(entity)
     ? browserEntityDefinition(entity).routes
     : null;
-  const repository = metadata.ports.repository;
+  const repository = presentation.repository;
   const facts: readonly [string, ReactNode][] = [
     ["Code", row.code ?? dash],
     ["Legacy code", row.legacy ?? dash],
@@ -102,7 +106,7 @@ function SchemaFacts({ entity, wide }: { entity: Entity; wide?: boolean }) {
     ["Routes", route ? `${route.list} · ${route.detail}` : "workflow owned"],
     [
       "Detail",
-      `${metadata.detail.variant} · ${metadata.detail.sections.length} sections`,
+      `${presentation.detail.variant} · ${presentation.detail.sections.length} sections`,
     ],
     [
       "Relation tables",
@@ -170,8 +174,14 @@ function OutcomeBadge({ status }: { status: OverrideComparison["status"] }) {
 const REQUIRED_TITLE =
   "Removing this input fails compilation; the compiler has no valid default.";
 
-function Overrides({ entity, full }: { entity: Entity; full?: boolean }) {
-  const overrides = overridesFor(entity);
+function Overrides({
+  presentation,
+  full,
+}: {
+  presentation: SchemaEntity;
+  full?: boolean;
+}) {
+  const overrides = presentation.overrides;
   if (overrides.length === 0)
     return (
       <p className="text-xs text-muted-foreground">No overrides declared.</p>
@@ -258,19 +268,19 @@ function Overrides({ entity, full }: { entity: Entity; full?: boolean }) {
 }
 
 function Relations({
-  entity,
+  presentation,
   target,
   full,
 }: {
-  entity: Entity;
+  presentation: SchemaEntity;
   target: EntityTarget;
   full?: boolean;
 }) {
-  const relationships = extendedManifest(entity).relationships;
+  const relationships = presentation.relationships;
   if (relationships.length === 0)
     return (
       <p className="text-xs text-muted-foreground">
-        {entity} declares no relations.
+        {presentation.row.entity} declares no relations.
       </p>
     );
   return (
@@ -313,14 +323,14 @@ function Relations({
           header: "Detail table",
           headClassName: head,
           cellProps: (relation) => {
-            const detail = relationDetailStatus(entity, relation);
+            const detail = relation.detail;
             return {
               title: detail.reason,
               className: cn(cell, relationStatusClass(detail.status)),
             };
           },
           cell: (relation) => {
-            const detail = relationDetailStatus(entity, relation);
+            const detail = relation.detail;
             return DETAIL_STATUS_LABEL[detail.status];
           },
         },
@@ -331,7 +341,7 @@ function Relations({
           headClassName: head,
           cellClassName: cn(cell, "font-mono"),
           cell: (relation) => {
-            const detail = relationDetailStatus(entity, relation);
+            const detail = relation.detail;
             return detail.descriptor ?? dash;
           },
         },
@@ -342,7 +352,7 @@ function Relations({
           headClassName: head,
           cellClassName: cn(cell, "text-muted-foreground"),
           cell: (relation) => {
-            const detail = relationDetailStatus(entity, relation);
+            const detail = relation.detail;
             return detail.reason ?? relation.label;
           },
         },
@@ -351,8 +361,8 @@ function Relations({
   );
 }
 
-function Filters({ entity }: { entity: Entity }) {
-  const filters = metadataFor(entity).filterDescriptors;
+function Filters({ presentation }: { presentation: SchemaEntity }) {
+  const filters = presentation.filters;
   if (filters.length === 0)
     return <p className="text-xs text-muted-foreground">No filters.</p>;
   return (
@@ -394,8 +404,8 @@ function Filters({ entity }: { entity: Entity }) {
   );
 }
 
-function DetailSectionsTable({ entity }: { entity: Entity }) {
-  const sections = metadataFor(entity).detail.sections;
+function DetailSectionsTable({ presentation }: { presentation: SchemaEntity }) {
+  const sections = presentation.detail.sections;
   return (
     <StaticTable
       className="w-full table-auto border-collapse text-sm"
@@ -435,8 +445,8 @@ function DetailSectionsTable({ entity }: { entity: Entity }) {
   );
 }
 
-function Identity({ entity }: { entity: Entity }) {
-  const metadata = metadataFor(entity);
+function Identity({ presentation }: { presentation: SchemaEntity }) {
+  const entity = presentation.row.entity;
   return (
     <div className="flex min-w-0 items-start gap-2">
       <EntityIcon entity={entity} className="mt-1 size-5 shrink-0" />
@@ -444,12 +454,12 @@ function Identity({ entity }: { entity: Entity }) {
         <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="font-serif text-lg leading-tight">{entity}</span>
           <span className="font-mono text-2xs text-muted-foreground">
-            {schemaRow(entity, undefined).code}
+            {presentation.row.code}
           </span>
         </div>
-        {metadata.description && (
+        {presentation.description && (
           <p className="text-xs text-muted-foreground">
-            {metadata.description}
+            {presentation.description}
           </p>
         )}
       </div>
@@ -459,7 +469,7 @@ function Identity({ entity }: { entity: Entity }) {
 
 /** The docked side panel: a bounded preview of one entity's effective
  * schema, with the full page one click away. */
-export function EntitySchemaPanel({
+function SchemaPanel({
   entity,
   onSelect,
   onClose,
@@ -468,24 +478,26 @@ export function EntitySchemaPanel({
   onSelect: (entity: Entity) => void;
   onClose: () => void;
 }) {
-  const overrides = overridesFor(entity).length;
-  const relations = extendedManifest(entity).relationships.length;
-  const metadata = metadataFor(entity);
+  const { data: presentation } = useSuspenseQuery(
+    schemaEntityQueryOptions(entity),
+  );
+  const overrides = presentation.overrides.length;
+  const relations = presentation.relationships.length;
   const step = useTableRowStep();
   return (
     <SidePanel
       label={`${entity} schema`}
       title={entity}
       icon={<EntityIcon entity={entity} className="size-5" />}
-      code={schemaRow(entity, undefined).code ?? undefined}
+      code={presentation.row.code ?? undefined}
       onClose={onClose}
       onPrev={() => step(-1)}
       onNext={() => step(1)}
     >
       <div className="space-y-4 p-3">
-        {metadata.description && (
+        {presentation.description && (
           <p className="text-xs text-muted-foreground">
-            {metadata.description}
+            {presentation.description}
           </p>
         )}
         <div className="flex flex-wrap gap-1.5">
@@ -506,14 +518,17 @@ export function EntitySchemaPanel({
             </Link>
           )}
         </div>
-        <SchemaFacts entity={entity} />
+        <SchemaFacts presentation={presentation} />
         <section className="space-y-1.5">
           <Heading title="Declaration overrides" count={overrides} />
-          <Overrides entity={entity} />
+          <Overrides presentation={presentation} />
         </section>
         <section className="space-y-1.5">
           <Heading title="Relations" count={relations} />
-          <Relations entity={entity} target={panelTarget(onSelect)} />
+          <Relations
+            presentation={presentation}
+            target={panelTarget(onSelect)}
+          />
         </section>
       </div>
     </SidePanel>
@@ -522,47 +537,62 @@ export function EntitySchemaPanel({
 
 /** The full schema page body: everything the panel shows, unabridged, plus
  * filters, detail sections, and saved views. */
-export function EntitySchemaDetail({ entity }: { entity: Entity }) {
-  const metadata = metadataFor(entity);
+function SchemaDetail({ entity }: { entity: Entity }) {
+  const { data: presentation } = useSuspenseQuery(
+    schemaEntityQueryOptions(entity),
+  );
   return (
     <div className="space-y-6">
-      <Identity entity={entity} />
-      <SchemaFacts entity={entity} wide />
+      <Identity presentation={presentation} />
+      <SchemaFacts presentation={presentation} wide />
       <section className="space-y-1.5">
-        <Heading
-          title="Relations"
-          count={extendedManifest(entity).relationships.length}
-        />
-        <Relations entity={entity} target={pageTarget} full />
+        <Heading title="Relations" count={presentation.relationships.length} />
+        <Relations presentation={presentation} target={pageTarget} full />
       </section>
       <section className="space-y-1.5">
         <Heading
           title="Declaration overrides"
-          count={overridesFor(entity).length}
+          count={presentation.overrides.length}
         />
         <p className="text-2xs text-muted-foreground">
           Explicit *Override inputs in the entity manifest. Each comparison
           compiles the manifest with that input removed.
         </p>
-        <Overrides entity={entity} full />
+        <Overrides presentation={presentation} full />
       </section>
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="space-y-1.5">
-          <Heading title="Filters" count={metadata.filterDescriptors.length} />
-          <Filters entity={entity} />
+          <Heading title="Filters" count={presentation.filters.length} />
+          <Filters presentation={presentation} />
         </section>
         <section className="space-y-1.5">
           <Heading
             title="Detail sections"
-            count={metadata.detail.sections.length}
+            count={presentation.detail.sections.length}
           />
-          <DetailSectionsTable entity={entity} />
+          <DetailSectionsTable presentation={presentation} />
         </section>
       </div>
       <section className="space-y-1.5">
         <Heading title="Saved views" />
-        <SavedViewChips entity={entity} />
+        <SavedViewChips presentation={presentation} />
       </section>
     </div>
+  );
+}
+
+export function EntitySchemaPanel(props: Parameters<typeof SchemaPanel>[0]) {
+  return (
+    <QuerySection title="Entity schema" resetKey={props.entity} fallback={null}>
+      <SchemaPanel {...props} />
+    </QuerySection>
+  );
+}
+
+export function EntitySchemaDetail(props: { entity: Entity }) {
+  return (
+    <QuerySection title="Entity schema" resetKey={props.entity} fallback={null}>
+      <SchemaDetail {...props} />
+    </QuerySection>
   );
 }

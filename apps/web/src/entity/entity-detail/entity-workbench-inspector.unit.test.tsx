@@ -1,5 +1,6 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
+
 const vendorOut = entityFieldEnvelopeSchemas.vendor.detail;
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -9,10 +10,12 @@ import {
   entityReadFixture,
   fieldValueFixture,
 } from "~/entity/fields/field-envelope.fixtures";
+import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { installFeatures } from "~/features/registry";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { recommendations } from "~/integrations/tanstack-query/generated/catalog/recommendations.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { loadEntityMetadata } from "~/server/entity-metadata/loader.server";
 
 import { EntityWorkbenchInspector } from "./entity-workbench-inspector";
 
@@ -126,8 +129,16 @@ const vendorRelationships = {
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
-beforeEach(() => {
+beforeEach(async () => {
   harness = createBrowserTestHarness();
+  await Promise.all(
+    (["vendor", "image"] as const).map(async (entity) => {
+      harness.queryClient.setQueryData(
+        entityMetadataQueryOptions(entity).queryKey,
+        await loadEntityMetadata(entity),
+      );
+    }),
+  );
 });
 
 afterEach(() => {

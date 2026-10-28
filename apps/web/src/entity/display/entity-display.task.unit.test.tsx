@@ -1,8 +1,14 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import type { CellData } from "@tanstack/react-table";
-import { render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  render as testingRender,
+  screen,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { installFeatures } from "~/features/registry";
 import {
@@ -12,6 +18,25 @@ import {
 } from "~/ui/data-table/table-features";
 
 import { createEntityDisplayColumns } from "./entity-display";
+
+let queryClient: Awaited<ReturnType<typeof metadataQueryClient>>;
+beforeEach(async () => {
+  queryClient = await metadataQueryClient();
+});
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
+
+function MetadataProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+function render(ui: ReactNode, options?: Parameters<typeof testingRender>[1]) {
+  return testingRender(ui, { wrapper: MetadataProvider, ...options });
+}
 
 installFeatures();
 
@@ -86,6 +111,7 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
 function buildTaskColumns() {
   const helper = createCubbyColumnHelper<TaskRow>();
   return createEntityDisplayColumns(
+    queryClient,
     "task",
     helper,
     createCubbyColumnCollection<TaskRow>((add) => {

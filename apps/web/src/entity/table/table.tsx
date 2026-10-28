@@ -652,22 +652,14 @@ function PinnedFooterCell<TItem extends RowData>({
   const total = serverTotal ?? money?.value;
   const identity =
     header.column.columnDef.meta?.entityColumnRole === "identity";
-  const fullTotal = tableMoneyTotals(
-    table.getVisibleLeafColumns(),
-    loaded,
-  ).some(
-    (column) =>
-      table.options.meta?.serverTotals?.sums?.[column.columnId] !== undefined,
-  );
-  const count = fullTotal
-    ? (table.options.meta?.serverTotals?.totalCount ?? loaded.length)
-    : loaded.length;
+  const population = table.options.meta?.serverTotals?.totalCount;
+  const count = population ?? loaded.length;
   const footer =
     money && total !== undefined ? (
       <CurrencyValue value={total} interactive={false} />
     ) : identity ? (
       <span className="font-normal text-muted-foreground">
-        {count} {fullTotal ? "rows" : "loaded rows"}
+        {count} {population === undefined ? "loaded rows" : "rows"}
       </span>
     ) : (
       flexRender(header.column.columnDef.footer, header.getContext())

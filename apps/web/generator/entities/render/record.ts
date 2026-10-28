@@ -34,3 +34,30 @@ export const renderRecord = ({
   }const ${name} = ${compactLiteral(entries)} as const${
     satisfies ? ` satisfies ${satisfies}` : ""
   };\n`;
+
+/** Aggregate projections reuse the per-entity source rather than duplicating its data. */
+export const renderMetadataProjection = ({
+  name,
+  keys,
+  property,
+  satisfies,
+}: {
+  name: string;
+  keys: readonly string[];
+  property: string;
+  satisfies?: string;
+}): string =>
+  keys
+    .map(
+      (key, index) =>
+        `import { metadata as entityMetadata${index} } from "./entity-metadata.${key}.gen";\n`,
+    )
+    .join("") +
+  `export const ${name} = {\n` +
+  keys
+    .map(
+      (key, index) =>
+        `  ${JSON.stringify(key)}: entityMetadata${index}.${property},\n`,
+    )
+    .join("") +
+  `} as const${satisfies ? ` satisfies ${satisfies}` : ""};\n`;

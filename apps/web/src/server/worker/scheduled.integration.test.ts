@@ -18,7 +18,7 @@ it("rejects daily completion with both independent database failures", async () 
     handleScheduledInvocation(
       { scheduledTime: 0, cron: CRON_SCHEDULES.dailyMaintenance },
       fromPartial<Env>({
-        HYPERDRIVE: { connectionString: connection.toString() },
+        HYPERDRIVE_BACKGROUND: { connectionString: connection.toString() },
         CF_VERSION_METADATA: { id: "synthetic-version" },
       }),
     ),
