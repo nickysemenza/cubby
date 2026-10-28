@@ -8,7 +8,6 @@ for (const viewport of [
 ]) {
   test(`relationship pickers resolve names and preserve other assignments at ${viewport.width}px`, async ({
     data,
-    agent,
     browser,
     screen,
   }) => {
@@ -22,13 +21,21 @@ for (const viewport of [
         .getByRole("link", `Synthetic Original Project ${viewport.width}`),
     ).toBeVisible();
     await screen.getByRole("button", "Edit Purchase").click();
-    await expect(
-      screen
-        .getByRole("dialog", "Edit Purchase")
-        .getByRole("combobox", "Default project"),
-    ).toBeVisible();
-    await agent.act(
-      `In the Edit Purchase dialog, set its Default project to "Synthetic Replacement Project ${viewport.width}".`,
+    const projectPicker = screen
+      .getByRole("dialog", "Edit Purchase")
+      .getByRole("combobox", "Default project");
+    await expect(projectPicker).toHaveValue(
+      `Synthetic Original Project ${viewport.width}`,
+    );
+    await projectPicker.click();
+    // Exact-value selection needs no model completion judgment after the option closes.
+    await screen
+      .getByRole("option", {
+        name: new RegExp(`^Synthetic Replacement Project ${viewport.width}\\b`),
+      })
+      .click();
+    await expect(projectPicker).toHaveValue(
+      `Synthetic Replacement Project ${viewport.width}`,
     );
     await screen.getByRole("button", "Save changes").click();
     await expect(screen.getByRole("dialog", "Edit Purchase")).toBeHidden();
