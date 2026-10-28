@@ -76,7 +76,7 @@ export function correctionOutcomeExists(assessmentId: SQL, receiptId?: SQL) {
 }
 
 /** Batch readers and replay use the same automatic-authority checks without scheduling work. */
-export async function readCorrectionReceipts(
+async function readCorrectionReceipts(
   db: RepositoryQueryInput,
   targets: readonly { sourceFeedbackId: string; targetAssessmentId: string }[],
 ) {

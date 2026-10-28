@@ -1,8 +1,7 @@
 import { inArray, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 
 /** Normalize lookup input without rewriting retained names or their indexes. */
-export const nameMatchKey = (value: string): string =>
-  value.trim().toLowerCase();
+const nameMatchKey = (value: string): string => value.trim().toLowerCase();
 
 export const matchesNameOrAlias = (input: {
   name: string;

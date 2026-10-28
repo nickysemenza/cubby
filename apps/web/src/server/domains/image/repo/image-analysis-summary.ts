@@ -63,10 +63,9 @@ export function composeImageAnalysisSummary(
  * Newest non-deleted row per image (keyed by the public `IMG-` shortcode) for
  * local analysis, in one query. SQL selects one row and only classifications/OCR
  * per image; full historical payloads stay in retained storage. Equal timestamps
- * use descending IDs; full timestamp precision is retained. Joins to `Image` rather than taking
- * internal ids because `aiAnalysis.entityId` is a uuid this reader's own
- * callers don't all have on hand — the Product mapper's image rows carry only
- * the shortcode (`MappableImageRecord` deliberately drops the uuid).
+ * use descending IDs; full timestamp precision is retained. Page readers select
+ * by internal IDs; embedded Product media selects by public codes. Both scopes
+ * keep the same code-keyed output without an identity-resolution query.
  */
 async function loadNewestLocalAnalysisByImage(
   db: Database | DrizzleTransaction,
