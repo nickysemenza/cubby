@@ -2997,7 +2997,9 @@ select fixed target rows with `targetWhere` during deferred fanout, or read reco
 (`json: { array, key }`). A path step may select a UUID from its `to` JSON
 object with `jsonKey`, or compare its `from` object’s UUID with
 `fromJsonKey`; malformed JSON references contribute no records. `dependsOn` names other stored
-values it reads, by column match, link table or join path. A unit test checks
+values it reads, by column match, link table, join path or fixed `targetWhere`.
+A fixed dependency marks only those target rows when any upstream publication
+changes; it does not subscribe to every `DerivedValue` write. A unit test checks
 every declared table and column against the Drizzle schema: PL/pgSQL resolves
 trigger columns only when a row fires, so a misspelled column would fail saves.
 

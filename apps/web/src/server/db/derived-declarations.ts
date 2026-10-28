@@ -50,6 +50,7 @@ export type DerivedDependency = {
 } & (
   | { readonly sourceColumn: string; readonly entityColumn: string }
   | { readonly path: readonly DerivedPathStep[] }
+  | { readonly targetWhere: Readonly<Record<string, string | null>> }
   | {
       readonly through: {
         readonly table: string;
@@ -132,6 +133,13 @@ const storedEntry = z.object({
           z.object({
             entity: entitySchema,
             key: z.string(),
+            targetWhere: z
+              .record(z.string(), z.string().nullable())
+              .refine((where) => Object.keys(where).length > 0),
+          }),
+          z.object({
+            entity: entitySchema,
+            key: z.string(),
             match: z.record(z.string(), z.string()),
           }),
           z.object({
@@ -205,6 +213,12 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
           }),
           dependsOn: (entry.stored.dependsOn ?? []).map(
             (dependency): DerivedDependency => {
+              if ("targetWhere" in dependency)
+                return {
+                  entity: dependency.entity,
+                  key: dependency.key,
+                  targetWhere: dependency.targetWhere,
+                };
               if ("path" in dependency)
                 return {
                   entity: dependency.entity,

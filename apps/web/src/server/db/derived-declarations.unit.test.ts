@@ -60,28 +60,30 @@ describe("stored derived declarations", () => {
         ]),
       ]),
       ...declaration.dependsOn.flatMap((dependency) =>
-        "path" in dependency
-          ? dependency.path.flatMap((step) =>
-              missing(step.table, [step.from, step.to]),
-            )
-          : "through" in dependency
-            ? missing(dependency.through.table, [
-                dependency.through.source,
-                dependency.through.dependent,
-                ...Object.keys(dependency.through.where ?? {}),
-              ])
-            : [
-                ...missing(declaration.table, [dependency.entityColumn]),
-                ...(storedDerivedDeclarations()
-                  .filter(
-                    (source) =>
-                      source.entity === dependency.entity &&
-                      source.key === dependency.key,
-                  )
-                  .flatMap((source) =>
-                    missing(source.table, [dependency.sourceColumn]),
-                  ) ?? []),
-              ],
+        "targetWhere" in dependency
+          ? missing(declaration.table, Object.keys(dependency.targetWhere))
+          : "path" in dependency
+            ? dependency.path.flatMap((step) =>
+                missing(step.table, [step.from, step.to]),
+              )
+            : "through" in dependency
+              ? missing(dependency.through.table, [
+                  dependency.through.source,
+                  dependency.through.dependent,
+                  ...Object.keys(dependency.through.where ?? {}),
+                ])
+              : [
+                  ...missing(declaration.table, [dependency.entityColumn]),
+                  ...(storedDerivedDeclarations()
+                    .filter(
+                      (source) =>
+                        source.entity === dependency.entity &&
+                        source.key === dependency.key,
+                    )
+                    .flatMap((source) =>
+                      missing(source.table, [dependency.sourceColumn]),
+                    ) ?? []),
+                ],
       ),
     ]);
     expect([...new Set(problems)]).toEqual([]);
