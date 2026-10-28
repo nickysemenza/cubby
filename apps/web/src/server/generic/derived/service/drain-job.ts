@@ -43,9 +43,13 @@ const DRAIN_PAGE_MARKS = 20;
  * Each page claims ready marks, computes outside the transaction and
  * publishes through `defineDrain`; an idle page marks expired clock values.
  */
-export const derivedDrainHandler = (computes: DerivedComputes): JobHandler =>
+export const derivedDrainHandler = (
+  computes: DerivedComputes,
+  /** Production pages stay at DRAIN_PAGE_MARKS; test drains settle larger fixtures faster. */
+  limit = DRAIN_PAGE_MARKS,
+): JobHandler =>
   defineDrain<{ plan: DerivedPagePlan; chunk: DerivedChunk }>({
-    limit: DRAIN_PAGE_MARKS,
+    limit,
     repeats: true,
     async prepare(db, items) {
       const { plan, failed } = await withTrace(

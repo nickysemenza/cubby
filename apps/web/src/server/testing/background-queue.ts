@@ -72,7 +72,7 @@ export async function drainStoredDerived(
     // A running server (E2E) may hold the drain's lease; its page drains the
     // same items, so wait for it instead of failing.
     if (
-      (await advanceDerivedPage(db, derivedDrainHandler(computes), {
+      (await advanceDerivedPage(db, derivedDrainHandler(computes, 500), {
         allowSkip: true,
       })) === "skipped"
     )
