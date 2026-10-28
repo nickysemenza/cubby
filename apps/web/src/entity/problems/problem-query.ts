@@ -99,19 +99,19 @@ export type ProblemFreshness =
 /**
  * A remediation the Problems UI actually exposes. These describe capability,
  * not membership: changing a button must never change the canonical query.
+ * Item actions act on one row or open its guided flow; group actions either
+ * re-run this Problem's registered entity query, or are deliberately global
+ * maintenance/backfill jobs that must never be labelled as acting on the
+ * group's count.
  */
 export type ProblemAction = {
   id: string;
   label: string;
-  scope: "item" | "bulk";
-  /**
-   * Bulk actions either re-run this Problem's registered entity query, or are
-   * deliberately global maintenance/backfill jobs. The latter must never be
-   * labelled as acting on the card's count.
-   */
-  target: "item" | "canonical-query" | "global-backfill" | "guided-flow";
   destructive?: boolean;
-};
+} & (
+  | { scope: "item"; target: "item" | "guided-flow" }
+  | { scope: "group"; target: "canonical-query" | "global-backfill" }
+);
 
 type ProblemPresenter = {
   /** Registered presenter adapter; defaults to the Problem key. */
@@ -128,18 +128,12 @@ export interface ProblemQuery {
   description: string;
   emptyMessage: string;
   source: ProblemSource;
-  /** Empty means the diagnostic is intentionally read-only. */
-  actions: readonly ProblemAction[];
   freshness: ProblemFreshness;
   presenter: ProblemPresenter;
   quality: ProblemQualityPolicy;
 }
 
-type ProblemDefinitionInput = Omit<
-  ProblemQuery,
-  "actions" | "presenter" | "quality"
-> & {
-  actions?: readonly ProblemAction[];
+type ProblemDefinitionInput = Omit<ProblemQuery, "presenter" | "quality"> & {
   presenter?: ProblemPresenter;
   quality?: Pick<ProblemQualityPolicy, "rowChecks">;
 };
@@ -151,7 +145,7 @@ type ProblemDefinitionInput = Omit<
  */
 export const defineProblem = <T extends ProblemDefinitionInput>(
   definition: T,
-): T & Pick<ProblemQuery, "actions" | "presenter" | "quality"> => {
+): T & Pick<ProblemQuery, "presenter" | "quality"> => {
   if (
     definition.source.kind === "entity" &&
     definition.source.filters == null
@@ -168,7 +162,6 @@ export const defineProblem = <T extends ProblemDefinitionInput>(
   }
   return {
     ...definition,
-    actions: definition.actions ?? [],
     quality: {
       scoring: "unscored",
       exceptions:

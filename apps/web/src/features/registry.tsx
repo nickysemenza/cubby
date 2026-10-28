@@ -541,30 +541,41 @@ const startRecountAction = lazy(() =>
 );
 
 const workActions: WorkActionTable = {
-  "open-list": openProblemListAction,
-  "pair-transfer": transferPairAction,
-  "duplicateProductIdentities:merge": duplicateProductMergeAction,
-  "orphanedProducts:delete": orphanedProductDeleteAction,
-  "productsWithNoImages:fetch-images": fetchProductImagesAction,
-  "duplicateVendors:merge": duplicateVendorMergeAction,
-  "vendorsWithoutLogos:fetch-logo": vendorLogoFetchWorkAction,
-  "duplicateFinancialTransactionSourceRefs:choose-keeper":
-    duplicateTransactionRefAction,
-  "duplicateFinancialAccountSourceAliases:choose-keeper":
-    duplicateAccountAliasAction,
-  "unusedIngredientsWithProduct:delete": unusedWithProductDeleteAction,
-  "unusedIngredientsWithProduct:delete-all": unusedWithProductDeleteAction,
-  "unusedIngredientsWithoutProduct:delete": unusedWithoutProductDeleteAction,
-  "unusedIngredientsWithoutProduct:delete-all":
-    unusedWithoutProductDeleteAction,
-  "ingredientsWithoutProduct:open-workbench": ingredientWorkbenchAction,
-  "ingredientsWithPartialCoverage:repair-coverage": partialCoverageAction,
-  "productsWithIslandedMappings:add-conversion": islandedMappingsAction,
-  "emptyLocations:add-inventory": addInventoryAction,
-  "locationsWithoutAiDescription:analyze-all": analyzeLocationsAction,
-  "staleLocations:start-recount": startRecountAction,
-  "neverVerifiedInventory:start-recount": startRecountAction,
-  "unknownParkedItems:start-recount": startRecountAction,
+  sources: {
+    "open-list": openProblemListAction,
+    "pair-transfer": transferPairAction,
+  },
+  problems: {
+    duplicateProductIdentities: { merge: duplicateProductMergeAction },
+    orphanedProducts: { delete: orphanedProductDeleteAction },
+    productsWithNoImages: { "fetch-images": fetchProductImagesAction },
+    duplicateVendors: { merge: duplicateVendorMergeAction },
+    vendorsWithoutLogos: { "fetch-logo": vendorLogoFetchWorkAction },
+    duplicateFinancialTransactionSourceRefs: {
+      "choose-keeper": duplicateTransactionRefAction,
+    },
+    duplicateFinancialAccountSourceAliases: {
+      "choose-keeper": duplicateAccountAliasAction,
+    },
+    unusedIngredientsWithProduct: {
+      delete: unusedWithProductDeleteAction,
+      "delete-all": unusedWithProductDeleteAction,
+    },
+    unusedIngredientsWithoutProduct: {
+      delete: unusedWithoutProductDeleteAction,
+      "delete-all": unusedWithoutProductDeleteAction,
+    },
+    ingredientsWithoutProduct: { "open-workbench": ingredientWorkbenchAction },
+    ingredientsWithPartialCoverage: {
+      "repair-coverage": partialCoverageAction,
+    },
+    productsWithIslandedMappings: { "add-conversion": islandedMappingsAction },
+    emptyLocations: { "add-inventory": addInventoryAction },
+    locationsWithoutAiDescription: { "analyze-all": analyzeLocationsAction },
+    staleLocations: { "start-recount": startRecountAction },
+    neverVerifiedInventory: { "start-recount": startRecountAction },
+    unknownParkedItems: { "start-recount": startRecountAction },
+  },
 };
 
 const headerAction = <E extends GenericDetailEntity>(

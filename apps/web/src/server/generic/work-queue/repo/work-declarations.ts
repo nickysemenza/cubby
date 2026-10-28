@@ -5,11 +5,18 @@ import {
 } from "@cubby/schemas/data-quality";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { workQueueGapViews, type WorkAction } from "@cubby/schemas/work-queue";
+import {
+  workQueueGapViews,
+  type WorkAction,
+  type WorkSourceActionId,
+} from "@cubby/schemas/work-queue";
 import { workQueueGapChecks } from "@cubby/schemas/work-queue-policy";
 import { sql, type SQL } from "drizzle-orm";
 
-import { problemActionsFor } from "~/entity/problems/problem-actions";
+import {
+  problemActionId,
+  problemActionsFor,
+} from "~/entity/problems/problem-actions";
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import type { FilterAssembly } from "~/entity/problems/problem-query";
 import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
@@ -121,8 +128,7 @@ export const workProblemActions = (
 ): WorkAction[] =>
   problemActionsFor(key).map((action) => ({
     ...action,
-    id: `${key}:${action.id}`,
-    scope: action.scope === "bulk" ? "group" : "item",
+    id: problemActionId(key, action.id),
   }));
 
 /** Domain readers supply their own query; declaration metadata stays shared. */
@@ -156,7 +162,7 @@ export const entityProblemSources = (
         ...(definition.continuation.kind === "entity-list"
           ? [
               {
-                id: "open-list",
+                id: "open-list" satisfies WorkSourceActionId,
                 label: `Open in ${entitySummary[entity].plural} list`,
                 scope: "group" as const,
                 target: "guided-flow" as const,

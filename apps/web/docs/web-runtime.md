@@ -513,7 +513,10 @@ materialized union. Exact totals and view/group counts use the complete
 eligible population in the same pass; quality gaps and display images load only
 for the selected page. A relation list's route derives its search schema from
 its declaration (`relationListSearch`), and its rows' declared actions render
-through the `workActions` feature table; neither is hand-listed per page. Pending
+through the `workActions` feature table; neither is hand-listed per page. That
+table's Problem handlers are shaped by `entity/problems/problem-actions.ts`,
+which also owns the `<problem>:<verb>` wire id; other sources' actions are
+keyed by `WorkSourceActionId`. Pending
 statement-reference invalidation uses one hashable source-reference set rather
 than a source-record lookup per reference per pending suggestion.
 Statement counts decode one compact page-independent eligibility projection.

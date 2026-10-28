@@ -19,8 +19,7 @@ const entityProblem = defineProblem({
 });
 
 describe("Problem Query registry", () => {
-  it("declares read-only action and presenter capabilities by default", () => {
-    expect(entityProblem.actions).toEqual([]);
+  it("declares its presenter by default", () => {
     expect(entityProblem.presenter).toEqual({
       key: "productsMissingPrice",
       detailRouting: "entity",

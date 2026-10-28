@@ -77,6 +77,11 @@ export const workAction = z.object({
 });
 export type WorkAction = z.infer<typeof workAction>;
 
+/** Actions a work source declares outside Problems, whose ids are namespaced
+ * by `problemActionId`; the web fills one handler for each. */
+export const workSourceActionIds = ["open-list", "pair-transfer"] as const;
+export type WorkSourceActionId = (typeof workSourceActionIds)[number];
+
 /** Where a row opens; route paths are client knowledge. */
 export const workLink = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("record") }),

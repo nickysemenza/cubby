@@ -71,8 +71,8 @@ export const UnusedWithoutProductDeleteAction = (props: WorkActionProps) => (
 
 /** `ingredientsWithoutProduct:open-workbench`: the workbench can create the
  * Product; the detail page can't. */
-export function IngredientWorkbenchAction(props: WorkActionProps) {
-  const id = props.target.scope === "item" ? props.target.row.id : null;
+export function IngredientWorkbenchAction(props: WorkActionProps<"item">) {
+  const id = props.target.row.id;
   return (
     <WorkActionLink
       action={props.action}

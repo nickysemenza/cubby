@@ -2,7 +2,10 @@ import {
   financialTransactionStatus,
   financialTransactionKind,
 } from "@cubby/schemas/financial-transaction";
-import { workExecutor } from "@cubby/schemas/work-queue";
+import {
+  workExecutor,
+  type WorkSourceActionId,
+} from "@cubby/schemas/work-queue";
 import { and, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -33,7 +36,7 @@ const source: WorkSource = {
   link: { kind: "record" },
   actions: [
     {
-      id: "pair-transfer",
+      id: "pair-transfer" satisfies WorkSourceActionId,
       label: "Pair transfer",
       scope: "item",
       target: "guided-flow",

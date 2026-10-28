@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 
-import { withProblemActionCapabilities } from "./problem-actions";
+import { problemActionsFor } from "./problem-actions";
 import { compileProblemFilters } from "./problem-filter-semantics";
 import type { DiagnosticKey, ProblemQuery } from "./problem-query";
 import { validateProblemQueries } from "./problem-query";
@@ -22,16 +22,6 @@ type RuntimeCapabilities = {
   listEntities?: ReadonlySet<Entity>;
   diagnostics?: ReadonlySet<DiagnosticKey>;
 };
-
-/**
- * Action capabilities describe server-enforced remediation scope, not the
- * browser-visible query assembly. Keep them on the server validation path so
- * a list page does not download labels and destructive-action contracts it
- * cannot render or invoke.
- */
-export const completeProblemQueryDeclarations = (
-  definitions: readonly ProblemQuery[] = problemQueryDeclarations(),
-): readonly ProblemQuery[] => withProblemActionCapabilities(definitions);
 
 const validateRegistryContracts = (
   definitions: readonly ProblemQuery[],
@@ -84,7 +74,7 @@ const validateRegistryContracts = (
       }
     }
     if (
-      definition.actions.some(
+      problemActionsFor(definition.key).some(
         (action) =>
           action.target === "canonical-query" &&
           definition.source.kind !== "entity",
@@ -106,7 +96,6 @@ export const validateCompleteProblemRegistry = (
   definitions: readonly ProblemQuery[] = problemQueryDeclarations(),
   capabilities: RuntimeCapabilities = {},
 ): void => {
-  const completeDefinitions = completeProblemQueryDeclarations(definitions);
-  validateProblemQueries(completeDefinitions, expectedProblemKeys);
-  validateRegistryContracts(completeDefinitions, capabilities);
+  validateProblemQueries(definitions, expectedProblemKeys);
+  validateRegistryContracts(definitions, capabilities);
 };

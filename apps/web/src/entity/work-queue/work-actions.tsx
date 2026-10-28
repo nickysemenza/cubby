@@ -1,8 +1,12 @@
-import type { WorkAction, WorkQueueRow } from "@cubby/schemas/work-queue";
+import type { WorkAction, WorkSourceActionId } from "@cubby/schemas/work-queue";
 import { Link } from "@tanstack/react-router";
 import { type ComponentType, type ReactNode, Suspense, useState } from "react";
 
 import { featureRegistry } from "~/entity/feature-registry";
+import {
+  problemActionHandler,
+  type ProblemActionHandlers,
+} from "~/entity/problems/problem-actions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,33 +19,30 @@ import {
 } from "~/ui/primitives/alert-dialog";
 import { Button } from "~/ui/primitives/button";
 
-/**
- * What a declared action acts on: one row (`item`), or a reason group's
- * whole population (`group`), which the handler re-reads server-side rather
- * than trusting the loaded rows.
- */
-export type WorkActionTarget =
-  | { readonly scope: "item"; readonly row: WorkQueueRow }
-  | {
-      readonly scope: "group";
-      readonly reason: string;
-      readonly count: number;
-    };
+import type { WorkActionProps, WorkActionTarget } from "./work-action-props";
 
-export interface WorkActionProps {
-  readonly action: WorkAction;
-  readonly target: WorkActionTarget;
-}
+export type { WorkActionProps, WorkActionTarget } from "./work-action-props";
 
 /**
- * The client half of every work source's declared actions, keyed by the
- * action's id: a component that performs it, built from the triggers below.
- * Sources declare what a row or group offers; the owning feature fills this
- * table (`features/registry.tsx`) lazily.
+ * The client half of every work source's declared actions: a component that
+ * performs it, built from the triggers below. Problem handlers are shaped by
+ * their declarations (`ProblemActionHandlers`); other sources' actions by
+ * `WorkSourceActionId`. The owning feature fills both lazily
+ * (`features/registry.tsx`).
  */
-export type WorkActionTable = Readonly<
-  Record<string, ComponentType<WorkActionProps>>
->;
+export type WorkActionTable = {
+  readonly problems: ProblemActionHandlers;
+  readonly sources: Readonly<
+    Record<WorkSourceActionId, ComponentType<WorkActionProps>>
+  >;
+};
+
+const workActionHandler = (
+  table: WorkActionTable,
+  id: string,
+): ComponentType<WorkActionProps> | undefined =>
+  Object.entries(table.sources).find(([candidate]) => candidate === id)?.[1] ??
+  problemActionHandler(table.problems, id);
 
 const stop = (event: { stopPropagation: () => void }) =>
   event.stopPropagation();
@@ -156,9 +157,9 @@ export function WorkActions({
   actions: readonly WorkAction[];
   target: WorkActionTarget;
 }) {
-  const handlers = featureRegistry().workActions;
+  const table = featureRegistry().workActions;
   const performed = actions.flatMap((action) => {
-    const Handler = handlers[action.id];
+    const Handler = workActionHandler(table, action.id);
     return Handler ? [{ action, Handler }] : [];
   });
   if (performed.length === 0) return null;

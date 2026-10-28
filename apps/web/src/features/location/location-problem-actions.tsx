@@ -11,10 +11,12 @@ import { useBackfill } from "~/features/maintenance/backfill-button";
 import { BACKFILL } from "~/features/maintenance/backfill-registry";
 
 /** `emptyLocations:add-inventory`: itemize the row's Location. */
-export function AddInventoryAction({ action, target }: WorkActionProps) {
-  const id = target.scope === "item" ? target.row.id : null;
-  const parsed = locationShortcode.safeParse(id);
-  if (target.scope !== "item" || !parsed.success) return null;
+export function AddInventoryAction({
+  action,
+  target,
+}: WorkActionProps<"item">) {
+  const parsed = locationShortcode.safeParse(target.row.id);
+  if (!parsed.success) return null;
   return (
     <WorkActionDialogTrigger action={action}>
       {(close) => (
@@ -46,7 +48,10 @@ export function AnalyzeLocationsAction(props: WorkActionProps) {
  * `start-recount`: recounting happens in the native app, so the flow opens
  * the record (a Location, or the Inventory entry whose Location to recount).
  */
-export function StartRecountAction({ action, target }: WorkActionProps) {
-  if (target.scope !== "item" || !target.row.id) return null;
+export function StartRecountAction({
+  action,
+  target,
+}: WorkActionProps<"item">) {
+  if (!target.row.id) return null;
   return <WorkActionLink action={action} href={`/${target.row.id}`} />;
 }

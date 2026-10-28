@@ -23,7 +23,7 @@ export function ProblemItemsAction<K extends ProblemKey>({
   problemKey,
   matches,
   children,
-}: WorkActionProps & {
+}: WorkActionProps<"item"> & {
   problemKey: K;
   matches?: (item: ProblemItem<K>, recordId: string) => boolean;
   children: (item: ProblemItem<K>, close: () => void) => ReactNode;
@@ -40,7 +40,7 @@ export function ProblemItemsAction<K extends ProblemKey>({
         >
           <ProblemItems
             problemKey={problemKey}
-            recordId={target.scope === "item" ? target.row.id : null}
+            recordId={target.row.id}
             matches={matches}
             close={close}
           >
