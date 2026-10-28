@@ -63,7 +63,9 @@ read fact is stated once:
   before request validation; column IDs are not wire filter keys. Server reads
   use generated filter codecs without picker presentation or option renderers.
 
-Scaffold construction publishes its title and field-context read ports. Domain
+Canonical scaffold construction with an explicit read declaration publishes its
+title and field-context read ports; query-only and aliased scaffolds cannot
+replace the entity's public reader. Domain
 operation entry points can therefore use public field envelopes without first
 loading the complete kernel repository graph. Read compilers must not rely on
 `defineRepository` import order to make those ports available.

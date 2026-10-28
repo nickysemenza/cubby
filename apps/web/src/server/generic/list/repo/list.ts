@@ -2809,14 +2809,16 @@ export function listScaffold<
       return readPlan().fields;
     },
   };
-  registerReadPorts(entity, {
-    title: result.title,
-    fieldReads: async (db, codes) => {
-      // SAFETY: the query boundary erases the schema, not the native handle.
-      const readDb = db as Database | DrizzleTransaction;
-      return (await result.get(readDb, codes, [])).fieldReads;
-    },
-  });
+  // Query-only and aliased scaffolds do not own an entity's public read ports.
+  if (options?.read && getTableName(table) === entityManifest[entity].dbTable)
+    registerReadPorts(entity, {
+      title: result.title,
+      fieldReads: async (db, codes) => {
+        // SAFETY: the query boundary erases the schema, not the native handle.
+        const readDb = db as Database | DrizzleTransaction;
+        return (await result.get(readDb, codes, [])).fieldReads;
+      },
+    });
   return result;
 }
 

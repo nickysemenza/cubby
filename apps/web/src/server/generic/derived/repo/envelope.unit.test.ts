@@ -497,18 +497,6 @@ describe("canonical field reads", () => {
     });
   });
 
-  it("offers a declared reset for saved intent before resolution is published", () => {
-    const row = buildFieldEnvelopeRow({
-      schema: assigneeRead,
-      entity: "project",
-      row: { id: "PRJ-EXAMPLE", assigneeId: "LPY-SAVED" },
-    });
-    expect(row.fields.assigneeId.current.controls).toMatchObject({
-      kind: "editable",
-      reset: { kind: "available", preview: { kind: "not_loaded" } },
-    });
-  });
-
   it("withholds a stale fallback without disabling an allowed reset", () => {
     const row = buildFieldEnvelopeRow({
       schema: assigneeRead,
