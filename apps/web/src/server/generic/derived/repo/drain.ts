@@ -514,11 +514,22 @@ const expandFanouts = async (tx: Executor, marks: readonly Mark[]) => {
         FOR UPDATE OF held SKIP LOCKED
       ) held
       WHERE d.target = held.target AND d.ref = held.ref AND d.ticket = held.ticket
-    ) SELECT target, ref FROM written`);
+    ) SELECT target, count(*)::int AS count,
+        array_agg(ref ORDER BY ref) FILTER (WHERE ordinal <= ${RING_RECORD_LIMIT + 1}) AS refs
+      FROM (
+        SELECT target, ref, row_number() OVER (PARTITION BY target ORDER BY ref) AS ordinal
+        FROM written
+      ) numbered GROUP BY target`);
   // Several inputs can reach the same dependent. Grouping above both keeps the
   // highest priority and avoids updating one conflict row twice in a statement.
   return z
-    .array(z.object({ target: z.string(), ref: z.string() }))
+    .array(
+      z.object({
+        target: z.string(),
+        count: z.number().int().nonnegative(),
+        refs: z.array(z.string()),
+      }),
+    )
     .parse(result.rows);
 };
 
@@ -570,15 +581,19 @@ export async function publishDerivedPage(
   const affected = new Map<string, Set<string>>();
   const touch = (entity: string, ids: readonly string[]) => {
     const set = affected.get(entity) ?? new Set<string>();
-    for (const id of ids) set.add(id);
+    if (set.size > RING_RECORD_LIMIT) return;
+    for (const id of ids) {
+      set.add(id);
+      if (set.size > RING_RECORD_LIMIT) break;
+    }
     affected.set(entity, set);
   };
   const drift: { target: string; count: number }[] = [];
   const fanouts = await expandFanouts(tx, plan.marks);
-  expanded += fanouts.length;
-  for (const { target, ref } of fanouts) {
+  for (const { target, count, refs } of fanouts) {
+    expanded += count;
     const parsed = parseTarget(target);
-    if (parsed) touch(parsed.declaration.entity, [ref]);
+    if (parsed) touch(parsed.declaration.entity, refs);
   }
   const groups = groupByTarget(plan.marks);
   const valueGroups = [...groups].flatMap(([target, marks]) => {
@@ -684,7 +699,9 @@ export async function publishDerivedPage(
     );
     await propagate(tx, declaration, changedIds);
   }
-  const ids = [...affected.values()].flatMap((set) => [...set]);
+  const ids = [...affected.values()].flatMap((set) =>
+    set.size > RING_RECORD_LIMIT ? [] : [...set],
+  );
   const codes = new Map(
     ids.length === 0
       ? []

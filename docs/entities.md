@@ -2915,7 +2915,16 @@ is discarded or guessed to be background work.
 The `derived.drain` Job claims ready marks, member edits first, then
 propagation, then reconciliation. It computes each directly marked target's
 batch outside the publication transaction through its adapter
-(`workflows/derived-computes.ts`). Preparation validates each outcome and its
+(`workflows/derived-computes.ts`). Each Worker page holds at most one 20-record compute
+batch, including sink results; it publishes before preparing another page.
+The existing invocation time budget is checked between pages. Fanout expansion
+stays set-based in Postgres, returning only its count and a bounded reader-notification
+sample per target. Large affected categories use the existing whole-category
+notification without loading every dependent id or shortcode into the Worker.
+Calculation lookups load their requested repository directly rather than importing
+the universal kernel registry and every entity repository into the drain.
+Preparation and publication spans report targets and processed/expanded counts.
+Preparation validates each outcome and its
 provenance against the value; invalid metadata backs off its target alongside
 other computation failures, before the publication batch is assembled. The Job's transaction expands fanout marks
 and publishes prepared values; newly expanded targets compute on a later page.
