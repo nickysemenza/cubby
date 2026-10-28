@@ -69,9 +69,11 @@ const isWasmFunction = (value: WasmType[keyof WasmType]): value is WasmMethod =>
 
 // Both capability surfaces share pure results from the same module. A miss is
 // unambiguous because cached methods never return nullish values.
+// Node fixture writers import this module without Vite's import.meta.env.
+const SERVER_RUNTIME = import.meta.env?.SSR ?? typeof window === "undefined";
 const resultCache = new LRUCache<string, NonNullable<WasmResult>>({
   // A browser owns one document; a Worker isolate retains this across callers.
-  max: import.meta.env.SSR ? 128 : 2048,
+  max: SERVER_RUNTIME ? 128 : 2048,
 });
 const SERVER_CACHE_KEY_LIMIT = 1024;
 
@@ -87,10 +89,7 @@ const primitiveCacheKey = (
     const value = String(arg);
     const part = `:${typeof arg}:${value.length}:${value}`;
     // Long authored text must not fill the isolate with copies of inputs/results.
-    if (
-      import.meta.env.SSR &&
-      key.length + part.length > SERVER_CACHE_KEY_LIMIT
-    )
+    if (SERVER_RUNTIME && key.length + part.length > SERVER_CACHE_KEY_LIMIT)
       return undefined;
     key += part;
   }
