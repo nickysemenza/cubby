@@ -732,6 +732,8 @@ describe("MCP catalog schemas", () => {
       "run.commit_prepared.resolutions[].stableLineId",
       "run.commit_prepared.operationId",
       "run.discover_mail.mailboxId",
+      "run.controlled_mail_import.mailboxId",
+      "run.resume_controlled_mail_import.mailboxId",
       "run.set_mail_import.mailboxId",
       "shipments.edit_observation.observationId",
       "shipments.reassign.sourcePackageId",

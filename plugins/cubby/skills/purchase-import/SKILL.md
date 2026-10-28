@@ -1,6 +1,6 @@
 ---
 name: purchase-import
-description: Support Cubby purchase imports when learning a vendor, importing an order Email, receipt or vendor export, resolving order Email, reconciling financial settlement, or booking shared-cost repayments.
+description: Support Cubby purchase imports when learning a vendor, controlling a vendor mailbox import, importing an order Email, receipt or vendor export, resolving order Email, reconciling financial settlement, or booking shared-cost repayments.
 ---
 
 <!-- Generated from .agents/skills/purchase-import/SKILL.md by apps/web/generator/claude-plugin.ts — do not edit. -->

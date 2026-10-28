@@ -87,7 +87,11 @@ Lint policy the exceptions follow:
   expect(result.value.unit).toBe("$");
   ```
 
-Generated output is never committed. `pnpm install`, `build`, `typecheck` and
+Generated app output is never committed. The Claude plugin wrappers under
+`plugins/cubby` are the exception: GitHub serves them directly. After changing
+a playbook name or description, run `pnpm --dir apps/web generate:claude-plugin`
+and commit the updated wrappers; the generator's drift test owns this contract.
+`pnpm install`, `build`, `typecheck` and
 every test entry point run `scripts/ensure.ts generate`, which runs the
 Nx-cached `cubby-checks:generate` target (a hit also restores missing output);
 `pnpm generate` forces a run. Cache restores are pruned against the artifact
