@@ -9,6 +9,7 @@ import type { SQL } from "drizzle-orm";
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
+import { withJobPhase } from "~/server/generic/jobs/context";
 import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import type { JobClaim } from "~/server/generic/jobs/repo/queue";
@@ -137,7 +138,9 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
   return {
     async prepare(db, claim, context) {
       const { backoff } = jobKindPolicy(claim.kind);
-      const items = await claimWork(db, claim.key, spec.limit, spec.eligible);
+      const items = await withJobPhase("drain.claim", () =>
+        claimWork(db, claim.key, spec.limit, spec.eligible),
+      );
       if (!items.length) {
         const next = spec.repeats ? null : await nextWorkReadyAt(db, claim.key);
         return {
@@ -167,7 +170,9 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
         }
       };
       const { prepared, failed: preparationFailures = new Map() } =
-        await spec.prepare(db, items, { ...context, claim });
+        await withJobPhase("drain.prepare", () =>
+          spec.prepare(db, items, { ...context, claim }),
+        );
       for (const error of preparationFailures.values())
         if (stopsDrainPage(error)) throw error;
       if (preparationFailures.size)
@@ -177,26 +182,28 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
       // A rolled-back chunk splits; committed siblings never replay.
       const publish = async (chunk: readonly WorkItem[]): Promise<void> => {
         try {
-          await context.fenced(
-            async (tx) => {
-              const narrowed =
-                (await spec.lock?.(tx, chunk, prepared)) ?? chunk;
-              const held = await lockWork(tx, narrowed);
-              if (!held.length) return;
-              const publication = await spec.publish(tx, held, prepared);
-              const retained = new Set(
-                (publication?.retain ?? []).map(
-                  ({ target, ref, ticket }) => `${target}\0${ref}\0${ticket}`,
-                ),
-              );
-              const completed = held.filter(
-                ({ target, ref, ticket }) =>
-                  !retained.has(`${target}\0${ref}\0${ticket}`),
-              );
-              await clearWork(tx, completed);
-              published += completed.length;
-            },
-            { isolationLevel: spec.isolationLevel },
+          await withJobPhase("drain.publish", () =>
+            context.fenced(
+              async (tx) => {
+                const narrowed =
+                  (await spec.lock?.(tx, chunk, prepared)) ?? chunk;
+                const held = await lockWork(tx, narrowed);
+                if (!held.length) return;
+                const publication = await spec.publish(tx, held, prepared);
+                const retained = new Set(
+                  (publication?.retain ?? []).map(
+                    ({ target, ref, ticket }) => `${target}\0${ref}\0${ticket}`,
+                  ),
+                );
+                const completed = held.filter(
+                  ({ target, ref, ticket }) =>
+                    !retained.has(`${target}\0${ref}\0${ticket}`),
+                );
+                await clearWork(tx, completed);
+                published += completed.length;
+              },
+              { isolationLevel: spec.isolationLevel },
+            ),
           );
         } catch (error) {
           if (
