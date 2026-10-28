@@ -56,6 +56,8 @@ An existing platform alias from an older policy cannot silently win seller
 resolution: an actual canonical seller is reused, otherwise the import stays
 blocked for a reviewed alias correction and explicit seller identity. Historical
 Purchases and aliases are not rewritten by discovery.
+Platform identity for this fence includes configured platform receipt senders,
+even when the Vendor has no website.
 Search completion describes the scope actually scanned, not proof that every
 purchase from that Vendor has been found.
 
@@ -71,11 +73,15 @@ Vendor coverage and must not be added together. Completed queries cover only
 their actual definitions; the rest of Gmail history remains unscanned.
 
 Seller unresolved counts related retained originals without attributed seller
-or accepted/linked Purchase evidence. Its drilldown lists the latest 50 across
-connected mailboxes, explicitly showing the displayed count against the full
+or accepted/linked Purchase evidence. Its drilldown lists the latest 50 per
+connected mailbox, explicitly showing the displayed count against the full
 local count, with links to the original Emails. It does not create a Generic
 Vendor or infer seller identity from sender matches. Vendor/account-scoped
 coverage retains its existing Vendor context.
+Each connected mailbox receives its own bounded sample before any mailbox
+filter is applied, so newer receipts in one mailbox cannot hide another's
+originals. Mobile discovery and shared-sender rows retain their key summaries;
+their Details disclosures expose every remaining field and Run link.
 
 Vendor coverage, alongside Emails and linked from Settings, shows every known
 Vendor in each connected member mailbox. Existing Vendor Accounts provide the

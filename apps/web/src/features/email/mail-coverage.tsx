@@ -54,6 +54,28 @@ const senderRowId = (row: MailCoverage["sharedSenders"][number]) =>
 const unresolvedRowId = (row: MailCoverage["unresolvedEmails"][number]) =>
   row.id;
 
+function CoverageDetails({
+  label,
+  facts,
+}: {
+  label: string;
+  facts: readonly (readonly [string, ReactNode])[];
+}) {
+  return (
+    <details className="text-xs">
+      <summary className="cursor-pointer">{label}</summary>
+      <dl className="space-y-1 pt-2">
+        {facts.map(([name, value]) => (
+          <div key={name} className="flex flex-wrap gap-x-2">
+            <dt className="font-medium">{name}</dt>
+            <dd className="min-w-0 break-words">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
+}
+
 function DiscoveryCoverage({
   coverage,
   mailboxId,
@@ -120,6 +142,9 @@ function DiscoveryCoverage({
         add(
           discoveryHelper.accessor("lastPolledAt", {
             header: "Last discovery poll",
+            meta: attachCubbyColumnMeta<MailCoverage["discovery"][number]>({
+              mobile: { slot: "meta", priority: 0, showWhenEmpty: true },
+            }),
             cell: ({ getValue }) => {
               const value = getValue();
               return value ? <DateDisplay timestamp={value} /> : "Not recorded";
@@ -129,6 +154,9 @@ function DiscoveryCoverage({
         add(
           discoveryHelper.accessor("newMailCatchupPending", {
             header: "New-mail catch-up",
+            meta: attachCubbyColumnMeta<MailCoverage["discovery"][number]>({
+              mobile: { slot: "meta", priority: 1, showWhenEmpty: true },
+            }),
             cell: ({ getValue }) =>
               getValue() === null
                 ? "Unknown"
@@ -141,6 +169,9 @@ function DiscoveryCoverage({
           discoveryHelper.display({
             id: "history",
             header: "Targeted history",
+            meta: attachCubbyColumnMeta<MailCoverage["discovery"][number]>({
+              mobile: { slot: "meta", priority: 2 },
+            }),
             cell: ({ row }) =>
               `${row.original.searchesCompleted} / ${row.original.searchesTotal} searches complete`,
           }),
@@ -170,6 +201,72 @@ function DiscoveryCoverage({
             },
           }),
         );
+        add(
+          discoveryHelper.display({
+            id: "details",
+            header: "Details",
+            meta: attachCubbyColumnMeta<MailCoverage["discovery"][number]>({
+              mobile: { slot: "actions", priority: 0, interactive: true },
+            }),
+            cell: ({ row }) => (
+              <CoverageDetails
+                label="Discovery details"
+                facts={[
+                  [
+                    "Automatic import",
+                    coverage.mailboxes.find(
+                      (mailbox) => mailbox.mailboxId === row.original.mailboxId,
+                    )?.enabled
+                      ? "On"
+                      : "Off",
+                  ],
+                  [
+                    "Last discovery poll",
+                    row.original.lastPolledAt ? (
+                      <DateDisplay
+                        key="poll"
+                        timestamp={row.original.lastPolledAt}
+                      />
+                    ) : (
+                      "Not recorded"
+                    ),
+                  ],
+                  [
+                    "New-mail catch-up",
+                    row.original.newMailCatchupPending === null
+                      ? "Unknown"
+                      : row.original.newMailCatchupPending
+                        ? "More pages pending"
+                        : "No pending pages recorded",
+                  ],
+                  [
+                    "Targeted history",
+                    `${row.original.searchesCompleted} / ${row.original.searchesTotal} searches complete`,
+                  ],
+                  ["Local Emails", row.original.scanned],
+                  ["Classified", row.original.classified],
+                  ["Content saved", row.original.retained],
+                  ["Pending Emails", row.original.pending],
+                  ["Blocked", row.original.blocked],
+                  ["Imported Emails", row.original.imported],
+                  [
+                    "Discovery Run",
+                    row.original.runId ? (
+                      <EntityRefLink
+                        key="run"
+                        entity="run"
+                        id={row.original.runId}
+                        name={humanize(row.original.runStatus ?? "running")}
+                      />
+                    ) : (
+                      "—"
+                    ),
+                  ],
+                ]}
+              />
+            ),
+          }),
+        );
       }),
     [mailboxName, coverage.mailboxes],
   );
@@ -195,6 +292,9 @@ function DiscoveryCoverage({
           add(
             senderHelper.accessor("state", {
               header: "Search status",
+              meta: attachCubbyColumnMeta<
+                MailCoverage["sharedSenders"][number]
+              >({ mobile: { slot: "subtitle", priority: 0 } }),
               cell: ({ getValue }) => humanize(getValue()),
             }),
           );
@@ -230,6 +330,58 @@ function DiscoveryCoverage({
                 const id = getValue();
                 return id ? <EntityRefLink entity="run" id={id} /> : "—";
               },
+            }),
+          );
+          add(
+            senderHelper.display({
+              id: "details",
+              header: "Details",
+              meta: attachCubbyColumnMeta<
+                MailCoverage["sharedSenders"][number]
+              >({
+                mobile: { slot: "actions", priority: 0, interactive: true },
+              }),
+              cell: ({ row }) => (
+                <CoverageDetails
+                  label="Sender details"
+                  facts={[
+                    ["Mailbox", mailboxName(row.original.mailboxId)],
+                    ["Historical search", row.original.query],
+                    ["Search status", humanize(row.original.state)],
+                    [
+                      "Completed",
+                      row.original.completedAt ? (
+                        <DateDisplay
+                          key="completed"
+                          timestamp={row.original.completedAt}
+                        />
+                      ) : (
+                        "Not recorded"
+                      ),
+                    ],
+                    ["Local Emails", row.original.scanned],
+                    ["Classified", row.original.classified],
+                    ["Content saved", row.original.retained],
+                    ["Related", row.original.related],
+                    ["Imported Emails", row.original.imported],
+                    ["Linked Emails", row.original.linkedEmails],
+                    ["Purchases", row.original.linkedPurchases],
+                    ["Seller unresolved", row.original.sellerUnresolved],
+                    [
+                      "Search Run",
+                      row.original.runId ? (
+                        <EntityRefLink
+                          key="run"
+                          entity="run"
+                          id={row.original.runId}
+                        />
+                      ) : (
+                        "—"
+                      ),
+                    ],
+                  ]}
+                />
+              ),
             }),
           );
         },
@@ -342,15 +494,17 @@ function DiscoveryCoverage({
             <p className="text-xs text-muted-foreground">
               Related retained Emails with no attributed seller or accepted
               Purchase link. Showing {unresolvedRows.length} of{" "}
-              {unresolvedTotal}; this list contains at most the latest 50 across
-              connected mailboxes.
+              {unresolvedTotal}; this list contains at most the latest 50 per
+              connected mailbox.
             </p>
             <RTable
               table={unresolvedTable}
               ariaLabel="Emails with unresolved seller"
               emptyState={
                 <p className="text-xs text-muted-foreground">
-                  No retained related Emails are waiting for seller attribution.
+                  {unresolvedTotal > 0
+                    ? "No originals are available in this sample. Refresh coverage to read the latest mailbox sample."
+                    : "No retained related Emails are waiting for seller attribution."}
                 </p>
               }
               embedded

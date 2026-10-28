@@ -13,6 +13,7 @@ import { formatCalendarDay } from "~/lib/date-format";
 import { createGmailApiClient } from "~/server/domains/purchase-import/repo/gmail/client";
 import { ingestGmailMessages } from "~/server/domains/purchase-import/service/gmail/ingest";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { retainedMailFixture } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import {
   createEvidenceHarnessContext,
   createEntityFixture,
@@ -193,6 +194,14 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
       `GET /gmail/v1/users/me/messages/${messageId}`,
     ]),
   );
+  await retainedMailFixture(db, {
+    ledgerPartyId: member.id,
+    mailboxId: connected.accountId,
+    messageId: `synthetic-platform-${token}`,
+    checksum: "c".repeat(64),
+    sender: "Synthetic Cafe <noreply@order.online>",
+    subject: "Synthetic Cafe receipt",
+  });
   await gotoAuthenticatedPage(page, "/settings");
   const coverageLink = page.getByRole("link", {
     name: "View Mail coverage and import a Vendor",
@@ -221,6 +230,38 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
   await expect(
     page.getByRole("region", { name: "Seller unresolved", exact: true }),
   ).toContainText(/Showing \d+ of \d+/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const discoveryRegion = page.getByRole("region", {
+    name: "Mailbox discovery",
+    exact: true,
+  });
+  await discoveryRegion
+    .getByText("Discovery details", { exact: true })
+    .filter({ visible: true })
+    .first()
+    .click();
+  await expect(
+    discoveryRegion
+      .getByText("Imported Emails", { exact: true })
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
+  const senderRegion = page.getByRole("region", {
+    name: "Shared senders",
+    exact: true,
+  });
+  await senderRegion
+    .getByText("Sender details", { exact: true })
+    .filter({ visible: true })
+    .first()
+    .click();
+  await expect(
+    senderRegion
+      .getByText('from:"noreply@order.online"', { exact: true })
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
   const row = coverage.getByRole("row").filter({ hasText: vendorName });
   await expect(row).toBeVisible();
   await expect(

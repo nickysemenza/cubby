@@ -82,6 +82,10 @@ Email and Purchase counts. Selecting a row opens the shared table inspector
 for controlled import and date bounds; Settings retains mailbox switches.
 Discovery completion and downstream import outcomes remain distinct.
 
+Mobile discovery rows retain poll/catch-up and historical search summaries;
+shared-sender rows retain search state. Both offer accessible Details disclosures
+for all counts, historical queries and Run links.
+
 ## Elevation & Depth
 
 Resting page and detail sections are open and flat, separated by 1px hairlines and whitespace. Section headings are plain semibold text; no gray bands and no cards around resting content. Rounded, shadowed containers are reserved for things that float: the inspector, popovers, menus and dialogs. Floating primitives share `popoverElevationClassName` and `--brand-elevation-popover`; the responsive schema inspector uses the same token only while floating. `cubby/no-shadow-utility` rejects sized and arbitrary shadow utilities; these floating surfaces carry explicit lint exceptions. Resting surfaces and table boundaries use flat hairlines. Motion explains state, respects reduced motion, and stays immediate for frequent search, navigation, and table work. Do not add page-load or media entrance animation.
