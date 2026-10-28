@@ -81,15 +81,18 @@ export const gapFilters = (scope: WorkScope, entity: GapEntity) => {
   return { ...filters, dataGap: [...checks] };
 };
 
-export const gapColumns = (scope: WorkScope, entity: GapEntity) => {
+export const gapColumns = (
+  scope: WorkScope,
+  entity: GapEntity,
+  /** A source may join its publication once instead of repeating scalar lookups. */
+  ownGap: (check: DataCheck) => SQL = (check) => gapCondition(entity, check),
+) => {
   const checks = workQueueGapChecks(gapView(entity));
   const own = new Set<DataCheck>(dataChecksByEntity[entity].options);
   const failed = (check: DataCheck): SQL => {
     if (scope.record?.quality)
       return sql`${[...scope.record.quality.gaps, ...scope.record.quality.relatedGaps].some((gap) => gap.check === check)}`;
-    return own.has(check)
-      ? gapCondition(entity, check)
-      : relatedGapCondition(entity, check);
+    return own.has(check) ? ownGap(check) : relatedGapCondition(entity, check);
   };
   const byMessage = new Map<string, SQL[]>();
   for (const check of [
