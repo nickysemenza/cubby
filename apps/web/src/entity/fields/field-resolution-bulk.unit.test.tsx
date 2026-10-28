@@ -5,11 +5,11 @@ import { renderHook } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { expect, it, vi } from "vitest";
 
+import { createEditorBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import {
   overrideStartDispatch,
   type StartTransportRuntime,
 } from "~/integrations/tanstack-query/start-transport";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { CubbyRow } from "~/ui/data-table/table-features";
 
 import { useRedundantOverrideBulkAction } from "./field-resolution";
@@ -17,7 +17,7 @@ import { useRedundantOverrideBulkAction } from "./field-resolution";
 it.each([true, false])(
   "loads a current preview before bulk reset (matching=%s)",
   async (matches) => {
-    const harness = createBrowserTestHarness();
+    const harness = createEditorBrowserTestHarness();
     const value = testShortcode("project", "synthetic-bulk-project");
     const envelope: ReadableFieldEnvelope = {
       current: {
