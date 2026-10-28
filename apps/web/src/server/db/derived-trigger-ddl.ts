@@ -23,6 +23,7 @@ const fnName = (table: string) =>
 /** One mark per changed input: the old and new matched column values. */
 type TriggerInput = {
   target: string;
+  fixedTarget: boolean;
   tableColumn: string;
   columns: readonly string[] | null;
   where: Readonly<Record<string, string>> | null;
@@ -42,6 +43,9 @@ const whereSql = (row: "OLD" | "NEW", where: TriggerInput["where"]) =>
 // A malformed JSON value contributes nothing rather than failing the save:
 // a non-array at an array path is empty and non-UUID references are skipped.
 const refsSql = (row: "OLD" | "NEW", input: TriggerInput) => {
+  // Fixed fanout ignores source refs; a nullable UUID must not drop its signal.
+  if (input.fixedTarget)
+    return `ARRAY['00000000-0000-4000-8000-000000000000'::uuid]`;
   if (!input.json) return `ARRAY[${row}.${ident(input.tableColumn)}::uuid]`;
   const column = `${row}.${ident(input.tableColumn)}`;
   const array = input.json.array
@@ -98,6 +102,7 @@ function derivedTriggerInputs(): Map<string, TriggerInput[]> {
         !entries.some(
           (entry) =>
             entry.target === target &&
+            entry.fixedTarget === (input.targetWhere !== null) &&
             entry.tableColumn === input.tableColumn &&
             JSON.stringify(entry.columns) === JSON.stringify(input.columns) &&
             JSON.stringify(entry.where) === JSON.stringify(input.where) &&
@@ -107,6 +112,7 @@ function derivedTriggerInputs(): Map<string, TriggerInput[]> {
       )
         entries.push({
           target,
+          fixedTarget: input.targetWhere !== null,
           tableColumn: input.tableColumn,
           columns: input.columns,
           where: input.where,
