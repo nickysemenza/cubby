@@ -1,0 +1,19 @@
+apps/web/src/server/domains/calendar/repo/calendar.ts
+  s_1f140a8b200d39::t_d5fafe7b4e5022 77-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "636dffe4681db66e606abcf0e63e061a71e25ffe",
+  "prompts": {},
+  "sessions": {
+    "s_1f140a8b200d39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c84ce0c-38eb-4617-aa88-1ea9ad9257df",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
