@@ -1,8 +1,8 @@
 import { productImagePurpose } from "../image-summary";
 import { imageAnalysisSummarySchema } from "../image-identification";
-import imageDefinition from "./18-image.entity";
+import { readSchemas as imageReadSchemas } from "./18-image.entity";
 
-export const imageOut = imageDefinition.readSchemas.output.meta({
+export const imageOut = imageReadSchemas.output.meta({
   "x-cubby-live-entity": "image",
 });
 

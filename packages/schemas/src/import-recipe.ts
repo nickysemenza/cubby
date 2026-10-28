@@ -1,3 +1,5 @@
+import { entityIdSchema } from "./identifier-fields";
+import { cookbookOut as cookbookSummary } from "@cubby/schemas/entities/cookbook";
 import { z } from "zod";
 import { batchProgressEvent } from "./batch";
 import { MAX_EXTERNAL_HTML_BYTES } from "@cubby/shared";
@@ -10,7 +12,7 @@ import {
   recipeShortcode,
 } from "./identifier-fields";
 import { cookbookExtractionSchema, cookbookRunReportSchema } from "./cookbook";
-import { cookbookSummary } from "./recipe";
+
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_UPLOAD_BYTES } from "./image";
 
 const bundlePath = z
@@ -261,7 +263,7 @@ export const upsertCookbookInput = z.object({
   author: z.array(z.string()).optional(),
   subjects: z.array(z.string()).optional(),
   sourceLabel: z.string(),
-  coverImageId: z.uuid().optional(),
+  coverImageId: entityIdSchema("image").optional(),
   coverUploadId: imageShortcode.optional(),
   /**
    * The book's ISBN as a canonical GTIN-14, picked out of the EPUB's OPF

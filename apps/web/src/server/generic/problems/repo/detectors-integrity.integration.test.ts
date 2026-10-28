@@ -5,8 +5,7 @@ import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { eq, getTableColumns, getTableName, sql } from "drizzle-orm";
-import { TEST_ACTOR } from "tooling/test-setup";
-import { withTestDb } from "tooling/test-setup";
+import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
@@ -508,7 +507,12 @@ const mkOrderMail = async (
 
 const mkSourceOrderObservation = async (
   db: Database,
-  media: { primaryDocumentImageId?: string; screenshotImageId?: string },
+  media: Partial<
+    Pick<
+      Parameters<typeof sourceOrderObservationFixture>[1],
+      "primaryDocumentImageId" | "screenshotImageId"
+    >
+  >,
 ) => {
   const imported = await mkPurchase(db);
   const claim = await mkImportSourceClaim(db);
@@ -755,14 +759,22 @@ const SOURCE_FACTORIES = {
     }),
 
   "SourceOrderObservation.primaryDocumentImageId": (db, targetId) =>
-    mkSourceOrderObservation(db, { primaryDocumentImageId: targetId }),
+    mkSourceOrderObservation(db, {
+      primaryDocumentImageId: parseEntityId("image", targetId),
+    }),
   "SourceOrderObservation.screenshotImageId": (db, targetId) =>
-    mkSourceOrderObservation(db, { screenshotImageId: targetId }),
+    mkSourceOrderObservation(db, {
+      screenshotImageId: parseEntityId("image", targetId),
+    }),
   "ImportPreparedOrder.primaryDocumentImageId": (db, targetId) =>
-    mkImportPreparedOrder(db, { primaryDocumentImageId: targetId }),
+    mkImportPreparedOrder(db, {
+      primaryDocumentImageId: parseEntityId("image", targetId),
+    }),
 
   "ImportPreparedOrder.screenshotImageId": (db, targetId) =>
-    mkImportPreparedOrder(db, { screenshotImageId: targetId }),
+    mkImportPreparedOrder(db, {
+      screenshotImageId: parseEntityId("image", targetId),
+    }),
 
   "PhotoRunImage.deviceWorkDeviceId": (db, targetId) =>
     mkPhotoRunImage(db, {
@@ -780,7 +792,7 @@ const SOURCE_FACTORIES = {
       filename: "receipt.pdf",
       mimeType: "application/pdf",
       checksum: uniq("attachment-checksum"),
-      imageId: targetId,
+      imageId: parseEntityId("image", targetId),
     });
   },
 
@@ -900,7 +912,9 @@ const SOURCE_FACTORIES = {
   },
 
   "ImportSourceClaim.vendorAccountId": (db, targetId) =>
-    mkImportSourceClaim(db, { vendorAccountId: targetId }),
+    mkImportSourceClaim(db, {
+      vendorAccountId: parseEntityId("vendorAccount", targetId),
+    }),
 
   "ExpenseAttribution.expenseId": async (db, targetId) => {
     const party = await mkLedgerParty(db);
@@ -1411,7 +1425,7 @@ const SOURCE_FACTORIES = {
   "Location.parentId": (db, targetId) =>
     insertWithShortcode(db, "location", {
       name: uniq("Location"),
-      type: "bin",
+      type: "box",
       parentId: parseEntityId("location", targetId),
     }),
 
@@ -1855,7 +1869,7 @@ const SOURCE_FACTORIES = {
     return insertAndReturn(db, entityAttachment, {
       entityId: p.id,
       entityKind: "product",
-      imageId: targetId,
+      imageId: parseEntityId("image", targetId),
       purpose: "item",
     });
   },

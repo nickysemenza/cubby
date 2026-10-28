@@ -24,6 +24,10 @@ import {
   isServiceProductFeature,
   productCategoryFeature,
 } from "@cubby/schemas/product-category-fields";
+import {
+  classifyProductOnHand,
+  type ProductPickerOnHandOut,
+} from "@cubby/schemas/product-read-fields";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import { type ShortcodeType } from "@cubby/shared";
 import { type QueryClient } from "@tanstack/react-query";
@@ -34,6 +38,10 @@ import { VendorMark } from "~/entity/components/vendor-cell";
 import { enumDisplayValue } from "~/entity/display/enum-field-display";
 import { EntityIcon, entityLabel } from "~/entity/entities";
 import { compactFieldText } from "~/entity/fields/field-text";
+import {
+  getEntityDetailOutputSchema,
+  type EntityDetailByEntity,
+} from "~/entity/generated/entity-details.gen";
 import { entityMetadata } from "~/entity/metadata";
 import { categoryText } from "~/entity/presentation/category-text";
 import { locationToSegments } from "~/entity/presentation/location-breadcrumb";
@@ -46,6 +54,7 @@ import type {
   ComboboxItem,
   PickerChip,
   PickerThumb,
+  PickerEntity,
 } from "~/ui/combobox/combobox-types";
 
 export type ProductPickerIntent = "reference" | "stock";
@@ -240,14 +249,37 @@ export const buildProductComboboxItem = (
     quantityLedger?: ProductPickerItemOut["quantityLedger"];
     onHand?: ProductPickerItemOut["onHand"];
     onHandUnits?: number | null;
-    inventoryEntry?: Array<{
-      amount: { value: number; unit: string };
-    }>;
+    inventoryEntry?: readonly Pick<
+      EntityDetailByEntity["product"]["inventoryEntry"][number],
+      "id"
+    >[];
   },
   intent: ProductPickerIntent = "reference",
 ): ComboboxItem<ProductShortcode> => {
   const ledger = product.quantityLedger;
-  const onHand = product.onHand ?? deriveProductOnHand(product, ledger);
+  const onHandEnvelope = fieldEnvelopeFor(product, "onHandUnits");
+  const currentUnits = onHandEnvelope
+    ? fieldValueOf(onHandEnvelope)
+    : product.onHandUnits;
+  const units =
+    currentUnits === undefined
+      ? undefined
+      : z.number().nullable().parse(currentUnits);
+  // NULL means absent or incomparable stock. The canonical live inventory roster
+  // distinguishes those states; quantity conversion and totals remain server-owned.
+  const onHand: ProductPickerInput["onHand"] =
+    product.onHand ??
+    (units === undefined
+      ? undefined
+      : units !== null
+        ? { state: "counted", units }
+        : product.inventoryEntry === undefined || !ledger
+          ? undefined
+          : classifyProductOnHand({
+              units,
+              inventoryCount: product.inventoryEntry.length,
+              locationCount: ledger.locationCount,
+            }));
   const coverEnvelope = fieldEnvelopeFor(product, "displayImages");
   const cover = coverEnvelope
     ? displayImagesField.nullable().parse(fieldValueOf(coverEnvelope))?.[0]
@@ -272,33 +304,6 @@ export const buildProductComboboxItem = (
 };
 
 type ProductPickerInput = Parameters<typeof buildProductComboboxItem>[0];
-type DerivedOnHand =
-  | { state: "none" }
-  | { state: "counted"; units: number }
-  | { state: "mixed" };
-
-function deriveProductOnHand(
-  product: ProductPickerInput,
-  ledger: ProductPickerInput["quantityLedger"],
-): DerivedOnHand | undefined {
-  const inventoryUnits = new Set(
-    product.inventoryEntry?.map((entry) => entry.amount.unit) ?? [],
-  );
-  if (product.onHandUnits != null)
-    return { state: "counted", units: product.onHandUnits };
-  if (product.inventoryEntry == null || ledger == null) return undefined;
-  if (inventoryUnits.size > 1) return { state: "mixed" };
-  if (product.inventoryEntry.length === 0 && ledger.locationCount === 0)
-    return { state: "none" };
-  return {
-    state: "counted",
-    units:
-      product.inventoryEntry.reduce(
-        (sum, entry) => sum + entry.amount.value,
-        0,
-      ) + ledger.locationCount,
-  };
-}
 
 function productPickerBase(
   product: ProductPickerInput,
@@ -334,7 +339,7 @@ function productPickerBase(
 function withProductInventoryPresentation(
   base: ComboboxItem<ProductShortcode>,
   ledger: NonNullable<ProductPickerInput["quantityLedger"]>,
-  onHand: DerivedOnHand,
+  onHand: ProductPickerOnHandOut,
   intent: ProductPickerIntent,
 ): ComboboxItem<ProductShortcode> {
   const unknownLines = ledger.unknownAcquisitionLines + ledger.unknownExitLines;
@@ -560,3 +565,60 @@ const vendorComboboxItem = <Id extends string>(
     },
   }),
 });
+
+/** Normalize canonical public image fields once for both vendor picker identities. */
+export const vendorPickerInputFromDetail = (
+  detail: unknown,
+): VendorPickerInput => {
+  const vendor = getEntityDetailOutputSchema("vendor").parse(detail);
+  const logoUrl = vendor.logo ? publicImageUrl(vendor.logo) : undefined;
+  return {
+    id: vendor.id,
+    name: vendor.name,
+    logo: logoUrl ? { url: logoUrl } : null,
+  };
+};
+
+/** Detail projections shared by exact-code lookup and stored-selection hydration. */
+type PickerDetailBuilder = (
+  detail: PickerRecord,
+  intent: ProductPickerIntent,
+) => ComboboxItem;
+const pickerDetailBuilders = new Map<PickerEntity, PickerDetailBuilder>([
+  [
+    "product",
+    (detail, intent) =>
+      buildProductComboboxItem(
+        getEntityDetailOutputSchema("product").parse(detail),
+        intent,
+      ),
+  ],
+  [
+    "location",
+    (detail) =>
+      buildLocationComboboxItemFromDetail(
+        getEntityDetailOutputSchema("location").parse(detail),
+      ),
+  ],
+  [
+    "vendor",
+    (detail) =>
+      buildVendorComboboxItem(vendorPickerInputFromDetail(detail), {
+        itemId: "shortcode",
+      }),
+  ],
+]);
+
+export function buildPickerDetailItem<E extends PickerEntity>(
+  queryClient: QueryClient,
+  entity: E,
+  detail: unknown,
+  intent: ProductPickerIntent = "reference",
+): ComboboxItem<ShortcodeFor<E>> {
+  const record = pickerRecord.parse(detail);
+  const build = pickerDetailBuilders.get(entity);
+  const item = build
+    ? build(record, intent)
+    : buildRecordComboboxItem(queryClient, entity, record);
+  return { ...item, id: parseShortcodeFor(entity, item.id) };
+}

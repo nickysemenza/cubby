@@ -1,4 +1,4 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { type ImageJobId, parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -46,12 +46,12 @@ describe("device work waits parked and records no attempt", () => {
     if (!scheduled) throw new Error("Expected persisted job");
     return scheduled.jobId;
   }
-  const attemptsOf = (jobId: string) =>
+  const attemptsOf = (jobId: ImageJobId) =>
     getDb(ctx.db)
       .select()
       .from(imageProcessingAttempt)
       .where(eq(imageProcessingAttempt.jobId, jobId));
-  const jobOf = async (jobId: string) => {
+  const jobOf = async (jobId: ImageJobId) => {
     const [job] = await getDb(ctx.db)
       .select()
       .from(imageProcessingJob)
@@ -59,7 +59,7 @@ describe("device work waits parked and records no attempt", () => {
     if (!job) throw new Error("Missing job");
     return job;
   };
-  const eventsOf = (jobId: string) =>
+  const eventsOf = (jobId: ImageJobId) =>
     getDb(ctx.db)
       .select()
       .from(imageProcessingEvent)
@@ -126,7 +126,7 @@ describe("device work waits parked and records no attempt", () => {
       attemptId: lease.attemptId,
       executor: {
         kind: "device" as const,
-        deviceId: crypto.randomUUID(),
+        deviceId: parseEntityId("device", crypto.randomUUID()),
         name: "Test Mac",
         platform: "macos" as const,
         appVersion: "1",
@@ -168,7 +168,7 @@ describe("device work waits parked and records no attempt", () => {
         state: "failed",
         executor: {
           kind: "device",
-          deviceId: crypto.randomUUID(),
+          deviceId: parseEntityId("device", crypto.randomUUID()),
           name: "Test Mac",
           platform: "macos",
           appVersion: "1",

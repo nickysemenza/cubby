@@ -18,7 +18,7 @@ const entityKeys = new Set(
     .filter((name) => name.endsWith(".entity.ts"))
     .map((name) => {
       const source = readFileSync(resolve(definitions, name), "utf8");
-      const key = /defineEntity\s*\(\s*\{\s*key:\s*["']([^"']+)["']/.exec(
+      const key = /defineEntityModel\s*\(\s*\{\s*key:\s*["']([^"']+)["']/.exec(
         source,
       )?.[1];
       if (!key) throw new Error(`Missing entity key in ${name}`);

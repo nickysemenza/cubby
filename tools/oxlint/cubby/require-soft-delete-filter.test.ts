@@ -22,7 +22,8 @@ test("raw EXISTS guards must name their own live relation alias", () => {
       'const e = sql`EXISTS (SELECT 1 FROM "Product" p WHERE ${liveAliasSql("p")} AND EXISTS (SELECT 1 FROM "InventoryEntry" ie WHERE ie."productId" = p.id))`;',
       'const f = drizzle.sql`SELECT 1 WHERE ${liveAliasSqlText("p")}`;',
       'const g = sql`SELECT 1 WHERE ${liveAliasSql("p")}`;',
-      "void [a, b, c, d, e, f, g];",
+      'const h = sql`EXISTS (SELECT 1 FROM "EntityAttachment" a WHERE a.id = ${id})`;',
+      "void [a, b, c, d, e, f, g, h];",
     ].join("\n"),
   );
   try {
@@ -44,7 +45,12 @@ test("raw EXISTS guards must name their own live relation alias", () => {
     const failures = output.diagnostics.filter(
       (entry) => entry.code === "cubby(require-soft-delete-filter)",
     );
-    assert.equal(failures.length, 4, JSON.stringify(failures));
+    assert.equal(failures.length, 5, JSON.stringify(failures));
+    assert.equal(
+      failures.filter((entry) => entry.message.includes('"EntityAttachment"'))
+        .length,
+      1,
+    );
     assert.equal(
       failures.filter((entry) => entry.message.includes('"InventoryEntry"'))
         .length,

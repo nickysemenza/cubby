@@ -3,18 +3,9 @@ import { z } from "zod";
 import { dateBound, dateRangeFields } from "./base-entity";
 import { createPaginatedResponseSchema } from "./pagination";
 import {
-  plantingBaseFilterFields,
+  plantingFilterFields as plantingBaseFilterFields,
   plantingListItemOut,
-} from "./generated/planting.gen";
-
-export {
-  plantingCreateInput,
-  plantingUpdateData,
-  plantingUpdateInput,
-  plantingOut,
-  plantingListItemOut,
-  type PlantingOut,
-} from "./generated/planting.gen";
+} from "@cubby/schemas/entities/planting";
 
 export const plantingFilterFields = {
   ...plantingBaseFilterFields,

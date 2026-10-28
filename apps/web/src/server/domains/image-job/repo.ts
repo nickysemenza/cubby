@@ -3,13 +3,13 @@ import {
   imageProcessingJobKind,
 } from "@cubby/schemas/activity";
 import {
+  type ImageJobRawOut as RawImageJobOut,
+  imageJobRawOut as rawImageJobOut,
+} from "@cubby/schemas/entity-contracts/imageJob";
+import {
   deviceShortcode,
   type DeviceShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  type RawImageJobOut,
-  rawImageJobOut,
-} from "@cubby/schemas/image-job-raw-read";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import { describeJobWaitingOn, jobState } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";

@@ -1,12 +1,12 @@
+import { inventoryDetailOut as inventoryWithLocationAndProductOut } from "@cubby/schemas/entities/inventory";
+import {
+  productDetailOut as productWithFoodOut,
+  productCreateInput,
+} from "@cubby/schemas/entities/product";
 import { z } from "zod";
 
-import {
-  inventoryCreatePayloadData,
-  inventoryPlacement,
-  inventoryWithLocationAndProductOut,
-} from "./inventory";
+import { inventoryCreatePayloadData, inventoryPlacement } from "./inventory";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
-import { productCreateInput, productWithFoodOut } from "./product";
 
 export const productCreateWithInventoryInput = z.object({
   product: productCreateInput,

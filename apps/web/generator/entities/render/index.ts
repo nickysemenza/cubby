@@ -16,6 +16,7 @@ import { renderDataQualityArtifacts } from "./data-quality.ts";
 import { renderClassificationPolicyArtifacts } from "../classification-policies.ts";
 import { renderImagePolicyArtifacts } from "./image-policy.ts";
 import { renderCoverageTotalsArtifacts } from "./coverage-totals.ts";
+import { renderRelatedViewArtifacts } from "./related-views.ts";
 import { renderSchemaWrapperArtifacts } from "./schema-wrappers.ts";
 
 export {
@@ -29,6 +30,7 @@ export const renderEntityArtifacts = (
   entities: readonly CompiledEntity[],
   moduleChildren: readonly ChildTableDeclaration[] = [],
 ): EntityArtifacts[] => [
+  ...renderRelatedViewArtifacts(entities),
   ...renderDataQualityArtifacts(entities),
   ...renderClassificationPolicyArtifacts(entities),
   ...renderSchemaWrapperArtifacts(entities),

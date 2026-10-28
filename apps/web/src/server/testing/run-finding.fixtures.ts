@@ -54,7 +54,7 @@ type RunFindingSeed = Omit<
   RunFindingPublication,
   "proposedFix" | "runId" | "entityKind"
 > & {
-  runId?: string | null;
+  runId?: RunFindingPublication["runId"];
   entityKind: string;
   proposedFix?: unknown;
   status?: "open" | "applied" | "dismissed";

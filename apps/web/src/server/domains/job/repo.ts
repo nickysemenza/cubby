@@ -1,7 +1,7 @@
 import { entityRefKey } from "@cubby/schemas/entity";
+import { jobRawOut as rawJobOut } from "@cubby/schemas/entity-contracts/job";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { describeJobWaitingOn } from "@cubby/schemas/job";
-import { rawJobOut } from "@cubby/schemas/job-raw-read";
 import { inArray } from "drizzle-orm";
 
 import {

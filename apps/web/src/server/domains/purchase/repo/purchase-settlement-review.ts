@@ -1,4 +1,4 @@
-import type { RawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
+import type { FinancialTransactionRawOut as RawFinancialTransactionOut } from "@cubby/schemas/entity-contracts/financialTransaction";
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import {
   type purchaseSettlementCandidatesOut,

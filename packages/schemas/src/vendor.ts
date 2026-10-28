@@ -1,21 +1,15 @@
+import {
+  vendorOut,
+  vendorFilterFields as vendorBaseFilterFields,
+} from "@cubby/schemas/entities/vendor";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { imageUrlSummary } from "./image-summary";
 import { plainDate } from "./base-entity";
-import { vendorFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.vendor.gen";
+
 import { vendorShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
 import { presenceFilter } from "./pagination";
-import { vendorBaseFilterFields } from "./generated/vendor.gen";
-
-export {
-  vendorCreateInput,
-  vendorUpdateData,
-  vendorUpdateInput,
-  type VendorCreateInput,
-  type VendorUpdateData,
-  type VendorUpdateInput,
-} from "./generated/vendor.gen";
 
 /** Comparison key for photo Brand evidence, member rejections and batch choices. */
 export const brandNameKey = (text: string): string =>
@@ -24,8 +18,6 @@ export const brandNameKey = (text: string): string =>
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
-export const vendorOut = vendorFieldEnvelopeSchemas.output;
-export type VendorOut = z.output<typeof vendorOut>;
 
 /**
  * Vendor — the roster of places money goes. `Vendor ──< Purchase ──< Expense`:

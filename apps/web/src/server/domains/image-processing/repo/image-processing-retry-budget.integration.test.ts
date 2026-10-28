@@ -1,4 +1,4 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { type ImageJobId, parseEntityId } from "@cubby/schemas/identifiers";
 import { JOB_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/job";
 import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
@@ -18,8 +18,10 @@ import { image } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
 import { claimCompanionImageCommands } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { deviceOwnedStreak } from "~/server/generic/jobs/repo/device-admission";
-import { DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE } from "~/server/generic/jobs/repo/device-admission";
+import {
+  deviceOwnedStreak,
+  DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE,
+} from "~/server/generic/jobs/repo/device-admission";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
 import {
@@ -59,7 +61,7 @@ describe("image job retry policy", () => {
     if (!scheduled) throw new Error("Expected persisted job");
     return { imageId, jobId: scheduled.jobId };
   }
-  const jobOf = async (jobId: string) => {
+  const jobOf = async (jobId: ImageJobId) => {
     const [job] = await getDb(ctx.db)
       .select({
         state: imageProcessingJob.state,
@@ -77,7 +79,7 @@ describe("image job retry policy", () => {
     if (!job) throw new Error("Missing job");
     return job;
   };
-  const makeDue = (jobId: string) =>
+  const makeDue = (jobId: ImageJobId) =>
     getDb(ctx.db)
       .update(durableJob)
       .set({ availableAt: new Date(0) })
@@ -88,7 +90,7 @@ describe("image job retry policy", () => {
       leaseMs: 60_000,
       processorRevisions: [IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION],
     });
-  async function failOnce(jobId: string, retryable: boolean) {
+  async function failOnce(jobId: ImageJobId, retryable: boolean) {
     await makeDue(jobId);
     const lease = await devicePull();
     if (lease?.id !== jobId) throw new Error("Expected the job's lease");
@@ -150,7 +152,7 @@ describe("image job retry policy", () => {
   it("releases a refused hand-off without an attempt so another device can take it", async () => {
     const { jobId } = await subjectLiftJob();
     const device = async (automaticWork: boolean) => {
-      const installationId = crypto.randomUUID();
+      const installationId = parseEntityId("device", crypto.randomUUID());
       await createDevice(
         ctx.db,
         {

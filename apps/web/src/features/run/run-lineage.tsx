@@ -1,4 +1,4 @@
-import type { RunOut } from "@cubby/schemas/run";
+import { type RunOut } from "@cubby/schemas/entities/run";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { useQuery, useQueryClient } from "@tanstack/react-query";

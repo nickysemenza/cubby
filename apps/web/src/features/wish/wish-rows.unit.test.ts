@@ -1,6 +1,7 @@
+import { type WishListItemOut } from "@cubby/schemas/entities/wish";
+import { wishListItemOut } from "@cubby/schemas/entities/wish";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
-import type { WishCandidateOut, WishListItemOut } from "@cubby/schemas/wish";
-import { wishListItemOut } from "@cubby/schemas/wish";
+import type { WishCandidateOut } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
 
 import {

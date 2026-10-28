@@ -8,8 +8,8 @@
  * `withTransaction`) — the create + move happen inline against the same `tx`.
  */
 import type { ActorContext } from "@cubby/schemas/context";
+import { projectCreateInput } from "@cubby/schemas/entities/project";
 import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
-import { projectCreateInput } from "@cubby/schemas/project";
 import type { CreateProjectFromTasksInput } from "@cubby/schemas/project";
 import type { RawProjectOut, RawTaskOut } from "@cubby/schemas/work-raw-read";
 import { and, inArray } from "drizzle-orm";

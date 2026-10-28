@@ -1,3 +1,7 @@
+import {
+  productOut as productTopLevelOut,
+  productDetailOut as productWithFoodOut,
+} from "@cubby/schemas/entities/product";
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { mealRecipeOut } from "@cubby/schemas/meal";
 import {
@@ -5,7 +9,6 @@ import {
   type NutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
-import { productTopLevelOut, productWithFoodOut } from "@cubby/schemas/product";
 import { foodSummary } from "@cubby/usda";
 import {
   Client,

@@ -300,7 +300,7 @@ extension ImageOut {
     }
 }
 
-extension ImageWithEntity {
+extension ImageDetailOut {
     /// Read only the selected envelope snapshots; image access never re-encodes the record.
     private var representationURLs: (preferred: URL?, original: URL?, transparent: URL?)? {
         switch fields.representations.result {

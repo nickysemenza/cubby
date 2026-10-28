@@ -1,7 +1,7 @@
-import type {
-  RecipeCreateInput,
-  RecipeUpdateInput,
-} from "@cubby/schemas/recipe";
+import {
+  type RecipeCreateInput,
+  type RecipeUpdateInput,
+} from "@cubby/schemas/entities/recipe";
 import {
   recipeNotes,
   recipeServings,

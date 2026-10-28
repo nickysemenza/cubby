@@ -15,7 +15,7 @@ export const cookbookRepository = defineRepository("cookbook", {
   lifecycle: { delete: COOKBOOK_DELETE_EDGE_POLICY },
   scaffold: cookbookScaffold,
   update: (ctx, shortcode, data) =>
-    updateCookbook(ctx.db, ctx.actorContext, shortcode, data),
+    updateCookbook(ctx.db, shortcode, data, ctx.actorContext),
   updateRead: (ctx, shortcode, data, fields) =>
-    updateCookbook.read(fields, ctx.db, ctx.actorContext, shortcode, data),
+    updateCookbook.read(fields, ctx.db, shortcode, data, ctx.actorContext),
 });

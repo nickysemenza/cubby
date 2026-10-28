@@ -1,13 +1,13 @@
+import { type inventoryDetailOut as inventoryWithLocationAndProductOut } from "@cubby/schemas/entities/inventory";
+import { type LocationDetailOut as InfLocation } from "@cubby/schemas/entities/location";
+import { type WishOut } from "@cubby/schemas/entities/wish";
 import { EXPENSE_DISPOSITION_COST_TYPE } from "@cubby/schemas/expense-fields";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   ProductShortcode,
   ProjectShortcode,
 } from "@cubby/schemas/identifiers";
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
-import type { InfLocation } from "@cubby/schemas/location";
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
-import type { WishOut } from "@cubby/schemas/wish";
 import type { QueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 

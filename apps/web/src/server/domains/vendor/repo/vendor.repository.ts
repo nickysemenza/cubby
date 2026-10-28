@@ -1,9 +1,9 @@
+import { vendorRawOut as rawVendorOut } from "@cubby/schemas/entity-contracts/vendor";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   mergeVendorsInput,
   vendorMergeSummaryOut,
 } from "@cubby/schemas/vendor";
-import { rawVendorOut } from "@cubby/schemas/vendor-raw-read";
 import { z } from "zod";
 
 import {

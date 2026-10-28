@@ -1,5 +1,6 @@
+import { expenseOut } from "@cubby/schemas/entities/expense";
 import { entityApi } from "./entity-api";
-import { expenseOut } from "@cubby/schemas/project";
+
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 

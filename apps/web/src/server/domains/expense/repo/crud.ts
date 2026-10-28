@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { type ExpenseUpdateInput } from "@cubby/schemas/entities/expense";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
@@ -21,7 +22,6 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   DeleteExpensesWithPurchaseEffectsOut,
   ExpenseCreateInput,
-  ExpenseUpdateInput,
 } from "@cubby/schemas/project";
 import { rawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { and, eq, inArray, sql } from "drizzle-orm";

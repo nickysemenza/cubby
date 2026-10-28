@@ -1,27 +1,27 @@
-import projectDefinition from "./entity-definitions/09-project.entity";
-import taskDefinition from "./entity-definitions/10-task.entity";
-import expenseDefinition from "./entity-definitions/16-expense.entity";
+import { readSchemas as projectDefinitionSchemas } from "./entity-definitions/09-project.entity";
+import { readSchemas as taskDefinitionSchemas } from "./entity-definitions/10-task.entity";
+import { readSchemas as expenseDefinitionSchemas } from "./entity-definitions/16-expense.entity";
 import { withEntityListMedia } from "./entity-media-raw-read";
 import type { z } from "zod";
 
 /** Repository/compiler reads; public work entities use generated field envelopes. */
-export const rawProjectOut = projectDefinition.readSchemas.output;
+export const rawProjectOut = projectDefinitionSchemas.output;
 export const rawProjectListItemOut = withEntityListMedia(
-  projectDefinition.readSchemas.list,
+  projectDefinitionSchemas.list,
 );
 export type RawProjectOut = z.output<typeof rawProjectOut>;
 export type RawProjectListItemOut = z.output<typeof rawProjectListItemOut>;
 
-export const rawTaskOut = taskDefinition.readSchemas.output;
+export const rawTaskOut = taskDefinitionSchemas.output;
 export const rawTaskListItemOut = withEntityListMedia(
-  taskDefinition.readSchemas.list,
+  taskDefinitionSchemas.list,
 );
 export type RawTaskOut = z.output<typeof rawTaskOut>;
 export type RawTaskListItemOut = z.output<typeof rawTaskListItemOut>;
 
-export const rawExpenseOut = expenseDefinition.readSchemas.output;
+export const rawExpenseOut = expenseDefinitionSchemas.output;
 export const rawExpenseListItemOut = withEntityListMedia(
-  expenseDefinition.readSchemas.list,
+  expenseDefinitionSchemas.list,
 );
 export type RawExpenseOut = z.output<typeof rawExpenseOut>;
 export type RawExpenseListItemOut = z.output<typeof rawExpenseListItemOut>;

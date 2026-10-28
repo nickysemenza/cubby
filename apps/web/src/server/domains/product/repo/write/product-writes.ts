@@ -1,5 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
+  type ProductCreateInput,
+  type ProductUpdateInput,
+} from "@cubby/schemas/entities/product";
+import type { ImageRawOut as RawImageOutput } from "@cubby/schemas/entity-contracts/image";
+import {
   ingredientShortcode,
   productShortcode,
 } from "@cubby/schemas/identifiers";
@@ -8,12 +13,9 @@ import {
   type ProductShortcode,
   parseEntityId,
 } from "@cubby/schemas/identifiers";
-import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import type {
-  ProductCreateInput,
   ProductSummariesInput,
   ProductSummariesOut,
-  ProductUpdateInput,
 } from "@cubby/schemas/product";
 import type {
   RawProductDetail,

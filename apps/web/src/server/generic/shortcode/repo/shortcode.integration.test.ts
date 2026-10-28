@@ -12,6 +12,7 @@ import type {
   ProductId,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
+import { locationType } from "@cubby/schemas/location-fields";
 import { testEntityId } from "@cubby/schemas/testing";
 import {
   PUBLIC_SHORTCODE_PREFIXES,
@@ -300,7 +301,11 @@ describe("insertWithShortcode", () => {
       "location",
       {
         where: eq(location.id, id),
-        values: () => ({ id, name: "Occupied identity name", type: "shelf" }),
+        values: () => ({
+          id,
+          name: "Occupied identity name",
+          type: locationType.parse("shelf"),
+        }),
       },
       generator,
     ).catch((cause: unknown) => cause);

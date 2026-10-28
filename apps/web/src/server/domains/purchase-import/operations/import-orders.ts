@@ -506,7 +506,7 @@ type StoredPreparation = {
 
 async function loadPreparation(
   db: Database,
-  runId: string,
+  runId: RunId,
   prepareOperationId: string,
 ): Promise<StoredPreparation[]> {
   const database = getDb(db);
@@ -939,7 +939,7 @@ async function priorPreparation(
 
 async function finalizeReviewRun(
   db: Database,
-  runId: string,
+  runId: RunId,
   operationId: string,
 ) {
   await auditAllImportBatches(db, {

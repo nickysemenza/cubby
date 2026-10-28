@@ -1,5 +1,5 @@
 /** Repository/compiler projections. Public Meal reads use generated envelopes. */
-import definition from "./entity-definitions/06-meal.entity";
+import { readSchemas as definitionSchemas } from "./entity-definitions/06-meal.entity";
 import { z } from "zod";
 import { rawMealRecipeOut } from "./meal-fields";
 import { mealShortcode } from "./identifier-fields";
@@ -12,9 +12,9 @@ export {
   rawMealRecipeSummary,
   type RawMealRecipeOut,
 } from "./meal-fields";
-export const rawMealOutput = definition.readSchemas.output;
-export const rawMealList = definition.readSchemas.list;
-export const rawMealDetail = definition.readSchemas.detail;
+export const rawMealOutput = definitionSchemas.output;
+export const rawMealList = definitionSchemas.list;
+export const rawMealDetail = definitionSchemas.detail;
 const mcpRecipes = z.array(rawMealRecipeOut.omit({ id: true }));
 export const rawMealMcpOutput = rawMealOutput.extend({ recipes: mcpRecipes });
 export const rawMealMcpList = rawMealList.extend({ recipes: mcpRecipes });

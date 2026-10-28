@@ -1,3 +1,4 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
@@ -25,7 +26,7 @@ export async function loadEmailRefreshTarget(
     getDb(db)
       .select({ item: email, member: emailMemberClassificationSql() })
       .from(email)
-      .where(eq(email.id, evaluation.target.recordId)),
+      .where(eq(email.id, parseEntityId("email", evaluation.target.recordId))),
     getDb(db).select().from(run).where(eq(run.id, evaluation.runId)),
   ]);
   return { current, owner };
@@ -38,7 +39,12 @@ export async function latestClassificationObservation(
   const [observation] = await getDb(db)
     .select()
     .from(emailClassificationObservation)
-    .where(eq(emailClassificationObservation.emailId, emailId))
+    .where(
+      eq(
+        emailClassificationObservation.emailId,
+        parseEntityId("email", emailId),
+      ),
+    )
     .orderBy(desc(emailClassificationObservation.createdAt))
     .limit(1);
   return observation;

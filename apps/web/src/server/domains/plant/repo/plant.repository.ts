@@ -1,4 +1,4 @@
-import { rawPlantOut } from "@cubby/schemas/plant-raw-read";
+import { plantRawOut as rawPlantOut } from "@cubby/schemas/entity-contracts/plant";
 import { z } from "zod";
 
 import {

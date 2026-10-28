@@ -1,7 +1,7 @@
 import {
   projectListItemOut,
   type ProjectListItemOut,
-} from "@cubby/schemas/project";
+} from "@cubby/schemas/entities/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 

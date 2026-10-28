@@ -1,5 +1,6 @@
+import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { displayItemsField } from "./label-field.js";
 import { productShortcode, wishShortcode } from "../identifier-fields.js";
 import {
@@ -7,7 +8,7 @@ import {
   wishPriceRangeOut,
 } from "@cubby/schemas/wish-fields";
 import { z } from "zod";
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "wish",
   names: { singular: "Wish", plural: "Wishlist" },
   route: {
@@ -130,6 +131,7 @@ export default defineEntity({
         },
       },
       {
+        output: false,
         key: "candidateProductIds",
         kind: "identifier",
         reference: { entity: "product", multiple: true },
@@ -142,6 +144,8 @@ export default defineEntity({
         },
       },
       {
+        output: false,
+        audit: false,
         key: "acquired",
         kind: "boolean",
         control: { kind: "checkbox" },
@@ -166,6 +170,7 @@ export default defineEntity({
         },
       },
       {
+        audit: true,
         key: "acquiredAt",
         kind: "timestamp",
         nullable: true,
@@ -283,32 +288,10 @@ export default defineEntity({
           update: null,
         },
       },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt"),
+      timestampField("updatedAt"),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
       // Server-composed rows for the candidates above (`display.itemsPath`).
       displayItemsField("candidateItems", "Candidate products"),
     ],
@@ -325,9 +308,7 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: ["name", "notes", "candidateProductIds"],
-    update: ["name", "notes", "candidateProductIds", "acquired"],
-    audit: ["name", "notes", "acquiredAt", "candidateProductIds"],
+
     derived: {
       // The midpoint of the candidates' price range.
       priceRange: { type: "number" },
@@ -352,23 +333,8 @@ export default defineEntity({
       create: ["capture", "full"],
       update: ["full", "identity", "acquisition"],
     },
-    output: [
-      "id",
-      "name",
-      "notes",
-      "acquiredAt",
-      "candidates",
-      "candidateItems",
-      "candidateCount",
-      "priceRange",
-      "createdAt",
-      "updatedAt",
-    ],
   },
   fields: {
-    create: { module: "@cubby/schemas/wish", export: "wishCreateInput" },
-    update: { module: "@cubby/schemas/wish", export: "wishUpdateData" },
-    output: { module: "@cubby/schemas/wish-raw-read", export: "rawWishOut" },
     list: {
       module: "@cubby/schemas/wish-raw-read",
       export: "rawWishListItemOut",
@@ -423,27 +389,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "candidates",
-      label: "Candidate products",
-      target: "product",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "EntityLink[wishCandidate].from", direction: "incoming" },
-          { edge: "EntityLink[wishCandidate].to", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "EntityLink[wishCandidate].to", direction: "incoming" },
-          { edge: "EntityLink[wishCandidate].from", direction: "outgoing" },
-        ],
-      },
-    },
-  ],
+
   search: {
     mode: "semantic",
     inputs: [
@@ -668,3 +614,15 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .link("wishCandidate", "outgoing")
+      .named("candidates", "Candidate products", {
+        view: { columnGroup: "Options", defaultVisible: true },
+      }),
+  ],
+  readSchemas,
+);

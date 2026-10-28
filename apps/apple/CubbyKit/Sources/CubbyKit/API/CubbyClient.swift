@@ -157,8 +157,8 @@ public actor CubbyClient {
     }
 
     /// One image with its owning records through the kernel `get` every entity shares. The
-    /// detail read is a superset of the photo views' `ImageWithEntity`, which it projects to.
-    public func imageDetail(id: String) async throws -> ImageWithEntity {
+    /// photo views consume the generated detail contract.
+    public func imageDetail(id: String) async throws -> ImageDetailOut {
         guard let row = try await EntityCatalog[.image].getRow(client: self, id: id) else {
             throw DecodingError.dataCorrupted(
                 .init(codingPath: [], debugDescription: "Image detail returned null"))

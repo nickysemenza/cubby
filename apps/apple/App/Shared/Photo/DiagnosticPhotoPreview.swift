@@ -18,7 +18,7 @@ struct DiagnosticPhotoPreview: View {
 struct DiagnosticStoredPhotoPreview: View {
     let id: ImageCode
     @Environment(AppModel.self) private var appModel
-    @State private var detail: ImageWithEntity?
+    @State private var detail: ImageDetailOut?
     @State private var error: String?
     @State private var retry = 0
 

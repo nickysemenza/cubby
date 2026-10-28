@@ -1,27 +1,17 @@
-/**
- * `INCOMING_EDGES` — the physical-fact half of `ENTITY_EDGES`
- * (`./entity-edges.ts`), projected down to what a SQL builder needs: the FK
- * `column` itself, plus `unconstrained`/`note`. `ENTITY_EDGES` is the single
- * source of truth; this is a real typed projection of it (not a second
- * hand-kept map), so it can never drift from `ENTITY_EDGE_SEMANTICS`
- * (`./entity-edge-semantics.ts`, the other projection) — both are built from
- * the same per-edge entries, so their key sets are identical by construction,
- * with no runtime parity check required.
- *
- * `IncomingEdgeKey<E>` stays a literal-key type (not widened to `string`):
- * every `IncomingEdgePolicy<E, ...>` an operation declares (there are 23 of
- * them) `satisfies`-checks its own keys against this, so a new edge is a
- * compile error at every operation until it has been given a disposition
- * there.
+/** Physical projection of the compiled source references and explicit domain semantics.
+ * Domain operation policies remain exhaustive over explicit edges; newly declared
+ * ordinary references receive a conservative blocking disposition automatically.
  */
 
 import type { Entity } from "@cubby/schemas/entity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type ShortcodeEntity,
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
 import { type AnyColumn, eq, type SQL } from "drizzle-orm";
 
+import { ENTITY_EDGE_OVERRIDES } from "./entity-edge-overrides";
 import type { EdgeScope, EntityEdge } from "./entity-edges";
 import { ENTITY_EDGES } from "./entity-edges";
 
@@ -77,31 +67,38 @@ const INCOMING_EDGES = Object.fromEntries(
 export type IncomingEdgeKey<E extends Entity> =
   keyof (typeof INCOMING_EDGES)[E];
 
-/**
- * A value for every incoming edge of `E` — the general form. Any map that must
- * stay exhaustive over an entity's edges uses this: stable per-edge semantics
- * (`ENTITY_EDGE_SEMANTICS`), an operation's dispositions
- * ({@link IncomingEdgePolicy}), or a per-edge SQL builder
- * (`PRODUCT_RETAINING_NOT_EXISTS`). Adding an edge above is a compile error in
- * every one of them until it's handled.
- */
-type IncomingEdgeMap<E extends Entity, Value> = Record<
-  IncomingEdgeKey<E>,
-  Value
->;
-
-/**
- * An operation-specific decision for every incoming edge of `E`.
- *
- * Keep the disposition type local to the operation: deleting a purchase
- * detaches its expenses, while merging one re-points those same rows. This
- * alias supplies exhaustiveness without pretending the edge has one global
- * behavior.
- */
-export type IncomingEdgePolicy<E extends Entity, Disposition> = IncomingEdgeMap<
-  E,
+/** Domain edges remain exhaustive; ordinary source references default to refusal. */
+export type IncomingEdgePolicy<E extends Entity, Disposition> = Record<
+  keyof (typeof ENTITY_EDGE_OVERRIDES)[E],
   Disposition
->;
+> &
+  Partial<Record<IncomingEdgeKey<E>, Disposition>>;
+
+export const ORDINARY_REFERENCE_BLOCK: OperationDisposition = {
+  code: "block-ordinary-reference",
+  effect: "block",
+  description:
+    "An ordinary reference requires an explicit operation policy before its target can be removed or merged.",
+};
+
+export const ordinaryIncomingEdgeKeys = (entity: Entity): string[] =>
+  Object.keys(INCOMING_EDGES[entity]).filter(
+    (key) => !(key in ENTITY_EDGE_OVERRIDES[entity]),
+  );
+
+/** The same conservative policy feeds execution and the integrity catalog. */
+export const effectiveIncomingEdgePolicy = (
+  entity: Entity,
+  policy: Readonly<Record<string, OperationDisposition>>,
+) => ({
+  ...Object.fromEntries(
+    ordinaryIncomingEdgeKeys(entity).map((key) => [
+      key,
+      ORDINARY_REFERENCE_BLOCK,
+    ]),
+  ),
+  ...policy,
+});
 
 /**
  * Inverted view of {@link INCOMING_EDGES}: `<SourceTable>.<column>` → the

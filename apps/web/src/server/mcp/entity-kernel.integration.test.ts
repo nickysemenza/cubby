@@ -1,11 +1,11 @@
-import { productCreateInput } from "@cubby/schemas/product";
+import { productCreateInput } from "@cubby/schemas/entities/product";
+import { vendorCreateInput } from "@cubby/schemas/entities/vendor";
+import { wishCreateInput } from "@cubby/schemas/entities/wish";
 import {
   recordSourceTransactionRecordsInput,
   sourceTransactionRecordFilters,
 } from "@cubby/schemas/source-transaction-record";
 import { testUserId } from "@cubby/schemas/testing";
-import { vendorCreateInput } from "@cubby/schemas/vendor";
-import { wishCreateInput } from "@cubby/schemas/wish";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";

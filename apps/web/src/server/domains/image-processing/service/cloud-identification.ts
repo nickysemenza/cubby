@@ -1,4 +1,4 @@
-import type { ImageId, RunId } from "@cubby/schemas/identifiers";
+import type { ImageId, ImageJobId, RunId } from "@cubby/schemas/identifiers";
 import {
   IMAGE_IDENTIFICATION_MODEL,
   IMAGE_IDENTIFICATION_PROMPT_REVISION,
@@ -15,7 +15,7 @@ import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 export async function completeCloudImageIdentification(
   db: Database,
   input: {
-    jobId: string;
+    jobId: ImageJobId;
     attemptId: string;
     imageId: ImageId;
     runId: RunId | null;

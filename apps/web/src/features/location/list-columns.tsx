@@ -1,4 +1,4 @@
-import type { LocationListItemOut } from "@cubby/schemas/location";
+import { type LocationListItemOut } from "@cubby/schemas/entities/location";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 

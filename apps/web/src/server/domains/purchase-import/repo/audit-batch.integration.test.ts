@@ -120,7 +120,7 @@ describe("purchase audit restart recovery", () => {
           name: "Other audit actor",
           email: `${foreignActor}@example.test`,
         });
-      const patch =
+      const patch: Partial<typeof run.$inferInsert> =
         boundary === "owner"
           ? { ledgerPartyId: foreignOwner.id }
           : boundary === "actor"

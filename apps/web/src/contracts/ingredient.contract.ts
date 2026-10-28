@@ -1,4 +1,5 @@
 import { ingredientFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/ingredient";
+import * as generatedIngredientContracts from "@cubby/schemas/entities/ingredient";
 import * as schemas from "@cubby/schemas/ingredient";
 import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";
 import { z } from "zod";
@@ -6,7 +7,7 @@ import { z } from "zod";
 import { defineContract, mutation, query } from "~/contracts/define";
 
 const mergeOutput = z.object({
-  ingredient: schemas.ingredientOut,
+  ingredient: generatedIngredientContracts.ingredientOut,
   mergeSummary: schemas.mergeSummary,
   sideEffects: mutationSideEffectsSchema,
 });

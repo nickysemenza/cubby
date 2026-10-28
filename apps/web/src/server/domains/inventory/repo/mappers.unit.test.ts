@@ -1,4 +1,5 @@
 import { rawInventoryDetail } from "@cubby/schemas/inventory-raw-read";
+import { locationType } from "@cubby/schemas/location-fields";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import {
   categorySummaryFixture,
@@ -53,7 +54,7 @@ const baseLocation = {
   lastBulkInventory: null,
   productId: null,
   parentId: null,
-  type: "room",
+  type: locationType.parse("room"),
   aiDescription: null,
   notes: null,
   valuation: null,

@@ -1,6 +1,7 @@
+import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
   locationShortcode,
@@ -13,7 +14,7 @@ import { plantingOutcome, plantingStatus } from "@cubby/schemas/garden-fields";
 import { z } from "zod";
 
 const optionalText = z.string().trim().min(1).nullable();
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "planting",
   names: { singular: "Planting", plural: "Plantings" },
   route: {
@@ -205,6 +206,7 @@ export default defineEntity({
         },
       },
       {
+        audit: false,
         key: "sourceProductId",
         kind: "identifier",
         nullable: true,
@@ -292,6 +294,7 @@ export default defineEntity({
         },
       },
       {
+        audit: false,
         key: "quantity",
         kind: "text",
         nullable: true,
@@ -304,6 +307,7 @@ export default defineEntity({
         },
       },
       {
+        audit: false,
         key: "notes",
         kind: "text",
         nullable: true,
@@ -316,6 +320,7 @@ export default defineEntity({
         },
       },
       {
+        audit: false,
         key: "plannedWindow",
         kind: "text",
         nullable: true,
@@ -328,10 +333,15 @@ export default defineEntity({
         },
       },
       {
+        audit: false,
         key: "season",
         kind: "dateRange",
         nullable: true,
-        dateRange: { start: "sowedOn", end: "finishedOn", semantics: "period" },
+        dateRange: {
+          start: "sowedOn",
+          end: "finishedOn",
+          semantics: "period",
+        },
         control: { kind: "dateRange" },
         display: { columnGroup: "Schedule", columnIdOverride: "sowedOn" },
         validation: {
@@ -340,8 +350,9 @@ export default defineEntity({
           update: dateRangeSchema.nullable().optional(),
         },
       },
-      { key: "sowedOn", kind: "date", nullable: true },
+      { output: false, key: "sowedOn", kind: "date", nullable: true },
       {
+        audit: false,
         key: "transplantedOn",
         kind: "date",
         nullable: true,
@@ -357,34 +368,50 @@ export default defineEntity({
           update: plainDate.nullable().optional(),
         },
       },
-      { key: "finishedOn", kind: "date", nullable: true },
+      { output: false, key: "finishedOn", kind: "date", nullable: true },
       {
         display: { detail: false, list: false },
         key: "plantName",
         kind: "text",
         nullable: true,
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         display: { detail: false, list: false },
         key: "sourceProductName",
         kind: "text",
         nullable: true,
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         display: { detail: false, list: false },
         key: "locationName",
         kind: "text",
         nullable: true,
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         display: { detail: false, list: false },
         key: "taskName",
         kind: "text",
         nullable: true,
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         // Derived on read from the plant's crop guide, for the household's
@@ -404,7 +431,11 @@ export default defineEntity({
           readPath: "guideSowWindow",
           sourceDependencies: [{ path: "plantId", label: "Plant" }],
         },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "guideTransplantWindow",
@@ -422,7 +453,11 @@ export default defineEntity({
           readPath: "guideTransplantWindow",
           sourceDependencies: [{ path: "plantId", label: "Plant" }],
         },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         // Expected first-harvest range: the later of sowedOn + the sow range and
@@ -452,14 +487,22 @@ export default defineEntity({
             { path: "plantId", label: "Plant" },
           ],
         },
-        validation: { read: plainDate.nullable(), create: null, update: null },
+        validation: {
+          read: plainDate.nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         display: { detail: false, list: false },
         key: "expectedHarvestEnd",
         kind: "date",
         nullable: true,
-        validation: { read: plainDate.nullable(), create: null, update: null },
+        validation: {
+          read: plainDate.nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         // e.g. "Jul 14–24 (crop estimate)"; the basis says whether the days
@@ -479,7 +522,11 @@ export default defineEntity({
           readPath: "expectedHarvest",
           sourceDependencies: [{ path: "plantId", label: "Plant" }],
         },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         display: { detail: false, list: false },
@@ -494,24 +541,10 @@ export default defineEntity({
         kind: "identifier",
         validation: { read: plantingShortcode, create: null, update: null },
       },
-      {
-        display: { detail: false, list: false },
-        key: "createdAt",
-        kind: "timestamp",
-        validation: { read: z.date(), create: null, update: null },
-      },
-      {
-        display: { detail: false, list: false },
-        key: "updatedAt",
-        kind: "timestamp",
-        validation: { read: z.date(), create: null, update: null },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt", { detail: false, list: false }),
+      timestampField("updatedAt", { detail: false, list: false }),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
       {
@@ -519,11 +552,11 @@ export default defineEntity({
         specialized: "primary-key:PlantingId",
       },
       { key: "shortcode", specialized: "shortcode" },
-      { key: "plantId", reference: "plant" },
+      "plantId",
       "outcome",
-      { key: "sourceProductId", reference: "product" },
-      { key: "locationId", reference: "location" },
-      { key: "taskId", reference: "task" },
+      "sourceProductId",
+      "locationId",
+      "taskId",
       {
         key: "status",
         specialized: "enum:status",
@@ -539,33 +572,7 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "plantId",
-      "sourceProductId",
-      "locationId",
-      "taskId",
-      "status",
-      "outcome",
-      "quantity",
-      "notes",
-      "plannedWindow",
-      "season",
-      "transplantedOn",
-    ],
-    update: [
-      "plantId",
-      "sourceProductId",
-      "locationId",
-      "taskId",
-      "status",
-      "outcome",
-      "quantity",
-      "notes",
-      "plannedWindow",
-      "season",
-      "transplantedOn",
-    ],
-    audit: ["status", "outcome", "plantId", "locationId", "taskId"],
+
     derived: {
       gardenEntryId: { via: "entries" },
       // From the first of sowed, transplanted or created to `finishedOn`
@@ -595,43 +602,8 @@ export default defineEntity({
       create: ["full", "capture"],
       update: ["full"],
     },
-    output: [
-      "id",
-      "plantId",
-      "sourceProductId",
-      "locationId",
-      "taskId",
-      "status",
-      "outcome",
-      "quantity",
-      "notes",
-      "plannedWindow",
-      "season",
-      "transplantedOn",
-      "displayName",
-      "plantName",
-      "expectedHarvestStart",
-      "expectedHarvestEnd",
-      "expectedHarvest",
-      "sourceProductName",
-      "locationName",
-      "taskName",
-      "guideSowWindow",
-      "guideTransplantWindow",
-      "createdAt",
-      "updatedAt",
-    ],
   },
   fields: {
-    create: {
-      module: "@cubby/schemas/planting",
-      export: "plantingCreateInput",
-    },
-    update: { module: "@cubby/schemas/planting", export: "plantingUpdateData" },
-    output: {
-      module: "@cubby/schemas/planting-raw-read",
-      export: "rawPlantingOut",
-    },
     list: {
       module: "@cubby/schemas/planting-raw-read",
       export: "rawPlantingListItemOut",
@@ -720,85 +692,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "plant",
-      label: "Plant",
-      target: "plant",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Planting.plantId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Planting.plantId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "source-product",
-      label: "Source product",
-      target: "product",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Planting.sourceProductId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Planting.sourceProductId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "location",
-      label: "Current location",
-      target: "location",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Planting.locationId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Planting.locationId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "task",
-      label: "Task",
-      target: "task",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Planting.taskId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Planting.taskId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "entries",
-      label: "Journal entries",
-      target: "gardenEntry",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "EntityLink[gardenEntryPlanting].to", direction: "incoming" },
-          {
-            edge: "EntityLink[gardenEntryPlanting].from",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "EntityLink[gardenEntryPlanting].from",
-            direction: "incoming",
-          },
-          { edge: "EntityLink[gardenEntryPlanting].to", direction: "outgoing" },
-        ],
-      },
-    },
-  ],
+
   // `displayName` is a non-null projected title (the plant's), so
   // Cmd-K / `/search` can index plantings like every other named entity.
   // Related rows the search document reads (ADR 0021).
@@ -1065,3 +959,17 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r.field("plantId").named("plant", "Plant"),
+    r.field("sourceProductId").named("source-product", "Source product"),
+    r.field("locationId").named("location", "Current location"),
+    r.field("taskId").named("task", "Task"),
+    r
+      .link("gardenEntryPlanting", "incoming")
+      .named("entries", "Journal entries"),
+  ],
+  readSchemas,
+);

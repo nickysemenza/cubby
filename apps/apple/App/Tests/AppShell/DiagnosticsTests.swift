@@ -74,8 +74,8 @@ struct ImageDiagnosticsCancellationTests {
                     "representations", "url", "capturedByName", "sightings", "provenanceEvidenceLabel",
                     "dataQuality", "displayImages",
                 ].map { ($0, missing) })
-        ).decoded(ImageWithEntityFields.self)
-        let detail = ImageWithEntity(
+        ).decoded(ImageDetailOutFields.self)
+        let detail = ImageDetailOut(
             id: ImageCode("IMG-4K7M"), key: "synthetic-image",
             filename: "sample.jpg", size: 1, contentType: "image/jpeg", status: .uploaded,
             width: nil, height: nil, detectedContentType: nil, sha256: nil, renderStatus: nil,

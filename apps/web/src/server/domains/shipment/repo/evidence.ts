@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { EmailId } from "@cubby/schemas/identifiers";
 import {
   parseEntityId,
   parseShortcodeFor,
@@ -198,7 +199,7 @@ async function sourceCapture(
   actor: ActorContext,
 ) {
   const source = input.source;
-  let emailId: string | null = null;
+  let emailId: EmailId | null = null;
   let ownerId: string | null = null;
   let sourceKey: string;
   let checksum: string;

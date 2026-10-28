@@ -1,4 +1,8 @@
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  type ImageJobId,
+  parseEntityId,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -73,7 +77,7 @@ describe("image work on every surface", () => {
     return id;
   }
 
-  const readImageJob = async (id: string) => {
+  const readImageJob = async (id: ImageJobId) => {
     const [row] = await getDb(ctx.db)
       .select({ shortcode: imageProcessingJob.shortcode })
       .from(imageProcessingJob)

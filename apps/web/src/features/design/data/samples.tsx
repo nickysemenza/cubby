@@ -1,6 +1,7 @@
+import { locationDetailOut as infLocation } from "@cubby/schemas/entities/location";
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import { locationShortcode } from "@cubby/schemas/identifiers";
-import { infLocation, type LocationType } from "@cubby/schemas/location";
+import { type LocationType } from "@cubby/schemas/location";
 import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import type { WorkQueueGap } from "@cubby/schemas/work-queue";
 import { capitalize, SHORTCODE_CHARS } from "@cubby/shared";

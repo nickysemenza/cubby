@@ -2,6 +2,7 @@ import { shipmentEvidence } from "./shipment-evidence";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 import {
+  entityIdSchema,
   emailShortcode,
   purchaseShortcode,
   financialTransactionShortcode,
@@ -714,7 +715,7 @@ export const mailSearchOut = z.object({
 /** Stored execution evidence is separate from the Email's later state. */
 export const discoveryEmailReceipt = z.object({
   id: emailShortcode,
-  emailId: z.uuid(),
+  emailId: entityIdSchema("email"),
   sourceChecksum: z.string().nullable(),
   handledAt: z.iso.datetime(),
   observationId: z.uuid().nullable(),

@@ -12,7 +12,10 @@ import { getDb, insertAndReturn } from "~/server/db/helpers";
 import { financialTransactionAllocation } from "~/server/db/schema";
 import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  type ShortcodeInsertValues,
+  insertWithShortcode,
+} from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   findFinancialTransactionAllocationDefects,
@@ -51,7 +54,7 @@ const mkPurchase = async (db: Database) => {
 const mkTransaction = async (
   db: Database,
   overrides: {
-    kind?: string;
+    kind?: NonNullable<ShortcodeInsertValues<"financialTransaction">["kind"]>;
     amount?: number;
     purchaseId?: PurchaseId | null;
   } = {},

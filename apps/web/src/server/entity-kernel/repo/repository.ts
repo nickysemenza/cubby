@@ -1,6 +1,7 @@
 // Keep this re-export before lifecycle imports: image writers initialize during their import cycle.
 export { defineMutationWriter, type MutationReceipt } from "./mutation-writer";
 
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * One repository shape for every kernel entity.
  *
@@ -15,8 +16,8 @@ export { defineMutationWriter, type MutationReceipt } from "./mutation-writer";
  *   exposes get/list only, whatever the spec supplies);
  * - every read — a page, a selected projection, the single-record get and
  *   the declared totals — goes through the entity's `scaffold` port;
- * - `delete` defaults to the declared `lifecycle.delete` edge policy plus
- *   `deleteHooks`;
+ * - `delete` blocks incoming references by default; explicit `lifecycle.delete`
+ *   dispositions and `deleteHooks` own domain exceptions;
  * - a create/update that returns the bare output has its internal id
  *   resolved from the output's public id.
  *
@@ -28,10 +29,11 @@ export { defineMutationWriter, type MutationReceipt } from "./mutation-writer";
  * forever (docs/agents/domain-rules.md). Nested `withTransaction` calls on
  * `ctx.db` become savepoints.
  */
-import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type AuditableEntity,
   entityManifest,
+  isAuditableEntity,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
@@ -39,6 +41,7 @@ import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
   type EntityId,
+  parseEntityId,
 } from "@cubby/schemas/identifiers";
 import {
   and,
@@ -52,6 +55,7 @@ import { type output as ZodOutput, type ZodSchema, type ZodType, z } from "zod";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
   notDeleted,
   updateLiveAndReturn,
@@ -92,6 +96,12 @@ import {
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  insertWithShortcode,
+  type ShortcodeInsertValues,
+} from "~/server/generic/shortcode/repo/shortcode-utils";
+
+import { defineMutationWriter, type MutationReceipt } from "./mutation-writer";
 
 /* -------------------------------------------------------------------------- */
 /* Reads                                                                       */
@@ -150,34 +160,6 @@ type EntityReaderConfig<
     }
 );
 
-export interface EntityReader<
-  TOut,
-  E extends ShortcodeEntity,
-  TDb extends ReaderDb = Database,
-> {
-  /**
-   * Fetch by id, throwing `ENTITY_NOT_FOUND_REASON[entity]` when there is no
-   * live row. `reader` passes the caller's actor and clients to a declared read.
-   */
-  getByID: (db: TDb, id: EntityId<E>, reader?: ListReader) => Promise<TOut>;
-  /** Fetch by id, returning `null` when there is no live row. */
-  getByIDOrNull: (
-    db: TDb,
-    id: EntityId<E>,
-    reader?: ListReader,
-  ) => Promise<TOut | null>;
-  /**
-   * Fetch by PUBLIC id — the shortcode URLs and MCP speak — returning `null`
-   * when the code is malformed, belongs to another entity, or names a row
-   * that no longer lives.
-   */
-  getByShortcode: (
-    db: TDb,
-    shortcode: string,
-    reader?: ListReader,
-  ) => Promise<TOut | null>;
-}
-
 /**
  * The live-row read every repository shares: fetch by id (with relations) →
  * null-or-404 → map. A repository's `get` is its `getByShortcode`.
@@ -192,7 +174,7 @@ export function createEntityReader<
   TOut,
   E extends ShortcodeEntity,
   TDb extends ReaderDb = Database,
->(config: EntityReaderConfig<TRow, TOut, E, TDb>): EntityReader<TOut, E, TDb> {
+>(config: EntityReaderConfig<TRow, TOut, E, TDb>) {
   const getByIDOrNull = async (
     db: TDb,
     id: EntityId<E>,
@@ -240,7 +222,63 @@ export function createEntityReader<
     return id === null ? null : getByIDOrNull(db, id);
   };
 
-  return { getByID, getByIDOrNull, getByShortcode };
+  /** Ordinary creates publish through the canonical scaffold on the write transaction. */
+  function createWriter<TInput, Full>(
+    values: (
+      tx: DrizzleTransaction,
+      data: TInput,
+    ) => ShortcodeInsertValues<E> | Promise<ShortcodeInsertValues<E>>,
+    publish: (output: TOut, entityId: EntityId<E>) => Full,
+  ) {
+    const readCreated = async (
+      db: ReaderDb,
+      id: EntityId<E>,
+    ): Promise<TOut> => {
+      if (!config.scaffold)
+        throw new Error("Ordinary creates require a declared scaffold read.");
+      const [row] = (await config.scaffold.getByIds(db, [id])).data;
+      return config.output.parse(row);
+    };
+    return defineMutationWriter({
+      entity: config.entity,
+      read: async (
+        receipt: MutationReceipt<E>,
+        db: ReaderDb,
+        _data: TInput,
+        _actor: ActorContext,
+      ) => publish(await readCreated(db, receipt.entityId), receipt.entityId),
+      write: async (
+        readOutput,
+        db: ReaderDb,
+        data: TInput,
+        actor: ActorContext,
+      ) =>
+        withTransactionOn(db, async (tx) => {
+          const row = await insertWithShortcode(
+            tx,
+            config.entity,
+            await values(tx, data),
+          );
+          const identity = z
+            .object({ id: z.string(), shortcode: z.string() })
+            .parse(row);
+          const entityId = parseEntityId(config.entity, identity.id);
+          if (isAuditableEntity(config.entity)) {
+            await logAuditEntry(tx, actor, {
+              entityKind: config.entity,
+              entityId,
+              action: "create",
+            });
+          }
+          return readOutput(
+            { entityId, shortcode: identity.shortcode },
+            async () => publish(await readCreated(tx, entityId), entityId),
+          );
+        }),
+    });
+  }
+
+  return { getByID, getByIDOrNull, getByShortcode, createWriter };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -292,36 +330,6 @@ type EntityCrudConfig<
   };
 };
 
-export interface EntityCrud<
-  TOut,
-  TUpdate,
-  E extends AuditableEntity & ShortcodeEntity,
-> extends EntityReader<TOut, E, ReaderDb> {
-  /**
-   * Diff-audited column update, atomic end to end: before-state → UPDATE →
-   * audit entry → re-read, all on one transaction (joined when the caller
-   * already holds one, e.g. the kernel's). Not serialized — two concurrent
-   * updates both diff against the same before-state; last write wins, which
-   * a single-household tool accepts rather than paying a row lock per write.
-   */
-  update(
-    db: ReaderDb,
-    id: EntityId<E>,
-    data: TUpdate,
-    actor: ActorContext,
-  ): Promise<TOut>;
-  update<TResult>(
-    db: ReaderDb,
-    id: EntityId<E>,
-    data: TUpdate,
-    actor: ActorContext,
-    readOutput: (
-      db: ReaderDb,
-      receipt: { entityId: EntityId<E>; shortcode: string },
-    ) => Promise<TResult>,
-  ): Promise<TResult>;
-}
-
 /**
  * The collections an entity's `relations` hook reports, keyed by audited
  * field: id sets or row lists, compared structurally by the audit diff.
@@ -338,11 +346,10 @@ export function createEntityCrud<
   TUpdate,
   E extends AuditableEntity & ShortcodeEntity,
   TRelKey extends string = never,
->(
-  config: EntityCrudConfig<TTable, TRow, TOut, TUpdate, E, TRelKey>,
-): EntityCrud<TOut, TUpdate, E> {
+>(config: EntityCrudConfig<TTable, TRow, TOut, TUpdate, E, TRelKey>) {
   const reader = createEntityReader<TRow, TOut, E, ReaderDb>(config);
   const fetchStoredRow = createEntityRowFetcher(config.table);
+  /** Atomic before-state, column/relation writes, audit and reread; household updates use last-write-wins. */
   function update(
     db: ReaderDb,
     id: EntityId<E>,
@@ -414,7 +421,52 @@ export function createEntityCrud<
         : reader.getByID(tx, id);
     });
   }
-  return { ...reader, update };
+
+  function updateWriter<Selector, TInput, Full>(
+    prepare: (
+      tx: DrizzleTransaction,
+      selector: Selector,
+      data: TInput,
+    ) => Promise<{ id: EntityId<E>; data: TUpdate }>,
+    publish: (output: TOut, entityId: EntityId<E>) => Full,
+  ) {
+    return defineMutationWriter({
+      entity: config.entity,
+      read: async (
+        receipt: MutationReceipt<E>,
+        db: ReaderDb,
+        _selector: Selector,
+        _data: TInput,
+        _actor: ActorContext,
+      ) =>
+        publish(await reader.getByID(db, receipt.entityId), receipt.entityId),
+      write: async (
+        readOutput,
+        db: ReaderDb,
+        selector: Selector,
+        data: TInput,
+        actor: ActorContext,
+      ) =>
+        withTransactionOn(db, async (tx) => {
+          const prepared = await prepare(tx, selector, data);
+          return update(
+            tx,
+            prepared.id,
+            prepared.data,
+            actor,
+            (readDb, receipt) =>
+              readOutput(receipt, async () =>
+                publish(
+                  await reader.getByID(readDb, receipt.entityId),
+                  receipt.entityId,
+                ),
+              ),
+          );
+        }),
+    });
+  }
+
+  return { ...reader, update, updateWriter };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -487,7 +539,7 @@ export type RepositorySpec<
   TMergeItem = never,
   TMergeSummary = never,
 > = {
-  /** Declared delete/merge edge policies; `{ delete: {} }` when omitted. */
+  /** Explicit delete/merge policies override the reference-preserving delete default. */
   lifecycle?: EntityLifecycleContract;
   /** The entity's declared read: list pages, records, totals and facets. */
   scaffold: EntityListScaffold;
@@ -587,10 +639,25 @@ export function defineRepository<
   const actions: readonly string[] =
     generatedEntityKernelContractCases[entity].actions;
   const declared = (action: string) => actions.includes(action);
-  const lifecycle: EntityLifecycleContract = spec.lifecycle ?? { delete: {} };
   // SAFETY: only an auditable shortcode entity declares a delete, and
   // `repository.delete` below exists only for an entity that declares one.
   const removable = entity as Extract<E, RemovableEntity>;
+  // Generic deletion preserves referenced records: only explicit domain policies
+  // can detach, cascade, or retain a different incoming-edge disposition.
+  const lifecycle: EntityLifecycleContract = spec.lifecycle ?? {
+    delete: declared("delete")
+      ? Object.fromEntries(
+          Object.keys(INCOMING_EDGES[removable]).map((edge) => [
+            edge,
+            {
+              effect: "block",
+              code: "referenced-record",
+              description: `Remove the ${edge} reference before deleting this record.`,
+            } satisfies OperationDisposition,
+          ]),
+        )
+      : {},
+  };
 
   const written = async (
     ctx: EntityKernelContext,

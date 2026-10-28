@@ -1,3 +1,4 @@
+import { timestampField, readOnly } from "./field-policy";
 import type { EnumIcon } from "@cubby/shared/enum-palette";
 import { z } from "zod";
 import {
@@ -11,13 +12,7 @@ import {
   runShortcode,
   shortcodeSchema,
 } from "../identifier-fields.js";
-import { defineEntity } from "./definition.js";
-
-const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
-  read,
-  create: null,
-  update: null,
-});
+import { defineEntity, defineEntityModel } from "./definition.js";
 
 const KIND_GLYPH = {
   subject_lift: { phosphor: "Scissors", sfSymbol: "scissors" },
@@ -76,7 +71,7 @@ const stateOptions = [
  * Worker queue and the Apple companion only claim and complete these rows, so
  * every client reads them through the generic list and detail.
  */
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "imageJob",
   names: { singular: "Image job", plural: "Image jobs" },
   route: { basePath: "image-jobs" },
@@ -412,28 +407,18 @@ export default defineEntity({
         display: { columnGroup: "Execution", format: "timestamp" },
         validation: readOnly(z.date().nullable()),
       },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { format: "timestamp" },
-        validation: readOnly(z.date()),
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: readOnly(z.date()),
-      },
-      { key: "shortcode", kind: "text" },
-      { key: "deletedAt", kind: "timestamp", nullable: true },
+      timestampField("createdAt", { format: "timestamp" }),
+      timestampField("updatedAt"),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
       { key: "id", specialized: "primary-key:ImageJobId" },
       { key: "shortcode", specialized: "shortcode" },
-      { key: "imageId", reference: "image" },
+      "imageId",
       { key: "kind", specialized: "enum:kind" },
       { key: "state", specialized: "enum:state" },
-      { key: "runId", reference: "run" },
+      "runId",
       { key: "attempts", defaultValue: 0 },
       "lastError",
       "processorRevision",
@@ -443,36 +428,15 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [],
-    update: [],
-    audit: [],
-    output: [
-      "id",
-      "displayName",
-      "kind",
-      "state",
-      "waitingOn",
-      "leaseDeviceId",
-      "leaseExpiresAt",
-      "imageId",
-      "runId",
-      "attempts",
-      "lastExecutor",
-      "lastError",
-      "durationMs",
-      "chargedCost",
-      "standardCost",
-      "processorRevision",
-      "dispatchedAt",
-      "completedAt",
-      "createdAt",
-      "updatedAt",
-    ],
+
     rows: {
       submissions: {
         label: "Submissions",
         path: [
-          { edge: "ImageProcessingSubmissionJob.jobId", direction: "incoming" },
+          {
+            edge: "ImageProcessingSubmissionJob.jobId",
+            direction: "incoming",
+          },
           {
             edge: "ImageProcessingSubmissionJob.submissionId",
             direction: "outgoing",
@@ -495,10 +459,6 @@ export default defineEntity({
   fields: {
     create: null,
     update: null,
-    output: {
-      module: "@cubby/schemas/image-job-raw-read",
-      export: "rawImageJobOut",
-    },
   },
   storage: {
     // Queue, lease and adoption state stays operational, outside the model.
@@ -583,46 +543,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "lease-device",
-      label: "Current lease device",
-      target: "device",
-      cardinality: "one",
-      provenance: { kind: "query", query: "imageLeaseDevice" },
-      inverse: {
-        steps: [
-          { edge: "Relationship.imageLeaseDevice", direction: "incoming" },
-        ],
-      },
-    },
-    {
-      key: "image",
-      label: "Image",
-      target: "image",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "ImageProcessingJob.imageId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "ImageProcessingJob.imageId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "run",
-      label: "Requesting Run",
-      target: "run",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "ImageProcessingJob.runId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "ImageProcessingJob.runId", direction: "incoming" }],
-      },
-    },
-  ],
+
   search: false,
   capabilities: {
     auditable: false,
@@ -663,3 +584,15 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .query("imageLeaseDevice", "one")
+      .named("lease-device", "Current lease device"),
+    r.field("imageId").named("image", "Image"),
+    r.field("runId").named("run", "Requesting Run"),
+  ],
+  readSchemas,
+);

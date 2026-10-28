@@ -386,7 +386,7 @@ async function writeSuggestionValue(
   const [record] = await getDb(db)
     .select({ shortcode: table.shortcode })
     .from(table)
-    .where(eq(table.id, row.recordId))
+    .where(eq(sql`${table.id}`, row.recordId))
     .limit(1);
   if (!record) throw new Error(`Suggestion record not found: ${row.recordId}`);
   const reviewedField =
@@ -540,7 +540,7 @@ async function automaticFieldFillRefusal(
   const [record] = await getDb(db)
     .select({ shortcode: table.shortcode })
     .from(table)
-    .where(eq(table.id, row.recordId))
+    .where(eq(sql`${table.id}`, row.recordId))
     .limit(1);
   if (!record) return "Automatic fill subject no longer exists";
   const result = await executeEntityAs({ ...context, db }, "get", {

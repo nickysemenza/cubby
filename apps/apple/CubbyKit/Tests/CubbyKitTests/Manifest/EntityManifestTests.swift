@@ -48,6 +48,11 @@ struct EntityManifestTests {
             return
         }
         #expect(spec.groupBy == "status")
+        #expect(spec.plan.groupBy == "status")
+        #expect(spec.plan.target == .task)
+        #expect(spec.plan.subtree == "includeSubProjects")
+        let seed = try #require(spec.plan.seed)
+        #expect(seed.fields.contains(seed.field))
         let status = try #require(EntityCatalog[.task].fields.first { $0.key == "status" })
         let inProgress = try #require(status.controlOptions?.first { $0.value == "in_progress" })
         #expect(inProgress.role == "status")

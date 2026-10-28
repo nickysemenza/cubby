@@ -1,3 +1,4 @@
+import type { RunId } from "@cubby/schemas/identifiers";
 import {
   extractedPurchaseLine,
   importExtractionOutcome,
@@ -232,7 +233,7 @@ export async function reviewPreparedNewProducts(
       );
   if (!source)
     throw new Error("Accepted original preparation ownership is unknown.");
-  const readOrders = (runId: string | null) =>
+  const readOrders = (runId: RunId | null) =>
     tx
       .select({ order: importPreparedOrder })
       .from(importPreparedOrder)

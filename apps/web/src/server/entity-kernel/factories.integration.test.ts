@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { count, eq } from "drizzle-orm";
 import {
@@ -12,9 +13,32 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { inventoryEntry, location, productCategory } from "~/server/db/schema";
+import { createLedgerPartyDefaultRepository } from "~/server/generated/entity-kernel-bindings.gen";
 
 describe("factories against the entity kernel", () => {
   const ctx = withTestDb();
+
+  it("executes ordinary create, update, list and get without a domain repository", async () => {
+    const context = buildKernelContext(ctx.db, testUserId(TEST_USER_ID));
+    const { repository } = createLedgerPartyDefaultRepository();
+    if (!repository.create || !repository.update)
+      throw new Error("Missing ordinary writers");
+    const created = await repository.create(context, {
+      name: "Synthetic guest",
+      kind: "guest",
+      notes: null,
+    });
+    const id = parseShortcodeFor("ledgerParty", created.output.id);
+    await repository.update(context, id, { name: "Renamed synthetic guest" });
+    expect(await repository.get(context, id)).toMatchObject({
+      name: "Renamed synthetic guest",
+    });
+    const page = await repository.listRead(context, {}, [], {
+      pageIndex: 0,
+      pageSize: 100,
+    });
+    expect(page.data.some((row) => row.id === id)).toBe(true);
+  });
 
   it("seedBaseWorld is idempotent: a second seed neither throws nor duplicates Home or the taxonomy", async () => {
     const client = getDb(ctx.db);

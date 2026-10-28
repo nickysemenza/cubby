@@ -33,7 +33,7 @@ import { assignImageProcessingExecutor } from "./image-processing-history";
 describe("parked device work wakes idle companions", () => {
   const ctx = withTestDb();
   const userId = "synthetic-background-user";
-  const deviceId = crypto.randomUUID();
+  const deviceId = parseEntityId("device", crypto.randomUUID());
   let rings = 0;
   let ringFailures = 0;
   beforeEach(() => {

@@ -376,7 +376,10 @@ describe("import report blocks", () => {
     const firstRow = (findings: RunDetail["findings"]) =>
       recordsOf(importReportBlocks("run.import-findings", run({ findings })))
         .rows[0];
-    const purchaseId = "0e6c4a7a-3e61-4d53-b8d7-8a2f3b6a1c11";
+    const purchaseId = parseEntityId(
+      "purchase",
+      "0e6c4a7a-3e61-4d53-b8d7-8a2f3b6a1c11",
+    );
 
     it("keeps expired finding history dismissible without offering apply", () => {
       const row = firstRow([

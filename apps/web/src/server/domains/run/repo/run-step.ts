@@ -354,7 +354,11 @@ export async function activeSweepFor(db: Database, family: string) {
  */
 export async function endSupersededRoutineRuns(
   db: Database,
-  pass: { purpose: string; input: unknown; keep: RunId | null },
+  pass: {
+    purpose: typeof run.$inferSelect.purpose;
+    input: unknown;
+    keep: RunId | null;
+  },
 ) {
   const ended = await getDb(db)
     .update(run)
@@ -394,7 +398,7 @@ export async function endSupersededRoutineRuns(
 /** Another unfinished Run of a purpose that allows only one at a time. */
 export async function otherActiveRun(
   db: Database,
-  purpose: string,
+  purpose: typeof run.$inferSelect.purpose,
   runId: RunId,
 ) {
   const [row] = await getDb(db)

@@ -1,4 +1,4 @@
-import type { ActorContext } from "@cubby/schemas/context";
+import { ingredientUpdateData } from "@cubby/schemas/entities/ingredient";
 /**
  * Ingredient CRUD operations.
  * Core create / update / read-by-id plus the find-or-create and batch
@@ -12,10 +12,6 @@ import {
   type ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import {
-  ingredientCreateInput,
-  ingredientUpdateData,
-} from "@cubby/schemas/ingredient";
-import {
   rawIngredientDetail,
   rawIngredientWithRecipesAndProduct,
   type RawIngredientWithRecipesAndProduct as IngredientWithRecipesAndProductOut,
@@ -25,28 +21,18 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
-import {
-  notDeleted,
-  unwrapDb,
-  updateAndReturn,
-  withTransactionOn,
-} from "~/server/db/helpers";
+import { notDeleted, unwrapDb, updateAndReturn } from "~/server/db/helpers";
 import { ingredient, product } from "~/server/db/schema";
 import {
-  type MutationReceipt,
   createEntityCrud,
   createEntityReader,
-  defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
-import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import { ENTITY_STORED_WRITES } from "~/server/generated/entity-write-bindings.gen";
 import {
   lexicalEligibility,
   lexicalRelevance,
 } from "~/server/generic/search/repo/search-lexical";
-import {
-  findOrCreateWithShortcode,
-  insertWithShortcode,
-} from "~/server/generic/shortcode/repo/shortcode-utils";
+import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { buildIngredientWhere } from "./internal-types";
 import { ingredientScaffold } from "./search";
@@ -73,74 +59,16 @@ export const readIngredientDetail = createEntityReader({
   output: rawIngredientDetail,
 }).getByIDOrNull;
 
-export const createIngredient = defineMutationWriter({
-  entity: "ingredient",
-  read: (
-    receipt: MutationReceipt<"ingredient">,
-    db: Database | DrizzleTransaction,
-    _data: z.input<typeof ingredientCreateInput>,
-    _actor: ActorContext,
-  ) => readIngredientById(db, receipt.entityId),
-  write: async (
-    readOutput,
-    db: Database | DrizzleTransaction,
-    data: z.input<typeof ingredientCreateInput>,
-    actor: ActorContext,
-  ) => {
-    const newIngredient = await insertWithShortcode(db, "ingredient", {
-      name: data.name,
-      aliases: data.aliases || [],
-      naKinds: data.naKinds ?? [],
-      usuallyOnHand: data.usuallyOnHand ?? false,
-    });
+export const createIngredient = ingredientCrud.createWriter(
+  ENTITY_STORED_WRITES.ingredient.create,
+  (output) => output,
+);
 
-    // Log audit entry
-    await logAuditEntry(db, actor, {
-      entityKind: "ingredient",
-      entityId: newIngredient.id,
-      action: "create",
-    });
-
-    return readOutput({
-      entityId: newIngredient.id,
-      shortcode: newIngredient.shortcode,
-    });
-  },
-});
-
-/**
- * Accepts an open transaction as well as the pooled handle, matching
- * `createIngredient` above: the factory's `update` joins a caller's transaction
- * rather than opening its own, so an importer that creates a recipe and renames
- * its ingredients can keep the whole thing atomic.
- */
-export const updateIngredient = defineMutationWriter({
-  entity: "ingredient",
-  read: (
-    receipt: MutationReceipt<"ingredient">,
-    db: Database | DrizzleTransaction,
-    _id: IngredientId,
-    _data: z.infer<typeof ingredientUpdateData>,
-    _actor: ActorContext,
-  ) => readIngredientById(db, receipt.entityId),
-  write: async (
-    readOutput,
-    db: Database | DrizzleTransaction,
-    id: IngredientId,
-    data: z.infer<typeof ingredientUpdateData>,
-    actor: ActorContext,
-  ) =>
-    withTransactionOn(db, async (tx) => {
-      const updated = await ingredientCrud.update(
-        tx,
-        id,
-        data,
-        actor,
-        async (_db, receipt) => receipt,
-      );
-      return readOutput(updated, () => ingredientCrud.getByID(tx, id));
-    }),
-});
+/** Ingredient imports can join the caller's transaction for atomic recipe edits. */
+export const updateIngredient = ingredientCrud.updateWriter(
+  ENTITY_STORED_WRITES.ingredient.updateById,
+  (output) => output,
+);
 
 export const findOrCreateIngredient = async (
   db: Database | DrizzleTransaction,

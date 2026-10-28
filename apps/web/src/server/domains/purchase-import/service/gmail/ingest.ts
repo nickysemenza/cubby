@@ -4,6 +4,7 @@ import type { EmailReclassifyOutcome } from "@cubby/schemas/email-actions";
 import { emailCandidateSource } from "@cubby/schemas/email-candidates";
 import type { EmailClassificationConflict } from "@cubby/schemas/email-observations";
 import type { EmailClassificationPublicationEvidence } from "@cubby/schemas/email-observations";
+import type { RunId } from "@cubby/schemas/identifiers";
 import { ledgerPartyId } from "@cubby/schemas/identifiers";
 import {
   MAILBOX_RESEARCH_VERSION,
@@ -399,7 +400,7 @@ async function fetchObservedMessage(
   db: Database,
   provider: GmailProvider,
   identity: MessageIdentity,
-  runId?: string,
+  runId?: RunId,
 ) {
   try {
     return {
@@ -936,7 +937,7 @@ export async function ingestGmailMessages(
     onCandidatePreview?: (
       value: NonNullable<Awaited<ReturnType<typeof relatedEmailPreview>>>,
     ) => Promise<void>;
-    runId?: string;
+    runId?: RunId;
     /** Retain search acquisitions and atomically queue their classifier Run. */
     searchActor?: ActorContext;
     /**

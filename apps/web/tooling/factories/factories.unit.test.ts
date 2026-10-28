@@ -10,8 +10,8 @@ import { testFaker } from "./vitest-faker";
  * 1. A failing run cannot be replayed because filler drifts between runs, or
  *    two tests share one Faker sequence.
  * 2. A newly declared creatable entity has no usable defaults, so every caller
- *    hits an unreadable schema error (the table is typed exhaustive; this
- *    proves the defaults actually parse).
+ *    hits an unreadable schema error (the generated roster exercises each
+ *    entity through its own create schema).
  * 3. An optional argument passed as `undefined` erases a default.
  * 4. A relation id is silently defaulted, attaching a test to a stranger.
  * 5. Filler names collide on a unique name index within one test.

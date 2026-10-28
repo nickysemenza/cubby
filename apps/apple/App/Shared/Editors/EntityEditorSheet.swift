@@ -15,6 +15,8 @@ struct ResolutionActionRequest: Hashable, Identifiable {
 struct EntityEditorSheet: View {
     let key: EntityKey
     let mode: GenericEntityEditModel.Mode
+    /// Compiled create-intent roster for a scoped relation action.
+    var createFields: [String]? = nil
     /// The loaded record for an update editor opened from a detail screen (skips the fetch).
     var original: JSONValue? = nil
     /// A detail assignment action (Use inherited, Keep this value, Set to …) staged for review;
@@ -46,11 +48,12 @@ struct EntityEditorSheet: View {
         let key: EntityKey
         let mode: GenericEntityEditModel.Mode
         let resolutionAction: ResolutionActionRequest?
+        let createFields: [String]?
     }
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
     private var editorIdentity: EditorIdentity {
-        EditorIdentity(key: key, mode: mode, resolutionAction: resolutionAction)
+        EditorIdentity(key: key, mode: mode, resolutionAction: resolutionAction, createFields: createFields)
     }
 
     private var isCreate: Bool {
@@ -60,7 +63,10 @@ struct EntityEditorSheet: View {
 
     private var handoffFields: [FieldDescriptor] {
         descriptor.fields.filter { field in
-            let participates = isCreate ? field.inCreate : field.inUpdate
+            let participates =
+                isCreate
+                ? field.inCreate && (createFields?.contains(field.key) ?? true)
+                : field.inUpdate
             return participates && NativePresentationCoverage.controlHandoff(field, entity: key) != nil
         }
     }
@@ -337,7 +343,8 @@ struct EntityEditorSheet: View {
         pickedTitles = [:]
         let identity = editorIdentity
         let created = GenericEntityEditModel(
-            descriptor: descriptor, mode: mode, client: appModel.client, original: original)
+            descriptor: descriptor, mode: mode, client: appModel.client, original: original,
+            createFields: createFields)
         model = created
         await created.load()
         finishLoad(created, identity: identity)

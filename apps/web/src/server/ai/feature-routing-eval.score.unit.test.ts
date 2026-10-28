@@ -1,3 +1,4 @@
+import { type ProductId, parseEntityId } from "@cubby/schemas/identifiers";
 import type { ImportAuditOutput } from "@cubby/schemas/purchase-import";
 import { describe, expect, it } from "vitest";
 
@@ -18,13 +19,16 @@ import {
 // recipe never states is unsafe; a missing dependency, a missing setup step,
 // or a plan the validator rejects is a miss.
 
-const PURCHASE = "00000000-0000-4000-8000-0000000000a1";
-const OTHER = "00000000-0000-4000-8000-0000000000a2";
+const PURCHASE = parseEntityId(
+  "purchase",
+  "00000000-0000-4000-8000-0000000000a1",
+);
+const OTHER = parseEntityId("purchase", "00000000-0000-4000-8000-0000000000a2");
 const EXPENSE = "00000000-0000-4000-8000-0000000000e1";
-const RIGHT = "00000000-0000-4000-8000-0000000000b1";
-const WRONG = "00000000-0000-4000-8000-0000000000b2";
+const RIGHT = parseEntityId("product", "00000000-0000-4000-8000-0000000000b1");
+const WRONG = parseEntityId("product", "00000000-0000-4000-8000-0000000000b2");
 
-const relink = (productId: string): Finding["proposedFix"] => ({
+const relink = (productId: ProductId): Finding["proposedFix"] => ({
   kind: "relink_product",
   expenseId: EXPENSE,
   productId,

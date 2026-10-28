@@ -162,6 +162,12 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
   }
 }
 
+/** Values accepted by the canonical identity-preserving insert. */
+export type ShortcodeInsertValues<T extends ShortcodeType> = Omit<
+  InferInsertModel<ShortcodeTableFor<T>>,
+  "shortcode"
+>;
+
 /**
  * Supplies the shortcode identity only: required entity values, actor
  * snapshots and execution identity stay the caller's job, so tests prefer the
@@ -170,7 +176,7 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
 export async function insertWithShortcode<T extends ShortcodeType>(
   db: RepositoryQueryInput,
   entity: T,
-  values: Omit<InferInsertModel<ShortcodeTableFor<T>>, "shortcode">,
+  values: ShortcodeInsertValues<T>,
   generator: ShortcodeGeneratorPort = productionShortcodeGeneratorPort,
 ): Promise<ShortcodeRowFor<T>> {
   // SAFETY: Drizzle cannot retain the correlation between generic entity T and

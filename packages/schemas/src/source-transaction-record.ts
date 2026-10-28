@@ -29,17 +29,14 @@ import {
   sourceTransactionRecordMatchState,
 } from "./source-transaction-record-fields";
 
-import { sourceTransactionRecordBaseFilterFields } from "./generated/sourceTransactionRecord.gen";
-import { sourceTransactionRecordOut } from "./generated/sourceTransactionRecord.gen";
-export {
-  sourceTransactionRecordOut,
-  type SourceTransactionRecordOut,
-} from "./generated/sourceTransactionRecord.gen";
+import { sourceTransactionRecordFilterFields as sourceTransactionRecordBaseFilterFields } from "@cubby/schemas/entities/sourceTransactionRecord";
+import { sourceTransactionRecordOut } from "@cubby/schemas/entities/sourceTransactionRecord";
+
 export {
   transactionImportOut,
   type TransactionImportOut,
-} from "./transaction-import";
-import { transactionImportOut } from "./transaction-import";
+} from "@cubby/schemas/entities/transactionImport";
+import { transactionImportOut } from "@cubby/schemas/entities/transactionImport";
 
 export const sourceTransactionRecordFilterFields = {
   ...sourceTransactionRecordBaseFilterFields,
@@ -252,10 +249,6 @@ export type SourceTransactionRecordSelector = z.infer<
  * Only the judgment fields. Provider evidence is immutable after ingest, which
  * is enforced by this schema's shape rather than by convention.
  */
-export {
-  sourceTransactionRecordUpdateData,
-  type SourceTransactionRecordUpdateData,
-} from "./generated/sourceTransactionRecord.gen";
 
 export const sourceTransactionRecordLegacyUpdateData = z.strictObject({
   accountId: financialAccountShortcode.nullable().optional(),

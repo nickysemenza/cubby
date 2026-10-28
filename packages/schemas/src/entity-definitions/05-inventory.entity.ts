@@ -1,10 +1,11 @@
 import { historicalDateRangePresets } from "../date-range";
+import { timestampField } from "./field-policy";
 import { INVENTORY_OWNERSHIP_INPUTS } from "./ownership-inputs";
 import { storedInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import { productPricingInputsFor } from "./product-pricing-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { inventoryReadSchemas } from "../inventory-fields";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { amount, positiveAmount } from "@cubby/schemas/codec";
 import {
   inventoryShortcode,
@@ -29,7 +30,7 @@ import {
   OWNER_FILTER_UNKNOWN,
 } from "@cubby/shared";
 import { z } from "zod";
-export default defineEntity(
+export const { definition, readSchemas } = defineEntityModel(
   {
     key: "inventory",
     names: { singular: "Inventory Item", plural: "Inventory" },
@@ -287,6 +288,7 @@ export default defineEntity(
     model: {
       fields: [
         {
+          output: false,
           key: "productId",
           kind: "identifier",
           reference: { entity: "product" },
@@ -372,6 +374,7 @@ export default defineEntity(
           },
         },
         {
+          output: false,
           key: "ownershipMode",
           kind: "enum",
           validation: {
@@ -521,6 +524,7 @@ export default defineEntity(
           },
         },
         {
+          output: false,
           display: { detail: false, list: false },
           // Storage-less and deliberately absent from `output`: the bare
           // entity read has no product/location join to compute it from. See
@@ -550,27 +554,10 @@ export default defineEntity(
             update: null,
           },
         },
+        timestampField("createdAt", { detail: false, list: false }),
+        timestampField("updatedAt", { detail: false, list: false }),
         {
-          display: { detail: false, list: false },
-          key: "createdAt",
-          kind: "timestamp",
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        {
-          display: { detail: false, list: false },
-          key: "updatedAt",
-          kind: "timestamp",
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        {
+          output: false,
           key: "images",
           kind: "json",
           display: { standard: "image" },
@@ -580,12 +567,8 @@ export default defineEntity(
           },
           validation: { read: z.array(imageOut), create: null, update: null },
         },
-        { key: "shortcode", kind: "text" },
-        {
-          key: "deletedAt",
-          kind: "timestamp",
-          nullable: true,
-        },
+        { output: false, key: "shortcode", kind: "text" },
+        { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
       ],
       storage: [
         {
@@ -593,13 +576,13 @@ export default defineEntity(
           specialized: "primary-key:InventoryItemId",
         },
         { key: "shortcode", specialized: "shortcode" },
-        { key: "productId", reference: "product" },
+        "productId",
         // Stored as `amountValue` + `amountUnit`; the wire shape stays `{ value, unit }`.
         { key: "amount", specialized: "amount-columns" },
         { key: "createdAt" },
         { key: "updatedAt", specialized: "updated-at" },
         "deletedAt",
-        { key: "locationId", reference: "location" },
+        "locationId",
         "verifiedAt",
         {
           key: "placement",
@@ -611,32 +594,9 @@ export default defineEntity(
           defaultValue: "inherit",
           specialized: "enum:ownershipMode",
         },
-        { key: "ownerLedgerPartyId", reference: "ledgerParty" },
-      ],
-      create: [
-        "productId",
-        "locationId",
-        "amount",
-        "placement",
-        "ownershipMode",
         "ownerLedgerPartyId",
       ],
-      update: [
-        "amount",
-        "productId",
-        "locationId",
-        "placement",
-        "ownershipMode",
-        "ownerLedgerPartyId",
-      ],
-      audit: [
-        "amount",
-        "productId",
-        "locationId",
-        "placement",
-        "ownershipMode",
-        "ownerLedgerPartyId",
-      ],
+
       stored: {
         ownership: {
           compute: "inventory.ownership",
@@ -745,18 +705,6 @@ export default defineEntity(
           "ownership",
         ],
       },
-      output: [
-        "id",
-        "locationId",
-        "amount",
-        "valuation",
-        "verifiedAt",
-        "placement",
-        "ownerLedgerPartyId",
-        "effectiveOwnership",
-        "createdAt",
-        "updatedAt",
-      ],
     },
     fields: {
       embedded: [
@@ -779,18 +727,7 @@ export default defineEntity(
         module: "@cubby/schemas/inventory",
         export: "inventoryUpdatePayloadData",
       },
-      output: {
-        module: "@cubby/schemas/inventory-raw-read",
-        export: "rawInventoryOutput",
-      },
-      list: {
-        module: "@cubby/schemas/inventory-raw-read",
-        export: "rawInventoryList",
-      },
-      detail: {
-        module: "@cubby/schemas/inventory-raw-read",
-        export: "rawInventoryDetail",
-      },
+
       mcpDetail: {
         module: "@cubby/schemas/inventory-raw-read",
         export: "rawInventoryMcpDetail",
@@ -1023,76 +960,7 @@ export default defineEntity(
         },
       ],
     },
-    relations: [
-      {
-        key: "product",
-        label: "Product",
-        target: "product",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "InventoryEntry.productId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "InventoryEntry.productId", direction: "incoming" }],
-        },
-      },
-      {
-        key: "location",
-        label: "Location",
-        target: "location",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "InventoryEntry.locationId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "InventoryEntry.locationId", direction: "incoming" }],
-        },
-      },
-      {
-        key: "owner",
-        label: "Owner",
-        target: "ledgerParty",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            {
-              edge: "InventoryEntry.ownerLedgerPartyId",
-              direction: "outgoing",
-            },
-          ],
-        },
-        inverse: {
-          steps: [
-            {
-              edge: "InventoryEntry.ownerLedgerPartyId",
-              direction: "incoming",
-            },
-          ],
-        },
-      },
-      {
-        key: "ingredient",
-        label: "Ingredient",
-        target: "ingredient",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "InventoryEntry.productId", direction: "outgoing" },
-            { edge: "Product.ingredientId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "Product.ingredientId", direction: "incoming" },
-            { edge: "InventoryEntry.productId", direction: "incoming" },
-          ],
-        },
-      },
-    ],
+
     // Related rows the search document reads (ADR 0021).
     search: {
       mode: "semantic",
@@ -1393,4 +1261,20 @@ export default defineEntity(
     },
   },
   inventoryReadSchemas,
+);
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r.field("productId").named("product", "Product"),
+    r.field("locationId").named("location", "Location"),
+    r.field("ownerLedgerPartyId").named("owner", "Owner"),
+    r
+      .path("ingredient", "one", [
+        { edge: "InventoryEntry.productId", direction: "outgoing" },
+        { edge: "Product.ingredientId", direction: "outgoing" },
+      ])
+      .named("ingredient", "Ingredient", { view: { columnGroup: "Catalog" } }),
+  ],
+  readSchemas,
 );

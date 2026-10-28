@@ -1,7 +1,7 @@
+import { type inventoryListItemOut } from "@cubby/schemas/entities/inventory";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useMemo } from "react";

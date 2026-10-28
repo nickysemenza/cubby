@@ -1,6 +1,6 @@
+import { inventoryListItemOut } from "@cubby/schemas/entities/inventory";
+import { locationListItemOut } from "@cubby/schemas/entities/location";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import { inventoryListItemOut } from "@cubby/schemas/inventory";
-import { locationListItemOut } from "@cubby/schemas/location";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 

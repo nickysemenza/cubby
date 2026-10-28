@@ -1,3 +1,4 @@
+import { type EmailId } from "@cubby/schemas/identifiers";
 /**
  * Reclassify reruns every Relevance stage from the Gmail original. Failure
  * modes guarded here: skipping the relevance model under classification-only
@@ -137,7 +138,7 @@ describe("member Reclassify", () => {
         ...fields,
       });
     }
-    async function retain(emailId: string) {
+    async function retain(emailId: EmailId) {
       const [row] = await getDb(ctx.db)
         .insert(orderMail)
         .values({
@@ -161,13 +162,13 @@ describe("member Reclassify", () => {
         .where(eq(emailTable.id, emailId));
       return row!;
     }
-    const history = (emailId: string) =>
+    const history = (emailId: EmailId) =>
       getDb(ctx.db)
         .select()
         .from(emailClassificationObservation)
         .where(eq(emailClassificationObservation.emailId, emailId))
         .orderBy(desc(emailClassificationObservation.createdAt));
-    const current = async (emailId: string) =>
+    const current = async (emailId: EmailId) =>
       (
         await getDb(ctx.db)
           .select()

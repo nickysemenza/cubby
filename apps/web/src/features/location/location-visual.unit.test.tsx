@@ -1,6 +1,7 @@
+import { type LocationDetailOut as InfLocation } from "@cubby/schemas/entities/location";
 import { imageOut, type ImageOut } from "@cubby/schemas/image";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
-import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import type { LocationType } from "@cubby/schemas/location";
 import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { cleanup, render, screen } from "@testing-library/react";

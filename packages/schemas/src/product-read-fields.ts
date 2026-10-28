@@ -44,6 +44,27 @@ export const productQuantityLedgerOut = z.object({
 });
 export type ProductQuantityLedgerOut = z.infer<typeof productQuantityLedgerOut>;
 
+export const productPickerOnHandOut = z.discriminatedUnion("state", [
+  z.object({ state: z.literal("none") }),
+  z.object({ state: z.literal("counted"), units: z.number() }),
+  z.object({ state: z.literal("mixed") }),
+]);
+export type ProductPickerOnHandOut = z.infer<typeof productPickerOnHandOut>;
+
+/** A null unit projection distinguishes absence from incompatible stock only with live counts. */
+export function classifyProductOnHand({
+  units,
+  inventoryCount,
+  locationCount,
+}: {
+  units: number | null;
+  inventoryCount: number;
+  locationCount: number;
+}): ProductPickerOnHandOut {
+  if (inventoryCount === 0 && locationCount === 0) return { state: "none" };
+  return units === null ? { state: "mixed" } : { state: "counted", units };
+}
+
 export const productIngredientOut = z.object({
   id: ingredientShortcode,
   name: z.string().meta({ mock: "food.ingredient" }),
@@ -127,11 +148,6 @@ export type ProductOwnershipEvidenceOut = z.infer<
 >;
 
 /** Published SQL/domain display facts; WASM results remain request-local. */
-export const productPickerOnHand = z.discriminatedUnion("state", [
-  z.object({ state: z.literal("none") }),
-  z.object({ state: z.literal("counted"), units: z.number() }),
-  z.object({ state: z.literal("mixed") }),
-]);
 export const productDisplayFactsState = z.object({
   available: z.boolean(),
   stale: z.boolean(),
@@ -140,7 +156,7 @@ export const productReadFacts = z.object({
   ...productQuantityFields,
   pricing: productPricingOut,
   ownershipEvidence: productOwnershipEvidenceOut,
-  pickerOnHand: productPickerOnHand,
+  pickerOnHand: productPickerOnHandOut,
 });
 
 /**

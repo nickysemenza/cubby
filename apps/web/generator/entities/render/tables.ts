@@ -22,7 +22,6 @@ import {
   validateEntityTables,
 } from "../table-storage.ts";
 import {
-  identifierTypeNames,
   renderStorageColumn,
   referencedImports,
   storageColumnImportsFor,
@@ -30,19 +29,13 @@ import {
 
 type TabledEntity = CompiledEntity & { table: CompiledEntityTable };
 
-const identifierTypes = new Set<string>(Object.values(identifierTypeNames));
 const declaredColumnTypeImports = (
   tables: readonly TabledEntity[],
   imports = new Map<string, Set<string>>(),
 ): Map<string, Set<string>> => {
-  for (const { table } of tables)
-    for (const { type } of table.columns) {
-      if (
-        type === null ||
-        (type.module === "@cubby/schemas/identifiers" &&
-          identifierTypes.has(type.export))
-      )
-        continue;
+  for (const { table, fieldModel } of tables)
+    for (const { type } of [...table.columns, ...fieldModel.storage]) {
+      if (type == null) continue;
       const names = imports.get(type.module) ?? new Set<string>();
       names.add(type.export);
       imports.set(type.module, names);
@@ -286,11 +279,6 @@ export const renderEntityTableArtifacts = (
   for (const table of declaredChildren)
     for (const { module, exports: names } of table.types)
       for (const name of names) {
-        if (
-          module === "@cubby/schemas/identifiers" &&
-          identifierTypes.has(name)
-        )
-          continue;
         const imports = typeImports.get(module) ?? new Set<string>();
         imports.add(name);
         typeImports.set(module, imports);
@@ -303,7 +291,14 @@ export const renderEntityTableArtifacts = (
     .filter((entity) => !identityKeys.has(entity.key))
     .map((entity) => renderTable(entity, exportOf))
     .join("\n\n");
-  const childDefinitions = renderChildTables(declaredChildren);
+  const childDefinitions = renderChildTables(
+    declaredChildren,
+    new Map(
+      tabled
+        .filter((entity) => entity.shortcode !== null)
+        .map((entity) => [entity.table.exportName, entity.key]),
+    ),
+  );
   const definitionSource = ownedDefinitions + "\n\n" + childDefinitions;
   const relationSource =
     tabled

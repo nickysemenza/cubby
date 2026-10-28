@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { storedReference } from "@cubby/schemas/entity-definitions/field-policy";
 import { detailSectionInOverview } from "./presentation.ts";
 import {
   type CompiledEntity,
@@ -86,12 +87,28 @@ const declarationView = z.object({
     .optional(),
   model: z
     .object({
+      fields: z
+        .array(
+          z.object({
+            key: z.string(),
+            kind: z.string().optional(),
+            reference: z
+              .object({ entity: z.string(), multiple: z.boolean().optional() })
+              .nullable()
+              .optional(),
+          }),
+        )
+        .optional()
+        .default([]),
       storage: z
         .array(
           z.union([
             // A bare key is a storage column with no declared options.
             z.string().transform((key) => ({ key, reference: undefined })),
-            z.object({ key: z.string(), reference: z.string().optional() }),
+            z.object({
+              key: z.string(),
+              reference: z.string().nullable().optional(),
+            }),
           ]),
         )
         .optional()
@@ -291,7 +308,12 @@ const addBackFilters = ({ current, views, gaps }: DeriveState) => {
       // Without a stored FK there is nothing to derive; the section pass
       // reports the gap if a table would need this filter.
       const storedFk = (target.model?.storage ?? []).some(
-        (field) => field.key === column && field.reference === owner.key,
+        (field) =>
+          field.key === column &&
+          storedReference(
+            field.reference,
+            target.model?.fields.find((candidate) => candidate.key === column),
+          ) === owner.key,
       );
       if (!storedFk) continue;
       const filters = objectValue(raw.filters, `${relation.target}.filters`);

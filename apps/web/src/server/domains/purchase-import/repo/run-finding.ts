@@ -1,5 +1,7 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { feedbackAuthority, runFindingEntity } from "@cubby/schemas/assessment";
+import type { LedgerPartyId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 import { storedImportFix } from "@cubby/schemas/purchase-import";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -29,8 +31,8 @@ export const runFindingData = z
   .passthrough();
 
 export type RunFindingPublication = {
-  runId: string | null;
-  ledgerPartyId: string;
+  runId: RunId | null;
+  ledgerPartyId: LedgerPartyId;
   entityKind: z.infer<typeof runFindingEntity>;
   entityId: string;
   kind: string;
@@ -46,7 +48,7 @@ export type RunFindingPublication = {
 /** Findings are shared by every Run purpose, independently of import detail. */
 export async function loadRunFindings(
   db: Database,
-  runId: string,
+  runId: RunId,
 ): Promise<RunDetail["findings"]> {
   const findings = await getDb(db)
     .select({

@@ -8,7 +8,7 @@ import { postedRequiresDate } from "./financial-transaction-fields";
 import { cents, dollars } from "@cubby/shared";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { financialTransactionBaseFilterFields } from "./generated/financialTransaction.gen";
+import { financialTransactionFilterFields as financialTransactionBaseFilterFields } from "@cubby/schemas/entities/financialTransaction";
 export {
   financialReconciliationStatus,
   financialReconciliationSummary,

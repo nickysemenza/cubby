@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { ingredientCreateInput, ingredientUpdateData } from "./ingredient";
+import {
+  ingredientCreateInput,
+  ingredientUpdateData,
+} from "@cubby/schemas/entities/ingredient";
 
 describe("ingredient pantry-planning metadata", () => {
   it("defaults newly created ingredients to not usually on hand", () => {

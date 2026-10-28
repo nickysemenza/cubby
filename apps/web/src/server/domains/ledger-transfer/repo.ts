@@ -1,4 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type LedgerTransferCreateInput,
+  type LedgerTransferUpdateData,
+} from "@cubby/schemas/entities/ledgerTransfer";
+import { ledgerTransferRawOut as rawLedgerTransferOut } from "@cubby/schemas/entity-contracts/ledgerTransfer";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -8,12 +13,7 @@ import type {
   LedgerTransferShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type {
-  LedgerSourceClaimOut,
-  LedgerTransferCreateInput,
-  LedgerTransferUpdateData,
-} from "@cubby/schemas/ledger-transfer";
-import { rawLedgerTransferOut } from "@cubby/schemas/ledger-transfer-raw-read";
+import type { LedgerSourceClaimOut } from "@cubby/schemas/ledger-transfer";
 import { cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";

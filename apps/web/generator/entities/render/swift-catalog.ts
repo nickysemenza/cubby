@@ -448,6 +448,13 @@ const detailSectionJSON = (entity: string, section: DetailSection) => {
           relation: {
             _0: {
               relation: section.relation,
+              plan:
+                section.plan ??
+                (() => {
+                  throw new Error(
+                    `${entity}.${section.id} has no compiled relation plan`,
+                  );
+                })(),
               contextFields: [...section.contextFields],
               filterDescriptor: section.filter.descriptor,
               prefill:

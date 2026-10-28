@@ -135,6 +135,6 @@ export const childTableMetadataSchema = z
 
 export type ChildTableDeclaration = z.input<typeof childTableMetadataSchema>;
 export type ChildTableMetadata = z.output<typeof childTableMetadataSchema>;
-export const defineChildTable = (
-  declaration: ChildTableDeclaration,
-): ChildTableDeclaration => declaration;
+export const defineChildTable = <const T extends ChildTableDeclaration>(
+  declaration: T,
+): T => declaration;

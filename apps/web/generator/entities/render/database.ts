@@ -6,6 +6,7 @@ import {
   renderEntityTableArtifacts,
   renderIdentityStorageTablesArtifact,
 } from "./tables.ts";
+import { renderEntityEdgesArtifact } from "./physical-edges.ts";
 import { lowerCamelCase } from "./routes.ts";
 
 export const renderEntityDatabaseArtifacts = (
@@ -42,6 +43,7 @@ export const renderEntityDatabaseArtifacts = (
     )
     .join("\n");
   return [
+    renderEntityEdgesArtifact(entities),
     {
       relativePath: "apps/web/src/server/db/generated/entity-tables.gen.ts",
       source: entityTables.relations,

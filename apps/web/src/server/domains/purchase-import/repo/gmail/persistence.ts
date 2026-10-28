@@ -336,14 +336,15 @@ export async function saveMailboxMetadata(
   await withTransaction(db, async (tx) => {
     const { row, created } = await findOrCreateWithShortcode(tx, "email", {
       where: messageWhere(identity),
-      values: () => ({
-        ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
-        provider: "gmail",
-        mailboxId: identity.mailboxId,
-        messageId: identity.messageId,
-        checksum: input.checksum,
-        status: "pending",
-      }),
+      values: () =>
+        ({
+          ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
+          provider: "gmail",
+          mailboxId: identity.mailboxId,
+          messageId: identity.messageId,
+          checksum: input.checksum,
+          status: "pending",
+        }) satisfies Omit<typeof emailTable.$inferInsert, "shortcode">,
     });
     const superseded = await supersedeLegacyEmail(tx, identity);
     const fields = mailboxMetadataFields(input, row);

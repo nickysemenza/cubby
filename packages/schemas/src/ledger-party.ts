@@ -2,21 +2,8 @@ import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { ledgerPartyShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
-import { ledgerPartyOut } from "./generated/ledgerParty.gen";
+import { ledgerPartyOut } from "@cubby/schemas/entities/ledgerParty";
 
-export {
-  ledgerPartyCreateInput,
-  ledgerPartyUpdateData,
-  ledgerPartyUpdateInput,
-  ledgerPartyOut,
-  ledgerPartyFilterFields,
-  ledgerPartyFiltersSchema,
-  type LedgerPartyCreateInput,
-  type LedgerPartyUpdateData,
-  type LedgerPartyUpdateInput,
-  type LedgerPartyOut,
-  type LedgerPartyFilters,
-} from "./generated/ledgerParty.gen";
 export {
   ledgerAttributionInput,
   ledgerAttributions,

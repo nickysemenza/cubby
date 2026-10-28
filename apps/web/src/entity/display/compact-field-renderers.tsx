@@ -1,8 +1,8 @@
 import { dataQuality } from "@cubby/schemas/data-quality";
+import { type ProductListItemOut as ProductListItem } from "@cubby/schemas/entities/product";
 import type { Entity } from "@cubby/schemas/entity";
 import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { productCategoryShortcode } from "@cubby/schemas/identifiers";
-import type { ProductListItem } from "@cubby/schemas/product";
 import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import type { ReactNode } from "react";
 import { z } from "zod";

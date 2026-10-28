@@ -1,4 +1,4 @@
-import type { FinancialAccountUpdateData } from "@cubby/schemas/financial-account";
+import { type FinancialAccountUpdateData } from "@cubby/schemas/entities/financialAccount";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";

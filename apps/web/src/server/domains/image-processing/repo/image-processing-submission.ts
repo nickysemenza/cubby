@@ -1,4 +1,4 @@
-import type { RunId } from "@cubby/schemas/identifiers";
+import type { RunId, ImageJobId } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobKind } from "@cubby/schemas/image-processing";
 
 import type { Database } from "~/server/db";
@@ -19,7 +19,7 @@ import {
   lockImageProcessingSubmissionSource,
 } from "./image-processing-history";
 
-type ScheduledImageProcessing = { jobIds: string[]; submissionId?: string };
+type ScheduledImageProcessing = { jobIds: ImageJobId[]; submissionId?: string };
 
 /** Membership and job insertion share the image lock and transaction. */
 export async function persistImageProcessingSubmission(
@@ -49,7 +49,7 @@ export async function persistImageProcessingSubmission(
       ? null
       : (input.submission ??
         (await createImageProcessingSubmission(transactionDb)));
-    const jobIds: string[] = [];
+    const jobIds: ImageJobId[] = [];
     for (const kind of new Set(input.kinds)) {
       if (kind === "subject_lift") {
         // Job identity reuses retained results; a new policy revision schedules independent work.
@@ -105,7 +105,7 @@ export async function persistImageProcessingSubmission(
 export async function persistAppleImageDescriptionSubmission(
   db: Database,
   input: { id: string; runId?: RunId | null },
-): Promise<{ jobId: string | null }> {
+): Promise<{ jobId: ImageJobId | null }> {
   return withTransactionDatabase(db, async (transactionDb) => {
     const imageId = await resolveOrThrow(transactionDb, "image", input.id);
     const existingIds = await lockImageProcessingSubmissionSource(

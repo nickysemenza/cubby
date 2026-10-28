@@ -1,11 +1,11 @@
 import { amount, amountFromColumns } from "@cubby/schemas/codec";
+import type { ImageRawOut as RawImageOutput } from "@cubby/schemas/entity-contracts/image";
 /**
  * Data transformation helper functions.
  * Extract, map, and transform database records.
  */
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { imageSourceEvidence } from "@cubby/schemas/image-capture-fields";
-import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import type { ShortcodeFor, ShortcodeType } from "@cubby/shared";
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import type { z } from "zod";

@@ -1,4 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type WishCreateInput,
+  type WishUpdateData,
+} from "@cubby/schemas/entities/wish";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
@@ -8,7 +12,6 @@ import {
   type WishId,
   type WishShortcode,
 } from "@cubby/schemas/identifiers";
-import type { WishCreateInput, WishUpdateData } from "@cubby/schemas/wish";
 import {
   wishPriceRangeOut,
   type WishPriceRange,

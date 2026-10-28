@@ -1,10 +1,15 @@
 import type { EntityRelationPageInput } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type ProductCreateInput,
+  type ProductUpdateInput,
+} from "@cubby/schemas/entities/product";
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
   isCollectionPatch,
   type ValueCollectionPatch,
 } from "@cubby/schemas/entity-collection";
+import type { ImageRawOut as RawImageOutput } from "@cubby/schemas/entity-contracts/image";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { EntityLinkKind } from "@cubby/schemas/entity-links";
 import {
@@ -25,18 +30,13 @@ import type {
   VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type { ProductFilters } from "@cubby/schemas/product";
-import {
-  impliedProductFeature,
-  type ProductCreateInput,
-  type ProductUpdateInput,
-} from "@cubby/schemas/product";
+import { impliedProductFeature } from "@cubby/schemas/product";
 import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
 import { type RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { productQuantityVarianceState } from "@cubby/schemas/product-fields";

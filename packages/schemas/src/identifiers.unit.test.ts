@@ -1,5 +1,5 @@
 import { AppErrors } from "@cubby/shared";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { shortcodeEntities } from "./entity-manifest";
 import { entitySummary } from "./generated/entity-summary.gen";
 import {
@@ -7,6 +7,8 @@ import {
   ENTITY_NOT_FOUND_REASON,
   entityIdSchema,
   parseEntityId,
+  parseEntityRef,
+  type ProductId,
 } from "./identifiers";
 
 const UUID = "3f7c1a52-9d0b-4e21-8b6a-1c2d3e4f5a6b";
@@ -48,6 +50,10 @@ describe("entity id lookups", () => {
   it("preserves valid UUID values for every entity", () => {
     for (const entity of shortcodeEntities) {
       expect(parseEntityId(entity, UUID)).toBe(UUID);
+      const ref = parseEntityRef(entity, UUID);
+      expect(ref).toEqual({ entity, id: UUID });
+      if (ref.entity === "product")
+        expectTypeOf(ref.id).toEqualTypeOf<ProductId>();
     }
   });
 

@@ -1,4 +1,10 @@
 import {
+  productOut as productTopLevelOut,
+  productDetailOut as productWithFoodOut,
+  productFilterFields as productBaseFilterFields,
+  productCreateInput,
+} from "@cubby/schemas/entities/product";
+import {
   rawProductResolveCandidate,
   rawProductPickerItem,
 } from "./product-raw-read";
@@ -69,18 +75,6 @@ import { generatedProductFieldSchemas } from "./generated/entity-field-schemas.p
 import { unitMappingOut, unitMappingWithMetadata } from "./unitmapping";
 import { productCategory, productPricingOut } from "./product-fields";
 import type { ProductCategorySummary } from "./product-category-fields";
-import {
-  productBaseFilterFields,
-  productCreateInput,
-} from "./generated/product.gen";
-
-export {
-  productCreateInput,
-  productUpdateData,
-  productUpdateInput,
-  type ProductCreateInput,
-  type ProductUpdateInput,
-} from "./generated/product.gen";
 
 export { productPricingOut } from "./product-fields";
 
@@ -544,8 +538,6 @@ export type ProductPricingOut = z.infer<typeof productPricingOut>;
 const { coverImageUrl: _coverImageUrl, ...productTopLevelFields } =
   rawProductOutput.shape;
 
-export const productTopLevelOut = productFieldEnvelopeSchemas.output;
-
 /**
  * find-or-create result: the product plus whether it was newly created (vs a
  * match against an existing product). The scan UI prompts to link an ingredient
@@ -590,7 +582,6 @@ export const productLookupUpcOut = z.object({
 
 export type ProductLookupUpcOut = z.infer<typeof productLookupUpcOut>;
 
-export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
 export type ProductFindOrCreateByUPCOut = z.infer<
   typeof productFindOrCreateByUPCOut
 >;
@@ -700,22 +691,12 @@ export type ProductInventoryEntriesByIdOut = z.infer<
 >;
 
 /** Generic MCP entity list row with storage-only child identifiers removed. */
-export const productListItemOut = productFieldEnvelopeSchemas.list;
-export type ProductListItem = z.infer<typeof productListItemOut>;
+
 export const productDataGaps = rawProductList.shape.dataGaps;
 
-export const productListItemMcpEntityOut = productFieldEnvelopeSchemas.mcpList;
-
 /** Generic MCP entity detail with storage-only child identifiers removed. */
-export const productWithFoodOut = productFieldEnvelopeSchemas.detail;
-export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;
-
-export const productWithFoodMcpEntityOut =
-  productFieldEnvelopeSchemas.mcpDetail;
 
 /** Generic MCP create/update result with storage-only child identifiers removed. */
-export const productTopLevelMcpEntityOut =
-  productFieldEnvelopeSchemas.mcpOutput;
 
 export const productWithFoodAndSideEffectsOut = productWithFoodOut.extend({
   sideEffects: mutationSideEffectsSchema,

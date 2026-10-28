@@ -1,4 +1,4 @@
-import { type InfLocation } from "@cubby/schemas/location";
+import { type LocationDetailOut as InfLocation } from "@cubby/schemas/entities/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 

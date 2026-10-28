@@ -1,4 +1,3 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
 /**
  * The embedding-cascade invariant: a removal must soft-delete the removed row's
  * `EntityEmbedding` in the same transaction. A live embedding pointing at a
@@ -34,7 +33,8 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
  * transaction — the direct-table form of "no orphan," rather than routing
  * through a detector.
  */
-import { taskCreateInput } from "@cubby/schemas/project";
+import { taskCreateInput } from "@cubby/schemas/entities/task";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq } from "drizzle-orm";
 import type { TestDbContext } from "tooling/test-setup";

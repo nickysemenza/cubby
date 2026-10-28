@@ -11,6 +11,10 @@ import {
 } from "@cubby/schemas/filter-sentinel-fields";
 import { z } from "zod";
 import { humanize } from "@cubby/shared/text-case";
+import {
+  relationshipPathStepSchema,
+  relationshipProvenanceSchema as sourceProvenanceSchema,
+} from "@cubby/schemas/compiler/entity-definitions/relationship-shape";
 
 import {
   type CompiledEntity,
@@ -18,17 +22,14 @@ import {
   type FilterDescriptor,
 } from "./declarations.ts";
 
-// A local view, like `derive.ts`: the runtime provenance schema imports
-// generated modules, which do not exist yet when the generator runs.
-const relationshipPathStep = z.object({
-  edge: z.string(),
-  direction: z.enum(["incoming", "outgoing"]),
-});
-type RelationshipPathStep = z.infer<typeof relationshipPathStep>;
-export const relationshipProvenanceSchema = z.object({
-  kind: z.string(),
-  steps: z.array(relationshipPathStep).optional(),
-});
+type RelationshipPathStep = z.infer<typeof relationshipPathStepSchema>;
+// List planning needs only local traversal steps; validation belongs to the source owner.
+export const relationshipProvenanceSchema = sourceProvenanceSchema.transform(
+  (provenance) => ({
+    kind: provenance.kind,
+    steps: provenance.kind === "local-path" ? provenance.steps : undefined,
+  }),
+);
 
 type Terminal = Extract<
   GeneratedListField<string>,

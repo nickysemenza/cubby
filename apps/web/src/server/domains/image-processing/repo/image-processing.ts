@@ -2,6 +2,8 @@ import type { AiAnalysisRuntime } from "@cubby/schemas/ai";
 import {
   parseEntityId,
   type ImageId,
+  type ImageJobId,
+  type DeviceId,
   type RunId,
 } from "@cubby/schemas/identifiers";
 import { ImageStatus } from "@cubby/schemas/image";
@@ -272,7 +274,7 @@ type JobIdentity = {
 };
 
 export type ClaimedImageProcessingJob = {
-  id: string;
+  id: ImageJobId;
   imageId: ImageId;
   kind: ImageProcessingJobKind;
   sourceContentHash: string;
@@ -369,7 +371,7 @@ export async function findCachedImageDescriptionAnalysis(
 export async function createImageProcessingJob(
   db: Database,
   input: JobIdentity & { derivativeId?: string | null },
-): Promise<string | null> {
+): Promise<ImageJobId | null> {
   const [liveImage] = await getDb(db)
     .select({
       id: image.id,
@@ -430,8 +432,8 @@ async function ensureImageProcessingJob(
 export async function enqueueImageProcessingExecution(
   db: Database,
   row: {
-    id: string;
-    imageId: string;
+    id: ImageJobId;
+    imageId: ImageId;
     kind: ImageProcessingJobKind;
     processorRevision: number;
     runId: RunId | null;
@@ -466,7 +468,7 @@ export async function createTransparentDerivativeAndJob(
     /** The Run that requested this job, when the caller has one. */
     runId?: RunId | null;
   },
-): Promise<{ derivativeId: string; jobId: string } | null> {
+): Promise<{ derivativeId: string; jobId: ImageJobId } | null> {
   return await withTransaction(db, async (tx) => {
     const [liveImage] = await tx
       .select({ id: image.id, status: image.status, sha256: image.sha256 })
@@ -527,7 +529,7 @@ export async function createTransparentDerivativeAndJob(
  */
 export async function retireObsoleteImageProcessingJobs(
   db: Database,
-  input: { jobId: string } | { limit: number },
+  input: { jobId: ImageJobId } | { limit: number },
 ): Promise<number> {
   const dbc = getDb(db);
   const scoped = "jobId" in input;
@@ -595,7 +597,7 @@ export async function retireObsoleteImageProcessingJobs(
  */
 async function rebuildTransparentDerivative(
   tx: DrizzleTransaction,
-  job: { id: string; imageId: string; sourceContentHash: string },
+  job: { id: ImageJobId; imageId: ImageId; sourceContentHash: string },
 ) {
   await tx
     .insert(imageDerivative)
@@ -634,8 +636,8 @@ async function rebuildTransparentDerivative(
 /** A bounded candidate page per class, owned by the pull transaction's admission lock. */
 export type DeviceImageClaimBatch = DeviceAdmission & {
   candidateLimit: number;
-  candidateIds?: string[];
-  handedOffIds: string[];
+  candidateIds?: ImageJobId[];
+  handedOffIds: ImageJobId[];
 };
 
 /**
@@ -649,7 +651,7 @@ export async function claimImageProcessingJob(
     kinds: readonly ImageProcessingJobKind[];
     leaseMs: number;
     /** A queue wakeup must never lease an unrelated row. */
-    jobId?: string;
+    jobId?: ImageJobId;
     /** Device pulls can execute only declared processor revisions, never cloud jobs. */
     processorRevisions?: readonly number[];
     /** A normalization-capable device may prepare cloud AVIF input, never other cloud jobs. */
@@ -709,7 +711,7 @@ export async function claimImageProcessingJob(
       const candidates = (
         runOwned?: boolean,
         limit = 1,
-        candidateIds?: readonly string[],
+        candidateIds?: readonly ImageJobId[],
       ) =>
         tx
           .select({
@@ -996,7 +998,7 @@ const attemptOwnsExecution = (attemptId: string) =>
 /** Read the one output key bound to the current attempt before validating its bytes. */
 export async function getLeasedImageProcessingOutputKey(
   db: Database,
-  input: { jobId: string; attemptId: string },
+  input: { jobId: ImageJobId; attemptId: string },
 ): Promise<string | null> {
   const row = await getDb(db)
     .select({ key: imageDerivative.key })
@@ -1022,7 +1024,7 @@ export async function getLeasedImageProcessingOutputKey(
 
 export async function getLeasedImageProcessingJobContext(
   db: Database,
-  input: { jobId: string; attemptId: string },
+  input: { jobId: ImageJobId; attemptId: string },
 ) {
   const rows = await getDb(db)
     .select({
@@ -1072,7 +1074,7 @@ export async function getLeasedImageProcessingJobContext(
 export async function releaseImageProcessingLease(
   db: Database,
   input: {
-    jobId: string;
+    jobId: ImageJobId;
     attemptId: string;
     reason: string;
     delayMs?: number;
@@ -1408,7 +1410,7 @@ type CompletionInput = {
 };
 
 type CompletionJob = {
-  id: string;
+  id: ImageJobId;
   imageId: ImageId;
   derivativeId: string | null;
   kind: ImageProcessingJobKind;
@@ -1471,7 +1473,7 @@ function canAdoptCompletion(
  */
 async function settleImageProcessingFailure(
   tx: DrizzleTransaction,
-  job: { id: string },
+  job: { id: ImageJobId },
   input: {
     reason: string;
     set: Partial<typeof imageProcessingJob.$inferInsert>;
@@ -2071,7 +2073,12 @@ export async function getImageProcessingReadProjection(
 /** The device-assigned attempt that still owns the job, for release and renewal. */
 async function deviceAssignment(
   tx: DrizzleTransaction,
-  input: { jobId: string; attemptId: string; deviceId: string; userId: string },
+  input: {
+    jobId: ImageJobId;
+    attemptId: string;
+    deviceId: DeviceId;
+    userId: string;
+  },
 ) {
   const [assignment] = await tx
     .select({
@@ -2108,7 +2115,12 @@ async function deviceAssignment(
  */
 export async function releaseAssignedImageProcessingJob(
   db: Database,
-  input: { jobId: string; attemptId: string; deviceId: string; userId: string },
+  input: {
+    jobId: ImageJobId;
+    attemptId: string;
+    deviceId: DeviceId;
+    userId: string;
+  },
 ): Promise<boolean> {
   const assigned = await withTransaction(db, async (tx) =>
     deviceAssignment(tx, input),
@@ -2133,7 +2145,12 @@ const DEVICE_LEASE_RENEWAL_MS = 60_000;
  */
 export async function renewAssignedImageProcessingLease(
   db: Database,
-  input: { jobId: string; attemptId: string; deviceId: string; userId: string },
+  input: {
+    jobId: ImageJobId;
+    attemptId: string;
+    deviceId: DeviceId;
+    userId: string;
+  },
 ): Promise<
   | { ok: true; leaseExpiresAt: string }
   | { ok: false; reason: "lease_lost" | "job_obsolete" }

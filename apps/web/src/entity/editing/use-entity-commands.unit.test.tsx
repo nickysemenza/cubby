@@ -1,5 +1,5 @@
+import { productOut as productTopLevelOut } from "@cubby/schemas/entities/product";
 import { publicImpactItemSchema } from "@cubby/schemas/entity-integrity";
-import { productTopLevelOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";

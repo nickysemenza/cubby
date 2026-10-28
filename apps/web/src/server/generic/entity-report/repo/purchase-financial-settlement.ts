@@ -1,7 +1,7 @@
 import {
-  type RawFinancialTransactionOut,
-  rawFinancialTransactionOut,
-} from "@cubby/schemas/financial-transaction-raw-read";
+  type FinancialTransactionRawOut as RawFinancialTransactionOut,
+  financialTransactionRawOut as rawFinancialTransactionOut,
+} from "@cubby/schemas/entity-contracts/financialTransaction";
 import type { RawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 
 import { formatCurrency } from "~/lib/number-format";

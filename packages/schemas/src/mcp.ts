@@ -16,16 +16,12 @@ import { deletedCountOut } from "./common";
 import {
   ingredientMcpListOut,
   ingredientMcpOut,
-  ingredientUpdateData,
   type IngredientMcpOut,
 } from "./ingredient";
-import { locationUpdateData } from "./location";
-import {
-  mealAddRecipeInput,
-  mealCreateInput,
-  mealUpdateData,
-  shoppingListOut,
-} from "./meal";
+import { ingredientUpdateData } from "@cubby/schemas/entities/ingredient";
+import { locationUpdateData } from "@cubby/schemas/entities/location";
+import { mealAddRecipeInput, shoppingListOut } from "./meal";
+import { mealCreateInput, mealUpdateData } from "@cubby/schemas/entities/meal";
 import { createPaginatedResponseSchema } from "./pagination";
 import {
   allProblemsMcpSchema,

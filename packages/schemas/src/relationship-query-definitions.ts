@@ -34,10 +34,15 @@ export const localRelationshipEntities = [
   "shipment",
 ] as const;
 
-const definition = <const Kind extends string>(
-  key: string,
-  source: string,
-  target: string,
+const definition = <
+  const Key extends string,
+  const Source extends string,
+  const Target extends string,
+  const Kind extends string,
+>(
+  key: Key,
+  source: Source,
+  target: Target,
   kind: Kind,
   history = false,
 ) => ({ key, source, target, kind, history });
@@ -79,28 +84,21 @@ const relationshipQueryDefinitions = [
   ),
 ];
 
+/** Endpoints derive from the executable query roster, including the Job subject family. */
+type QueryDefinition = (typeof relationshipQueryDefinitions)[number];
+export type RelationshipQueryKey = QueryDefinition["key"];
+type JobSubject = (typeof localRelationshipEntities)[number];
+export type RelationshipQuerySource<K extends RelationshipQueryKey> =
+  K extends `jobSubject${JobSubject}`
+    ? "job"
+    : Extract<QueryDefinition, { key: K }>["source"];
+export type RelationshipQueryTarget<K extends RelationshipQueryKey> =
+  K extends `jobSubject${infer Target extends JobSubject}`
+    ? Target
+    : Extract<QueryDefinition, { key: K }>["target"];
+
 export const relationshipQueryDefinition = (key: string) => {
   const found = relationshipQueryDefinitions.find((item) => item.key === key);
   if (!found) throw new Error(`Unknown relationship query ${key}`);
   return found;
 };
-
-/** Query inverses use the same evidence, with only the endpoints reversed. */
-export const queryRelationship = (input: {
-  key: string;
-  label: string;
-  query: string;
-  target: string;
-  cardinality?: "one" | "many";
-}) => ({
-  key: input.key,
-  label: input.label,
-  target: input.target,
-  cardinality: input.cardinality ?? "many",
-  provenance: { kind: "query" as const, query: input.query },
-  inverse: {
-    steps: [
-      { edge: `Relationship.${input.query}`, direction: "incoming" as const },
-    ],
-  },
-});

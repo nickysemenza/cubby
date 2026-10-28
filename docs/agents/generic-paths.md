@@ -8,8 +8,12 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 
 ## Entity spine
 
-- Declarations: `packages/schemas/src/entity-definitions/*.entity.ts`, metadata
-  schema in `definition.ts`, compiled by `apps/web/generator/entities/*`. Presentation metadata changes also update the compiled contract in
+- Declarations: `packages/schemas/src/entity-definitions/*.entity.ts`, source/read
+  construction in `defineEntityModel`, typed relationship factories in
+  `relationships.ts`, common field policy in `field-policy.ts`, compiled by
+  `apps/web/generator/entities/*`. Raw-read facades import named read schemas
+  independently of relationship inference. Relation sections consume one compiled
+  scope/create/sort/page plan on web and Apple. Presentation metadata changes also update the compiled contract in
   `apps/web/generator/entities/declarations.ts`, the web field-model emitter, and
   the native wire/catalog projection. Generation checks structure; the web/test
   typecheck verifies those contracts agree.
@@ -85,7 +89,19 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Kernel commands: `executeEntity` / `executeEntityAs`
   (`apps/web/src/server/entity-kernel/execute.ts`).
 - Repositories: `defineRepository`, `createEntityReader`, `createEntityCrud`
-  (`server/entity-kernel/repo/repository.ts`). `createEntityRowFetcher(table)`
+  (`server/entity-kernel/repo/repository.ts`). Its `createWriter` and
+  `updateWriter` own ordinary transaction/audit/receipt/reread choreography.
+  Server-only `ENTITY_STORED_WRITES[entity]` prepares complete supported stored
+  operations from source validation and reference targets; these functions do
+  not grant mutation authority or replace domain guards. Unsupported mappings
+  require a domain override. With no repository port, generation constructs
+  the existing scaffold/CRUD/repository binding and refuses unsupported declared
+  operations. Public contracts are generated at `@cubby/schemas/entities/<key>`;
+  `@cubby/schemas/entity-contracts/<key>` owns generated raw schemas and inferred
+  raw types, separately from field envelopes. Runtime repositories import that
+  raw namespace. Source bootstrap may retain a pure alias to named `readSchemas`
+  when importing generated code would create an inference or generation cycle;
+  new entities need no such façade. `createEntityRowFetcher(table)`
   owns full stored-row reads by ID with the live-row predicate; audited updates
   use the same selection. Keep custom projections and relation-loaded fetches
   in their owning repository. `compileDeclaredFilters`

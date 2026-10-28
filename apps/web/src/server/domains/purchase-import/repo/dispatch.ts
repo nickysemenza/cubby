@@ -1,3 +1,4 @@
+import type { RunId } from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { jobState } from "@cubby/schemas/job";
 import {
@@ -33,7 +34,7 @@ export async function dispatchRunEvent(
 
 export async function dispatchStartedRun(
   db: RepositoryQueryInput,
-  run: { id: string; eventId: string; purpose: string },
+  run: { id: RunId; eventId: string; purpose: string },
 ): Promise<"running"> {
   await dispatchRunEvent(db, {
     version: 1,

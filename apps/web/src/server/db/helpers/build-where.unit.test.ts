@@ -1,3 +1,7 @@
+import {
+  type LedgerPartyFilters,
+  ledgerPartyFiltersSchema,
+} from "@cubby/schemas/entities/ledgerParty";
 import type { FinancialAccountFilters } from "@cubby/schemas/financial-account";
 import type { FinancialTransactionFilters } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -6,10 +10,6 @@ import {
   type IngredientFilters,
   ingredientFiltersSchema,
 } from "@cubby/schemas/ingredient";
-import {
-  type LedgerPartyFilters,
-  ledgerPartyFiltersSchema,
-} from "@cubby/schemas/ledger-party";
 import type { MealFilters } from "@cubby/schemas/meal";
 import type { ProductFilters } from "@cubby/schemas/product";
 import type {

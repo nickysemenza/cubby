@@ -1,5 +1,6 @@
 import { recipeAvailabilityOut } from "@cubby/schemas/availability";
 import { positiveAmount } from "@cubby/schemas/codec";
+import { cookbookOut as cookbookSummary } from "@cubby/schemas/entities/cookbook";
 import { equivalenceReportSchema } from "@cubby/schemas/equivalences";
 import {
   ingredientShortcode,
@@ -42,7 +43,6 @@ import {
 } from "@cubby/schemas/mcp";
 import { nutritionEstimate } from "@cubby/schemas/nutrition";
 import {
-  cookbookSummary,
   recipeCooccurrenceInput,
   recipeCookbookScopeInput,
   recipeDryRunRecomputeTotalsOut,

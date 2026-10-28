@@ -12,31 +12,23 @@ public final class RelationSectionModel: Identifiable {
     public let source: EntityDescriptor
     public let recordID: String
     public let target: EntityDescriptor
-    /// The target field that references the source record, when the target declares one; the
-    /// generic create editor prefills it so a record added from this section lands here.
-    public let referenceField: FieldDescriptor?
-    private let prefillIsMany: Bool?
+    /// The compiler-selected create intent's writable roster.
+    public var createFields: [String]? { spec.plan.seed?.fields }
     public let list: GenericEntityListModel
     public private(set) var connectionEvidence: [String: ConnectedRecord] = [:]
     public private(set) var connectionError: String?
     private let client: CubbyClient
 
-    /// `nil` when `section` is not a relation section, the relation is undeclared on `source`, or
-    /// the target has no descriptor by the section's name — each a compiler-checked declaration
-    /// fact, so a nil here means the catalog and the declaration disagree.
+    /// Non-relation sections have no relation list; all relation semantics are compiler-resolved.
     public init?(
         section: DetailSection,
         source: EntityDescriptor,
         recordID: String,
         client: CubbyClient
     ) {
-        guard case .relation(let spec) = section.kind,
-            let relation = source.relation(spec.relation)
-        else { return nil }
-        let target = EntityCatalog[relation.target]
-        guard let filter = target.filter(spec.filterDescriptor),
-            case .param(let wireName) = filter.wire
-        else { return nil }
+        guard case .relation(let spec) = section.kind else { return nil }
+        let plan = spec.plan
+        let target = EntityCatalog[plan.target]
         self.id = section.id
         self.section = section
         self.spec = spec
@@ -44,47 +36,28 @@ public final class RelationSectionModel: Identifiable {
         self.recordID = recordID
         self.client = client
         self.target = target
-        // The generic seed rule: when the filter's own column is a real create field on the
-        // target (a direct filter like `locationId`), seed that; otherwise (a derived
-        // filter like `journalPlantingId`) fall back to the target's single reference field whose
-        // `reference.entity` matches the filter's brandRef entity. Sections with an ambiguous or
-        // multiple reference use the generated explicit prefill field instead.
-        let explicitField = spec.prefill.flatMap { target.field($0.field) }
-        self.referenceField =
-            explicitField
-            ?? (spec.prefill == nil
-                ? target.field(filter.columnId)
-                    ?? filter.targetEntity.flatMap { brandEntity in
-                        target.fields.first {
-                            $0.reference?.entity == brandEntity
-                        }
-                    }
-                : nil)
-        self.prefillIsMany = referenceField?.reference?.multiple
-        let sort = spec.sort.map { $0.direction == .desc ? "-\($0.field)" : $0.field }
-        // A declared relation follows the direct reference, so a hierarchical filter's
-        // default-on "Include sub-…" toggle is switched off.
-        var scope = EntityFilterState([wireName: [recordID]])
-        if let subtree = filter.subtreeParam { scope.set(["false"], for: subtree) }
+        let sort = plan.sort.direction == .desc ? "-\(plan.sort.field)" : plan.sort.field
+        var scope = EntityFilterState([plan.filterKey: [recordID]])
+        if let subtree = plan.subtree { scope.set(["false"], for: subtree) }
         self.list = GenericEntityListModel(
             descriptor: target,
             client: client,
-            pageSize: spec.limit ?? 25,
+            pageSize: plan.pageSize,
             sort: sort,
             filters: scope,
             view: .table,
-            groupBy: spec.groupBy
+            groupBy: plan.groupBy
         )
     }
 
     /// The draft the section's create button opens the editor with.
     public var createPrefill: [String: JSONValue] {
-        guard let referenceField else { return [:] }
+        guard let seed = spec.plan.seed else { return [:] }
         let value: JSONValue =
-            prefillIsMany == true
+            spec.plan.seedMultiple
             ? .array([.string(recordID)])
             : .string(recordID)
-        return [referenceField.key: value]
+        return [seed.field: value]
     }
 
     public func loadConnectionEvidence() async {

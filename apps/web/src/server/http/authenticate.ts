@@ -494,7 +494,7 @@ export const authenticate = createAuthenticator({
     );
     if (!grant) return false;
     const [scope, party] = await Promise.all([
-      loadRunScope(context.db, delegation.runId),
+      loadRunScope(context.db, runEntityId.parse(delegation.runId)),
       context.currentParty(),
     ]);
     return delegatedRunHolds(scope, actorUserId, party);

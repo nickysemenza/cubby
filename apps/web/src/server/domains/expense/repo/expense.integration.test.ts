@@ -1,3 +1,4 @@
+import { expenseUpdateData } from "@cubby/schemas/entities/expense";
 import type {
   ExpenseId,
   PurchaseId,
@@ -8,7 +9,6 @@ import type { ExpenseFilters } from "@cubby/schemas/project";
 import {
   type ExpenseCreateInput,
   expenseCreateInput,
-  expenseUpdateData,
 } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import {

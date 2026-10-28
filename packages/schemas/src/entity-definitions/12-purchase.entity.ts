@@ -1,4 +1,5 @@
 import { historicalDateRangePresets } from "../date-range";
+import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { labelField } from "./label-field.js";
@@ -6,7 +7,7 @@ import { purchaseChildren } from "../child-tables/purchase.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
 import { purchaseEvidenceCoverage } from "../purchase-evidence-policy";
 import { spendingCategoryShortcode } from "../identifier-fields";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { financialReconciliationSummary } from "@cubby/schemas/financial-reconciliation";
@@ -26,7 +27,7 @@ import {
 } from "@cubby/schemas/purchase-fields";
 import { z } from "zod";
 import { TRADE_SUGGEST_RULE, tradeSchema } from "@cubby/schemas/task-fields";
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "purchase",
   names: { singular: "Purchase", plural: "Purchases" },
   route: {
@@ -166,7 +167,11 @@ export default defineEntity({
           fields: ["vendorId", "date", "statedTotal", "notes"],
         },
         { kind: "slot", id: "receiving", title: "Receive into Inventory" },
-        { kind: "slot", id: "project-allocation", title: "Project allocation" },
+        {
+          kind: "slot",
+          id: "project-allocation",
+          title: "Project allocation",
+        },
         {
           kind: "fields",
           id: "order",
@@ -559,6 +564,7 @@ export default defineEntity({
         },
       },
       {
+        audit: true,
         key: "spendingCategoryOrigin",
         kind: "enum",
         labelOverride: "Fallback provenance",
@@ -609,7 +615,11 @@ export default defineEntity({
         key: "spendingCategoryName",
         kind: "text",
         nullable: true,
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "itemizationExpectation",
@@ -880,6 +890,8 @@ export default defineEntity({
         },
       },
       {
+        output: false,
+        audit: false,
         key: "pendingImageIds",
         kind: "identifier",
         reference: { entity: "image", multiple: true },
@@ -891,6 +903,8 @@ export default defineEntity({
         },
       },
       {
+        output: false,
+        audit: false,
         key: "removeImageIds",
         kind: "identifier",
         reference: { entity: "image", multiple: true },
@@ -902,6 +916,8 @@ export default defineEntity({
         },
       },
       {
+        output: false,
+        audit: false,
         key: "imageOrder",
         semanticRole: "attachment",
         kind: "text",
@@ -1228,6 +1244,7 @@ export default defineEntity({
         },
       },
       {
+        output: false,
         key: "transactionCount",
         kind: "number",
         labelOverride: "Transactions",
@@ -1273,35 +1290,13 @@ export default defineEntity({
         kind: "text",
         validation: { read: z.string(), create: null, update: null },
       },
-      {
-        display: { detail: false, list: false },
-        key: "createdAt",
-        kind: "timestamp",
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        display: { detail: false, list: false },
-        key: "updatedAt",
-        kind: "timestamp",
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt", { detail: false, list: false }),
+      timestampField("updatedAt", { detail: false, list: false }),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
-      { key: "spendingCategoryId", reference: "spendingCategory" },
+      "spendingCategoryId",
       {
         key: "spendingCategoryOrigin",
         specialized: "enum:spendingCategoryOrigin",
@@ -1316,10 +1311,10 @@ export default defineEntity({
         specialized: "primary-key:PurchaseId",
       },
       { key: "shortcode", specialized: "shortcode" },
-      { key: "vendorId", reference: "vendor" },
-      { key: "vendorAccountId", reference: "vendorAccount" },
-      { key: "purchaserOverrideId", reference: "ledgerParty" },
-      { key: "defaultProjectId", reference: "project" },
+      "vendorId",
+      "vendorAccountId",
+      "purchaserOverrideId",
+      "defaultProjectId",
       { key: "defaultTrade", specialized: "enum:trade" },
       "orderId",
       "displayLabel",
@@ -1330,53 +1325,7 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "purchaserOverrideId",
-      "spendingCategoryId",
-      "itemizationExpectation",
-      "vendorId",
-      "vendorAccountId",
-      "defaultProjectId",
-      "defaultTrade",
-      "orderId",
-      "displayLabel",
-      "date",
-      "statedTotal",
-      "notes",
-      "pendingImageIds",
-    ],
-    update: [
-      "purchaserOverrideId",
-      "spendingCategoryId",
-      "itemizationExpectation",
-      "vendorId",
-      "vendorAccountId",
-      "defaultProjectId",
-      "defaultTrade",
-      "orderId",
-      "displayLabel",
-      "date",
-      "statedTotal",
-      "notes",
-      "pendingImageIds",
-      "removeImageIds",
-      "imageOrder",
-    ],
-    audit: [
-      "purchaserOverrideId",
-      "spendingCategoryId",
-      "itemizationExpectation",
-      "vendorId",
-      "vendorAccountId",
-      "defaultProjectId",
-      "defaultTrade",
-      "orderId",
-      "displayLabel",
-      "date",
-      "statedTotal",
-      "notes",
-      "spendingCategoryOrigin",
-    ],
+
     derived: {
       reconciliationGap: { type: "number" },
       // The live vendor's name.
@@ -1386,7 +1335,10 @@ export default defineEntity({
       documentCount: { rollup: "count", via: "images" },
       // The expense total of a purchase with at least one priced line.
       pricedExpenseTotal: { type: "number" },
-      expenseStatus: { type: "enum", options: ["empty", "unpriced", "priced"] },
+      expenseStatus: {
+        type: "enum",
+        options: ["empty", "unpriced", "priced"],
+      },
       hasDocuments: { type: "boolean" },
       // The settlement-mismatch gap, less an active evidence-bound exception.
       financialReconciliation: { type: "enum", options: ["mismatch"] },
@@ -1448,46 +1400,6 @@ export default defineEntity({
       create: ["capture", "full"],
       update: ["full", "vendor", "identity"],
     },
-    output: [
-      "purchaserId",
-      "purchaserOverrideId",
-      "bookingCoverage",
-      "documentCoverage",
-      "itemizationCoverage",
-      "productsCoverage",
-      "coverage",
-      "spendingCategorySummary",
-      "spendingCategoryId",
-      "spendingCategoryName",
-      "spendingCategoryOrigin",
-      "itemizationExpectation",
-      "id",
-      "vendorId",
-      "vendorAccountId",
-      "defaultProjectId",
-      "defaultTrade",
-      "orderId",
-      "displayLabel",
-      "date",
-      "statedTotal",
-      "notes",
-      "vendorName",
-      "vendorLogo",
-      "orderUrl",
-      "expenseCount",
-      "expenseCountLabel",
-      "reconciliationLabel",
-      "financialReconciliationLabel",
-      "unpricedExpenseCount",
-      "expenseTotal",
-      "reconciliation",
-      "financialReconciliation",
-      "documentCount",
-      "images",
-      "displayName",
-      "createdAt",
-      "updatedAt",
-    ],
   },
   fields: {
     embedded: [
@@ -1508,11 +1420,11 @@ export default defineEntity({
       module: "@cubby/schemas/purchase",
       export: "purchaseCreateInput",
     },
-    update: { module: "@cubby/schemas/purchase", export: "purchaseUpdateData" },
-    output: {
-      module: "@cubby/schemas/purchase-raw-read",
-      export: "rawPurchaseOut",
+    update: {
+      module: "@cubby/schemas/purchase",
+      export: "purchaseUpdateData",
     },
+
     list: {
       module: "@cubby/schemas/purchase-raw-read",
       export: "rawPurchaseListItemOut",
@@ -1830,294 +1742,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "purchaser-override",
-      label: "Purchaser override",
-      target: "ledgerParty",
-      cardinality: "one",
-      inverseOmit:
-        "LedgerParty.purchases lists the effective purchaser, which every override already decides.",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Purchase.purchaserOverrideId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Purchase.purchaserOverrideId", direction: "incoming" },
-        ],
-      },
-    },
-    {
-      key: "emails",
-      sources: [
-        {
-          key: "accepted",
-          label: "Accepted Email evidence",
-          provenance: { kind: "query", query: "purchaseEmails" },
-          inverse: {
-            steps: [
-              { edge: "Relationship.purchaseEmails", direction: "incoming" },
-            ],
-          },
-        },
-      ],
-      label: "Emails",
-      target: "email",
-      cardinality: "many",
-      // Accepted import sources, reviewed links and live suggestions (ADR 0011).
-      provenance: {
-        kind: "derived",
-        filter: "purchaseId",
-        evidence: ["ImportSourceOrder", "AssessmentState", "OrderMailEvent"],
-      },
-    },
-    {
-      key: "spendingCategory",
-      label: "Spending category",
-      target: "spendingCategory",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Purchase.spendingCategoryId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Purchase.spendingCategoryId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "vendor",
-      label: "Vendor",
-      target: "vendor",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Purchase.vendorId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Purchase.vendorId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "vendor-account",
-      label: "Vendor account",
-      target: "vendorAccount",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Purchase.vendorAccountId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Purchase.vendorAccountId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "images",
-      label: "Images",
-      target: "image",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "EntityAttachment.entityId", direction: "incoming" },
-          { edge: "EntityAttachment.imageId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.entityId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "financial-transactions",
-      label: "Financial transactions",
-      target: "financialTransaction",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "outgoing",
-          },
-        ],
-      },
-    },
-    {
-      key: "expenses",
-      label: "Expenses",
-      target: "expense",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Expense.purchaseId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Expense.purchaseId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "products",
-      label: "Products",
-      target: "product",
-      cardinality: "many",
-      sourceKey: "expense",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Expense.purchaseId", direction: "incoming" },
-          { edge: "Expense.productId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Expense.productId", direction: "incoming" },
-          { edge: "Expense.purchaseId", direction: "outgoing" },
-        ],
-      },
-      sources: [
-        {
-          key: "explicit",
-          label: "Explicit product link",
-          provenance: {
-            kind: "local-path",
-            steps: [
-              {
-                edge: "EntityLink[purchaseProduct].from",
-                direction: "incoming",
-              },
-              { edge: "EntityLink[purchaseProduct].to", direction: "outgoing" },
-            ],
-          },
-          inverse: {
-            steps: [
-              { edge: "EntityLink[purchaseProduct].to", direction: "incoming" },
-              {
-                edge: "EntityLink[purchaseProduct].from",
-                direction: "outgoing",
-              },
-            ],
-          },
-        },
-      ],
-      mutation: {
-        source: "explicit",
-        itemSchema: {
-          module: "@cubby/schemas/common",
-          export: "entityRelationReferenceItemSchema",
-        },
-        rowSchema: {
-          module: "@cubby/schemas/purchase",
-          export: "purchaseProductOut",
-        },
-        adapter: {
-          module: "~/server/domains/purchase/repo/purchase-products",
-          export: "purchaseProductsRelationAdapter",
-        },
-        audiences: ["browser", "mcp"],
-      },
-    },
-    {
-      key: "paymentAccounts",
-      label: "Payment accounts",
-      target: "financialAccount",
-      cardinality: "many",
-      sourceKey: "explicit",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "EntityLink[purchasePaymentAccount].from",
-            direction: "incoming",
-          },
-          {
-            edge: "EntityLink[purchasePaymentAccount].to",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "EntityLink[purchasePaymentAccount].to",
-            direction: "incoming",
-          },
-          {
-            edge: "EntityLink[purchasePaymentAccount].from",
-            direction: "outgoing",
-          },
-        ],
-      },
-      mutation: {
-        source: "explicit",
-        itemSchema: {
-          module: "@cubby/schemas/common",
-          export: "entityRelationReferenceItemSchema",
-        },
-        rowSchema: {
-          module: "@cubby/schemas/purchase",
-          export: "purchasePaymentAccountOut",
-        },
-        adapter: {
-          module: "~/server/domains/purchase/repo/purchase-payment-accounts",
-          export: "purchasePaymentAccountsRelationAdapter",
-        },
-        audiences: ["browser", "mcp"],
-      },
-    },
-    {
-      key: "defaultProject",
-      label: "Default project",
-      target: "project",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Purchase.defaultProjectId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Purchase.defaultProjectId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "projects",
-      label: "Projects",
-      target: "project",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Expense.purchaseId", direction: "incoming" },
-          { edge: "Expense.projectId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Expense.projectId", direction: "incoming" },
-          { edge: "Expense.purchaseId", direction: "outgoing" },
-        ],
-      },
-    },
-  ],
+
   // Related rows the search document reads (ADR 0021).
   search: {
     mode: "lexical",
@@ -2713,3 +2338,131 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .field("purchaserOverrideId")
+      .named("purchaser-override", "Purchaser override", {
+        inverseOmit:
+          "LedgerParty.purchases lists the effective purchaser, which every override already decides.",
+      }),
+    // Accepted import sources, reviewed links and live suggestions (ADR 0011).
+    r
+      .derived("email", "many", "purchaseId", [
+        "ImportSourceOrder",
+        "AssessmentState",
+        "OrderMailEvent",
+      ])
+      .named("emails", "Emails", {
+        sources: [
+          r
+            .query("purchaseEmails", "many")
+            .source("accepted", "Accepted Email evidence"),
+        ],
+      }),
+    r
+      .field("spendingCategoryId")
+      .named("spendingCategory", "Spending category"),
+    r.field("vendorId").named("vendor", "Vendor"),
+    r.field("vendorAccountId").named("vendor-account", "Vendor account"),
+    r
+      .path("image", "many", [
+        { edge: "EntityAttachment.entityId", direction: "incoming" },
+        { edge: "EntityAttachment.imageId", direction: "outgoing" },
+      ])
+      .named("images", "Images"),
+    r
+      .path("financialTransaction", "many", [
+        {
+          edge: "FinancialTransactionAllocation.purchaseId",
+          direction: "incoming",
+        },
+        {
+          edge: "FinancialTransactionAllocation.transactionId",
+          direction: "outgoing",
+        },
+      ])
+      .named("financial-transactions", "Financial transactions", {
+        view: {
+          key: "transactions",
+          columnGroup: "Settlement",
+          order: "newest",
+          defaultVisible: true,
+        },
+      }),
+    r
+      .path("expense", "many", [
+        { edge: "Expense.purchaseId", direction: "incoming" },
+      ])
+      .named("expenses", "Expenses", {
+        view: {
+          columnGroup: "Booking",
+          order: "newest",
+          defaultVisible: true,
+        },
+      }),
+    r
+      .path("product", "many", [
+        { edge: "Expense.purchaseId", direction: "incoming" },
+        { edge: "Expense.productId", direction: "outgoing" },
+      ])
+      .named("products", "Products", {
+        view: { columnGroup: "Booking" },
+        sourceKey: "expense",
+        sources: [
+          r
+            .link("purchaseProduct", "outgoing")
+            .source("explicit", "Explicit product link"),
+        ],
+        mutation: {
+          source: "explicit",
+          itemSchema: {
+            module: "@cubby/schemas/common",
+            export: "entityRelationReferenceItemSchema",
+          },
+          rowSchema: {
+            module: "@cubby/schemas/purchase",
+            export: "purchaseProductOut",
+          },
+          adapter: {
+            module: "~/server/domains/purchase/repo/purchase-products",
+            export: "purchaseProductsRelationAdapter",
+          },
+          audiences: ["browser", "mcp"],
+        },
+      }),
+    r
+      .link("purchasePaymentAccount", "outgoing")
+      .named("paymentAccounts", "Payment accounts", {
+        sourceKey: "explicit",
+        mutation: {
+          source: "explicit",
+          itemSchema: {
+            module: "@cubby/schemas/common",
+            export: "entityRelationReferenceItemSchema",
+          },
+          rowSchema: {
+            module: "@cubby/schemas/purchase",
+            export: "purchasePaymentAccountOut",
+          },
+          adapter: {
+            module: "~/server/domains/purchase/repo/purchase-payment-accounts",
+            export: "purchasePaymentAccountsRelationAdapter",
+          },
+          audiences: ["browser", "mcp"],
+        },
+      }),
+    r.field("defaultProjectId").named("defaultProject", "Default project"),
+    r
+      .path("project", "many", [
+        { edge: "Expense.purchaseId", direction: "incoming" },
+        { edge: "Expense.projectId", direction: "outgoing" },
+      ])
+      .named("projects", "Projects", {
+        view: { columnGroup: "Booking" },
+      }),
+  ],
+  readSchemas,
+);

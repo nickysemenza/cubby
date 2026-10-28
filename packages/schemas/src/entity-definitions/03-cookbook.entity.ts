@@ -1,13 +1,13 @@
+import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { cookbookReadSchemas } from "../cookbook-fields";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { cookbookProductSummary } from "@cubby/schemas/cookbook-fields";
 import { cookbookShortcode } from "../identifier-fields.js";
 import { imageOut } from "./field-primitives.js";
-import { timestampedFields } from "../base-entity.js";
 import { z } from "zod";
-export default defineEntity(
+export const { definition, readSchemas } = defineEntityModel(
   {
     key: "cookbook",
     names: { singular: "Cookbook", plural: "Cookbooks" },
@@ -114,7 +114,7 @@ export default defineEntity(
             update: null,
           },
         },
-        { key: "shortcode", kind: "text" },
+        { output: false, key: "shortcode", kind: "text" },
         {
           key: "name",
           kind: "text",
@@ -153,10 +153,11 @@ export default defineEntity(
             update: z.array(z.string().trim().min(1)).optional(),
           },
         },
-        { key: "sourceLabel", kind: "text" },
-        { key: "rawJson", kind: "json" },
-        { key: "report", kind: "json", nullable: true },
+        { output: false, key: "sourceLabel", kind: "text" },
+        { output: false, key: "rawJson", kind: "json" },
+        { output: false, key: "report", kind: "json", nullable: true },
         {
+          output: false,
           display: { detail: false, list: false },
           key: "productId",
           kind: "identifier",
@@ -169,32 +170,10 @@ export default defineEntity(
             suggest: { basis: ["name", "author"], reviewRequired: true },
           },
         },
-        { key: "importedAt", kind: "timestamp" },
-        {
-          display: { detail: false, list: false },
-          key: "createdAt",
-          kind: "timestamp",
-          validation: {
-            read: timestampedFields.createdAt,
-            create: null,
-            update: null,
-          },
-        },
-        {
-          display: { detail: false, list: false },
-          key: "updatedAt",
-          kind: "timestamp",
-          validation: {
-            read: timestampedFields.updatedAt,
-            create: null,
-            update: null,
-          },
-        },
-        {
-          key: "deletedAt",
-          kind: "timestamp",
-          nullable: true,
-        },
+        { output: false, key: "importedAt", kind: "timestamp" },
+        timestampField("createdAt", { detail: false, list: false }),
+        timestampField("updatedAt", { detail: false, list: false }),
+        { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
         {
           key: "recipeCount",
           kind: "number",
@@ -246,6 +225,7 @@ export default defineEntity(
           },
         },
         {
+          output: false,
           key: "images",
           kind: "json",
           display: { standard: "image" },
@@ -329,52 +309,39 @@ export default defineEntity(
           specialized: "text-array",
         },
         "sourceLabel",
-        { key: "rawJson", specialized: "json:rawJson" },
-        { key: "report", specialized: "json:report" },
-        { key: "productId", reference: "product" },
+        {
+          key: "rawJson",
+          specialized: "json:rawJson",
+          type: {
+            module: "@cubby/schemas/cookbook",
+            export: "CookbookExtraction",
+          },
+        },
+        {
+          key: "report",
+          specialized: "json:report",
+          type: {
+            module: "@cubby/schemas/cookbook",
+            export: "CookbookRunReport",
+          },
+        },
+        "productId",
         { key: "importedAt", defaultOverride: "now" },
         { key: "createdAt" },
         { key: "updatedAt", specialized: "updated-at" },
         "deletedAt",
       ],
-      create: [],
-      update: ["name", "author", "subjects"],
-      audit: ["name", "author", "subjects"],
+
       derived: { recipeCount: { type: "number" } },
       sort: {
         fields: ["name", "recipeCount", "createdAt", "updatedAt"],
       },
-      output: [
-        "id",
-        "name",
-        "author",
-        "subjects",
-        "recipeCount",
-        "coverUrl",
-        "sourceRecipeCount",
-        "needsReextract",
-        "product",
-        "createdAt",
-        "updatedAt",
-      ],
     },
     fields: {
       create: null,
       update: {
         module: "@cubby/schemas/recipe",
         export: "cookbookUpdateInput",
-      },
-      output: {
-        module: "@cubby/schemas/cookbook-raw-read",
-        export: "rawCookbookOutput",
-      },
-      list: {
-        module: "@cubby/schemas/cookbook-raw-read",
-        export: "rawCookbookList",
-      },
-      detail: {
-        module: "@cubby/schemas/cookbook-raw-read",
-        export: "rawCookbookDetail",
       },
     },
     // The book a set of EPUB-extracted recipes came from. Holds the full
@@ -413,57 +380,7 @@ export default defineEntity(
         },
       ],
     },
-    relations: [
-      {
-        key: "recipes",
-        label: "Recipes",
-        target: "recipe",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Recipe.cookbookId", direction: "incoming" }],
-        },
-        inverse: {
-          steps: [{ edge: "Recipe.cookbookId", direction: "outgoing" }],
-        },
-      },
-      {
-        key: "cover",
-        label: "Cover image",
-        target: "image",
-        cardinality: "one",
-        inverseOmit:
-          "The image's associations slot lists what uses it, cookbook covers included.",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "EntityAttachment.entityId", direction: "incoming" },
-            { edge: "EntityAttachment.imageId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "EntityAttachment.imageId", direction: "incoming" },
-            { edge: "EntityAttachment.entityId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "product",
-        label: "Product",
-        target: "product",
-        cardinality: "one",
-        inverseOmit:
-          "The product page's cookbooks slot already lists the cookbooks this product is.",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Cookbook.productId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "Cookbook.productId", direction: "incoming" }],
-        },
-      },
-    ],
+
     search: {
       mode: "semantic",
       inputs: [...imageDescriptionInputs("cookbook")],
@@ -620,4 +537,29 @@ export default defineEntity(
     },
   },
   cookbookReadSchemas,
+);
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .path("recipe", "many", [
+        { edge: "Recipe.cookbookId", direction: "incoming" },
+      ])
+      .named("recipes", "Recipes"),
+    r
+      .path("image", "one", [
+        { edge: "EntityAttachment.entityId", direction: "incoming" },
+        { edge: "EntityAttachment.imageId", direction: "outgoing" },
+      ])
+      .named("cover", "Cover image", {
+        inverseOmit:
+          "The image's associations slot lists what uses it, cookbook covers included.",
+      }),
+    r.field("productId").named("product", "Product", {
+      inverseOmit:
+        "The product page's cookbooks slot already lists the cookbooks this product is.",
+    }),
+  ],
+  readSchemas,
 );

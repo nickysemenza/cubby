@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { financialTransactionRawOut as rawFinancialTransactionOut } from "@cubby/schemas/entity-contracts/financialTransaction";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -12,7 +13,6 @@ import {
   financialTransactionSettlementViolation,
 } from "@cubby/schemas/financial-transaction";
 import { descriptorProcessors } from "@cubby/schemas/financial-transaction-fields";
-import { rawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
 import {
   type FinancialTransactionId,
   type FinancialTransactionShortcode,

@@ -1,4 +1,4 @@
-import { productWithFoodMcpEntityOut } from "@cubby/schemas/product";
+import { productMcpDetailOut as productWithFoodMcpEntityOut } from "@cubby/schemas/entities/product";
 import type { NutrientSummary } from "@cubby/usda";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";

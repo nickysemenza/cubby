@@ -15,6 +15,7 @@ import {
   sourceTransactionRecord,
   transactionImportRecord,
 } from "~/server/db/schema";
+import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { findIncompleteTransactionImports } from "~/server/generic/problems/repo/detectors-financial";
@@ -1209,6 +1210,31 @@ describe("statement row ledger", () => {
       observedAt: "2026-06-01T00:00:00Z",
       rowCountDeclared: 1,
     });
+    const search = kernelScaffold("transactionImport")?.search;
+    if (!search || !first.batchId)
+      throw new Error("Missing import search source");
+    expect(await search.embedding(ctx.db, { ids: [first.batchId] })).toEqual([
+      {
+        entityKind: "transactionImport",
+        entityId: first.batchId,
+        embeddingText: "monarch monarch-2026-08.csv fp-monarch-1",
+      },
+    ]);
+    const documents = await getDb(ctx.db).execute(sql`
+      WITH documents("entityKind", "entityId", shortcode, title, subtitle, "typeHint", aliases, keywords) AS (
+        ${search.document({
+          types: sql`${"transactionImport"}`,
+          requested: (column) => sql`${column} = ${first.batchId}::uuid`,
+          bounded: () => sql`true`,
+        })}
+      ) SELECT title, subtitle, "typeHint" FROM documents`);
+    expect(documents.rows).toEqual([
+      {
+        title: "monarch-2026-08.csv",
+        subtitle: "fp-monarch-1",
+        typeHint: "monarch",
+      },
+    ]);
     const original = (await listSourceTransactionRecords(ctx.db, {})).data[0];
     const overlapping = {
       fingerprint: "fp-overlapping",

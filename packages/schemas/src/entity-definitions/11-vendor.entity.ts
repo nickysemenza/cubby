@@ -1,4 +1,5 @@
 import { historicalDateRangePresets } from "../date-range";
+import { timestampField, aliasList } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { vendorSpendingProfile } from "../spending-classification.js";
@@ -7,7 +8,7 @@ import {
   rawPurchasedCategorySummary,
 } from "../product-category-fields";
 import { spendingCategoryShortcode } from "../identifier-fields.js";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { labelField } from "./label-field.js";
 import { vendorShortcode } from "../identifier-fields.js";
 import { imageOut } from "./field-primitives.js";
@@ -21,7 +22,7 @@ import {
   vendorEmailSenderList,
   vendorOrderEvidence,
 } from "../vendor-import-fields.js";
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "vendor",
   names: { singular: "Vendor", plural: "Vendors" },
   route: { basePath: "vendors" },
@@ -235,10 +236,15 @@ export default defineEntity({
   model: {
     fields: [
       {
+        output: false,
         key: "systemKey",
         kind: "text",
         nullable: true,
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "purchasedCategories",
@@ -596,8 +602,8 @@ export default defineEntity({
         display: { list: false },
         validation: {
           read: z.array(z.string()),
-          create: z.array(z.string()).default([]),
-          update: z.array(z.string()).optional(),
+          create: aliasList.default([]),
+          update: aliasList.optional(),
         },
       },
       {
@@ -836,7 +842,11 @@ export default defineEntity({
             "Earliest date among live purchases from this seller. No purchases means no date.",
           readPath: "firstPurchaseDate",
         },
-        validation: { read: plainDate.nullable(), create: null, update: null },
+        validation: {
+          read: plainDate.nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "documentedPurchaseCount",
@@ -1046,32 +1056,10 @@ export default defineEntity({
           update: null,
         },
       },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt"),
+      timestampField("updatedAt"),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
       // Server-composed text for the structured detail field above (`display.detailLabelPath`).
       labelField("agentHintsLabel", "Vendor agent hints"),
     ],
@@ -1082,7 +1070,7 @@ export default defineEntity({
         specialized: "enum:spendingProfile",
         defaultValue: "unspecified",
       },
-      { key: "defaultSpendingCategoryId", reference: "spendingCategory" },
+      "defaultSpendingCategoryId",
       {
         key: "itemizationExpectation",
         specialized: "enum:itemizationExpectation",
@@ -1123,51 +1111,7 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "spendingProfile",
-      "defaultSpendingCategoryId",
-      "itemizationExpectation",
-      "name",
-      "aliases",
-      "website",
-      "orderUrlTemplate",
-      "orderEvidence",
-      "orderEmailSenders",
-      "browserDomains",
-      "agentHints",
-      "returnWindowDays",
-      "notes",
-    ],
-    update: [
-      "spendingProfile",
-      "defaultSpendingCategoryId",
-      "itemizationExpectation",
-      "name",
-      "aliases",
-      "website",
-      "orderUrlTemplate",
-      "orderEvidence",
-      "orderEmailSenders",
-      "browserDomains",
-      "agentHints",
-      "returnWindowDays",
-      "notes",
-    ],
-    audit: [
-      "spendingProfile",
-      "defaultSpendingCategoryId",
-      "itemizationExpectation",
-      "name",
-      "aliases",
-      "website",
-      "orderUrlTemplate",
-      "orderEvidence",
-      "orderEmailSenders",
-      "browserDomains",
-      "agentHints",
-      "returnWindowDays",
-      "notes",
-    ],
+
     derived: {
       role: { type: "enum", options: ["seller", "brand", "both", "unused"] },
       spend: { rollup: "sum", via: "expenses.cost" },
@@ -1236,45 +1180,6 @@ export default defineEntity({
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
-    output: [
-      "purchasedCategories",
-      "principalLineCount",
-      "unknownCategoryLineCount",
-      "defaultSpendingCategoryName",
-      "defaultSpendingCategoryEmoji",
-      "spendingProfile",
-      "defaultSpendingCategoryId",
-      "itemizationExpectation",
-      "id",
-      "name",
-      "aliases",
-      "website",
-      "orderUrlTemplate",
-      "orderEvidence",
-      "orderEmailSenders",
-      "browserDomains",
-      "agentHints",
-      "agentHintsLabel",
-      "statementLabels",
-      "returnWindowDays",
-      "notes",
-      "role",
-      "purchaseCount",
-      "brandedProductCount",
-      "brandCategoryCount",
-      "purchasedBrandProductCount",
-      "brandSpend",
-      "expenseCount",
-      "firstPurchaseDate",
-      "documentedPurchaseCount",
-      "missingItemizationCount",
-      "spend",
-      "latestPurchaseDate",
-      "mailSearch",
-      "logo",
-      "createdAt",
-      "updatedAt",
-    ],
   },
   fields: {
     embedded: [
@@ -1303,12 +1208,6 @@ export default defineEntity({
         ],
       },
     ],
-    create: { module: "@cubby/schemas/vendor", export: "vendorCreateInput" },
-    update: { module: "@cubby/schemas/vendor", export: "vendorUpdateData" },
-    output: {
-      module: "@cubby/schemas/vendor-raw-read",
-      export: "rawVendorOut",
-    },
   },
   storage: {
     indexes: [
@@ -1409,8 +1308,16 @@ export default defineEntity({
             label: "Credit / negative",
             expand: { spendMax: -0.01 },
           },
-          { value: "gte100", label: "$100 and up", expand: { spendMin: 100 } },
-          { value: "gte500", label: "$500 and up", expand: { spendMin: 500 } },
+          {
+            value: "gte100",
+            label: "$100 and up",
+            expand: { spendMin: 100 },
+          },
+          {
+            value: "gte500",
+            label: "$500 and up",
+            expand: { spendMin: 500 },
+          },
         ],
       },
       {
@@ -1578,186 +1485,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "branded-products",
-      label: "Branded products",
-      target: "product",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Product.brandId", direction: "incoming" }],
-      },
-      inverse: { steps: [{ edge: "Product.brandId", direction: "outgoing" }] },
-    },
-    {
-      key: "emails",
-      sources: [
-        {
-          key: "accepted",
-          label: "Accepted or sender-proof Emails",
-          provenance: { kind: "query", query: "vendorEmails" },
-          inverse: {
-            steps: [
-              { edge: "Relationship.vendorEmails", direction: "incoming" },
-            ],
-          },
-        },
-      ],
-      label: "Emails",
-      target: "email",
-      cardinality: "many",
-      // Its Purchases' Emails plus its sender-proof mail (ADR 0011).
-      provenance: {
-        kind: "derived",
-        filter: "vendorId",
-        evidence: ["ImportSourceOrder", "AssessmentState", "OrderMailEvent"],
-      },
-    },
-    {
-      key: "defaultSpendingCategory",
-      label: "Default spending category",
-      target: "spendingCategory",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Vendor.defaultSpendingCategoryId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Vendor.defaultSpendingCategoryId", direction: "incoming" },
-        ],
-      },
-    },
-    {
-      key: "logo",
-      label: "Logo image",
-      target: "image",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "EntityAttachment.entityId", direction: "incoming" },
-          { edge: "EntityAttachment.imageId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.entityId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "expenses",
-      label: "Recent expenses",
-      target: "expense",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Purchase.vendorId", direction: "incoming" },
-          { edge: "Expense.purchaseId", direction: "incoming" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Expense.purchaseId", direction: "outgoing" },
-          { edge: "Purchase.vendorId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "purchases",
-      label: "Purchases",
-      target: "purchase",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Purchase.vendorId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Purchase.vendorId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "products",
-      label: "Products",
-      target: "product",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Purchase.vendorId", direction: "incoming" },
-          { edge: "Expense.purchaseId", direction: "incoming" },
-          { edge: "Expense.productId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Expense.productId", direction: "incoming" },
-          { edge: "Expense.purchaseId", direction: "outgoing" },
-          { edge: "Purchase.vendorId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "projects",
-      label: "Projects",
-      target: "project",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Purchase.vendorId", direction: "incoming" },
-          { edge: "Expense.purchaseId", direction: "incoming" },
-          { edge: "Expense.projectId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Expense.projectId", direction: "incoming" },
-          { edge: "Expense.purchaseId", direction: "outgoing" },
-          { edge: "Purchase.vendorId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "transactions",
-      label: "Financial transactions",
-      target: "financialTransaction",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Purchase.vendorId", direction: "incoming" },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "outgoing",
-          },
-          { edge: "Purchase.vendorId", direction: "outgoing" },
-        ],
-      },
-    },
-  ],
+
   search: { mode: "semantic", inputs: [...imageDescriptionInputs("vendor")] },
   capabilities: {
     images: {
@@ -1854,3 +1582,97 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .path("product", "many", [
+        { edge: "Product.brandId", direction: "incoming" },
+      ])
+      .named("branded-products", "Branded products", {
+        view: {
+          key: "brandedProducts",
+          columnGroup: "Brand / catalog",
+          filterPrefix: "brandedProduct",
+          defaultVisible: true,
+        },
+      }),
+    // Its Purchases' Emails plus its sender-proof mail (ADR 0011).
+    r
+      .derived("email", "many", "vendorId", [
+        "ImportSourceOrder",
+        "AssessmentState",
+        "OrderMailEvent",
+      ])
+      .named("emails", "Emails", {
+        sources: [
+          r
+            .query("vendorEmails", "many")
+            .source("accepted", "Accepted or sender-proof Emails"),
+        ],
+      }),
+    r
+      .field("defaultSpendingCategoryId")
+      .named("defaultSpendingCategory", "Default spending category"),
+    r
+      .path("image", "one", [
+        { edge: "EntityAttachment.entityId", direction: "incoming" },
+        { edge: "EntityAttachment.imageId", direction: "outgoing" },
+      ])
+      .named("logo", "Logo image"),
+    r
+      .path("expense", "many", [
+        { edge: "Purchase.vendorId", direction: "incoming" },
+        { edge: "Expense.purchaseId", direction: "incoming" },
+      ])
+      .named("expenses", "Recent expenses", {
+        view: {
+          columnGroup: "Purchasing",
+          order: "newest",
+          defaultVisible: true,
+        },
+      }),
+    r
+      .path("purchase", "many", [
+        { edge: "Purchase.vendorId", direction: "incoming" },
+      ])
+      .named("purchases", "Purchases", {
+        view: { columnGroup: "Purchasing", order: "newest" },
+      }),
+    r
+      .path("product", "many", [
+        { edge: "Purchase.vendorId", direction: "incoming" },
+        { edge: "Expense.purchaseId", direction: "incoming" },
+        { edge: "Expense.productId", direction: "outgoing" },
+      ])
+      .named("products", "Products", {
+        view: { columnGroup: "Purchasing", inverseKey: "product.vendors" },
+      }),
+    r
+      .path("project", "many", [
+        { edge: "Purchase.vendorId", direction: "incoming" },
+        { edge: "Expense.purchaseId", direction: "incoming" },
+        { edge: "Expense.projectId", direction: "outgoing" },
+      ])
+      .named("projects", "Projects", {
+        view: { columnGroup: "Purchasing", inverseKey: "project.vendors" },
+      }),
+    r
+      .path("financialTransaction", "many", [
+        { edge: "Purchase.vendorId", direction: "incoming" },
+        {
+          edge: "FinancialTransactionAllocation.purchaseId",
+          direction: "incoming",
+        },
+        {
+          edge: "FinancialTransactionAllocation.transactionId",
+          direction: "outgoing",
+        },
+      ])
+      .named("transactions", "Financial transactions", {
+        view: { columnGroup: "Purchasing", order: "newest" },
+      }),
+  ],
+  readSchemas,
+);

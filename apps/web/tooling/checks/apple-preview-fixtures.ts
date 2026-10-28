@@ -1,3 +1,4 @@
+import { mealListItemOut } from "@cubby/schemas/entities/meal";
 /**
  * The wire-shaped JSON `PreviewFixtures.swift` decodes for its `#Preview`s,
  * from the same Zod schemas the server validates output against. `pnpm
@@ -28,7 +29,6 @@ import type { z } from "zod";
 
 import { entityTimelineOut } from "@cubby/schemas/entity-timeline";
 import {
-  mealListItemOut,
   mealNutritionOut,
   mealNutritionPerson,
   mealRecipeOut,

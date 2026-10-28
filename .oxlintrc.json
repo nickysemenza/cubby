@@ -357,6 +357,10 @@
       "files": [
         "packages/schemas/src/entity-definitions/**/*.ts",
         "packages/schemas/src/relationship-query-definitions.ts",
+        "packages/schemas/src/entity-links.ts",
+        "packages/schemas/src/entity-attachment.ts",
+        "packages/schemas/src/automatic-rule.ts",
+        "packages/schemas/src/entity-integrity.ts",
         "packages/schemas/src/child-tables/**/*.ts",
         "packages/schemas/src/*-fields.ts",
         "packages/schemas/src/product-raw-read.ts",

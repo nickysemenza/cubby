@@ -1,4 +1,4 @@
-import { productListItemOut } from "@cubby/schemas/product";
+import { productListItemOut } from "@cubby/schemas/entities/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 

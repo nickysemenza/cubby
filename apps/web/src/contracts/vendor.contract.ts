@@ -1,10 +1,10 @@
+import { vendorOut } from "@cubby/schemas/entities/vendor";
 import {
   fetchVendorLogoInput,
   mergeVendorsInput,
   mergeVendorsOut,
   vendorCoverageInput,
   vendorCoverageOut,
-  vendorOut,
 } from "@cubby/schemas/vendor";
 
 import { defineContract, mutation, query } from "~/contracts/define";

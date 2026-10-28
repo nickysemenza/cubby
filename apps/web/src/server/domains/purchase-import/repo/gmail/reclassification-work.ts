@@ -1,3 +1,4 @@
+import type { EmailId } from "@cubby/schemas/identifiers";
 import {
   type SupportedDecisionModel,
   supportedDecisionModelSchema,
@@ -80,6 +81,8 @@ export async function loadReclassificationTarget(
   db: Database,
   evaluation: ReclassificationEvaluation,
 ) {
+  if (evaluation.target.kind !== "email")
+    throw new Error("Email reclassification requires an Email target");
   const [[owner], [current]] = await Promise.all([
     getDb(db).select().from(run).where(eq(run.id, evaluation.runId)),
     getDb(db)
@@ -119,7 +122,7 @@ export async function readEvaluationState(
   return published;
 }
 
-export async function readReclassifiedEmail(db: Database, emailId: string) {
+export async function readReclassifiedEmail(db: Database, emailId: EmailId) {
   const [after] = await getDb(db)
     .select()
     .from(email)

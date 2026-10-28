@@ -1,3 +1,4 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { ExtractedPurchaseLine } from "@cubby/schemas/purchase-import";
 import { describe, expect, it, vi } from "vitest";
 
@@ -9,6 +10,11 @@ import {
   lineExternalIdentity,
   purchaseDateFor,
 } from "./writer";
+
+const SYNTHETIC_PRODUCT_ID = parseEntityId(
+  "product",
+  "00000000-0000-4000-8000-000000000101",
+);
 
 describe("purchase date", () => {
   it("is the household-local day of an evening Pacific order, not its UTC day", () => {
@@ -135,7 +141,11 @@ describe("explicitLineDecisions", () => {
       line({ title: "Gadget", amount: 15, lineKind: "principal" }),
     ];
     const resolutions = [
-      { kind: "existing" as const, lineIndex: 0, productId: "product-1" },
+      {
+        kind: "existing" as const,
+        lineIndex: 0,
+        productId: SYNTHETIC_PRODUCT_ID,
+      },
       { kind: "new" as const, lineIndex: 4 },
     ];
 
@@ -147,7 +157,7 @@ describe("explicitLineDecisions", () => {
 
     expect(decisions).toHaveLength(5);
     expect(decisions[0]).toMatchObject({
-      productId: "product-1",
+      productId: SYNTHETIC_PRODUCT_ID,
       promote: false,
       lineKind: "principal",
     });
@@ -184,7 +194,11 @@ describe("explicitLineDecisions", () => {
   it("consults the reversal stage for a negative-amount principal line", async () => {
     const lines = [line({ lineKind: "principal", amount: -12 })];
     const resolutions = [
-      { kind: "existing" as const, lineIndex: 0, productId: "product-1" },
+      {
+        kind: "existing" as const,
+        lineIndex: 0,
+        productId: SYNTHETIC_PRODUCT_ID,
+      },
     ];
     const resolveReversal = vi.fn<() => Promise<DecisionChoiceResult>>(
       async () => ({

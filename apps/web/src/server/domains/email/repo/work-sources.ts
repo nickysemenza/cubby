@@ -1,4 +1,4 @@
-import { emailFilters } from "@cubby/schemas/email";
+import { emailFiltersSchema } from "@cubby/schemas/email";
 import { and, sql } from "drizzle-orm";
 
 import { householdDaySql } from "~/server/db/helpers/query";
@@ -33,7 +33,10 @@ export const emailWorkSources: WorkSource[] = [
           .from(email)
           .where(
             and(
-              await emailScaffold.prepareWhere(db, emailFilters.parse(filters)),
+              await emailScaffold.prepareWhere(
+                db,
+                emailFiltersSchema.parse(filters),
+              ),
               recordScope(scope, sql`${email.shortcode}`),
             ),
           ),

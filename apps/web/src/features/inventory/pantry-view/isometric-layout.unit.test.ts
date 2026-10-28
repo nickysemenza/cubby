@@ -1,5 +1,5 @@
+import { type LocationDetailOut as InfLocation } from "@cubby/schemas/entities/location";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import { type InfLocation } from "@cubby/schemas/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { categoryReadFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it, vi } from "vitest";

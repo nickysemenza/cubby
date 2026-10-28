@@ -160,7 +160,8 @@ describe("entity manifest", () => {
   // inline in an `if` branch) keeps every `expect` call unconditional from
   // the linter's point of view.
   async function expectInventoryTitleSchemaRejectsNull(titleField: string) {
-    const { inventoryWithLocationAndProductOut } = await import("./inventory");
+    const { inventoryDetailOut: inventoryWithLocationAndProductOut } =
+      await import("@cubby/schemas/entities/inventory");
     // SAFETY: `titleField` is dynamic per entity (looped from
     // `entitySummary` across every entity), so it can't be a literal key of
     // this one entity's own shape type; index a `Record`-typed view instead.

@@ -9,3 +9,16 @@ export const entityAttachmentRoleValues = [
   "logo",
 ] as const;
 export type EntityAttachmentRole = (typeof entityAttachmentRoleValues)[number];
+
+/** Shared attachment graph facts; database bindings preserve the polymorphic identity pair. */
+export const entityAttachmentStorage = {
+  table: "EntityAttachment",
+  owner: {
+    column: "entityId",
+    kindColumn: "entityKind",
+    foreignKey: "EntityAttachment_entity_fk",
+    targetId: "id",
+    targetKind: "kind",
+  },
+  image: { column: "imageId", targetEntity: "image", targetColumn: "id" },
+} as const;

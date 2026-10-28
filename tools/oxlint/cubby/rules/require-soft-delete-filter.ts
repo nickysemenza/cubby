@@ -24,6 +24,7 @@ const repoRoot = resolve(
 );
 const schemaPath = resolve(repoRoot, "apps/web/src/server/db/schema.ts");
 const schemaFragments = [
+  "packages/schemas/src/entity-attachment.ts",
   "apps/web/src/server/db/schema-primitives.ts",
   ...globSync("apps/web/src/server/db/*tables.ts", { cwd: repoRoot }),
   ...globSync("apps/web/src/server/db/generated/*table*.gen.ts", {

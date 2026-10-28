@@ -1,4 +1,4 @@
-import type { TaskOut } from "@cubby/schemas/project";
+import { type TaskOut } from "@cubby/schemas/entities/task";
 
 /** A task remains due through the inclusive end of its window. */
 export const taskDueDatePrecedence = ["end", "start"] as const;

@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { searchableEntities } from "./generated/entity-roster.gen";
-import { imageId, locationId, parseEntityRef } from "./identifiers";
+import {
+  imageId,
+  locationId,
+  parseEntityRef,
+  entityIdSchema,
+} from "./identifiers";
 
 /** Domain admission inputs. Publishers persist Job intent; transport carries only a wake. */
 export const backgroundTaskKinds = [
@@ -57,7 +62,7 @@ export const locationAiInventoryRefreshTaskSchema = z.object({
 export const imageProcessingWakeupTaskSchema = z.object({
   kind: z.literal("image-processing.wakeup"),
   ...taskEnvelopeFields,
-  jobId: z.uuid(),
+  jobId: entityIdSchema("imageJob"),
 });
 
 /**

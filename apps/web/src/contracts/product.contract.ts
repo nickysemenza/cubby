@@ -1,3 +1,4 @@
+import { productDetailOut as productWithFoodOut } from "@cubby/schemas/entities/product";
 import { productShortcode } from "@cubby/schemas/identifiers";
 import {
   productCreateManyInput,
@@ -5,7 +6,6 @@ import {
   productExternalIdCollisionsOut,
   productLookupUpcOut,
   productMarkUsdaUnavailableManyInput,
-  productWithFoodOut,
 } from "@cubby/schemas/product";
 import {
   productCreateWithInventoryInput,

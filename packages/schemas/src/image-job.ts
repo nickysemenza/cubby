@@ -2,12 +2,10 @@ import { z } from "zod";
 
 import { activitySubmissionId } from "./activity";
 import {
-  imageJobBaseFilterFields,
+  imageJobFilterFields as imageJobBaseFilterFields,
   imageJobOut,
-} from "./generated/imageJob.gen";
+} from "@cubby/schemas/entities/imageJob";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
-
-export { imageJobOut, type ImageJobOut } from "./generated/imageJob.gen";
 
 export const imageJobFilterFields = {
   ...imageJobBaseFilterFields,

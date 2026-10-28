@@ -1,13 +1,13 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { dateRangeFromDates } from "@cubby/schemas/date-range";
+import {
+  type ProjectCreateInput,
+  type ProjectUpdateInput,
+} from "@cubby/schemas/entities/project";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ProjectId, ProjectShortcode } from "@cubby/schemas/identifiers";
-import {
-  MAX_PROJECT_TREE_DEPTH,
-  type ProjectCreateInput,
-  type ProjectUpdateInput,
-} from "@cubby/schemas/project";
+import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
 import {
   rawProjectOut,
   type RawProjectOut,

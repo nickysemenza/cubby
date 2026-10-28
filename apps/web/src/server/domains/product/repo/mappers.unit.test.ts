@@ -1,3 +1,4 @@
+import { locationType } from "@cubby/schemas/location-fields";
 import { testCompleteDataQuality, testEntityId } from "@cubby/schemas/testing";
 import { productRowFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
@@ -73,7 +74,7 @@ const activeLocation = {
   lastBulkInventory: null,
   productId: null,
   parentId: null,
-  type: "room",
+  type: locationType.parse("room"),
   notes: null,
   aiDescription: null,
   valuation: null,

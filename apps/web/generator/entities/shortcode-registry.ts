@@ -60,11 +60,42 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
       exported?.type === "ExportDefaultDeclaration"
         ? exported.declaration
         : undefined;
-    const declaration =
+    const argument =
       call?.type === "CallExpression" ? call.arguments[0] : undefined;
-    if (declaration?.type !== "ObjectExpression")
+    let declaration =
+      argument?.type === "ObjectExpression" ? argument : undefined;
+    if (argument?.type === "Identifier" && argument.name === "definition") {
+      for (const statement of program.body) {
+        if (
+          statement.type !== "ExportNamedDeclaration" ||
+          statement.declaration?.type !== "VariableDeclaration"
+        )
+          continue;
+        for (const binding of statement.declaration.declarations) {
+          const pattern = binding.id;
+          if (
+            pattern.type !== "ObjectPattern" ||
+            !["definition", "readSchemas"].every((name) =>
+              pattern.properties.some(
+                (property) =>
+                  property.type === "Property" &&
+                  property.value.type === "Identifier" &&
+                  property.value.name === name,
+              ),
+            ) ||
+            binding.init?.type !== "CallExpression" ||
+            binding.init.callee.type !== "Identifier" ||
+            binding.init.callee.name !== "defineEntityModel"
+          )
+            continue;
+          const body = binding.init.arguments[0];
+          if (body?.type === "ObjectExpression") declaration = body;
+        }
+      }
+    }
+    if (!declaration)
       throw new EntityDeclarationError(
-        `${name} must export default defineEntity({...}).`,
+        `${name} must export default defineEntity(definition, …) with an exported literal defineEntityModel body.`,
       );
     const key = literal(valueOf(declaration, "key"), `${name} key`);
     const identifiers = valueOf(declaration, "identifiers");
@@ -98,6 +129,19 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
     )
     .join("");
   return [
+    {
+      relativePath:
+        "packages/schemas/src/entity-definitions/definition-catalog.gen.ts",
+      source:
+        generatedHeader +
+        files
+          .map(
+            (file, index) =>
+              `import type { definition as Definition${index} } from ${JSON.stringify(`./${file.slice(0, -3)}`)};`,
+          )
+          .join("\n") +
+        `\nexport type EntityDefinitions = ${files.map((_, index) => `typeof Definition${index}`).join(" | ")};\n`,
+    },
     {
       relativePath: "packages/shared/src/generated/shortcode-registry.gen.ts",
       source:

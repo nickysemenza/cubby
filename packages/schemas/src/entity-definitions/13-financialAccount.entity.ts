@@ -1,9 +1,10 @@
+import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import {
   financialAccountAuthorizedUsers,
   financialAccountFundingPeriods,
 } from "../financial-account-party-fields";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { displayItemsField, labelField } from "./label-field.js";
 import {
   financialAccountCardNumbers,
@@ -17,7 +18,7 @@ import {
   vendorShortcode,
 } from "../identifier-fields.js";
 import { z } from "zod";
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "financialAccount",
   names: { singular: "Financial Account", plural: "Accounts" },
   route: {
@@ -203,6 +204,7 @@ export default defineEntity({
         },
       },
       {
+        audit: false,
         key: "network",
         kind: "enum",
         nullable: true,
@@ -378,6 +380,7 @@ export default defineEntity({
         },
       },
       {
+        output: false,
         key: "primaryCardholderMode",
         kind: "enum",
         validation: {
@@ -504,32 +507,10 @@ export default defineEntity({
           update: null,
         },
       },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt"),
+      timestampField("updatedAt"),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
       // Server-composed text for the structured detail fields above (`display.detailLabelPath`).
       labelField("sourceAliasesLabel", "Source aliases"),
       labelField("cardNumbersLabel", "Card numbers"),
@@ -543,20 +524,37 @@ export default defineEntity({
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
-      { key: "identity", specialized: "json:identity" },
+      {
+        key: "identity",
+        specialized: "json:identity",
+        type: {
+          module: "@cubby/schemas/financial-account",
+          export: "FinancialAccountIdentity",
+        },
+      },
       {
         key: "sourceAliases",
         defaultValue: "'[]'::jsonb",
         specialized: "json:sourceAliases",
+        type: {
+          module: "@cubby/schemas/financial-account",
+          export: "FinancialAccountSourceAlias",
+          array: true,
+        },
       },
       {
         key: "cardNumbers",
         defaultValue: "'[]'::jsonb",
         specialized: "json:cardNumbers",
+        type: {
+          module: "@cubby/schemas/financial-account",
+          export: "FinancialAccountCardNumber",
+          array: true,
+        },
       },
-      { key: "providerVendorId", reference: "vendor" },
-      { key: "ledgerPartyId", reference: "ledgerParty" },
-      { key: "primaryCardholderId", reference: "ledgerParty" },
+      "providerVendorId",
+      "ledgerPartyId",
+      "primaryCardholderId",
       {
         key: "primaryCardholderMode",
         defaultValue: "'inherit'",
@@ -566,11 +564,21 @@ export default defineEntity({
         key: "authorizedUsers",
         defaultValue: "'[]'::jsonb",
         specialized: "json:authorizedUsers",
+        type: {
+          module: "@cubby/schemas/financial-account",
+          export: "FinancialAccountPartyPeriod",
+          array: true,
+        },
       },
       {
         key: "fundingPeriods",
         defaultValue: "'[]'::jsonb",
         specialized: "json:fundingPeriods",
+        type: {
+          module: "@cubby/schemas/financial-account",
+          export: "FinancialAccountPartyPeriod",
+          array: true,
+        },
       },
       {
         key: "inventoryOwnerDefaultEnabled",
@@ -581,50 +589,7 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "network",
-      "primaryCardholderId",
-      "primaryCardholderMode",
-      "authorizedUsers",
-      "fundingPeriods",
-      "name",
-      "identity",
-      "sourceAliases",
-      "cardNumbers",
-      "providerVendorId",
-      "ledgerPartyId",
-      "inventoryOwnerDefaultEnabled",
-      "notes",
-    ],
-    update: [
-      "network",
-      "primaryCardholderId",
-      "primaryCardholderMode",
-      "authorizedUsers",
-      "fundingPeriods",
-      "name",
-      "identity",
-      "sourceAliases",
-      "cardNumbers",
-      "providerVendorId",
-      "ledgerPartyId",
-      "inventoryOwnerDefaultEnabled",
-      "notes",
-    ],
-    audit: [
-      "primaryCardholderId",
-      "primaryCardholderMode",
-      "authorizedUsers",
-      "fundingPeriods",
-      "name",
-      "identity",
-      "sourceAliases",
-      "cardNumbers",
-      "notes",
-      "providerVendorId",
-      "ledgerPartyId",
-      "inventoryOwnerDefaultEnabled",
-    ],
+
     rows: {
       cards: { label: "Card numbers", json: "cardNumbers" },
       aliases: { label: "Source aliases", json: "sourceAliases" },
@@ -684,45 +649,8 @@ export default defineEntity({
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
-    output: [
-      "network",
-      "authorizedUserItems",
-      "fundingPeriodItems",
-      "primaryCardholderId",
-      "authorizedUsers",
-      "fundingPeriods",
-      "id",
-      "name",
-      "identity",
-      "sourceAliases",
-      "sourceAliasesLabel",
-      "cardNumbers",
-      "cardNumbersLabel",
-      "providerVendorId",
-      "ledgerPartyId",
-      "inventoryOwnerDefaultEnabled",
-      "notes",
-      "providerVendorName",
-      "ledgerPartyName",
-      "transactionCount",
-      "createdAt",
-      "updatedAt",
-    ],
   },
-  fields: {
-    create: {
-      module: "@cubby/schemas/financial-account",
-      export: "financialAccountCreateInput",
-    },
-    update: {
-      module: "@cubby/schemas/financial-account",
-      export: "financialAccountUpdateData",
-    },
-    output: {
-      module: "@cubby/schemas/financial-account-raw-read",
-      export: "rawFinancialAccountOut",
-    },
-  },
+
   storage: {
     indexes: [{ on: ["name"] }, { on: ["providerVendorId", "ledgerPartyId"] }],
     checks: [
@@ -873,150 +801,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "primary-cardholder",
-      label: "Primary cardholder",
-      target: "ledgerParty",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "FinancialAccount.primaryCardholderId",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "FinancialAccount.primaryCardholderId",
-            direction: "incoming",
-          },
-        ],
-      },
-    },
-    {
-      key: "provider-vendor",
-      label: "Provider",
-      target: "vendor",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "FinancialAccount.providerVendorId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "FinancialAccount.providerVendorId", direction: "incoming" },
-        ],
-      },
-    },
-    {
-      key: "ledger-party",
-      label: "Ledger party",
-      target: "ledgerParty",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "FinancialAccount.ledgerPartyId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "FinancialAccount.ledgerPartyId", direction: "incoming" },
-        ],
-      },
-    },
-    {
-      key: "transactions",
-      label: "Transactions",
-      target: "financialTransaction",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "FinancialTransaction.accountId", direction: "incoming" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "FinancialTransaction.accountId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "purchases",
-      label: "Purchases",
-      target: "purchase",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "FinancialTransaction.accountId", direction: "incoming" },
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "outgoing",
-          },
-          { edge: "FinancialTransaction.accountId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "vendors",
-      label: "Vendors",
-      target: "vendor",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "FinancialTransaction.accountId", direction: "incoming" },
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "outgoing",
-          },
-          { edge: "Purchase.vendorId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Purchase.vendorId", direction: "incoming" },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "outgoing",
-          },
-          { edge: "FinancialTransaction.accountId", direction: "outgoing" },
-        ],
-      },
-    },
-  ],
+
   search: {
     mode: "semantic",
     inputs: [
@@ -1112,3 +897,55 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .field("primaryCardholderId")
+      .named("primary-cardholder", "Primary cardholder"),
+    r.field("providerVendorId").named("provider-vendor", "Provider"),
+    r.field("ledgerPartyId").named("ledger-party", "Ledger party"),
+    r
+      .path("financialTransaction", "many", [
+        { edge: "FinancialTransaction.accountId", direction: "incoming" },
+      ])
+      .named("transactions", "Transactions", {
+        view: {
+          columnGroup: "Activity",
+          order: "newest",
+          defaultVisible: true,
+        },
+      }),
+    r
+      .path("purchase", "many", [
+        { edge: "FinancialTransaction.accountId", direction: "incoming" },
+        {
+          edge: "FinancialTransactionAllocation.transactionId",
+          direction: "incoming",
+        },
+        {
+          edge: "FinancialTransactionAllocation.purchaseId",
+          direction: "outgoing",
+        },
+      ])
+      .named("purchases", "Purchases", {
+        view: { columnGroup: "Activity", order: "newest" },
+      }),
+    r
+      .path("vendor", "many", [
+        { edge: "FinancialTransaction.accountId", direction: "incoming" },
+        {
+          edge: "FinancialTransactionAllocation.transactionId",
+          direction: "incoming",
+        },
+        {
+          edge: "FinancialTransactionAllocation.purchaseId",
+          direction: "outgoing",
+        },
+        { edge: "Purchase.vendorId", direction: "outgoing" },
+      ])
+      .named("vendors", "Vendors", { view: { columnGroup: "Activity" } }),
+  ],
+  readSchemas,
+);

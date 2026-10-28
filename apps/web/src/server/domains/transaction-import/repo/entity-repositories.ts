@@ -1,18 +1,17 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { sourceTransactionRecordUpdateData } from "@cubby/schemas/entities/sourceTransactionRecord";
+import { sourceTransactionRecordRawOut as rawSourceTransactionRecordOut } from "@cubby/schemas/entity-contracts/sourceTransactionRecord";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
-import { sourceTransactionRecordUpdateData } from "@cubby/schemas/source-transaction-record";
 import { sourceTransactionRecordMatchState } from "@cubby/schemas/source-transaction-record";
-import { rawSourceTransactionRecordOut } from "@cubby/schemas/source-transaction-record-raw-read";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import { notDeleted, unwrapDb, withTransactionOn } from "~/server/db/helpers";
-import { sourceTransactionRecord, transactionImport } from "~/server/db/schema";
+import { sourceTransactionRecord } from "~/server/db/schema";
 import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { sourceTransactionRecordSearch } from "~/server/domains/transaction-import/repo/search-read-source-transaction-record";
-import { transactionImportSearch } from "~/server/domains/transaction-import/repo/search-read-transaction-import";
 import {
   merchantVendorInferences,
   normalizeMerchant,
@@ -47,9 +46,7 @@ const initialFingerprint = sql`(SELECT i.fingerprint FROM "TransactionImport" i
   WHERE i.id = "SourceTransactionRecord"."batchId")`;
 const transactionCode = sql`(SELECT cs.shortcode FROM ${CHARGE_STATE} cs
   WHERE cs.source = "SourceTransactionRecord".source AND cs."chargeKey" = "SourceTransactionRecord"."chargeKey")`;
-const storedCount = sql<number>`(SELECT count(*)::int FROM "TransactionImportRecord" m
-  JOIN "SourceTransactionRecord" r ON r.id = m."statementRowId" AND ${notDeleted("r")}
-  WHERE m."importId" = "TransactionImport".id)`;
+
 const sourceRead = {
   media: true,
   references: {
@@ -197,18 +194,6 @@ export const sourceTransactionRecordScaffold = listScaffold(
     },
   },
 );
-export const transactionImportScaffold = listScaffold(
-  "transactionImport",
-  transactionImport,
-  {
-    derived: { rowCountStored: storedCount },
-    read: {
-      search: transactionImportSearch,
-      media: true,
-      references: { source: { kind: "public" } },
-    },
-  },
-);
 
 const sourceReader = createEntityReader<
   unknown,
@@ -330,11 +315,5 @@ export const sourceTransactionRecordRepository = defineRepository(
     deleteHooks: { beforeDelete: assertSourceTransactionRecordDeletionAllowed },
     scaffold: sourceTransactionRecordScaffold,
     update: asActor(updateSource),
-  },
-);
-export const transactionImportRepository = defineRepository(
-  "transactionImport",
-  {
-    scaffold: transactionImportScaffold,
   },
 );

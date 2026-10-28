@@ -25,7 +25,7 @@ import type {
 import { entityListFor } from "~/entity/entity-list";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { getEntityFilters } from "~/entity/filter-manifest";
-import { buildFiltersFromManifest, filterUrlKey } from "~/entity/filters";
+import { buildFiltersFromManifest } from "~/entity/filters";
 import {
   listEntities,
   entityListParamsFromParsed,
@@ -37,10 +37,6 @@ import {
   connectionRefs,
   ConnectionPaths,
 } from "~/entity/relationships/connection-paths";
-import {
-  defaultSortDirectionFor,
-  defaultSortFor,
-} from "~/entity/sortable-fields";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -74,78 +70,19 @@ type RelationSection = Extract<
   { kind: "relation" }
 >;
 
-/** What a relation section resolves to once the manifest is consulted. */
-export interface RelationSectionPlan {
-  source: BrowserRoutedEntity;
-  relation: string;
-  target: ListEntity;
-  /** The descriptor's column id — the filter control the scoped table hides. */
-  descriptorId: string;
-  /** The list filter key (`field ?? columnId`) that scopes the target's list. */
-  filterKey: string;
-  /** The URL key the target's list route reads for the same filter. */
-  urlKey: string;
-  /**
-   * The filter's "Include sub-…" toggle, switched off: a declared relation
-   * follows the direct reference, not the target's subtree.
-   */
-  subtree: string | null;
-  /** The create-intent field the section's create button prefills, if any. */
-  seed: { intent: string; field: string } | null;
-  /** Whether the seeded field is an id array (`idMulti`/many reference). */
-  seedMultiple: boolean;
-  columns: readonly string[] | null;
-  sort: { field: string; direction: "asc" | "desc" };
-  limit: number | null;
-  /** The target's `model.grouping` field the section opens grouped by. */
-  groupBy: string | null;
-  /**
-   * The target's column that names the record this section belongs to (a
-   * Task's Project on a Project's Tasks) — always this record, so hidden.
-   */
-  backReferenceColumn: string | null;
-  /** Inferred through the target's filter, with no edge path to show as evidence. */
-  derived: boolean;
-}
+/** A compiled relation section, bound to its source entity for runtime actions. */
+export type RelationSectionPlan = Omit<
+  import("@cubby/schemas/entity-definitions/relation-plan").CompiledRelationSectionPlan,
+  "target"
+> & { source: BrowserRoutedEntity; relation: string; target: ListEntity };
 
 const isListEntity = (value: string): value is ListEntity =>
   listEntities.some((entity) => entity === value);
 
-/** The first declared create intent of `target` that can be seeded through `field`. */
-function createSeedThrough(
-  queryClient: QueryClient,
-  target: ListEntity,
-  field: string,
-): { intent: string; field: string; multiple: boolean } | null {
-  const intents = entityMetadata(queryClient, target).editIntents;
-  if (intents === null) return null;
-  const fields: Readonly<Partial<Record<string, readonly string[]>>> =
-    intents.fields;
-  const intent = intents.create.find((candidate) =>
-    fields[candidate]?.includes(field),
-  );
-  const modelField = entityMetadata(queryClient, target).fields.fields.find(
-    (candidate) => candidate.key === field,
-  );
-  return intent === undefined
-    ? null
-    : { intent, field, multiple: modelField?.reference?.multiple === true };
-}
-
-/**
- * Resolve a declared relation section against the manifest: the relation's
- * target, the target's descriptor (checked by the entity compiler to be an
- * id filter pointing back at the source), and the create seed. Pure so the
- * table's test can assert the resolved filter and links without rendering.
- */
 export function planRelationSection(
   queryClient: QueryClient,
   entity: BrowserRoutedEntity,
-  section: Pick<
-    RelationSection,
-    "relation" | "filter" | "prefill" | "columns" | "sort" | "limit"
-  > &
-    Partial<Pick<RelationSection, "groupBy">>,
+  section: RelationSection,
 ): RelationSectionPlan {
   const relation = entityMetadata(
     queryClient,
@@ -153,88 +90,22 @@ export function planRelationSection(
   ).descriptor.relationships.find(
     (candidate) => candidate.key === section.relation,
   );
-  if (relation === undefined)
-    throw new Error(`${entity} declares no relation ${section.relation}`);
-  const target = relation.target;
-  if (!isListEntity(target))
+  const plan = section.plan;
+  if (!plan)
+    throw new Error(`${entity}.${section.id} has no compiled relation plan`);
+  if (relation?.target !== plan.target)
     throw new Error(
-      `${entity}.${section.relation} targets ${target}, which has no list`,
+      `${entity}.${section.id} has an inconsistent relation target`,
     );
-  const descriptor = getEntityFilters(queryClient, target).find(
-    (candidate) => candidate.columnId === section.filter.descriptor,
-  );
-  if (descriptor === undefined)
-    throw new Error(
-      `${target} declares no filter descriptor ${section.filter.descriptor}`,
-    );
-  const filterKey = descriptor.field ?? descriptor.columnId;
-  // A create intent can only be prefilled through a real field key, which
-  // is what a `<key>Filter` list-filter alias names once the suffix goes.
-  const seedField = filterKey.replace(/Filter$/u, "");
-  const explicitField = section.prefill?.field;
-  let seed = createSeedThrough(queryClient, target, explicitField ?? seedField);
-  // The descriptor's own key names no create field — a derived descriptor
-  // like `journalPlantingId` reads a computed column, not a
-  // storage field. Fall back to the target's own reference field pointing at
-  // the same entity the descriptor scopes by, so its create button still
-  // seeds a real, writable field. Explicit `prefill` is required when that
-  // fallback would be ambiguous or needs a multiple reference.
-  if (
-    (section.prefill === null || section.prefill === undefined) &&
-    seed === null &&
-    descriptor.referenceEntity !== undefined
-  ) {
-    const referenceField = entityMetadata(
-      queryClient,
-      target,
-    ).fields.fields.find(
-      (field) => field.reference?.entity === descriptor.referenceEntity,
-    );
-    if (referenceField !== undefined)
-      seed = createSeedThrough(queryClient, target, referenceField.key);
-  }
+  if (!isListEntity(plan.target))
+    throw new Error(`${entity}.${section.id} targets an unavailable list`);
   return {
+    ...plan,
+    target: plan.target,
     source: entity,
     relation: section.relation,
-    target,
-    descriptorId: descriptor.columnId,
-    filterKey,
-    urlKey: filterUrlKey(descriptor),
-    subtree: descriptor.subtree ?? null,
-    seed: seed ? { intent: seed.intent, field: seed.field } : null,
-    seedMultiple: seed?.multiple === true,
-    columns: section.columns,
-    sort: section.sort ?? {
-      field: defaultSortFor(queryClient, target),
-      direction: defaultSortDirectionFor(queryClient, target),
-    },
-    limit: section.limit,
-    groupBy: section.groupBy ?? null,
-    backReferenceColumn: backReferenceColumnFor(
-      queryClient,
-      entity,
-      target,
-      seedField,
-    ),
-    derived: relation.provenance.kind === "derived",
   };
 }
-
-/** The target's list column for the field that points back at `source`. */
-function backReferenceColumnFor(
-  queryClient: QueryClient,
-  source: BrowserRoutedEntity,
-  target: ListEntity,
-  fieldKey: string,
-): string | null {
-  const field = entityMetadata(queryClient, target).fields.fields.find(
-    (candidate) =>
-      candidate.key === fieldKey && candidate.reference?.entity === source,
-  );
-  return field === undefined ? null : (field.display.columnId ?? field.key);
-}
-
-const DEFAULT_RELATION_PAGE_SIZE = 50;
 
 export interface EntityRelationTableOperations extends RelationshipMovementOperations {
   list: typeof entityList.list;
@@ -259,7 +130,7 @@ function useRelationCreateDialog(plan: RelationSectionPlan, recordId: string) {
       <EntityEditDialog
         open={creating}
         onOpenChange={setCreating}
-        // SAFETY: `seed.intent` is the target's own first create intent and
+        // SAFETY: `seed.intent` is the compiler-selected create intent and
         // `seed.field` one of that intent's declared fields; the generic
         // dialog resolves both at runtime through the registry.
         request={
@@ -542,7 +413,7 @@ function StreamedEntityRelationTable(props: EntityRelationTableProps) {
           },
           pagination: {
             pageIndex: 0,
-            pageSize: plan.limit ?? DEFAULT_RELATION_PAGE_SIZE,
+            pageSize: plan.pageSize,
           },
           sort: [{ orderBy: plan.sort.field, direction: plan.sort.direction }],
           ...(plan.groupBy ? { groupBy: [{ key: plan.groupBy }] } : {}),
@@ -655,10 +526,10 @@ function LiveEntityRelationTable({
       initialSortDesc: plan.sort.direction === "desc",
       initialPagination: {
         pageIndex: 0,
-        pageSize: plan.limit ?? DEFAULT_RELATION_PAGE_SIZE,
+        pageSize: plan.pageSize,
       },
     }),
-    [plan.limit, plan.sort.direction, plan.sort.field],
+    [plan.pageSize, plan.sort.direction, plan.sort.field],
   );
   // Header menus regroup an embedded table for the visit; the declared
   // section grouping is the default on every mount.

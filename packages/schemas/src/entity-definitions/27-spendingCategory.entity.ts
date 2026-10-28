@@ -1,12 +1,13 @@
+import { timestampField, aliasList } from "./field-policy";
 import { productCategoryShortcode } from "../identifier-fields";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
 import { spendingCategoryShortcode as code } from "../identifier-fields";
 import { productExpectation } from "../purchase-evidence-policy";
-import { defineEntity } from "./definition";
+import { defineEntity, defineEntityModel } from "./definition";
 
 const expectation = z.enum(["unknown", "required", "not_expected"]);
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "spendingCategory",
   names: { singular: "Spending Category", plural: "Spending Categories" },
   route: { basePath: "spending-categories" },
@@ -136,6 +137,7 @@ export default defineEntity({
         },
       },
       {
+        audit: false,
         ...recordEmojiField,
         control: {
           ...recordEmojiField.control,
@@ -165,8 +167,8 @@ export default defineEntity({
         display: { list: false },
         validation: {
           read: z.array(z.string()),
-          create: z.array(z.string()).default([]),
-          update: z.array(z.string()).optional(),
+          create: aliasList.default([]),
+          update: aliasList.optional(),
         },
       },
       {
@@ -342,20 +344,10 @@ export default defineEntity({
         kind: "identifier",
         validation: { read: code, create: null, update: null },
       },
-      {
-        display: { detail: false, list: false },
-        key: "createdAt",
-        kind: "timestamp",
-        validation: { read: z.date(), create: null, update: null },
-      },
-      {
-        display: { detail: false, list: false },
-        key: "updatedAt",
-        kind: "timestamp",
-        validation: { read: z.date(), create: null, update: null },
-      },
-      { key: "shortcode", kind: "text" },
-      { key: "deletedAt", kind: "timestamp", nullable: true },
+      timestampField("createdAt", { detail: false, list: false }),
+      timestampField("updatedAt", { detail: false, list: false }),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
       "emoji",
@@ -363,7 +355,7 @@ export default defineEntity({
       { key: "shortcode", specialized: "shortcode" },
       "name",
       { key: "aliases", defaultValue: "'{}'::text[]" },
-      { key: "parentId", reference: "spendingCategory" },
+      "parentId",
       {
         key: "itemizationExpectation",
         specialized: "enum:itemizationExpectation",
@@ -379,45 +371,7 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "emoji",
-      "name",
-      "aliases",
-      "parentId",
-      "itemizationExpectation",
-      "productExpectation",
-      "stockTracked",
-    ],
-    update: [
-      "emoji",
-      "name",
-      "aliases",
-      "parentId",
-      "itemizationExpectation",
-      "productExpectation",
-      "stockTracked",
-    ],
-    audit: [
-      "name",
-      "aliases",
-      "parentId",
-      "itemizationExpectation",
-      "productExpectation",
-      "stockTracked",
-    ],
-    output: [
-      "productCategories",
-      "emoji",
-      "id",
-      "name",
-      "aliases",
-      "parentId",
-      "itemizationExpectation",
-      "productExpectation",
-      "stockTracked",
-      "createdAt",
-      "updatedAt",
-    ],
+
     sort: { fields: ["name", "updatedAt"] },
     intents: {
       fields: {
@@ -441,20 +395,7 @@ export default defineEntity({
       update: ["full"],
     },
   },
-  fields: {
-    create: {
-      module: "@cubby/schemas/spending-category",
-      export: "spendingCategoryCreateInput",
-    },
-    update: {
-      module: "@cubby/schemas/spending-category",
-      export: "spendingCategoryUpdateData",
-    },
-    output: {
-      module: "@cubby/schemas/spending-category-raw-read",
-      export: "rawSpendingCategoryOut",
-    },
-  },
+
   storage: {
     checks: [
       { column: "itemizationExpectation" },
@@ -462,10 +403,6 @@ export default defineEntity({
     ],
   },
   filters: {
-    schema: {
-      module: "@cubby/schemas/spending-category",
-      export: "spendingCategoryFilterFields",
-    },
     audit: true,
     descriptors: [
       {
@@ -486,83 +423,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "parent",
-      label: "Parent category",
-      target: "spendingCategory",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "SpendingCategory.parentId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "SpendingCategory.parentId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "children",
-      label: "Subcategories",
-      target: "spendingCategory",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "SpendingCategory.parentId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "SpendingCategory.parentId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "purchases",
-      label: "Purchases",
-      target: "purchase",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Purchase.spendingCategoryId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Purchase.spendingCategoryId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "expenses",
-      label: "Expense overrides",
-      target: "expense",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Expense.spendingCategoryId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Expense.spendingCategoryId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "transactions",
-      label: "Transactions",
-      target: "financialTransaction",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "FinancialTransaction.spendingCategoryId",
-            direction: "incoming",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "FinancialTransaction.spendingCategoryId",
-            direction: "outgoing",
-          },
-        ],
-      },
-    },
-  ],
+
   search: false,
   capabilities: {
     images: { storage: false },
@@ -605,3 +466,34 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r.field("parentId").named("parent", "Parent category"),
+    r
+      .path("spendingCategory", "many", [
+        { edge: "SpendingCategory.parentId", direction: "incoming" },
+      ])
+      .named("children", "Subcategories"),
+    r
+      .path("purchase", "many", [
+        { edge: "Purchase.spendingCategoryId", direction: "incoming" },
+      ])
+      .named("purchases", "Purchases"),
+    r
+      .path("expense", "many", [
+        { edge: "Expense.spendingCategoryId", direction: "incoming" },
+      ])
+      .named("expenses", "Expense overrides"),
+    r
+      .path("financialTransaction", "many", [
+        {
+          edge: "FinancialTransaction.spendingCategoryId",
+          direction: "incoming",
+        },
+      ])
+      .named("transactions", "Transactions"),
+  ],
+  readSchemas,
+);

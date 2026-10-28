@@ -4,16 +4,10 @@ import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { plantShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
 import { gardenCropKey } from "./garden-practice";
-import { plantBaseFilterFields, plantOut } from "./generated/plant.gen";
-
-export {
-  plantCreateInput,
-  plantUpdateData,
+import {
+  plantFilterFields as plantBaseFilterFields,
   plantOut,
-  type PlantCreateInput,
-  type PlantUpdateData,
-  type PlantOut,
-} from "./generated/plant.gen";
+} from "@cubby/schemas/entities/plant";
 
 export const plantFilterFields = plantBaseFilterFields;
 export const plantFiltersSchema = z.object(plantFilterFields);

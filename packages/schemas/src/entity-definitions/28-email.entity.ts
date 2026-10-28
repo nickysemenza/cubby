@@ -1,3 +1,4 @@
+import { timestampField, readOnly } from "./field-policy";
 import { emailRelationshipResult } from "../email-relationship-facts";
 import { EMAIL_RELATIONSHIP_INPUTS } from "./email-relationship-inputs";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
@@ -20,7 +21,7 @@ import {
   mailboxClassificationStage,
   emailStatus,
 } from "../mailbox-research.js";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { labelField } from "./label-field";
 
 type OptionPresentation = { color: ColorToken; glyph?: EnumIcon };
@@ -55,11 +56,6 @@ const STATUS_PRESENTATION = {
   },
 } satisfies Record<z.infer<typeof emailStatus>, OptionPresentation>;
 
-const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
-  read,
-  create: null,
-  update: null,
-});
 // `linkState` and link order are relative to one scope record.
 const EMAIL_SCOPE_REASON =
   "Link state is relative to one Purchase, Vendor or Vendor account.";
@@ -135,7 +131,7 @@ const importOutcomeOptions = [
 }[];
 
 /** The promoted processing ledger owns identity and headers; retained content is optional. */
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "email",
   names: { singular: "Email", plural: "Emails" },
   route: { basePath: "emails" },
@@ -626,25 +622,15 @@ export default defineEntity({
         },
         validation: readOnly(emailImportOutcome.nullable()),
       },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: readOnly(z.date()),
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: readOnly(z.date()),
-      },
-      { key: "shortcode", kind: "text" },
-      { key: "deletedAt", kind: "timestamp", nullable: true },
+      timestampField("createdAt"),
+      timestampField("updatedAt"),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
       { key: "id", specialized: "primary-key:EmailId" },
       { key: "shortcode", specialized: "shortcode" },
-      { key: "ledgerPartyId", reference: "ledgerParty" },
+      "ledgerPartyId",
       { key: "provider", defaultValue: "gmail" },
       "mailboxId",
       "messageId",
@@ -659,46 +645,12 @@ export default defineEntity({
       { key: "classificationStage", specialized: "enum:classificationStage" },
       "classificationReason",
       { key: "status", specialized: "enum:status" },
-      { key: "runId", reference: "run" },
+      "runId",
       "createdAt",
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    output: [
-      "id",
-      "displayName",
-      "sender",
-      "subject",
-      "receivedAt",
-      "classification",
-      "relevanceLabel",
-      "classificationStage",
-      "classificationReason",
-      "reviewedClassification",
-      "reviewedClassificationReason",
-      "reviewConflict",
-      "status",
-      "mailboxId",
-      "ledgerPartyId",
-      "ledgerPartyName",
-      "provider",
-      "messageId",
-      "threadId",
-      "historyId",
-      "checksum",
-      "classificationVersion",
-      "runId",
-      "linked",
-      "linkState",
-      "purchaseLinks",
-      "ownedByViewer",
-      "importOutcome",
-      "createdAt",
-      "updatedAt",
-    ],
-    create: [],
-    update: [],
-    audit: [],
+
     stored: {
       relationshipFacts: {
         compute: "email.relationshipFacts",
@@ -753,7 +705,6 @@ export default defineEntity({
   fields: {
     create: null,
     update: null,
-    output: { module: "@cubby/schemas/email-raw-read", export: "rawEmailOut" },
   },
   storage: {
     // Transitional pointer: the content/events/attachments keep their UUIDs.
@@ -799,7 +750,11 @@ export default defineEntity({
           { sql: "({provider} || ':' || {mailboxId} || ':' || {messageId})" },
         ],
       },
-      { on: ["orderMailId"], unique: true, where: "{orderMailId} IS NOT NULL" },
+      {
+        on: ["orderMailId"],
+        unique: true,
+        where: "{orderMailId} IS NOT NULL",
+      },
       { on: ["ledgerPartyId", { column: "receivedAt", desc: true }] },
     ],
     checks: [
@@ -959,59 +914,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "reviewed-transactions",
-      label: "Reviewed transaction evidence",
-      target: "financialTransaction",
-      cardinality: "many",
-      provenance: { kind: "query", query: "reviewedEmailTransactions" },
-      inverse: {
-        steps: [
-          {
-            edge: "Relationship.reviewedEmailTransactions",
-            direction: "incoming",
-          },
-        ],
-      },
-    },
-    {
-      key: "reviewed-accounts",
-      label: "Account at review",
-      target: "financialAccount",
-      cardinality: "many",
-      provenance: { kind: "query", query: "reviewedEmailAccounts" },
-      inverse: {
-        steps: [
-          { edge: "Relationship.reviewedEmailAccounts", direction: "incoming" },
-        ],
-      },
-    },
-    {
-      key: "ledger-party",
-      label: "Owner",
-      target: "ledgerParty",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Email.ledgerPartyId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Email.ledgerPartyId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "run",
-      label: "Current import Run",
-      target: "run",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Email.runId", direction: "outgoing" }],
-      },
-      inverse: { steps: [{ edge: "Email.runId", direction: "incoming" }] },
-    },
-  ],
+
   search: false,
   capabilities: {
     auditable: false,
@@ -1131,7 +1034,10 @@ export default defineEntity({
         },
 
         { table: "OrderMail", match: { id: "orderMailId" } },
-        { table: "OrderMailAttachment", match: { orderMailId: "orderMailId" } },
+        {
+          table: "OrderMailAttachment",
+          match: { orderMailId: "orderMailId" },
+        },
         { table: "EmailCandidateObservation", match: { emailId: "id" } },
         { table: "EmailClassificationObservation", match: { emailId: "id" } },
         // A completed mail import names its originals in `input.sources`.
@@ -1206,3 +1112,18 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .query("reviewedEmailTransactions", "many")
+      .named("reviewed-transactions", "Reviewed transaction evidence"),
+    r
+      .query("reviewedEmailAccounts", "many")
+      .named("reviewed-accounts", "Account at review"),
+    r.field("ledgerPartyId").named("ledger-party", "Owner"),
+    r.field("runId").named("run", "Current import Run"),
+  ],
+  readSchemas,
+);

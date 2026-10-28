@@ -1,3 +1,4 @@
+import { jobOut } from "@cubby/schemas/entities/job";
 import type { RunShortcode } from "@cubby/schemas/identifiers";
 import {
   describeJobRollup,
@@ -8,7 +9,7 @@ import {
   type JobState,
   type JobWaitingOnReason,
 } from "@cubby/schemas/job";
-import { jobFilters, jobOut } from "@cubby/schemas/job-entity";
+import { jobFilters } from "@cubby/schemas/job-entity";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";

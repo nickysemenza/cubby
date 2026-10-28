@@ -19,7 +19,6 @@ import { NoneValue } from "~/ui/primitives/none-value";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 
 import {
-  entityKindMap,
   getSearchMatchText,
   SearchResultMedia,
 } from "../../entity/presentation/search-utils";
@@ -172,7 +171,7 @@ export function productFamilyChildren(
       destination: item,
       media: item,
       title: item.title,
-      detail: `${entities[entityKindMap[item.entityKind]].label} · ${item.id} · Linked to ${group.primary.title}`,
+      detail: `${entities[item.entityKind].label} · ${item.id} · Linked to ${group.primary.title}`,
       code: null,
       match: item,
     })),

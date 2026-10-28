@@ -1,3 +1,4 @@
+import { timestampField, aliasList } from "./field-policy";
 import { categoryMappingSchema } from "../spending-classification";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
@@ -9,10 +10,10 @@ import {
   productCategoryFeature,
   rawProductCategorySummary,
 } from "../product-category-fields.js";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { labelField } from "./label-field.js";
 
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "productCategory",
   names: { singular: "Product Category", plural: "Product Categories" },
   route: {
@@ -188,6 +189,7 @@ export default defineEntity({
       },
 
       {
+        audit: false,
         ...recordEmojiField,
         control: {
           ...recordEmojiField.control,
@@ -284,8 +286,8 @@ export default defineEntity({
         display: { list: false },
         validation: {
           read: z.array(z.string()),
-          create: z.array(z.string()).default([]),
-          update: z.array(z.string()).optional(),
+          create: aliasList.default([]),
+          update: aliasList.optional(),
         },
       },
       {
@@ -574,7 +576,11 @@ Rules:
           ruleId: "productCategory.parentName",
           description: "The current name of this category's immediate parent.",
         },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "effectiveFeature",
@@ -650,24 +656,10 @@ Rules:
           update: null,
         },
       },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: { read: z.date(), create: null, update: null },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: { read: z.date(), create: null, update: null },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt"),
+      timestampField("updatedAt"),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
       // Server-composed text for the structured detail field above (`display.detailLabelPath`).
       labelField("pathLabel", "Category ancestry"),
     ],
@@ -678,7 +670,7 @@ Rules:
         specialized: "enum:spendingCategoryMode",
         defaultValue: "inherit",
       },
-      { key: "spendingCategoryId", reference: "spendingCategory" },
+      "spendingCategoryId",
       {
         key: "id",
         specialized: "primary-key:ProductCategoryId",
@@ -690,7 +682,7 @@ Rules:
         defaultValue: "'{}'::text[]",
       },
       "description",
-      { key: "parentId", reference: "productCategory" },
+      "parentId",
       { key: "sortOrder", defaultValue: 0 },
       { key: "feature", specialized: "enum:feature" },
       "stockTracked",
@@ -698,41 +690,7 @@ Rules:
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "emoji",
-      "spendingCategoryMode",
-      "spendingCategoryId",
-      "name",
-      "aliases",
-      "description",
-      "parentId",
-      "sortOrder",
-      "feature",
-      "stockTracked",
-    ],
-    update: [
-      "emoji",
-      "spendingCategoryMode",
-      "spendingCategoryId",
-      "name",
-      "aliases",
-      "description",
-      "parentId",
-      "sortOrder",
-      "feature",
-      "stockTracked",
-    ],
-    audit: [
-      "spendingCategoryMode",
-      "spendingCategoryId",
-      "name",
-      "aliases",
-      "description",
-      "parentId",
-      "sortOrder",
-      "feature",
-      "stockTracked",
-    ],
+
     derived: {
       // No effective spending category, direct or inherited.
       needsClassification: { type: "boolean" },
@@ -763,45 +721,8 @@ Rules:
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
-    output: [
-      "spendingCategoryMapping",
-      "effectiveSpendingCategory",
-      "spendingCategoryName",
-      "spendingCategoryEmoji",
-      "emoji",
-      "spendingCategoryMode",
-      "spendingCategoryId",
-      "effectiveFeature",
-      "id",
-      "name",
-      "aliases",
-      "description",
-      "parentId",
-      "sortOrder",
-      "feature",
-      "stockTracked",
-      "parentName",
-      "path",
-      "pathLabel",
-      "productCount",
-      "createdAt",
-      "updatedAt",
-    ],
   },
-  fields: {
-    create: {
-      module: "@cubby/schemas/product-category",
-      export: "productCategoryCreateInput",
-    },
-    update: {
-      module: "@cubby/schemas/product-category",
-      export: "productCategoryUpdateData",
-    },
-    output: {
-      module: "@cubby/schemas/product-category-raw-read",
-      export: "rawProductCategoryOut",
-    },
-  },
+
   storage: {
     indexes: [
       {
@@ -830,10 +751,7 @@ Rules:
   },
   filters: {
     audit: true,
-    schema: {
-      module: "@cubby/schemas/product-category",
-      export: "productCategoryFilterFields",
-    },
+
     descriptors: [
       {
         columnId: "effectiveSpendingCategory",
@@ -865,64 +783,7 @@ Rules:
       },
     ],
   },
-  relations: [
-    {
-      key: "spendingCategory",
-      label: "Mapped spending category",
-      target: "spendingCategory",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "ProductCategory.spendingCategoryId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "ProductCategory.spendingCategoryId", direction: "incoming" },
-        ],
-      },
-    },
-    {
-      key: "parent",
-      label: "Parent category",
-      target: "productCategory",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "ProductCategory.parentId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "ProductCategory.parentId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "products",
-      label: "Products",
-      target: "product",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Product.categoryId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Product.categoryId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "children",
-      label: "Subcategories",
-      target: "productCategory",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "ProductCategory.parentId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "ProductCategory.parentId", direction: "outgoing" }],
-      },
-    },
-  ],
+
   search: false,
   capabilities: {
     images: {
@@ -1055,7 +916,11 @@ Rules:
           match: { id: "id" },
           columns: ["deletedAt"],
           path: [
-            { table: "ProductCategory", from: "spendingCategoryId", to: "id" },
+            {
+              table: "ProductCategory",
+              from: "spendingCategoryId",
+              to: "id",
+            },
           ],
         },
       ],
@@ -1102,3 +967,24 @@ Rules:
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .field("spendingCategoryId")
+      .named("spendingCategory", "Mapped spending category"),
+    r.field("parentId").named("parent", "Parent category"),
+    r
+      .path("product", "many", [
+        { edge: "Product.categoryId", direction: "incoming" },
+      ])
+      .named("products", "Products"),
+    r
+      .path("productCategory", "many", [
+        { edge: "ProductCategory.parentId", direction: "incoming" },
+      ])
+      .named("children", "Subcategories"),
+  ],
+  readSchemas,
+);

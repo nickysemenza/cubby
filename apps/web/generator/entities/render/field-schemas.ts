@@ -1,3 +1,4 @@
+import { entityContractName } from "../contracts.ts";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared/filter";
 import { generatedHeader } from "../../artifacts.ts";
 import { EntityDeclarationError, declarationModules } from "../declarations.ts";
@@ -308,7 +309,48 @@ export const renderFieldSchemaArtifacts = (
       );
     const prefix = `generated${entity.inspector.singular.replaceAll(" ", "")}`;
     const filterFields = renderDerivedFilterFields(entity, fieldModel.fields);
+    const name = entityContractName(entity.key);
+    const writes = [
+      ...(fieldModel.create.length
+        ? [
+            `export const ${name}CreateInput = z.object(${prefix}FieldSchemas.create);`,
+          ]
+        : []),
+      ...(fieldModel.update.length
+        ? [
+            `export const ${name}UpdateData = z.object(${prefix}FieldSchemas.update);`,
+          ]
+        : []),
+    ];
     return [
+      {
+        relativePath: `packages/schemas/src/generated/entity-contracts.${entity.key}.gen.ts`,
+        source:
+          generatedHeader +
+          `import definition from ${JSON.stringify(declaration.path)};\n` +
+          (writes.length
+            ? 'import { z } from "zod";\n'
+            : 'import type { z } from "zod";\n') +
+          `import { ${prefix}FilterFields${writes.length ? `, ${prefix}FieldSchemas` : ""} } from "./entity-field-schemas.${entity.key}.gen";\n` +
+          (entity.filterAudit
+            ? 'import { auditDateFilterFields } from "../base-entity";\n'
+            : "") +
+          'import { relatedFilterFieldsByEntity } from "./related-view-filters.gen";\n' +
+          writes.join("\n") +
+          "\n" +
+          [
+            ["RawOut", "output"],
+            ["RawListItemOut", "list"],
+            ["RawDetailOut", "detail"],
+          ]
+            .map(
+              ([suffix, surface]) =>
+                `export const ${name}${suffix} = definition.readSchemas.${surface};\n` +
+                `export type ${name[0]?.toUpperCase()}${name.slice(1)}${suffix} = z.output<typeof ${name}${suffix}>;`,
+            )
+            .join("\n") +
+          `\nexport const ${name}FilterFields = {${entity.filterAudit ? "...auditDateFilterFields," : ""}...relatedFilterFieldsByEntity[${JSON.stringify(entity.key)}],...${prefix}FilterFields};\n`,
+      },
       {
         relativePath: `packages/schemas/src/generated/entity-field-schemas.${entity.key}.gen.ts`,
         source:
@@ -324,9 +366,7 @@ export const renderFieldSchemaArtifacts = (
           // cannot shift another field's schema. The rosters were validated
           // complete above; the runtime lookup throws on a missing schema.
           `export const ${prefix}FieldSchemas = fieldSchemasOf(definition);\n` +
-          (filterFields.entries.length
-            ? `export const ${prefix}FilterFields = {${filterFields.entries.join(",")}} as const;\n`
-            : ""),
+          `export const ${prefix}FilterFields = {${filterFields.entries.join(",")}} as const;\n`,
       },
     ];
   });

@@ -6,7 +6,8 @@ import {
   fieldValueFixture,
 } from "~/entity/fields/field-envelope.fixtures";
 const mealOut = entityFieldEnvelopeSchemas.meal.list;
-import { type MealCreateInput, mealAddRecipeInput } from "@cubby/schemas/meal";
+import { type MealCreateInput } from "@cubby/schemas/entities/meal";
+import { mealAddRecipeInput } from "@cubby/schemas/meal";
 import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";

@@ -1,8 +1,9 @@
+import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { recipeReadSchemas } from "../recipe-fields";
 import { recipeChildren } from "../child-tables/recipe.js";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import {
   cookbookShortcode,
   imageShortcode,
@@ -23,7 +24,7 @@ import {
 } from "@cubby/schemas/recipe-shared";
 import { FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
-export default defineEntity(
+export const { definition, readSchemas } = defineEntityModel(
   {
     key: "recipe",
     names: { singular: "Recipe", plural: "Recipes" },
@@ -199,6 +200,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "meta",
           kind: "json",
           labelOverride: "Source URL",
@@ -217,6 +219,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "yield",
           kind: "json",
           nullable: true,
@@ -229,6 +232,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "servings",
           kind: "number",
           nullable: true,
@@ -268,6 +272,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "tags",
           kind: "text-array",
           collection: { key: "value" },
@@ -281,6 +286,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "notes",
           kind: "text",
           nullable: true,
@@ -297,6 +303,7 @@ export default defineEntity(
           },
         },
         {
+          output: false,
           key: "costTotal",
           kind: "number",
           nullable: true,
@@ -324,6 +331,7 @@ export default defineEntity(
           },
         },
         {
+          output: false,
           key: "caloriesTotal",
           kind: "number",
           nullable: true,
@@ -354,6 +362,7 @@ export default defineEntity(
           },
         },
         {
+          output: false,
           key: "meals",
           kind: "number",
           // A live MealRecipe count in the list response, not a stored column.
@@ -378,6 +387,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "sections",
           kind: "json",
           labelOverride: "Composition",
@@ -407,6 +417,8 @@ export default defineEntity(
           },
         },
         {
+          output: false,
+          audit: false,
           key: "pendingImageIds",
           kind: "identifier",
           reference: { entity: "image", multiple: true },
@@ -418,6 +430,8 @@ export default defineEntity(
           },
         },
         {
+          output: false,
+          audit: false,
           key: "removeImageIds",
           kind: "identifier",
           reference: { entity: "image", multiple: true },
@@ -429,6 +443,8 @@ export default defineEntity(
           },
         },
         {
+          output: false,
+          audit: false,
           key: "imageOrder",
           semanticRole: "attachment",
           kind: "text",
@@ -453,26 +469,8 @@ export default defineEntity(
             update: null,
           },
         },
-        {
-          key: "createdAt",
-          kind: "timestamp",
-          display: { list: false },
-          validation: {
-            read: rawRecipeTopLevelFields.createdAt,
-            create: null,
-            update: null,
-          },
-        },
-        {
-          key: "updatedAt",
-          kind: "timestamp",
-          display: { list: false },
-          validation: {
-            read: rawRecipeTopLevelFields.updatedAt,
-            create: null,
-            update: null,
-          },
-        },
+        timestampField("createdAt"),
+        timestampField("updatedAt"),
         {
           key: "source",
           // Object-valued (a discriminated union of book/website/other
@@ -636,13 +634,10 @@ export default defineEntity(
             update: null,
           },
         },
-        { key: "shortcode", kind: "text" },
+        { output: false, key: "shortcode", kind: "text" },
+        { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
         {
-          key: "deletedAt",
-          kind: "timestamp",
-          nullable: true,
-        },
-        {
+          output: false,
           display: {},
           key: "sourceType",
           kind: "enum",
@@ -650,6 +645,7 @@ export default defineEntity(
           readKeyOverride: "source",
         },
         {
+          output: false,
           display: {},
           // A Website recipe's page. A Notion recipe's page id is an
           // EntityExternalId; a cookbook recipe names its Cookbook.
@@ -659,6 +655,7 @@ export default defineEntity(
           readKeyOverride: "source",
         },
         {
+          output: false,
           display: {},
           // The book a Book recipe came from when no Cookbook row exists.
           key: "sourceLabel",
@@ -667,6 +664,8 @@ export default defineEntity(
           readKeyOverride: "source",
         },
         {
+          output: false,
+          audit: false,
           // Re-pointing a recipe at another cookbook (or none). Read through
           // `source`, so no read schema of its own.
           key: "cookbookId",
@@ -708,17 +707,20 @@ export default defineEntity(
           },
         },
         {
+          output: false,
           key: "totalsComputedAt",
           kind: "timestamp",
           nullable: true,
         },
         {
+          output: false,
           key: "activeMinutes",
           kind: "number",
           nullable: true,
           display: { list: false, readPath: "meta.times.activeMinutes" },
         },
         {
+          output: false,
           key: "totalMinutes",
           kind: "number",
           nullable: true,
@@ -747,9 +749,15 @@ export default defineEntity(
           },
         },
         // Server-composed text for the computed columns above (`display.labelPath`).
-        labelField("costTotalLabel", "Recipe cost total"),
-        labelField("caloriesTotalLabel", "Recipe calorie total"),
-        labelField("totalMinutesLabel", "Recipe time metadata"),
+        { ...labelField("costTotalLabel", "Recipe cost total"), output: false },
+        {
+          ...labelField("caloriesTotalLabel", "Recipe calorie total"),
+          output: false,
+        },
+        {
+          ...labelField("totalMinutesLabel", "Recipe time metadata"),
+          output: false,
+        },
         // The same, for the structured detail fields (`display.detailLabelPath`).
         labelField("compositionLabel", "Recipe sections"),
         labelField("totalsLabel", "Computed recipe totals"),
@@ -764,12 +772,23 @@ export default defineEntity(
         { key: "createdAt" },
         { key: "updatedAt", specialized: "updated-at" },
         "deletedAt",
-        { key: "sourceType", specialized: "enum:sourceType" },
+        {
+          key: "sourceType",
+          specialized: "enum:sourceType",
+          enum: { values: [...recipeSourceValues] },
+        },
         "sourceUrl",
         "sourceLabel",
-        { key: "cookbookId", reference: "cookbook" },
-        { key: "forkedFromRecipeId", reference: "recipe" },
-        { key: "yield", specialized: "json:yield" },
+        "cookbookId",
+        "forkedFromRecipeId",
+        {
+          key: "yield",
+          specialized: "json:yield",
+          type: {
+            module: "@cubby/schemas/recipe-shared",
+            export: "RecipeYield",
+          },
+        },
         "servings",
         {
           key: "tags",
@@ -778,38 +797,27 @@ export default defineEntity(
           specialized: "text-array",
         },
         "notes",
-        { key: "totals", specialized: "json:totals" },
+        {
+          key: "totals",
+          specialized: "json:totals",
+          type: {
+            module: "@cubby/schemas/recipe-shared",
+            export: "StoredRecipeTotals",
+          },
+        },
         "totalsComputedAt",
         "activeMinutes",
         "totalMinutes",
-        { key: "meta", specialized: "json:meta" },
+        {
+          key: "meta",
+          specialized: "json:meta",
+          type: {
+            module: "@cubby/schemas/recipe-shared",
+            export: "RecipeStoredMeta",
+          },
+        },
       ],
-      create: [
-        "name",
-        "meta",
-        "yield",
-        "servings",
-        "tags",
-        "notes",
-        "sections",
-        "pendingImageIds",
-        "forkedFromRecipeId",
-      ],
-      update: [
-        "name",
-        "meta",
-        "yield",
-        "servings",
-        "tags",
-        "notes",
-        "sections",
-        "pendingImageIds",
-        "removeImageIds",
-        "imageOrder",
-        "forkedFromRecipeId",
-        "cookbookId",
-      ],
-      audit: ["name", "forkedFromRecipeId"],
+
       // Stored derived values that are not list fields (ADR 0021).
       stored: {
         totals: {
@@ -985,30 +993,6 @@ export default defineEntity(
         create: ["capture", "full"],
         update: ["full", "identity"],
       },
-      output: [
-        "id",
-        "name",
-        "createdAt",
-        "updatedAt",
-        "meta",
-        "source",
-        "yield",
-        "servings",
-        "tags",
-        "notes",
-        "sections",
-        "compositionLabel",
-        "totals",
-        "totalsLabel",
-        "cost",
-        "calories",
-        "protein",
-        "carbs",
-        "fat",
-        "images",
-        "forkedFromRecipeId",
-        "forkedFromRecipeName",
-      ],
     },
     fields: {
       embedded: [
@@ -1023,16 +1007,12 @@ export default defineEntity(
           projections: ["output", "detail", "mcpOutput", "mcpDetail"],
         },
       ],
-      create: { module: "@cubby/schemas/recipe", export: "recipeCreateInput" },
-      update: { module: "@cubby/schemas/recipe", export: "recipeUpdateData" },
+
       output: {
         module: "@cubby/schemas/recipe-raw-read",
         export: "rawRecipeOutput",
       },
-      list: {
-        module: "@cubby/schemas/recipe-raw-read",
-        export: "rawRecipeList",
-      },
+
       mcpOutput: {
         module: "@cubby/schemas/recipe-raw-read",
         export: "rawRecipeMcpOutput",
@@ -1287,169 +1267,7 @@ export default defineEntity(
         },
       ],
     },
-    relations: [
-      {
-        key: "cookbook",
-        label: "Cookbook",
-        target: "cookbook",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Recipe.cookbookId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "Recipe.cookbookId", direction: "incoming" }],
-        },
-      },
-      {
-        key: "forkedFrom",
-        label: "Forked from",
-        target: "recipe",
-        cardinality: "one",
-        inverseOmit:
-          "The recipe page is custom; a recipe's forks are reached from each fork's Forked from field.",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Recipe.forkedFromRecipeId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "Recipe.forkedFromRecipeId", direction: "incoming" }],
-        },
-      },
-      {
-        key: "images",
-        label: "Images",
-        target: "image",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "EntityAttachment.entityId", direction: "incoming" },
-            { edge: "EntityAttachment.imageId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "EntityAttachment.imageId", direction: "incoming" },
-            { edge: "EntityAttachment.entityId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "ingredients",
-        label: "Ingredients",
-        target: "ingredient",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "RecipeSection.recipeId", direction: "incoming" },
-            {
-              edge: "RecipeSectionIngredient.recipeSectionId",
-              direction: "incoming",
-            },
-            {
-              edge: "RecipeSectionIngredient.ingredientId",
-              direction: "outgoing",
-            },
-          ],
-        },
-        inverse: {
-          steps: [
-            {
-              edge: "RecipeSectionIngredient.ingredientId",
-              direction: "incoming",
-            },
-            {
-              edge: "RecipeSectionIngredient.recipeSectionId",
-              direction: "outgoing",
-            },
-            { edge: "RecipeSection.recipeId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "sub-recipes",
-        label: "Sub-recipes",
-        target: "recipe",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "RecipeSection.recipeId", direction: "incoming" },
-            {
-              edge: "RecipeSectionIngredient.recipeSectionId",
-              direction: "incoming",
-            },
-            {
-              edge: "RecipeSectionIngredient.ingredientId",
-              direction: "outgoing",
-            },
-            { edge: "Ingredient.recipeId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "Ingredient.recipeId", direction: "incoming" },
-            {
-              edge: "RecipeSectionIngredient.ingredientId",
-              direction: "incoming",
-            },
-            {
-              edge: "RecipeSectionIngredient.recipeSectionId",
-              direction: "outgoing",
-            },
-            { edge: "RecipeSection.recipeId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "meals",
-        label: "Meals",
-        target: "meal",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "MealRecipe.recipeId", direction: "incoming" },
-            { edge: "MealRecipe.mealId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "MealRecipe.mealId", direction: "incoming" },
-            { edge: "MealRecipe.recipeId", direction: "outgoing" },
-          ],
-        },
-        sources: [
-          {
-            key: "served-portions",
-            label: "Served portions",
-            provenance: {
-              kind: "local-path",
-              steps: [
-                { edge: "MealRecipe.recipeId", direction: "incoming" },
-                {
-                  edge: "MealRecipePortion.mealRecipeId",
-                  direction: "incoming",
-                },
-                { edge: "MealRecipePortion.mealId", direction: "outgoing" },
-              ],
-            },
-            inverse: {
-              steps: [
-                { edge: "MealRecipePortion.mealId", direction: "incoming" },
-                {
-                  edge: "MealRecipePortion.mealRecipeId",
-                  direction: "outgoing",
-                },
-                { edge: "MealRecipe.recipeId", direction: "outgoing" },
-              ],
-            },
-          },
-        ],
-      },
-    ],
+
     search: {
       mode: "semantic",
       inputs: [
@@ -1644,4 +1462,73 @@ export default defineEntity(
     },
   },
   recipeReadSchemas,
+);
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r.field("cookbookId").named("cookbook", "Cookbook"),
+    r.field("forkedFromRecipeId").named("forkedFrom", "Forked from", {
+      inverseOmit:
+        "The recipe page is custom; a recipe's forks are reached from each fork's Forked from field.",
+    }),
+    r
+      .path("image", "many", [
+        { edge: "EntityAttachment.entityId", direction: "incoming" },
+        { edge: "EntityAttachment.imageId", direction: "outgoing" },
+      ])
+      .named("images", "Images"),
+    r
+      .path("ingredient", "many", [
+        { edge: "RecipeSection.recipeId", direction: "incoming" },
+        {
+          edge: "RecipeSectionIngredient.recipeSectionId",
+          direction: "incoming",
+        },
+        {
+          edge: "RecipeSectionIngredient.ingredientId",
+          direction: "outgoing",
+        },
+      ])
+      .named("ingredients", "Ingredients", { view: { columnGroup: "Recipe" } }),
+    r
+      .path("recipe", "many", [
+        { edge: "RecipeSection.recipeId", direction: "incoming" },
+        {
+          edge: "RecipeSectionIngredient.recipeSectionId",
+          direction: "incoming",
+        },
+        {
+          edge: "RecipeSectionIngredient.ingredientId",
+          direction: "outgoing",
+        },
+        { edge: "Ingredient.recipeId", direction: "outgoing" },
+      ])
+      .named("sub-recipes", "Sub-recipes"),
+    r
+      .path("meal", "many", [
+        { edge: "MealRecipe.recipeId", direction: "incoming" },
+        { edge: "MealRecipe.mealId", direction: "outgoing" },
+      ])
+      .named("meals", "Meals", {
+        view: {
+          columnGroup: "Source & use",
+          order: "newest",
+          inverseKey: "meal.recipes",
+        },
+        sources: [
+          r
+            .path("meal", "many", [
+              { edge: "MealRecipe.recipeId", direction: "incoming" },
+              {
+                edge: "MealRecipePortion.mealRecipeId",
+                direction: "incoming",
+              },
+              { edge: "MealRecipePortion.mealId", direction: "outgoing" },
+            ])
+            .source("served-portions", "Served portions"),
+        ],
+      }),
+  ],
+  readSchemas,
 );

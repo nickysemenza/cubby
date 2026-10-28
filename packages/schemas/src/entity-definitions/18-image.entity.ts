@@ -1,4 +1,5 @@
 import { historicalDateRangePresets } from "../date-range";
+import { timestampField } from "./field-policy";
 import { imageReadSchemas } from "../image-processing";
 import { imageChildren } from "../child-tables/image.js";
 import {
@@ -10,7 +11,7 @@ import {
 } from "../image-capture-fields.js";
 import { imageSightingOut } from "../image-sighting-fields.js";
 import { optionalImageRepresentations } from "../image-summary.js";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { labelField } from "./label-field.js";
 import { imageShortcode, ledgerPartyShortcode } from "../identifier-fields.js";
 import { z } from "zod";
@@ -36,7 +37,7 @@ export const imageSourceValues = [
   "unknown",
   "screenshot",
 ] as const;
-export default defineEntity(
+export const { definition, readSchemas } = defineEntityModel(
   {
     key: "image",
     names: { singular: "Image", plural: "Images" },
@@ -159,6 +160,7 @@ export default defineEntity(
     model: {
       fields: [
         {
+          audit: false,
           key: "filename",
           kind: "text",
           control: { kind: "text" },
@@ -326,12 +328,9 @@ export default defineEntity(
             update: null,
           },
         },
+        { output: false, key: "perceptualHash", kind: "text", nullable: true },
         {
-          key: "perceptualHash",
-          kind: "text",
-          nullable: true,
-        },
-        {
+          output: false,
           key: "sourceFingerprint",
           kind: "json",
           nullable: true,
@@ -416,6 +415,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "source",
           kind: "enum",
           control: {
@@ -457,6 +457,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "sourcePageUrl",
           control: { kind: "text" },
           kind: "text",
@@ -469,6 +470,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "sourceAssetUrl",
           control: { kind: "text" },
           kind: "text",
@@ -481,6 +483,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "sourceName",
           control: { kind: "text" },
           kind: "text",
@@ -493,6 +496,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "useOriginal",
           control: { kind: "checkbox" },
           kind: "boolean",
@@ -515,6 +519,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "capturedAt",
           control: { kind: "text", placeholder: "ISO date and time" },
           kind: "timestamp",
@@ -576,6 +581,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "capturedByPartyId",
           kind: "identifier",
           nullable: true,
@@ -679,48 +685,30 @@ export default defineEntity(
           },
         },
         {
+          output: false,
           key: "metadataRevision",
           kind: "number",
           nullable: true,
         },
         {
+          output: false,
           key: "embeddedMetadata",
           kind: "json",
           nullable: true,
         },
         {
+          output: false,
           // Terminal EXIF/GPS outcome: a row that can never extract leaves the
           // `metadataRevision` backlog with its raw error instead of pinning it.
           key: "metadataOutcome",
           kind: "enum",
           nullable: true,
         },
+        { output: false, key: "metadataError", kind: "text", nullable: true },
+        timestampField("createdAt"),
+        timestampField("updatedAt"),
         {
-          key: "metadataError",
-          kind: "text",
-          nullable: true,
-        },
-        {
-          key: "createdAt",
-          kind: "timestamp",
-          display: { list: false },
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        {
-          key: "updatedAt",
-          kind: "timestamp",
-          display: { list: false },
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        {
+          output: false,
           key: "images",
           kind: "json",
           labelOverride: "Image",
@@ -740,12 +728,8 @@ export default defineEntity(
             update: null,
           },
         },
-        { key: "shortcode", kind: "text" },
-        {
-          key: "deletedAt",
-          kind: "timestamp",
-          nullable: true,
-        },
+        { output: false, key: "shortcode", kind: "text" },
+        { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
         // Server-composed text for the evidence above (`display.detailLabelPath`).
         labelField("provenanceEvidenceLabel", "Image provenance evidence"),
       ],
@@ -767,7 +751,13 @@ export default defineEntity(
         "width",
         "height",
         "perceptualHash",
-        "sourceFingerprint",
+        {
+          key: "sourceFingerprint",
+          type: {
+            module: "@cubby/schemas/image",
+            export: "ImageSourceFingerprint",
+          },
+        },
         "detectedContentType",
         "sha256",
         { key: "renderStatus", specialized: "enum:ImageRenderStatus" },
@@ -784,10 +774,17 @@ export default defineEntity(
         "verifiedAt",
         "capturedAt",
         "capturedAtOffsetMinutes",
-        { key: "captureLocation", specialized: "json:captureLocation" },
+        {
+          key: "captureLocation",
+          specialized: "json:captureLocation",
+          type: {
+            module: "@cubby/schemas/image-capture-fields",
+            export: "ImageCaptureLocation",
+          },
+        },
         "capturePlaceName",
         "captureDeviceLabel",
-        { key: "capturedByPartyId", reference: "ledgerParty" },
+        "capturedByPartyId",
         {
           key: "captureAttribution",
           specialized: "enum:captureAttribution",
@@ -796,28 +793,32 @@ export default defineEntity(
         {
           key: "provenanceEvidence",
           specialized: "json:provenanceEvidence",
+          type: {
+            module: "@cubby/schemas/image-capture-fields",
+            export: "ImageProvenanceEvidence",
+          },
         },
         { key: "sourceEvidence", specialized: "json:sourceEvidence" },
         "metadataRevision",
-        { key: "embeddedMetadata", specialized: "json:embeddedMetadata" },
-        { key: "metadataOutcome", specialized: "enum:ImageMetadataOutcome" },
+        {
+          key: "embeddedMetadata",
+          specialized: "json:embeddedMetadata",
+          type: {
+            module: "@cubby/schemas/image",
+            export: "StoredImageEmbeddedMetadata",
+          },
+        },
+        {
+          key: "metadataOutcome",
+          specialized: "enum:ImageMetadataOutcome",
+          enum: { values: ["original_missing", "extraction_failed"] },
+        },
         "metadataError",
         { key: "createdAt" },
         { key: "updatedAt", specialized: "updated-at" },
         "deletedAt",
       ],
-      create: [],
-      update: [
-        "filename",
-        "source",
-        "sourcePageUrl",
-        "sourceAssetUrl",
-        "sourceName",
-        "useOriginal",
-        "capturedByPartyId",
-        "capturedAt",
-      ],
-      audit: [],
+
       rows: {
         importTargets: {
           label: "Import targets",
@@ -836,58 +837,10 @@ export default defineEntity(
       sort: {
         fields: ["createdAt", "updatedAt", "filename", "size", "status"],
       },
-      output: [
-        "representations",
-        "id",
-        "url",
-        "key",
-        "filename",
-        "size",
-        "contentType",
-        "status",
-        "width",
-        "height",
-        "detectedContentType",
-        "sha256",
-        "renderStatus",
-        "storageStatus",
-        "source",
-        "sourcePageUrl",
-        "sourceAssetUrl",
-        "sourceName",
-        "useOriginal",
-        "verifiedAt",
-        "capturedAt",
-        "capturedAtOffsetMinutes",
-        "captureLocation",
-        "capturePlaceName",
-        "captureDeviceLabel",
-        "capturedByPartyId",
-        "capturedByName",
-        "captureAttribution",
-        "provenanceEvidence",
-        "sourceEvidence",
-        "provenanceEvidenceLabel",
-        "sightings",
-        "createdAt",
-        "updatedAt",
-      ],
     },
     fields: {
       create: null,
       update: { module: "@cubby/schemas/image", export: "imageUpdateInput" },
-      output: {
-        module: "@cubby/schemas/image-raw-read",
-        export: "rawImageOutput",
-      },
-      list: {
-        module: "@cubby/schemas/image-raw-read",
-        export: "rawImageList",
-      },
-      detail: {
-        module: "@cubby/schemas/image-raw-read",
-        export: "rawImageDetail",
-      },
     },
     storage: {
       indexes: [
@@ -1075,59 +1028,7 @@ export default defineEntity(
         },
       ],
     },
-    relations: [
-      {
-        key: "sighting-devices",
-        label: "Sighting devices",
-        target: "device",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "ImageSighting.imageId", direction: "incoming" },
-            { edge: "ImageSighting.deviceId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "ImageSighting.deviceId", direction: "incoming" },
-            { edge: "ImageSighting.imageId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "sighting-members",
-        label: "Observed by",
-        target: "ledgerParty",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "ImageSighting.imageId", direction: "incoming" },
-            { edge: "ImageSighting.ledgerPartyId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "ImageSighting.ledgerPartyId", direction: "incoming" },
-            { edge: "ImageSighting.imageId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "captured-by",
-        label: "Captured by",
-        target: "ledgerParty",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Image.capturedByPartyId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "Image.capturedByPartyId", direction: "incoming" }],
-        },
-      },
-    ],
+
     // Image filenames and the current preferred description/correction are
     // searchable. The shared search document loader adds only direct owners.
     search: {
@@ -1241,4 +1142,24 @@ export default defineEntity(
     },
   },
   imageReadSchemas,
+);
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .path("device", "many", [
+        { edge: "ImageSighting.imageId", direction: "incoming" },
+        { edge: "ImageSighting.deviceId", direction: "outgoing" },
+      ])
+      .named("sighting-devices", "Sighting devices"),
+    r
+      .path("ledgerParty", "many", [
+        { edge: "ImageSighting.imageId", direction: "incoming" },
+        { edge: "ImageSighting.ledgerPartyId", direction: "outgoing" },
+      ])
+      .named("sighting-members", "Observed by"),
+    r.field("capturedByPartyId").named("captured-by", "Captured by"),
+  ],
+  readSchemas,
 );

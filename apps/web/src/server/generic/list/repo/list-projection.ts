@@ -320,7 +320,9 @@ export function listReadPlan<Row>(
   const storage = model?.storage ?? [];
   const privateKeys = new Set<string>(
     storage
-      .filter((field) => field.reference !== null)
+      .filter(
+        (field) => field.reference !== null && field.kind === "identifier",
+      )
       .flatMap((field) => [field.key, field.column]),
   );
   const inferred: NonNullable<ListReadOptions<Row>["references"]> = {};

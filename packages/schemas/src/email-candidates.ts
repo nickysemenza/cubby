@@ -1,3 +1,4 @@
+import { entityIdSchema } from "./identifier-fields";
 import { z } from "zod";
 import { confidence } from "./ai.js";
 import { importExtractionOutcome } from "./purchase-import.js";
@@ -68,7 +69,7 @@ const metadata = {
   candidates: z.array(emailEvidenceCandidate).max(8),
   model: z.string().nullable(),
   promptVersion: z.string().nullable(),
-  runId: z.uuid().nullable(),
+  runId: entityIdSchema("run").nullable(),
   usageId: z.uuid().nullable(),
   operation: z.literal("mailbox-order-candidate"),
 };

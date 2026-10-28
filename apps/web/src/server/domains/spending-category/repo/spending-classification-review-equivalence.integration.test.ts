@@ -125,7 +125,9 @@ async function seedTaxonomy(db: Database, { next, pick }: Random) {
   const categories: (ReturnType<typeof identity<"productCategory">> & {
     name: string;
     parentId: ProductCategoryId | null;
-    spendingCategoryMode: string;
+    spendingCategoryMode: NonNullable<
+      (typeof productCategory.$inferInsert)["spendingCategoryMode"]
+    >;
     spendingCategoryId: SpendingCategoryId | null;
   })[] = [];
   const addCategory = (parentId: ProductCategoryId | null, name: string) => {
@@ -137,7 +139,7 @@ async function seedTaxonomy(db: Database, { next, pick }: Random) {
       parentId,
       spendingCategoryMode: mode,
       spendingCategoryId: mode === "mapped" ? pick(spend).id : null,
-    };
+    } satisfies typeof productCategory.$inferInsert;
     categories.push(row);
     return row;
   };
@@ -215,20 +217,26 @@ async function seedEdgeBaskets(
     "negative",
     "adjustmentOnly",
   ] as const;
-  const baskets = Array.from({ length: basketKinds.length }, (_, index) => ({
-    ...identity("purchase", firstPurchase + index),
-    kind: at(basketKinds, index),
-    vendorId: at(vendors, 0).id,
-    date: "2026-01-01",
-    spendingCategoryId:
-      at(basketKinds, index) === "adjustmentOnly"
-        ? merged
-        : index % 3 === 0
-          ? pick(spend).id
-          : null,
-    spendingCategoryOrigin: index % 3 === 0 ? "manual" : "legacy",
-    defaultProjectId: project(index),
-  }));
+  const baskets = Array.from(
+    { length: basketKinds.length },
+    (_, index) =>
+      ({
+        ...identity("purchase", firstPurchase + index),
+        kind: at(basketKinds, index),
+        vendorId: at(vendors, 0).id,
+        date: "2026-01-01",
+        spendingCategoryId:
+          at(basketKinds, index) === "adjustmentOnly"
+            ? merged
+            : index % 3 === 0
+              ? pick(spend).id
+              : null,
+        spendingCategoryOrigin: index % 3 === 0 ? "manual" : "legacy",
+        defaultProjectId: project(index),
+      }) satisfies typeof purchase.$inferInsert & {
+        kind: (typeof basketKinds)[number];
+      },
+  );
   await insertRows(
     db,
     purchase,
@@ -292,13 +300,17 @@ async function seedReviewGraph(db: Database) {
     defaultSpendingCategoryId: index === 1 ? at(spend, 8).id : null,
   }));
   await insertRows(db, vendor, "vendor", vendors);
-  const purchases = Array.from({ length: 4 }, (_, index) => ({
-    ...identity("purchase", index),
-    vendorId: at(vendors, index % vendors.length).id,
-    date: "2026-01-01",
-    spendingCategoryId: index === 0 ? at(spend, 2).id : null,
-    spendingCategoryOrigin: index === 0 ? "manual" : "legacy",
-  }));
+  const purchases = Array.from(
+    { length: 4 },
+    (_, index) =>
+      ({
+        ...identity("purchase", index),
+        vendorId: at(vendors, index % vendors.length).id,
+        date: "2026-01-01",
+        spendingCategoryId: index === 0 ? at(spend, 2).id : null,
+        spendingCategoryOrigin: index === 0 ? "manual" : "legacy",
+      }) satisfies typeof purchase.$inferInsert,
+  );
   await insertRows(db, purchase, "purchase", purchases);
   const mergedCategory = at(spend, 3).id;
   const inheritedVendor = {
@@ -306,7 +318,7 @@ async function seedReviewGraph(db: Database) {
     name: "Synthetic merge default vendor",
     spendingProfile: "food_retail",
     defaultSpendingCategoryId: mergedCategory,
-  };
+  } satisfies typeof vendor.$inferInsert;
   await insertRows(db, vendor, "vendor", [inheritedVendor]);
   const mappedCategory = {
     ...identity("productCategory", taxonomy.categories.length),
@@ -314,7 +326,7 @@ async function seedReviewGraph(db: Database) {
     parentId: null,
     spendingCategoryMode: "mapped",
     spendingCategoryId: mergedCategory,
-  };
+  } satisfies typeof productCategory.$inferInsert;
   await insertRows(db, productCategory, "productCategory", [mappedCategory]);
   const mappedProduct = {
     ...identity("product", products.length),
@@ -325,13 +337,17 @@ async function seedReviewGraph(db: Database) {
   await insertRows(db, productTable, "product", [mappedProduct]);
   // Separate Purchases prevent another matching Expense override from
   // masking a missing Vendor, Purchase or mapped-category scope predicate.
-  const mergePaths = Array.from({ length: 3 }, (_, index) => ({
-    ...identity("purchase", purchases.length + index),
-    vendorId: index === 0 ? inheritedVendor.id : at(vendors, 0).id,
-    date: "2026-01-01",
-    spendingCategoryId: index === 1 ? mergedCategory : null,
-    spendingCategoryOrigin: index === 1 ? "manual" : "legacy",
-  }));
+  const mergePaths = Array.from(
+    { length: 3 },
+    (_, index) =>
+      ({
+        ...identity("purchase", purchases.length + index),
+        vendorId: index === 0 ? inheritedVendor.id : at(vendors, 0).id,
+        date: "2026-01-01",
+        spendingCategoryId: index === 1 ? mergedCategory : null,
+        spendingCategoryOrigin: index === 1 ? "manual" : "legacy",
+      }) satisfies typeof purchase.$inferInsert,
+  );
   await insertRows(db, purchase, "purchase", mergePaths);
   const expenses: (ReturnType<typeof identity<"expense">> &
     Line &

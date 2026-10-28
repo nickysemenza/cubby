@@ -1,4 +1,8 @@
-import type { ProductId, RecipeId } from "@cubby/schemas/identifiers";
+import type {
+  ProductId,
+  RecipeId,
+  ImageShortcode,
+} from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 
 import type { UpcLookupPort } from "~/server/clients/upc";
@@ -38,7 +42,7 @@ export const importImageFromUPC = async (
   upcLookupClient: Pick<UpcLookupPort, "lookup">,
   upc: string,
   productId: ProductId,
-): Promise<{ imageId: string } | null> => {
+): Promise<{ imageId: ImageShortcode } | null> => {
   const upcData = await upcLookupClient.lookup(upc);
   if (!upcData?.imageUrl) return null;
 
@@ -71,7 +75,7 @@ export const importRecipeImageFromUrl = async (
   recipeId: RecipeId,
   sourceUrl: string,
   port: RecipeImageImportPort = productionRecipeImageImportPort,
-): Promise<{ imageId: string } | null> => {
+): Promise<{ imageId: ImageShortcode } | null> => {
   try {
     if (await port.hasImages(db, recipeId)) {
       return null;

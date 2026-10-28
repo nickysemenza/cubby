@@ -1,7 +1,8 @@
+import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { imageAssociationStorage } from "./image-associations";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { MAX_PROJECT_TREE_DEPTH } from "../project-fields.js";
 import { selectControlOptions } from "./select-control-options.js";
 import {
@@ -25,7 +26,7 @@ const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 /** A parent's subtasks; subtasks have none of their own. */
 const SUBTASKS = { table: "Task", from: "parentTaskId", to: "id" } as const;
 
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "task",
   names: { singular: "Task", plural: "Tasks" },
   route: {
@@ -147,7 +148,12 @@ export default defineEntity({
             "trade",
           ],
         },
-        { kind: "fields", id: "schedule", title: "Schedule", fields: ["due"] },
+        {
+          kind: "fields",
+          id: "schedule",
+          title: "Schedule",
+          fields: ["due"],
+        },
         {
           kind: "fields",
           id: "dependencies",
@@ -340,6 +346,7 @@ export default defineEntity({
         },
       },
       {
+        output: false,
         key: "assigneeMode",
         kind: "enum",
         validation: {
@@ -364,7 +371,11 @@ export default defineEntity({
         display: { detail: false, list: false },
         key: "assigneeName",
         kind: "text",
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "projectId",
@@ -425,6 +436,7 @@ export default defineEntity({
         },
       },
       {
+        output: false,
         key: "projectMode",
         kind: "enum",
         validation: {
@@ -507,6 +519,7 @@ export default defineEntity({
         },
       },
       {
+        output: false,
         key: "subjectProductMode",
         kind: "enum",
         validation: {
@@ -562,8 +575,8 @@ export default defineEntity({
           update: dateRangeSchema.nullable().optional(),
         },
       },
-      { key: "dueDate", kind: "date", nullable: true },
-      { key: "dueEndDate", kind: "date", nullable: true },
+      { output: false, key: "dueDate", kind: "date", nullable: true },
+      { output: false, key: "dueEndDate", kind: "date", nullable: true },
       {
         key: "trade",
         kind: "enum",
@@ -624,6 +637,7 @@ export default defineEntity({
         },
       },
       {
+        audit: false,
         key: "sortOrder",
         kind: "number",
         nullable: true,
@@ -636,6 +650,7 @@ export default defineEntity({
         },
       },
       {
+        audit: false,
         key: "blockedByIds",
         kind: "identifier",
         reference: { entity: "task", multiple: true },
@@ -648,6 +663,8 @@ export default defineEntity({
         },
       },
       {
+        output: false,
+        audit: false,
         key: "pendingImageIds",
         kind: "identifier",
         reference: { entity: "image", multiple: true },
@@ -658,6 +675,8 @@ export default defineEntity({
         },
       },
       {
+        output: false,
+        audit: false,
         key: "removeImageIds",
         kind: "identifier",
         reference: { entity: "image", multiple: true },
@@ -668,6 +687,8 @@ export default defineEntity({
         },
       },
       {
+        output: false,
+        audit: false,
         key: "imageOrder",
         semanticRole: "attachment",
         kind: "text",
@@ -774,32 +795,10 @@ export default defineEntity({
           update: null,
         },
       },
-      {
-        display: { detail: false, list: false },
-        key: "createdAt",
-        kind: "timestamp",
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        display: { detail: false, list: false },
-        key: "updatedAt",
-        kind: "timestamp",
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt", { detail: false, list: false }),
+      timestampField("updatedAt", { detail: false, list: false }),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
       {
@@ -813,25 +812,25 @@ export default defineEntity({
         defaultValue: "'not_started'",
         specialized: "enum:status",
       },
-      { key: "projectId", reference: "project" },
+      "projectId",
       {
         key: "projectMode",
         defaultValue: "'inherit'",
         specialized: "enum:inheritance-mode",
       },
-      { key: "assigneeId", reference: "ledgerParty" },
+      "assigneeId",
       {
         key: "assigneeMode",
         defaultValue: "'inherit'",
         specialized: "enum:inheritance-mode",
       },
-      { key: "subjectProductId", reference: "product" },
+      "subjectProductId",
       {
         key: "subjectProductMode",
         defaultValue: "'inherit'",
         specialized: "enum:inheritance-mode",
       },
-      { key: "parentTaskId", reference: "task" },
+      "parentTaskId",
       "dueDate",
       "dueEndDate",
       { key: "trade", specialized: "enum:trade" },
@@ -840,52 +839,7 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "name",
-      "status",
-      "projectId",
-      "projectMode",
-      "subjectProductId",
-      "subjectProductMode",
-      "assigneeId",
-      "assigneeMode",
-      "parentTaskId",
-      "due",
-      "trade",
-      "sortOrder",
-      "pendingImageIds",
-    ],
-    update: [
-      "name",
-      "status",
-      "projectId",
-      "projectMode",
-      "subjectProductId",
-      "subjectProductMode",
-      "assigneeId",
-      "assigneeMode",
-      "parentTaskId",
-      "due",
-      "trade",
-      "sortOrder",
-      "blockedByIds",
-      "pendingImageIds",
-      "removeImageIds",
-      "imageOrder",
-    ],
-    audit: [
-      "name",
-      "status",
-      "projectId",
-      "projectMode",
-      "subjectProductId",
-      "subjectProductMode",
-      "assigneeId",
-      "assigneeMode",
-      "parentTaskId",
-      "due",
-      "trade",
-    ],
+
     derived: {
       // Effective references, inherited from a parent task, by name.
       projectId: { via: "project" },
@@ -959,29 +913,6 @@ export default defineEntity({
       // required there even though a task may be unscheduled.
       required: { schedule: ["due"] },
     },
-    output: [
-      "assigneeId",
-      "assigneeName",
-      "id",
-      "name",
-      "status",
-      "projectId",
-      "subjectProductId",
-      "parentTaskId",
-      "due",
-      "trade",
-      "sortOrder",
-      "projectName",
-      "subjectProductName",
-      "parentTaskName",
-      "blockedByIds",
-      "blockingIds",
-      "subtaskCount",
-      "doneSubtaskCount",
-      "images",
-      "createdAt",
-      "updatedAt",
-    ],
   },
   fields: {
     embedded: [
@@ -998,20 +929,21 @@ export default defineEntity({
         ],
       },
     ],
-    create: { module: "@cubby/schemas/project", export: "taskCreateInput" },
-    update: { module: "@cubby/schemas/project", export: "taskUpdateData" },
-    output: { module: "@cubby/schemas/work-raw-read", export: "rawTaskOut" },
+
     list: {
       module: "@cubby/schemas/work-raw-read",
       export: "rawTaskListItemOut",
     },
     detail: { module: "@cubby/schemas/work-raw-read", export: "rawTaskOut" },
-    mcpOutput: { module: "@cubby/schemas/work-raw-read", export: "rawTaskOut" },
+
     mcpList: {
       module: "@cubby/schemas/work-raw-read",
       export: "rawTaskListItemOut",
     },
-    mcpDetail: { module: "@cubby/schemas/work-raw-read", export: "rawTaskOut" },
+    mcpDetail: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawTaskOut",
+    },
   },
   storage: {
     indexes: [{ on: ["status"] }, { on: ["dueDate"] }],
@@ -1207,107 +1139,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "assignee",
-      label: "Assignee",
-      target: "ledgerParty",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Task.assigneeId", direction: "outgoing" }],
-      },
-      inverse: { steps: [{ edge: "Task.assigneeId", direction: "incoming" }] },
-    },
-    {
-      key: "subtasks",
-      label: "Subtasks",
-      target: "task",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Task.parentTaskId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Task.parentTaskId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "project",
-      label: "Project",
-      target: "project",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Task.projectId", direction: "outgoing" }],
-      },
-      inverse: { steps: [{ edge: "Task.projectId", direction: "incoming" }] },
-    },
-    {
-      key: "subject",
-      label: "Subject product",
-      target: "product",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Task.subjectProductId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Task.subjectProductId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "parent",
-      label: "Parent task",
-      target: "task",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Task.parentTaskId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Task.parentTaskId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "blocked-by",
-      label: "Blocked by",
-      target: "task",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "EntityLink[taskDependency].from", direction: "incoming" },
-          { edge: "EntityLink[taskDependency].to", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "EntityLink[taskDependency].to", direction: "incoming" },
-          { edge: "EntityLink[taskDependency].from", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "images",
-      label: "Images",
-      target: "image",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "EntityAttachment.entityId", direction: "incoming" },
-          { edge: "EntityAttachment.imageId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.entityId", direction: "outgoing" },
-        ],
-      },
-    },
-  ],
+
   // Related rows the search document reads (ADR 0021).
   search: {
     mode: "semantic",
@@ -2371,3 +2203,40 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r.field("assigneeId").named("assignee", "Assignee"),
+    r
+      .path("task", "many", [
+        { edge: "Task.parentTaskId", direction: "incoming" },
+      ])
+      .named("subtasks", "Subtasks"),
+    r.field("projectId").named("project", "Project"),
+    r.field("subjectProductId").named("subject", "Subject product"),
+    r.field("parentTaskId").named("parent", "Parent task", {
+      view: {
+        columnGroup: "Dependencies",
+        order: "task",
+        filterPrefix: "parentTask",
+      },
+    }),
+    r.link("taskDependency", "outgoing").named("blocked-by", "Blocked by", {
+      view: {
+        key: "blockedBy",
+        columnGroup: "Dependencies",
+        order: "task",
+        filterPrefix: "blockedByTask",
+        defaultVisible: true,
+      },
+    }),
+    r
+      .path("image", "many", [
+        { edge: "EntityAttachment.entityId", direction: "incoming" },
+        { edge: "EntityAttachment.imageId", direction: "outgoing" },
+      ])
+      .named("images", "Images"),
+  ],
+  readSchemas,
+);

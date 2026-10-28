@@ -15,6 +15,7 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import { financialTransactionProviderStatus } from "@cubby/schemas/financial-transaction-fields";
 import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
+import type { RunId } from "@cubby/schemas/identifiers";
 import {
   parseShortcodeFor,
   type FinancialTransactionShortcode,
@@ -1446,7 +1447,7 @@ export async function refreshTransferPairStatements(
   });
 }
 
-const ruleProducer = (runId: string | null): AssessmentProducer => ({
+const ruleProducer = (runId: RunId | null): AssessmentProducer => ({
   kind: "rule",
   model: null,
   revision: TRANSFER_PAIR_REVISION,
@@ -1601,7 +1602,7 @@ const transferPairFailure = (ref: string, error: unknown): RunStepError => ({
 export async function generateTransferPairSuggestionsPage(
   db: Database,
   input: {
-    runId: string | null;
+    runId: RunId | null;
     scope?: TransferPairScope;
     after?: TransferPairGenerationCursor | null;
     limit?: number;
@@ -1874,7 +1875,7 @@ export async function generateTransferPairSuggestionsPage(
 export async function retryTransferPairRefs(
   db: Database,
   input: {
-    runId: string | null;
+    runId: RunId | null;
     scope?: TransferPairScope;
     refs: readonly string[];
   },
@@ -1916,7 +1917,7 @@ export async function retryTransferPairRefs(
  */
 export async function generateTransferPairSuggestions(
   db: Database,
-  input: { runId: string | null; scope?: TransferPairScope },
+  input: { runId: RunId | null; scope?: TransferPairScope },
 ): Promise<{
   found: number;
   published: number;
@@ -1941,7 +1942,7 @@ export async function generateTransferPairSuggestions(
   return total;
 }
 
-const runScope = (runId: string | null | undefined) =>
+const runScope = (runId: RunId | null | undefined) =>
   runId ? sql`AND s."runId" = ${runId}::uuid` : sql``;
 
 /** A label pass's position in `(createdAt, id)` order. */
@@ -1953,7 +1954,7 @@ export async function transferPairsNeedingLabels(
   input: {
     limit: number;
     after?: TransferPairLabelCursor | null;
-    runId?: string | null;
+    runId?: RunId | null;
   },
 ) {
   const { rows } = await unwrapDb(db).execute<{
@@ -1980,7 +1981,7 @@ export async function transferPairsNeedingLabels(
 /** Remaining movement-label or dependent-refresh work, for a Sweep's estimate. */
 export async function countTransferPairsNeedingLabels(
   db: Database,
-  input: { runId?: string | null } = {},
+  input: { runId?: RunId | null } = {},
 ) {
   const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
     SELECT count(*)::int AS count FROM "AssessmentState" s

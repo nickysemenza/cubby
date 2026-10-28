@@ -1,4 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type ProductCreateInput,
+  type ProductUpdateInput,
+} from "@cubby/schemas/entities/product";
 /**
  * Product Orchestration Service
  *
@@ -20,10 +24,6 @@ import {
   type MutationSideEffects,
   mutationSideEffectsWithWarnings,
 } from "@cubby/schemas/mutation-side-effects";
-import type {
-  ProductCreateInput,
-  ProductUpdateInput,
-} from "@cubby/schemas/product";
 import type {
   RawProductDetail,
   RawProductOutput,

@@ -1,15 +1,12 @@
+import {
+  mealOut,
+  mealListItemOut,
+  mealFilterFields as mealBaseFilterFields,
+} from "@cubby/schemas/entities/meal";
 import { mealFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.meal.gen";
 import { rawUpcomingMealSummary } from "./meal-raw-read";
 import { z } from "zod";
-import { mealBaseFilterFields } from "./generated/meal.gen";
 
-export {
-  mealCreateInput,
-  mealUpdateData,
-  mealUpdateInput,
-  type MealCreateInput,
-  type MealUpdateInput,
-} from "./generated/meal.gen";
 export * from "./meal-nutrition";
 export * from "./meal-amount";
 import { mealFoodAmount } from "./meal-amount";
@@ -318,15 +315,10 @@ export type SaveMealRecipePreparationOut = z.infer<
   typeof saveMealRecipePreparationOut
 >;
 
-export const mealOut = mealFieldEnvelopeSchemas.output;
-export type MealOut = z.infer<typeof mealOut>;
-
 /** List-row projection: `mealOut` plus the server-resolved gallery cover(s). */
-export const mealListItemOut = mealFieldEnvelopeSchemas.list;
-export type MealListItemOut = z.infer<typeof mealListItemOut>;
 
 /** Generic MCP entity result; MealRecipe rows have no public shortcode. */
-export const mealMcpEntityOut = mealFieldEnvelopeSchemas.mcpOutput;
+
 export const mealRecipeOut = mealListItemOut.shape.recipes.element;
 export const mealRecipeSummary = mealRecipeOut.shape.recipe;
 export type MealRecipeOut = z.output<typeof mealRecipeOut>;

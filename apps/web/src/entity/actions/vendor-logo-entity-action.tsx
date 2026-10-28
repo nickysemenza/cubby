@@ -1,5 +1,6 @@
+import { vendorOut } from "@cubby/schemas/entities/vendor";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { fetchVendorLogoInput, vendorOut } from "@cubby/schemas/vendor";
+import { fetchVendorLogoInput } from "@cubby/schemas/vendor";
 import { useMutationState, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";

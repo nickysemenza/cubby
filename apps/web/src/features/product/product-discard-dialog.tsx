@@ -1,11 +1,11 @@
 import type { DecisionStep } from "@cubby/schemas/decision-step";
+import { type ProductListItemOut as ProductListItem } from "@cubby/schemas/entities/product";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   InventoryShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ProductListItem } from "@cubby/schemas/product";
 import { tradeSchema } from "@cubby/schemas/task-fields";
 /**
  * ProductDiscardDialog — record that units were thrown away or written off.

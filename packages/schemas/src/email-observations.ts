@@ -1,3 +1,4 @@
+import { entityIdSchema } from "./identifier-fields";
 import { aiProvenance, capturedFieldInput } from "./ai-evaluation";
 import { z } from "zod";
 import { assessmentChildHandle } from "./assessment-reference";
@@ -111,8 +112,8 @@ export type EmailClassificationConflict = z.infer<
 >;
 export const emailClassificationObservationInput = z
   .object({
-    emailId: z.uuid(),
-    runId: z.uuid().nullable().default(null),
+    emailId: entityIdSchema("email"),
+    runId: entityIdSchema("run").nullable().default(null),
     checksum: z.string().nullable(),
     classification: mailboxClassification,
     stage: mailboxClassificationStage.nullable(),
@@ -129,8 +130,8 @@ export const emailClassificationObservationInput = z
   .strict();
 export const emailRetrievalFailureInput = z
   .object({
-    emailId: z.uuid(),
-    runId: z.uuid().nullable().default(null),
+    emailId: entityIdSchema("email"),
+    runId: entityIdSchema("run").nullable().default(null),
     httpStatus: z.number().int().min(100).max(599).nullable(),
     error: z.string().min(1),
   })

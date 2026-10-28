@@ -5,6 +5,7 @@ import {
 import { emailReclassifyResult } from "@cubby/schemas/email-actions";
 import {
   runShortcode,
+  parseEntityId,
   type LedgerPartyId,
   type UserId,
 } from "@cubby/schemas/identifiers";
@@ -131,7 +132,7 @@ export async function loadMailReclassificationRead(
             .object({ result: emailReclassifyResult })
             .safeParse(item.receipt);
           if (receipt.success) return [receipt.data.result];
-          const id = codes.get(item.target.recordId);
+          const id = codes.get(parseEntityId("email", item.target.recordId));
           if (!id || !["failed", "obsolete", "cancelled"].includes(item.state))
             return [];
           return [

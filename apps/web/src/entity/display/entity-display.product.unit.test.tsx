@@ -1,7 +1,7 @@
 import {
   productListItemOut,
-  type ProductListItem,
-} from "@cubby/schemas/product";
+  type ProductListItemOut as ProductListItem,
+} from "@cubby/schemas/entities/product";
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fields";
 import type { ProductCategory } from "@cubby/shared";
 import { QueryClientProvider } from "@tanstack/react-query";

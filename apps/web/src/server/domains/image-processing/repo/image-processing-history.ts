@@ -1,5 +1,5 @@
 import type { ActivityExecutor } from "@cubby/schemas/activity";
-import type { ImageId } from "@cubby/schemas/identifiers";
+import type { ImageId, ImageJobId, DeviceId } from "@cubby/schemas/identifiers";
 import { jobState, type JobWaitReason } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -36,7 +36,7 @@ import { armDeviceWake } from "./image-processing-ring";
 export async function recordImageProcessingEvent(
   db: Database | DrizzleTransaction,
   input: {
-    jobId: string;
+    jobId: ImageJobId;
     eventKey: string;
     event: string;
     attempt?: number;
@@ -60,7 +60,7 @@ export async function recordImageProcessingEvent(
 export async function insertImageProcessingAttempt(
   db: Database | DrizzleTransaction,
   input: {
-    jobId: string;
+    jobId: ImageJobId;
     attemptId: string;
     state: "running" | "failed";
     executor?: ActivityExecutor;
@@ -106,7 +106,7 @@ export async function insertImageProcessingAttempt(
 export async function assignImageProcessingExecutor(
   db: Database,
   input: {
-    jobId: string;
+    jobId: ImageJobId;
     attemptId: string;
     executor: ActivityExecutor;
     userId?: string;
@@ -185,7 +185,12 @@ export async function assignImageProcessingExecutor(
 /** Whether the attempt went to this member's device. */
 export async function findImageProcessingDeviceAssignment(
   db: Database,
-  input: { jobId: string; attemptId: string; deviceId: string; userId: string },
+  input: {
+    jobId: ImageJobId;
+    attemptId: string;
+    deviceId: DeviceId;
+    userId: string;
+  },
 ): Promise<boolean> {
   const [attempt] = await getDb(db)
     .select({
@@ -213,8 +218,8 @@ export const createImageProcessingSubmission = (db: Database) =>
 export async function attachSubmissionJobs(
   db: Database,
   submissionId: string,
-  ids: readonly string[],
-  existingIds: readonly string[],
+  ids: readonly ImageJobId[],
+  existingIds: readonly ImageJobId[],
 ) {
   if (!ids.length) return;
   await withTransaction(db, async (tx) => {
@@ -251,7 +256,7 @@ export async function attachSubmissionJobs(
 export async function lockImageProcessingSubmissionSource(
   db: Database,
   imageId: ImageId,
-): Promise<string[]> {
+): Promise<ImageJobId[]> {
   await getDb(db)
     .select({ id: image.id })
     .from(image)
@@ -273,7 +278,7 @@ export async function lockImageProcessingSubmissionSource(
 export async function deferImageProcessingJob(
   db: Database,
   input: {
-    jobId: string;
+    jobId: ImageJobId;
     attemptId: string;
     until: Date;
     reason: string;

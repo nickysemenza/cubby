@@ -1,8 +1,6 @@
+import { type IngredientListItemOut as IngredientListItem } from "@cubby/schemas/entities/ingredient";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import type {
-  IngredientFilters,
-  IngredientListItem,
-} from "@cubby/schemas/ingredient";
+import type { IngredientFilters } from "@cubby/schemas/ingredient";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -128,10 +126,7 @@ function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
   );
 }
 
-export const ingredientListOverride = defineListOverride<
-  IngredientListItem,
-  IngredientFilters
->({
+export const ingredientListOverride = defineListOverride<IngredientFilters>({
   use() {
     const queryClient = useQueryClient();
     const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(

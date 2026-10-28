@@ -1,9 +1,10 @@
+import { timestampField } from "./field-policy";
 import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { shortcodeSchema } from "../identifier-fields";
 import { statementDateKind } from "../source-transaction-record-fields";
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "transactionImport",
   names: { singular: "Transaction import", plural: "Transaction imports" },
   table: "TransactionImport",
@@ -104,24 +105,28 @@ export default defineEntity({
         },
       },
       {
+        audit: true,
         key: "source",
         kind: "text",
         display: { columnGroup: "Source" },
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        audit: true,
         key: "label",
         kind: "text",
         display: {},
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        audit: true,
         key: "fingerprint",
         kind: "text",
         display: { list: false },
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        audit: true,
         key: "dateKind",
         kind: "enum",
         display: {
@@ -142,6 +147,7 @@ export default defineEntity({
         validation: { read: statementDateKind, create: null, update: null },
       },
       {
+        audit: true,
         key: "rowCountDeclared",
         kind: "number",
         nullable: true,
@@ -153,12 +159,14 @@ export default defineEntity({
         },
       },
       {
+        audit: true,
         key: "observedAt",
         kind: "timestamp",
         display: { columnGroup: "Source", format: "timestamp" },
         validation: { read: z.date(), create: null, update: null },
       },
       {
+        audit: true,
         key: "coverage",
         kind: "json",
         nullable: true,
@@ -166,6 +174,7 @@ export default defineEntity({
         validation: { read: z.json().nullable(), create: null, update: null },
       },
       {
+        audit: true,
         key: "completedAt",
         kind: "timestamp",
         nullable: true,
@@ -173,31 +182,28 @@ export default defineEntity({
         validation: { read: z.date().nullable(), create: null, update: null },
       },
       {
+        audit: true,
         key: "notes",
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
+      timestampField("createdAt", { format: "timestamp" }),
+      timestampField("updatedAt", { list: false, format: "timestamp" }),
       {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { format: "timestamp" },
-        validation: { read: z.date(), create: null, update: null },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false, format: "timestamp" },
-        validation: { read: z.date(), create: null, update: null },
-      },
-      {
+        output: false,
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
         validation: { read: z.date().nullable(), create: null, update: null },
       },
       {
+        output: false,
         key: "shortcode",
         kind: "text",
         validation: { read: z.string(), create: null, update: null },
@@ -237,47 +243,16 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       { key: "deletedAt" },
     ],
-    create: [],
-    update: [],
-    audit: [
-      "source",
-      "label",
-      "fingerprint",
-      "dateKind",
-      "rowCountDeclared",
-      "observedAt",
-      "coverage",
-      "completedAt",
-      "notes",
-    ],
-    output: [
-      "id",
-      "source",
-      "label",
-      "fingerprint",
-      "dateKind",
-      "rowCountDeclared",
-      "observedAt",
-      "coverage",
-      "completedAt",
-      "notes",
-      "createdAt",
-      "updatedAt",
-      "rowCountStored",
-    ],
+
     derived: {
       sourceTransactionRecordId: { via: "records" },
-      rowCountStored: { type: "number" },
+      rowCountStored: { rollup: "count", via: "records" },
     },
     sort: { fields: ["observedAt", "createdAt", "label", "source"] },
   },
   fields: {
     create: null,
     update: null,
-    output: {
-      module: "@cubby/schemas/transaction-import-raw-read",
-      export: "rawTransactionImportOut",
-    },
   },
   storage: {
     indexes: [
@@ -306,10 +281,7 @@ export default defineEntity({
   },
   filters: {
     audit: true,
-    schema: {
-      module: "@cubby/schemas/transaction-import",
-      export: "transactionImportFilterFields",
-    },
+
     descriptors: [
       {
         columnId: "label",
@@ -343,73 +315,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "records",
-      label: "Source transaction records",
-      target: "sourceTransactionRecord",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "TransactionImportRecord.importId", direction: "incoming" },
-          {
-            edge: "TransactionImportRecord.statementRowId",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "TransactionImportRecord.statementRowId",
-            direction: "incoming",
-          },
-          { edge: "TransactionImportRecord.importId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "firstRecords",
-      label: "First recorded here",
-      target: "sourceTransactionRecord",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "SourceTransactionRecord.batchId", direction: "incoming" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "SourceTransactionRecord.batchId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "withdrawnRecords",
-      label: "Withdrawal proof for",
-      target: "sourceTransactionRecord",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "SourceTransactionRecord.withdrawalImportId",
-            direction: "incoming",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "SourceTransactionRecord.withdrawalImportId",
-            direction: "outgoing",
-          },
-        ],
-      },
-    },
-  ],
+
   search: "lexical",
   capabilities: {
     images: { storage: false },
@@ -420,11 +326,45 @@ export default defineEntity({
   },
   extensions: {
     ports: {
-      repository: {
-        module:
-          "~/server/domains/transaction-import/repo/source-transaction-record",
-        export: "transactionImportRepository",
+      // Preserve statement source/fingerprint search presentation without a repository wrapper.
+      search: {
+        read: {
+          module:
+            "~/server/domains/transaction-import/repo/search-read-transaction-import",
+          export: "transactionImportSearch",
+        },
+        projection: null,
+        semanticText: null,
       },
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .path("sourceTransactionRecord", "many", [
+        { edge: "TransactionImportRecord.importId", direction: "incoming" },
+        {
+          edge: "TransactionImportRecord.statementRowId",
+          direction: "outgoing",
+        },
+      ])
+      .named("records", "Source transaction records"),
+    r
+      .path("sourceTransactionRecord", "many", [
+        { edge: "SourceTransactionRecord.batchId", direction: "incoming" },
+      ])
+      .named("firstRecords", "First recorded here"),
+    r
+      .path("sourceTransactionRecord", "many", [
+        {
+          edge: "SourceTransactionRecord.withdrawalImportId",
+          direction: "incoming",
+        },
+      ])
+      .named("withdrawnRecords", "Withdrawal proof for"),
+  ],
+  readSchemas,
+);

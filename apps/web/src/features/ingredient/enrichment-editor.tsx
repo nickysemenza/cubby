@@ -1,4 +1,4 @@
-import type { IngredientOut } from "@cubby/schemas/ingredient";
+import { type IngredientOut } from "@cubby/schemas/entities/ingredient";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { getErrorMessage } from "@cubby/shared";

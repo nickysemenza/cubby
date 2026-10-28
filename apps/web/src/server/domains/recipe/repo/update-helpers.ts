@@ -4,14 +4,16 @@
  */
 
 import type { amount } from "@cubby/schemas/codec";
+import {
+  type RecipeCreateInput,
+  type RecipeUpdateInput,
+} from "@cubby/schemas/entities/recipe";
 import type {
   CookbookId,
   IngredientId,
   RecipeId,
 } from "@cubby/schemas/identifiers";
 import {
-  type RecipeCreateInput,
-  type RecipeUpdateInput,
   type RecipeYield,
   type recipeIngredientInput,
 } from "@cubby/schemas/recipe";

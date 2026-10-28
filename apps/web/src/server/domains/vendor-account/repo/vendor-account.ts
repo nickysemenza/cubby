@@ -1,4 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type VendorAccountCreateInput,
+  type VendorAccountUpdateData,
+} from "@cubby/schemas/entities/vendorAccount";
+import { vendorAccountRawOut as rawVendorAccountOut } from "@cubby/schemas/entity-contracts/vendorAccount";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -7,12 +12,7 @@ import type {
   VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type {
-  VendorAccountCreateInput,
-  VendorAccountUpdateData,
-} from "@cubby/schemas/vendor-account";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
-import { rawVendorAccountOut } from "@cubby/schemas/vendor-account-raw-read";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { and, count, eq, inArray, max, sql } from "drizzle-orm";
 

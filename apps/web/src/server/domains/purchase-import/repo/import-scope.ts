@@ -4,6 +4,7 @@ import {
   type LedgerPartyId,
   type RunId,
   type VendorId,
+  type VendorAccountId,
   runEntityId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -40,7 +41,7 @@ export type ImportScope = {
   status: string;
   ledgerPartyId: LedgerPartyId;
   vendorId: VendorId | null;
-  vendorAccountId: string | null;
+  vendorAccountId: VendorAccountId | null;
 };
 
 export async function loadImportScope(

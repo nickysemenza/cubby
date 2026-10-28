@@ -15,7 +15,7 @@ const db = createDatabase(() => {
   );
 });
 const stored = {
-  id: "11111111-1111-1111-1111-111111111111",
+  id: testEntityId("image", "verification-image"),
   key: "products/photo.png",
   contentType: "image/png",
   size: 3,

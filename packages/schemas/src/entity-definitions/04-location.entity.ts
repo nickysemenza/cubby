@@ -1,8 +1,9 @@
+import { timestampField, aliasList } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { locationReadSchemas } from "../location-fields";
 import { labelField } from "./label-field.js";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import {
   imageShortcode,
@@ -16,7 +17,7 @@ import {
   locationValuation,
 } from "@cubby/schemas/location-fields";
 import { z } from "zod";
-export default defineEntity(
+export const { definition, readSchemas } = defineEntityModel(
   {
     key: "location",
     names: { singular: "Location", plural: "Locations" },
@@ -291,13 +292,12 @@ export default defineEntity(
               .describe(
                 "Alternate names for this location (searched + embedded)",
               ),
-            create: z
-              .array(z.string())
+            create: aliasList
               .default([])
               .describe(
                 "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
               ),
-            update: z.array(z.string()).optional(),
+            update: aliasList.optional(),
           },
         },
         {
@@ -358,6 +358,7 @@ Rules:
           },
         },
         {
+          audit: false,
           key: "notes",
           kind: "text",
           nullable: true,
@@ -370,6 +371,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           key: "productId",
           kind: "identifier",
           nullable: true,
@@ -384,6 +387,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "parentId",
           kind: "identifier",
           nullable: true,
@@ -397,6 +401,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           // No editor `control`: the generic dialog shell renders the shared
           // photo-capture field itself for any intent whose roster includes
           // this key (`entity-edit-dialog-content.tsx`) — same convention as
@@ -411,6 +417,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           key: "removeImageIds",
           kind: "identifier",
           reference: { entity: "image", multiple: true },
@@ -426,6 +434,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           key: "imageOrder",
           semanticRole: "attachment",
           kind: "text",
@@ -552,7 +562,10 @@ Rules:
             update: null,
           },
         },
-        labelField("valuationLabel", "Inventory valuation"),
+        {
+          ...labelField("valuationLabel", "Inventory valuation"),
+          output: false,
+        },
         {
           key: "valuation",
           storedKey: "valuationRollup",
@@ -598,32 +611,10 @@ Rules:
             update: null,
           },
         },
-        {
-          key: "createdAt",
-          kind: "timestamp",
-          display: { list: false },
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        {
-          key: "updatedAt",
-          kind: "timestamp",
-          display: { list: false },
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        { key: "shortcode", kind: "text" },
-        {
-          key: "deletedAt",
-          kind: "timestamp",
-          nullable: true,
-        },
+        timestampField("createdAt"),
+        timestampField("updatedAt"),
+        { output: false, key: "shortcode", kind: "text" },
+        { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
       ],
       storage: [
         {
@@ -646,34 +637,12 @@ Rules:
         { key: "updatedAt", specialized: "updated-at" },
         "deletedAt",
         "lastBulkInventory",
-        { key: "parentId", reference: "location" },
-        { key: "productId", reference: "product" },
+        "parentId",
+        "productId",
         { key: "type", specialized: "enum:type" },
         "notes",
       ],
-      create: [
-        "name",
-        "aliases",
-        "tags",
-        "type",
-        "notes",
-        "productId",
-        "parentId",
-        "pendingImageIds",
-      ],
-      update: [
-        "name",
-        "aliases",
-        "tags",
-        "type",
-        "notes",
-        "productId",
-        "parentId",
-        "pendingImageIds",
-        "removeImageIds",
-        "imageOrder",
-      ],
-      audit: ["name", "aliases", "tags", "type", "parentId"],
+
       derived: {
         parent: { via: "parent" },
         inventoryEntries: { type: "number" },
@@ -780,21 +749,6 @@ Rules:
         create: ["capture", "full"],
         update: ["full", "identity", "parent"],
       },
-      output: [
-        "id",
-        "name",
-        "aliases",
-        "tags",
-        "type",
-        "notes",
-        "product",
-        "lastBulkInventory",
-        "aiDescription",
-        "images",
-        "valuation",
-        "createdAt",
-        "updatedAt",
-      ],
     },
     fields: {
       embedded: [
@@ -860,26 +814,6 @@ Rules:
           projections: ["list", "mcpList"],
         },
       ],
-      create: {
-        module: "@cubby/schemas/location",
-        export: "locationCreateInput",
-      },
-      update: {
-        module: "@cubby/schemas/location",
-        export: "locationUpdateData",
-      },
-      output: {
-        module: "@cubby/schemas/location-raw-read",
-        export: "rawLocationOutput",
-      },
-      list: {
-        module: "@cubby/schemas/location-raw-read",
-        export: "rawLocationList",
-      },
-      detail: {
-        module: "@cubby/schemas/location-raw-read",
-        export: "rawLocationDetail",
-      },
     },
     storage: {
       indexes: [
@@ -1147,127 +1081,7 @@ Rules:
         },
       ],
     },
-    relations: [
-      {
-        key: "children",
-        label: "Sub-locations",
-        empty: "No sub-locations yet.",
-        target: "location",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Location.parentId", direction: "incoming" }],
-        },
-        inverse: {
-          steps: [{ edge: "Location.parentId", direction: "outgoing" }],
-        },
-      },
-      {
-        key: "inventory",
-        label: "Inventory",
-        target: "inventory",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "InventoryEntry.locationId", direction: "incoming" }],
-        },
-        inverse: {
-          steps: [{ edge: "InventoryEntry.locationId", direction: "outgoing" }],
-        },
-      },
-      {
-        key: "parent",
-        label: "Parent location",
-        target: "location",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Location.parentId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "Location.parentId", direction: "incoming" }],
-        },
-      },
-      {
-        key: "product",
-        label: "Product",
-        target: "product",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Location.productId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "Location.productId", direction: "incoming" }],
-        },
-      },
-      {
-        key: "ingredients",
-        label: "Ingredients",
-        target: "ingredient",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "InventoryEntry.locationId", direction: "incoming" },
-            { edge: "InventoryEntry.productId", direction: "outgoing" },
-            { edge: "Product.ingredientId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "Product.ingredientId", direction: "incoming" },
-            { edge: "InventoryEntry.productId", direction: "incoming" },
-            { edge: "InventoryEntry.locationId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "images",
-        label: "Images",
-        target: "image",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "EntityAttachment.entityId", direction: "incoming" },
-            { edge: "EntityAttachment.imageId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "EntityAttachment.imageId", direction: "incoming" },
-            { edge: "EntityAttachment.entityId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "plantings",
-        label: "Plantings",
-        target: "planting",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Planting.locationId", direction: "incoming" }],
-        },
-        inverse: {
-          steps: [{ edge: "Planting.locationId", direction: "outgoing" }],
-        },
-      },
-      {
-        key: "garden-entries",
-        label: "Garden entries",
-        target: "gardenEntry",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "GardenEntry.locationId", direction: "incoming" }],
-        },
-        inverse: {
-          steps: [{ edge: "GardenEntry.locationId", direction: "outgoing" }],
-        },
-      },
-    ],
+
     search: {
       mode: "semantic",
       inputs: [
@@ -1462,4 +1276,46 @@ Rules:
     },
   },
   locationReadSchemas,
+);
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .path("location", "many", [
+        { edge: "Location.parentId", direction: "incoming" },
+      ])
+      .named("children", "Sub-locations", { empty: "No sub-locations yet." }),
+    r
+      .path("inventory", "many", [
+        { edge: "InventoryEntry.locationId", direction: "incoming" },
+      ])
+      .named("inventory", "Inventory"),
+    r.field("parentId").named("parent", "Parent location"),
+    r.field("productId").named("product", "Product"),
+    r
+      .path("ingredient", "many", [
+        { edge: "InventoryEntry.locationId", direction: "incoming" },
+        { edge: "InventoryEntry.productId", direction: "outgoing" },
+        { edge: "Product.ingredientId", direction: "outgoing" },
+      ])
+      .named("ingredients", "Ingredients", { view: { columnGroup: "Stock" } }),
+    r
+      .path("image", "many", [
+        { edge: "EntityAttachment.entityId", direction: "incoming" },
+        { edge: "EntityAttachment.imageId", direction: "outgoing" },
+      ])
+      .named("images", "Images"),
+    r
+      .path("planting", "many", [
+        { edge: "Planting.locationId", direction: "incoming" },
+      ])
+      .named("plantings", "Plantings"),
+    r
+      .path("gardenEntry", "many", [
+        { edge: "GardenEntry.locationId", direction: "incoming" },
+      ])
+      .named("garden-entries", "Garden entries"),
+  ],
+  readSchemas,
 );

@@ -1,4 +1,4 @@
-import { taskCreateInput } from "@cubby/schemas/project";
+import { taskCreateInput } from "@cubby/schemas/entities/task";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";

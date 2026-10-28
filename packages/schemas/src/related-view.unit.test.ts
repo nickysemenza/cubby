@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { relatedFilterFieldsByEntity } from "./generated/related-view-filters.gen";
 import { connectionCatalog } from "./connected-views";
 import { financialAccountFilterFields } from "./financial-account";
 import { financialTransactionFilterFields } from "./financial-transaction";
 import { ingredientFilterFields } from "./ingredient";
 import { inventoryFilterFields } from "./inventory";
-import { ledgerPartyFilterFields } from "./ledger-party";
+import { ledgerPartyFilterFields } from "@cubby/schemas/entities/ledgerParty";
 import { locationFilterFields } from "./location";
 import { mealFilterFields } from "./meal";
 import { productFilterFields } from "./product";
@@ -25,7 +26,7 @@ import {
 import { relatedViewPaths, relatedViewRegistry } from "./related-view-registry";
 
 import { vendorFilterFields } from "./vendor";
-import { vendorAccountFilterFields } from "./vendor-account";
+import { vendorAccountFilterFields } from "@cubby/schemas/entities/vendorAccount";
 import { wishFilterFields } from "./wish";
 
 const declaredLocalEdges = new Set(
@@ -172,6 +173,13 @@ describe("relatedViewRegistry", () => {
   });
 
   it("exposes an exact-id, presence, and terminal-search field for every path", () => {
+    expect(relatedFilterFieldsByEntity.product.eaterId.parse("@me")).toBe(
+      "@me",
+    );
+    expect(
+      relatedFilterFieldsByEntity.ingredient.eaterId.parse(["@me"]),
+    ).toEqual(["@me"]);
+    expect(relatedFilterFieldsByEntity.meal.eaterId.parse("@me")).toBe("@me");
     const fields = {
       product: productFilterFields,
       recipe: recipeFilterFields,

@@ -49,15 +49,17 @@ public final class GenericEntityEditModel {
     /// field to come up empty when that binding has no value, not silently fall back to the
     /// field's generic default. Keyed by the caller, never by field or entity name.
     private let suppressDefaultKeys: Set<String>
+    private let createFields: Set<String>?
 
     public init(
         descriptor: EntityDescriptor, mode: Mode, client: CubbyClient, original: JSONValue? = nil,
-        suppressDefaultKeys: Set<String> = []
+        suppressDefaultKeys: Set<String> = [], createFields: [String]? = nil
     ) {
         self.descriptor = descriptor
         self.mode = mode
         self.client = client
         self.suppressDefaultKeys = suppressDefaultKeys
+        self.createFields = createFields.map(Set.init)
         self.draft = [:]
         switch mode {
         case .create(let prefill):
@@ -124,7 +126,7 @@ public final class GenericEntityEditModel {
 
     private func editableFields(in record: JSONValue) -> [FieldDescriptor] {
         let fields = descriptor.fields.filter { field in
-            field.controlKind != nil && (isCreate ? field.inCreate : field.inUpdate)
+            field.controlKind != nil && participates(field)
                 && field.applicabilityRefusal(in: record) == nil
         }
         let hasCollectionControl = fields.contains { $0.collection?.primary != nil }
@@ -242,7 +244,7 @@ public final class GenericEntityEditModel {
         guard !isSaving, !isLoading, !values.isEmpty,
             values.keys.allSatisfy({ key in
                 guard let field = descriptor.field(key) else { return false }
-                return (isCreate ? field.inCreate : field.inUpdate)
+                return participates(field)
             })
         else { return false }
         for (key, value) in values {
@@ -294,7 +296,7 @@ public final class GenericEntityEditModel {
 
     /// The create body: every non-null draft value, plus the pending uploads.
     public func createBody() -> [String: JSONValue] {
-        var body = wireDraft().filter { $0.value != .null }
+        var body = wireDraft().filter { $0.value != .null && (createFields?.contains($0.key) ?? true) }
         if imageField("pendingImageIds"), !pendingUploads.isEmpty {
             body["pendingImageIds"] = Self.codes(pendingUploads)
         }
@@ -559,7 +561,7 @@ public final class GenericEntityEditModel {
         }
         // A prefilled key outside the visible roster still travels (a relation section's
         // reference is a create-only key the control may not render).
-        for (key, value) in prefill where seeded[key] == nil {
+        for (key, value) in prefill where seeded[key] == nil && (createFields?.contains(key) ?? true) {
             seeded[key] = value
         }
         for field in visibleFields where field.collection?.primary != nil {
@@ -568,9 +570,15 @@ public final class GenericEntityEditModel {
         draft = seeded
     }
 
+    private func participates(_ field: FieldDescriptor) -> Bool {
+        isCreate
+            ? field.inCreate && (createFields?.contains(field.key) ?? true)
+            : field.inUpdate
+    }
+
     private func imageField(_ key: String) -> Bool {
         guard let field = descriptor.field(key) else { return false }
-        return isCreate ? field.inCreate : field.inUpdate
+        return participates(field)
     }
 
     private static func codes(_ ids: [ImageCode]) -> JSONValue {

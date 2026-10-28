@@ -1029,7 +1029,7 @@ describe("entity display image resolver", () => {
       const associationTime = new Date("2026-09-16T12:00:00.000Z");
       const records = await Promise.all([
         insertWithShortcode(ctx.db, "image", {
-          id: "00000000-0000-4000-8000-0000000001a1",
+          id: parseEntityId("image", "00000000-0000-4000-8000-0000000001a1"),
           key: `images/${crypto.randomUUID()}.heic`,
           filename: "pending.heic",
           contentType: "image/heic",
@@ -1037,7 +1037,7 @@ describe("entity display image resolver", () => {
           status: "PENDING",
         }),
         insertWithShortcode(ctx.db, "image", {
-          id: "00000000-0000-4000-8000-0000000001a2",
+          id: parseEntityId("image", "00000000-0000-4000-8000-0000000001a2"),
           key: `images/${crypto.randomUUID()}.bin`,
           filename: "legacy.bin",
           contentType: "application/octet-stream",
@@ -1047,7 +1047,7 @@ describe("entity display image resolver", () => {
           storageStatus: "missing",
         }),
         insertWithShortcode(ctx.db, "image", {
-          id: "00000000-0000-4000-8000-0000000001a3",
+          id: parseEntityId("image", "00000000-0000-4000-8000-0000000001a3"),
           key: `images/${crypto.randomUUID()}.pdf`,
           filename: "receipt.pdf",
           contentType: "application/pdf",
@@ -1057,7 +1057,7 @@ describe("entity display image resolver", () => {
           storageStatus: "metadata_mismatch",
         }),
         insertWithShortcode(ctx.db, "image", {
-          id: "00000000-0000-4000-8000-0000000001a4",
+          id: parseEntityId("image", "00000000-0000-4000-8000-0000000001a4"),
           key: `images/${crypto.randomUUID()}.jpg`,
           filename: "verified.jpg",
           contentType: "image/jpeg",

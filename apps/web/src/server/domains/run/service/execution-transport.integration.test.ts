@@ -1,4 +1,4 @@
-import type { RunId } from "@cubby/schemas/identifiers";
+import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import {
   gatewayFetchThrough,
   type GatewayFetchRequest,
@@ -81,7 +81,12 @@ describe("household AI funding at the paid transport boundary", () => {
               kind: "mail_reclassify",
               mode: "relevance",
               mailboxId: "synthetic-budget-mailbox",
-              emails: [{ emailId: crypto.randomUUID(), checksum: "synthetic" }],
+              emails: [
+                {
+                  emailId: parseEntityId("email", crypto.randomUUID()),
+                  checksum: "synthetic",
+                },
+              ],
             }
           : purpose === "mail_discovery"
             ? {

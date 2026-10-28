@@ -1,18 +1,9 @@
 import { z } from "zod";
-import { wishBaseFilterFields, wishOut } from "./generated/wish.gen";
-
-export {
-  wishCreateInput,
-  wishUpdateData,
-  wishUpdateInput,
+import {
+  wishFilterFields as wishBaseFilterFields,
   wishOut,
-  wishListItemOut,
-  type WishCreateInput,
-  type WishUpdateData,
-  type WishUpdateInput,
-  type WishOut,
-  type WishListItemOut,
-} from "./generated/wish.gen";
+} from "@cubby/schemas/entities/wish";
+
 export { wishCandidateOut, type WishCandidateOut } from "./wish-fields";
 import { createPaginatedResponseSchema } from "./pagination";
 

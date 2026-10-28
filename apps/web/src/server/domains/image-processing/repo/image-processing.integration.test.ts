@@ -1,4 +1,4 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { type ImageJobId, parseEntityId } from "@cubby/schemas/identifiers";
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
@@ -128,14 +128,14 @@ describe("durable image representations", () => {
       .update(image)
       .set({ sha256: "b".repeat(64) })
       .where(eq(image.id, row.id));
-    const execution = async (jobId: string) =>
+    const execution = async (jobId: ImageJobId) =>
       (
         await getDb(ctx.db)
           .select()
           .from(durableJob)
           .where(eq(durableJob.key, `image-processing:${jobId}`))
       )[0]!;
-    const payload = async (jobId: string) =>
+    const payload = async (jobId: ImageJobId) =>
       (
         await getDb(ctx.db)
           .select()

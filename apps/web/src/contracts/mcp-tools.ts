@@ -1,4 +1,8 @@
 import {
+  productMcpOut as productTopLevelMcpEntityOut,
+  productMcpDetailOut as productWithFoodMcpEntityOut,
+} from "@cubby/schemas/entities/product";
+import {
   mcpUsdaFoodListItemOut,
   recipeAvailabilityMcpOut,
   usdaFoodMcpListOut,
@@ -7,8 +11,6 @@ import {
 import {
   productLookupUpcOut,
   productFindOrCreateByUPCOut,
-  productTopLevelMcpEntityOut,
-  productWithFoodMcpEntityOut,
 } from "@cubby/schemas/product";
 import {
   recipesUsingIngredientOut,

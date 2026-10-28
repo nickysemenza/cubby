@@ -1,3 +1,4 @@
+import { entityIdSchema } from "./identifier-fields";
 import type { RunTargetState } from "./activity-fields";
 import {
   DISTINCT_FROM_QUOTE_MAX,
@@ -119,7 +120,7 @@ export const purchaseImportRunExecution = z
   .object({
     // The private run id: it is what the delegation token and agent instance
     // carry, so the public code can change without touching agent state.
-    runId: z.uuid().optional(),
+    runId: entityIdSchema("run").optional(),
     // A member names the Run its own preparation returned. A member's
     // preparation without either opens a new import Run.
     run: runShortcode.optional(),
@@ -248,7 +249,7 @@ export type AcceptedSourceOrder = z.infer<typeof acceptedSourceOrder>;
 export const sourceOrderObservationBindings = z.array(
   z.object({
     lineIndex: z.number().int().nonnegative(),
-    productId: z.uuid().nullable(),
+    productId: entityIdSchema("product").nullable(),
   }),
 );
 export type SourceOrderObservationBindings = z.infer<
@@ -381,7 +382,7 @@ export const runFindingKind = z.enum([
   "other",
 ]);
 export const replacementLineIdentity = z.object({
-  productId: z.uuid().nullable(),
+  productId: entityIdSchema("product").nullable(),
   promote: z.boolean(),
   /** An explicit expense-only decision: the line is not a stocked item. */
   expenseOnly: z.boolean().default(false),
@@ -567,7 +568,7 @@ export const commitAcceptedSourceOrderReconciliationOut = z.object({
 export const proposedImportFix = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("reconcile_source_order"),
-    purchaseId: z.uuid(),
+    purchaseId: entityIdSchema("purchase"),
     source: importSourceIdentity,
     orderKey: z.string(),
     acceptedChecksum: z
@@ -581,7 +582,7 @@ export const proposedImportFix = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("replace_aggregate_line"),
-    purchaseId: z.uuid(),
+    purchaseId: entityIdSchema("purchase"),
     // No `.min(1)`: this shape is the auditor model's output and Anthropic
     // structured outputs reject array bounds. `applyFix` refuses an empty
     // roster instead.
@@ -595,15 +596,15 @@ export const proposedImportFix = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("relink_product"),
     expenseId: z.uuid(),
-    productId: z.uuid(),
+    productId: entityIdSchema("product"),
   }),
   z.object({
     kind: z.literal("receive_purchase"),
-    purchaseId: z.uuid(),
+    purchaseId: entityIdSchema("purchase"),
   }),
   z.object({
     kind: z.literal("create_refund"),
-    purchaseId: z.uuid(),
+    purchaseId: entityIdSchema("purchase"),
     amount: money.refine((value) => value < 0, "refund must be negative"),
     title: z.string().trim().min(1).max(500),
   }),
@@ -665,7 +666,7 @@ export type OrderMailMessageClassification = z.infer<
 
 const agentEventBase = z.object({
   version: z.literal(1),
-  runId: z.uuid(),
+  runId: entityIdSchema("run"),
   purpose: agentImportRunPurpose.optional(),
   eventId: z.string().trim().min(1).max(256),
   generation: z.string().min(1),
@@ -687,7 +688,7 @@ export const runScope = z.object({
   trigger: runTrigger,
   purpose: runPurpose,
   status: runStatus,
-  vendorAccountId: z.uuid().nullable(),
+  vendorAccountId: entityIdSchema("vendorAccount").nullable(),
   vendorLabel: z.string().trim().min(1).max(500).nullable(),
   allowedHosts: z.array(z.string().trim().min(1).max(253)).max(20),
   navigationHints: z.unknown(),
@@ -702,24 +703,24 @@ export type RunScope = z.infer<typeof runScope>;
 
 export const importWriterInput = z.object({
   orderLocator: z.string().trim().min(1).max(128).optional(),
-  targetPurchaseId: z.uuid().nullable().optional(),
+  targetPurchaseId: entityIdSchema("purchase").nullable().optional(),
   defaultTrade: tradeSchema.optional(),
-  defaultProjectId: z.uuid().optional(),
-  runId: z.uuid(),
-  ledgerPartyId: z.uuid(),
-  vendorId: z.uuid(),
-  vendorAccountId: z.uuid().nullable(),
+  defaultProjectId: entityIdSchema("project").optional(),
+  runId: entityIdSchema("run"),
+  ledgerPartyId: entityIdSchema("ledgerParty"),
+  vendorId: entityIdSchema("vendor"),
+  vendorAccountId: entityIdSchema("vendorAccount").nullable(),
   source: importSourceIdentity,
   extraction: importExtractionOutcome,
-  primaryDocumentImageId: z.uuid().nullable(),
-  screenshotImageId: z.uuid().nullable(),
+  primaryDocumentImageId: entityIdSchema("image").nullable(),
+  screenshotImageId: entityIdSchema("image").nullable(),
   productResolutions: z
     .array(
       z.discriminatedUnion("kind", [
         z.object({
           kind: z.literal("existing"),
           lineIndex: z.number().int().nonnegative(),
-          productId: z.uuid(),
+          productId: entityIdSchema("product"),
         }),
         z.object({
           kind: z.literal("new"),
@@ -743,7 +744,7 @@ export type ImportWriterInput = z.infer<typeof importWriterInput>;
 
 export const importWriterOutput = z.object({
   outcome: z.enum(["created", "updated", "replayed", "conflict"]),
-  purchaseId: z.uuid().nullable(),
+  purchaseId: entityIdSchema("purchase").nullable(),
   findingIds: z.array(z.uuid()),
   outputFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
 });
@@ -977,7 +978,7 @@ export const importOperationStatusOut = z.object({
 
 export const importAuditFinding = z.object({
   kind: runFindingKind,
-  targetPurchaseId: z.uuid(),
+  targetPurchaseId: entityIdSchema("purchase"),
   summary: z.string().trim().min(1).max(1_000),
   probability: z.number().finite().min(0).max(1),
   proposedFix: proposedImportFix.nullable(),

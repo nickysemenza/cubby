@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { RawCookbookList } from "@cubby/schemas/cookbook-raw-read";
+import type { CookbookRawListItemOut as RawCookbookList } from "@cubby/schemas/entity-contracts/cookbook";
 import type {
   ReportCommand,
   ReportRecordRow,

@@ -1,5 +1,5 @@
+import { imageDetailOut as imageWithEntitySchema } from "@cubby/schemas/entities/image";
 import type { ImageShortcode } from "@cubby/schemas/identifiers";
-import { imageWithEntitySchema } from "@cubby/schemas/image";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { toast } from "sonner";

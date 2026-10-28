@@ -1,5 +1,5 @@
+import { productCategoryUpdateData } from "@cubby/schemas/entities/productCategory";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { productCategoryUpdateData } from "@cubby/schemas/product-category";
 import { sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";

@@ -1,5 +1,5 @@
+import { financialTransactionRawOut as rawFinancialTransactionOut } from "@cubby/schemas/entity-contracts/financialTransaction";
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
-import { rawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   type linkExpensesToPurchaseInput,

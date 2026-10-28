@@ -1,3 +1,4 @@
+import { type TaskCreateInput } from "@cubby/schemas/entities/task";
 import {
   fieldResolutionsSchema,
   type FieldResolutions,
@@ -8,7 +9,6 @@ import type {
   ProjectId,
   TaskId,
 } from "@cubby/schemas/identifiers";
-import type { TaskCreateInput } from "@cubby/schemas/project";
 import { tradeSchema, type Trade } from "@cubby/schemas/task-fields";
 /**
  * Task inheritance provenance. Effective project, subject product, assignee

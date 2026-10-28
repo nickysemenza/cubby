@@ -1,10 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { VendorRawOut as RawVendorOut } from "@cubby/schemas/entity-contracts/vendor";
 import type { VendorId, VendorShortcode } from "@cubby/schemas/identifiers";
 import {
   ALLOWED_IMAGE_TYPES,
   MAX_IMAGE_UPLOAD_BYTES,
 } from "@cubby/schemas/image";
-import type { RawVendorOut } from "@cubby/schemas/vendor-raw-read";
 import {
   assertResponseContentType,
   fetchExternalResponse,

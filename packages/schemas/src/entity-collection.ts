@@ -46,6 +46,8 @@ export function collectionArraySchema(
   schema: z.core.$ZodType | null,
 ): z.ZodArray | null {
   if (schema instanceof z.ZodArray) return schema;
+  // Member metadata describes input; the owning field still normalizes the completed list.
+  if (schema instanceof z.ZodPipe) return collectionArraySchema(schema.in);
   if (
     schema instanceof z.ZodOptional ||
     schema instanceof z.ZodNullable ||

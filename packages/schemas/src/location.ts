@@ -1,4 +1,9 @@
 import {
+  locationOut,
+  locationDetailOut as infLocation,
+  locationFilterFields as locationBaseFilterFields,
+} from "@cubby/schemas/entities/location";
+import {
   locationFieldEnvelopeSchemas,
   locationDetailNode,
 } from "./generated/entity-field-envelopes.location.gen";
@@ -22,15 +27,6 @@ import {
   locationType,
   locationValuation,
 } from "./location-fields";
-import { locationBaseFilterFields } from "./generated/location.gen";
-
-export {
-  locationCreateInput,
-  locationUpdateData,
-  locationUpdateInput,
-  type LocationCreateInput,
-  type LocationUpdateInput,
-} from "./generated/location.gen";
 
 export { locationType, locationValuation } from "./location-fields";
 
@@ -121,10 +117,6 @@ export type LocationIdentityProductOut = NonNullable<
   >
 >;
 
-export const locationOut = locationFieldEnvelopeSchemas.output;
-
-export type LocationOut = z.infer<typeof locationOut>;
-
 export { locationListRefOut } from "./location-fields";
 export type LocationListRefOut = z.infer<typeof locationListRefOut>;
 
@@ -200,9 +192,6 @@ export const locationPickerItemOut = locationPickerAncestorOut.extend({
 });
 export type LocationPickerItemOut = z.infer<typeof locationPickerItemOut>;
 
-export const locationListItemOut = locationFieldEnvelopeSchemas.list;
-export type LocationListItemOut = z.infer<typeof locationListItemOut>;
-
 export const locationWithParentNameOut = locationOut.extend({
   parentName: z.string().nullable(),
 });
@@ -212,8 +201,6 @@ export type LocationWithParentNameOut = z.infer<
 
 export const locationsWithParentNameOut = z.array(locationWithParentNameOut);
 
-export const infLocation = locationFieldEnvelopeSchemas.detail;
-export type InfLocation = z.output<typeof infLocation>;
 export const locationTreeNodeOut = locationDetailNode;
 export type LocationTreeNode = z.output<typeof locationTreeNodeOut>;
 export const inventoryItemForTree =

@@ -1,6 +1,6 @@
+import { type LocationDetailOut as InfLocation } from "@cubby/schemas/entities/location";
 import { imageOut, type ImageOut } from "@cubby/schemas/image";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
-import type { InfLocation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   act,

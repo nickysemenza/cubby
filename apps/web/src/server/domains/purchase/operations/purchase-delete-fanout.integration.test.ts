@@ -1,9 +1,9 @@
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
+import { financialAccountCreateInput } from "@cubby/schemas/entities/financialAccount";
+import { vendorCreateInput } from "@cubby/schemas/entities/vendor";
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
-import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 

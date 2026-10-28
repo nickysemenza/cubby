@@ -1,3 +1,4 @@
+import type { EmailId } from "@cubby/schemas/identifiers";
 import {
   MAILBOX_RESEARCH_VERSION,
   type MailboxClassificationDecision,
@@ -14,7 +15,7 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 /** Gmail ingest's own reads and writes on Email and its retained original. */
 
 /** The member's classification override for one Email, if any. */
-export async function readMemberClassification(db: Database, emailId: string) {
+export async function readMemberClassification(db: Database, emailId: EmailId) {
   const [member] = await getDb(db)
     .select({ classification: emailMemberClassificationSql() })
     .from(emailTable)
@@ -43,7 +44,7 @@ export async function hasRetainedOrderMailContent(
 /** A rerun that agrees with the stored verdict refreshes only its stage and reason. */
 export async function confirmEmailClassification(
   db: Database,
-  emailId: string,
+  emailId: EmailId,
   decision: Pick<MailboxClassificationDecision, "stage" | "reason">,
 ) {
   await withTransaction(db, async (tx) => {

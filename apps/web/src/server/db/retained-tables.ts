@@ -20,10 +20,12 @@ import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import {
   type EntityAttachmentRole,
   entityAttachmentRoleValues,
+  entityAttachmentStorage,
 } from "@cubby/schemas/entity-attachment";
 import { entitySchema, type Entity } from "@cubby/schemas/entity-core";
 import type { EntityLinkKind } from "@cubby/schemas/entity-links";
 import type {
+  EntityId,
   DeviceId,
   ExpenseId,
   RunId,
@@ -314,14 +316,26 @@ export const dataExceptionRecord = pgTable(
  * Detach soft-deletes. Upload idempotency lives here rather than on `Image`,
  * so a key reuses a file only while that exact association is active.
  */
+// Table modules import each other; resolve targets only when Drizzle evaluates the foreign key.
+const attachmentTargets = () => ({ image });
+
 export const entityAttachment = pgTable(
-  "EntityAttachment",
+  entityAttachmentStorage.table,
   {
     id: pkUuid(),
-    ...entityRef({ nullable: false }),
-    imageId: uuid("imageId")
+    entityId: uuid(entityAttachmentStorage.owner.column).notNull(),
+    entityKind: text(entityAttachmentStorage.owner.kindColumn)
+      .$type<Entity>()
+      .notNull(),
+    imageId: uuid(entityAttachmentStorage.image.column)
+      .$type<EntityId<typeof entityAttachmentStorage.image.targetEntity>>()
       .notNull()
-      .references(() => image.id),
+      .references(
+        () =>
+          attachmentTargets()[entityAttachmentStorage.image.targetEntity][
+            entityAttachmentStorage.image.targetColumn
+          ],
+      ),
     role: text("role", { enum: entityAttachmentRoleValues })
       .notNull()
       .default("attachment")
@@ -338,7 +352,14 @@ export const entityAttachment = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
-    entityRefFk("EntityAttachment_entity_fk", table),
+    foreignKey({
+      name: entityAttachmentStorage.owner.foreignKey,
+      columns: [table.entityId, table.entityKind],
+      foreignColumns: [
+        entityIdentity[entityAttachmentStorage.owner.targetId],
+        entityIdentity[entityAttachmentStorage.owner.targetKind],
+      ],
+    }),
     uniqueIndex("EntityAttachment_entity_image_key")
       .on(table.entityId, table.imageId)
       .where(sql`${table.deletedAt} IS NULL`),

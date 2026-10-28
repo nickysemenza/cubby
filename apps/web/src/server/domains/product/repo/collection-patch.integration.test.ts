@@ -1,5 +1,5 @@
+import { type ProductUpdateInput } from "@cubby/schemas/entities/product";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ProductUpdateInput } from "@cubby/schemas/product";
 import { buildEntity, type EntityOverrides } from "tooling/factories/build";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
