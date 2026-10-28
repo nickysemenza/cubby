@@ -10,5 +10,7 @@ export const storedFieldDecision = z.object({
     z.object({ kind: z.literal("empty"), reason: fieldEmptyReason }),
   ]),
   provenance: fieldProvenance.nullable(),
+  /** Private computation inputs, read only when explaining this publication. */
+  evidence: z.json().optional(),
 });
 export type StoredFieldDecision = z.output<typeof storedFieldDecision>;

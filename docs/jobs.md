@@ -563,6 +563,10 @@ other drain lanes free for other kinds.
 Product identity and connection features prepare a page of up to 100 items
 together and publish it in fenced chunks; other features run up to 8 items, two
 at a time, each in its own guarded transactions under the drain lease.
+Paged evaluations annotate the existing Job heartbeat and completion logs with
+`evaluation.prepare`, `evaluation.stage` and `evaluation.infer` phase timing.
+These labels distinguish evidence preparation from decision work without logging
+prompts or household evidence; concurrent decisions share one inference phase.
 
 `EvaluationPageAdapter` in `ai/evaluation/repo/evaluation-page.ts` owns finite feature
 preparation, decision evaluation and publication results. Every target carries

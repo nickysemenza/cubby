@@ -17,9 +17,11 @@
 
 import type { InventoryId, ProductId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { inventoryValuationFacts } from "@cubby/schemas/inventory-fields";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { and, type AnyColumn, inArray, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { z } from "zod";
 
 import { computeInventoryValuations } from "~/lib/price-mapping-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -109,10 +111,10 @@ export type InventoryValuations = ReadonlyMap<InventoryId, number | null>;
  * for all products, one batched WASM call per product. A row whose product is
  * missing or soft-deleted values at `null`, the honest answer.
  */
-export const loadInventoryValuations = async (
+const prepareInventoryValuations = async (
   db: Database | DrizzleTransaction,
   rows: readonly InventoryValuationRow[],
-): Promise<InventoryValuations> => {
+) => {
   const byProduct = new Map<ProductId, InventoryValuationRow[]>();
   for (const row of rows) {
     const group = byProduct.get(row.productId) ?? [];
@@ -130,8 +132,36 @@ export const loadInventoryValuations = async (
       valuations.set(row.id, values[index] ?? null);
     });
   }
-  return valuations;
+  return { valuations, graphs };
 };
+
+/** The drain captures the very graphs used by the same batched calculation. */
+export const loadInventoryValuationFacts = async (
+  db: Database | DrizzleTransaction,
+  rows: readonly InventoryValuationRow[],
+): Promise<
+  ReadonlyMap<InventoryId, z.output<typeof inventoryValuationFacts>>
+> => {
+  const { valuations, graphs } = await prepareInventoryValuations(db, rows);
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      inventoryValuationFacts.parse({
+        value: valuations.get(row.id) ?? null,
+        evidence: {
+          amount: { value: row.amountValue, unit: row.amountUnit },
+          unitMappings: graphs.get(row.productId) ?? [],
+        },
+      }),
+    ]),
+  );
+};
+
+export const loadInventoryValuations = async (
+  db: Database | DrizzleTransaction,
+  rows: readonly InventoryValuationRow[],
+): Promise<InventoryValuations> =>
+  (await prepareInventoryValuations(db, rows)).valuations;
 
 /** Attach each row's computed valuation, for mappers that read `entry.valuation`. */
 export const attachInventoryValuations = <T extends { id: InventoryId }>(

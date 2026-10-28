@@ -33,6 +33,8 @@ export const productCost = z.discriminatedUnion("kind", [
     amount: z.number(),
     chargeCount: z.number().int().positive(),
     latestCharge: moneyNullable,
+    /** Absent on retained publications until their evidence is backfilled. */
+    chargeTotal: z.number().optional(),
   }),
 ]);
 
@@ -62,6 +64,19 @@ export const productPricingEvidence = productPricingOut.pick({
   unknownExpenseCount: true,
   knownUnitCount: true,
   partial: true,
+});
+
+/** Private inputs captured with the scalar valuation-price publication. */
+export const productPriceFacts = z.object({
+  value: moneyNullable,
+  evidence: z.object({
+    manualPrice: moneyNullable,
+    service: z.boolean(),
+    knownCost: z.number(),
+    knownUnitCount: z.number(),
+    knownExpenseCount: z.number().int().nonnegative(),
+    unknownExpenseCount: z.number().int().nonnegative(),
+  }),
 });
 
 export { moneyNullable, positiveMoneyNullable };

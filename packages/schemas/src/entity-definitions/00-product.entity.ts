@@ -1286,18 +1286,25 @@ Rules:
             },
             sourceDependencies: [
               {
-                path: "fields.price.current.assignment.value",
+                path: "storedEvidence.manualPrice",
                 label: "Manual valuation price",
               },
               {
-                path: "fields.price.current.controls.reset.preview.result.decision.outcome.value",
-                label: "Expense-derived unit price",
+                path: "storedEvidence.knownCost",
+                label: "Weighted acquisition cost",
               },
               {
-                path: "fields.price.result.decision.provenance",
-                label: "Selected price source",
+                path: "storedEvidence.knownUnitCount",
+                label: "Weighted acquired units",
               },
-              { path: "pricing.partial", label: "Incomplete expense coverage" },
+              {
+                path: "storedEvidence.unknownExpenseCount",
+                label: "Expenses missing quantity",
+              },
+              {
+                path: "storedEvidence.service",
+                label: "Service pricing policy",
+              },
             ],
           },
           validation: {
@@ -1333,6 +1340,20 @@ Rules:
             ruleId: "product.descriptive-cost",
             description:
               "Physical Cost follows the selected valuation price. Service Cost is the published average of positive actual charges, with its matching count and latest dated charge; it is not a monthly rate.",
+            sourceDependencies: [
+              {
+                path: "storedResult.chargeTotal",
+                label: "Positive charge total",
+              },
+              {
+                path: "storedResult.chargeCount",
+                label: "Positive charge count",
+              },
+              {
+                path: "storedResult.latestCharge",
+                label: "Latest dated charge",
+              },
+            ],
           },
         },
         {
@@ -1724,11 +1745,18 @@ Rules:
           explanation: {
             ruleId: "product.usda-food",
             description:
-              "USDA food is the current lookup result for this product's explicit FDC identifier or normalized primary barcode.",
+              "USDA food is the published lookup result for this product's explicit FDC identifier or normalized primary barcode. Its captured lookup shows which source was used.",
             projections: { list: "food", summary: "food" },
             sourceDependencies: [
-              { path: "fdc_id", label: "Explicit FDC identifier" },
-              { path: "primaryGtin", label: "Primary normalized barcode" },
+              {
+                path: "storedEvidence.fdcId",
+                label: "Explicit FDC identifier",
+              },
+              {
+                path: "storedEvidence.primaryGtin",
+                label: "Primary normalized barcode",
+              },
+              { path: "storedEvidence.lookup", label: "Published USDA lookup" },
             ],
           },
           validation: {
@@ -2012,13 +2040,17 @@ Rules:
               "Expected quantity is the signed sum of product quantities on live expenses; incomplete quantity evidence is retained in the ledger status.",
             resolver: "productQuantity",
             projections: {
-              list: "quantityLedger.expectedQuantity",
-              summary: "quantityLedger.expectedQuantity",
+              list: "ledgerExpectedQuantity",
+              summary: "ledgerExpectedQuantity",
             },
             sourceDependencies: [
-              { path: "quantityLedger", label: "Expense quantity ledger" },
+              {
+                path: "storedEvidence.quantityLedger",
+                label: "Expense quantity ledger",
+              },
             ],
           },
+          validation: { read: z.number(), create: null, update: null },
         },
         {
           output: false,
@@ -2127,9 +2159,12 @@ Rules:
             resolver: "productQuantity",
             readPath: "quantityVariance",
             sourceDependencies: [
-              { path: "onHandUnits", label: "Counted inventory units" },
               {
-                path: "quantityLedger.expectedQuantity",
+                path: "storedEvidence.onHandUnits",
+                label: "Counted inventory units",
+              },
+              {
+                path: "storedEvidence.quantityLedger.expectedQuantity",
                 label: "Expected ledger quantity",
               },
             ],

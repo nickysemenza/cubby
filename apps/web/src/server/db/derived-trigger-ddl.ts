@@ -23,6 +23,7 @@ const fnName = (table: string) =>
 /** One mark per changed input: the old and new matched column values. */
 type TriggerInput = {
   target: string;
+  fixedTarget: boolean;
   tableColumn: string;
   columns: readonly string[] | null;
   where: Readonly<Record<string, string>> | null;
@@ -42,13 +43,19 @@ const whereSql = (row: "OLD" | "NEW", where: TriggerInput["where"]) =>
 // A malformed JSON value contributes nothing rather than failing the save:
 // a non-array at an array path is empty and non-UUID references are skipped.
 const refsSql = (row: "OLD" | "NEW", input: TriggerInput) => {
+  // Preserve independent writers' refs; only NULL needs a synthetic fanout signal.
+  if (input.fixedTarget && !input.json)
+    return `ARRAY[coalesce(${row}.${ident(input.tableColumn)}::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]`;
   if (!input.json) return `ARRAY[${row}.${ident(input.tableColumn)}::uuid]`;
   const column = `${row}.${ident(input.tableColumn)}`;
   const array = input.json.array
     ? `${column} #> '{${input.json.array.join(",")}}'`
     : `jsonb_build_array(${column})`;
   const key = literal(input.json.key);
-  return `ARRAY(SELECT (e->>${key})::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(${array}) = 'array' THEN ${array} ELSE '[]'::jsonb END) AS e WHERE e->>${key} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')`;
+  const refs = `ARRAY(SELECT (e->>${key})::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(${array}) = 'array' THEN ${array} ELSE '[]'::jsonb END) AS e WHERE e->>${key} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')`;
+  return input.fixedTarget
+    ? `coalesce(nullif(${refs}, ARRAY[]::uuid[]), ARRAY['00000000-0000-4000-8000-000000000000'::uuid])`
+    : refs;
 };
 
 const markStatement = (input: TriggerInput) => {
@@ -98,6 +105,7 @@ function derivedTriggerInputs(): Map<string, TriggerInput[]> {
         !entries.some(
           (entry) =>
             entry.target === target &&
+            entry.fixedTarget === (input.targetWhere !== null) &&
             entry.tableColumn === input.tableColumn &&
             JSON.stringify(entry.columns) === JSON.stringify(input.columns) &&
             JSON.stringify(entry.where) === JSON.stringify(input.where) &&
@@ -107,6 +115,7 @@ function derivedTriggerInputs(): Map<string, TriggerInput[]> {
       )
         entries.push({
           target,
+          fixedTarget: input.targetWhere !== null,
           tableColumn: input.tableColumn,
           columns: input.columns,
           where: input.where,

@@ -1,4 +1,6 @@
-import { eq } from "drizzle-orm";
+import { storedFieldDecision } from "@cubby/schemas/derived-value";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -8,6 +10,9 @@ import {
   inventoryScaffold,
   readInventory,
 } from "~/server/domains/inventory/repo/crud";
+import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { loadStoredDerived } from "~/server/generic/derived/repo/read";
+import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
@@ -17,6 +22,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 const page = { pageIndex: 0, pageSize: 50 };
 const each = (value: number) => ({ value, unit: "each" }) as const;
@@ -58,6 +64,45 @@ describe("inventory valuation — stored and recomputed on change", () => {
     await drainStoredDerived(ctx.db);
 
     expect((await readInventory(ctx.db, entry.id))?.valuation).toBe(20);
+    expect(
+      (
+        await loadStoredDerived(
+          ctx.db,
+          "inventory",
+          [entry.entityId],
+          ["valuation"],
+        )
+      )
+        .get(entry.entityId)
+        ?.get("valuation"),
+    ).not.toHaveProperty("evidence");
+    const explain = (
+      displayedResult?: Parameters<typeof explainField>[1]["displayedResult"],
+    ) =>
+      explainField(
+        entityKernelContextSchema.parse(
+          createTestRequestContext(ctx.db, {
+            auth: { userId: ctx.actor.userId },
+          }),
+        ),
+        {
+          entityKind: "inventory",
+          entityId: entry.id,
+          field: "valuation",
+          surface: "list",
+          displayedResult,
+        },
+      );
+    const initial = await explain();
+    expect(initial.publication?.kind).toBe("current");
+    const originalMappings = initial.sources.find(
+      (source) => source.label === "Published conversion and price mappings",
+    )?.value;
+    expect(originalMappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ b: expect.objectContaining({ value: 10 }) }),
+      ]),
+    );
 
     // Bypass every repo write path: only the product row changes.
     await getDb(ctx.db)
@@ -66,9 +111,27 @@ describe("inventory valuation — stored and recomputed on change", () => {
       .where(eq(product.id, sku.entityId));
 
     expect((await readInventory(ctx.db, entry.id))?.valuation).toBe(20);
+    const stale = await explain(initial.envelope.result);
+    expect(stale.publication?.kind).toBe("current");
+    expect(
+      stale.sources.find(
+        (source) => source.label === "Published conversion and price mappings",
+      )?.value,
+    ).toEqual(originalMappings);
+    // Legacy publications retain their scalar even when no input graph was captured.
+    await getDb(ctx.db)
+      .execute(sql`UPDATE "DerivedValue" SET "decidedBy"="decidedBy"-${storedFieldDecision.keyof().enum.evidence}
+      WHERE "entityId"=${entry.entityId} AND key='valuation'`);
+    const legacy = await explain(initial.envelope.result);
+    expect(legacy.publication?.kind).toBe("unavailable");
+    expect(fieldValueOf(legacy.envelope)).toBe(20);
     // The price edit marked the entry; the drain republishes the record and list figure.
     await drainStoredDerived(ctx.db);
     expect((await readInventory(ctx.db, entry.id))?.valuation).toBe(60);
+    expect((await explain(initial.envelope.result)).publication?.kind).toBe(
+      "superseded",
+    );
+    expect((await explain()).publication?.kind).toBe("current");
     const list = await listInventoryFixture(ctx.db, {}, [], page);
     expect(list.data.find((row) => row.id === entry.id)?.valuation).toBe(60);
     expect(

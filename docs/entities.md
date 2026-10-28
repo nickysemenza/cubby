@@ -2863,6 +2863,24 @@ recipes through one shared costing context; the drain preserves tickets written
 during that preparation. WorkItem fanout lookup uses an indexed `COLLATE "C"`
 prefix range, including correlated target lookups.
 
+Service Cost captures the positive actual charge total beside its average, count
+and latest dated charge. The explanation reads those operands from the same
+publication, including while refresh is pending or failed. Retained publications
+without the total remain visible with unavailable additional evidence until the
+existing drain backfills them; opening the explanation never computes that total.
+
+Home and Work queue diagnostic sources read one household-day publication on the
+reserved household Project. Canonical detectors, including private financial
+findings, run only in background preparation. Display reads fetch compact counts
+and status; private finding arrays stay in SQL through current ownership fences,
+search, exact totals and pagination. Missing counts remain unavailable rather than
+zero, and stale/error publications retain their last successful findings. Current
+actions still validate authoritative evidence. The declaration names the physical
+graph and canonical source tables and its quality/rollup dependencies; new source
+tables require enrollment and read-set coverage. Project attention still combines
+stored rollups with current Task/Expense checks; this diagnostic publication does
+not replace that separate owner.
+
 A stored result may declare `resultSchema` and supply several scalar fields through
 `model.derived.<field>.fromResult: { key, path }`. Generation checks each path and
 scalar type against that schema. These fields share the result's publication,
@@ -2968,6 +2986,18 @@ controls remain explicitly separate from that evidence. Additional evidence not
 captured in the publication is unavailable rather than reconstructed from current
 sources. Expense beneficiary portions use this binding to keep
 contributor references out of ordinary list payloads.
+Scalar publications retain their numeric/null shape and may capture private
+inputs in their atomic decision metadata. Explanations expose these as
+`storedEvidence` from the same MVCC snapshot and publication timestamp. Ordinary
+stored reads remove that evidence in SQL before transfer and never carry it in
+public field decisions. Inventory valuation captures the actual conversion graph,
+including the unrounded price edge; Product price captures its weighted cost and
+quantity operands, quantities capture their ledger and counted units, and USDA
+food captures its chosen lookup. Missing evidence is unavailable, including for
+a retained successful empty result; it is never reconstructed from current rows.
+Capturing Product price evidence preserves the existing PostgreSQL decimal
+rounding of the weighted unit cost; it must not substitute binary floating-point
+rounding for publication.
 An absent optional evidence path in a legacy publication leaves the value and
 available aggregate evidence readable, but reports the explanation unavailable.
 It must not throw, reconstruct the missing inputs live, or certify partial
@@ -2991,9 +3021,19 @@ select fixed target rows with `targetWhere` during deferred fanout, or read reco
 (`json: { array, key }`). A path step may select a UUID from its `to` JSON
 object with `jsonKey`, or compare its `from` object’s UUID with
 `fromJsonKey`; malformed JSON references contribute no records. `dependsOn` names other stored
-values it reads, by column match, link table or join path. A unit test checks
+values it reads, by column match, link table, join path or fixed `targetWhere`.
+A fixed dependency marks only those target rows when any upstream publication
+changes; it does not subscribe to every `DerivedValue` write.
+Global dependents wait at claim admission while an upstream direct or fanout
+ticket remains owed, including backed-off work. Preparation cannot observe a
+partially rebuilt upstream population or spend retries waiting for its own page
+to publish. Missing upstream publications without queued work still fail explicitly.
+The schema guard checks
 every declared table and column against the Drizzle schema: PL/pgSQL resolves
 trigger columns only when a row fires, so a misspelled column would fail saves.
+Fixed-target inputs preserve non-null source references so independent writers
+do not contend on one work ticket. A null source UUID uses a constant fallback:
+it must not silently suppress invalidation. Only the drain selects target rows.
 
 Inputs follow the precision and relationships of the compute. Exact valuations
 watch raw pricing inputs rather than a rounded stored price. Kit-link and

@@ -15,6 +15,7 @@ import type { DerivedComputes } from "~/server/generic/derived/repo/compute";
 import {
   DERIVED_DRAIN_JOB_KEY,
   derivedChunk,
+  derivedWorkEligible,
   type DerivedChunk,
   type DerivedPagePlan,
   lockDerivedChunk,
@@ -50,6 +51,7 @@ export const derivedDrainHandler = (
 ): JobHandler =>
   defineDrain<{ plan: DerivedPagePlan; chunk: DerivedChunk }>({
     limit,
+    eligible: derivedWorkEligible,
     chunk,
     repeats: true,
     async prepare(db, items) {

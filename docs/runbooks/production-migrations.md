@@ -160,6 +160,29 @@ not performed; migration success alone is not deployment verification.
 
 ## Derived values cutover
 
+### Publication evidence (0057)
+
+`0057_publication_evidence` queues retained service Cost publications missing
+their positive charge total and scalar Product/Inventory publications missing
+private computation inputs. It leaves stored values, publication timestamps,
+existing tickets, member-edit priority and retry state untouched. After deployment,
+verify that pending refreshes retain their old Cost and that a completed refresh
+publishes its charge total with the average and count. Verify scalar valuation,
+quantity and USDA explanations use their captured inputs while ordinary list
+responses omit that evidence. Legacy evidence remains
+explicitly unavailable until that publication; opening a popover is never a repair.
+
+It also installs the declared household diagnostic inputs, including constant
+fixed-target fanout for nullable source references, and queues the live reserved
+household Project without replacing any existing ticket. The predecessor drain
+does not recognize that target and can discard its initial work. Use the existing
+code-first sequence: before merge set the `cloudflare` environment's
+`PRODUCTION_MIGRATION_THROUGH` to `0056_recipe_publication`, deploy the matching
+code, and verify its release. With no Deploy queued/running, apply through
+`0057_publication_evidence`, read back preservation and the new publication, then
+remove the boundary before another release. No writer hold is needed. The
+migration uses a two-second lock timeout and rolls back for replay on contention.
+
 ### Recipe publication identity (0056)
 
 `0056_recipe_publication` adds a retained publication timestamp independently of

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { incompleteWorkDiagnosticSource } from "./work-diagnostic-facts";
+
 import { plainDate } from "./base-entity";
 import { dataCheck, dataQuality } from "./data-quality";
 import { displayImagesField } from "./display-images";
@@ -288,6 +290,11 @@ export const workQueueOutSchema = z.object({
     pageSize: z.number().int().positive(),
     /** Counts cover known candidates while Project inputs are incomplete. */
     incompleteProjectIds: z.array(projectShortcode).optional(),
+    /** Missing/stale diagnostic publications; totals cover known work only. */
+    incompleteDiagnosticSources: z
+      .array(incompleteWorkDiagnosticSource)
+      .max(64)
+      .optional(),
     totalCount: count,
     viewCounts: z.record(z.string(), count),
     /** The grouped read's sections of the whole filtered set, in page order. */

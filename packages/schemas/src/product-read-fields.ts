@@ -125,6 +125,8 @@ export const productQuantityFields = {
   stockStatus: z.string().nullish(),
   stockStatusItems: displayItems,
   quantityLedger: productQuantityLedgerOut,
+  /** The public envelope takes this scalar from its own stored publication. */
+  ledgerExpectedQuantity: z.number().nullish(),
   onHandUnits: z.number().nullable(),
   quantityVariance: z.number().nullable(),
 };

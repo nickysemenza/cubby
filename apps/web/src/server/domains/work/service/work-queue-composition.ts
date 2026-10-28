@@ -28,6 +28,7 @@ import type { WorkQueueComposition } from "~/server/generic/work-queue/repo/work
 /** Explicit domains, with request-local evidence shared only by this read. */
 export const workQueueComposition = (): WorkQueueComposition => {
   const context = projectWorkContext();
+  const diagnostics = diagnosticWorkSources();
   return {
     sources: [
       ...productWorkSources(),
@@ -50,9 +51,10 @@ export const workQueueComposition = (): WorkQueueComposition => {
       purchaseSettlementWorkSource,
       transferWorkSource,
       pendingSuggestionsWorkSource,
-      ...diagnosticWorkSources(context),
+      ...diagnostics.sources,
     ],
     deferrals: [plannedPurchaseWorkDeferral()],
     incompleteProjectIds: context.incompleteProjectIds,
+    incompleteDiagnosticSources: diagnostics.incompleteDiagnosticSources,
   };
 };

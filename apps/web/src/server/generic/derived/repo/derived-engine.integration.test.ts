@@ -11,6 +11,7 @@ import { seedEntity, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Database } from "~/server/db";
+import * as derivedDeclarations from "~/server/db/derived-declarations";
 import {
   getDb,
   databaseForTransaction,
@@ -248,7 +249,6 @@ describe("stored derived values", () => {
   it("claims newer member edits before older background source writes without demoting member work", async () => {
     const background = await makeProduct("Synthetic background source", 2);
     const member = await makeProduct("Synthetic member source", 3);
-    await clearMarks();
     const saved = await enqueueJob(ctx.db, {
       key: "synthetic:derived-source-priority",
       kind: "image.cloud",
@@ -256,6 +256,8 @@ describe("stored derived values", () => {
     });
     const claim = await claimExternal(ctx.db, saved.id);
     if (!claim) throw new Error("Expected synthetic Job claim");
+    // Job identity creation is fixture setup, before the source writes under test.
+    await clearMarks();
     const rename = (id: ProductId, name: string) =>
       withTransaction(ctx.db, (tx) =>
         tx.update(product).set({ name }).where(eq(product.id, id)),
@@ -1154,14 +1156,52 @@ describe("stored derived values", () => {
     const location = await makeLocation("Closet");
     const soap = await makeProduct("Synthetic soap", 2);
     const entry = await makeEntry(soap, location, 3);
+    const fixedEntry = await makeEntry(
+      await makeProduct("Synthetic fixed-target stock", 7),
+      location,
+      1,
+    );
     await drain();
+    const dependent = derivedDeclarations.storedDerived(
+      "inventory",
+      "valuation",
+    );
+    if (!dependent) throw new Error("Missing inventory valuation declaration");
+    const originalDependents = derivedDeclarations.dependentsOf;
+    vi.spyOn(derivedDeclarations, "dependentsOf").mockImplementation(
+      (entity, key) => [
+        ...originalDependents(entity, key),
+        ...(entity === "product" && key === "price"
+          ? [
+              {
+                declaration: dependent,
+                dependency: {
+                  entity,
+                  key,
+                  targetWhere: { id: fixedEntry, deletedAt: null },
+                },
+              },
+            ]
+          : []),
+      ],
+    );
+    const compute = derivedComputes["inventory.valuation"];
+    if (typeof compute !== "function")
+      throw new Error("Expected inventory valuation compute");
+    const observed = vi.fn(compute);
     expect((await valuation(entry))?.value).toBe(6);
     await getDb(ctx.db)
       .update(product)
       .set({ price: 3 })
       .where(eq(product.id, soap));
-    await drain();
+    await drainStoredDerived(ctx.db, 100, {
+      ...derivedComputes,
+      "inventory.valuation": observed,
+    });
     expect((await valuation(entry))?.value).toBe(9);
+    expect(observed.mock.calls.flatMap(([, ids]) => [...ids])).toContain(
+      fixedEntry,
+    );
   });
 
   it("discards marks with a rolled-back save", async () => {

@@ -690,6 +690,7 @@ async function loadPublishedExplanationFacts({
               resultExists: true,
               value: fieldValueOf(root),
               computedAt: root.result.computedAt,
+              evidence: undefined,
             }
           : undefined,
     };
@@ -698,7 +699,11 @@ async function loadPublishedExplanationFacts({
     declaration,
     storedResult:
       internalId && declaration
-        ? (await loadStoredDerived(db, entity, [internalId], [key]))
+        ? (
+            await loadStoredDerived(db, entity, [internalId], [key], {
+              includeEvidence: true,
+            })
+          )
             .get(internalId)
             ?.get(key)
         : undefined,
@@ -863,6 +868,9 @@ async function loadExplanationSnapshot(
           ? {
               ...sourceProjection,
               storedResult: z.json().parse(storedResult.value),
+              ...(storedResult.evidence !== undefined
+                ? { storedEvidence: storedResult.evidence }
+                : {}),
             }
           : {
               ...sourceProjection,
@@ -1054,6 +1062,7 @@ function explainPublication({
   input,
   envelope,
   publishedFacts,
+  publishedEvidence,
   explanation,
   label,
   comparison,
@@ -1062,6 +1071,7 @@ function explainPublication({
   input: ExplainFieldInput;
   envelope: z.output<typeof fieldExplanationOutput>["envelope"];
   publishedFacts: Json | undefined;
+  publishedEvidence: Json | undefined;
   explanation: Explanation;
   label: string;
   comparison: z.output<typeof fieldExplanationOutput>["comparison"] | null;
@@ -1073,30 +1083,37 @@ function explainPublication({
   const displayed = input.displayedResult;
   const actual = envelope.result;
   const matches = matchesDisplayedPublication(displayed, actual);
+  const capturedProjection = {
+    storedResult: publishedFacts ?? null,
+    // A null parent is known absence in ordinary projections; missing evidence is not.
+    ...(publishedEvidence != null ? { storedEvidence: publishedEvidence } : {}),
+  };
   const capturedDependencies =
     explanation.sourceDependencies?.filter(
       (dependency) =>
         dependency.path === "storedResult" ||
-        dependency.path.startsWith("storedResult."),
+        dependency.path.startsWith("storedResult.") ||
+        dependency.path === "storedEvidence" ||
+        dependency.path.startsWith("storedEvidence."),
     ) ?? [];
   const capturedSources =
-    publishedFacts == null
+    publishedFacts == null && publishedEvidence == null
       ? []
       : capturedDependencies.length
-        ? dependencySources(
-            { storedResult: publishedFacts },
+        ? dependencySources(capturedProjection, {
+            ...explanation,
+            sourceDependencies: capturedDependencies.filter(
+              (dependency) =>
+                readExplanationPath(capturedProjection, dependency.path).found,
+            ),
+          })
+        : [
             {
-              ...explanation,
-              sourceDependencies: capturedDependencies.filter(
-                (dependency) =>
-                  readExplanationPath(
-                    { storedResult: publishedFacts },
-                    dependency.path,
-                  ).found,
-              ),
+              label: "Published facts",
+              entity: null,
+              value: publishedFacts ?? publishedEvidence ?? null,
             },
-          )
-        : [{ label: "Published facts", entity: null, value: publishedFacts }];
+          ];
   const bounded = boundExplanationSources([
     ...capturedSources,
     ...(input.scope && explanation.scopeFilters?.[input.scope.entityKind]
@@ -1143,16 +1160,13 @@ function explainPublication({
           reason:
             "The displayed value has been replaced. Refresh the value and its explanation together.",
         }
-      : publishedFacts != null &&
+      : (publishedFacts != null || publishedEvidence != null) &&
           ((capturedDependencies.length > 0 &&
             capturedDependencies.length ===
               explanation.sourceDependencies?.length &&
             capturedDependencies.every(
               (dependency) =>
-                readExplanationPath(
-                  { storedResult: publishedFacts },
-                  dependency.path,
-                ).found,
+                readExplanationPath(capturedProjection, dependency.path).found,
             )) ||
             qualityBreakdown)
         ? { kind: "current" }
@@ -1289,6 +1303,10 @@ export async function explainField(
       explanation,
       label: field.label,
       publishedFacts: sourceProjection.storedResult,
+      publishedEvidence:
+        "storedEvidence" in sourceProjection
+          ? sourceProjection.storedEvidence
+          : undefined,
       comparison: snapshot.comparison,
       currentQualityControls: snapshot.currentQualityControls,
     });

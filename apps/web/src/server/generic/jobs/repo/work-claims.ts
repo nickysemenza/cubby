@@ -2,7 +2,7 @@
  * Claiming and settling work items, private to `defineDrain`: only the drain
  * that holds the Job lease claims, clears, backs off or schedules its items.
  */
-import { and, asc, eq, lte, min, sql } from "drizzle-orm";
+import { and, asc, eq, lte, min, sql, type SQL } from "drizzle-orm";
 
 import {
   repositoryQueries,
@@ -18,6 +18,7 @@ export async function claimWork(
   db: RepositoryQueryInput,
   drain: string,
   limit: number,
+  eligible?: (target: SQL) => SQL,
 ): Promise<WorkItem[]> {
   return repositoryQueries(db)
     .select({
@@ -28,7 +29,13 @@ export async function claimWork(
       attempts: workItem.attempts,
     })
     .from(workItem)
-    .where(and(eq(workItem.drain, drain), lte(workItem.readyAt, sql`now()`)))
+    .where(
+      and(
+        eq(workItem.drain, drain),
+        lte(workItem.readyAt, sql`now()`),
+        eligible?.(sql`${workItem.target}`),
+      ),
+    )
     .orderBy(
       asc(workItem.priority),
       asc(workItem.readyAt),

@@ -38,6 +38,7 @@ import {
   unobservedWork,
   type WorkItem,
   workTicketsWhere,
+  workPendingWhere,
 } from "~/server/generic/jobs/repo/work-items";
 
 export { DERIVED_DRAIN_JOB_KEY };
@@ -46,7 +47,40 @@ export const DERIVED_DRAIN: Drain = {
   kind: "derived.drain",
 };
 
+/** Global dependents cannot share preparation with their still-owed upstream publications. */
+export function derivedWorkEligible(target: SQL): SQL {
+  const blocked = storedDerivedDeclarations().flatMap((declaration) =>
+    declaration.dependsOn.flatMap((dependency) =>
+      "targetWhere" in dependency
+        ? [
+            sql`(${target} = ${declaration.target} AND ${workPendingWhere(
+              (
+                column,
+              ) => sql`(${column} = ${`${dependency.entity}.${dependency.key}`}
+              OR ${fanoutTargetMatches(column, sql`${`${dependency.entity}.${dependency.key}`}::text`)})`,
+            )})`,
+          ]
+        : [],
+    ),
+  );
+  return blocked.length
+    ? sql`NOT (${sql.join(blocked, sql` OR `)})`
+    : sql`true`;
+}
+
 const ident = (name: string) => sql.raw(`"${name.replaceAll('"', '""')}"`);
+const fixedTargetRows = (
+  table: string,
+  where: Readonly<Record<string, string | null>>,
+) =>
+  sql`SELECT id FROM ${ident(table)} WHERE ${sql.join(
+    Object.entries(where).map(([column, value]) =>
+      value === null
+        ? sql`${ident(column)} IS NULL`
+        : sql`${ident(column)} = ${value}`,
+    ),
+    sql` AND `,
+  )}`;
 
 /** Ids per compute call. */
 export const DERIVED_COMPUTE_BATCH = 200;
@@ -235,14 +269,7 @@ async function expandFanouts(
     const { declaration } = parsed;
     const refs = sql`SELECT unnest(${uuidArrayParam(group.map((item) => item.ref))})`;
     const dependents = input.targetWhere
-      ? sql`SELECT id FROM ${ident(declaration.table)} WHERE ${sql.join(
-          Object.entries(input.targetWhere).map(([column, value]) =>
-            value === null
-              ? sql`${ident(column)} IS NULL`
-              : sql`${ident(column)} = ${value}`,
-          ),
-          sql` AND `,
-        )}`
+      ? fixedTargetRows(declaration.table, input.targetWhere)
       : input.path
         ? pathSql(input.path, refs)
         : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
@@ -454,13 +481,15 @@ async function propagate(
   const selections = dependentsOf(declaration.entity, declaration.key).map(
     ({ declaration: dependent, dependency }) => {
       const refs =
-        "path" in dependency
-          ? pathSql(
-              dependency.path,
-              sql`SELECT unnest(${uuidArrayParam(changedIds)})`,
-            )
-          : "through" in dependency
-            ? sql`SELECT l.${ident(dependency.through.dependent)} AS id
+        "targetWhere" in dependency
+          ? fixedTargetRows(dependent.table, dependency.targetWhere)
+          : "path" in dependency
+            ? pathSql(
+                dependency.path,
+                sql`SELECT unnest(${uuidArrayParam(changedIds)})`,
+              )
+            : "through" in dependency
+              ? sql`SELECT l.${ident(dependency.through.dependent)} AS id
                 FROM ${ident(dependency.through.table)} l
                WHERE l.${ident(dependency.through.source)} = ANY(${uuidArrayParam(changedIds)})
                  ${sql.join(
@@ -469,7 +498,7 @@ async function propagate(
                        sql` AND l.${ident(column)} = ${value}`,
                    ),
                  )}`
-            : sql`SELECT d.id FROM ${ident(dependent.table)} d
+              : sql`SELECT d.id FROM ${ident(dependent.table)} d
                 JOIN ${ident(declaration.table)} s
                   ON s.${ident(dependency.sourceColumn)} = d.${ident(dependency.entityColumn)}
                WHERE s.id = ANY(${uuidArrayParam(changedIds)})`;

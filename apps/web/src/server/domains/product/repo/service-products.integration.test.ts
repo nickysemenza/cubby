@@ -19,6 +19,7 @@ import {
   productPricingSummary,
   productStockSummary,
 } from "~/server/generic/entity-report/repo/summary";
+import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import { updateWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { drainStoredDerived } from "~/server/testing/background-queue";
@@ -257,6 +258,7 @@ describe("category-based service Products", () => {
                 amount: 65,
                 chargeCount: 2,
                 latestCharge: 90,
+                chargeTotal: 130,
               },
             },
             provenance: { kind: "computed" },
@@ -359,6 +361,37 @@ describe("category-based service Products", () => {
         kind: "failed",
         error: "Synthetic Cost refresh failure",
       });
+      const explainCost = () =>
+        explainField(
+          entityKernelContextSchema.parse(
+            createTestRequestContext(ctx.db, {
+              auth: { userId: ctx.actor.userId },
+            }),
+          ),
+          {
+            entityKind: "product",
+            entityId: service.id,
+            field: "cost",
+            surface: "detail",
+          },
+        );
+      const retainedExplanation = await explainCost();
+      expect(retainedExplanation.publication?.kind).toBe("current");
+      expect(retainedExplanation.sources).toContainEqual(
+        expect.objectContaining({ label: "Positive charge total", value: 130 }),
+      );
+      // A legacy snapshot must not borrow the newly edited live charge total.
+      await getDb(ctx.db).execute(sql`UPDATE "DerivedValue"
+        SET value=value-'chargeTotal'
+        WHERE "entityId"=${service.entityId} AND key='cost'`);
+      const legacyExplanation = await explainCost();
+      expect(legacyExplanation.publication?.kind).toBe("unavailable");
+      expect(legacyExplanation.sources).not.toContainEqual(
+        expect.objectContaining({ label: "Positive charge total" }),
+      );
+      expect(legacyExplanation.sources).toContainEqual(
+        expect.objectContaining({ label: "Positive charge count", value: 2 }),
+      );
       const staleSort = await listProductsFixture(
         ctx.db,
         { ids: [service.id, physical.id] },
@@ -376,6 +409,9 @@ describe("category-based service Products", () => {
       );
       await drainStoredDerived(ctx.db);
       const refreshed = await readCanonical();
+      expect((await explainCost()).sources).toContainEqual(
+        expect.objectContaining({ label: "Positive charge total", value: 230 }),
+      );
       expect(refreshed.fields.cost.result).toMatchObject({
         kind: "cached",
         freshness: "fresh",

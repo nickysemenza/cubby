@@ -23,6 +23,7 @@ import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costin
 import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
 import { shipmentDerivedComputes } from "~/server/domains/shipment/repo/event-summary";
 import { requestUsdaRelease } from "~/server/domains/usda-release/service/client";
+import { computeWorkDiagnosticFacts } from "~/server/domains/work/service/work-diagnostics";
 import { qualityDerivedComputes } from "~/server/generic/data-quality/repo/derived";
 import {
   type DerivedAdapter,
@@ -121,6 +122,7 @@ export const derivedComputes: DerivedComputes = {
   ...emailDerivedComputes,
   ...locationDerivedComputes,
   ...projectDerivedComputes,
+  "project.workDiagnosticFacts": computeWorkDiagnosticFacts,
   ...shipmentDerivedComputes,
   ...qualityDerivedComputes,
   ...searchComputes,

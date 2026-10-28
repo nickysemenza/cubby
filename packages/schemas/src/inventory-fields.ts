@@ -2,11 +2,20 @@ import { productCategoryFeature } from "./product-category-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { z } from "zod";
 import { moneyNullable } from "./money";
+import { amount } from "./codec";
+import { unitMappingWithMetadata } from "./unitmapping";
 
 /** Cycle-safe field schemas consumed by the generated Inventory contract. */
 export const inventoryPlacement = z.enum(inventoryPlacementValues);
 
 export const inventoryValuation = moneyNullable;
+export const inventoryValuationFacts = z.object({
+  value: inventoryValuation,
+  evidence: z.object({
+    amount,
+    unitMappings: z.array(unitMappingWithMetadata),
+  }),
+});
 /**
  * A row's valuation state: valued, else whether its product has an effective
  * price the stored unit cannot reach (priceable) or none (unpriceable).

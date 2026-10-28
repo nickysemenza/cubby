@@ -3,6 +3,7 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project-fields";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -21,6 +22,7 @@ import {
   image,
   ledgerParty,
   product,
+  project,
 } from "~/server/db/schema";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
@@ -38,6 +40,7 @@ import {
 import { markAllStoredDerived } from "~/server/generic/derived/repo/drain";
 import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductFixture,
@@ -54,6 +57,8 @@ const UNDECLARED_READS = new Set(["Entity", "DerivedValue"]);
 
 /** Full read models also load presentation fields these sinks never publish. */
 const INCIDENTAL_READS = {
+  // Input availability reads queue status; scheduling changes are not diagnostic inputs.
+  "project.workDiagnosticFacts": new Set(["WorkItem"]),
   "recipe.totals": new Set([
     // getRecipesByIDs loads cookbook metadata; recipeWasmInput uses only yield and rows.
     "Cookbook",
@@ -215,6 +220,20 @@ describe("stored derived read sets", () => {
       .where(eq(ledgerParty.id, member.entityId));
     await seedPerformanceCorpus(ctx.db, ctx.actor.userId, { bundles: 1 });
     await seedCorpusGaps();
+    const created = await createRepoEntity(ctx, "project", {
+      name: "Synthetic read-set anchor",
+    });
+    const [row] = await getDb(ctx.db)
+      .select()
+      .from(project)
+      .where(eq(project.id, created.entityId));
+    if (!row) throw new Error("Synthetic Project was not persisted");
+    // The reserved system code is not assignable through the ordinary create contract.
+    const { id: _id, shortcode: _shortcode, ...values } = row;
+    await insertWithShortcode(ctx.db, "project", values, {
+      generate: (entity) =>
+        parseShortcodeFor(entity, HOUSEHOLD_PROJECT_SHORTCODE),
+    });
   }
 
   it("reads only declared inputs", async () => {
@@ -235,9 +254,13 @@ describe("stored derived read sets", () => {
         failed.push(`${declaration.target}: no compute adapter`);
         continue;
       }
+      if (declaration.target === "project.workDiagnosticFacts")
+        await drainStoredDerived(ctx.db, 100, Object.fromEntries(computes));
       const ids = (
         await getDb(ctx.db).execute(
-          sql`SELECT id::text AS id FROM ${sql.identifier(declaration.table)} ORDER BY id LIMIT 25`,
+          sql`SELECT id::text AS id FROM ${sql.identifier(declaration.table)}
+          ${declaration.target === "project.workDiagnosticFacts" ? sql`WHERE shortcode=${HOUSEHOLD_PROJECT_SHORTCODE}` : sql``}
+          ORDER BY id LIMIT 25`,
         )
       ).rows.map((row) => String((row as { id: string }).id));
       if (ids.length === 0) {

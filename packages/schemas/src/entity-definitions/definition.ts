@@ -1053,6 +1053,12 @@ const buildMetadataSchemas = () => {
   const derivedMatchSchema = z
     .record(nonEmptyString(), nonEmptyString())
     .refine((match) => Object.keys(match).length === 1, "one column pair");
+  const derivedTargetWhereSchema = z
+    .record(nonEmptyString(), nonEmptyString().nullable())
+    .refine(
+      (where) => Object.keys(where).length > 0,
+      "targetWhere needs at least one column",
+    );
   /**
    * A join path the drain walks from changed values to the records to mark:
    * each step selects `to` from `table` rows whose `from` is in the previous
@@ -1089,13 +1095,7 @@ const buildMetadataSchemas = () => {
       except: z.array(nonEmptyString()).min(1).optional(),
       /** From the matched column's value to this entity's ids; `match` then names `{ column: "id" }`. */
       path: derivedPathSchema.optional(),
-      targetWhere: z
-        .record(nonEmptyString(), nonEmptyString().nullable())
-        .refine(
-          (where) => Object.keys(where).length > 0,
-          "targetWhere needs at least one column",
-        )
-        .optional(),
+      targetWhere: derivedTargetWhereSchema.optional(),
       /**
        * The matched column is JSON: read `key` from the object, or from each
        * element at `array` (a mail-import Run's `input.sources`).
@@ -1117,6 +1117,13 @@ const buildMetadataSchemas = () => {
       dependsOn: z
         .array(
           z.union([
+            z
+              .object({
+                entity: nonEmptyString(),
+                key: derivedKey,
+                targetWhere: derivedTargetWhereSchema,
+              })
+              .strict(),
             z
               .object({
                 entity: nonEmptyString(),

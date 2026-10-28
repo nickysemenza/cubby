@@ -1,3 +1,5 @@
+import type { SQL } from "drizzle-orm";
+
 /**
  * A drain Job pages through its work items (docs/jobs.md#coarse-jobs-and-work-items): claim
  * ready items, prepare them outside any transaction, then publish fenced
@@ -46,6 +48,8 @@ type DrainPublication = {
 export type DrainSpec<P> = {
   /** Items claimed per page. */
   limit: number;
+  /** Admission against the current work frontier, before limiting the page. */
+  eligible?: (target: SQL) => SQL;
   /** Publication weight of an item (default 1); a chunk holds at most `chunk`. */
   weight?: (item: WorkItem, prepared: P) => number;
   /** Weight one publication transaction holds (default 25). */
@@ -133,7 +137,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
   return {
     async prepare(db, claim, context) {
       const { backoff } = jobKindPolicy(claim.kind);
-      const items = await claimWork(db, claim.key, spec.limit);
+      const items = await claimWork(db, claim.key, spec.limit, spec.eligible);
       if (!items.length) {
         const next = spec.repeats ? null : await nextWorkReadyAt(db, claim.key);
         return {

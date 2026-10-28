@@ -1,7 +1,5 @@
-import {
-  fieldProvenance,
-  fieldEmptyReason,
-} from "@cubby/schemas/field-envelope";
+import { fieldProvenance } from "@cubby/schemas/field-envelope";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { productCost } from "@cubby/schemas/product-fields";
 import { and, isNull, sql } from "drizzle-orm";
 /**
@@ -20,14 +18,85 @@ import type {
   DerivedCompute,
   DerivedComputed,
 } from "~/server/generic/derived/repo/compute";
-import { sqlColumnCompute } from "~/server/generic/derived/repo/sql-compute";
 
-import { effectiveProductPriceSql } from "./pricing";
-import { expectedQuantitySql, quantityVarianceSql } from "./quantity-ledger";
+import { loadProductPriceFacts } from "./pricing";
+import { loadProductQuantitySummaries } from "./quantity-ledger";
 
 const row = quotedTable(product);
 const charge = alias(expense, "e");
-const source = { table: product, id: product.id, deletedAt: product.deletedAt };
+
+const computeProductPrice: DerivedCompute = async (db, ids) => {
+  const rows = await unwrapDb(db)
+    .select({ id: product.id, price: product.price })
+    .from(product)
+    .where(
+      and(
+        isNull(product.deletedAt),
+        sql`${product.id} = ANY(${uuidArrayParam(ids)})`,
+      ),
+    );
+  const facts = await loadProductPriceFacts(db, rows);
+  return new Map(
+    [...facts].map(([id, { value, evidence }]) => [
+      id,
+      {
+        value,
+        sort: value,
+        decision: {
+          outcome:
+            value === null
+              ? {
+                  kind: "empty" as const,
+                  reason: evidence.service
+                    ? ("not_applicable" as const)
+                    : ("unset" as const),
+                }
+              : { kind: "value" as const },
+          provenance:
+            evidence.manualPrice !== null && !evidence.service
+              ? fieldProvenance.parse({
+                  kind: "own",
+                  ownership: { kind: "record" },
+                })
+              : fieldProvenance.parse({ kind: "computed" }),
+          evidence,
+        },
+      },
+    ]),
+  );
+};
+
+const computeProductQuantity =
+  (key: "ledgerExpectedQuantity" | "quantityVariance"): DerivedCompute =>
+  async (db, ids) => {
+    const summaries = await loadProductQuantitySummaries(
+      db,
+      ids.map((id) => parseEntityId("product", id)),
+    );
+    return new Map(
+      [...summaries].map(([id, summary]) => {
+        const value =
+          key === "ledgerExpectedQuantity"
+            ? summary.quantityLedger.expectedQuantity
+            : summary.quantityVariance;
+        return [
+          id,
+          {
+            value,
+            sort: value,
+            decision: {
+              outcome:
+                value === null
+                  ? { kind: "empty" as const, reason: "unset" as const }
+                  : { kind: "value" as const },
+              provenance: fieldProvenance.parse({ kind: "computed" }),
+              evidence: summary,
+            },
+          },
+        ];
+      }),
+    );
+  };
 
 /** Only services publish Cost; physical Cost projects the selected price read. */
 const computeServiceCost: DerivedCompute = async (db, ids) => {
@@ -38,6 +107,7 @@ const computeServiceCost: DerivedCompute = async (db, ids) => {
       ${productCost.options[1].keyof().enum.kind}::text, ${productCost.options[1].shape.kind.value}::text,
       'amount', round(avg(e."cost")::numeric, 2)::double precision,
       'chargeCount', count(*)::int,
+      'chargeTotal', sum(e."cost"::double precision),
       'latestCharge', (array_agg(e."cost" ORDER BY e."date" DESC, e."id" DESC)
         FILTER (WHERE e."date" IS NOT NULL))[1]::double precision) END
       FROM "Expense" e WHERE e."productId" = ${outer(product.id)}
@@ -62,22 +132,9 @@ const computeServiceCost: DerivedCompute = async (db, ids) => {
 export const productDerivedComputes = {
   "product.ownership": productOwnershipCompute,
   "product.cost": computeServiceCost,
-  "product.price": sqlColumnCompute(
-    source,
-    sql.raw(`(${effectiveProductPriceSql(row)})::double precision`),
-    {
-      emptyReason: sql`CASE WHEN ${sql.raw(serviceProductSqlText(`${row}."id"`))} THEN ${fieldEmptyReason.enum.not_applicable}::text ELSE ${fieldEmptyReason.enum.unset}::text END`,
-      provenance: sql`CASE WHEN ${product.price} IS NOT NULL AND NOT ${sql.raw(serviceProductSqlText(`${row}."id"`))}
-        THEN ${JSON.stringify(fieldProvenance.parse({ kind: "own", ownership: { kind: "record" } }))}::jsonb
-        ELSE ${JSON.stringify(fieldProvenance.parse({ kind: "computed" }))}::jsonb END`,
-    },
+  "product.price": computeProductPrice,
+  "product.ledgerExpectedQuantity": computeProductQuantity(
+    "ledgerExpectedQuantity",
   ),
-  "product.ledgerExpectedQuantity": sqlColumnCompute(
-    source,
-    sql.raw(`(${expectedQuantitySql(row)})::double precision`),
-  ),
-  "product.quantityVariance": sqlColumnCompute(
-    source,
-    sql.raw(`(${quantityVarianceSql(row)})::double precision`),
-  ),
+  "product.quantityVariance": computeProductQuantity("quantityVariance"),
 };
