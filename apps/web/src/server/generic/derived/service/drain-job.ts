@@ -23,6 +23,7 @@ import {
 import { repeatJob } from "~/server/generic/jobs/repo/producer";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { JobHandler } from "~/server/generic/jobs/types";
+import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const log = createLogger("derived");
 
@@ -30,21 +31,44 @@ export const DERIVED_RECONCILE_JOB_KEY = "derived:reconcile";
 const DRAIN_REPEAT_MS = 60_000;
 const RECONCILE_INTERVAL_MS = 60 * 60_000;
 const RECONCILE_BUCKETS = 24;
+// A sink retains its prepared results until publication. Finish one bounded
+// batch before preparing more, so the invocation budget can yield between pages.
+const DRAIN_PAGE_MARKS = 20;
 
 /** Each page claims ready marks, computes outside the transaction and publishes. */
 export const derivedDrainHandler = (computes: DerivedComputes): JobHandler =>
   defineJobHandler(z.object({}).passthrough(), async (db) => {
-    const marks = await claimDerivedMarks(db);
+    const marks = await claimDerivedMarks(db, DRAIN_PAGE_MARKS);
     if (marks.length === 0)
       return {
         page: { done: true },
         publish: async (tx) => ({ marked: await markExpiredClockDerived(tx) }),
       };
-    const plan = await prepareDerivedPage(db, computes, marks);
+    const plan = await withTrace(
+      TraceNames.service("derived", "prepare"),
+      () => prepareDerivedPage(db, computes, marks),
+      {
+        "derived.marks": marks.length,
+        "derived.targets": [...new Set(marks.map((mark) => mark.target))].join(
+          ",",
+        ),
+      },
+    );
     return {
       page: { done: false },
       publish: async (tx) => {
-        const publication = await publishDerivedPage(tx, plan);
+        const publication = await withTrace(
+          TraceNames.service("derived", "publish"),
+          async (span) => {
+            const result = await publishDerivedPage(tx, plan);
+            span.setAttributes({
+              "derived.processed": result.processed,
+              "derived.changed": result.changed,
+              "derived.expanded": result.expanded,
+            });
+            return result;
+          },
+        );
         if (publication.drift.length > 0)
           log.warn("derived.drift", { drift: publication.drift });
         if (publication.categories.length > 0)
