@@ -16,10 +16,10 @@ import {
   openRecipeRecomputeStaleStream,
 } from "~/features/recipe/recipe-streams";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { imageUpload } from "~/integrations/tanstack-query/domains/imageUpload";
-import { maintenance } from "~/integrations/tanstack-query/domains/maintenance";
-import { problems } from "~/integrations/tanstack-query/domains/problems";
-import { recipe } from "~/integrations/tanstack-query/domains/recipe";
+import { imageUpload } from "~/integrations/tanstack-query/generated/domains/imageUpload.gen";
+import { maintenance } from "~/integrations/tanstack-query/generated/domains/maintenance.gen";
+import { problems } from "~/integrations/tanstack-query/generated/domains/problems.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

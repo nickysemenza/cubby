@@ -7,7 +7,7 @@ import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { Page } from "~/entity/page/page";
 import RTable from "~/entity/table/table";
 import { OrphanedClientMaintenance } from "~/features/account/orphaned-client-maintenance";
-import { oauth } from "~/integrations/tanstack-query/domains/oauth";
+import { oauth } from "~/integrations/tanstack-query/generated/domains/oauth.gen";
 import { pageTitle } from "~/lib/page-title";
 import { DateDisplay } from "~/ui/common/date-display";
 import {

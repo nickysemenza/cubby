@@ -79,9 +79,9 @@ import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.g
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { CorrectionAuthorityEvidence } from "~/entity/suggestions/correction-authority-evidence";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import { ai } from "~/integrations/tanstack-query/domains/ai";
-import { assessment } from "~/integrations/tanstack-query/domains/assessment";
-import { suggestions } from "~/integrations/tanstack-query/domains/suggestions";
+import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
+import { assessment } from "~/integrations/tanstack-query/generated/domains/assessment.gen";
+import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import type { OperationCallOptions } from "~/integrations/tanstack-query/operation-call";
 import { operationCachePolicy } from "~/integrations/tanstack-query/query-policy";

@@ -7,7 +7,7 @@ import { EntityListCardDensityProvider } from "~/entity/entity-list/generic-enti
 import { entitySearch } from "~/entity/generated/entity-search.gen";
 import { listChromePage } from "~/entity/routing/list-page";
 import { installFeatures } from "~/features/registry";
-import { usdaFood } from "~/integrations/tanstack-query/domains/usdaFood";
+import { usdaFood } from "~/integrations/tanstack-query/generated/domains/usdaFood.gen";
 
 import {
   type USDAFoodListOperations,

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
-import { imageUpload } from "~/integrations/tanstack-query/domains/imageUpload";
+import { imageUpload } from "~/integrations/tanstack-query/generated/domains/imageUpload.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";

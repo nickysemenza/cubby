@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { vendor } from "~/integrations/tanstack-query/domains/vendor";
+import { vendor } from "~/integrations/tanstack-query/generated/domains/vendor.gen";
 import { DropdownMenuItem } from "~/ui/primitives/dropdown-menu";
 
 import { VerbMenuItem } from "./action-verb-ui";

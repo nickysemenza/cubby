@@ -525,7 +525,8 @@ TypeScript artifact emitters use `tsModule` in `generator/artifacts.ts`. Its
 vocabulary is imports, exported literal constants (`as const`, optionally
 `satisfies` a named type), aliases of named types, and re-export aliases.
 Literal tables may reference imported values or their properties; they cannot
-call them. Behavior, Zod construction, mapped and conditional types, and parsing
+call them. The one call is a `bindings` entry: an imported, side-effect-free
+factory applied to imported references (the per-contract operation domains). Behavior, Zod construction, mapped and conditional types, and parsing
 live in ordinary typed modules under `src/`, importing generated data directly.
 Named constraints live beside their owning typed contracts. Unmigrated emitters
 mark free-form source with the explicit `rawSource()` escape hatch; migrated
@@ -2159,9 +2160,9 @@ declares them only when they differ (`tags: []` opts out of tagging).
 The vocabulary types live in `contracts/cache-policy.ts`, which contracts may
 import; no contract holds React, query-client, or input-dependent code.
 
-Browser call sites import small typed modules under
-`integrations/tanstack-query/domains/`, each importing its own contract.
-`defineOperationDomain` computes default query tags and mutation ripples from
+Browser call sites import one generated module per contract from
+`integrations/tanstack-query/generated/domains/`, so a route bundles only the
+contracts it uses. `defineOperationDomain` computes default query tags and mutation ripples from
 contract data, then applies optional input-dependent policies from
 `operation-overrides/<domain>.ts`. Module initialization rejects invalid cache
 policy and unknown override members. Domains stay independently loadable.

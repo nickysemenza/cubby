@@ -3,7 +3,7 @@ import type { RowDiagnosticOut } from "@cubby/schemas/recipe-shared";
 import { useQuery } from "@tanstack/react-query";
 import { match } from "ts-pattern";
 
-import { recipe } from "~/integrations/tanstack-query/domains/recipe";
+import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatEstimate, formatKcal } from "~/lib/nutrition-format";
 import { Row, Section } from "~/ui/layout";

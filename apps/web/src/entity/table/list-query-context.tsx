@@ -8,7 +8,7 @@ import { getEntityFilters } from "~/entity/filter-manifest";
 import { buildFiltersFromManifest } from "~/entity/filters";
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
 import { viewsForEntity } from "~/entity/model/view-manifest";
-import { entityList } from "~/integrations/tanstack-query/domains/entityList";
+import { entityList } from "~/integrations/tanstack-query/generated/domains/entityList.gen";
 import type { FilterBarField } from "~/ui/data-table/filter-bar-core";
 
 /**

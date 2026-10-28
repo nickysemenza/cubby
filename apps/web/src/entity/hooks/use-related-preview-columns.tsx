@@ -12,7 +12,7 @@ import { getSortableFields } from "~/entity/entities";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
 import { entityMetadata } from "~/entity/metadata";
 import { RelatedPreviewCell } from "~/entity/table/related-preview-cell";
-import { relatedData } from "~/integrations/tanstack-query/domains/relatedData";
+import { relatedData } from "~/integrations/tanstack-query/generated/domains/relatedData.gen";
 import type {
   CubbyColumnDef as ColumnDef,
   CubbyColumnHelper as ColumnHelper,

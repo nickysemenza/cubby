@@ -9,7 +9,7 @@ import { compileEntityListInput } from "~/entity/entity-list";
 import { useServerTree } from "~/entity/hooks/use-server-tree";
 import { useEntityMetadata } from "~/entity/metadata";
 import { getFeatureColor } from "~/entity/presentation/category-theme";
-import { product } from "~/integrations/tanstack-query/domains/product";
+import { product } from "~/integrations/tanstack-query/generated/domains/product.gen";
 
 import {
   buildCategoryHierarchy,

@@ -21,7 +21,7 @@ import {
   JobDefinition,
   WorkEffects,
 } from "~/features/run/work-definition";
-import { run } from "~/integrations/tanstack-query/domains/run";
+import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { formatDuration } from "~/lib/format-duration";
 import { pageTitle } from "~/lib/page-title";
 import { DateDisplay } from "~/ui/common/date-display";

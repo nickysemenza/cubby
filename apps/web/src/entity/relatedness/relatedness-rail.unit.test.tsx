@@ -3,8 +3,8 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { recommendations } from "~/integrations/tanstack-query/domains/recommendations";
-import { search } from "~/integrations/tanstack-query/domains/search";
+import { recommendations } from "~/integrations/tanstack-query/generated/domains/recommendations.gen";
+import { search } from "~/integrations/tanstack-query/generated/domains/search.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { entityDisplayImageKey } from "../entity-media/entity-display-images";

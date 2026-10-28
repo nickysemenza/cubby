@@ -19,7 +19,7 @@ import { addDays, format, parseISO } from "date-fns";
 import { useState } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { meal } from "~/integrations/tanstack-query/domains/meal";
+import { meal } from "~/integrations/tanstack-query/generated/domains/meal.gen";
 import { Picker } from "~/ui/combobox/picker";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";

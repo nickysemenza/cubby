@@ -1,4 +1,4 @@
-import { problemsStreams } from "~/integrations/tanstack-query/domains/problemsStreams";
+import { problemsStreams } from "~/integrations/tanstack-query/generated/domains/problemsStreams.gen";
 
 export const openProblemsReparseStream = (signal?: AbortSignal) =>
   problemsStreams.reparseStale.open(undefined, { signal });

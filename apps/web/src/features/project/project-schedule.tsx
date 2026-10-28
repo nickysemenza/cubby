@@ -30,8 +30,8 @@ import {
   ScheduleGrid,
   type ScheduleRow,
 } from "~/features/schedule/schedule-grid";
-import { entityReport } from "~/integrations/tanstack-query/domains/entityReport";
-import { project } from "~/integrations/tanstack-query/domains/project";
+import { entityReport } from "~/integrations/tanstack-query/generated/domains/entityReport.gen";
+import { project } from "~/integrations/tanstack-query/generated/domains/project.gen";
 import { flattenUniquePageItems } from "~/ui/hooks/infinite-page-utils";
 import { Panel } from "~/ui/layout/panel";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";

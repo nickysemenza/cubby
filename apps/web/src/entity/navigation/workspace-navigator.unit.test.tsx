@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { dashboard } from "~/integrations/tanstack-query/domains/dashboard";
+import { dashboard } from "~/integrations/tanstack-query/generated/domains/dashboard.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { completeNavLeaves } from "./nav-items";

@@ -8,7 +8,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
-import { entityFilterOptions } from "~/integrations/tanstack-query/domains/entityFilterOptions";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/domains/entityFilterOptions.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";

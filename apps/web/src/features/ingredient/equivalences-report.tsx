@@ -11,7 +11,7 @@ import {
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import RTable from "~/entity/table/table";
-import { recipe } from "~/integrations/tanstack-query/domains/recipe";
+import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
 import { cn } from "~/lib/utils";
 import {
   createCubbyColumnCollection,

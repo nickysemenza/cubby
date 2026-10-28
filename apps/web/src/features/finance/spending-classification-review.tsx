@@ -17,7 +17,7 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
-import { spendingClassification } from "~/integrations/tanstack-query/domains/spendingClassification";
+import { spendingClassification } from "~/integrations/tanstack-query/generated/domains/spendingClassification.gen";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";

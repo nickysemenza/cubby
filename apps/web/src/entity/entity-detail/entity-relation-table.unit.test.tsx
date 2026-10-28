@@ -15,8 +15,8 @@ import {
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import type { EntityListInputByEntity } from "~/entity/generated/entity-lists.gen";
 import { installFeatures } from "~/features/registry";
-import { entityGraph } from "~/integrations/tanstack-query/domains/entityGraph";
-import { entityList } from "~/integrations/tanstack-query/domains/entityList";
+import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
+import { entityList } from "~/integrations/tanstack-query/generated/domains/entityList.gen";
 import { mock } from "~/lib/test/mock-schema";
 import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
 const productListItem = getEntityListItemSchema("product");

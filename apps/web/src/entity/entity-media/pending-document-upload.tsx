@@ -7,7 +7,7 @@ import prettyBytes from "pretty-bytes";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
-import { imageUpload } from "~/integrations/tanstack-query/domains/imageUpload";
+import { imageUpload } from "~/integrations/tanstack-query/generated/domains/imageUpload.gen";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { FileDropField } from "~/ui/file-upload/file-drop-field";

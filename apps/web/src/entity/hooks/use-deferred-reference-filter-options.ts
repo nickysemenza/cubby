@@ -15,7 +15,7 @@ import {
 } from "~/entity/filter-manifest";
 import { recordFilterOption } from "~/entity/filter-option-presentation";
 import { isPickerEntity, recordSource } from "~/entity/picker/picker";
-import { entityFilterOptions } from "~/integrations/tanstack-query/domains/entityFilterOptions";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/domains/entityFilterOptions.gen";
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
 /**

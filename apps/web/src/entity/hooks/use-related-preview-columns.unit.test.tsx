@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
-import { relatedData } from "~/integrations/tanstack-query/domains/relatedData";
+import { relatedData } from "~/integrations/tanstack-query/generated/domains/relatedData.gen";
 import { createCubbyColumnHelper } from "~/ui/data-table/table-features";
 
 import {

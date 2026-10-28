@@ -16,7 +16,7 @@ import {
   useState,
 } from "react";
 
-import { entityMedia } from "~/integrations/tanstack-query/domains/entityMedia";
+import { entityMedia } from "~/integrations/tanstack-query/generated/domains/entityMedia.gen";
 
 export type EntityDisplayImageMap = EntityDisplayImagesOutput;
 export type EntityDisplayImagesQueryOptions =

@@ -34,7 +34,7 @@ import {
   entityDisplayImageKey,
 } from "~/entity/entity-media/entity-display-images";
 import { useEntityPreview } from "~/entity/hooks/use-entity-preview";
-import { calendar } from "~/integrations/tanstack-query/domains/calendar";
+import { calendar } from "~/integrations/tanstack-query/generated/domains/calendar.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";

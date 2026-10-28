@@ -5,7 +5,7 @@ import { useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entityDetailFor } from "~/entity/entity-detail";
-import { usdaFood as usdaFoodOperations } from "~/integrations/tanstack-query/domains/usdaFood";
+import { usdaFood as usdaFoodOperations } from "~/integrations/tanstack-query/generated/domains/usdaFood.gen";
 import {
   BASE_KINDS,
   type BaseKind,

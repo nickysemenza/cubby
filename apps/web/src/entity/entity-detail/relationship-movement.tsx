@@ -6,7 +6,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import type { z } from "zod";
 
 import type { generatedEntityRelationListOutputSchema } from "~/entity/generated/entity-relation-lists.gen";
-import { entityGraph } from "~/integrations/tanstack-query/domains/entityGraph";
+import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { Badge } from "~/ui/primitives/badge";
 
 import { CellFrame } from "../../ui/data-table/cell-frame";

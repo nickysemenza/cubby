@@ -10,7 +10,7 @@ import {
 } from "~/entity/hooks/use-action-mutation";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import { useQueuePass } from "~/features/work-queue/use-queue-pass";
-import { ingredient } from "~/integrations/tanstack-query/domains/ingredient";
+import { ingredient } from "~/integrations/tanstack-query/generated/domains/ingredient.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";

@@ -21,7 +21,7 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { DataTableToolbar } from "~/entity/table/data-table-toolbar";
 import { TableEmptyState } from "~/entity/table/entity-empty-states";
 import { ListWorkbench } from "~/entity/table/list-workbench";
-import { usdaFood } from "~/integrations/tanstack-query/domains/usdaFood";
+import { usdaFood } from "~/integrations/tanstack-query/generated/domains/usdaFood.gen";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";

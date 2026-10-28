@@ -13,11 +13,13 @@ import {
   rippleFor,
   type InvalidationTagSet,
 } from "./cache-tags";
-import { entityGraph } from "./domains/entityGraph";
-import { entityMedia } from "./domains/entityMedia";
-import { recommendations } from "./domains/recommendations";
+import { entityGraph } from "./generated/domains/entityGraph.gen";
+import { entityMedia } from "./generated/domains/entityMedia.gen";
+import { recommendations } from "./generated/domains/recommendations.gen";
 const moduleExportsSchema = z.record(z.string(), z.unknown());
-const domainModules = import.meta.glob("./domains/*.ts", { eager: true });
+const domainModules = import.meta.glob("./generated/domains/*.gen.ts", {
+  eager: true,
+});
 const catalog = Object.fromEntries(
   Object.entries(domainModules).flatMap(([_path, module]) =>
     Object.entries(moduleExportsSchema.parse(module)).map(([name, domain]) => [

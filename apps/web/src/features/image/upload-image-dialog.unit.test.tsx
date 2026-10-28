@@ -9,7 +9,7 @@ import {
   entityReadFixture,
   fieldValueFixture,
 } from "~/entity/fields/field-envelope.fixtures";
-import { imageUpload } from "~/integrations/tanstack-query/domains/imageUpload";
+import { imageUpload } from "~/integrations/tanstack-query/generated/domains/imageUpload.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { UploadImageDialog } from "./upload-image-dialog";

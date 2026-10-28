@@ -5,7 +5,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 
-import { entityList } from "~/integrations/tanstack-query/domains/entityList";
+import { entityList } from "~/integrations/tanstack-query/generated/domains/entityList.gen";
 import {
   infiniteOperationQueryKey,
   type OperationQueryKey,

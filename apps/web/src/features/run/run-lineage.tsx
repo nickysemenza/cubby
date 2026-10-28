@@ -8,7 +8,7 @@ import type { RunDetail } from "~/contracts/run.contract";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { useEntityMetadata } from "~/entity/metadata";
 import { runHref } from "~/entity/routing/purchase-import-links";
-import { run as runOperations } from "~/integrations/tanstack-query/domains/run";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { Row } from "~/ui/layout";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 

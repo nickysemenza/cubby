@@ -9,7 +9,7 @@ import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
-import { entityMutation } from "~/integrations/tanstack-query/domains/entityMutation";
+import { entityMutation } from "~/integrations/tanstack-query/generated/domains/entityMutation.gen";
 import {
   entityBrowserMutationCommandSchema,
   type EntityBrowserMutationInput,

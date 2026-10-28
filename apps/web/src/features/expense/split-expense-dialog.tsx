@@ -32,7 +32,7 @@ import { Picker } from "~/entity/picker/picker";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { useTradeOptions } from "~/entity/presentation/trade-options";
 import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
-import { purchase } from "~/integrations/tanstack-query/domains/purchase";
+import { purchase } from "~/integrations/tanstack-query/generated/domains/purchase.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";

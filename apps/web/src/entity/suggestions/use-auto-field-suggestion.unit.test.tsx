@@ -25,7 +25,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
-import { ai } from "~/integrations/tanstack-query/domains/ai";
+import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 
 import {

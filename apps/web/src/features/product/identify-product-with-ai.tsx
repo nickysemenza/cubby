@@ -8,7 +8,7 @@ import {
   type AiProposalRow,
 } from "~/entity/suggestions/ai-proposal-list";
 import { useAiProposal } from "~/entity/suggestions/use-ai-proposal";
-import { ai } from "~/integrations/tanstack-query/domains/ai";
+import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";

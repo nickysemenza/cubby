@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { imageUpload } from "~/integrations/tanstack-query/domains/imageUpload";
+import { imageUpload } from "~/integrations/tanstack-query/generated/domains/imageUpload.gen";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";

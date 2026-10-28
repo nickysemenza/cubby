@@ -11,7 +11,7 @@ import {
   connectionRefs,
   ambiguousConnectionLabels,
 } from "~/entity/relationships/connection-paths";
-import { entityGraph } from "~/integrations/tanstack-query/domains/entityGraph";
+import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import {
   RecordFold,
   RecordGroup,

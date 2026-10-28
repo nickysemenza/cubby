@@ -15,7 +15,7 @@ import {
 import { z } from "zod";
 
 import { RecordProposals } from "~/entity/suggestions/queue/record-proposals";
-import { suggestions } from "~/integrations/tanstack-query/domains/suggestions";
+import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";
 import {

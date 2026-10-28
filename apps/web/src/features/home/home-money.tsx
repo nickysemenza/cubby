@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useId, useMemo } from "react";
 
-import { expense } from "~/integrations/tanstack-query/domains/expense";
+import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";

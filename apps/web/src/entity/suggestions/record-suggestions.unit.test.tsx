@@ -30,7 +30,7 @@ import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { ensureEntityMetadata, entityMetadata } from "~/entity/metadata";
 import { installFeatures } from "~/features/registry";
 import { rippleFor } from "~/integrations/tanstack-query/cache-tags";
-import { ai } from "~/integrations/tanstack-query/domains/ai";
+import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { mock } from "~/lib/test/mock-schema";
 import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";

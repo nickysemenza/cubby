@@ -1,4 +1,7 @@
-import { tsModule } from "../artifacts.ts";
+import { readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+import { tsModule, tsReference } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import {
   collectOperationIds,
@@ -129,6 +132,65 @@ const renderOperationHandlers = async (): Promise<string> => {
   });
 };
 
+const OVERRIDES_ROOT = fileURLToPath(
+  new URL(
+    "../../src/integrations/tanstack-query/operation-overrides/",
+    import.meta.url,
+  ),
+);
+
+/** One browser domain module per contract, so a route bundles only its own. */
+const renderOperationDomains = async (): Promise<EntityArtifacts[]> => {
+  const overrides = new Set(
+    readdirSync(OVERRIDES_ROOT)
+      .filter((file) => file.endsWith(".ts"))
+      .map((file) => file.replace(/\.ts$/u, "")),
+  );
+  const contracts = await loadContracts();
+  const names = new Set(
+    contracts.map(({ exportName }) => exportName.replace(/Contract$/u, "")),
+  );
+  for (const override of overrides)
+    if (!names.has(override))
+      throw new Error(
+        `operation-overrides/${override}.ts does not match a contract.`,
+      );
+  return contracts.map(({ exportName, module }) => {
+    const name = exportName.replace(/Contract$/u, "");
+    const overridden = overrides.has(name);
+    return {
+      relativePath: `apps/web/src/integrations/tanstack-query/generated/domains/${name}.gen.ts`,
+      source: tsModule({
+        imports: [
+          { from: module, names: [exportName] },
+          {
+            from: "~/integrations/tanstack-query/operation-catalog",
+            names: ["defineOperationDomain"],
+          },
+          ...(overridden
+            ? [
+                {
+                  from: `~/integrations/tanstack-query/operation-overrides/${name}`,
+                  names: [`${name}Overrides`],
+                },
+              ]
+            : []),
+        ],
+        bindings: [
+          {
+            name,
+            factory: "defineOperationDomain",
+            args: [
+              tsReference(exportName),
+              ...(overridden ? [tsReference(`${name}Overrides`)] : []),
+            ],
+          },
+        ],
+      }),
+    };
+  });
+};
+
 export const renderOperationArtifacts = async (): Promise<{
   artifacts: EntityArtifacts[];
   operationIds: string[];
@@ -143,6 +205,7 @@ export const renderOperationArtifacts = async (): Promise<{
         "apps/web/src/server/generated/operation-handler-data.gen.ts",
       source: await renderOperationHandlers(),
     },
+    ...(await renderOperationDomains()),
   ],
   operationIds: await collectOperationIds(),
 });

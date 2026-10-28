@@ -8,7 +8,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { entityMedia } from "~/integrations/tanstack-query/domains/entityMedia";
+import { entityMedia } from "~/integrations/tanstack-query/generated/domains/entityMedia.gen";
 
 import {
   EntityDisplayImagesProvider,

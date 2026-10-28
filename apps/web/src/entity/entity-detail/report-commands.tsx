@@ -36,21 +36,21 @@ export function useReportCommands() {
   const reprocess = useDeferredActionMutation({
     loadMutation: async () =>
       (
-        await import("~/integrations/tanstack-query/domains/recipe")
+        await import("~/integrations/tanstack-query/generated/domains/recipe.gen")
       ).recipe.reprocessCookbookOnce.mutationOptions(),
     error: "Could not reprocess the cookbook",
   });
   const importRecipes = useDeferredActionMutation({
     loadMutation: async () =>
       (
-        await import("~/integrations/tanstack-query/domains/recipe")
+        await import("~/integrations/tanstack-query/generated/domains/recipe.gen")
       ).recipe.importCookbookRecipesOnce.mutationOptions(),
     error: "Could not add the recipes",
   });
   const commit = useDeferredActionMutation({
     loadMutation: async () =>
       (
-        await import("~/integrations/tanstack-query/domains/run")
+        await import("~/integrations/tanstack-query/generated/domains/run.gen")
       ).run.commitPrepared.mutationOptions(),
     error: "Could not import the prepared orders",
   });

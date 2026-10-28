@@ -13,13 +13,13 @@ type DomainModule = Record<
   string,
   Record<string, { definition: { kind: string } }>
 >;
-const domains = import.meta.glob<DomainModule>("./domains/*.ts");
+const domains = import.meta.glob<DomainModule>("./generated/domains/*.gen.ts");
 const registry: OperationRegistry = OPERATIONS;
 
 export async function workflowCommandOptions(operation: string) {
   const command = workflowCommandMetadata(operation);
   const domain = registry[operation]?.clientDomain;
-  const loader = domains[`./domains/${domain}.ts`];
+  const loader = domains[`./generated/domains/${domain}.gen.ts`];
   if (!loader || !domain)
     throw new Error(`Undeclared user command: ${operation}`);
   const module = await loader();

@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { maintenance } from "~/integrations/tanstack-query/domains/maintenance";
+import { maintenance } from "~/integrations/tanstack-query/generated/domains/maintenance.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";

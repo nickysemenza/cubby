@@ -26,7 +26,7 @@ import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
 import { useEntityMetadata } from "~/entity/metadata";
 import { useListQuery } from "~/entity/table/list-query-context";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import { fieldExplanation } from "~/integrations/tanstack-query/domains/fieldExplanation";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatCurrency } from "~/lib/number-format";

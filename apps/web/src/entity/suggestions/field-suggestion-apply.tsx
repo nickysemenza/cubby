@@ -4,7 +4,7 @@ import { useContext } from "react";
 
 import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { useEntityMetadata } from "~/entity/metadata";
-import { assessment } from "~/integrations/tanstack-query/domains/assessment";
+import { assessment } from "~/integrations/tanstack-query/generated/domains/assessment.gen";
 
 import {
   type EntitySuggestionsOperations,

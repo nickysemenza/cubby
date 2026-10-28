@@ -8,12 +8,12 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import { EMPTY_INVALIDATION_TAG_SET } from "./cache-tags";
-import { entityMutation } from "./domains/entityMutation";
-import { inventory } from "./domains/inventory";
-import { location } from "./domains/location";
-import { mcp } from "./domains/mcp";
-import { recipe } from "./domains/recipe";
-import { run } from "./domains/run";
+import { entityMutation } from "./generated/domains/entityMutation.gen";
+import { inventory } from "./generated/domains/inventory.gen";
+import { location } from "./generated/domains/location.gen";
+import { mcp } from "./generated/domains/mcp.gen";
+import { recipe } from "./generated/domains/recipe.gen";
+import { run } from "./generated/domains/run.gen";
 import { invalidateOperationTags } from "./operation-cache";
 import { operationInvalidationTags } from "./operation-catalog";
 import type { CubbyOperationMeta } from "./operation-meta";

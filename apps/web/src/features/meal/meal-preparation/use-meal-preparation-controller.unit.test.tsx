@@ -15,8 +15,8 @@ import {
   entityReadFixture,
   fieldValueFixture,
 } from "~/entity/fields/field-envelope.fixtures";
-import { entityFilterOptions } from "~/integrations/tanstack-query/domains/entityFilterOptions";
-import { meal } from "~/integrations/tanstack-query/domains/meal";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/domains/entityFilterOptions.gen";
+import { meal } from "~/integrations/tanstack-query/generated/domains/meal.gen";
 import { mock } from "~/lib/test/mock-schema";
 
 import { useMealPreparationController } from "./use-meal-preparation-controller";

@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useImageUpdateMutation } from "~/entity/hooks/use-update-mutation";
-import { image as imageOperations } from "~/integrations/tanstack-query/domains/image";
+import { image as imageOperations } from "~/integrations/tanstack-query/generated/domains/image.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Overlay } from "~/ui/overlays/overlay";

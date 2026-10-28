@@ -7,7 +7,7 @@ import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { imageUpload } from "~/integrations/tanstack-query/domains/imageUpload";
+import { imageUpload } from "~/integrations/tanstack-query/generated/domains/imageUpload.gen";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { showErrorToast } from "~/ui/feedback/error-details";
 

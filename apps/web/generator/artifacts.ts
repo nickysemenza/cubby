@@ -39,6 +39,13 @@ type ModuleImport = {
 };
 type ModuleConst = { name: string; value: unknown; satisfies?: string };
 type ModuleType = { name: string; target: string };
+// A side-effect-free factory applied to imported references: the one call
+// shape data modules allow (operation domains). Arguments are never literals.
+type ModuleBinding = {
+  name: string;
+  factory: string;
+  args: readonly ModuleReference[];
+};
 type ModuleAlias = {
   from: string;
   names: readonly string[];
@@ -84,9 +91,11 @@ export function tsModule({
   consts = [],
   types = [],
   exports = [],
+  bindings = [],
 }: {
   imports?: readonly ModuleImport[];
   consts?: readonly ModuleConst[];
+  bindings?: readonly ModuleBinding[];
   types?: readonly ModuleType[];
   exports?: readonly ModuleAlias[];
 }): string {
@@ -95,6 +104,17 @@ export function tsModule({
       throw new Error(`Invalid constant name ${name}`);
     if (satisfies && !/^[A-Za-z_$][\w$]*(?:<[\s\S]*>)?$/u.test(satisfies))
       throw new Error("satisfies requires a named type");
+  }
+  const valueImports = new Set(
+    imports.flatMap(({ names, typeOnly }) => (typeOnly ? [] : names)),
+  );
+  for (const { name, factory, args } of bindings) {
+    if (!/^[A-Za-z_$][\w$]*$/u.test(name))
+      throw new Error(`Invalid binding name ${name}`);
+    if (!valueImports.has(factory))
+      throw new Error(`Binding factory ${factory} must be an imported value`);
+    if (!args.every((arg) => arg instanceof ModuleReference))
+      throw new Error("Binding arguments must be imported references");
   }
   for (const { target } of types)
     if (!/^[A-Za-z_$][\w$]*(?:<[\s\S]*>)?$/u.test(target))
@@ -130,6 +150,11 @@ export function tsModule({
       ...consts.map(
         ({ name, value, satisfies }) =>
           `export const ${name} = ${moduleLiteral(value)} as const${satisfies ? ` satisfies ${satisfies}` : ""};`,
+      ),
+      // `@__PURE__` lets the bundler drop an unused binding and its imports.
+      ...bindings.map(
+        ({ name, factory, args }) =>
+          `export const ${name} = /* @__PURE__ */ ${factory}(${args.map(moduleLiteral).join(", ")});`,
       ),
       ...types.map(({ name, target }) => `export type ${name} = ${target};`),
       ...exports.map(

@@ -16,7 +16,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { entityDetailLink } from "~/entity/entities";
-import { meal } from "~/integrations/tanstack-query/domains/meal";
+import { meal } from "~/integrations/tanstack-query/generated/domains/meal.gen";
 import {
   compactEstimateText,
   estimateStatusText,

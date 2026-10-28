@@ -8,7 +8,7 @@ import {
   suggestionsSearch,
   WorkRowLink,
 } from "~/features/work-queue/work-row-link";
-import { workQueue } from "~/integrations/tanstack-query/domains/workQueue";
+import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { formatCount } from "~/lib/number-format";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { DenseCellContext } from "~/ui/common/stacked-value";

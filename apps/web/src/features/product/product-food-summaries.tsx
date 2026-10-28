@@ -2,7 +2,7 @@ import type { FoodSummary } from "@cubby/usda";
 import { createContext, type ReactNode, useContext } from "react";
 
 import { useChunkedRecordQuery } from "~/entity/hooks/use-chunked-record-query";
-import { product as productOperations } from "~/integrations/tanstack-query/domains/product";
+import { product as productOperations } from "~/integrations/tanstack-query/generated/domains/product.gen";
 
 type ProductFoodMap = Record<string, FoodSummary | null>;
 

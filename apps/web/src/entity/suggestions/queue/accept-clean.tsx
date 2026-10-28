@@ -10,7 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { z } from "zod";
 
-import { suggestions } from "~/integrations/tanstack-query/domains/suggestions";
+import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCount } from "~/lib/number-format";
 import {

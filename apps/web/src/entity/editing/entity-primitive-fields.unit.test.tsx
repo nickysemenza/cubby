@@ -13,7 +13,7 @@ import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web
 import type { EntitySuggestionsOperations } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { installFeatures } from "~/features/registry";
-import { ai } from "~/integrations/tanstack-query/domains/ai";
+import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 
 import {

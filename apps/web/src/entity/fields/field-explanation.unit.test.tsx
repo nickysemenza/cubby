@@ -4,7 +4,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
-import { fieldExplanation } from "~/integrations/tanstack-query/domains/fieldExplanation";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { DecisionChain } from "~/ui/derived/decision-chain";
 import {
   ReadableExplanationValue,

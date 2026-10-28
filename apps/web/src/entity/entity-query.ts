@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { entityDetailFor } from "~/entity/entity-detail";
-import { usdaFood } from "~/integrations/tanstack-query/domains/usdaFood";
+import { usdaFood } from "~/integrations/tanstack-query/generated/domains/usdaFood.gen";
 import type { CubbyOperationMeta } from "~/integrations/tanstack-query/operation-meta";
 
 import {

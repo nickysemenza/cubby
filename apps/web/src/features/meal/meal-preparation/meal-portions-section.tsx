@@ -5,7 +5,7 @@ import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useQuery } from "@tanstack/react-query";
 
 import { ReportBlocks } from "~/entity/entity-detail/report-slot";
-import { entityReport } from "~/integrations/tanstack-query/domains/entityReport";
+import { entityReport } from "~/integrations/tanstack-query/generated/domains/entityReport.gen";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";

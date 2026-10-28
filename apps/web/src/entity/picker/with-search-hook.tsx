@@ -15,8 +15,8 @@ import type { EntityEditDialog as EntityEditDialogComponent } from "~/entity/edi
 import { entityListFor, type EntityListParams } from "~/entity/entity-list";
 import { featureRegistry } from "~/entity/feature-registry";
 import { useEntityMetadata } from "~/entity/metadata";
-import { location } from "~/integrations/tanstack-query/domains/location";
-import { product } from "~/integrations/tanstack-query/domains/product";
+import { location } from "~/integrations/tanstack-query/generated/domains/location.gen";
+import { product } from "~/integrations/tanstack-query/generated/domains/product.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";

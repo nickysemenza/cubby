@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { entityRipple, ripple } from "~/integrations/tanstack-query/cache-tags";
-import { entityMutation } from "~/integrations/tanstack-query/domains/entityMutation";
+import { entityMutation } from "~/integrations/tanstack-query/generated/domains/entityMutation.gen";
 
 const hasTag = (tags: readonly (readonly string[])[], tag: readonly string[]) =>
   tags.some((candidate) => candidate.join(" ") === tag.join(" "));
