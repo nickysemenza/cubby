@@ -724,16 +724,20 @@ export async function visitCalendarFeedItems(
       "Calendar feed pages require meal, task, or planting kinds",
     );
   const limit = 100;
-  await withTransactionDatabase(db, async (snapshotDb) => {
-    await getDb(snapshotDb).execute(
-      sql`set transaction isolation level repeatable read read only`,
-    );
-    for (let offset = 0; ; offset += limit) {
-      const page = await getCalendarItems(snapshotDb, input, { limit, offset });
-      await visit(page.items);
-      if (!page.hasMore) break;
-    }
-  });
+  await withTransactionDatabase(
+    db,
+    async (snapshotDb) => {
+      for (let offset = 0; ; offset += limit) {
+        const page = await getCalendarItems(snapshotDb, input, {
+          limit,
+          offset,
+        });
+        await visit(page.items);
+        if (!page.hasMore) break;
+      }
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
 }
 
 export async function getCalendarRange(

@@ -360,7 +360,10 @@ export function createIcsDocument(opts: IcsOptions) {
     calendar.addProperty(ICAL.Property.fromString(property));
 
   const end = `END:VCALENDAR${CRLF}`;
-  const header = serializeCalendarComponent(calendar).slice(0, -end.length);
+  const serialized = serializeCalendarComponent(calendar);
+  if (!serialized.endsWith(end))
+    throw new Error("Calendar serializer did not emit its closing component");
+  const header = serialized.slice(0, -end.length);
   const parts: string[] = [];
   const encoder = new TextEncoder();
   let size = encoder.encode(end).byteLength;

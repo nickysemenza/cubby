@@ -6,7 +6,7 @@ import {
   taskShortcode,
 } from "@cubby/schemas/identifiers";
 import { MEAL_TYPE_LABELS } from "@cubby/schemas/meal-classification";
-import { and, eq, isNotNull, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, or } from "drizzle-orm";
 
 import { shiftPlainDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -45,68 +45,69 @@ export async function visitCalDavProjection(
   db: Database,
   visit: (projections: CalendarProjection[]) => Promise<void>,
 ): Promise<void> {
-  await withTransaction(db, async (tx) => {
-    await tx.execute(
-      sql`set transaction isolation level repeatable read read only`,
-    );
-    for (let offset = 0; ; offset += PAGE_SIZE) {
-      const page = await tx.query.meal.findMany({
-        where: notDeleted(meal),
-        columns: {
-          shortcode: true,
-          name: true,
-          date: true,
-          mealType: true,
-          updatedAt: true,
-        },
-        orderBy: (row, { asc }) => [asc(row.createdAt), asc(row.id)],
-        limit: PAGE_SIZE,
-        offset,
-      });
-      await visit(
-        page.map((row) => ({
-          entity: "meal",
-          id: parseShortcodeFor("meal", row.shortcode),
-          name: row.name,
-          date: row.date,
-          mealType: row.mealType,
-          updatedAt: timestamp(row.updatedAt),
-        })),
-      );
-      if (page.length < PAGE_SIZE) break;
-    }
-    for (let offset = 0; ; offset += PAGE_SIZE) {
-      const page = await tx.query.task.findMany({
-        where: and(
-          notDeleted(task),
-          or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
-        ),
-        columns: {
-          shortcode: true,
-          name: true,
-          dueDate: true,
-          dueEndDate: true,
-          status: true,
-          updatedAt: true,
-        },
-        orderBy: (row, { asc }) => [asc(row.createdAt), asc(row.id)],
-        limit: PAGE_SIZE,
-        offset,
-      });
-      await visit(
-        page.map((row) => ({
-          entity: "task",
-          id: parseShortcodeFor("task", row.shortcode),
-          name: row.name,
-          dueDate: row.dueDate,
-          dueEndDate: row.dueEndDate,
-          status: row.status,
-          updatedAt: timestamp(row.updatedAt),
-        })),
-      );
-      if (page.length < PAGE_SIZE) break;
-    }
-  });
+  await withTransaction(
+    db,
+    async (tx) => {
+      for (let offset = 0; ; offset += PAGE_SIZE) {
+        const page = await tx.query.meal.findMany({
+          where: notDeleted(meal),
+          columns: {
+            shortcode: true,
+            name: true,
+            date: true,
+            mealType: true,
+            updatedAt: true,
+          },
+          orderBy: (row, { asc }) => [asc(row.createdAt), asc(row.id)],
+          limit: PAGE_SIZE,
+          offset,
+        });
+        await visit(
+          page.map((row) => ({
+            entity: "meal",
+            id: parseShortcodeFor("meal", row.shortcode),
+            name: row.name,
+            date: row.date,
+            mealType: row.mealType,
+            updatedAt: timestamp(row.updatedAt),
+          })),
+        );
+        if (page.length < PAGE_SIZE) break;
+      }
+      for (let offset = 0; ; offset += PAGE_SIZE) {
+        const page = await tx.query.task.findMany({
+          where: and(
+            notDeleted(task),
+            or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
+          ),
+          columns: {
+            shortcode: true,
+            name: true,
+            dueDate: true,
+            dueEndDate: true,
+            status: true,
+            updatedAt: true,
+          },
+          orderBy: (row, { asc }) => [asc(row.createdAt), asc(row.id)],
+          limit: PAGE_SIZE,
+          offset,
+        });
+        await visit(
+          page.map((row) => ({
+            entity: "task",
+            id: parseShortcodeFor("task", row.shortcode),
+            name: row.name,
+            dueDate: row.dueDate,
+            dueEndDate: row.dueEndDate,
+            status: row.status,
+            updatedAt: timestamp(row.updatedAt),
+          })),
+        );
+        if (page.length < PAGE_SIZE) break;
+      }
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
 }
 
 const caldavContext = (
