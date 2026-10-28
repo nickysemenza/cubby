@@ -59,9 +59,6 @@ export const renderEntityReadArtifacts = (
           }.extend({ids:z.array(z.string()).max(500).optional()});`,
     )
     .join("\n");
-  const listFilterSchemaBindings = listEntitySpecs
-    .map(({ key }) => `  ${JSON.stringify(key)}: ${key}ListFiltersSchema,`)
-    .join("\n");
   // One named export per list row so the native contract stage names the component
   // `<Entity>ListItem` (the export walk in `http-api/schema-names.ts` names
   // exported instances only); an inline `withEntityListMedia(...)` call would
@@ -118,8 +115,6 @@ export const renderEntityReadArtifacts = (
         "const entityListPaginationSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE) });\n" +
         "// The one page-metadata schema every list shares (one native model).\nconst entityListMetaSchema = paginatedMetaSchema;\n\n" +
         `${listFilterSchemas}\n\n` +
-        "// One generated filter schema per list entity.\n// oxfmt-ignore\n" +
-        `const ENTITY_LIST_FILTER_SCHEMAS = {\n${listFilterSchemaBindings}\n} as const;\n\n` +
         `export const entityListInputSchema = z.discriminatedUnion("entity", [\n  ${listInputVariants}\n]);\n\n` +
         `${listItemSchemas}\n\n` +
         `export const ENTITY_LIST_READ_SCHEMAS = {\n${listReadSchemas}\n} as const;\n\n` +
