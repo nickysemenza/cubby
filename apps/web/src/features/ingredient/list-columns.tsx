@@ -126,7 +126,10 @@ function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
   );
 }
 
-export const ingredientListOverride = defineListOverride<IngredientFilters>({
+export const ingredientListOverride = defineListOverride<
+  IngredientListItem,
+  IngredientFilters
+>({
   use() {
     const queryClient = useQueryClient();
     const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(

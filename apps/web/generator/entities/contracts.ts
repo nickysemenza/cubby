@@ -48,15 +48,14 @@ export const resolveDefaultContracts = (
     ordinary &&
     declaration.extensions.ports.repository === null &&
     model &&
-    fields?.update &&
-    model.update.length
+    (fields?.create || fields?.update)
       ? {
           fields: {
             ...(fields.create ? { create: model.create } : {}),
-            full: model.update,
+            ...(fields.update ? { full: model.update } : {}),
           },
           create: fields.create ? ["create"] : [],
-          update: ["full"],
+          update: fields.update ? ["full"] : [],
           editorFields: [],
           required: {},
         }

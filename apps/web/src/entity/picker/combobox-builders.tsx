@@ -1,3 +1,6 @@
+import { locationFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/location";
+import { productFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/product";
+import { vendorFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/vendor";
 import { displayImagesField } from "@cubby/schemas/display-images";
 import {
   fieldValueOf,
@@ -38,10 +41,7 @@ import { VendorMark } from "~/entity/components/vendor-cell";
 import { enumDisplayValue } from "~/entity/display/enum-field-display";
 import { EntityIcon, entityLabel } from "~/entity/entities";
 import { compactFieldText } from "~/entity/fields/field-text";
-import {
-  getEntityDetailOutputSchema,
-  type EntityDetailByEntity,
-} from "~/entity/generated/entity-details.gen";
+import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import { entityMetadata } from "~/entity/metadata";
 import { categoryText } from "~/entity/presentation/category-text";
 import { locationToSegments } from "~/entity/presentation/location-breadcrumb";
@@ -570,7 +570,7 @@ const vendorComboboxItem = <Id extends string>(
 export const vendorPickerInputFromDetail = (
   detail: unknown,
 ): VendorPickerInput => {
-  const vendor = getEntityDetailOutputSchema("vendor").parse(detail);
+  const vendor = vendorFieldEnvelopeSchemas.detail.parse(detail);
   const logoUrl = vendor.logo ? publicImageUrl(vendor.logo) : undefined;
   return {
     id: vendor.id,
@@ -589,7 +589,7 @@ const pickerDetailBuilders = new Map<PickerEntity, PickerDetailBuilder>([
     "product",
     (detail, intent) =>
       buildProductComboboxItem(
-        getEntityDetailOutputSchema("product").parse(detail),
+        productFieldEnvelopeSchemas.detail.parse(detail),
         intent,
       ),
   ],
@@ -597,7 +597,7 @@ const pickerDetailBuilders = new Map<PickerEntity, PickerDetailBuilder>([
     "location",
     (detail) =>
       buildLocationComboboxItemFromDetail(
-        getEntityDetailOutputSchema("location").parse(detail),
+        locationFieldEnvelopeSchemas.detail.parse(detail),
       ),
   ],
   [

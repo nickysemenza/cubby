@@ -78,6 +78,24 @@ describe("recursive field projections", () => {
       stored: { columns: ["locationId"] },
       deriveSchema: true,
     });
+    const createOnly = compileEntity(
+      {
+        ...source,
+        extensions: {
+          ...source.extensions,
+          ports: { ...source.extensions.ports, repository: undefined },
+        },
+        capabilities: { ...source.capabilities, merge: false },
+        fields: { update: null },
+        model: { ...source.model, intents: undefined },
+      },
+      0,
+    );
+    expect(createOnly.fieldModel.intents).toMatchObject({
+      fields: { create: createOnly.fieldModel.create },
+      create: ["create"],
+      update: [],
+    });
     const artifacts = renderKernelBindingsArtifacts([compiled]);
     const runtime = artifacts.find((artifact) =>
       artifact.relativePath.endsWith("entity-kernel-bindings.gen.ts"),

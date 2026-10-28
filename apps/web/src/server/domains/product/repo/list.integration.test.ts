@@ -1,6 +1,5 @@
 import { type LocationCreateInput } from "@cubby/schemas/entities/location";
 import { shortcode } from "@cubby/schemas/identifiers";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import {
