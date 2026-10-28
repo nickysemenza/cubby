@@ -1,0 +1,459 @@
+apps/web/src/server/generic/data-quality/repo/shipment-checks.integration.test.ts
+  s_41504dfc385516::t_c36c5b71550624 35,38,560-574
+apps/web/tooling/ai-work.ts
+  s_41504dfc385516::t_6ad7cf6f2100c4 6-7,19-20,71,104-116
+  s_688735423882f0::t_7c6ffcf940ce9a 3-4,9,74,80-84,117,128-132
+apps/web/src/server/domains/image-processing/repo/image-processing-history.ts
+  s_41504dfc385516::t_ed11658b51fc23 3
+  s_41504dfc385516::t_210d45dfeb0e75 28,30-33,133-137,169-176,303,322
+apps/web/src/server/domains/run/service/sweep.ts
+  s_41504dfc385516::t_7462fa4890699b 23
+apps/web/src/server/domains/run/repo/connection-refresh.integration.test.ts
+  s_41504dfc385516::t_b97d3f0387d01b 7-8
+apps/web/src/server/testing/quality.fixtures.ts
+  s_41504dfc385516::t_62aed0f86f80b0 8-9,19-24
+apps/web/src/server/generic/jobs/types.ts
+  s_41504dfc385516::t_95639e31a92a31 27-30,33-35
+apps/web/src/server/domains/run/service/derived-discovery.ts
+  s_41504dfc385516::t_f1b866d90b668e 47,65
+apps/web/src/server/ai/enrichment/location-vision.integration.test.ts
+  s_41504dfc385516::t_b1f39b8ee8a784 15,84-90,149
+  s_688735423882f0::t_394c5c3bf85ee6 12,68,132
+apps/web/src/server/domains/image/service/image-metadata-backfill.integration.test.ts
+  s_41504dfc385516::t_43d51a1afe82bb 25,217-222
+  s_688735423882f0::t_ee771f62c4b513 22,201
+apps/web/src/server/generic/search/repo/search-document.ts
+  s_41504dfc385516::t_2d60a2d261fd17 38,835
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassification-continuation.ts
+  s_41504dfc385516::t_7cf60deaa429ac 4-5
+apps/web/src/server/domains/recipe/repo/totals-publication.integration.test.ts
+  s_41504dfc385516::t_8b54e836c9bb5d 10,35-49
+packages/schemas/src/job.ts
+  s_41504dfc385516::t_9f2b1695224e79 361-362
+apps/web/src/server/workflows/runs/job-execution.ts
+  s_41504dfc385516::t_c28db614e5d12c 36,38-43
+apps/web/src/server/domains/image/repo/image-metadata.ts
+  s_41504dfc385516::t_4b113ec6d55f85 6,13,37,46
+apps/web/src/server/workflows/background-tasks/handle.ts
+  s_41504dfc385516::t_31955250f23123 5-6,12,22,26-31,73-74,91,109-116,124
+apps/web/src/server/domains/financial-transaction/repo/transfer-pair-suggestions.integration.test.ts
+  s_41504dfc385516::t_9d10a75c505112 46-49,737-742,744-757
+apps/web/src/server/domains/image-processing/repo/device-backlog.ts
+  s_41504dfc385516::t_4f66b919705198 7,36
+apps/web/src/server/domains/run/repo/ai-refresh-scheduling.integration.test.ts
+  s_41504dfc385516::t_acb250d0f7d73e 15
+  s_688735423882f0::t_307d43bcf63181 6,19-20,35,37
+apps/web/src/server/workflows/runs/control.ts
+  s_41504dfc385516::t_f77413c4d95f81 13,22,126,224,229-233,235-236,240,304
+  s_688735423882f0::t_e3c2c06792fa8a 20,89
+apps/web/src/server/generic/jobs/repo/job-runtime.integration.test.ts
+  s_41504dfc385516::t_b36bb74e3c16cd 9
+apps/web/src/server/domains/run/repo/run-reclassification-read.ts
+  s_41504dfc385516::t_aecddd4c201958 19
+apps/web/src/server/domains/purchase-import/repo/gmail/admitted-source.ts
+  s_41504dfc385516::t_1ebb0bc2fff883 136,163,196,302
+apps/web/src/server/domains/product/repo/match/product-identity-snapshot.ts
+  s_41504dfc385516::t_d0e872992eaa11 10
+apps/web/src/server/domains/run/service/ai-evaluation-execution.ts
+  s_41504dfc385516::t_a691e5e831d5bc 1-62
+apps/web/src/server/domains/image-processing/repo/image-processing-waiting.integration.test.ts
+  s_41504dfc385516::t_0ed4de39788ba8 98
+  s_688735423882f0::t_beee3e76cb9bfb 14,72-74,94
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassification-work.ts
+  s_41504dfc385516::t_67116990a981e8 10-11
+apps/web/src/server/generic/jobs/repo/work-items.ts
+  s_41504dfc385516::t_b19eb5de0adf9b 4-6,8-9,15,19-25,30-42,44,47-49,51-63,71-85,87-95,97-98,102-109,111-169,178-184,188-189,192,195-198,201-202,204-205,207-214,224-288,291-320,322-361,363-386
+apps/web/src/server/domains/image/service/image-metadata-extraction.service.ts
+  s_41504dfc385516::t_4156f68faa5405 19-20,79-80,86
+tools/oxlint/cubby/rules/domain-layers.ts
+  s_41504dfc385516::t_805ad2988def47 14-15,45
+apps/web/src/server/entity-kernel/projection.integration.test.ts
+  s_41504dfc385516::t_9185b3db17a7a0 328,332-333
+apps/web/src/server/generic/jobs/repo/waiting-on.ts
+  s_41504dfc385516::t_b56c7ba80287cb 10,145-146,148,151,158-159,169-179
+apps/web/src/server/generic/derived/repo/backlog.ts
+  s_41504dfc385516::t_8c890ff991b937 7,9,17-19,34
+apps/web/src/server/workflows/runs/lifecycle.integration.test.ts
+  s_41504dfc385516::t_a12cb31f16c937 15,18,84-95,101-112
+  s_688735423882f0::t_46fd5ba83795ea 6,9-13,42,44,59,78,80,138
+apps/web/src/server/domains/run/service/ai-work.ts
+  s_41504dfc385516::t_daa7aa7c274dd1 17,21
+apps/web/src/server/workflows/runs/execution.ts
+  s_41504dfc385516::t_3cf2f705ba0af4 5,7,10-11,53,58
+  s_41504dfc385516::t_b4fa5899770497 9,13-15,45-49
+apps/web/src/server/generic/derived/repo/drain.ts
+  s_41504dfc385516::t_c8b4727cafd6ac 2-6,12,22,25,35-41,44-47,51,55-56,59,76-81,86-93,97-98,103-105,108-114,117-118,123-125,129,144,147,150-156,158-187,189-201,203-216,218,220-261,263-265,267-268,270-278,280-312,314-340,345,349-355,357-361,365,374-395,397,399,403-406,422,424,429,431,444-445,447-477,479-488,490-496,498,500-501,503-506,508-513,515-521,523-524,527-546,548-550,553-555,559-560,562,564,568,570-571,577,584-592,599,608-611,615-618
+apps/web/src/server/generic/embedding/repo/embedding-cleanup.ts
+  s_41504dfc385516::t_c612a2039f417f 11,35
+apps/web/src/server/domains/email/repo/discovery-email-audit.ts
+  s_41504dfc385516::t_53f9ea0522c8d7 10
+apps/web/src/server/domains/recipe/repo/totals.ts
+  s_41504dfc385516::t_3e8fc1f77575f2 207
+apps/web/src/server/generic/jobs/operations/job.server.ts
+  s_41504dfc385516::t_40131cedff38a5 2
+apps/web/src/server/domains/purchase-import/service/gmail/reclassification-target.ts
+  s_41504dfc385516::t_5f3536afff91d7 6-7
+apps/web/src/server/ai/evaluation/repo/ai-evaluation-work.ts
+  s_41504dfc385516::t_71c9b7b8f2b9f4 11,13,16-23,32-33,39-44,59-60,75-91
+apps/web/src/server/generic/derived/service/assignment-precedence.integration.test.ts
+  s_41504dfc385516::t_6d28ade41b0200 22-25,55-59
+  s_688735423882f0::t_5c76f3b985afe9 21,308-315
+apps/web/drizzle/meta/_journal.json
+  s_41504dfc385516::t_94cbd287c4f8ee 389-395,398
+apps/web/src/server/generic/jobs/repo/job-retention.ts
+  s_41504dfc385516::t_8ab0235b061b02 8,36
+apps/web/src/server/generic/assessment/repo/assessment-product.integration.test.ts
+  s_41504dfc385516::t_02ee2e4ce5e3eb 9-14
+apps/web/src/server/generic/jobs/outside-job.ts
+  s_41504dfc385516::t_ae38bf36808ea5 1-15
+apps/web/src/server/domains/image-job/repo.integration.test.ts
+  s_41504dfc385516::t_c61fb990719eab 15
+  s_688735423882f0::t_279dc630f33de0 21,166-169,174-175,222-226,228-232
+apps/web/src/server/generic/jobs/repo/external-claim.ts
+  s_41504dfc385516::t_a0667cd1e0e0eb 2-5,7,9-18,23,29-82,125-285
+  s_688735423882f0::t_a85f75cd6189eb 8,83-124
+apps/web/src/server/domains/purchase-import/service/gmail/refresh-evaluation.integration.test.ts
+  s_41504dfc385516::t_fb3e8d1e046d2c 8-11
+docs/adr/0015-unified-durable-work-coordination.md
+  s_41504dfc385516::t_bff9309b27dda2 220-248
+apps/web/src/server/domains/run/repo/ai-work-state.ts
+  s_41504dfc385516::t_a629a06a1adac7 5-6,15-16,98
+apps/web/src/server/domains/transaction-import/repo/statement-suggestions.integration.test.ts
+  s_41504dfc385516::t_f2defdfa6934dc 93,3579,3584-3591,3823,3828-3835
+  s_688735423882f0::t_db2f01c5a98ec5 85-86,4683
+apps/web/tooling/typecheck-repositories.ts
+  s_41504dfc385516::t_31ee0611ae4407 85-86,122-123
+  s_41504dfc385516::t_1e073359edab08 60
+  s_688735423882f0::t_a7fadb20429e1b 79
+apps/web/src/server/generic/jobs/repo/job-queue.ts
+  s_41504dfc385516::t_178c67c400d169 16-26,192,232-251,281
+  s_688735423882f0::t_a2107587b9974f 44,123-149
+apps/web/src/server/domains/run/service/suggestion-sweep.ts
+  s_41504dfc385516::t_59205ce46a006e 27-33
+apps/web/src/server/generic/jobs/repo/work-items.integration.test.ts
+  s_41504dfc385516::t_ac67d7ddaaa707 11-12,175-251
+apps/web/src/server/domains/run/service/ai-refresh.integration.test.ts
+  s_41504dfc385516::t_bac0efb1ef07b9 18-25,78
+  s_688735423882f0::t_72df9e3ae8e747 62,1382-1384
+apps/web/src/server/generic/jobs/repo/work-claims.ts
+  s_41504dfc385516::t_1499397b609b6e 1-80
+apps/web/src/server/workflows/jobs.ts
+  s_41504dfc385516::t_acaa054bb4e435 12,18,55,58-63,86
+  s_41504dfc385516::t_c9a9fc50ff5165 34,41-46,68-69,84
+apps/web/src/server/domains/image-processing/repo/image-processing-retry-budget.integration.test.ts
+  s_41504dfc385516::t_c0f59e1ebeba51 15-16
+  s_688735423882f0::t_ce6c34a5a6554a 3,19-23,74-83,86-90,194
+apps/web/src/server/domains/run/service/ai-refresh.ts
+  s_41504dfc385516::t_e2ef3ab1bc66b8 34-49,99,1003,1009,1011,1230,1236,1316,1365,1372,1378
+apps/web/src/server/generic/derived/service/drain-job.ts
+  s_41504dfc385516::t_15bb70a211f71c 17-20,24,27,42-45,51,54-78,80-95
+  s_41504dfc385516::t_c9edebacd28d4c 46-47,50,52
+apps/web/drizzle/0055_job_lease_holder.sql
+  s_41504dfc385516::t_c964711104d3e1 1-7
+docs/entities.md
+  s_41504dfc385516::t_7d936524355287 3000-3010
+apps/web/src/server/domains/image-job/repo.ts
+  s_41504dfc385516::t_deedfcbccd44a8 18,203
+  s_688735423882f0::t_6bb7b577ad25af 22,201
+apps/web/src/server/testing/background-queue.ts
+  s_41504dfc385516::t_507755b6761fe3 13,16,19-20,23,31-39,41,60-64,71,88-150,156-157,163-166,168,170-173,175-176,181,185-195,296-300,304-306,310-311,317-324,326-335
+  s_688735423882f0::t_c318045d345f34 7,24-30,158-162,169,271-275,313-314,339-340
+  s_41504dfc385516::t_be535618ad6eff 72-74,82-83,151-155,167,174
+apps/web/src/server/generic/derived/repo/read.ts
+  s_41504dfc385516::t_6af4d5fa987f89 27-30,215-217,230
+apps/web/src/server/domains/job/repo.ts
+  s_41504dfc385516::t_0ad1eb4bde7463 39
+  s_688735423882f0::t_cce18fa30a8e10 8-9,17,87
+apps/web/src/server/domains/run/repo/execution-context.ts
+  s_41504dfc385516::t_ccf37728ef1bd4 52
+.oxlintrc.json
+  s_41504dfc385516::t_593873769ed40f 238,254,264-265,275
+  s_688735423882f0::t_3490c60ec2f704 232-237,241-247,253,255-263,266-273,276,280-332,419,423
+apps/web/src/server/domains/run/service/connection-evaluation-page.integration.test.ts
+  s_41504dfc385516::t_2c10b3ce709d81 9
+  s_688735423882f0::t_bed0707a5929d8 28,313
+apps/web/src/server/domains/run/repo/run-progress.ts
+  s_41504dfc385516::t_8f81ac91c6b4ca 20,97
+  s_688735423882f0::t_af90e9d78c83cc 16,19,47,107-109
+apps/web/src/server/generic/derived/repo/derived-engine.integration.test.ts
+  s_41504dfc385516::t_bd2e8e2c4ca528 11,13,44,47,56-61,63-66,121-122,124-127,129-137,139,251,266,273,278,283,288,307-309,314,325-327,332,339-341,350-365,370-371,374,391,401,425-426,428,432,491-495,523,525-527,529,542-545,563-564,593-601,617-632,644-653,696-698,717-719,721,725,731-732,770-774,779-782,784,833-835
+  s_688735423882f0::t_8341f7e2d4ed25 54,257,294
+apps/web/src/server/workflows/runs/control-cancel.integration.test.ts
+  s_41504dfc385516::t_3173bcc595f802 6-7
+  s_688735423882f0::t_71410667df1bec 2,11,68-69
+apps/web/src/server/domains/purchase-import/repo/gmail/execution-policy.ts
+  s_41504dfc385516::t_81142d9008b2cb 42
+apps/web/src/server/ai/evaluation/service/ai-evaluation-drain.ts
+  s_41504dfc385516::t_850198925df82e 1-4,9-12,14,22,30-32,36-42,47-51,53-76,100,109-110,119,127,155,160,163,172-173,182,187-188,202-205,280,295,300,304,377,435,437-438
+apps/web/src/server/ai/evaluation/repo/ai-evaluation.ts
+  s_41504dfc385516::t_f61c5718e8825f 13,19-21,33,36,58,62,79,83,89,120
+apps/web/src/server/ai/evaluation/repo/evaluation-page.ts
+  s_41504dfc385516::t_a6d9727bf364ba 72-88
+apps/web/src/server/domains/purchase-import/service/gmail/reclassify.integration.test.ts
+  s_41504dfc385516::t_5700eaea9a54e4 26-28
+  s_688735423882f0::t_226cbb5bb8b950 44,214
+tools/oxlint/cubby/domain-layers.test.ts
+  s_41504dfc385516::t_f430a2d58f9c61 132-139
+apps/web/src/server/ai/evaluation/service/ai-evaluation-drain.fixtures.ts
+  s_41504dfc385516::t_baac7054b533b4 4-5,7-10,14-17,24,39-41,44-49,71-72,84,89-90
+  s_688735423882f0::t_5f7057a20a823e 11-12,53-58
+apps/web/src/server/domains/image-processing/repo/image-processing.ts
+  s_41504dfc385516::t_fa03585f47f0e5 82-86,99-101,103-113,573-575,671,759-760,793-797,833,931-940,953-956,1046,1090,1261,1281-1286,1403,1406,1424,1561,1668,2082,2108-2114
+  s_688735423882f0::t_86ce3e989e69e5 102,709,724,782-787,800,1188-1190,1202,1259
+apps/web/src/server/domains/run/repo/connection-refresh.ts
+  s_41504dfc385516::t_c4f96c67e91c09 24
+  s_688735423882f0::t_00f7627c1d35b5 33,40,357,359
+apps/web/src/server/generic/assessment/repo/correction-propagation.integration.test.ts
+  s_41504dfc385516::t_915ad40a33b90f 19
+  s_688735423882f0::t_4638585f5465c0 78-79,150-153,170-173,176-178,186,190,209-210,212,219,224,234-236,1027,1379,1382
+apps/web/src/server/domains/purchase-import/service/gmail/refresh-evaluation.ts
+  s_41504dfc385516::t_db7d4cc52cd50c 4
+docs/jobs.md
+  s_41504dfc385516::t_7fa3ec289447c5 57-64,71-80,128-130,207,237-242,246-247,255-259,395-396,539-543,567
+  s_41504dfc385516::t_1688e1a7cdafb8 243-245
+  s_41504dfc385516::t_4c56400ef0b062 260-270
+apps/web/src/server/workflows/runs/lifecycle.ts
+  s_41504dfc385516::t_f14713db671cf0 18,25,160,190,229
+  s_688735423882f0::t_b67dedc543d907 4,16,19-23,139,253,265
+apps/web/src/server/generic/jobs/service/drain.ts
+  s_41504dfc385516::t_ddf0a796f3b609 8,18-19,23-31,59,62-66,68-72,79-85,94-107,138,141,151-152,168,178-180
+apps/web/src/server/ai/evaluation/repo/evaluation-page.integration.test.ts
+  s_41504dfc385516::t_c3cf45fd616b49 14,18-26,32,238
+  s_688735423882f0::t_462b70a0bed012 29,33-37,131,144-147,228-231
+apps/web/src/server/generic/jobs/service/jobs.ts
+  s_41504dfc385516::t_7cd5a9e26f9c8d 13,16,58-73,134
+apps/web/src/server/domains/run/repo/ai-refresh-state.ts
+  s_41504dfc385516::t_45618feb243c6e 31-32
+apps/web/src/server/domains/connection/service/connection-preparation.integration.test.ts
+  s_41504dfc385516::t_df569f2d6b3d02 10-13
+apps/web/src/server/domains/image-processing/repo/device-admission.ts
+  s_41504dfc385516::t_2442157c4ca5b6 5,9,47,58
+apps/web/src/server/ai/evaluation/repo/evaluation-page-transport.integration.test.ts
+  s_41504dfc385516::t_d46a0171c1dc8d 17-18
+  s_688735423882f0::t_6e216d1f0fc37f 34,382
+packages/schemas/src/entity-definitions/32-job.entity.ts
+  s_41504dfc385516::t_035a665dd361f3 242-243,294
+apps/web/src/server/ai/enrichment/location-vision.ts
+  s_41504dfc385516::t_4cb99ba40f080f 47,71-72,275,282,335-336,396,586-587,635
+apps/web/src/server/domains/image-processing/service/image-processing.service.ts
+  s_41504dfc385516::t_c449834742ba5d 30
+apps/web/src/server/domains/run/repo/connection-discovery-pacing.integration.test.ts
+  s_41504dfc385516::t_b2f1ce8230f62e 20,487
+  s_688735423882f0::t_e567cbc0722aa1 15,18-19,142-145,435,478
+apps/web/src/server/domains/run/repo/derived-discovery.ts
+  s_41504dfc385516::t_fbf863a20f8069 3,20,22
+apps/web/src/server/domains/purchase-import/repo/gmail/refresh-evaluation-state.ts
+  s_41504dfc385516::t_f77572847ac55a 4-5
+apps/web/src/server/workflows/runs/execution.integration.test.ts
+  s_41504dfc385516::t_ea1f4484f8a573 12,55-64
+  s_688735423882f0::t_63725d30f59dd2 9,47
+apps/web/src/server/domains/image-processing/repo/image-processing-pull.integration.test.ts
+  s_41504dfc385516::t_02d4c0f72ab1ef 20-21
+  s_688735423882f0::t_c660c24764e9ab 29-32,34,107-111,225,261,303-305,354-356,390-392,403-406,409-413,433-435,701-704,706-707,899-901,977-979,982-986
+apps/web/src/server/domains/purchase-import/operations/mail-tool.integration.test.ts
+  s_688735423882f0::t_452ca3b0659475 62,1393
+apps/web/src/server/domains/purchase-import/repo/mail-import-run.ts
+  s_688735423882f0::t_305db39eb78609 24,65,199
+apps/web/src/server/domains/maintenance/service/maintenance-run.integration.test.ts
+  s_688735423882f0::t_bb54bcc2226292 3,9,24-25,201,238-240
+apps/web/src/server/workflows/catch-up.integration.test.ts
+  s_688735423882f0::t_2d7128af69c81c 7,63
+apps/web/src/server/domains/run/service/execution-transport.integration.test.ts
+  s_688735423882f0::t_e7c7cb07dce5f4 24-27,537-542,552-555,558-559,569,574-576,591-593,609,647-649
+apps/web/src/server/domains/purchase-import/operations/gmail/discovery.integration.test.ts
+  s_688735423882f0::t_d2b601dc82c9b1 8,24-25,137-150,152-157,520-522,583-586,589-590,593-597,748-750,763-765
+apps/web/src/server/domains/purchase-import/repo/mail-import-run.integration.test.ts
+  s_688735423882f0::t_3904823bee25c5 34,78,238,335,371-373,524,1516-1518,1528-1530
+apps/web/src/server/domains/run/service/statement-workflow.integration.test.ts
+  s_688735423882f0::t_c63481b508b06f 19,166
+apps/web/src/server/workflows/runs/wake.ts
+  s_688735423882f0::t_d22e5ae5c70640 1,4-5,16-21,25-26
+apps/web/src/server/generic/jobs/repo/entity-list.ts
+  s_688735423882f0::t_ba4e5dcb683416 14,18,20,49-53
+apps/web/src/server/db/create-shape-drift.unit.test.ts
+  s_688735423882f0::t_8d5a93042c844d 20
+apps/web/src/server/domains/product-category/repo/category-feature.unit.test.ts
+  s_688735423882f0::t_8986f2c66afa0c 5
+apps/web/src/server/domains/purchase-import/repo/controlled-mail-import.ts
+  s_688735423882f0::t_862e28d7816f07 32,37,270
+apps/web/src/server/workflows/job-explain.ts
+  s_688735423882f0::t_1ee8175ece3428 9,21,24,63,114,160-163
+apps/web/tooling/checks/statement-label-retained.setup.ts
+  s_688735423882f0::t_669b7645ed2134 8
+apps/web/src/server/domains/run/repo/run.integration.test.ts
+  s_688735423882f0::t_306808fe6b3234 8,10,275-278,283-284
+apps/web/src/server/generic/search/repo/search-source-selection.integration.test.ts
+  s_688735423882f0::t_59f0bf6194cf2a 15-18,44-45,56-58
+apps/web/src/server/domains/transaction-import/operations/source-transaction-record.integration.test.ts
+  s_688735423882f0::t_702422c4574dba 25-26,121-127,164,305,349
+apps/web/src/server/generic/derived/repo/read-set.integration.test.ts
+  s_688735423882f0::t_8ef2be8e7a31f1 39,310
+apps/web/src/server/domains/image-processing/repo/image-processing-device-wake.integration.test.ts
+  s_688735423882f0::t_5dcf795085bca2 12-17,110,197,214-222,224,227-231,242-246,267
+apps/web/src/server/domains/image-processing/repo/image-processing-maintenance.integration.test.ts
+  s_688735423882f0::t_b80dbb6a041e56 2,14,77-79
+apps/web/src/server/generic/search/service/search-index-repair.service.integration.test.ts
+  s_688735423882f0::t_781ad59cb47751 4,30,58-60
+apps/web/src/server/db/drizzle-schema.ts
+  s_d150f5d0e75878::t_91ce917390b726 1-7
+apps/web/src/server/mcp/run-lifecycle.integration.test.ts
+  s_688735423882f0::t_a5713180beec07 22-23,344-348,371-373,480
+apps/web/src/server/ai/repo/ai-usage.integration.test.ts
+  s_688735423882f0::t_c99e1c05e63935 14
+apps/web/src/server/domains/purchase-import/repo/gmail/publication-concurrency.integration.test.ts
+  s_688735423882f0::t_726107d76987b9 22,229-231
+apps/web/src/server/testing/database-transfer.fixtures.ts
+  s_688735423882f0::t_0a19564eda0355 6
+apps/web/src/server/generic/derived/repo/backlog.integration.test.ts
+  s_688735423882f0::t_3c90496b1385d2 6-9,22,34-40,55
+apps/web/src/server/generic/embedding/repo/embedding-drain.fixtures.ts
+  s_688735423882f0::t_1577291dd424cc 9-14,28,30-35,53-55
+apps/web/src/server/domains/run/operations/run-mail-import.integration.test.ts
+  s_688735423882f0::t_24400998e2ae31 11,14-15,198,203,220
+apps/web/tooling/integration-teardown.ts
+  s_688735423882f0::t_61814112cb32c0 5
+apps/web/tooling/checks/statement-label.benchmark.ts
+  s_688735423882f0::t_81e3e0e8df6e17 28
+apps/web/src/server/ai/repo/ai-refresh-observation.integration.test.ts
+  s_688735423882f0::t_87457436344b82 9,15,278-280,290,327,345-347
+apps/web/src/server/workflows/background-tasks/durable.integration.test.ts
+  s_688735423882f0::t_08987d4a070e2d 4-5,23,53-55,62,71,75
+apps/web/tooling/historical-accepted-orders.ts
+  s_688735423882f0::t_c330b5db6d4544 22
+apps/web/src/server/db/db-pg-tracing.unit.test.ts
+  s_688735423882f0::t_76114b45d33dce 6
+apps/web/src/server/generic/jobs/jobs.fixtures.ts
+  s_688735423882f0::t_1aefc8d794ce85 1-149
+apps/web/src/server/domains/purchase-import/repo/mail-outcome/replay.live-eval.ts
+  s_688735423882f0::t_49f47257a4af17 22-23,275
+apps/web/src/server/domains/purchase-import/repo/run-service.integration.test.ts
+  s_688735423882f0::t_84cb97a89ebda4 13,27,115
+apps/web/src/server/generic/embedding/service/semantic-search.service.integration.test.ts
+  s_688735423882f0::t_60f984fd086ed0 12,29-31,196,198-203,449-451
+apps/web/tooling/dev/scenarios.ts
+  s_688735423882f0::t_8f508f66ded723 11
+apps/web/src/server/domains/purchase-import/repo/import-order-convergence.integration.test.ts
+  s_688735423882f0::t_17f4bb08c1d86b 30
+apps/web/tooling/db-check.ts
+  s_688735423882f0::t_20b10c2e395cb2 11
+apps/web/src/server/domains/run/service/step-run.integration.test.ts
+  s_688735423882f0::t_c871d923858cff 12,160-164
+apps/web/src/server/domains/image/repo/work-sources.integration.test.ts
+  s_688735423882f0::t_5ae9a754f539ba 20,103,142
+apps/web/src/server/generic/embedding/repo/embedding-drain.integration.test.ts
+  s_688735423882f0::t_312cebeede7caf 2,7,26-35,141,143-148,158,160-165,187-189,194-196,202,297,358-360,364-368,455-457
+apps/web/src/server/domains/image-processing/repo/image-processing.integration.test.ts
+  s_688735423882f0::t_e2694f19c3f1d9 43-44,133,295-307,913-915,962-966
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassify-recovery.integration.test.ts
+  s_688735423882f0::t_59961f98b197b3 10,12,224-226
+apps/web/src/server/generic/search/repo/search-index-repair.ts
+  s_688735423882f0::t_8e75ffefa45e12 2,7,33
+apps/web/src/server/generic/relatedness/repo/traversal.ts
+  s_688735423882f0::t_1e47dda614384d 14
+apps/web/src/server/domains/image-processing/repo/image-processing-identification.integration.test.ts
+  s_688735423882f0::t_0edcb618207f67 22-23,134-139,197-199,393-397
+apps/web/src/server/domains/calendar/repo/calendar-caldav.integration.test.ts
+  s_688735423882f0::t_425ac4bf4ae759 15,278
+apps/web/tooling/convergence-harness.ts
+  s_688735423882f0::t_9beed7d6dbe8f3 31
+apps/web/tooling/scenarios/simulator-input-journey.ts
+  s_688735423882f0::t_4330c1222286bc 11
+apps/web/src/server/generic/jobs/repo/operator.ts
+  s_688735423882f0::t_b13cc7c48d310a 7,15,54-57,71,79-108
+apps/web/src/server/db/snapshot-write.integration.test.ts
+  s_688735423882f0::t_907348b086ef67 11,13-17,48-49,54-55,66,71,87,161,186
+apps/web/src/server/db/derived-declarations.unit.test.ts
+  s_688735423882f0::t_e876e72f5412f9 7
+apps/web/src/server/domains/product/repo/service-products.integration.test.ts
+  s_688735423882f0::t_4f748050bedf17 22,317-324,372-376
+apps/web/tooling/remaining-derived-results-migration.integration.test.ts
+  s_688735423882f0::t_c2252062659f19 5
+apps/web/src/server/workflows/job-maintenance.integration.test.ts
+  s_688735423882f0::t_7ec22ec396bb06 8,11-12,49,51-55,62-64,75-79,86-88,100-103,106-107,124-126,139,143,151-153
+apps/web/src/server/domains/image-processing/repo/image-processing-history.integration.test.ts
+  s_688735423882f0::t_efbd64e11e4d4b 39-40,104-106,110,275-279,421-425,428-432,639-641,700-709
+apps/web/tooling/scenarios/context.ts
+  s_688735423882f0::t_5c0f4548788cd9 9
+apps/web/tooling/scenarios/corpus.ts
+  s_688735423882f0::t_c4715e507732a2 16
+apps/web/src/server/domains/transaction-import/repo/statement-spending.integration.test.ts
+  s_688735423882f0::t_96f69b4d236dfc 16,28-31,244-247
+apps/web/src/server/testing/mock-db.ts
+  s_688735423882f0::t_6bff6279ab4aa2 22
+apps/web/src/server/domains/image/repo/image-correction-resolver.integration.test.ts
+  s_688735423882f0::t_7a5bf3477d4c7f 13,35-36,102-105,125-128,131-133,146,152,177-178,180,194-197,201-203,206,225,251
+apps/web/src/server/generic/jobs/repo/job-reads.ts
+  s_688735423882f0::t_654551e2dd7371 1-162
+apps/web/src/server/db.ts
+  s_688735423882f0::t_bc5235857c4a65 26
+apps/web/src/server/generic/activity/repo/activity-input.ts
+  s_688735423882f0::t_b47c2ea484d648 13,68-70,82-85,120-122,132-135
+apps/web/src/server/domains/job/repo.integration.test.ts
+  s_688735423882f0::t_e8f22d0a738ab7 8,11,86,102,104-106,162-165,185,196-198
+apps/web/tooling/test-setup.ts
+  s_688735423882f0::t_3fa4a705cbd3d3 40
+apps/web/src/server/domains/image-processing/repo/image-processing-surfaces.integration.test.ts
+  s_688735423882f0::t_37a4ad68bf737f 17,126-130
+apps/web/src/server/db/helpers/relations.unit.test.ts
+  s_688735423882f0::t_2b79d9b30e2906 10
+apps/web/src/server/domains/inventory/repo/ownership-mutations.integration.test.ts
+  s_688735423882f0::t_9ecc9aeb5fd282 60,298-305,311-315
+apps/web/tooling/tester-army/scenarios.ts
+  s_688735423882f0::t_332110d74c1cfa 16
+apps/web/src/server/db/entity-manifest-fk.unit.test.ts
+  s_688735423882f0::t_325482c7599ef5 13
+apps/web/src/server/mcp/run-discovery-read.integration.test.ts
+  s_688735423882f0::t_40e2e6c99f3829 12,16,119-121,191,273
+apps/web/src/server/db/write-after-commit.integration.test.ts
+  s_688735423882f0::t_1f3d2e4ec30567 24-25,115-119
+apps/web/src/server/domains/run/service/sweep.integration.test.ts
+  s_41504dfc385516::t_dc22585c709509 22,569,571,575-583
+docs/runbooks/production-migrations.md
+  s_41504dfc385516::t_c71b41cb4494c2 87
+apps/web/src/server/domains/transaction-import/repo/statement-suggestions.ts
+  s_d150f5d0e75878::t_ac24fdc0f1fd66 103-114,1655,1783-1807,1809-1846,1850-1903,1908-1909,1913,1919,1922-1929,1935,1945-2017,2019-2027,2029,2034-2036,2042,2044,2055,2058,2062-2070,2072-2074,2076-2168,2255,2257-2263,2270,2283-2284,2301,2304,2340,2400-2410,2453-2457,2513-2514,2516-2521,2523-2525,2527-2529,2531-2535,2792-2793,2795-2811,2813,3245,3453-3457
+docs/adr/0016-shared-assessments-and-feedback.md
+  s_d150f5d0e75878::t_e0d49213b1ad71 386-424
+apps/web/src/server/generic/assessment/repo/suggestion-publication.ts
+  s_d150f5d0e75878::t_93728274870037 1-572
+apps/web/src/server/domains/financial-transaction/repo/transfer-pair-suggestions.ts
+  s_d150f5d0e75878::t_2e1e6e26f3a406 71-77,1283-1285,1287-1299,1323-1324,1338,1344-1366,1925,1928,1939-1943,1956-1960
+docs/agents/generic-paths.md
+  s_d150f5d0e75878::t_fbebe2c49f3d3c 51-56
+apps/web/src/server/generic/assessment/repo/suggestion-publication.integration.test.ts
+  s_41504dfc385516::t_d726fb45950e94 1-177
+docs/guide/terminology.md
+  s_d150f5d0e75878::t_851e5ca4536093 798-810
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "edc6e273a63061bb16073d0d1801fc5b1c71a04a",
+  "prompts": {},
+  "sessions": {
+    "s_41504dfc385516": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20c7954d-2a54-4f64-9b83-4f2c98fd3f87",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_688735423882f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2a3d8d5b-08aa-4155-b997-f3e66aaaa2dd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_d150f5d0e75878": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ee233bd6-f486-4df9-a96f-4a4ebbebf8f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
