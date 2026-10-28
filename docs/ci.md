@@ -89,6 +89,10 @@ is excluded only from web-specific passes; root tooling keeps broad coverage.
 Rust checks include their actual compiler, platform and Cargo warning policy.
 CI establishes `CARGO_BUILD_WARNINGS=deny` for native compilation. Portable generation and
 WASM artifacts retain their own narrower, content/toolchain-based inputs.
+Generation outputs outside the standard generated directories must be listed in
+`cubby-checks:generate.outputs`, including the bootstrap definition catalog beside
+the entity declarations. A cache replay must restore these on a clean checkout;
+a warm local copy is not evidence that the artifact is cached.
 
 Apple host tests and simulator builds do not cache result passes. The selected
 macOS jobs prepare FFI and use Xcode, SwiftPM and Cargo artifact caches while
