@@ -1,0 +1,21 @@
+apps/apple/CubbyKit/Sources/CubbyKit/Edit/FieldEnvelopePresentation.swift
+  s_1f140a8b200d39::t_c99f91f46c40ec 126-127
+apps/web/src/lib/project-schedule.ts
+  s_1f140a8b200d39::t_827f0644da9900 57-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "819d4415e063a43cc61631a095f37241a6c5c919",
+  "prompts": {},
+  "sessions": {
+    "s_1f140a8b200d39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c84ce0c-38eb-4617-aa88-1ea9ad9257df",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
