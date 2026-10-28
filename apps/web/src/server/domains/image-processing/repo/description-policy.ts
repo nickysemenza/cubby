@@ -10,6 +10,32 @@ import { IMAGE_DESCRIPTION_IDENTITY } from "~/server/ai/policy/feature-identity"
 /** Changing this requires a fresh cloud-description job and analysis cache key. */
 export const IMAGE_ANALYSIS_NORMALIZATION_REVISION = 1;
 
+/** Keep the stored key order stable: retained analyses match this exact string. */
+export function imageDescriptionInputFingerprint(input: {
+  sourceContentHash: string;
+  contentType: string;
+  model: string;
+  provider: string;
+  renditionHash?: string;
+  promptRevision?: number;
+  resultSchemaRevision?: number;
+}): string {
+  return JSON.stringify({
+    renditionHash: input.renditionHash,
+    feature: IMAGE_DESCRIPTION_IDENTITY.feature,
+    sourceContentHash: input.sourceContentHash,
+    contentType: input.contentType,
+    provider: input.provider,
+    model: input.model,
+    promptRevision:
+      input.promptRevision ?? IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
+    resultSchemaRevision:
+      input.resultSchemaRevision ??
+      IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
+    normalizationRevision: IMAGE_ANALYSIS_NORMALIZATION_REVISION,
+  });
+}
+
 export const preferredImageDescriptionPolicy = {
   provider: providerFor(IMAGE_DESCRIPTION_IDENTITY.model),
   model: IMAGE_DESCRIPTION_IDENTITY.model,

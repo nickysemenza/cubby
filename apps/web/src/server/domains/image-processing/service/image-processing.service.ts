@@ -26,6 +26,7 @@ import {
 } from "~/server/clients/s3";
 import type { Database } from "~/server/db";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
+import { imageDescriptionInputFingerprint } from "~/server/domains/image-processing/repo/description-policy";
 import {
   claimImageProcessingJob,
   finalizeCompanionImageLeases,
@@ -56,16 +57,9 @@ import {
   persistImageProcessingSubmission,
   persistAppleImageDescriptionSubmission,
 } from "~/server/domains/image-processing/repo/image-processing-submission";
-import { completeCloudImageDescription } from "~/server/domains/image-processing/service/cloud-description";
 import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/domains/image-processing/service/cloud-limits";
-import {
-  deferCloudAttemptForTypedWait,
-  prepareCompanionImageCommand,
-  reserveCompanionAnalysisOutput,
-} from "~/server/domains/image-processing/service/dispatch";
 import { safeImageProcessingError } from "~/server/domains/image-processing/service/safe-error";
 import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
-import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
 import { hasMeaningfulPngTransparency } from "~/server/domains/image/service/image-transparency";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
 import { lockDeviceAdmission } from "~/server/generic/jobs/repo/device-admission";
@@ -251,6 +245,8 @@ async function completeNormalizedImageInput(
     // Recheck after storage IO; the cloud helper snapshots these bytes under a server-only key.
     const current = await getLeasedImageProcessingJobContext(db, result);
     if (!current || current.inputKey !== snapshotKey) return { adopted: false };
+    const { completeCloudImageDescription } =
+      await import("~/server/domains/image-processing/service/cloud-description");
     return {
       adopted: await completeCloudImageDescription(db, {
         jobId: result.jobId,
@@ -263,6 +259,8 @@ async function completeNormalizedImageInput(
   } catch (error) {
     // The verified JPEG stays retained under this attempt's input key; only
     // the provider call waits, without spending an attempt.
+    const { deferCloudAttemptForTypedWait } =
+      await import("~/server/domains/image-processing/service/dispatch");
     if (await deferCloudAttemptForTypedWait(db, result, error))
       return { adopted: false };
     const completion = await completeImageProcessingJob(db, {
@@ -512,6 +510,8 @@ export async function claimCompanionImageCommands(
   const { revisions, kinds, allowAvifNormalization } =
     companionClaimCapabilities(device);
   if (!kinds.length) return [];
+  const { prepareCompanionImageCommand, reserveCompanionAnalysisOutput } =
+    await import("~/server/domains/image-processing/service/dispatch");
   const batch = await withImageProcessingTransaction(db, async (tx) => {
     const admission: DeviceImageClaimBatch = {
       ownedStreak: await lockDeviceAdmission(tx),

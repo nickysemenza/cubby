@@ -22,7 +22,10 @@ import { runStructuredFeature } from "~/server/ai/run-feature";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { imageAnalysisKey, uploadToS3 } from "~/server/clients/s3";
 import type { Database } from "~/server/db";
-import { IMAGE_ANALYSIS_NORMALIZATION_REVISION } from "~/server/domains/image-processing/repo/description-policy";
+import {
+  IMAGE_ANALYSIS_NORMALIZATION_REVISION,
+  imageDescriptionInputFingerprint,
+} from "~/server/domains/image-processing/repo/description-policy";
 import {
   findCachedImageDescriptionAnalysis,
   getUploadedImageProcessingSource,
@@ -105,31 +108,6 @@ export async function fetchAnalysisRendition(input: {
  * Includes only bytes and declared AI inputs. Timestamps and perceptual hashes
  * are deliberately absent: neither tells us whether the model saw new pixels.
  */
-export function imageDescriptionInputFingerprint(input: {
-  sourceContentHash: string;
-  contentType: string;
-  model: string;
-  provider: string;
-  renditionHash?: string;
-  promptRevision?: number;
-  resultSchemaRevision?: number;
-}): string {
-  return JSON.stringify({
-    renditionHash: input.renditionHash,
-    feature: IMAGE_DESCRIPTION_FEATURE.feature,
-    sourceContentHash: input.sourceContentHash,
-    contentType: input.contentType,
-    provider: input.provider,
-    model: input.model,
-    promptRevision:
-      input.promptRevision ?? IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
-    resultSchemaRevision:
-      input.resultSchemaRevision ??
-      IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
-    normalizationRevision: IMAGE_ANALYSIS_NORMALIZATION_REVISION,
-  });
-}
-
 /**
  * Preferred cloud analysis through the mandatory AI Gateway. A matching
  * immutable AiAnalysis result is returned before any model request is placed.

@@ -314,6 +314,11 @@ pre-cutover Worker can run; nothing reads it.
 
 Device wire contract:
 
+Companion completion loads cloud execution only when adopting a device-prepared
+input that needs a cloud description. Ordinary Apple results use the lightweight
+description policy for their exact retained fingerprint, without initializing
+cloud execution merely to compute that identity.
+
 - `imageProcessing.pull` leases for `leaseSeconds` (default 60, 20–300) and
   accepts optional `maxCommands` (1–16, default 1). `commands` contains up to
   that many commands in hand-off order; the retained `command` field is its
