@@ -19,7 +19,10 @@ export const JobDetailActions: DetailSlotComponent<"job"> = ({ record }) => (
       size="sm"
       variant="outline"
       render={
-        <Link to="/activity" search={{ tab: "now", kind: record.kind }} />
+        <Link
+          to="/jobs"
+          search={{ kind: record.kind, includeInternal: "true" }}
+        />
       }
       nativeButton={false}
     >

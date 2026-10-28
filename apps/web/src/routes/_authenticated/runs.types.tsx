@@ -239,7 +239,15 @@ function RunTypesPage() {
         <Button
           variant="outline"
           size="sm"
-          render={<Link to="/activity" search={{ tab: "now", kind: key }} />}
+          render={
+            <Link
+              to="/jobs"
+              search={{
+                kind: key,
+                includeInternal: definition.internal ? "true" : undefined,
+              }}
+            />
+          }
           nativeButton={false}
         >
           View Jobs
