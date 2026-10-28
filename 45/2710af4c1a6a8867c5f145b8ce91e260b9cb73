@@ -1,0 +1,23 @@
+apps/web/src/server/workflows/jobs.ts
+  s_41504dfc385516::t_c9a9fc50ff5165 34,41-46,68-69,84
+apps/web/src/server/workflows/runs/execution.ts
+  s_41504dfc385516::t_b4fa5899770497 9,13-15,45-49
+docs/jobs.md
+  s_41504dfc385516::t_1688e1a7cdafb8 243-245
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "452710af4c1a6a8867c5f145b8ce91e260b9cb73",
+  "prompts": {},
+  "sessions": {
+    "s_41504dfc385516": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20c7954d-2a54-4f64-9b83-4f2c98fd3f87",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

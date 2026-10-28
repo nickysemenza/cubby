@@ -1,0 +1,21 @@
+apps/web/src/server/generic/derived/service/drain-job.ts
+  s_41504dfc385516::t_c9edebacd28d4c 46-50,52
+apps/web/src/server/testing/background-queue.ts
+  s_41504dfc385516::t_3c7ada369738e1 75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cdbc3a4d1be697dca1920c68891abf359b6fcc57",
+  "prompts": {},
+  "sessions": {
+    "s_41504dfc385516": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20c7954d-2a54-4f64-9b83-4f2c98fd3f87",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
