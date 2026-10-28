@@ -57,7 +57,11 @@ import { shiftPlainDate } from "~/lib/household-date";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { expense, project, task, meal, planting } from "~/server/db/schema";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import {
@@ -149,10 +153,12 @@ const loadCalendarMeals = async (
   db: Database,
   input: CalendarRangeInput,
   endInclusive: string,
+  page?: { limit: number; offset: number },
 ) => {
-  if (!calendarSourceMatches("meal", input)) return [];
+  if (!calendarSourceMatches("meal", input))
+    return { rows: [], hasMore: false };
   const condition = await calendarSourceWhere(db, input, "meal");
-  const ids = await getDb(db)
+  const query = getDb(db)
     .select({ id: meal.id })
     .from(meal)
     .where(
@@ -161,9 +167,13 @@ const loadCalendarMeals = async (
         gte(meal[calendarSources.meal.dates[0]], input.startDate),
         lte(meal[calendarSources.meal.dates[0]], endInclusive),
       ),
-    );
-  return ids.length
-    ? getMealsByDateRange(
+    )
+    .orderBy(asc(meal.date), asc(meal.id));
+  const ids = await (page
+    ? query.limit(page.limit).offset(page.offset)
+    : query);
+  const rows = ids.length
+    ? await getMealsByDateRange(
         db,
         input.startDate,
         endInclusive,
@@ -173,16 +183,19 @@ const loadCalendarMeals = async (
         ),
       )
     : [];
+  return { rows, hasMore: page !== undefined && ids.length === page.limit };
 };
 
 const loadCalendarTasks = async (
   db: Database,
   input: CalendarRangeInput,
   endInclusive: string,
+  page?: { limit: number; offset: number },
 ) => {
-  if (!calendarSourceMatches("task", input)) return [];
+  if (!calendarSourceMatches("task", input))
+    return { rows: [], hasMore: false };
   const condition = await calendarSourceWhere(db, input, "task");
-  const ids = await getDb(db)
+  const query = getDb(db)
     .select({ id: task.id })
     .from(task)
     .where(
@@ -193,12 +206,18 @@ const loadCalendarTasks = async (
         gte(effectiveTaskDueDateSql(), input.startDate),
       ),
     )
-    .orderBy(asc(task.dueDate), asc(task.name));
+    .orderBy(asc(task.dueDate), asc(task.name), asc(task.id));
+  const ids = await (page
+    ? query.limit(page.limit).offset(page.offset)
+    : query);
   const read = await taskScaffold.getByIds(
     db,
     ids.map((row) => row.id),
   );
-  return read.data.map((row) => rawTaskOut.parse(row));
+  return {
+    rows: read.data.map((row) => rawTaskOut.parse(row)),
+    hasMore: page !== undefined && ids.length === page.limit,
+  };
 };
 
 const loadCalendarExpenses = async (
@@ -304,7 +323,7 @@ const loadCalendarProjects = async (
 };
 
 const mapMealItems = async (
-  meals: Awaited<ReturnType<typeof loadCalendarMeals>>,
+  meals: Awaited<ReturnType<typeof loadCalendarMeals>>["rows"],
 ): Promise<RawCalendarItem[]> => {
   return meals.map((meal) => ({
     kind: "meal",
@@ -325,7 +344,7 @@ const mapMealItems = async (
 };
 
 const mapTaskItems = (
-  values: Awaited<ReturnType<typeof loadCalendarTasks>>,
+  values: Awaited<ReturnType<typeof loadCalendarTasks>>["rows"],
 ): RawCalendarItem[] =>
   values.flatMap((value) => {
     const startDate = value.due?.start ?? value.due?.end;
@@ -488,10 +507,11 @@ const summarizeCalendarDays = (
  * One bounded read for the unified planning calendar. Date-only comparisons
  * stay as YYYY-MM-DD strings; ReUI Date conversion is a client boundary.
  */
-export async function getCalendarRange(
+async function getCalendarItems(
   db: Database,
   input: CalendarRangeInput,
-): Promise<CalendarRangeOut> {
+  page?: { limit: number; offset: number },
+): Promise<{ items: CalendarItem[]; hasMore: boolean }> {
   const endInclusive = shiftPlainDate(input.endDateExclusive, -1);
   // Omitted `kinds` means all five, so the in-app calendar is unchanged. A
   // narrowed request skips whole reads rather than filtering after the fact —
@@ -502,21 +522,21 @@ export async function getCalendarRange(
     calendarSourceMatches(kind, input);
 
   const [
-    meals,
-    taskRows,
+    mealPage,
+    taskPage,
     expenseRows,
     purchaseItems,
     projectRows,
     plantingRows,
     projectDates,
   ] = await Promise.all([
-    loadCalendarMeals(db, input, endInclusive),
-    loadCalendarTasks(db, input, endInclusive),
+    loadCalendarMeals(db, input, endInclusive, page),
+    loadCalendarTasks(db, input, endInclusive, page),
     loadCalendarExpenses(db, input, endInclusive),
     loadCalendarPurchaseItems(db, input),
     loadCalendarProjects(db, input),
     calendarSourceWhere(db, input, "planting").then((condition) =>
-      loadCalendarPlantings(db, input, endInclusive, condition),
+      loadCalendarPlantings(db, input, endInclusive, condition, page),
     ),
     // The date fold stays WHOLE-TREE on purpose. `aggregateSubtreeDates`
     // folds a parent's window up from its descendants, so scoping the fold to
@@ -530,8 +550,8 @@ export async function getCalendarRange(
   ]);
 
   const [mealItems, taskItems, expenseItems, projectItems] = await Promise.all([
-    mapMealItems(meals),
-    mapTaskItems(taskRows),
+    mapMealItems(mealPage.rows),
+    mapTaskItems(taskPage.rows),
     mapExpenseItems(expenseRows),
     mapProjectItems(projectRows, projectDates, input),
   ]);
@@ -679,8 +699,49 @@ export async function getCalendarRange(
       }),
     });
   });
-  const ordered = sortCalendarItems(hydrated);
-  return { items: ordered, days: summarizeCalendarDays(input, ordered) };
+  return {
+    items: sortCalendarItems(hydrated),
+    hasMore:
+      mealPage.hasMore ||
+      taskPage.hasMore ||
+      (page !== undefined && plantingRows.length === page.limit),
+  };
+}
+
+/** Visit bounded feed pages under one snapshot; the awaited consumer releases each page. */
+export async function visitCalendarFeedItems(
+  db: Database,
+  input: CalendarRangeInput,
+  visit: (items: CalendarItem[]) => Promise<void>,
+): Promise<void> {
+  if (
+    !input.kinds ||
+    input.kinds.some(
+      (kind) => kind !== "meal" && kind !== "task" && kind !== "planting",
+    )
+  )
+    throw new Error(
+      "Calendar feed pages require meal, task, or planting kinds",
+    );
+  const limit = 100;
+  await withTransactionDatabase(db, async (snapshotDb) => {
+    await getDb(snapshotDb).execute(
+      sql`set transaction isolation level repeatable read read only`,
+    );
+    for (let offset = 0; ; offset += limit) {
+      const page = await getCalendarItems(snapshotDb, input, { limit, offset });
+      await visit(page.items);
+      if (!page.hasMore) break;
+    }
+  });
+}
+
+export async function getCalendarRange(
+  db: Database,
+  input: CalendarRangeInput,
+): Promise<CalendarRangeOut> {
+  const { items } = await getCalendarItems(db, input);
+  return { items, days: summarizeCalendarDays(input, items) };
 }
 
 /** One read for the two-kind Schedule workbench. The window selects dated

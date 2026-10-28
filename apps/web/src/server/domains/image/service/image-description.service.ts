@@ -105,10 +105,6 @@ export async function fetchAnalysisRendition(input: {
 }
 
 /**
- * Includes only bytes and declared AI inputs. Timestamps and perceptual hashes
- * are deliberately absent: neither tells us whether the model saw new pixels.
- */
-/**
  * Preferred cloud analysis through the mandatory AI Gateway. A matching
  * immutable AiAnalysis result is returned before any model request is placed.
  */

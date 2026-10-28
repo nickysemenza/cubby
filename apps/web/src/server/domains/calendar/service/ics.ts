@@ -259,13 +259,6 @@ function isPublishable(
   return false;
 }
 
-export function calendarItemCount(
-  items: CalendarItem[],
-  feed: IcsFeed,
-): number {
-  return items.filter((item) => isPublishable(item, feed)).length;
-}
-
 /**
  * DTSTART/DTEND for one item — DATE-valued for a full-day event, UTC DATE-TIME
  * for a timed one.
@@ -346,9 +339,11 @@ export interface IcsOptions {
   now: Date;
   /** Absolute origin this feed is served from, e.g. `https://cubby.example.com`. */
   origin: string;
+  /** Refuse oversized subscriptions before retaining the whole component graph. */
+  maxBytes?: number;
 }
 
-export function renderIcs(items: CalendarItem[], opts: IcsOptions): string {
+export function createIcsDocument(opts: IcsOptions) {
   const calendar = new ICAL.Component("vcalendar");
   calendar.addPropertyWithValue("version", "2.0");
   calendar.addPropertyWithValue("prodid", "-//Cubby//Calendar Feed//EN");
@@ -364,9 +359,42 @@ export function renderIcs(items: CalendarItem[], opts: IcsOptions): string {
   for (const property of properties)
     calendar.addProperty(ICAL.Property.fromString(property));
 
-  for (const item of items) {
-    if (!isPublishable(item, opts.feed)) continue;
-    calendar.addSubcomponent(toEvent(item, opts));
-  }
-  return serializeCalendarComponent(calendar);
+  const end = `END:VCALENDAR${CRLF}`;
+  const header = serializeCalendarComponent(calendar).slice(0, -end.length);
+  const parts: string[] = [];
+  const encoder = new TextEncoder();
+  let size = encoder.encode(end).byteLength;
+  const appendPart = (part: string) => {
+    size += encoder.encode(part).byteLength;
+    if (opts.maxBytes !== undefined && size > opts.maxBytes)
+      throw new Error(
+        `Calendar ${opts.feed} snapshot is ${size} bytes; maximum is ${opts.maxBytes}`,
+      );
+    parts.push(part);
+  };
+  // Retain serialized text only: each event's ICAL graph can be reclaimed before
+  // the next one, and the byte ceiling is checked before retaining its text.
+  appendPart(header);
+  let itemCount = 0;
+  return {
+    get itemCount() {
+      return itemCount;
+    },
+    append(items: CalendarItem[]): void {
+      for (const item of items) {
+        if (!isPublishable(item, opts.feed)) continue;
+        appendPart(serializeCalendarComponent(toEvent(item, opts)));
+        itemCount++;
+      }
+    },
+    finish(): string {
+      return [...parts, end].join("");
+    },
+  };
+}
+
+export function renderIcs(items: CalendarItem[], opts: IcsOptions): string {
+  const document = createIcsDocument(opts);
+  document.append(items);
+  return document.finish();
 }

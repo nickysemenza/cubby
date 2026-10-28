@@ -14,8 +14,18 @@ import { readMealById } from "~/server/domains/meal/repo/crud";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { updateTask } from "~/server/domains/task/repo/crud";
 
-import { executeCalDavWrite, loadCalDavProjection } from "./calendar-caldav";
+import { executeCalDavWrite, visitCalDavProjection } from "./calendar-caldav";
 import { scheduleCalendarFeedDirty } from "./client";
+
+const loadCalDavProjection = async (
+  db: Parameters<typeof visitCalDavProjection>[0],
+) => {
+  const projections: CalendarProjection[] = [];
+  await visitCalDavProjection(db, async (page) => {
+    projections.push(...page);
+  });
+  return { projections };
+};
 
 const expectedResource = (
   projection: CalendarProjection,

@@ -42,8 +42,16 @@ export class CalendarFeedDurableObject
     ctx.blockConcurrencyWhile(() =>
       withTrace("caldav.initialize", async () => {
         await this.store.migrate();
-        if (!this.store.meta().generation && env.APP_ORIGIN)
+        const meta = this.store.meta();
+        if (!meta.generation && env.APP_ORIGIN)
           await this.markDirty("initialize", env.APP_ORIGIN);
+        else if (
+          meta.dirtyReason &&
+          meta.origin &&
+          (await ctx.storage.getAlarm()) === null
+        )
+          // A hard reset can end the alarm before the refresh catch schedules a retry.
+          await ctx.storage.setAlarm(Date.now() + DIRTY_DELAY_MS);
         // Clean cutover: old subscription credentials and documents are disposable.
         await ctx.storage.delete([
           "calendar:meta",
@@ -193,7 +201,8 @@ export class CalendarFeedDurableObject
       "calendar.alarm",
       async () => {
         const meta = this.store.meta();
-        if (!meta.origin) return;
+        // A cold-started alarm may have re-armed itself during construction.
+        if (!meta.origin || !meta.dirtyReason) return;
         try {
           await this.refreshNow(meta.dirtyReason ?? "reconcile", meta.origin);
         } catch (error) {
@@ -243,9 +252,10 @@ export class CalendarFeedDurableObject
     return withTrace(
       "calendar.feed.refresh",
       async () => {
-        const { resources, snapshot } = await this.withDatabase(async (db) => {
+        const generation = this.store.beginPublication();
+        const snapshot = await this.withDatabase(async (db) => {
           const [
-            { loadCalDavProjection },
+            { visitCalDavProjection },
             { buildCalendarSnapshot },
             { renderCalDavResource },
           ] = await Promise.all([
@@ -253,35 +263,31 @@ export class CalendarFeedDurableObject
             import("../service/snapshot"),
             import("../service/caldav-ics"),
           ]);
-          const data = await loadCalDavProjection(db);
-          const identityByCode = new Map(
-            this.store
-              .identities()
-              .map((identity) => [identity.shortcode, identity]),
-          );
-          const resources = await Promise.all(
-            data.projections.map((projection) =>
-              renderCalDavResource(
+          await visitCalDavProjection(db, async (projections) => {
+            const resources = [];
+            for (const projection of projections) {
+              const resource = await renderCalDavResource(
                 projection,
-                identityByCode.get(projection.id) ?? {
+                this.store.identityFor(projection.id) ?? {
                   entity: projection.entity,
                   shortcode: projection.id,
                   filename: `${projection.id}.ics`,
                   uid: `${projection.id}@${UID_DOMAIN}`,
                 },
                 origin,
-              ),
-            ),
-          );
-          const snapshot = await buildCalendarSnapshot(db, {
+              );
+              resources.push(resource);
+            }
+            this.store.stageResources(generation, resources);
+          });
+          return buildCalendarSnapshot(db, {
             origin,
             now: new Date(),
-            revision: this.store.meta().generation + 1,
+            revision: generation,
           });
-          return { resources, snapshot };
         }, origin);
         const revision = this.store.publish(
-          resources,
+          generation,
           snapshot.documents,
           origin,
         );
