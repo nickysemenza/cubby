@@ -1,0 +1,29 @@
+docs/agents/issues.md
+  s_bcb03f0357bb0e::t_58d2a9308e0833 163-167
+AGENTS.md
+  s_f9b38eae28f662::t_1d9f70c306be2b 41-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "82217375942e6c25fe3162f5e03d27b043bc90e8",
+  "prompts": {},
+  "sessions": {
+    "s_bcb03f0357bb0e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3a16ab93-2138-47ea-a8de-62afbb6f0536",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_f9b38eae28f662": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15d31a0c-0fdb-4745-b359-8664bbd5360e",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
