@@ -49,7 +49,7 @@ The desktop shell has a collapsible navigation sidebar containing global search 
 
 A list row’s primary identity opens the record in the side inspector; checkboxes own batch selection and other cells retain editing/copying (J/K and visible step buttons move between rows, Enter opens the full page): a white panel with a 15px title and mono key, the declared key numbers as one inline line under the header (`KeyNumbers layout="inline"`), compact facts with "Add…" for empty editable fields, and hairline-topped sections; below 768px it is a full-screen sheet. The full detail page stacks: identity header, a declaration-owned summary strip (up to eight applicable linked-field, record-preview, report or chart cells), then a small sticky contents index beside one full-width content column: the first fields section (the record's identity facts, in two columns), Needs you (suggestions, quality findings and declared workflow prompts in one block that reserves its space while loading), the merged Activity timeline, then the declared sections. Activity groups entries by household day with a date and calendar-day relative-age gutter; “Show older” continues the existing cursor pages. The index lists groups as quiet bold labels with their sections indented on a hairline guide, each led by its icon (a relation by its target entity's icon) and its row count; the current section follows the reading position, and a jump marks its destination. Jumps remain immediate for reduced-motion users. Empty sections read muted. Below the two-column width the index becomes the phone “Jump to”. Summary fields use the effective values the detail read carries; related records and report cells reuse their bounded canonical readers. Monthly spend readouts use portalled tooltips so strip clipping cannot hide edge values. The chart has one tab stop; arrow keys, Home and End move between labelled months without a second hidden copy of the data. Full record pages keep all empty fields visible. The inspector omits a field section only when every value is blank and there is no edit/Add affordance, custom renderer, or quality finding; its key numbers and Edit action share one line, and work needing input uses a sparse citron rule. An empty editable stored field reads as a quiet "Add…" that opens the editor, and a derived one as a dash. Fact sections at least 40rem wide reflow into two columns; narrow fact lists (the inspector) give labels a fixed share and start every value on one left edge, with no dotted leaders. Needs you collapses when nothing in it needs attention and shows a count of visible attention rows. Field info icons appear on row hover or focus; a row with a quality finding keeps a visible marker. A small identity thumbnail (48px) sits beside the title; the full gallery appears later in Images. Header actions wrap before squeezing identity. Lists retain compact workbench controls and horizontal table overflow rather than horizontal page overflow. Ownership evidence uses the shared RecordList in one content column.
 
-Settings and long analytical workspaces (expense analytics, portfolio analytics, and cash flow) use `IndexedSections`: a continuous column with sticky contents navigation at 800px available width and phone “Jump to”, stable section hashes that preserve search parameters, and mounted drafts. Embedded expense analytics stays inside the record’s existing contents navigation. Keep controls and summaries above the indexed body. Settings groups connections, mail and purchases, household access, and maintenance; connection diagnostics remain behind an explicit disclosure. Use tabs for distinct workflows rather than sections of the same page.
+Settings and long analytical workspaces (expense analytics, portfolio analytics, and cash flow) use `IndexedSections`: a continuous column with sticky contents navigation at 800px available width and phone “Jump to”, stable section hashes that preserve search parameters, and mounted drafts. Embedded expense analytics stays inside the record’s existing contents navigation. Keep controls and summaries above the indexed body. Settings groups connections, mail and purchases, and household access; it links to Activity for maintenance, while connection diagnostics remain behind an explicit disclosure. Use tabs for distinct workflows rather than sections of the same page.
 
 Today/Home titles itself with the household day and keeps Log meal and New task in the page header. A key-numbers strip (Tasks due, Needs you, Spent this month, Pantry on hand) leads, then Today and Needs you side by side as ruled 32px rows, then What changed grouped by household day with the day in a quiet gutter. From 1280px a right rail holds Meals, Money (recorded spend by month), Today’s nutrition, Pantry by location and Your views; below it the rail follows the main column. Records and Insights stay behind disclosure. Every figure is an existing query value; never invent pace, progress scores, risk predictions, or AI panels.
 
@@ -560,7 +560,7 @@ The observation window is local to the mounted view, not a durable workload tota
 
 ### Activity and evaluation progress
 
-Activity leads with one flat Now feed: plain work names, explicit states,
+Activity’s Now view leads with one flat feed: plain work names, explicit states,
 measured pace and waiting context. Working streams light a small info dot beside
 Now; reduced motion keeps it still. With no outstanding work the caption reads
 All quiet only when all feed reads are known, fresh and successful. Derived
@@ -588,3 +588,36 @@ pace and ETA. Derived backlog has no payload timestamp, so its successful read
 time supplies the age. The minute display clock also refreshes on focus and wake.
 
 Project attention uses one quiet shared completeness notice in its dashboard, Problems and Work surfaces, with singular-aware project counts and known-findings wording. Saved-view count pills contain numbers only; incomplete membership is explained in the tab title and shared list status strip. Missing Project task rollups display Updating… until publication.
+
+### Work diagnosis and definitions
+
+Activity is the operational entry point. Its URL-addressable Needs you, Now,
+History and Advanced maintenance views use the shared Tabs primitives. Needs
+you separates Decisions from Problems and exposes existing Run/Job attention
+views; Now retains quiet retries, waits, dependencies and measured progress.
+Visited panels remain mounted so filters, previews and foreground work survive
+view switching. Tab triggers stay disabled until their route handlers are ready.
+Existing Work queue views and direct Run/Job links stay available.
+
+Run types is the permanent “What does each Run do?” reference. Definitions
+lead with targets, exclusions, possible effects, dependencies, cost and recovery.
+Ordered steps reuse declaration labels and purpose text from live execution;
+static definitions forecast possible work; actual Run/Job evidence remains
+canonical. Counted inputs freeze at step start, estimates retain their qualifier,
+and tallies have no implied total.
+Execution drivers and ownership details stay behind a technical disclosure.
+Job definitions share the canonical kind-policy declaration, and Job/Run headers
+link to their definitions. Historical types remain distinct.
+
+Advanced maintenance explains the standard nightly pass before its Run now
+action; internal five-minute queue upkeep has its own Job definition. Backlog
+and image classification counts sit behind disclosure. Image classification
+rows can overlap and uncertain cutout eligibility is not a review queue.
+Recipe re-parsing and alias pruning require an explicit successful preview
+before Apply; each bounded Current/Proposed sample states its coverage and that
+the server rechecks current eligibility rather than locking the preview population.
+
+Activity tabs keep their intrinsic label widths and wrap as whole controls on
+narrow screens. Expanded repair comparisons span the available width below
+the description and action controls; comparison content never competes with
+the description for a narrow right-hand column.

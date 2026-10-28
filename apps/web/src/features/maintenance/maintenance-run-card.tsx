@@ -4,6 +4,7 @@ import type {
 } from "@cubby/schemas/maintenance";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
 
@@ -17,6 +18,7 @@ import { cn } from "~/lib/utils";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Progress } from "~/ui/primitives/progress";
@@ -78,9 +80,9 @@ const IMAGE_STATES = [
   ["pending", "Pending"],
   ["waiting", "Waiting for companion"],
   ["skipped", "Skipped"],
-  ["failed", "Failed"],
-  ["reviewNeeded", "Needs review"],
-  ["remaining", "Not processed"],
+  ["failed", "Needs attention (may be retrying)"],
+  ["reviewNeeded", "Cutout eligibility uncertain"],
+  ["remaining", "No current-revision processing"],
 ] as const;
 
 export interface MaintenanceRunOperations {
@@ -137,7 +139,9 @@ export function MaintenanceRunCard({
         ) : (
           <Description size="xs">No maintenance pass has run yet.</Description>
         )}
-        <Backlog status={data} />
+        <Disclosure summary="Backlog and image processing">
+          <Backlog status={data} />
+        </Disclosure>
       </Stack>
     );
   }
@@ -149,7 +153,7 @@ export function MaintenanceRunCard({
         <Description size="xs">
           {active
             ? `Started ${formatInstant(active.startedAt, "dateShortTime")}${active.trigger === "scheduled" ? " by the nightly schedule" : ""}. One pass at a time.`
-            : "Runs nightly. Each pass drains every backlog below and keeps a step-by-step record."}
+            : "Runs nightly. Each pass runs the declared upkeep steps and keeps their outcomes. Other background work has its own Jobs."}
         </Description>
         <Button
           size="sm"
@@ -279,7 +283,9 @@ function Backlog({ status }: { status: MaintenanceStatus }) {
           <>
             Descriptions use the configured AI vision model and stop at the AI
             budget. Transparent images wait for an available Apple companion.
-            Originals are retained.
+            Originals are retained. Counts use the current processor revision;
+            rows can overlap. Cutout eligibility is a classification, not a
+            review queue.
           </>
         }
       >
@@ -300,6 +306,26 @@ function Backlog({ status }: { status: MaintenanceStatus }) {
             },
           ]}
         />
+        <p className="text-xs text-muted-foreground">
+          Inspect{" "}
+          <Link
+            to="/image-jobs"
+            search={{ state: "failed" }}
+            className="text-link hover:underline"
+          >
+            image Jobs needing attention
+          </Link>{" "}
+          or{" "}
+          <Link
+            to="/image-jobs"
+            search={{ state: "waiting_for_device" }}
+            className="text-link hover:underline"
+          >
+            device waits
+          </Link>
+          . These lists include retained revisions; the snapshot above counts
+          only the current revision.
+        </p>
       </Section>
     </Stack>
   );

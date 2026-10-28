@@ -29,6 +29,7 @@ import { Input } from "~/ui/primitives/input";
 import { StaticTable } from "~/ui/primitives/static-table";
 
 import { jobWait } from "../run/run-view-model";
+import { JobDefinition } from "../run/work-definition";
 import { JOB_STATE_LABEL, JobStatePill, WaitNotice } from "./job-status";
 
 const time = (iso: string | null) =>
@@ -388,7 +389,10 @@ export function JobDiagnostics({
   return (
     <div className="grid gap-5">
       {jobs.primary ? (
-        <JobFactsList facts={jobs.primary} />
+        <div className="grid gap-3">
+          <JobDefinition kind={jobs.primary.kind} />
+          <JobFactsList facts={jobs.primary} />
+        </div>
       ) : (
         <p className="text-xs text-muted-foreground">
           No Job executes this Run.

@@ -9,6 +9,7 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import {
   openRecipeRecomputeAllStream,
@@ -19,10 +20,13 @@ import { imageUpload } from "~/integrations/tanstack-query/generated/catalog/ima
 import { maintenance } from "~/integrations/tanstack-query/generated/catalog/maintenance.gen";
 import { problems } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
 import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
+import { StaticTable } from "~/ui/primitives/static-table";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 
 import { BackfillButton } from "./backfill-button";
 import { BACKFILL } from "./backfill-registry";
@@ -33,7 +37,7 @@ import {
 import { PendingButton } from "./pending-button";
 import { openSearchIndexRepairStream } from "./search-streams";
 
-/** One labeled maintenance action: description left, dry-run count + run-button right. */
+/** Comparisons span the row below its description, never the narrow action slot. */
 function MaintenanceRow({
   label,
   description,
@@ -41,39 +45,46 @@ function MaintenanceRow({
   count,
   approximate = false,
   action,
+  actionPlacement = "inline",
 }: {
   label: string;
   description: string;
-  /** Whether this tool has an always-on affected count. */
   showCount?: boolean;
-  /** The affected figure; undefined while the counts query loads. */
   count?: number;
-  /**
-   * Count is a candidate set the action only *attempts* (an external lookup/API
-   * may not change every one) → render "up to N" instead of "N affected".
-   */
+  /** External lookups attempt a candidate set rather than guaranteeing every change. */
   approximate?: boolean;
   action: ReactNode;
+  actionPlacement?: "inline" | "below";
 }) {
-  return (
-    <Row align="start" justify="between" gap="md" className="py-4">
-      <Stack gap="tight">
-        <span className="text-sm font-medium">{label}</span>
-        <Description size="xs">{description}</Description>
-      </Stack>
-      <Row align="center" gap="sm" className="shrink-0">
-        {showCount && (
-          <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-            {count == null
-              ? "—"
-              : approximate
-                ? `up to ${count}`
-                : `${count} to do`}
-          </span>
-        )}
-        {action}
-      </Row>
+  const controls = (
+    <Row align="center" gap="sm" className="max-w-full min-w-0 max-md:w-full">
+      {showCount ? (
+        <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+          {count == null
+            ? "—"
+            : approximate
+              ? `up to ${count}`
+              : `${count} to do`}
+        </span>
+      ) : null}
+      {action}
     </Row>
+  );
+  return (
+    <fieldset className="grid min-w-0 gap-2 py-3" aria-label={label}>
+      <Row align="start" justify="between" gap="md" className="max-md:flex-col">
+        <Stack gap="tight">
+          <span className="text-sm font-medium">{label}</span>
+          <Description size="xs" className="max-w-prose">
+            {description}
+          </Description>
+        </Stack>
+        {actionPlacement === "inline" ? controls : null}
+      </Row>
+      {actionPlacement === "below" ? (
+        <div className="min-w-0">{action}</div>
+      ) : null}
+    </fieldset>
   );
 }
 
@@ -203,36 +214,124 @@ function CullPendingImagesAction() {
 // used to run on every Problems-page load). Dry run counts the drifted lines;
 // "Re-parse all" applies + recomputes affected totals.
 function ReparseAction() {
+  const [previewed, setPreviewed] = useState(false);
   const dryRun = useQuery({
     ...problems.dryRunReparse.queryOptions(),
     enabled: false,
   });
   return (
-    <MaintenanceDryRunRow
-      summary={
-        dryRun.data
-          ? `${dryRun.data.wouldChange} of ${dryRun.data.total} would change`
-          : null
-      }
-      onDryRun={() => void dryRun.refetch()}
-      dryRunPending={dryRun.isFetching}
-      backfill={
-        <BackfillButton<{ updated: number; recipesAffected: number }>
-          run={openProblemsReparseStream}
-          invalidateTags={ripple.recipe}
-          foreground
-          idleLabel="Run"
-          pendingLabel="Re-parsing…"
-          toastResult={(r) => ({
-            tone: r.updated > 0 ? "success" : "info",
-            message:
-              r.updated > 0
-                ? `Re-parsed ${countLabel(r.updated, "line")} across ${countLabel(r.recipesAffected, "recipe")}.`
-                : "Nothing to re-parse.",
-          })}
+    <Stack gap="sm">
+      <MaintenanceDryRunRow
+        summary={
+          dryRun.data
+            ? `${dryRun.data.wouldChange} of ${dryRun.data.total} would change`
+            : null
+        }
+        onDryRun={() => {
+          setPreviewed(false);
+          void dryRun
+            .refetch()
+            .then((result) => setPreviewed(result.isSuccess));
+        }}
+        dryRunPending={dryRun.isFetching}
+        backfill={
+          <BackfillButton<{ updated: number; recipesAffected: number }>
+            disabled={
+              !previewed || dryRun.isFetching || !dryRun.data?.wouldChange
+            }
+            run={(signal) => {
+              setPreviewed(false);
+              return openProblemsReparseStream(signal);
+            }}
+            invalidateTags={ripple.recipe}
+            foreground
+            idleLabel="Apply reparse repair"
+            pendingLabel="Re-parsing…"
+            toastResult={(r) => ({
+              tone: r.updated > 0 ? "success" : "info",
+              message:
+                r.updated > 0
+                  ? `Re-parsed ${countLabel(r.updated, "line")} across ${countLabel(r.recipesAffected, "recipe")}.`
+                  : "Nothing to re-parse.",
+            })}
+          />
+        }
+      />
+      {dryRun.error ? (
+        <ErrorDisplay
+          title="Recipe reparse preview"
+          error={dryRun.error}
+          onRetry={() => {
+            setPreviewed(false);
+            void dryRun
+              .refetch()
+              .then((result) => setPreviewed(result.isSuccess));
+          }}
         />
-      }
-    />
+      ) : null}
+      {previewed && dryRun.data ? (
+        <Stack gap="sm">
+          <p className="max-w-prose text-xs text-muted-foreground">
+            Showing {dryRun.data.sample.length} of {dryRun.data.wouldChange}{" "}
+            changed lines. This repair can overwrite manual amounts, modifiers
+            and ingredient choices. The server checks current eligibility again
+            when applying; this preview does not lock the records.
+          </p>
+          <StaticTable
+            rows={dryRun.data.sample}
+            rowKey={(line) => line.recipeSectionIngredientId}
+            columns={[
+              {
+                id: "recipe",
+                header: "Recipe / original line",
+                cell: (line) => (
+                  <Stack gap="tight">
+                    <EntityRefLink entity="recipe" id={line.recipeId} />
+                    <span>{line.rawLine}</span>
+                  </Stack>
+                ),
+              },
+              {
+                id: "current",
+                header: "Current",
+                cell: (line) => (
+                  <span>
+                    {line.storedName} ·{" "}
+                    {line.storedAmounts
+                      .map((amount) =>
+                        tryFormatAmount({
+                          ...amount,
+                          upper_value: amount.upperValue,
+                        }),
+                      )
+                      .join(", ")}
+                    {line.storedModifier ? ` · ${line.storedModifier}` : ""}
+                  </span>
+                ),
+              },
+              {
+                id: "proposed",
+                header: "Proposed",
+                cell: (line) => (
+                  <span>
+                    {line.parsedName} ·{" "}
+                    {line.parsedAmounts
+                      .map((amount) =>
+                        tryFormatAmount({
+                          ...amount,
+                          upper_value: amount.upperValue,
+                        }),
+                      )
+                      .join(", ")}
+                    {line.parsedModifier ? ` · ${line.parsedModifier}` : ""}
+                  </span>
+                ),
+              },
+            ]}
+          />
+        </Stack>
+      ) : null}
+    </Stack>
   );
 }
 
@@ -240,36 +339,85 @@ function ReparseAction() {
 // every ingredient at once — the other WASM sweep, also re-homed here. Dry run
 // counts what would be pruned; "Prune all" applies it.
 function PruneAliasesAction() {
+  const [previewed, setPreviewed] = useState(false);
   const dryRun = useQuery({
     ...problems.dryRunPruneAliases.queryOptions(),
     enabled: false,
   });
   return (
-    <MaintenanceDryRunRow
-      summary={
-        dryRun.data
-          ? `${countLabel(dryRun.data.wouldPrune, "alias")} across ${countLabel(dryRun.data.ingredients, "ingredient")}`
-          : null
-      }
-      onDryRun={() => void dryRun.refetch()}
-      dryRunPending={dryRun.isFetching}
-      backfill={
-        <BackfillButton<{ pruned: number }>
-          run={openProblemsPruneAliasesStream}
-          invalidateTags={ripple.ingredient}
-          foreground
-          idleLabel="Run"
-          pendingLabel="Pruning…"
-          toastResult={(r) => ({
-            tone: r.pruned > 0 ? "success" : "info",
-            message:
-              r.pruned > 0
-                ? `Pruned ${countLabel(r.pruned, "alias")}.`
-                : "No unused aliases to prune.",
-          })}
-        />
-      }
-    />
+    <Stack gap="sm">
+      <MaintenanceDryRunRow
+        summary={
+          dryRun.data
+            ? `${countLabel(dryRun.data.wouldPrune, "alias")} across ${countLabel(dryRun.data.ingredients, "ingredient")}`
+            : null
+        }
+        onDryRun={() => {
+          setPreviewed(false);
+          void dryRun
+            .refetch()
+            .then((result) => setPreviewed(result.isSuccess));
+        }}
+        dryRunPending={dryRun.isFetching}
+        backfill={
+          <BackfillButton<{ pruned: number }>
+            disabled={
+              !previewed || dryRun.isFetching || !dryRun.data?.wouldPrune
+            }
+            run={(signal) => {
+              setPreviewed(false);
+              return openProblemsPruneAliasesStream(signal);
+            }}
+            invalidateTags={ripple.ingredient}
+            foreground
+            idleLabel="Apply alias pruning"
+            pendingLabel="Pruning…"
+            toastResult={(r) => ({
+              tone: r.pruned > 0 ? "success" : "info",
+              message:
+                r.pruned > 0
+                  ? `Pruned ${countLabel(r.pruned, "alias")}.`
+                  : "No unused aliases to prune.",
+            })}
+          />
+        }
+      />
+      {dryRun.error ? (
+        <ErrorDisplay title="Alias pruning preview" error={dryRun.error} />
+      ) : null}
+      {previewed && dryRun.data ? (
+        <Stack gap="sm">
+          <p className="max-w-prose text-xs text-muted-foreground">
+            Showing {dryRun.data.sample.length} of {dryRun.data.ingredients}{" "}
+            affected Ingredients. Only the listed unused aliases are removed;
+            the Ingredients remain. Eligibility is checked again when applying.
+          </p>
+          <StaticTable
+            rows={dryRun.data.sample}
+            rowKey={(item) => item.id}
+            columns={[
+              {
+                id: "ingredient",
+                header: "Ingredient",
+                cell: (item) => (
+                  <EntityRefLink entity="ingredient" id={item.id} />
+                ),
+              },
+              {
+                id: "current",
+                header: "Current aliases",
+                cell: (item) => item.aliases.join(", "),
+              },
+              {
+                id: "remove",
+                header: "Remove",
+                cell: (item) => item.unusedAliases.join(", "),
+              },
+            ]}
+          />
+        </Stack>
+      ) : null}
+    </Stack>
   );
 }
 
@@ -403,6 +551,7 @@ type MaintenanceTool = {
   // not change every one) → shown as "up to N" rather than "N affected".
   approximate?: boolean;
   action: ReactNode;
+  actionPlacement?: "inline" | "below";
 };
 
 const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
@@ -438,12 +587,14 @@ const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
         description:
           "Re-run the ingredient parser over each recipe line as it was originally written. Overwrites manual edits to those lines, so preview first.",
         action: <ReparseAction />,
+        actionPlacement: "below",
       },
       {
         label: "Prune unused aliases",
         description:
           "Remove ingredient aliases that no recipe line matches or that duplicate the ingredient's name. The ingredients themselves stay.",
         action: <PruneAliasesAction />,
+        actionPlacement: "below",
       },
     ],
   },
@@ -481,8 +632,8 @@ const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
 ];
 
 /**
- * One-off repair tools in Settings → Maintenance; routine upkeep runs
- * automatically. Settings supplies the heading.
+ * One-off repair tools in Activity → Advanced maintenance. Routine upkeep runs
+ * automatically; Activity supplies the heading.
  */
 export function MaintenanceTools() {
   // Always-on "N to do" figures — one cheap DB query (no USDA/UPC network).
@@ -505,6 +656,7 @@ export function MaintenanceTools() {
                 count={t.count && counts ? t.count(counts) : undefined}
                 approximate={t.approximate}
                 action={t.action}
+                actionPlacement={t.actionPlacement}
               />
             ))}
           </div>

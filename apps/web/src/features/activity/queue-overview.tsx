@@ -10,10 +10,9 @@ import {
 } from "@cubby/schemas/job";
 import { jobFilters, jobOut } from "@cubby/schemas/job-entity";
 import { countLabel } from "@cubby/shared/pluralize";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { toast } from "sonner";
 
 import type { JobSetFilter } from "~/contracts/job.contract";
 import { EmbeddedEntityList } from "~/entity/entity-list/generic-entity-list";
@@ -23,12 +22,13 @@ import type {
 } from "~/entity/hooks/use-entity-list";
 import { WorkFeed } from "~/features/activity/work-feed";
 import { JobLogPanel } from "~/features/job/job-diagnostics";
+import { RetryJobsButton } from "~/features/job/retry-jobs";
+import { JobDefinition } from "~/features/run/work-definition";
 import { derived } from "~/integrations/tanstack-query/generated/catalog/derived.gen";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { formatCount } from "~/lib/number-format";
 import { roundTo } from "~/lib/round-to";
 import { DerivedBacklogOverview } from "~/ui/derived/backlog";
-import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { StatusText } from "~/ui/primitives/status-text";
@@ -87,7 +87,15 @@ function DeviceBacklogNotice() {
   );
 }
 
-function JobExplain({ id, error }: { id: string; error: string | null }) {
+function JobExplain({
+  id,
+  error,
+  kind,
+}: {
+  id: string;
+  error: string | null;
+  kind: string;
+}) {
   const explain = useQuery(job.explain.queryOptions({ id }));
   if (explain.isPending) return <StatusText>Explaining…</StatusText>;
   if (explain.isError)
@@ -95,6 +103,7 @@ function JobExplain({ id, error }: { id: string; error: string | null }) {
   const rollup = explain.data.rollup;
   return (
     <Stack gap="tight">
+      <JobDefinition kind={kind} />
       <ol className="grid gap-1">
         {explain.data.steps.map((step) => (
           <li key={`${step.kind}:${step.ref}`} className="grid gap-0.5">
@@ -186,32 +195,6 @@ function QueueSummary({
   );
 }
 
-function RetryJobsButton({
-  filter,
-  label = "Retry now",
-}: {
-  filter: JobSetFilter;
-  label?: string;
-}) {
-  const retry = useMutation(
-    job.retryNow.mutationOptions({
-      onSuccess: ({ retried }) =>
-        toast.success(`Retry now: ${countLabel(retried, "Job")} made due`),
-      onError: (error) => showErrorToast(error, "Retry now failed"),
-    }),
-  );
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      disabled={retry.isPending}
-      onClick={() => retry.mutate({ filter })}
-    >
-      {retry.isPending ? "Retrying…" : label}
-    </Button>
-  );
-}
-
 function JobActions({ list }: { list: UseEntityListReturn<BaseListRow> }) {
   const selection = list.workbench.table.atoms.rowSelection?.get() ?? {};
   const codes = Object.keys(selection).filter((id) => selection[id]);
@@ -224,10 +207,13 @@ function JobActions({ list }: { list: UseEntityListReturn<BaseListRow> }) {
   return (
     <RetryJobsButton
       filter={filter}
+      disabled={list.totalCount === undefined}
       label={
         codes.length
           ? `Retry ${countLabel(codes.length, "selected Job")} now`
-          : "Retry matching Jobs now"
+          : list.totalCount === undefined
+            ? "Retry matching Jobs now"
+            : `Retry ${countLabel(list.totalCount, "matching Job")} now`
       }
     />
   );
@@ -268,6 +254,7 @@ const JOB_DETAIL = {
     <div className="grid gap-2 px-2 py-2" data-testid="job-explain">
       <JobExplain
         id={row.id}
+        kind={jobOut.pick({ kind: true }).parse(row).kind}
         error={jobOut.pick({ error: true }).partial().parse(row).error ?? null}
       />
       <RetryJobsButton filter={{ codes: [jobOut.shape.id.parse(row.id)] }} />
@@ -304,9 +291,11 @@ function DerivedBacklogSection() {
 export function QueueOverview({
   search,
   onSearchChange,
+  mode = "now",
 }: {
   search: QueueSearch;
   onSearchChange: (next: Partial<QueueSearch>) => void;
+  mode?: "now" | "attention";
 }) {
   const filters = useMemo(
     () => ({
@@ -328,18 +317,35 @@ export function QueueOverview({
   );
   return (
     <Stack gap="lg">
-      <DeviceBacklogNotice />
-      <WorkFeed
-        onShowJobs={(kind) =>
-          onSearchChange({
-            kind,
-            lane: undefined,
-            reason: undefined,
-            page: undefined,
-          })
-        }
-      />
-      <DerivedBacklogSection />
+      {mode === "attention" ? (
+        <WorkFeed
+          attentionOnly
+          onShowJobs={(kind) =>
+            onSearchChange({
+              kind,
+              lane: undefined,
+              reason: undefined,
+              page: undefined,
+            })
+          }
+        />
+      ) : null}
+      {mode === "now" ? (
+        <>
+          <DeviceBacklogNotice />
+          <WorkFeed
+            onShowJobs={(kind) =>
+              onSearchChange({
+                kind,
+                lane: undefined,
+                reason: undefined,
+                page: undefined,
+              })
+            }
+          />
+          <DerivedBacklogSection />
+        </>
+      ) : null}
       <Section headingAs="h2" title="Runs needing attention">
         <EmbeddedEntityList
           entity="run"
@@ -351,13 +357,25 @@ export function QueueOverview({
           allLink
         />
       </Section>
-      <Section headingAs="h2" title="Jobs" id="queue-jobs">
-        <QueueSummary search={search} onSearchChange={onSearchChange} />
+      <Section
+        headingAs="h2"
+        title={mode === "attention" ? "Execution problems" : "Jobs"}
+        id={mode === "attention" ? "attention-jobs" : "queue-jobs"}
+      >
+        {mode === "now" ? (
+          <QueueSummary search={search} onSearchChange={onSearchChange} />
+        ) : (
+          <p className="mb-2 text-sm text-muted-foreground">
+            Failed Jobs and repeated failures under the existing attention
+            policy. Expand a row to inspect its cause, affected record, attempts
+            and scoped recovery.
+          </p>
+        )}
         <EmbeddedEntityList
           key={JSON.stringify(filters)}
           entity="job"
           filters={filters}
-          savedViewId="in-progress"
+          savedViewId={mode === "attention" ? "attention" : "in-progress"}
           pageSize={25}
           columns={JOB_COLUMNS}
           detail={JOB_DETAIL}

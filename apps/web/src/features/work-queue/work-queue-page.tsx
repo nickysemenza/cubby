@@ -433,26 +433,49 @@ function queueColumns(
 export function WorkQueuePage() {
   return (
     <Page title="Work queue" listChrome="workbench" layout="full">
-      <WorkQueue />
+      <WorkQueueRoute />
     </Page>
   );
 }
 
 const PROBLEMS_VIEW = "problems";
 
-function WorkQueue() {
-  const navigate = useNavigate({ from: "/work-queue" });
+function WorkQueueRoute() {
   const search = route.useSearch();
+  return (
+    <WorkQueue
+      groupBy={
+        search.group ?? (search.view === PROBLEMS_VIEW ? "reason" : undefined)
+      }
+    />
+  );
+}
+
+/** Embedded attention groups use the same queries and canonical actions as the full queue. */
+export function WorkQueue({
+  scope: fixedScope,
+  groupBy,
+  label = "Work queue",
+}: {
+  scope?: QueueFilters;
+  groupBy?: string;
+  label?: string;
+}) {
+  const navigate = useNavigate();
+  const embedded = fixedScope !== undefined;
+  const [embeddedGroup, setEmbeddedGroup] = useState<string | undefined>(
+    groupBy,
+  );
   // Problems opens grouped by Reason, where its group actions (Delete all,
   // backfills, Open in list) live; `none` keeps an explicit ungrouping.
-  const group =
-    search.group ?? (search.view === PROBLEMS_VIEW ? "reason" : undefined);
+  const group = embedded ? embeddedGroup : groupBy;
   const inspection = useEntityPreview(undefined, PREVIEW_OPTIONS);
   const tableState = useTableState({
     initialSort: workQueueList.defaultSort.orderBy,
     initialSortDesc: workQueueList.defaultSort.direction === "desc",
     filterSpecs: FILTER_SPECS,
-    urlSync: true,
+    urlSync: !embedded,
+    readUrlState: !embedded,
     syncPaginationToUrl: false,
   });
   const activeGroup = workQueueList.grouping.find(
@@ -461,9 +484,10 @@ function WorkQueue() {
   const queueFilters = useCallback(
     (state: TableStateReturn) => ({
       ...buildQueueFilters(state),
+      ...fixedScope,
       group: workQueueInput.shape.group.safeParse(activeGroup?.key).data,
     }),
-    [activeGroup],
+    [activeGroup, fixedScope],
   );
   const list = useInfiniteTableList({
     queryOptions: queueQueryPlan,
@@ -474,8 +498,22 @@ function WorkQueue() {
   const reasons = firstPage?.meta.reasons ?? NO_REASONS;
   const ownerRoster = useDeferredEntityRosters(OWNER_ROSTER).owner;
   const columns = useMemo(
-    () => queueColumns(reasons, ownerRoster),
-    [reasons, ownerRoster],
+    () =>
+      createCubbyColumnCollection<QueueTableRow>((add) => {
+        queueColumns(reasons, ownerRoster).visit((column) =>
+          add({
+            ...column,
+            // The section owns these predicates; never offer a filter it would ignore.
+            enableColumnFilter:
+              embedded &&
+              (column.id === "family" ||
+                (fixedScope?.view === "human" && column.id === "executor"))
+                ? false
+                : column.enableColumnFilter,
+          }),
+        );
+      }),
+    [reasons, ownerRoster, embedded, fixedScope],
   );
   const selection = useBulkActions({ config: COPY_ACTIONS });
   const { clearSelection, onRowSelectionChange } = selection;
@@ -507,7 +545,11 @@ function WorkQueue() {
     onRowSelectionChange,
   ]);
   const setGroup = useCallback(
-    (next: string | null) =>
+    (next: string | null) => {
+      if (embedded) {
+        setEmbeddedGroup(next ?? undefined);
+        return;
+      }
       void navigate({
         to: ".",
         search: (prev) => ({
@@ -515,8 +557,9 @@ function WorkQueue() {
           group: next ?? (prev.view === PROBLEMS_VIEW ? "none" : undefined),
         }),
         replace: true,
-      }),
-    [navigate],
+      });
+    },
+    [navigate, embedded],
   );
   const table = useTableConfig({
     data: list.data,
@@ -528,8 +571,8 @@ function WorkQueue() {
     rowSelection: selection.rowSelection,
     onRowSelectionChange: selection.onRowSelectionChange,
     initialColumnVisibility: HIDDEN_COLUMNS,
-    filterFields: FILTER_FIELDS,
-    scrollRestorationId: "work-queue",
+    filterFields: embedded ? [] : FILTER_FIELDS,
+    scrollRestorationId: label,
     grouping: {
       choices: GROUP_MENU,
       active: activeGroup?.key ?? null,
@@ -623,7 +666,7 @@ function WorkQueue() {
   const keyState = useRef({ rows, currentRowId, currentHref });
   keyState.current = { rows, currentRowId, currentHref };
   useEffect(() => {
-    if (isInspectorOpen) return;
+    if (isInspectorOpen || embedded) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (
         event.defaultPrevented ||
@@ -659,7 +702,7 @@ function WorkQueue() {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isInspectorOpen, navigate]);
+  }, [isInspectorOpen, navigate, embedded]);
 
   const isLoading = useHydratedLoading(list.isLoading);
   const isTransitioning = list.infiniteScroll.isTransitioning;
@@ -671,7 +714,7 @@ function WorkQueue() {
       ...previous.filter((filter) => filter.id !== "view"),
       ...(next ? [{ id: "view", value: next }] : []),
     ]);
-  const tabsTarget = usePageWorkbenchTarget("tabs");
+  const tabsTarget = usePageWorkbenchTarget("tabs", !embedded);
   const PreviewSheet = inspection.PreviewSheet;
 
   const incompleteCount = firstPage?.meta.incompleteProjectIds?.length ?? 0;
@@ -703,7 +746,7 @@ function WorkQueue() {
         )}
       <RTable
         table={table}
-        ariaLabel="Work queue"
+        ariaLabel={label}
         isLoading={isLoading}
         error={list.error}
         infiniteScroll={list.infiniteScroll}

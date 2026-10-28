@@ -1,4 +1,5 @@
 import { entityReportOut } from "@cubby/schemas/entity-report";
+import { dryRunReparseOut } from "@cubby/schemas/problems";
 import { testUserId } from "@cubby/schemas/testing";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -10,6 +11,7 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
+import { dryRunReparse } from "~/server/generic/problems/service/problems.service";
 import { ingredientRef, makeRecipeInput } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -81,6 +83,21 @@ describe("reparseRecipeLine", () => {
     const { entityKernel, flour, recipe } = await setup();
     const line = recipe.sections[0]!.ingredients[0]!;
 
+    const preview = dryRunReparseOut.parse(await dryRunReparse(ctx.db));
+    expect(preview.wouldChange).toBe(1);
+    expect(preview.sample).toEqual([
+      expect.objectContaining({
+        recipeId: recipe.id,
+        recipeSectionIngredientId: line.id,
+        storedAmounts: [{ value: 999, unit: "g" }],
+        parsedAmounts: [{ value: 2, unit: "cup" }],
+      }),
+    ]);
+    // Inspecting a repair must preserve the member’s currently stored amount.
+    expect(
+      (await readRecipe(ctx.db, recipe.id))?.sections[0]?.ingredients[0]
+        ?.amounts,
+    ).toEqual([{ value: 999, unit: "g" }]);
     const before = await usagesReport(flour.shortcode);
     const drifted = before.rows.filter((row) => (row.commands ?? []).length);
     expect(drifted).toHaveLength(1);

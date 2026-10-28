@@ -340,7 +340,7 @@ it("retries the current filter without widening to other lanes", async () => {
     { wrapper: harness.wrapper },
   );
   await userEvent.click(
-    await screen.findByRole("button", { name: "Retry matching Jobs now" }),
+    await screen.findByRole("button", { name: /Retry \d+ matching Jobs? now/ }),
   );
   await waitFor(() =>
     expect(retried).toContainEqual({
