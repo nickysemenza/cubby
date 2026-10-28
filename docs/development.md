@@ -537,14 +537,7 @@ deploy-time Worker values ([error tracking](infrastructure.md#error-tracking-and
 the output contains no commit. GitHub Actions adds the full source SHA as the
 Cloudflare version tag and a bounded message with the originating PR/author,
 deployment actors and run link. Source attribution is prepared before migrations;
-it does not change the build cache key. After deployment, Actions reads back the
-active Cloudflare version and checks the public root document's `cubby-release`
-marker against the uploaded release values. The root may redirect to sign-in;
-the final response must remain on the application origin and return HTTP 200.
-The document check allows six attempts, ten seconds per request and five seconds
-between attempts. Failure marks the deployment job red with diagnostics and a
-summary; it never rolls back code or migrations. This is release/SSR health,
-not an authenticated household journey or proof of every integration's health.
+it does not change the build cache key.
 Nx's `@cubby/web:build-cf` owns its staleness
 from content inputs alone. The plugin writes directly into this output tree;
 there is no separate `dist` bundle.

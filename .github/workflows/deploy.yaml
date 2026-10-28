@@ -33,8 +33,6 @@ jobs:
       - uses: ./.github/actions/deploy-worker
         with:
           package: "@cubby/web"
-          worker-name: "cubby"
-          verify-url: "https://cubby.nickysemenza.com/"
           workspace-filter: "@cubby/web..."
           wasm: "restore"
           build-command: "pnpm --filter @cubby/web run build:cf"

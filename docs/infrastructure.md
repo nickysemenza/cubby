@@ -1052,13 +1052,12 @@ not as a repository secret. Required repository or environment secrets are:
 
 The Cloudflare token should be scoped to the checked-in account and only the
 resource types the deployment workflow manages. Production deploys always
-build before invoking `cf deploy --prebuilt --mode production`. The token also
-needs read access to Worker deployments and versions for release verification.
+build before invoking `cf deploy --prebuilt --mode production`.
 Actions tags versions with the full commit SHA and supplies a message with the
 commit subject, originating merged PR/author when available, deployment actors
-and run URL. The Actions summary links the source, run and Cloudflare deployments
-and records the active Worker version/deployment IDs. The token remains the
-Cloudflare authenticated actor; the message records source and execution context.
+and run URL. The Actions summary records the source and deployment run. The token
+remains the Cloudflare authenticated actor; the message records source and
+execution context.
 
 GitHub Actions is the sole production build/deployment owner. The main Worker's
 Cloudflare Git build connection is disconnected: disabling production builds
@@ -1066,13 +1065,6 @@ alone leaves the independent preview-branch build trigger enabled. Do not
 reconnect it just for attribution. WASM is restored or built through the existing
 Nx target in Actions, which installs `wasm-pack`; Cloudflare-hosted WASM builds
 and preview infrastructure are deferred. Production is the only deployed environment.
-
-After deployment, Actions requires a single version at 100% traffic with the
-expected full-SHA tag, then checks the serving document's existing release marker
-and HTTP status ([deployment mechanics](development.md#deployment-appsweb-on-workers)).
-Failures remain visible in Actions diagnostics and the run summary, using normal
-GitHub workflow notifications. Rollback requires an explicit operator decision
-because preceding database migrations may make older code unsafe.
 
 ## Apple platform
 
