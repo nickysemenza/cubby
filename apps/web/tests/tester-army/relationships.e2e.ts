@@ -20,6 +20,11 @@ for (const viewport of [
       screen.getByText(`Synthetic Original Project ${viewport.width}`),
     ).toBeVisible();
     await screen.getByRole("button", "Edit Purchase").click();
+    await expect(
+      screen
+        .getByRole("dialog", "Edit Purchase")
+        .getByRole("combobox", "Default project"),
+    ).toBeVisible();
     await agent.act(
       `In the Edit Purchase dialog, set its Default project to "Synthetic Replacement Project ${viewport.width}".`,
     );
@@ -44,15 +49,20 @@ for (const viewport of [
 test("moving a task between board lanes persists its project without changing siblings", async ({
   data,
   agent,
+  screen,
 }) => {
   const { project, sibling, task } = data.world.board;
   await data.open(
     `/tasks?view=board&groupBy=${encodeURIComponent(JSON.stringify([{ key: "projectId" }]))}`,
   );
+  await screen.getByRole("combobox", "Move Synthetic inbox card").click();
+  await expect(
+    screen.getByRole("option", "Synthetic Destination Project"),
+  ).toBeVisible();
   await agent.act(
     // Board drag-and-drop exposes no addressable drop target to the decision
     // model; the card's own Move picker is the keyboard-accessible path.
-    'Move "Synthetic inbox card" from No project to "Synthetic Destination Project" by opening that card\'s "Move Synthetic inbox card" picker and choosing "Synthetic Destination Project". Do not drag the card.',
+    'In the open Move Synthetic inbox card picker, choose "Synthetic Destination Project". Do not drag the card.',
   );
   outcome(await data.fields("task", task.id, ["projectId"]), {
     projectId: project.id,
@@ -88,6 +98,12 @@ test("source claim editing preserves canonical identity and money", async ({
   if (!original) throw new Error("Synthetic claim was not created");
   await data.open(`/expenses/${expense.id}`);
   await screen.getByRole("button", "Edit Expense").click();
+  // Hydration precedes the async editor defaults; the agent needs the retained claim.
+  await expect(
+    screen
+      .getByRole("dialog", "Edit Expense")
+      .getByRole("textbox", "Description"),
+  ).toHaveValue("Synthetic claim evidence");
   await agent.act(
     'In the Edit Expense dialog, change the Description of the existing synthetic-provider source claim to "Synthetic claim evidence revised". Keep the existing claim; do not add another row.',
   );

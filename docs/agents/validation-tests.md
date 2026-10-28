@@ -17,6 +17,11 @@ The UI project shares module state between files. Its shared teardown clears
 Sonner notifications as well as React trees: unmounting a Toaster leaves its
 notifications available to the next test.
 
+Goal-driven browser journeys wait for the record's editor defaults and requested
+picker options before asking the decision model to act. App hydration alone
+does not establish that an async editor or picker is ready. Keep the stored-data
+read-back after the action; readiness waits do not replace outcome assertions.
+
 Keep pure logic imported directly by standalone Node subprocesses in alias-free
 `.ts` files. Vitest uses the application's configured aliases; server composition
 keeps the declared `~/server/` boundary. Temporary subprocess workspaces declare
