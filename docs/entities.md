@@ -121,6 +121,11 @@ a missing computation. A missing result renders Updating… (or Unavailable with
 evidence, never a cached `automaticFields` value; edits and same-value confirmation
 end that ownership immediately.
 
+Envelope validation graphs are shared by their stored and effective schema
+identities across projections. These weak caches contain schemas only, never
+assignments, controls, results or other record data. Repeated nested reads must
+not rebuild the same validation graph for every list, detail and MCP occurrence.
+
 One shared Why this value experience owns source stacks, assignment/reset,
 suggestion review and explanations across web and Apple. Image stacks use the
 same ordered source primitive with view-only thumbnail strips. Allocation

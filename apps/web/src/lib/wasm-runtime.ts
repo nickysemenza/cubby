@@ -70,8 +70,10 @@ const isWasmFunction = (value: WasmType[keyof WasmType]): value is WasmMethod =>
 // Both capability surfaces share pure results from the same module. A miss is
 // unambiguous because cached methods never return nullish values.
 const resultCache = new LRUCache<string, NonNullable<WasmResult>>({
-  max: 2048,
+  // A browser owns one document; a Worker isolate retains this across callers.
+  max: import.meta.env.SSR ? 128 : 2048,
 });
+const SERVER_CACHE_KEY_LIMIT = 1024;
 
 // Object-heavy work is batched by the caller. Primitive keys avoid allocating
 // and retaining a serialized copy of each page's input graph.
@@ -83,7 +85,14 @@ const primitiveCacheKey = (
   for (const arg of args) {
     if (arg !== null && typeof arg === "object") return undefined;
     const value = String(arg);
-    key += `:${typeof arg}:${value.length}:${value}`;
+    const part = `:${typeof arg}:${value.length}:${value}`;
+    // Long authored text must not fill the isolate with copies of inputs/results.
+    if (
+      import.meta.env.SSR &&
+      key.length + part.length > SERVER_CACHE_KEY_LIMIT
+    )
+      return undefined;
+    key += part;
   }
   return key;
 };

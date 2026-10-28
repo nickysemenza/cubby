@@ -4,6 +4,21 @@ import { entitySchema } from "./entity-core";
 import { fieldEmptyReason } from "./field-outcome";
 export { fieldEmptyReason } from "./field-outcome";
 
+/** Schema identities own validation graphs; record values never enter this cache. */
+const shareSchema = <Input extends z.ZodType, Output extends z.ZodType>(
+  build: (input: Input) => Output,
+) => {
+  const schemas = new WeakMap<Input, Output>();
+  return (input: Input): Output => {
+    let schema = schemas.get(input);
+    if (schema === undefined) {
+      schema = build(input);
+      schemas.set(input, schema);
+    }
+    return schema;
+  };
+};
+
 /** Null/absence is represented by an intent or outcome, never a value arm. */
 function fieldValueSchema<S extends z.ZodType>(
   schema: S,
@@ -74,7 +89,7 @@ export const fieldProvenance = z.discriminatedUnion("kind", [
 ]);
 
 /** Declarations specialize permitted intents; allocation is never an intent. */
-export const fieldAssignment = <S extends z.ZodType>(stored: S) =>
+export const fieldAssignment = shareSchema(<S extends z.ZodType>(stored: S) =>
   z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("inherit") }),
     z.object({ kind: z.literal("none") }),
@@ -83,10 +98,11 @@ export const fieldAssignment = <S extends z.ZodType>(stored: S) =>
       value: fieldValueSchema(stored),
       ownership: fieldAssignmentOwnership,
     }),
-  ]);
+  ]),
+);
 
 /** The outcome and its provenance always describe the same computation. */
-export const fieldDecision = <V extends z.ZodType>(value: V) =>
+export const fieldDecision = shareSchema(<V extends z.ZodType>(value: V) =>
   z.object({
     outcome: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("value"), value: fieldValueSchema(value) }),
@@ -96,9 +112,10 @@ export const fieldDecision = <V extends z.ZodType>(value: V) =>
       }),
     ]),
     provenance: fieldProvenance.nullable(),
-  });
+  }),
+);
 
-export const fieldResult = <V extends z.ZodType>(value: V) =>
+export const fieldResult = shareSchema(<V extends z.ZodType>(value: V) =>
   z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("missing") }),
     z.object({ kind: z.literal("live"), decision: fieldDecision(value) }),
@@ -108,7 +125,8 @@ export const fieldResult = <V extends z.ZodType>(value: V) =>
       computedAt: z.iso.datetime(),
       freshness: z.enum(["fresh", "stale"]),
     }),
-  ]);
+  ]),
+);
 
 /** A failed or waiting refresh does not imply whether a usable result exists. */
 export const fieldWork = z.discriminatedUnion("kind", [
@@ -122,21 +140,23 @@ export const fieldWork = z.discriminatedUnion("kind", [
   }),
 ]);
 
-export const fieldResetPreview = <V extends z.ZodType>(value: V) => {
-  const result = fieldResult(value);
-  return z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("not_loaded") }),
-    z.object({
-      kind: z.literal("ready"),
-      result: z.discriminatedUnion("kind", [
-        result.options[1],
-        result.options[2].extend({ freshness: z.literal("fresh") }),
-      ]),
-    }),
-  ]);
-};
+export const fieldResetPreview = shareSchema(
+  <V extends z.ZodType>(value: V) => {
+    const result = fieldResult(value);
+    return z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("not_loaded") }),
+      z.object({
+        kind: z.literal("ready"),
+        result: z.discriminatedUnion("kind", [
+          result.options[1],
+          result.options[2].extend({ freshness: z.literal("fresh") }),
+        ]),
+      }),
+    ]);
+  },
+);
 
-export const fieldControls = <V extends z.ZodType>(value: V) =>
+export const fieldControls = shareSchema(<V extends z.ZodType>(value: V) =>
   z.discriminatedUnion("kind", [
     z.object({
       kind: z.literal("readonly"),
@@ -154,7 +174,8 @@ export const fieldControls = <V extends z.ZodType>(value: V) =>
         }),
       ]),
     }),
-  ]);
+  ]),
+);
 
 /** Current assignment and controls must never be reconstructed from a cache. */
 export const fieldEnvelope = <S extends z.ZodType, V extends z.ZodType>(
@@ -185,6 +206,32 @@ export const computedFieldEnvelope = <V extends z.ZodType>(effective: V) =>
   });
 
 type StoredFieldSchemas = Readonly<Record<string, z.ZodType | null>>;
+
+// Projections often reuse the same stored/effective schemas. Share their
+// validation graph, not record values, so nested list/detail/MCP reads do not
+// allocate another controls/result graph for every occurrence of a field.
+const computedEnvelopeSchemas = new WeakMap<z.ZodType, z.ZodType>();
+const assignedEnvelopeSchemas = new WeakMap<
+  z.ZodType,
+  WeakMap<z.ZodType, z.ZodType>
+>();
+
+const envelopeSchema = (stored: z.ZodType | null, effective: z.ZodType) => {
+  let schemas = computedEnvelopeSchemas;
+  if (stored !== null) {
+    schemas = assignedEnvelopeSchemas.get(stored) ?? new WeakMap();
+    assignedEnvelopeSchemas.set(stored, schemas);
+  }
+  let schema = schemas.get(effective);
+  if (schema === undefined) {
+    schema =
+      stored === null
+        ? computedFieldEnvelope(effective)
+        : fieldEnvelope(stored, effective);
+    schemas.set(effective, schema);
+  }
+  return schema;
+};
 
 type EnvelopedReadFields<
   ReadFields extends z.ZodRawShape,
@@ -274,16 +321,7 @@ export function withFieldEnvelopes(
       const effective = schema.shape[key]
         ? (publicReadFields[key] ?? schema.shape[key])
         : undefined;
-      return effective
-        ? [
-            [
-              key,
-              stored === null
-                ? computedFieldEnvelope(effective)
-                : fieldEnvelope(stored, effective),
-            ],
-          ]
-        : [];
+      return effective ? [[key, envelopeSchema(stored, effective)]] : [];
     }),
   );
   const ordinaryFields: z.ZodRawShape = Object.fromEntries(
