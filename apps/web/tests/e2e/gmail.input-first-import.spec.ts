@@ -214,7 +214,10 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
   await expect(
     page.getByRole("heading", { name: "Shared senders", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Seller unresolved/ }).click();
+  await page
+    .getByRole("region", { name: "Seller unresolved", exact: true })
+    .getByRole("button", { name: /^Seller unresolved · \d+$/ })
+    .click();
   await expect(
     page.getByRole("region", { name: "Seller unresolved", exact: true }),
   ).toContainText(/Showing \d+ of \d+/);

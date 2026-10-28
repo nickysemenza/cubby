@@ -250,7 +250,7 @@ function DiscoveryCoverage({
                 <EntityRefLink
                   entity="email"
                   id={row.original.id}
-                  name={getValue()}
+                  name={getValue() ?? "No subject"}
                 />
               ),
             }),

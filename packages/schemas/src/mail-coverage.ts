@@ -142,8 +142,8 @@ export const mailCoverage = z.strictObject({
     z.strictObject({
       id: emailShortcode,
       mailboxId: z.string(),
-      sender: z.string(),
-      subject: z.string(),
+      sender: z.string().nullable(),
+      subject: z.string().nullable(),
       receivedAt: z.iso.datetime().nullable(),
     }),
   ),
