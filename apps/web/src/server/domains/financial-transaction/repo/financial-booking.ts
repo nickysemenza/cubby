@@ -248,9 +248,8 @@ async function resolveBookingVendor(
       ? await merchantVendorInferenceFor(db, merchant)
       : null;
   if (!input.purchaseId && !input.vendorId && merchantHistory) {
-    const inference = merchantHistory;
-    if (inference.status === "suggested") {
-      input.vendorId = inference.candidates[0].vendorId;
+    if (merchantHistory.status === "suggested") {
+      input.vendorId = merchantHistory.candidates[0].vendorId;
       input.confirmsMerchant = false;
     }
   }

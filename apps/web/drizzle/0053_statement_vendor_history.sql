@@ -12,6 +12,16 @@ SET "confirmsMerchant" = COALESCE((
   WHERE audit."entityKind" = 'financialTransaction'
     AND audit."entityId" = allocation."transactionId"
     AND audit.changes ? 'allocations'
+    -- Amount-only rewrites do not independently confirm a Vendor assignment.
+    AND ARRAY(
+      SELECT split_part(value, ':', 1)
+      FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(audit.changes->'allocations'->'from') = 'array' THEN audit.changes->'allocations'->'from' ELSE '[]'::jsonb END) AS entries(value)
+      ORDER BY 1
+    ) IS DISTINCT FROM ARRAY(
+      SELECT split_part(value, ':', 1)
+      FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(audit.changes->'allocations'->'to') = 'array' THEN audit.changes->'allocations'->'to' ELSE '[]'::jsonb END) AS entries(value)
+      ORDER BY 1
+    )
   ORDER BY audit."createdAt" DESC, audit.id DESC
   LIMIT 1
 ), false);

@@ -66,7 +66,7 @@ export const financialTransactionAllocation = z.object({
     .optional()
     .meta({ opaque: true })
     .describe(
-      "Whether this allocation independently confirms the statement merchant's Vendor. Set false when copying an inferred Vendor; automatic settlement never confirms merchant history.",
+      "Whether this write independently confirms the statement merchant's Vendor. Set false when copying an inferred Vendor; automatic settlement never adds confirmation. Existing independent confirmation survives inferred replays until the allocation is removed.",
     ),
 });
 export const financialTransactionAllocations = z.array(

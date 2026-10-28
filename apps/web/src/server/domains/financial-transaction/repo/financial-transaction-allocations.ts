@@ -279,9 +279,7 @@ export async function writeAllocationSet(
     // Automation preserves independent confirmation but cannot create it by default.
     const memberDecision = actor.channel !== "system" && actor.runId === null;
     const confirmsMerchant =
-      prior?.confirmsMerchant && !memberDecision
-        ? true
-        : (row.confirmsMerchant ?? memberDecision);
+      prior?.confirmsMerchant || (row.confirmsMerchant ?? memberDecision);
     if (!prior) {
       await tx.insert(financialTransactionAllocation).values({
         transactionId,

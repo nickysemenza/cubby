@@ -14,6 +14,7 @@ import { type Trade, tradeSchema } from "@cubby/schemas/task-fields";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
@@ -23,6 +24,7 @@ import { financialTransaction } from "~/integrations/tanstack-query/generated/ca
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { FieldValueMark } from "~/ui/derived/value-mark";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -51,11 +53,28 @@ function expectsBookingReview(transaction: FinancialTransactionOut) {
 }
 function BookingPreviewDetails({
   review,
+  vendorName,
 }: {
   review: FinancialBookingPreview;
+  vendorName?: string;
 }) {
   return (
     <>
+      {review.vendorId ? (
+        <p className="text-sm">
+          Vendor:{" "}
+          <EntityRefLink
+            entity="vendor"
+            id={review.vendorId}
+            name={vendorName ?? review.vendorId}
+          />
+          {review.confirmsMerchant === false ? (
+            <span className="ml-1 text-xs text-muted-foreground">
+              identified from evidence
+            </span>
+          ) : null}
+        </p>
+      ) : null}
       <p className="text-sm">
         {review.action === "link_existing"
           ? "Link existing Expenses to"
@@ -139,26 +158,43 @@ export function FinancialBookingReview({
         disabled={busy}
       />
       {!purchase ? (
-        <WithVendorShortcodeSearch>
-          {(search) => (
-            <Picker
-              {...search}
-              entity="vendor"
-              label="Vendor"
-              value={vendor}
-              setValue={(item) => {
-                setVendor(item);
-                setReview(null);
-              }}
-              placeholder={
-                identifiedVendor
-                  ? `Identified: ${identifiedVendor.vendorName}`
-                  : "Choose vendor for a new purchase"
-              }
-              disabled={busy}
-            />
-          )}
-        </WithVendorShortcodeSearch>
+        <Stack gap="tight">
+          <WithVendorShortcodeSearch>
+            {(search) => (
+              <Picker
+                {...search}
+                entity="vendor"
+                label="Vendor"
+                value={vendor}
+                setValue={(item) => {
+                  setVendor(item);
+                  setReview(null);
+                }}
+                placeholder="Choose vendor for a new purchase"
+                disabled={busy}
+              />
+            )}
+          </WithVendorShortcodeSearch>
+          {!vendor && identifiedVendor ? (
+            <Row gap="sm" className="text-xs">
+              <FieldValueMark envelope={transaction.fields.vendorInference}>
+                <EntityRefLink
+                  entity="vendor"
+                  id={identifiedVendor.vendorId}
+                  name={identifiedVendor.vendorName}
+                />
+              </FieldValueMark>
+              <span className="text-muted-foreground">
+                From confirmed statement history
+              </span>
+            </Row>
+          ) : !vendor && inference?.status === "ambiguous" ? (
+            <p className="text-xs text-muted-foreground">
+              This statement label identifies several Vendors. Choose the Vendor
+              or an existing Purchase.
+            </p>
+          ) : null}
+        </Stack>
       ) : null}
       <Row gap="sm" className="flex-wrap">
         <Picker
@@ -204,7 +240,10 @@ export function FinancialBookingReview({
       ) : null}
       {review ? (
         <Stack gap="tight">
-          <BookingPreviewDetails review={review} />
+          <BookingPreviewDetails
+            review={review}
+            vendorName={vendor?.name ?? identifiedVendor?.vendorName}
+          />
           <Row gap="sm">
             <Button
               onClick={() =>

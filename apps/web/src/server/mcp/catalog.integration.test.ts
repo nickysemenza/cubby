@@ -291,17 +291,10 @@ describe("MCP catalog", () => {
       }),
     ).toBeDefined();
 
-    const vendorId = await createdId(
+    await createdId(
       "vendor",
       mock(vendorCreateInput, { overrides: { name: "Catalog vendor" } }),
     );
-    expect(
-      await call("purchase_import", {
-        action: "confirm_merchant_vendor",
-        merchant: "SYNTHETIC SHOP",
-        vendorId,
-      }),
-    ).toMatchObject({ vendorId });
 
     const { output: expense } = await createRepoEntity(
       ctx,

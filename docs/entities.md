@@ -3815,15 +3815,19 @@ The Vendors table's read-only **Statement labels** column derives all known labe
 from the same history, including ambiguous labels on each supported Vendor.
 
 An explicit UI or MCP allocation outside unattended Runs confirms merchant history
-by default. System and Run-scoped writes do not confirm it by default. Set
+by default. System and Run-scoped writes preserve existing confirmations but do
+not create them by default. Set
 `confirmsMerchant: false` when copying an inferred Vendor; automatic retained
-settlement always sets it false. Amount-only edits and Purchase merges preserve
+settlement and automatic Email convergence always set it false, including
+member-authenticated MCP convergence calls. Source amount corrections, ordinary
+amount-only edits and Purchase merges preserve
 this provenance. Booking may identify an omitted Vendor from an unambiguous
 statement label, but its resulting allocation is inferred and cannot teach the
 label again. Neither label identification nor its display creates a confirmed
 Vendor or Product connection without a purchase allocation. Specific order
 matching still requires independent settlement evidence and may not contradict
-confirmed merchant history.
+confirmed merchant history; ambiguity blocks automatic settlement for every
+candidate until it is resolved.
 
 Explicit member-scoped merchant rules and their Settings panel are retired.
 The migration promotes existing matching allocations using those confirmations

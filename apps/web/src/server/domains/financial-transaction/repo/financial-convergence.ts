@@ -310,6 +310,7 @@ async function automaticBookingPreview(
         transactionId: input.transactionId,
         purchaseId: target?.shortcode ?? null,
         vendorId: vendorId?.shortcode ?? null,
+        confirmsMerchant: false,
       }),
     );
   } catch (error) {

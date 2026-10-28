@@ -471,6 +471,7 @@ export async function reconcileFinancialEvidenceCorrection(
                   graph.target.shortcode,
                 ),
                 amount: observation.amount,
+                confirmsMerchant: allocation.confirmsMerchant,
               },
             ],
             sourceRefs: nextRefs,

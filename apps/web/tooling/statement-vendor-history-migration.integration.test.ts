@@ -59,6 +59,11 @@ it("preserves money and existing confirmations while retiring routing rules", as
       [confirmed, inferred],
     );
     await client.query(
+      `INSERT INTO "AuditLog" ("entityId","entityKind",action,changes,"userId",channel,"createdAt") VALUES
+      ($1,'financialTransaction','update','{"allocations":{"from":["PUR-SYNTHETIC:19.00"],"to":["PUR-SYNTHETIC:20.00"]}}','synthetic-member','mcp',now()+interval '1 second')`,
+      [inferred],
+    );
+    await client.query(
       `INSERT INTO "MerchantVendorRule" ("ledgerPartyId","normalizedMerchant","vendorId","confirmedByUserId") VALUES
       ($1,'synthetic market',$2,'synthetic-member'),($1,'unseen label',$2,'synthetic-member')`,
       [party, vendor],

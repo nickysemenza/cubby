@@ -166,7 +166,11 @@ export type FinancialWorkPreview = z.infer<typeof financialWorkPreview>;
 
 export const financialSettlementAllocationInput = z.strictObject({
   transactionId: financialTransactionShortcode,
-  priorAllocations: z.array(financialTransactionAllocationInput),
+  priorAllocations: z
+    .array(financialTransactionAllocationInput)
+    .describe(
+      "Echo the current allocations from the transaction read, including confirmsMerchant. This is the expected state for the stale-write guard.",
+    ),
   allocations: z.array(financialTransactionAllocationInput),
   acknowledgeConflicts: z
     .strictObject({ note: z.string().trim().min(1).max(2_000) })
