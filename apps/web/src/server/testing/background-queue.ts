@@ -69,7 +69,14 @@ export async function drainStoredDerived(
 ): Promise<void> {
   for (let page = 0; page < maxPages; page++) {
     if (!(await drainReady(db, DERIVED_DRAIN_JOB_KEY))) return;
-    await advanceDerivedPage(db, derivedDrainHandler(computes));
+    // A running server (E2E) may hold the drain's lease; its page drains the
+    // same items, so wait for it instead of failing.
+    if (
+      (await advanceDerivedPage(db, derivedDrainHandler(computes), {
+        allowSkip: true,
+      })) === "skipped"
+    )
+      await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Stored derived drain exceeded ${maxPages} pages`);
 }
@@ -137,7 +144,11 @@ export async function drainDerivedPage(
   }
 }
 
-async function advanceDerivedPage(db: Database, handler: JobHandler) {
+async function advanceDerivedPage(
+  db: Database,
+  handler: JobHandler,
+  { allowSkip = false }: { allowSkip?: boolean } = {},
+) {
   await wakeJob(db, { ...DERIVED_DRAIN, input: {} });
   // Job retries and waits end now: the helper drains what is ready.
   const [drain] = await updateJobs(
@@ -149,12 +160,14 @@ async function advanceDerivedPage(db: Database, handler: JobHandler) {
   const outcome = await advanceJob(db, drain.id, {
     [DERIVED_DRAIN.kind]: handler,
   });
+  if (outcome === "skipped" && allowSkip) return outcome;
   if (outcome !== "succeeded") {
     const failed = await readJob(db, { id: drain.id });
     throw new Error(
       `Derived drain page ${outcome}: ${JSON.stringify(failed?.error)}`,
     );
   }
+  return outcome;
 }
 
 /**
