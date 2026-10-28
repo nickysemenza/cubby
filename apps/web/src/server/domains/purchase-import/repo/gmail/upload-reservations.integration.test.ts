@@ -2,6 +2,7 @@
  * Only the Gmail and object-store boundaries are replaced; ownership, transactions,
  * orphan discovery and current-original reads use persisted production paths. */
 import { correctEmailRelevanceInput } from "@cubby/schemas/email-actions";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -158,6 +159,79 @@ describe("durable Mail attachment upload reservations", () => {
       );
     return { source, attachment, input, objects, storage, put, remove, read };
   }
+  it.each([
+    "application/octet-stream",
+    "application/binary",
+    "Application/PDF; charset=binary",
+  ])(
+    "reads a retained PDF with transport MIME %s without rewriting source metadata",
+    async (mimeType) => {
+      const f = await fixture();
+      const bytes = Buffer.from("%PDF-1.4\nSynthetic retained original\n%%EOF");
+      const key = "synthetic/original.pdf";
+      f.objects.set(key, bytes);
+      await getDb(ctx.db)
+        .update(orderMailAttachment)
+        .set({
+          mimeType,
+          pendingObjectKey: key,
+          checksum: await sha256Hex(bytes),
+        })
+        .where(eq(orderMailAttachment.id, f.attachment.id));
+      expect(await f.read()).toMatchObject({
+        mimeType: "application/pdf",
+        dataBase64: bytes.toString("base64"),
+      });
+      const [retained] = await getDb(ctx.db)
+        .select()
+        .from(orderMailAttachment)
+        .where(eq(orderMailAttachment.id, f.attachment.id));
+      expect(retained?.mimeType).toBe(mimeType);
+    },
+  );
+
+  it("refuses unsupported originals with an actionable domain error before object reads", async () => {
+    const f = await fixture();
+    await getDb(ctx.db)
+      .update(orderMailAttachment)
+      .set({ mimeType: "text/html" })
+      .where(eq(orderMailAttachment.id, f.attachment.id));
+    const read = vi.fn(f.storage.get);
+    await expect(
+      loadMailAttachmentOriginal(
+        ctx.db,
+        {
+          orderMailId: f.source.id,
+          attachmentRef: f.attachment.id,
+        },
+        read,
+      ),
+    ).rejects.toMatchObject({
+      reason: "MAIL_REQUEST_REFUSED",
+      code: "BAD_REQUEST",
+    });
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("does not infer a generic original's format from its PDF filename", async () => {
+    const f = await fixture();
+    const bytes = Buffer.from("<html>Synthetic unsupported original</html>");
+    const key = "synthetic/not-a-pdf.pdf";
+    f.objects.set(key, bytes);
+    await getDb(ctx.db)
+      .update(orderMailAttachment)
+      .set({
+        mimeType: "application/octet-stream",
+        pendingObjectKey: key,
+        checksum: await sha256Hex(bytes),
+      })
+      .where(eq(orderMailAttachment.id, f.attachment.id));
+    await expect(f.read()).rejects.toMatchObject({
+      reason: "MAIL_REQUEST_REFUSED",
+      code: "BAD_REQUEST",
+    });
+  });
+
   it("discards only a still-reserved upload with no adopted attachment", async () => {
     const f = await fixture();
     const key = `order-mail-attachment/synthetic-discard/${crypto.randomUUID()}`;

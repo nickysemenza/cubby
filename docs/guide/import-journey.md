@@ -66,6 +66,14 @@ useful related evidence and uncertain candidates for resolution.
 Retained attachments and reversal or lifecycle exception evidence always go to
 the coordinator, including Emails classified unrelated; neither rule shortcut
 can clear those originals without review.
+Original attachment reads support images and PDFs within the existing byte
+limit. A generic binary content type is identified from the retained bytes;
+the filename alone never establishes the format. Content-type case and
+parameters are normalized for the read without rewriting source metadata.
+Other formats return an explicit unsupported-reader response.
+Import operation IDs identify exact requests. An unchanged retry replays its
+retained result; a changed request under the same ID returns a conflict and
+must use a new ID. This never replaces a saved result or relaxes source checks.
 Catch-up also admits older retained related Emails in enabled mailboxes. Only
 usable text or retained attachments count toward its bounded page; empty shells
 and historical sources with unresolved ownership stay out. An admission failure

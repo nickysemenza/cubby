@@ -17,6 +17,7 @@ import {
   insertOperation,
   readOperation,
 } from "~/server/domains/run/repo/run-operation";
+import { createAppError } from "~/server/errors/app-error";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { Principal, RunDelegation } from "~/server/http/authenticate";
 import { selectOperationContext } from "~/server/http/request-context";
@@ -168,7 +169,10 @@ export async function executePurchaseAgentMutation<T>(input: {
           operation.inputFingerprint !== argsFingerprint ||
           operation.kind !== `mcp:${input.toolName}`
         )
-          throw new Error("Operation id was replayed with different input");
+          throw createAppError(
+            "RUN_OPERATION_REPLAY_CONFLICT",
+            "Operation id was replayed with different input. Reuse it only for the exact original request, or choose a new operation id for a changed request.",
+          );
         if (operation.state === "completed") {
           // SAFETY: the same tool, stable operation ID and exact arguments own this result.
           return operation.result as T;
