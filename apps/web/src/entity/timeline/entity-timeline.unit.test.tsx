@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog/entityTimeline.gen";
+import { resolveDateRange } from "~/lib/date-range-presets";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityTimeline } from "./entity-timeline";
@@ -288,6 +289,27 @@ describe("EntityTimeline", () => {
       expect(screen.queryByRole("button", { name: "Newest first" })).toBeNull();
       fireEvent.click(within(band).getByRole("button", { name: "Oldest" }));
       expect(onControlsChange).toHaveBeenCalledWith({ order: "asc" });
+      fireEvent.click(
+        within(band).getByRole("button", { name: "Range shortcuts" }),
+      );
+      fireEvent.click(
+        await screen.findByRole("menuitem", { name: "Past month" }),
+      );
+      const bounds = resolveDateRange("1m");
+      expect(onControlsChange).toHaveBeenCalledWith({
+        from: bounds.dateFrom,
+        to: bounds.dateTo,
+      });
+      fireEvent.click(
+        within(band).getByRole("button", { name: "Range shortcuts" }),
+      );
+      fireEvent.click(
+        await screen.findByRole("menuitem", { name: "All time" }),
+      );
+      expect(onControlsChange).toHaveBeenCalledWith({
+        from: undefined,
+        to: undefined,
+      });
     });
 
     it("keeps the band on screen while the first read loads", () => {

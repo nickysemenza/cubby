@@ -1,3 +1,4 @@
+import { historicalDateRangePresets } from "../date-range";
 import { expenseBeneficiaryResult } from "../expense-beneficiaries";
 import { EXPENSE_BENEFICIARY_INPUTS } from "./beneficiary-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
@@ -1512,14 +1513,9 @@ Rules:
             upper: "Inclusive upper bound on expense date",
           },
         },
-        options: [
-          { value: "30d", label: "Last 30 days" },
-          { value: "90d", label: "Last 90 days" },
-          { value: "ytd", label: "Year to date" },
-          { value: "1y", label: "Last 12 months" },
-        ],
+        options: [...historicalDateRangePresets],
         expandRef: {
-          module: "~/entity/filter-behavior",
+          module: "~/lib/date-range-presets",
           export: "resolveDateRange",
         },
       },

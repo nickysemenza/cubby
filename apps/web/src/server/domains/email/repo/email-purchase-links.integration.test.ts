@@ -26,6 +26,7 @@ import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { account as googleAccount } from "~/server/db/auth.schema";
 import {
   databaseForTransaction,
   getDb,
@@ -52,6 +53,7 @@ import {
   emailMemberClassificationSql,
 } from "~/server/domains/email/repo/email-sql";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
+import { readMailCoverage } from "~/server/domains/purchase-import/repo/gmail/mail-coverage";
 import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import {
@@ -239,6 +241,30 @@ describe("Email Purchase links", () => {
         checksum,
         outputFingerprint: "synthetic-accepted-review-fingerprint",
       });
+      await getDb(ctx.db).insert(googleAccount).values({
+        id: crypto.randomUUID(),
+        providerId: "google",
+        accountId: original.mailboxId,
+        userId: ctx.actor.userId,
+        updatedAt: new Date(),
+      });
+      const coverage = await readMailCoverage(ctx.db, ctx.actor.userId);
+      expect(
+        coverage.rows.find(
+          (row) =>
+            row.vendorId === vendor.shortcode &&
+            row.mailboxId === original.mailboxId,
+        ),
+      ).toMatchObject({
+        vendorAccountId: account.shortcode,
+        vendorAccountName: `${vendor.name} · ${party.name}`,
+        scanned: 1,
+        classified: 1,
+        retained: 0,
+        linkedEmails: 1,
+        linkedRetainedEmails: 0,
+        linkedPurchases: 1,
+      });
       // Another member's copy of the same message, accepted onto this
       // member's account Purchase, never relates.
       const foreignParty = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -337,6 +363,25 @@ describe("Email Purchase links", () => {
         (await readPurchaseById(ctx.db, purchaseId.parse(purchase.id)))
           .purchaserId,
       ).toBe(party.shortcode);
+      // A source already included through sender proof must not be counted again through its accepted Purchase link.
+      await getDb(ctx.db)
+        .update(orderMail)
+        .set({ vendorId: vendor.id })
+        .where(eq(orderMail.id, original.id));
+      expect(
+        (await readMailCoverage(ctx.db, ctx.actor.userId)).rows.find(
+          (row) =>
+            row.vendorId === vendor.shortcode &&
+            row.mailboxId === original.mailboxId,
+        ),
+      ).toMatchObject({
+        scanned: 1,
+        classified: 1,
+        retained: 0,
+        linkedEmails: 1,
+        linkedRetainedEmails: 0,
+        linkedPurchases: 1,
+      });
     },
   );
 

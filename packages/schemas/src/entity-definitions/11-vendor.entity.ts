@@ -1,3 +1,4 @@
+import { historicalDateRangePresets } from "../date-range";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { vendorSpendingProfile } from "../spending-classification.js";
@@ -1427,10 +1428,7 @@ export default defineEntity({
         options: [
           { value: "has", label: "Has purchase", meta: true },
           { value: "none", label: "(none)", meta: true },
-          { value: "30d", label: "Last 30 days" },
-          { value: "90d", label: "Last 90 days" },
-          { value: "ytd", label: "Year to date" },
-          { value: "1y", label: "Last 12 months" },
+          ...historicalDateRangePresets,
         ],
         expandRef: {
           module: "~/entity/filter-behavior",

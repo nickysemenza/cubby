@@ -1,5 +1,6 @@
 import { HOUSEHOLD_TIMEZONE } from "@cubby/shared/client-constants";
 import { TZDate } from "@date-fns/tz";
+import { addMonths } from "date-fns";
 
 export { HOUSEHOLD_TIMEZONE };
 
@@ -81,6 +82,15 @@ export function householdLocalDate(date: Date = new Date()): string {
     day: "2-digit",
   });
   return householdDayFormat.format(date);
+}
+
+/** Shift calendar months, clamping month ends in the household's timezone. */
+export function shiftPlainDateMonths(value: string, months: number): string {
+  const day = new TZDate(
+    householdDateTime(value).getTime(),
+    HOUSEHOLD_TIMEZONE,
+  );
+  return householdLocalDate(addMonths(day, months));
 }
 
 /** Household-local calendar date `days` ago, for activity-cutoff checks. */

@@ -241,6 +241,7 @@ describe("EntityRefLink record identity", () => {
     ["project", "PRJ-4K7M", "/projects/PRJ-4K7M"],
     ["inventory", "INV-4K7M", "/inventory/INV-4K7M"],
     ["cookbook", "CKB-4K7M", "/cookbooks/CKB-4K7M"],
+    ["vendorAccount", "VACCT-4K7M", "/vendor-accounts/VACCT-4K7M"],
   ] as const)(
     "resolves an unnamed %s chip and preserves its destination",
     async (entity, id, href) => {
@@ -250,10 +251,25 @@ describe("EntityRefLink record identity", () => {
       expect(screen.getByRole("status")).toHaveTextContent("Loading");
       expect(screen.queryByRole("link")).toBeNull();
       await act(async () => {
-        harness.queryClient.setQueryData(queryKey, {
-          id,
-          [entitySummary[entity].titleField]: "Synthetic resolved record",
-        });
+        harness.queryClient.setQueryData(
+          queryKey,
+          entity === "vendorAccount"
+            ? {
+                id,
+                displayName: "Stale flat label",
+                fields: {
+                  displayName: fieldValueFixture(
+                    entityFieldEnvelopeSchemas.vendorAccount.detail.shape.fields
+                      .shape.displayName,
+                    "Synthetic resolved record",
+                  ),
+                },
+              }
+            : {
+                id,
+                [entitySummary[entity].titleField]: "Synthetic resolved record",
+              },
+        );
       });
       expect(
         await screen.findByRole("link", { name: /Synthetic resolved record/ }),

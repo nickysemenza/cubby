@@ -1,9 +1,8 @@
 import { taskStatusSchema } from "@cubby/schemas/task-fields";
-import { format, startOfYear, subDays, subMonths } from "date-fns";
-import { match } from "ts-pattern";
 
 import type { FilterPatch } from "~/entity/filters";
 import { resolveDueRange } from "~/entity/presentation/task-options";
+import { resolveDateRange } from "~/lib/date-range-presets";
 
 interface ProductPurchaseDateRangeFilters {
   purchaseDateFrom?: string;
@@ -15,28 +14,6 @@ type ProductPurchaseDateFilters = FilterPatch &
     | { purchaseDatePresenceFilter: "has" | "none" }
     | ProductPurchaseDateRangeFilters
   );
-
-/**
- * Resolves a date-range preset (as read off a date column filter) into
- * inclusive "YYYY-MM-DD" bounds anchored on today's local date. An
- * unknown/undefined preset resolves to `{}` — no bound, matching every date
- * (see `plainDate` in `@cubby/schemas/project`; the dates are timezone-free,
- * so bounds are computed from local `today`, never UTC).
- */
-export function resolveDateRange(preset: string | undefined): {
-  dateFrom?: string;
-  dateTo?: string;
-} {
-  const today = new Date();
-  const dateTo = format(today, "yyyy-MM-dd");
-  const dateFrom = match(preset)
-    .with("30d", () => format(subDays(today, 30), "yyyy-MM-dd"))
-    .with("90d", () => format(subDays(today, 90), "yyyy-MM-dd"))
-    .with("ytd", () => format(startOfYear(today), "yyyy-MM-dd"))
-    .with("1y", () => format(subMonths(today, 12), "yyyy-MM-dd"))
-    .otherwise(() => undefined);
-  return dateFrom ? { dateFrom, dateTo } : {};
-}
 
 export const resolveProductPurchaseDateFilter = (
   preset: string | undefined,

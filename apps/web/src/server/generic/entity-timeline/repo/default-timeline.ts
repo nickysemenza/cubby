@@ -73,12 +73,15 @@ const inWindow = (date: string, window: TimelineWindow) =>
   (window.from === undefined || date >= window.from) &&
   (window.to === undefined || date <= window.to);
 
-const recordTitle = (entity: TimelineEntity, record: TimelineRecord) =>
-  z
+const recordTitle = (entity: TimelineEntity, record: TimelineRecord) => {
+  const key = entitySummary[entity].titleField;
+  const envelope = fieldEnvelopeFor(record, key);
+  return z
     .string()
     .min(1)
     .catch(record.id)
-    .parse(record[entitySummary[entity].titleField]);
+    .parse(envelope ? fieldValueOf(envelope) : record[key]);
+};
 
 const fieldLabel = (entity: TimelineEntity, key: string) => {
   const [fieldKey, endpoint] = key.split(".");

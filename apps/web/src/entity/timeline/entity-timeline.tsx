@@ -46,6 +46,7 @@ import {
 } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { DatePickerInput } from "~/ui/date-picker-input";
+import { DateRangeShortcuts } from "~/ui/date-range-shortcuts";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -242,6 +243,7 @@ function ControlsBand({
   cohort: string | undefined;
   onChange: (patch: EntityTimelineControls) => void;
 }) {
+  const [dateRevision, setDateRevision] = useState(0);
   return (
     <div
       role="toolbar"
@@ -263,13 +265,21 @@ function ControlsBand({
           }}
         />
       )}
+      <DateRangeShortcuts
+        onSelect={(bounds) => {
+          setDateRevision((revision) => revision + 1);
+          onChange({ from: bounds.dateFrom, to: bounds.dateTo });
+        }}
+      />
       <BandDate
+        key={`from-${dateRevision}`}
         label="From"
         value={state.from}
         max={state.to}
         onChange={(from) => onChange({ from })}
       />
       <BandDate
+        key={`to-${dateRevision}`}
         label="To"
         value={state.to}
         min={state.from}
@@ -310,14 +320,22 @@ function Controls({
   hasRows: boolean;
   onChange: (patch: EntityTimelineControls) => void;
 }) {
+  const [dateRevision, setDateRevision] = useState(0);
   const fromId = useId();
   const toId = useId();
   return (
     <Row align="end" justify="between" wrap gap="sm">
       <Row align="end" wrap gap="sm">
+        <DateRangeShortcuts
+          onSelect={(bounds) => {
+            setDateRevision((revision) => revision + 1);
+            onChange({ from: bounds.dateFrom, to: bounds.dateTo });
+          }}
+        />
         <label htmlFor={fromId} className="text-xs text-muted-foreground">
           From
           <DatePickerInput
+            key={`from-${dateRevision}`}
             id={fromId}
             value={from ?? null}
             max={to}
@@ -329,6 +347,7 @@ function Controls({
         <label htmlFor={toId} className="text-xs text-muted-foreground">
           To
           <DatePickerInput
+            key={`to-${dateRevision}`}
             id={toId}
             value={to ?? null}
             min={from}
