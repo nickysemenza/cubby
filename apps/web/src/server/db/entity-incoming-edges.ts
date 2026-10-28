@@ -74,7 +74,7 @@ export type IncomingEdgePolicy<E extends Entity, Disposition> = Record<
 > &
   Partial<Record<IncomingEdgeKey<E>, Disposition>>;
 
-export const ORDINARY_REFERENCE_BLOCK: OperationDisposition = {
+const ORDINARY_REFERENCE_BLOCK: OperationDisposition = {
   code: "block-ordinary-reference",
   effect: "block",
   description:
