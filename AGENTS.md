@@ -38,7 +38,8 @@
 Search existing [GitHub Issues](https://github.com/nickysemenza/cubby/issues)
 before implementation. For matches or backlog changes, follow the
 [issue workflow](docs/agents/issues.md#agent-workflow-with-gh), including Project
-fields, issue bodies and PR attribution. Issues own unfinished work.
+fields, issue bodies and PR attribution. Issues own unfinished work; do not
+create one for work you are starting immediately.
 
 ## Breaking changes
 
