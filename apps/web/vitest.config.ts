@@ -405,7 +405,7 @@ export default defineConfig({
                 include:
                   name === "capability"
                     ? requiredCapabilityTests
-                    : ["**/*.preview.test.tsx"],
+                    : ["src/**/*.preview.test.tsx"],
                 // A direct file argument enables preview implicitly. Required
                 // files already run in capability; explicit preview still runs all.
                 exclude:

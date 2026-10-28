@@ -222,7 +222,7 @@ function usePhotoRunCandidates(
         staleTime: Infinity,
       };
     }),
-    combine: combinePhotoCandidates,
+    combine: (results) => combinePhotoCandidates(results, proposals),
   });
 }
 
@@ -232,6 +232,7 @@ type PhotoCandidateGroup = Awaited<
 
 function combinePhotoCandidates(
   results: UseQueryResult<PhotoCandidateGroup>[],
+  proposals: readonly PhotoGroupProposal[],
 ) {
   return {
     data: {
@@ -243,9 +244,7 @@ function combinePhotoCandidates(
     refetch: (groupKey: string) =>
       Promise.all(
         results
-          .filter(
-            (result) => result.data?.groupKey === groupKey || result.isError,
-          )
+          .filter((_, index) => proposals[index]?.groupKey === groupKey)
           .map((result) => result.refetch()),
       ),
   };
