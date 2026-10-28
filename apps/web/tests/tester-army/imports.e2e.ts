@@ -13,7 +13,7 @@ test("wardrobe upload processes images, proposes items and commits only approved
   screen,
 }) => {
   const { photo } = data.scenarios();
-  await data.open(`/runs/${photo.runId}`);
+  await data.open(`/runs/${photo.runId}#photo-batch`);
   const review = () =>
     data
       .operation("photoImport.review", { runId: photo.runId })
@@ -62,7 +62,7 @@ test("wardrobe upload processes images, proposes items and commits only approved
   const [first, second] = photo.groups;
   assert(first && second, "The wardrobe fixture requires two distinct items");
   await agent.act(
-    `Open the wardrobe item "${first.name}" and approve it using its individual Create product and add 1 action. Finish when that item shows Applied. Leave the other item unapproved.`,
+    `Stay on this Run and use its Photos review. Open the wardrobe item "${first.name}" there and approve it using its individual Create product and add 1 action. Finish when that item shows Applied. Leave the other item unapproved.`,
   );
   const partlyApproved = await review();
   outcome(
@@ -322,7 +322,7 @@ test("Run progress is visible and dismissing a finding persists member resolutio
   screen,
 }) => {
   const { console: run } = data.scenarios();
-  await data.open(`/runs/${run.runId}`);
+  await data.open(`/runs/${run.runId}#live-progress`);
   await expect(screen.getByText("Reading synthetic orders")).toBeVisible();
   await data.open(`/runs/${run.runId}#import-findings`);
   await expect(screen.getByText("Synthetic finding to resolve")).toBeVisible();
