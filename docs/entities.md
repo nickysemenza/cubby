@@ -2995,6 +2995,9 @@ including the unrounded price edge; Product price captures its weighted cost and
 quantity operands, quantities capture their ledger and counted units, and USDA
 food captures its chosen lookup. Missing evidence is unavailable, including for
 a retained successful empty result; it is never reconstructed from current rows.
+Capturing Product price evidence preserves the existing PostgreSQL decimal
+rounding of the weighted unit cost; it must not substitute binary floating-point
+rounding for publication.
 An absent optional evidence path in a legacy publication leaves the value and
 available aggregate evidence readable, but reports the explanation unavailable.
 It must not throw, reconstruct the missing inputs live, or certify partial

@@ -203,12 +203,15 @@ const loadPricingAggregates = async (
   db: Database | DrizzleTransaction,
   ids: readonly ProductId[],
   options: { wholeCatalog?: boolean },
-): Promise<Map<ProductId, PricingAggregate>> => {
+): Promise<
+  Map<ProductId, PricingAggregate & { derivedPrice: number | null }>
+> => {
   const query = sql`${kitAncestorCteSql(
     kitSeedForProductIds(ids, options.wholeCatalog ?? false),
   )}
     SELECT ka.target AS "productId",
            ${sql.raw(serviceProductSqlText("ka.target"))} AS "service",
+           ${sql.raw(PROJECTED_DERIVED_PRICE)} AS "derivedPrice",
            COALESCE(${sql.raw(PROJECTED_KNOWN_COST)}, 0)::double precision AS "knownCost",
            COALESCE(${sql.raw(PROJECTED_KNOWN_UNITS)}, 0)::double precision AS "knownUnitCount",
            COALESCE(${sql.raw(ownOnly(`"knownExpenseCount"`))}, 0)::int AS "knownExpenseCount",
@@ -218,13 +221,17 @@ const loadPricingAggregates = async (
 
   const rows = projectionRows(
     await unwrapDb(db).execute(query),
-    pricingAggregateRowSchema,
+    pricingAggregateRowSchema.extend({ derivedPrice: z.number().nullable() }),
   );
 
-  const aggregateById = new Map<ProductId, PricingAggregate>();
+  const aggregateById = new Map<
+    ProductId,
+    PricingAggregate & { derivedPrice: number | null }
+  >();
   for (const row of rows) {
     aggregateById.set(row.productId, {
       service: row.service,
+      derivedPrice: row.derivedPrice,
       knownCost: Number(row.knownCost),
       knownExpenseCount: Number(row.knownExpenseCount),
       unknownExpenseCount: Number(row.unknownExpenseCount),
@@ -246,11 +253,15 @@ export const loadProductPriceFacts = async (
   );
   return new Map(
     products.map((row) => {
-      const aggregate = aggregates.get(row.id) ?? EMPTY_AGGREGATE;
+      const { derivedPrice, ...aggregate } = aggregates.get(row.id) ?? {
+        ...EMPTY_AGGREGATE,
+        derivedPrice: null,
+      };
       return [
         row.id,
         productPriceFacts.parse({
-          value: resolveProductPricing(row.price, aggregate).effectivePrice,
+          // Keep PostgreSQL decimal rounding identical to the previous publication.
+          value: aggregate.service ? null : (row.price ?? derivedPrice),
           evidence: {
             ...aggregate,
             service: aggregate.service ?? false,

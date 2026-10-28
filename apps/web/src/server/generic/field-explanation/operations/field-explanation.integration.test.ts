@@ -1177,6 +1177,26 @@ describe("derived field explanations against canonical records", () => {
         })
       ).publication?.kind,
     ).toBe("superseded");
+    await updateExpense(
+      ctx.db,
+      expense.output.id,
+      { cost: 201, productQuantity: 200 },
+      ctx.actor,
+    );
+    await drainStoredDerived(ctx.db);
+    const rounded = await explainField(context(), {
+      entityKind: "product",
+      entityId: product.id,
+      field: "price",
+      surface: "list",
+    });
+    expect(fieldValueOf(rounded.envelope)).toBe(1.01);
+    expect(rounded.sources).toContainEqual(
+      expect.objectContaining({
+        label: "Weighted acquisition cost",
+        value: 201,
+      }),
+    );
   });
 
   it("uses the same explicit owner and evidence fingerprint as inventory detail", async () => {
