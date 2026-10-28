@@ -331,6 +331,12 @@ replace this fresh decision read or the receiving command's current-stock checks
 
 ## List loading and enrichment
 
+Pure WASM result memoization belongs to the current runtime. The browser keeps
+up to 2,048 primitive-keyed results; a reused Worker isolate keeps at most 128
+and bypasses keys over 1,024 characters. Object inputs are batched and bypass
+memoization. Long authored text must not remain in the server cache as both a
+key and a parsed result across unrelated requests.
+
 Location valuation summaries consume the canonical valuation envelope: missing results show their shared pending or failed state, successful empty outcomes show a dash, and a numeric zero remains $0.00. Pricing counts come only from a successful valuation result; stale usable values retain their refresh status and raw failure.
 
 Governed values are read only from `record.fields[readKey ?? key]`; ordinary fields remain plain. Assignment intent and edit controls come from `current`, effective outcomes and provenance from `result`, and refresh failures from `work`. A cached result never supplies current edit permissions. Why this value loads exact reset previews on demand; missing previews are not substituted with the effective result. Reference and image evidence share the ordered SourceStack; allocated values retain all contributors.
