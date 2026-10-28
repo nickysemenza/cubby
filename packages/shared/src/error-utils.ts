@@ -219,6 +219,8 @@ export const AppErrors = {
   // A prepare naming an itemOperationId this Run already prepared under another
   // operation with different orders; the message names that preparation.
   PURCHASE_IMPORT_ITEM_PREPARED: "CONFLICT",
+  // A replay id belongs to its exact stored request; a changed request needs a new id.
+  RUN_OPERATION_REPLAY_CONFLICT: "CONFLICT",
   // A Run control action its current status refuses (cancel an ended Run,
   // resume one that is not paused); the message names the status.
   RUN_CONTROL_REFUSED: "CONFLICT",

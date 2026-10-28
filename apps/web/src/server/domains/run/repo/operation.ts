@@ -11,6 +11,7 @@ import {
   readOperation,
   reclaimOperation,
 } from "~/server/domains/run/repo/run-operation";
+import { createAppError } from "~/server/errors/app-error";
 
 /** A `started` row younger than this belongs to a live attempt. */
 const LEASE_MS = 5 * 60_000;
@@ -61,7 +62,10 @@ export async function executeLeasedOperation<T extends object | null>(
       !recorded ||
       (recorded.inputFingerprint !== fingerprint && !takesOverFailed)
     )
-      throw new Error("Operation id was replayed with different input");
+      throw createAppError(
+        "RUN_OPERATION_REPLAY_CONFLICT",
+        "Operation id was replayed with different input. Reuse it only for the exact original request, or choose a new operation id for a changed request.",
+      );
     if (recorded.state === "completed") {
       // SAFETY: the unique operation row is written only by this generic call
       // with the same fingerprint, so its completed JSON has work's T shape.
@@ -156,7 +160,10 @@ export async function executeAtomicOperation<T>(
       const recorded = await readOperation(client, key, options);
       if (!recorded) return undefined;
       if (recorded.inputFingerprint !== row.inputFingerprint)
-        throw new Error("Operation id was replayed with different input");
+        throw createAppError(
+          "RUN_OPERATION_REPLAY_CONFLICT",
+          "Operation id was replayed with different input. Reuse it only for the exact original request, or choose a new operation id for a changed request.",
+        );
       if (recorded.state !== "completed")
         throw new Error(
           `${operation.subject} outcome is uncertain; inspect operation status`,

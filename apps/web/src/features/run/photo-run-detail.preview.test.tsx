@@ -23,8 +23,10 @@ import { page, userEvent } from "vitest/browser";
 import { photoImportContract } from "~/contracts/photo-import.contract";
 import type { RunDetail } from "~/contracts/run.contract";
 import { installFeatures } from "~/features/registry";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { photoImport } from "~/integrations/tanstack-query/generated/catalog/photoImport.gen";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
@@ -717,6 +719,126 @@ function presentProposal(proposal = proposedSweater) {
     } satisfies PhotoRunReview,
   );
 }
+
+it("retains unchanged candidate checks across Run progress and refreshes only revised groups", async () => {
+  const proposals = Array.from({ length: 7 }, (_, index) => ({
+    ...proposedSweater,
+    groupKey: `fixture-group-${index}`,
+    images:
+      index === 6
+        ? [{ id: imageShortcode.parse("IMG-4K7N"), purpose: "label" as const }]
+        : proposedSweater.images,
+  }));
+  const key = photoImport.review.queryKey({ runId: RUN_ID });
+  let snapshot: PhotoRunReview = {
+    ...review,
+    review: {
+      ...review.review,
+      proposals: [
+        ...proposals,
+        committedSweater,
+        {
+          ...committedSweater,
+          groupKey: "discarded-fixture",
+          state: "discarded",
+        },
+      ],
+    },
+  } satisfies PhotoRunReview;
+  harness.queryClient.setQueryData(key, snapshot);
+  const requests: string[][] = [];
+  let rejected = false;
+  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    if (operation === "photoImport.review") return { ok: true, data: snapshot };
+    if (operation === "photoImport.rejectCandidate") {
+      rejected = true;
+      return {
+        ok: true,
+        data: { ...snapshot.review, results: [], frozenGroupKeys: [] },
+      };
+    }
+    if (operation !== "photoImport.candidatesBatch")
+      throw new Error(`Unexpected operation ${operation}`);
+    const { groupKeys } =
+      photoImportContract.ops.candidatesBatch.input.parse(input);
+    requests.push(groupKeys ?? []);
+    return {
+      ok: true,
+      data: {
+        groups: (groupKeys ?? []).map((groupKey) => ({
+          groupKey,
+          status: "ready",
+          error: null,
+          candidates: [],
+          rejectedCandidates: rejected
+            ? [
+                {
+                  id: "PRD-4K7M",
+                  name: "Synthetic rejected sweater",
+                  rejected: true,
+                },
+              ]
+            : [],
+          selectedComparison: null,
+        })),
+      },
+    };
+  });
+  render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+  await waitFor(() =>
+    expect(requests.flat()).toEqual(proposals.map((p) => p.groupKey)),
+  );
+  await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
+  await invalidateOperationTags(harness.queryClient, ripple.runOnly);
+  expect(requests).toHaveLength(2);
+  snapshot = {
+    ...snapshot,
+    review: {
+      ...snapshot.review,
+      proposals: snapshot.review.proposals.map((proposal, index) =>
+        index === 3
+          ? { ...proposal, updatedAt: "2026-09-20T16:06:00.000Z" }
+          : proposal,
+      ),
+    },
+  };
+  harness.queryClient.setQueryData(key, snapshot);
+  await waitFor(() => expect(requests.slice(2)).toEqual([["fixture-group-3"]]));
+  await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
+  snapshot = {
+    ...snapshot,
+    images: snapshot.images.map((image) =>
+      image.id === "IMG-4K7N"
+        ? { ...image, recognizedText: "Synthetic revised size label" }
+        : image,
+    ),
+  };
+  harness.queryClient.setQueryData(key, snapshot);
+  await waitFor(() => expect(requests.slice(3)).toEqual([["fixture-group-6"]]));
+  await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
+  await invalidateOperationTags(harness.queryClient, ripple.image);
+  expect(requests.slice(4).flat().sort()).toEqual(
+    proposals.map((p) => p.groupKey).sort(),
+  );
+  const beforeRejection = requests.length;
+  const rejection = {
+    runId: RUN_ID,
+    groupKey: "fixture-group-3",
+    productId: productShortcode.parse("PRD-4K7M"),
+    operationId: "fixture-rejection",
+  };
+  await photoImport.rejectCandidate.call(rejection);
+  await invalidateOperationTags(
+    harness.queryClient,
+    photoImport.rejectCandidate.invalidates(rejection),
+  );
+  expect(requests.slice(beforeRejection).flat().sort()).toEqual(
+    proposals.map((p) => p.groupKey).sort(),
+  );
+  expect(
+    await screen.findByText("Synthetic rejected sweater · Rejected"),
+  ).toBeVisible();
+});
 
 it("retries a failed candidate read without disabling approval", async () => {
   await page.viewport(402, 874);

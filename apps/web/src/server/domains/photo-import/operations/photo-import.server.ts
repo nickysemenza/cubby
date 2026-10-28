@@ -40,6 +40,7 @@ import {
   discardPhotoGroupProposal,
   listPhotoGroupProposals,
   listPhotoRunImages,
+  readPhotoRunReview,
   proposePhotoGroups,
   updatePhotoGroupProductDraft,
 } from "~/server/domains/photo-import/repo/run/proposals";
@@ -143,10 +144,10 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
         input.runId,
       );
-      const [review, images] = await Promise.all([
-        listPhotoGroupProposals(context.db, input.runId),
-        listPhotoRunImages(context.db, input.runId),
-      ]);
+      const { review, images } = await readPhotoRunReview(
+        context.db,
+        input.runId,
+      );
       const result = await photoRunCandidates(
         context.db,
         review,

@@ -11,6 +11,7 @@ import { getS3Object } from "~/server/clients/s3";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { image, orderMailAttachment } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 
 export type MailAttachmentReader = (
   key: string,
@@ -50,12 +51,24 @@ export async function loadMailAttachmentOriginal(
       "Attachment reference does not belong to this retained mail source.",
     );
   const { attachment } = source;
-  const descriptor = mailAttachmentOriginal.omit({ dataBase64: true }).parse({
-    attachmentId: attachment.providerAttachmentId,
-    filename: attachment.filename,
-    mimeType: attachment.mimeType,
-    checksum: attachment.checksum,
-  });
+  const mimeType =
+    attachment.mimeType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  const generic =
+    mimeType === "application/octet-stream" ||
+    mimeType === "application/binary";
+  const supported = mailAttachmentOriginal.shape.mimeType.safeParse(mimeType);
+  if (!supported.success && !generic)
+    throw createAppError(
+      "MAIL_REQUEST_REFUSED",
+      "Original attachment reads support images and PDFs; this file requires another document reader.",
+    );
+  const descriptor = mailAttachmentOriginal
+    .omit({ dataBase64: true, mimeType: true })
+    .parse({
+      attachmentId: attachment.providerAttachmentId,
+      filename: attachment.filename,
+      checksum: attachment.checksum,
+    });
   const key = attachment.pendingObjectKey ?? source.imageKey;
   if (!key)
     throw new Error(
@@ -68,6 +81,23 @@ export async function loadMailAttachmentOriginal(
     );
   if ((await sha256Hex(bytes)) !== attachment.checksum)
     throw new Error("Attachment original checksum changed.");
+  let contentType = mimeType;
+  if (generic) {
+    // A generic transport label makes no format claim. Identify only supported
+    // bytes; filenames and provider metadata cannot certify a readable format.
+    const { inspectImageFile } =
+      await import("~/server/domains/image/repo/image-integrity");
+    try {
+      contentType = (await inspectImageFile(bytes, "application/octet-stream"))
+        .contentType;
+    } catch (cause) {
+      throw createAppError(
+        "MAIL_REQUEST_REFUSED",
+        "Original attachment bytes are not a supported image or PDF.",
+        cause,
+      );
+    }
+  }
   await assertMailAttachmentOriginal(db, {
     orderMailId: input.orderMailId,
     attachmentRef: attachment.id,
@@ -75,6 +105,7 @@ export async function loadMailAttachmentOriginal(
   });
   return mailAttachmentOriginal.parse({
     ...descriptor,
+    mimeType: contentType,
     dataBase64: Buffer.from(bytes).toString("base64"),
   });
 }

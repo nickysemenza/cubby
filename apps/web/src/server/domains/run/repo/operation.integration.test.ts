@@ -164,7 +164,11 @@ describe("RunOperation rows written by earlier code", () => {
         },
         work,
       ),
-    ).rejects.toThrow("different input");
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      reason: "RUN_OPERATION_REPLAY_CONFLICT",
+      message: expect.stringContaining("different input"),
+    });
     await expect(
       executeLeasedOperation(
         ctx.db,
