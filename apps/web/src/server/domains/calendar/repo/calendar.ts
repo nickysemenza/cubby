@@ -74,6 +74,9 @@ import {
 } from "~/server/domains/meal/repo/crud";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
+// Purchase field reads below resolve through the read ports this scaffold
+// registers; without the import, they depend on module load order.
+import "~/server/domains/purchase/repo/purchase";
 import { loadPurchaseSpending } from "~/server/domains/purchase/repo/purchase-spending";
 import { readTasksByIds } from "~/server/domains/task/repo/crud";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
