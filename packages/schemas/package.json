@@ -63,6 +63,7 @@
     "./field-suggestion": "./src/field-suggestion.ts",
     "./field-suggestion-policy": "./src/field-suggestion-policy.ts",
     "./entity-core": "./src/entity-core.ts",
+    "./problem-classification": "./src/generated/problem-classification.gen.ts",
     "./entity-definitions/definition": "./src/entity-definitions/definition.ts",
     "./entity-definitions/label-field": "./src/entity-definitions/label-field.ts",
     "./sidebar-manifest": "./src/sidebar-manifest.ts",

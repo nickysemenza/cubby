@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { problemClasses as PROBLEM_CLASS } from "@cubby/schemas/entity-roster";
 import type { homePinnedViews } from "@cubby/schemas/entity-roster";
 import type { ListGroupBy } from "@cubby/schemas/pagination";
+import { PROBLEM_CLASS } from "@cubby/schemas/problem-classification";
 import type { ProblemKey } from "@cubby/schemas/problems";
 import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";

@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Entity } from "./entity";
 import { money } from "./money";
 import { partyFilter, sortDirection } from "./pagination";
-import { entitySchema } from "./entity";
+import { entitySchema } from "./entity-core";
 import { imageUrlSummary } from "./image-summary";
 import {
   expenseShortcode,
@@ -19,7 +19,7 @@ import {
   vendorShortcode,
   wishShortcode,
   nonEmptyTuple,
-} from "./identifiers";
+} from "./identifier-fields";
 
 interface RelatedViewPresentationDefinition {
   key: string;

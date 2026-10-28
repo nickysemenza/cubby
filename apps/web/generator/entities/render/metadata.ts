@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { compileRelatedViewRegistry } from "@cubby/schemas/related-view";
 
-import { PROBLEM_CLASS } from "@cubby/schemas/problems";
-import { entitySchema } from "@cubby/schemas/entity";
+import { entitySchema } from "@cubby/schemas/entity-core";
 import { createConnectionCatalog } from "@cubby/schemas/connected-view-definitions";
 import { entityRelationshipSchema } from "@cubby/schemas/entity-integrity";
 
@@ -429,7 +428,6 @@ export const renderEntityMetadataArtifacts = (
             )
             .map(({ key }) => key),
         }) +
-        renderRecord({ name: "problemClasses", entries: PROBLEM_CLASS }) +
         renderRecord({
           name: "scoredEntities",
           entries: scoredEntitiesFor(entities).map(({ key }) => key),
