@@ -1,4 +1,5 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { fieldEmptyLabel } from "@cubby/schemas/field-envelope-presentation";
 
 import { useDenseCell } from "~/ui/common/stacked-value";
 import { textCellData } from "~/ui/data-table/cell-data";
@@ -41,7 +42,7 @@ const taskProgress: ListRenderer<"project"> = (helper) =>
           if (!rollup)
             return (
               <FieldValueMark envelope={row.original.fields.rollup}>
-                Updating…
+                {fieldEmptyLabel(row.original.fields.rollup)}
               </FieldValueMark>
             );
           const { doneTaskCount, taskCount } = rollup;

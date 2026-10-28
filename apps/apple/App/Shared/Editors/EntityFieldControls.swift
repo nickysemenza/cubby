@@ -47,7 +47,7 @@ struct EntityFieldControl: View {
             HStack {
                 Spacer()
                 resolutionMenu {
-                    Button(noneLabel(policy)) { model.stageResolutionNone(key) }
+                    Button(FieldAssignmentAction.setNoneLabel(policy)) { model.stageResolutionNone(key) }
                         .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).none")
                 }
             }
@@ -144,7 +144,7 @@ struct EntityFieldControl: View {
         guard action.kind == .useInherited else { return "\(action.label) on save" }
         guard let original = model.original, let saved = FieldEnvelope.of(original, field: field),
             let preview = saved.resetPreview
-        else { return "Use inherited on save · Updating…" }
+        else { return "Use inherited on save · \(FieldEnvelope.missingLabel(failure: nil))" }
         let text = preview.value.flatMap(valueText) ?? FieldEnvelope.label(for: preview, field: field)
         return "Use inherited on save · \(text)"
     }
@@ -197,10 +197,6 @@ struct EntityFieldControl: View {
             } ?? pickedTitles[id] ?? id
         }
         return EntityFieldValue.text(value, field: field)
-    }
-
-    private func noneLabel(_ policy: FieldResolutionDescriptor) -> String {
-        "Set to \(policy.labels?.none ?? "none")"
     }
 
     private func resolutionMenu(@ViewBuilder content: () -> some View) -> some View {

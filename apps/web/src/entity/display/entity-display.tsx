@@ -17,6 +17,11 @@ import { displayItems } from "@cubby/schemas/entity-definitions/label-field";
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { fieldValueOf, fieldDecisionOf } from "@cubby/schemas/field-envelope";
+import {
+  fieldAssignmentActions,
+  fieldEmptyLabel,
+  fieldVisibleEmptyLabel,
+} from "@cubby/schemas/field-envelope-presentation";
 import { resolvedListSchema } from "@cubby/schemas/field-resolution";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { flexRender } from "@tanstack/react-table";
@@ -402,17 +407,9 @@ function resolutionEmptyLabel(
   if (fieldDecisionOf(resolution)?.provenance?.kind === "allocated")
     return null;
   const labels = resolutionPolicyFor(queryClient, entity, field.key)?.labels;
-  const label =
-    resolution.current.assignment?.kind === "inherit"
-      ? labels?.unresolved
-      : labels?.none;
   const text =
-    label ??
-    (explainMissing
-      ? fieldDecisionOf(resolution)?.outcome.kind === "empty"
-        ? "Not set"
-        : null
-      : null);
+    fieldVisibleEmptyLabel(resolution, labels) ??
+    (explainMissing ? fieldEmptyLabel(resolution, labels) : null);
   return text ? <span className="text-muted-foreground">{text}</span> : null;
 }
 
@@ -1540,6 +1537,13 @@ function renderEditableField<TRecord extends object>(
   const { key, control } = field;
   const format = field.display.format;
   const resolution = fieldResolutionFor(record, field.key);
+  const inheritedAction = resolution
+    ? fieldAssignmentActions(
+        resolution,
+        resolutionPolicyFor(queryClient, entity, field.key),
+        field.key,
+      ).find((action) => action.kind === "use-inherited")
+    : undefined;
   const editValue = resolution
     ? (editableFieldValue.parse(
         resolution.current.assignment?.kind === "value"
@@ -1688,8 +1692,9 @@ function renderEditableField<TRecord extends object>(
           {asBoolean(resolution ? fieldValueOf(resolution) : value) === null ? (
             <span className="text-xs text-muted-foreground">Undecided</span>
           ) : null}
-          {resolution?.current.controls.kind === "editable" &&
-          resolution.current.controls.reset.kind === "available" &&
+          {inheritedAction &&
+          Object.keys(inheritedAction.patch).length === 1 &&
+          inheritedAction.patch[field.key] === null &&
           field.nullable ? (
             <Button
               type="button"
@@ -1697,7 +1702,7 @@ function renderEditableField<TRecord extends object>(
               size="xs"
               onClick={() => void save(null)}
             >
-              Use inherited
+              {inheritedAction.label}
             </Button>
           ) : null}
         </span>

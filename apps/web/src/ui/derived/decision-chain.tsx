@@ -1,5 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { fieldDecisionOf, fieldValueOf } from "@cubby/schemas/field-envelope";
+import {
+  fieldEmptyLabel,
+  fieldNoneLabel,
+} from "@cubby/schemas/field-envelope-presentation";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -59,10 +63,12 @@ function EntityDecisionValue({
 
 function DecisionResult({
   result,
+  work,
   entity,
   field,
 }: {
   result: FieldExplanationOutput["envelope"]["result"];
+  work: FieldExplanationOutput["envelope"]["work"];
   entity: Entity;
   field: string;
 }) {
@@ -70,25 +76,10 @@ function DecisionResult({
   useEntityMetadata(entity);
   const decision = fieldDecisionOf({ result });
   const labels = resolutionPolicyFor(queryClient, entity, field)?.labels;
-  if (!decision)
-    return <span className="text-xs text-muted-foreground">Updating…</span>;
-  if (decision.outcome.kind === "empty")
-    return (
-      <span className="text-xs text-muted-foreground">
-        {
-          {
-            explicit_none: labels?.none ?? "None",
-            unset:
-              decision.provenance?.kind === "allocated"
-                ? "Allocated"
-                : (labels?.unresolved ?? "Not set"),
-            blocked: "Blocked",
-            mixed: "Mixed",
-            not_applicable: "Not applicable",
-          }[decision.outcome.reason]
-        }
-      </span>
-    );
+  const emptyLabel = fieldEmptyLabel({ result, work }, labels);
+  if (emptyLabel !== null)
+    return <span className="text-xs text-muted-foreground">{emptyLabel}</span>;
+  if (!decision || decision.outcome.kind !== "value") return null;
   return (
     <DecisionValue
       entity={entity}
@@ -112,9 +103,10 @@ export function DecisionChain({
   const queryClient = useQueryClient();
   useEntityMetadata(data.subject.entityKind);
   const decision = fieldDecisionOf(data.envelope);
-  const noneLabel =
+  const noneLabel = fieldNoneLabel(
     resolutionPolicyFor(queryClient, data.subject.entityKind, data.field)
-      ?.labels?.none ?? "None";
+      ?.labels,
+  );
   const provenance = decision?.provenance;
   const source =
     provenance?.kind === "inherited" || provenance?.kind === "default"
@@ -126,6 +118,7 @@ export function DecisionChain({
         <h3 className="text-xs font-medium">Effective result</h3>
         <DecisionResult
           result={data.envelope.result}
+          work={data.envelope.work}
           entity={data.subject.entityKind}
           field={data.field}
         />
@@ -151,12 +144,14 @@ export function DecisionChain({
               Stored{" "}
               <DecisionResult
                 result={data.envelope.result}
+                work={data.envelope.work}
                 entity={data.subject.entityKind}
                 field={data.field}
               />
               {" → live "}
               <DecisionResult
                 result={data.comparison.result}
+                work={data.envelope.work}
                 entity={data.subject.entityKind}
                 field={data.field}
               />

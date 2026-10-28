@@ -21,7 +21,12 @@ struct ExpenseSpendingCategoryView: View {
         if let envelope = FieldEnvelope.of(row.raw, key: "spendingCategoryId") {
             if case .missing = envelope.result {
                 LabeledContent(
-                    "Spending category", value: envelope.failure == nil ? "Updating…" : "Unavailable")
+                    "Spending category",
+                    value:
+                        EntityCatalog[.expense].field("spendingCategoryId").map {
+                            envelope.emptyLabel(field: $0)
+                        }
+                        ?? FieldEnvelope.missingLabel(failure: envelope.failure))
             } else if !envelope.unsupportedKinds.isEmpty {
                 Text("Unsupported spending category: \(envelope.unsupportedKinds.joined(separator: ", "))")
                     .foregroundStyle(.secondary)

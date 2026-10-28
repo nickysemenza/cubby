@@ -414,7 +414,7 @@ struct WhyThisValueView: View {
                 } else if case .editable(_, _, .available(.unsupported(let kind))) = envelope.controls {
                     Text("Unsupported preview: \(kind)").foregroundStyle(FieldGuideTokens.warning)
                 } else {
-                    Text("Updating…").foregroundStyle(.secondary)
+                    Text(FieldEnvelope.missingLabel(failure: nil)).foregroundStyle(.secondary)
                 }
             }
             .accessibilityIdentifier("field.explanation.fallback-value")
@@ -426,7 +426,7 @@ struct WhyThisValueView: View {
         switch envelope.assignment {
         case nil: return "Nothing stored on this record"
         case .inherit?: return "Follow the source"
-        case .explicitNone?: return field.resolution?.labels?.none ?? "None"
+        case .explicitNone?: return FieldEnvelope.noneLabel(field: field)
         case .value(let value, let ownership)?:
             let text = valueText(value) ?? "Set here"
             switch ownership {

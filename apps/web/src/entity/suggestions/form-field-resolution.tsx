@@ -4,6 +4,10 @@ import {
   fieldValueOf,
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
+import {
+  fieldAssignmentActions,
+  fieldSetNoneLabel,
+} from "@cubby/schemas/field-envelope-presentation";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { useQueries } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -150,38 +154,30 @@ function BoundFormFieldResolution<TValues extends FieldValues>({
       );
     }
   };
-  const inheritedAction =
-    resolution &&
-    !(
-      resolution.current.controls.kind === "editable" &&
-      resolution.current.controls.reset.kind === "available"
-    ) ? null : (
-      <Button
-        type="button"
-        size="xs"
-        variant="link"
-        className={resolutionActionClassName}
-        onClick={() => applyPatch(policy.reset)}
-      >
-        Use inherited
-      </Button>
-    );
-  const ownAction =
-    nonePatch &&
-    (!resolution ||
-      (resolution.current.controls.kind === "editable" &&
-        resolution.current.controls.canSetNone)) &&
-    resolution?.current.assignment?.kind !== "none" ? (
-      <Button
-        type="button"
-        size="xs"
-        variant="link"
-        className={resolutionActionClassName}
-        onClick={() => applyPatch(nonePatch)}
-      >
-        Set to none
-      </Button>
-    ) : null;
+  const actions = resolution
+    ? fieldAssignmentActions(resolution, policy, field)
+    : context?.mode === "edit"
+      ? []
+      : [
+          ...(Object.keys(policy.reset).length
+            ? [
+                {
+                  kind: "use-inherited",
+                  label: "Use inherited",
+                  patch: policy.reset,
+                },
+              ]
+            : []),
+          ...(nonePatch
+            ? [
+                {
+                  kind: "set-none",
+                  label: fieldSetNoneLabel(policy),
+                  patch: nonePatch,
+                },
+              ]
+            : []),
+        ];
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
@@ -199,26 +195,34 @@ function BoundFormFieldResolution<TValues extends FieldValues>({
             value={value ?? null}
           />
           <div className="flex gap-2">
-            {ownAction}
-            {inheritedAction}
+            {actions
+              .filter((action) => action.kind !== "keep-value")
+              .map((action) => (
+                <Button
+                  key={action.kind}
+                  type="button"
+                  size="xs"
+                  variant="link"
+                  className={resolutionActionClassName}
+                  onClick={() => applyPatch(action.patch)}
+                >
+                  {action.label}
+                </Button>
+              ))}
           </div>
-          {resolution?.current.controls.kind === "editable" &&
-          resolution.current.controls.canConfirm &&
-          policy.confirm ? (
-            <Button
-              type="button"
-              size="xs"
-              variant="link"
-              onClick={() =>
-                applyPatch({
-                  ...policy.confirm,
-                  [field]: resolution ? fieldValueOf(resolution) : null,
-                })
-              }
-            >
-              Keep this value
-            </Button>
-          ) : null}
+          {actions
+            .filter((action) => action.kind === "keep-value")
+            .map((action) => (
+              <Button
+                key={action.kind}
+                type="button"
+                size="xs"
+                variant="link"
+                onClick={() => applyPatch(action.patch)}
+              >
+                {action.label}
+              </Button>
+            ))}
           {resolution?.current.controls.kind === "editable" &&
           resolution.current.controls.reset.kind === "available" &&
           resolution.current.controls.reset.preview.kind === "ready" ? (
