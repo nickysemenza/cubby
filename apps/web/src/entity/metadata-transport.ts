@@ -15,13 +15,17 @@ function metadataEntity(query: TransportQuery) {
 function serializeQuery(query: TransportQuery): TransportQuery {
   const entity = metadataEntity(query);
   if (entity === null) return query;
+  const promise = query.promise?.then(() => entity);
+  void promise?.catch(() => {
+    // SILENT: Transport must retain the rejection even if SSR cancels before consuming it.
+  });
   return {
     ...query,
     state: {
       ...query.state,
       ...(query.state.data !== undefined ? { data: entity } : {}),
     },
-    ...(query.promise ? { promise: query.promise.then(() => entity) } : {}),
+    ...(promise ? { promise } : {}),
   };
 }
 
@@ -43,15 +47,34 @@ async function reconstructQuery(
   void promise?.catch(() => {
     // SILENT: Query consumes this same rejected promise after batch admission.
   });
-  const data =
-    query.state.data === undefined
-      ? undefined
-      : await reconstruct(query.state.data);
-  return {
-    ...query,
-    state: { ...query.state, data },
-    ...(promise ? { promise } : {}),
-  };
+  try {
+    const data =
+      query.state.data === undefined
+        ? undefined
+        : await reconstruct(query.state.data);
+    return {
+      ...query,
+      state: { ...query.state, data },
+      ...(promise ? { promise } : {}),
+    };
+  } catch (cause) {
+    // A failed chunk belongs to this Query, not the shared hydration stream.
+    return {
+      ...query,
+      state: {
+        ...query.state,
+        data: undefined,
+        status: "error",
+        error:
+          cause instanceof Error
+            ? cause
+            : new Error("Metadata import failed", { cause }),
+        errorUpdatedAt: Date.now(),
+        fetchStatus: "idle",
+      },
+      ...(promise ? { promise } : {}),
+    };
+  }
 }
 
 /** Install after TanStack's SSR Query integration. It still owns hydration,

@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
 import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
+import { publicEntityMetadataLoaders } from "~/entity/generated/entity-metadata-loaders.gen";
 import { entityMetadata, entityMetadataQueryOptions } from "~/entity/metadata";
 import { installEntityMetadataTransport } from "~/entity/metadata-transport";
 import { entityListDefaultSort } from "~/entity/sortable-fields";
@@ -256,6 +257,118 @@ describe("ensureEntityListSsr", () => {
 });
 
 describe("metadata SSR admission", () => {
+  it("keeps failed initial, streamed and pending metadata imports inside their queries", async () => {
+    const server = new QueryClient();
+    const browser = new QueryClient();
+    const makeRouter = (isServer: boolean, queryClient: QueryClient) => {
+      const router = createRouter({
+        routeTree: createRootRoute(),
+        history: createMemoryHistory(),
+        origin: "https://synthetic.invalid",
+        isServer,
+      });
+      setupRouterSsrQueryIntegration({ router, queryClient });
+      installEntityMetadataTransport(router);
+      return router;
+    };
+    const serverRouter = makeRouter(true, server);
+    const browserRouter = makeRouter(false, browser);
+    attachRouterServerSsrUtils({ router: serverRouter, manifest: undefined });
+    const product = await loadEntityMetadata("product");
+    const inventory = await loadEntityMetadata("inventory");
+    const expense = await loadEntityMetadata("expense");
+    const failure = new Error("Synthetic metadata chunk failure");
+    const mocks = (["product", "inventory", "expense"] as const).map((entity) =>
+      vi.spyOn(publicEntityMetadataLoaders, entity).mockRejectedValue(failure),
+    );
+    const pending = Promise.withResolvers<typeof inventory>();
+    try {
+      server.setQueryData(
+        entityMetadataQueryOptions("product").queryKey,
+        product,
+      );
+      server.setQueryData(["ordinary", "initial"], "initial value");
+      const pendingRead = server.fetchQuery({
+        ...entityMetadataQueryOptions("inventory"),
+        queryFn: () => pending.promise,
+      });
+      const state = await serverRouter.options.dehydrate?.();
+      if (!state) throw new Error("Missing Query dehydration state");
+      await browserRouter.options.hydrate?.(state);
+      expect(
+        browser.getQueryState(entityMetadataQueryOptions("product").queryKey)
+          ?.error,
+      ).toBe(failure);
+      expect(browser.getQueryData(["ordinary", "initial"])).toBe(
+        "initial value",
+      );
+      await server.fetchQuery({
+        ...entityMetadataQueryOptions("expense"),
+        queryFn: async () => expense,
+      });
+      await server.fetchQuery({
+        queryKey: ["ordinary", "streamed"],
+        queryFn: async () => "streamed value",
+      });
+      pending.resolve(inventory);
+      await pendingRead;
+      await server.fetchQuery({
+        queryKey: ["ordinary", "later"],
+        queryFn: async () => "later value",
+      });
+      serverRouter.serverSsr?.setRenderFinished();
+      await vi.waitFor(() => {
+        for (const entity of ["product", "inventory", "expense"] as const) {
+          const query = browser.getQueryState(
+            entityMetadataQueryOptions(entity).queryKey,
+          );
+          expect(query?.status).toBe("error");
+          expect(query?.error).toBe(failure);
+          expect(query?.data).toBeUndefined();
+        }
+        expect(browser.getQueryData(["ordinary", "streamed"])).toBe(
+          "streamed value",
+        );
+        expect(browser.getQueryData(["ordinary", "later"])).toBe("later value");
+      });
+    } finally {
+      for (const mock of mocks) mock.mockRestore();
+      serverRouter.serverSsr?.cleanup();
+      server.clear();
+      browser.clear();
+    }
+  });
+
+  it("observes mapped pending rejections when SSR cancels before transport consumption", async () => {
+    const server = new QueryClient();
+    const router = createRouter({
+      routeTree: createRootRoute(),
+      history: createMemoryHistory(),
+      origin: "https://synthetic.invalid",
+      isServer: true,
+    });
+    setupRouterSsrQueryIntegration({ router, queryClient: server });
+    installEntityMetadataTransport(router);
+    attachRouterServerSsrUtils({ router, manifest: undefined });
+    const pending = server.fetchQuery({
+      ...entityMetadataQueryOptions("product"),
+      queryFn: () => new Promise<never>(() => {}),
+    });
+    void pending.catch(() => {});
+    try {
+      const state = await router.options.dehydrate?.();
+      if (!state) throw new Error("Missing Query dehydration state");
+      await server.cancelQueries();
+      // Leave the mapped transport promise unconsumed for one event-loop turn.
+      // Vitest reports an unhandled rejection if the adapter drops its observer.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await expect(state.query.initial[0]?.promise).rejects.toBeDefined();
+    } finally {
+      router.serverSsr?.cleanup();
+      server.clear();
+    }
+  });
+
   it("reconstructs initial, streamed and pending bundles before successful publication without refetching", async () => {
     const server = new QueryClient();
     const browser = new QueryClient();

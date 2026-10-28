@@ -181,6 +181,9 @@ The stream transform awaits subsequent admissions before TanStack hydrates each
 batch. Never use async Query `deserializeData`: successful data would contain a
 Promise rather than metadata. TanStack retains stream consumption, errors,
 cancellation, request cleanup and query publication; the app does not fork them.
+Failed metadata imports publish an error only to their affected Query; sibling
+queries and later stream batches still hydrate. Mapped pending promises retain
+their rejection observers even when SSR cleanup cancels before transport reads.
 
 Browser navigation and dynamic admissions use those same public chunks, without
 a metadata RPC or hydration-time server read. Module loading deduplicates immutable
