@@ -1,0 +1,49 @@
+apps/apple/App/Shared/Editors/EntityFieldControls.swift
+  s_86113641f3e568::t_9f47809d332f9f 50,147
+apps/apple/App/Shared/Entity/Detail/WhyThisValueView.swift
+  s_86113641f3e568::t_18e332951a6ec1 417,429
+apps/apple/App/Shared/Finance/ExpenseSpendingCategoryView.swift
+  s_86113641f3e568::t_356a9c42c62a33 24-29
+apps/apple/App/Shared/Photo/ImageEntityDetailView.swift
+  s_86113641f3e568::t_bfe9a42a28b6d9 246-247
+apps/apple/CubbyKit/Sources/CubbyKit/Edit/FieldEnvelopePresentation.swift
+  s_86113641f3e568::t_cad18fe2553a36 18-21,92,126-131,134,175-182,186,194
+apps/web/src/entity/display/entity-display.tsx
+  s_86113641f3e568::t_2d47eed55dbdec 20-24,411-412,1540-1546,1695-1697,1705
+apps/web/src/entity/display/list-renderers/project.tsx
+  s_86113641f3e568::t_f365c667f28a48 2,45
+apps/web/src/entity/display/product-cost-value.tsx
+  s_86113641f3e568::t_f9c7deca54bb4a 3,23
+apps/web/src/entity/fields/field-resolution.tsx
+  s_86113641f3e568::t_c2a3d58aea5b28 7,199-204
+apps/web/src/entity/suggestions/form-field-resolution.tsx
+  s_86113641f3e568::t_a9a20645f8aafc 7-10,157-180,198-211,213-225
+apps/web/src/lib/project-schedule.ts
+  s_86113641f3e568::t_bbfbf287551ffa 5,57,61
+apps/web/src/ui/derived/decision-chain.tsx
+  s_86113641f3e568::t_adc4ff9a26b511 3-6,66,71,79-82,106,108-109,121,147,154
+apps/web/src/ui/derived/value-mark.tsx
+  s_86113641f3e568::t_757d84900e3c81 5,78
+docs/entities.md
+  s_86113641f3e568::t_1c682a2017c61c 124-127
+packages/schemas/package.json
+  s_86113641f3e568::t_3c5f012edd1b7c 238
+packages/schemas/src/field-envelope-presentation.ts
+  s_86113641f3e568::t_5a1935e3561888 1-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "989ad1b5052dd2ae7db2fdd553c3cc84328ea9f0",
+  "prompts": {},
+  "sessions": {
+    "s_86113641f3e568": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18312-cf21-7e00-a756-08946338bee8",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
