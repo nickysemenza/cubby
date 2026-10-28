@@ -9,8 +9,7 @@
  * Cloudflare `cf-ray` when available.
  */
 
-import superjson from "superjson";
-import { z } from "zod";
+import type { z } from "zod";
 
 import { START_OPERATIONS } from "~/lib/generated/start-operation-registry.gen";
 import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";
@@ -24,7 +23,6 @@ import {
   sentryEventUrl,
 } from "./error-diagnostics";
 import { notifyNativeWorkspaceResponse } from "./native-workspace/bridge";
-import { superJsonResultSchema } from "./superjson-wire";
 
 export const REQUEST_ID_HEADER = "x-request-id";
 
@@ -86,21 +84,7 @@ export async function fetchWithRequestDiagnostics(
       },
     );
   }
-  notifyNativeWorkspaceResponse(response);
-  const requestId =
-    response.headers.get(REQUEST_ID_HEADER) ?? response.headers.get("cf-ray");
-  if (requestId && globalThis.window !== undefined) {
-    const diagnostic: BrowserRequestDiagnostic = {
-      requestId,
-      status: response.status,
-      at: performance.now(),
-    };
-    if (operation) diagnostic.operation = operation;
-    requestDiagnostics.push(diagnostic);
-    if (requestDiagnostics.length > REQUEST_DIAGNOSTIC_LIMIT) {
-      requestDiagnostics.shift();
-    }
-  }
+  const requestId = recordResponse(response, operation);
   if (!response.ok && operation) {
     const eventId = response.headers.get("x-sentry-event-id") ?? undefined;
     let body: string | undefined;
@@ -121,23 +105,9 @@ export async function fetchWithRequestDiagnostics(
       | z.infer<typeof publicStartOperationErrorSchema>
       | undefined;
     try {
-      const json: unknown = JSON.parse(body ?? "");
-      const serialized = superJsonResultSchema.safeParse(json);
-      const value = serialized.success
-        ? superjson.deserialize(serialized.data)
-        : json;
-      const envelope = z
-        .object({
-          ok: z.literal(false),
-          error: publicStartOperationErrorSchema,
-        })
-        .safeParse(value);
-      const direct = publicStartOperationErrorSchema.safeParse(value);
-      publicError = envelope.success
-        ? envelope.data.error
-        : direct.success
-          ? direct.data
-          : undefined;
+      publicError = publicStartOperationErrorSchema.safeParse(
+        JSON.parse(body ?? ""),
+      ).data;
     } catch {
       // SILENT: non-JSON bodies are expected here; the full raw body is surfaced below.
     }
@@ -177,6 +147,32 @@ export async function fetchWithRequestDiagnostics(
     throw new ServerResponseError(message, data);
   }
   return response;
+}
+
+/**
+ * Record a response's own correlation id for browser diagnostics and let the
+ * hosted native workspace observe it.
+ */
+export function recordResponse(
+  response: Response,
+  operation: string | undefined,
+): string | null {
+  notifyNativeWorkspaceResponse(response);
+  const requestId =
+    response.headers.get(REQUEST_ID_HEADER) ?? response.headers.get("cf-ray");
+  if (requestId && globalThis.window !== undefined) {
+    const diagnostic: BrowserRequestDiagnostic = {
+      requestId,
+      status: response.status,
+      at: performance.now(),
+    };
+    if (operation) diagnostic.operation = operation;
+    requestDiagnostics.push(diagnostic);
+    if (requestDiagnostics.length > REQUEST_DIAGNOSTIC_LIMIT) {
+      requestDiagnostics.shift();
+    }
+  }
+  return requestId;
 }
 
 class ServerResponseError extends Error {

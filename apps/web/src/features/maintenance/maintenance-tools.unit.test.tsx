@@ -2,7 +2,7 @@ import type { ClassifyImageProvenanceOut } from "@cubby/schemas/maintenance";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { maintenance } from "~/integrations/tanstack-query/generated/catalog/maintenance.gen";
+import { maintenance } from "~/integrations/tanstack-query/domains/maintenance";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { ImageProvenanceAction } from "./maintenance-tools";

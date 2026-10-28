@@ -21,8 +21,8 @@ them `axiom:axiom-*`), plus the relevant platform skill.
   {operation, input?}. Responses use {ok: true, data}; nullable outputs
   keep data: null. Errors use the public ApiError body (code, message, optional
   reason, request id, validation issues and diagnostics), decoded by
-  CubbyAPIError — never a per-operation error type. Apple sends plain JSON;
-  the browser opts into superjson with x-cubby-value-codec: superjson.
+  CubbyAPIError — never a per-operation error type. Apple and the browser
+  both send plain JSON; Apple sends no x-cubby-surface header.
 - Send `Origin: cubby-mobile://` on every `/api/auth/*` request (Better Auth trusts this origin;
   omitting it fails sign-in).
 - Store the `set-auth-token` response header verbatim in Keychain. If a _later_ `/api/auth/*`

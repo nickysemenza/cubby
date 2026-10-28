@@ -12,8 +12,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
-import { recommendations } from "~/integrations/tanstack-query/generated/catalog/recommendations.gen";
-import { search } from "~/integrations/tanstack-query/generated/catalog/search.gen";
+import { recommendations } from "~/integrations/tanstack-query/domains/recommendations";
+import { search } from "~/integrations/tanstack-query/domains/search";
 import { RecordList } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { Button, buttonVariants } from "~/ui/primitives/button";

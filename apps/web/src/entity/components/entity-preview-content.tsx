@@ -24,7 +24,7 @@ import {
 } from "~/entity/entity-references";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
-import { usdaFood } from "~/integrations/tanstack-query/generated/catalog/usdaFood.gen";
+import { usdaFood } from "~/integrations/tanstack-query/domains/usdaFood";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 
 import {

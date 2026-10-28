@@ -21,7 +21,7 @@ export type OperationObservability = {
   entities: readonly string[];
   productPhases: readonly string[];
 };
-export type HandlerDefinition = {
+type HandlerDefinition = {
   module: string;
   exportName: string;
   /**
@@ -198,13 +198,13 @@ export const assertContractPurity = (path: string): void => {
  * The hand-written browser policy that cannot be contract data because it is a
  * function of the call's input (see `operation-overrides.ts`).
  */
-export const OPERATION_OVERRIDES_MODULE = join(
+const OPERATION_OVERRIDES_MODULE = join(
   SOURCE_ROOT,
   "integrations/tanstack-query/operation-overrides.ts",
 );
 
 /**
- * `defineOperationDomain` modules (the generated client catalog) and the
+ * `defineOperationDomain` modules (the typed browser catalog) and the
  * operation overrides they import are loaded by the browser bundle, so a
  * runtime dependency on server-only code (or node builtins) would either crash
  * the client build or silently pull server modules into it. Type-only imports

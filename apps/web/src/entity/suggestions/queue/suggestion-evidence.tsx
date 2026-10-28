@@ -31,7 +31,7 @@ import {
   suggestionBasisLabels,
 } from "~/entity/suggestions/suggestion-body";
 import { renderOptionCell } from "~/entity/table/column-helpers";
-import { sourceTransactionRecord } from "~/integrations/tanstack-query/generated/catalog/sourceTransactionRecord.gen";
+import { sourceTransactionRecord } from "~/integrations/tanstack-query/domains/sourceTransactionRecord";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";

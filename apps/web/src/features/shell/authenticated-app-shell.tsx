@@ -69,7 +69,7 @@ function requestCatchUpWhenVisible() {
   const now = Date.now();
   if (catchUpRequestPending || now - lastCatchUpRequestAt < 5 * 60_000) return;
   catchUpRequestPending = true;
-  void import("~/integrations/tanstack-query/generated/catalog/maintenance.gen")
+  void import("~/integrations/tanstack-query/domains/maintenance")
     .then(({ maintenance }) => maintenance.requestCatchUp.call())
     .then(() => {
       lastCatchUpRequestAt = Date.now();

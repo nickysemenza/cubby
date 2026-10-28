@@ -24,7 +24,7 @@ import { VerbButton } from "~/entity/actions/action-verb-ui";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { MarkdownText } from "~/entity/prose/markdown";
-import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
+import { recipe as recipeOperations } from "~/integrations/tanstack-query/domains/recipe";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";

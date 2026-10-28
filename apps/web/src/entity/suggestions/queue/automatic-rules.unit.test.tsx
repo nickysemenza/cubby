@@ -12,7 +12,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
-import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
+import { suggestions } from "~/integrations/tanstack-query/domains/suggestions";
 
 import {
   AutomaticRulesSection,

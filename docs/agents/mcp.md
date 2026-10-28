@@ -162,7 +162,7 @@ historical observation; it changes no ledger or stock.
 
 Every action runs through the shared Start operation runner
 (`runStartOperation`), like a browser or native call: an operation action is
-dispatched by its id (`dispatchStartOperation`), and an entity-kernel verb
+dispatched by its id (`dispatchOperation`), and an entity-kernel verb
 runs as an ad hoc runner operation named by its tool action (`entity.create`).
 The runner owns read policy (strong), the per-principal deadline, the Apple
 write gate, calendar dirty marks and the freshness write. The adapter

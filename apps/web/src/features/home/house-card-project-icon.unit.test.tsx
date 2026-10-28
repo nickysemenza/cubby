@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
+import { entityReport } from "~/integrations/tanstack-query/domains/entityReport";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 

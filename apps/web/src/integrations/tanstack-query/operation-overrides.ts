@@ -1,4 +1,4 @@
-// Generation enumerates these policies; browser catalogs import each owner directly.
+// The test catalog enumerates policies; browser domains import each owner directly.
 export { entityListOverrides } from "./operation-overrides/entityList";
 export { entityDetailOverrides } from "./operation-overrides/entityDetail";
 export { entityTimelineOverrides } from "./operation-overrides/entityTimeline";

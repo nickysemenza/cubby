@@ -16,10 +16,9 @@ import { z } from "zod";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { mock } from "~/lib/test/mock-schema";
-import {
-  getEntityListOutputSchema,
-  purchaseListItem,
-} from "~/server/generated/entity-lists.server.gen";
+import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
+import { getEntityListOutputSchema } from "~/server/generated/entity-lists.server.gen";
+const purchaseListItem = getEntityListItemSchema("purchase");
 
 import { FinancialBookingReview } from "./financial-booking-review";
 

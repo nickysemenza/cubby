@@ -11,7 +11,7 @@ import {
   type EntityMutationTransport,
 } from "~/entity/entity-mutation-command";
 import { ensureEntityMetadata } from "~/entity/metadata";
-import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
+import { entityMutation } from "~/integrations/tanstack-query/domains/entityMutation";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
 import type { StandardEntity } from "../entity-contracts";

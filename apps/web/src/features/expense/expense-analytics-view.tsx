@@ -58,7 +58,7 @@ const dateSearch = (search: {
   dateFrom?: string;
   dateTo?: string;
 }) => ({ date: search.date, dateFrom: search.dateFrom, dateTo: search.dateTo });
-import { expense } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
+import { expense } from "~/integrations/tanstack-query/domains/expense";
 
 import { ExpenseSummaryStrip } from "./expense-summary-strip";
 

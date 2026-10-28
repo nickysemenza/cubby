@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { renderEmbeddedField } from "./embedded-field.ts";
 import { z } from "zod";
 import { generatedHeader } from "../../artifacts.ts";
@@ -350,49 +351,51 @@ export const renderFieldEnvelopeArtifacts = (
     return [
       {
         relativePath: `packages/schemas/src/generated/entity-field-envelope-fields.${entity.key}.gen.ts`,
-        source:
+        source: rawSource(
           generatedHeader +
-          `import definition from ${JSON.stringify(declaration.path)};\n` +
-          `import { ${hasStored ? "fieldSchemasOf, " : ""}publicReadFieldSchemas } from "../entity-definitions/definition";\n` +
-          (hasStored ? "const stored = fieldSchemasOf(definition);\n" : "") +
-          `export const ${name}PublicReadFields = publicReadFieldSchemas(definition);\n` +
-          `export const ${name}FieldEnvelopeFields = {${entries.join(",")}} as const;\n`,
+            `import definition from ${JSON.stringify(declaration.path)};\n` +
+            `import { ${hasStored ? "fieldSchemasOf, " : ""}publicReadFieldSchemas } from "../entity-definitions/definition";\n` +
+            (hasStored ? "const stored = fieldSchemasOf(definition);\n" : "") +
+            `export const ${name}PublicReadFields = publicReadFieldSchemas(definition);\n` +
+            `export const ${name}FieldEnvelopeFields = {${entries.join(",")}} as const;\n`,
+        ),
       },
       {
         relativePath: `packages/schemas/src/generated/entity-field-envelopes.${entity.key}.gen.ts`,
-        source:
+        source: rawSource(
           generatedHeader +
-          `import { ${name}FieldEnvelopeFields, ${name}PublicReadFields } from "./entity-field-envelope-fields.${entity.key}.gen";\n` +
-          `export { ${name}FieldEnvelopeFields } from "./entity-field-envelope-fields.${entity.key}.gen";\n` +
-          readImports
-            .map(
-              ([projection, ref]) =>
-                `import { ${ref.export} as ${projection}Read } from ${JSON.stringify(ref.module)};`,
-            )
-            .join("\n") +
-          "\n" +
-          'import { withFieldEnvelopes } from "../field-envelope";\n' +
-          'import { withEntityListMedia, withEntityDetailMedia } from "../entity-read-media";\n' +
-          (nested.length
-            ? (usesZod ? 'import { z } from "zod";\n' : "") +
-              nestedTargets
-                .filter((target) => target !== entity.key)
-                .map(
-                  (target) =>
-                    `import { ${target}FieldEnvelopeFields, ${target}PublicReadFields } from "./entity-field-envelope-fields.${target}.gen";\n`,
-                )
-                .join("") +
-              nestedSource
-            : "") +
-          `const fields = ${name}FieldEnvelopeFields;\n\n` +
-          `export const ${name}FieldEnvelopeSchemas = {\n` +
-          `  output: withFieldEnvelopes(${embedded("output")}, fields, ${name}PublicReadFields),\n` +
-          `  list: withFieldEnvelopes(withEntityListMedia(${embedded("list")}), fields, ${name}PublicReadFields),\n` +
-          `  detail: ${recursiveProjections.has("detail") ? "withEntityDetailMedia(detailEnvelopeRead).omit({displayImages:true})" : `withFieldEnvelopes(withEntityDetailMedia(${embedded("detail")}), fields, ${name}PublicReadFields)`},\n` +
-          `  mcpOutput: withFieldEnvelopes(${embedded("mcpOutput")}, fields, ${name}PublicReadFields),\n` +
-          `  mcpList: withFieldEnvelopes(withEntityListMedia(${embedded("mcpList")}), fields, ${name}PublicReadFields),\n` +
-          `  mcpDetail: ${recursiveProjections.has("mcpDetail") ? "withEntityDetailMedia(mcpDetailEnvelopeRead).omit({displayImages:true})" : `withFieldEnvelopes(withEntityDetailMedia(${embedded("mcpDetail")}), fields, ${name}PublicReadFields)`},\n` +
-          "};\n",
+            `import { ${name}FieldEnvelopeFields, ${name}PublicReadFields } from "./entity-field-envelope-fields.${entity.key}.gen";\n` +
+            `export { ${name}FieldEnvelopeFields } from "./entity-field-envelope-fields.${entity.key}.gen";\n` +
+            readImports
+              .map(
+                ([projection, ref]) =>
+                  `import { ${ref.export} as ${projection}Read } from ${JSON.stringify(ref.module)};`,
+              )
+              .join("\n") +
+            "\n" +
+            'import { withFieldEnvelopes } from "../field-envelope";\n' +
+            'import { withEntityListMedia, withEntityDetailMedia } from "../entity-read-media";\n' +
+            (nested.length
+              ? (usesZod ? 'import { z } from "zod";\n' : "") +
+                nestedTargets
+                  .filter((target) => target !== entity.key)
+                  .map(
+                    (target) =>
+                      `import { ${target}FieldEnvelopeFields, ${target}PublicReadFields } from "./entity-field-envelope-fields.${target}.gen";\n`,
+                  )
+                  .join("") +
+                nestedSource
+              : "") +
+            `const fields = ${name}FieldEnvelopeFields;\n\n` +
+            `export const ${name}FieldEnvelopeSchemas = {\n` +
+            `  output: withFieldEnvelopes(${embedded("output")}, fields, ${name}PublicReadFields),\n` +
+            `  list: withFieldEnvelopes(withEntityListMedia(${embedded("list")}), fields, ${name}PublicReadFields),\n` +
+            `  detail: ${recursiveProjections.has("detail") ? "withEntityDetailMedia(detailEnvelopeRead).omit({displayImages:true})" : `withFieldEnvelopes(withEntityDetailMedia(${embedded("detail")}), fields, ${name}PublicReadFields)`},\n` +
+            `  mcpOutput: withFieldEnvelopes(${embedded("mcpOutput")}, fields, ${name}PublicReadFields),\n` +
+            `  mcpList: withFieldEnvelopes(withEntityListMedia(${embedded("mcpList")}), fields, ${name}PublicReadFields),\n` +
+            `  mcpDetail: ${recursiveProjections.has("mcpDetail") ? "withEntityDetailMedia(mcpDetailEnvelopeRead).omit({displayImages:true})" : `withFieldEnvelopes(withEntityDetailMedia(${embedded("mcpDetail")}), fields, ${name}PublicReadFields)`},\n` +
+            "};\n",
+        ),
       },
     ];
   });
@@ -401,48 +404,53 @@ export const renderFieldEnvelopeArtifacts = (
     {
       relativePath:
         "packages/schemas/src/generated/entity-image-attachment.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import { rawImageOutput } from "../image-raw-read";\n' +
-        'import { imageFieldEnvelopeFields, imagePublicReadFields } from "./entity-field-envelope-fields.image.gen";\n' +
-        'import { withFieldEnvelopes } from "../field-envelope";\n' +
-        "/** Bounded live Image read; excludes universal media to terminate attachment nesting. */\n" +
-        "export const imageAttachmentReadSchema = withFieldEnvelopes(rawImageOutput, imageFieldEnvelopeFields, imagePublicReadFields);\n",
+          'import { rawImageOutput } from "../image-raw-read";\n' +
+          'import { imageFieldEnvelopeFields, imagePublicReadFields } from "./entity-field-envelope-fields.image.gen";\n' +
+          'import { withFieldEnvelopes } from "../field-envelope";\n' +
+          "/** Bounded live Image read; excludes universal media to terminate attachment nesting. */\n" +
+          "export const imageAttachmentReadSchema = withFieldEnvelopes(rawImageOutput, imageFieldEnvelopeFields, imagePublicReadFields);\n",
+      ),
     },
     {
       relativePath:
         "apps/web/src/server/generated/entity-field-envelope-projectors.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import type { Entity } from "@cubby/schemas/entity";\n' +
-        'import type { FieldEnvelopeProjector } from "~/server/generic/derived/repo/envelope";\n' +
-        projectorImports.join("\n") +
-        "\n" +
-        `export const entityFieldEnvelopeProjectors: Readonly<Partial<Record<Entity, FieldEnvelopeProjector>>> = {${projectorBindings.join(",")}};\n`,
+          'import type { Entity } from "@cubby/schemas/entity";\n' +
+          'import type { FieldEnvelopeProjector } from "~/server/generic/derived/repo/envelope";\n' +
+          projectorImports.join("\n") +
+          "\n" +
+          `export const entityFieldEnvelopeProjectors: Readonly<Partial<Record<Entity, FieldEnvelopeProjector>>> = {${projectorBindings.join(",")}};\n`,
+      ),
     },
     {
       relativePath:
         "packages/schemas/src/generated/entity-field-envelopes.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        imports.join("\n") +
-        "\n\n" +
-        `export const entityFieldEnvelopeSchemas = {${bindings.join(",")}} as const;\n` +
-        `export const entityFieldEnvelopeFields = {${fieldBindings.join(",")}} as const;\n`,
+          imports.join("\n") +
+          "\n\n" +
+          `export const entityFieldEnvelopeSchemas = {${bindings.join(",")}} as const;\n` +
+          `export const entityFieldEnvelopeFields = {${fieldBindings.join(",")}} as const;\n`,
+      ),
     },
     {
       relativePath:
         "packages/schemas/src/generated/entity-field-envelope-nested.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        `export const entityFieldEnvelopeNested = {${nestedBindings.join(",")}} as const;\n`,
+          `export const entityFieldEnvelopeNested = {${nestedBindings.join(",")}} as const;\n`,
+      ),
     },
     {
       relativePath:
         "packages/schemas/src/generated/entity-field-envelope-assignments.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        `export const entityFieldAssignmentKeys = {${assignmentBindings.join(",")}} as const;\n`,
+          `export const entityFieldAssignmentKeys = {${assignmentBindings.join(",")}} as const;\n`,
+      ),
     },
   ];
 };

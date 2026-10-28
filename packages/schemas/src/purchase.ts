@@ -11,6 +11,7 @@ import {
 } from "./generated/entity-field-envelope-fields.product.gen";
 import { cents, dollars } from "@cubby/shared";
 import { z } from "zod";
+import { dateTime } from "./codec";
 import {
   purchaseExpenseStatus,
   purchaseReconciliation,
@@ -679,7 +680,7 @@ export type PurchaseProductSource = z.infer<typeof purchaseProductSource>;
  * This is the detachability test. `source` names where a row came from;
  * `linkAttachedAt !== null` is what says a link exists to remove.
  */
-const linkAttachedAt = z.date().nullable();
+const linkAttachedAt = dateTime.nullable();
 
 export const purchaseProductOut = z.object({
   displayFacts: productDisplayFactsState,

@@ -4,15 +4,13 @@ import type {
   OperationContract,
   OperationMemberName,
 } from "~/contracts/define";
-import {
-  type StartOperationId,
-  startOperationDefinitionFor,
-} from "~/lib/start-operation-observability";
+import type { StartOperationId } from "~/lib/start-operation-observability";
 import { readPolicyFor } from "~/server/db/read-policy";
 import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
-import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
+import type { StartOperationHandler } from "~/server/operation-runtime/operation-handlers.server";
 import {
   type AuthenticatedStartOperationContext,
+  resolveOperation,
   runStartOperation,
 } from "~/server/operation-runtime/start-operation.server";
 
@@ -183,13 +181,12 @@ export function implementOperationDomain(
   > = {};
   for (const [member, definition] of Object.entries(contract.ops)) {
     if (definition.kind === "subscription") continue;
-    const operation = startOperationDefinitionFor(
-      `${contract.domain}.${member}`,
-    );
-    if (!operation)
-      throw new Error(
-        `${contract.domain}.${member} is missing from the generated registry`,
-      );
+    const resolved = resolveOperation(`${contract.domain}.${member}`, {
+      kinds: [definition.kind],
+      exposure: "internal",
+    });
+    if (!resolved.ok) throw new Error(resolved.error.message);
+    const operation = resolved.definition;
     const entry = handlers[member];
     if (!entry) throw new Error(`Missing handler for ${operation.id}`);
     operations[member] = operationHandlerFor(

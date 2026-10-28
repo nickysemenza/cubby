@@ -10,7 +10,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 
-import { product } from "~/integrations/tanstack-query/generated/catalog/product.gen";
+import { product } from "~/integrations/tanstack-query/domains/product";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { showErrorToast } from "~/ui/feedback/error-details";
 

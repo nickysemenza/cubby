@@ -37,8 +37,8 @@ import {
   connectionRefs,
   ConnectionPaths,
 } from "~/entity/relationships/connection-paths";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
-import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
+import { entityGraph } from "~/integrations/tanstack-query/domains/entityGraph";
+import { entityList } from "~/integrations/tanstack-query/domains/entityList";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { Button } from "~/ui/primitives/button";

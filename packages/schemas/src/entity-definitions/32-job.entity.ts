@@ -1,6 +1,7 @@
 import { timestampField, readOnly } from "./field-policy";
 import { humanize } from "@cubby/shared/text-case";
 import { z } from "zod";
+import { dateTime } from "../codec";
 import {
   shortcodeSchema,
   runShortcode,
@@ -201,7 +202,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "timestamp",
         nullable: true,
         display: { columnLabel: "Lease ends", format: "timestamp" },
-        validation: readOnly(z.date().nullable()),
+        validation: readOnly(dateTime.nullable()),
       },
       timestampField("createdAt", { format: "timestamp" }),
       timestampField("updatedAt", { format: "timestamp" }),

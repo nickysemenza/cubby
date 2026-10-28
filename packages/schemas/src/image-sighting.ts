@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateTime } from "./codec";
 
 import {
   deviceShortcode,
@@ -43,15 +44,15 @@ export const imageSightingReportFields = z.object({
   pixelWidth: z.number().int().positive().nullable().optional(),
   pixelHeight: z.number().int().positive().nullable().optional(),
   hasAdjustments: z.boolean().default(false),
-  capturedAt: z.coerce.date().nullable().optional(),
+  capturedAt: dateTime.nullable().optional(),
   capturedAtOffsetMinutes: z.number().int().nullable().optional(),
-  addedAt: z.coerce.date().nullable().optional(),
+  addedAt: dateTime.nullable().optional(),
   location: imageSightingLocation.nullable().optional(),
   placeName: optionalText,
   camera: imageSightingCamera.nullable().optional(),
   hashDistance: z.number().int().nonnegative().nullable().optional(),
   aspectGate: z.boolean().nullable().optional(),
-  observedAt: z.coerce.date(),
+  observedAt: dateTime,
 });
 export type ImageSightingReportFields = z.infer<
   typeof imageSightingReportFields

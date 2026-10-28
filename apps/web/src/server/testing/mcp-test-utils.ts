@@ -14,7 +14,6 @@ import { mutation, query } from "~/contracts/define";
 import { isKernelActionRef, type McpActionSpec } from "~/contracts/mcp-define";
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
-import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
 import {
   type DeadlineBudget,
   MCP_TOOL_DEADLINE_MS,
@@ -28,6 +27,8 @@ import {
   type McpEntityExecutor,
 } from "~/server/mcp/kernel-actions";
 import { observeOperation } from "~/server/observability/observed-request";
+import type { StartOperationHandler } from "~/server/operation-runtime/operation-handlers.server";
+import { unparsedStartOperationDataSchema } from "~/server/operation-runtime/start-operation.contract";
 import { createStartOperationRunner } from "~/server/operation-runtime/start-operation.server";
 
 import {
@@ -176,8 +177,27 @@ export function registerTestTool<
     {
       ...runtime,
       runStartOperation: run,
-      // SAFETY: the loader map is keyed by registry ids; this test id is not one.
-      loaders: fromAny({ "test.run": async () => handler }),
+      // The test id is not in the registry, so it bypasses dispatch's
+      // resolver and runs the handler directly.
+      dispatchOperation: async (principal, call) => {
+        const result = await handler({
+          data: call.input,
+          request: {
+            principal,
+            headers: call.headers,
+            signal: call.signal,
+            modelBacked: call.modelBacked,
+          },
+        });
+        return {
+          result: result.ok
+            ? {
+                ...result,
+                data: unparsedStartOperationDataSchema.parse(result.data),
+              }
+            : result,
+        };
+      },
     },
   );
 }

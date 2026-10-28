@@ -12,7 +12,7 @@ import {
   type JobListOut,
   type JobLogsOut,
 } from "~/contracts/job.contract";
-import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
+import { job } from "~/integrations/tanstack-query/domains/job";
 import { formatInstant } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";

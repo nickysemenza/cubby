@@ -8,6 +8,7 @@ import {
   wishPriceRangeOut,
 } from "@cubby/schemas/wish-fields";
 import { z } from "zod";
+import { dateTime } from "../codec";
 export const { definition, readSchemas } = defineEntityModel({
   key: "wish",
   names: { singular: "Wish", plural: "Wishlist" },
@@ -192,7 +193,7 @@ export const { definition, readSchemas } = defineEntityModel({
           optionColor: "neutral-status",
         },
         validation: {
-          read: z.date().nullable(),
+          read: dateTime.nullable(),
           create: null,
           update: null,
         },

@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/domains/entityGraph";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";

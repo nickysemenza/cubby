@@ -43,6 +43,7 @@ const EXPECTED_ERROR_CODES: Set<string> = new Set([
   "CONFLICT",
   "PRECONDITION_FAILED",
   "UPGRADE_REQUIRED",
+  "METHOD_NOT_ALLOWED",
 ]);
 
 const unparsedErrorSchema = z.unknown();

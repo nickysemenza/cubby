@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { run } from "~/integrations/tanstack-query/generated/catalog/run.gen";
+import { run } from "~/integrations/tanstack-query/domains/run";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";

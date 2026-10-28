@@ -7,7 +7,7 @@ import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
-import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
+import { entityMutation } from "~/integrations/tanstack-query/domains/entityMutation";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 

@@ -5,6 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 import type { JSONType } from "zod";
 
+import { browserOperationPath } from "~/lib/browser-operation-path";
 import { setCfEnv } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
@@ -16,8 +17,7 @@ import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
-import { dispatchAs } from "~/server/operation-runtime/browser-operation-dispatch";
-import { startOperationDispatchInput } from "~/server/operation-runtime/start-operation-dispatch.contract";
+import { createOperationDispatch } from "~/server/operation-runtime/operation-dispatch.server";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 // Failures: an unauthenticated or foreign toggle; discovery running while the
@@ -29,25 +29,35 @@ describe("automatic Mail import switch", () => {
   afterEach(() => setCfEnv(undefined));
   const mailboxId = "synthetic-mail-import-mailbox";
   /** The browser endpoint's dispatch, signed in or refused by the Auth step. */
-  const invoke = async (member: string, input: JSONType, signedIn = true) =>
-    dispatchAs(
-      signedIn
-        ? systemPrincipal(
-            requireActor(
-              createTestRequestContext(ctx.db, {
-                auth: { userId: ctx.actor.userId },
-              }),
-            ),
-            { channel: "browser", credential: "cookie" },
-          )
-        : {
-            status: 401,
-            code: "UNAUTHORIZED",
-            message: "Valid bearer token, or session required",
-          },
-      startOperationDispatchInput.parse({ operation: `run.${member}`, input }),
-      new Request("https://cubby.test/api/operations", { method: "POST" }),
+  const invoke = async (member: string, input: JSONType, signedIn = true) => {
+    const operation = `run.${member}`;
+    const { handleOperationRequest } = createOperationDispatch({
+      authenticate: async () =>
+        signedIn
+          ? systemPrincipal(
+              requireActor(
+                createTestRequestContext(ctx.db, {
+                  auth: { userId: ctx.actor.userId },
+                }),
+              ),
+              { channel: "browser", credential: "cookie" },
+            )
+          : {
+              status: 401,
+              code: "UNAUTHORIZED",
+              message: "Valid bearer token, or session required",
+            },
+    });
+    const response = await handleOperationRequest(
+      new Request(`https://cubby.test${browserOperationPath(operation)}`, {
+        method: "POST",
+        body: JSON.stringify({ operation, input }),
+      }),
     );
+    const body: JSONType = await response.json();
+    // A refusal is the bare error under its status.
+    return response.ok ? body : { ok: false, error: body };
+  };
   const seed = async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic Mail import member",

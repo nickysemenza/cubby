@@ -11,6 +11,7 @@ import {
   type ErrorDiagnostics,
   errorDiagnosticsSchema,
 } from "./error-diagnostics";
+import { StartOperationError } from "./start-operation-error";
 
 export const SUPERSEDED_VIEW_TRANSITION_MESSAGE =
   "Old view transition aborted by new view transition.";
@@ -100,6 +101,18 @@ type AppErrorDetails = {
 };
 
 export function getAppErrorDetails(error: UnparsedError): AppErrorDetails {
+  if (error instanceof StartOperationError) {
+    const { data } = error;
+    const details: AppErrorDetails = { message: error.message };
+    if (data.requestId) details.requestId = data.requestId;
+    if (data.diagnostics) details.diagnostics = data.diagnostics;
+    details.code = data.code;
+    const reason = appErrorReasonSchema.safeParse(data.reason);
+    if (reason.success) details.reason = reason.data;
+    if (data.blockers) details.blockers = data.blockers;
+    if (data.validationIssues) details.validationIssues = data.validationIssues;
+    return details;
+  }
   const parsed = transportErrorSchema.safeParse(error);
   if (parsed.success) {
     const details: AppErrorDetails = { message: parsed.data.message };

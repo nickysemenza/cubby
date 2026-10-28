@@ -1,76 +1,39 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { type JSONType, z } from "zod";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { reset, snapshot } from "~/lib/perf/perf-store";
+import { StartOperationError } from "~/lib/start-operation-error";
 import type { StartOperationResult } from "~/server/operation-runtime/start-operation.contract";
 
 import {
-  StartOperationError,
+  overrideStartDispatch,
   startOperation,
-  type StartTransportRuntime,
   unwrapStartOperationResult,
 } from "./start-transport";
 
+let restore = () => {};
 beforeEach(reset);
+afterEach(() => restore());
 
 const ok = <T>(data: T): StartOperationResult<T> => ({ ok: true, data });
 
 describe("Start operation binding", () => {
-  it("uses the lazy shared dispatcher when no explicit transport is supplied", async () => {
+  it("dispatches through the shared seam and observes the bound entity", async () => {
     const dispatch = vi.fn(async () => ok({ items: ["one"] }));
-    const runtime = { dispatch } satisfies StartTransportRuntime;
-    const operation = startOperation<{ entity: string }, { items: string[] }>(
-      {
-        operation: "entity.list",
-        parse: (result) =>
-          z.object({ items: z.array(z.string()) }).parse(result),
-      },
-      runtime,
-    );
-
-    await expect(operation.call({ entity: "product" })).resolves.toEqual({
-      items: ["one"],
+    restore = overrideStartDispatch(dispatch);
+    const operation = startOperation<{ entity: string }, { items: string[] }>({
+      operation: "entity.list",
+      parse: (result) => z.object({ items: z.array(z.string()) }).parse(result),
     });
+
+    await expect(
+      operation.forEntity("product").call({ entity: "product" }),
+    ).resolves.toEqual({ items: ["one"] });
     expect(dispatch).toHaveBeenCalledWith(
       "entity.list",
       { entity: "product" },
       expect.objectContaining({ headers: expect.anything() }),
     );
-  });
-
-  it("keeps an explicit transport independent from the shared dispatcher", async () => {
-    const transport = vi.fn(() => Promise.resolve(ok("local")));
-    const operation = startOperation<null, string>({
-      operation: "cookbook.list",
-      transport,
-      parse: (result) => z.string().parse(result),
-    });
-
-    await expect(operation.call(null)).resolves.toBe("local");
-    expect(transport).toHaveBeenCalledOnce();
-  });
-
-  it("keeps the entity in observability without sending operation headers", async () => {
-    const operation = startOperation<{ entity: string }, { items: JSONType[] }>(
-      {
-        operation: "entity.list",
-        transport: (_input, { headers }) => {
-          expect(new Headers(headers).get("x-cubby-operation-id")).toBeNull();
-          return Promise.resolve(ok({ items: [], meta: { totalCount: 0 } }));
-        },
-        parse: (result) =>
-          z
-            .object({ items: z.array(z.json()) })
-            .passthrough()
-            .parse(result),
-      },
-    );
-
-    const result = await operation
-      .forEntity("product")
-      .call({ entity: "product" });
-
-    expect(result).toMatchObject({ items: [] });
     expect(snapshot().queries["start:entity.list"]).toMatchObject({
       operation: "entity.list",
       transport: "start",
@@ -79,9 +42,9 @@ describe("Start operation binding", () => {
   });
 
   it("records transport errors", async () => {
+    restore = overrideStartDispatch(() => Promise.reject(new Error("broken")));
     const operation = startOperation<Record<string, never>, never>({
       operation: "entity.filterOptions",
-      transport: () => Promise.reject(new Error("broken")),
       parse: z.never().parse,
     });
 
@@ -93,10 +56,10 @@ describe("Start operation binding", () => {
   });
 
   it("records registered mutations through the mutation channel", async () => {
+    restore = overrideStartDispatch(() => Promise.resolve(ok(null)));
     const operation = startOperation<null, null>({
       operation: "image.delete",
       kind: "mutation",
-      transport: () => Promise.resolve(ok(null)),
       parse: () => null,
     });
 
@@ -112,7 +75,6 @@ describe("Start operation binding", () => {
   it("derives query metadata from the same declaration the call observes", () => {
     const operation = startOperation<null, null>({
       operation: "cookbook.list",
-      transport: () => Promise.resolve(ok(null)),
       parse: () => null,
     });
 
@@ -128,17 +90,16 @@ describe("Start operation binding", () => {
 
   it("raises the bound error type for a refused operation", async () => {
     class DetailError extends StartOperationError {}
+    restore = overrideStartDispatch(async () => ({
+      ok: false,
+      error: {
+        code: "NOT_FOUND",
+        message: "Product not found",
+        requestId: "ray-operation-test",
+      },
+    }));
     const operation = startOperation<null, null>({
       operation: "entity.detail",
-      transport: () =>
-        Promise.resolve({
-          ok: false,
-          error: {
-            code: "NOT_FOUND",
-            message: "Product not found",
-            requestId: "ray-operation-test",
-          },
-        }),
       parse: () => null,
       createError: (error) => new DetailError(error),
     });
@@ -150,23 +111,22 @@ describe("Start operation binding", () => {
   });
 
   it("keeps request ids on their own out-of-order failures", async () => {
+    const requestSchema = z.object({ id: z.string(), delay: z.number() });
+    restore = overrideStartDispatch((_operation, input) => {
+      const { id, delay } = requestSchema.parse(input);
+      return new Promise((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              ok: false,
+              error: { code: "NOT_FOUND", message: "Missing", requestId: id },
+            }),
+          delay,
+        ),
+      );
+    });
     const operation = startOperation<{ id: string; delay: number }, null>({
       operation: "entity.detail",
-      transport: ({ id, delay }) =>
-        new Promise((resolve) =>
-          setTimeout(
-            () =>
-              resolve({
-                ok: false,
-                error: {
-                  code: "NOT_FOUND",
-                  message: "Missing",
-                  requestId: id,
-                },
-              }),
-            delay,
-          ),
-        ),
       parse: () => null,
     });
 

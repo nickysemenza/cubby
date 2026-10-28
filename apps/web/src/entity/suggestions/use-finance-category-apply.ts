@@ -5,7 +5,7 @@ import {
 import { useMutation } from "@tanstack/react-query";
 import { useCallback } from "react";
 
-import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
+import { ai } from "~/integrations/tanstack-query/domains/ai";
 
 import type { EntitySuggestionsOperations } from "./field-suggestion";
 

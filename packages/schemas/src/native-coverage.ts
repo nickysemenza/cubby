@@ -17,6 +17,7 @@ import {
 import { imageUrlSummary } from "./image-summary";
 import { foodSummary } from "@cubby/usda";
 import { z } from "zod";
+import { dateTime } from "./codec";
 // Not "@cubby/shared": its index reaches generated files, and this module is imported by the
 // generator before they exist.
 import { mapRecord } from "../../shared/src/record";
@@ -199,7 +200,7 @@ export const nativeCoverage = {
         { path: "caloriesTotalLabel", schema: listLabel },
         { path: "yield", schema: rawRecipeTopLevelFields.yield },
         { path: "servings", schema: rawRecipeTopLevelFields.servings },
-        { path: "updatedAt", schema: z.date() },
+        { path: "updatedAt", schema: dateTime },
       ],
     },
     "estimate-cost": {
@@ -209,7 +210,7 @@ export const nativeCoverage = {
         { path: "costTotalLabel", schema: listLabel },
         { path: "yield", schema: rawRecipeTopLevelFields.yield },
         { path: "servings", schema: rawRecipeTopLevelFields.servings },
-        { path: "updatedAt", schema: z.date() },
+        { path: "updatedAt", schema: dateTime },
       ],
     },
     "recipe-links": {

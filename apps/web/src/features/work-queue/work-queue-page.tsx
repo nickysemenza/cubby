@@ -51,7 +51,7 @@ import {
 import { WorkActions } from "~/entity/work-queue/work-actions";
 import { ownerLabel, OwnerPill } from "~/entity/work-queue/work-queue-display";
 import { AttentionInputStatus } from "~/features/project/attention-input-status";
-import { workQueue } from "~/integrations/tanstack-query/generated/catalog/workQueue.gen";
+import { workQueue } from "~/integrations/tanstack-query/domains/workQueue";
 import { copyShortcodes } from "~/lib/clipboard";
 import { formatCount } from "~/lib/number-format";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";

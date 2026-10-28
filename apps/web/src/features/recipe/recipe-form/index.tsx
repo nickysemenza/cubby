@@ -17,7 +17,7 @@ import { z } from "zod";
 
 import { EntityPrimitiveFields } from "~/entity/editing/entity-primitive-fields";
 import { PendingImageUpload } from "~/entity/entity-media/pending-image-upload";
-import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
+import { recipe as recipeOperations } from "~/integrations/tanstack-query/domains/recipe";
 import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";

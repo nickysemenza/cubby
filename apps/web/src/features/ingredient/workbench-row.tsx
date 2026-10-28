@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { IngredientEnrichmentRead } from "~/contracts/ingredient.contract";
 import { UsdaFoodSearchField } from "~/entity/picker/with-usda-food-search";
 import { RecipeUsagesTable } from "~/features/recipe/recipe-usages-table";
-import { ingredient } from "~/integrations/tanstack-query/generated/catalog/ingredient.gen";
+import { ingredient } from "~/integrations/tanstack-query/domains/ingredient";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";

@@ -4,7 +4,7 @@ import type {
 } from "@cubby/schemas/ai";
 import type { ReactNode } from "react";
 
-import { assessment } from "~/integrations/tanstack-query/generated/catalog/assessment.gen";
+import { assessment } from "~/integrations/tanstack-query/domains/assessment";
 
 import { stringLabelOf } from "./field-suggestion";
 import type { SuggestionOutcomeSurface } from "./suggestion-outcome-mark";

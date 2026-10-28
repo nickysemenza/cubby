@@ -13,7 +13,10 @@ import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import type { AppSpan } from "~/server/observability/tracing";
 import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";
-import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
+import type {
+  AuthenticatedStartOperationContext,
+  StartOperationRequest,
+} from "~/server/operation-runtime/start-operation.server";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
@@ -30,10 +33,14 @@ const context = requireActor(
   }),
 );
 
-const request = () =>
-  new Request("https://cubby.test/_serverFn/ai.backfillLocationDescriptions", {
-    method: "POST",
-  });
+const request = (): StartOperationRequest => ({
+  principal: systemPrincipal(context, {
+    channel: "browser",
+    credential: "cookie",
+  }),
+  headers: new Headers(),
+  signal: new AbortController().signal,
+});
 
 type StreamRun = (
   context: AuthenticatedStartOperationContext,
@@ -48,10 +55,8 @@ const span: AppSpan = {
   setError: () => undefined,
   recordException: () => undefined,
 };
-const authenticate = vi.fn<WorkflowStreamRuntime["authenticate"]>();
 const recordDatabaseWrite = vi.fn(async () => undefined);
 const runtime: WorkflowStreamRuntime = {
-  authenticate,
   observe: async (_definition, _observation, run) => await run(span),
   recordDatabaseWrite,
 };
@@ -94,14 +99,11 @@ const streamFrameSchema = z.object({
 describe("workflow stream freshness notifications", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    authenticate.mockResolvedValue(
-      systemPrincipal(context, { channel: "browser", credential: "cookie" }),
-    );
   });
 
   it("delivers a signed session marker for commits after the last progress event", async () => {
     await withMemberFreshness(async () => {
-      const response = await workflowStream(
+      const response = workflowStream(
         {
           request: request(),
           input: {},
@@ -132,7 +134,7 @@ describe("workflow stream freshness notifications", () => {
 
   it("notifies before progress and again during mutation stream finalization", async () => {
     let callsWhenSecondEventStarts = 0;
-    const response = await responseFor(
+    const response = responseFor(
       "ai.backfillLocationDescriptions",
       async function* () {
         yield { n: 1 };
@@ -174,40 +176,8 @@ describe("workflow stream freshness notifications", () => {
     expect(recordDatabaseWrite).toHaveBeenCalledTimes(2);
   });
 
-  it("authenticates before validating malformed domain input", async () => {
-    authenticate.mockRejectedValueOnce(
-      new Error("private authentication backend detail"),
-    );
-    const run = vi.fn(async function* () {
-      yield { n: 1 };
-    });
-    const response = await workflowStream(
-      {
-        request: new Request("https://cubby.test/_serverFn/test", {
-          method: "POST",
-        }),
-        input: "not-an-object",
-        operation: "ai.backfillLocationDescriptions",
-        inputSchema: z.object({}),
-        eventSchema: z.object({ n: z.number() }),
-        run,
-      },
-      runtime,
-    );
-    const frames = await collect(response);
-    const frame = streamFrameSchema.parse(frames[0]);
-    expect(frame.error?.diagnostics).toMatchObject({
-      stage: "context",
-      causes: [],
-    });
-    expect(JSON.stringify(frames)).not.toContain(
-      "private authentication backend detail",
-    );
-    expect(run).not.toHaveBeenCalled();
-  });
-
   it("notifies when cancellation follows committed progress", async () => {
-    const response = await responseFor(
+    const response = responseFor(
       "ai.backfillLocationDescriptions",
       async function* (_context, _input, signal) {
         yield { n: 1 };

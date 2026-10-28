@@ -30,8 +30,8 @@ import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-displa
 import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { ConnectionPaths } from "~/entity/relationships/connection-paths";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
-import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
+import { entityGraph } from "~/integrations/tanstack-query/domains/entityGraph";
+import { entityReport } from "~/integrations/tanstack-query/domains/entityReport";
 import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";

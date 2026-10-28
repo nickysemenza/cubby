@@ -7,8 +7,10 @@ import {
   scrubErrorMessage,
   sentryEventUrl,
 } from "~/lib/error-diagnostics";
+import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import {
   isStartOperationEntity,
+  type StartOperationDefinition,
   type StartOperationId,
   type StartOperationKind,
   startOperationDefinitionFor,
@@ -338,14 +340,15 @@ export function assertClientMayWrite(principal: Principal): void {
 
 const EXPIRED = Symbol("deadline expired");
 
-const deadlineClassOf = (
+/** Mutations and workflow streams write; reads may wait on a model. */
+export const deadlineClassOf = (
   kind: StartOperationKind,
   modelBacked?: boolean,
 ): DeadlineClass =>
-  kind === "mutation" ? "write" : modelBacked ? "modelRead" : "read";
+  kind !== "query" ? "write" : modelBacked ? "modelRead" : "read";
 
 /** The refusal a call that outlived its budget answers with. */
-const deadlineExceededError = (name: string, budgetMs: number) =>
+export const deadlineExceededError = (name: string, budgetMs: number) =>
   new AppError({
     code: "INTERNAL_SERVER_ERROR",
     reason: "MCP_TOOL_DEADLINE_EXCEEDED",
@@ -362,7 +365,7 @@ const deadlineExceededError = (name: string, budgetMs: number) =>
  * one from within the transaction: answering early from inside it would roll
  * back under work still using the connection.
  */
-async function withinBudget<T>(
+export async function withinBudget<T>(
   budget: DeadlineBudget | null,
   deadlineClass: DeadlineClass,
   signal: AbortSignal,
@@ -427,7 +430,7 @@ export function withinCompositeBudget<T>(options: {
 }
 
 /** How each client family is observed and names its calendar dirty marks. */
-const CHANNEL_OBSERVATION = {
+export const CHANNEL_OBSERVATION = {
   browser: { origin: "ui", workload: "ui", source: "browser" },
   native: { origin: "api", workload: "other", source: "api" },
   cli: { origin: "api", workload: "other", source: "api" },
@@ -437,6 +440,117 @@ const CHANNEL_OBSERVATION = {
   Channel,
   { origin: RequestOrigin; workload: Workload; source: string }
 >;
+
+/** The operations a caller reaches: the kinds callable here, and `internal` ids or not. */
+export type OperationAccess<Kind extends StartOperationKind> = {
+  readonly kinds: readonly Kind[];
+  /** `internal` also reaches the web UI's own plumbing; `external` refuses it. */
+  readonly exposure: "internal" | "external";
+};
+
+type ResolvedOperation<Kind extends StartOperationKind> =
+  | {
+      ok: true;
+      definition: StartOperationDefinition<StartOperationIdOfKind<Kind>>;
+    }
+  | { ok: false; error: PublicStartOperationError };
+
+export const isOperationOfKind = <Kind extends StartOperationKind>(
+  definition: StartOperationDefinition,
+  kinds: readonly Kind[],
+): definition is StartOperationDefinition<StartOperationIdOfKind<Kind>> =>
+  kinds.some((kind) => kind === definition.kind);
+
+/**
+ * The one registry check every entry runs. An id the caller cannot reach
+ * answers `NOT_FOUND`; a reachable id of another kind answers `BAD_REQUEST`.
+ * Without a failure context the refusal is neither reported nor annotated.
+ */
+export function resolveOperation<Kind extends StartOperationKind>(
+  operation: string,
+  access: OperationAccess<Kind>,
+  failure?: Omit<OperationFailureContext, "operation"> & { requestId?: string },
+): ResolvedOperation<Kind> {
+  const definition = startOperationDefinitionFor(operation);
+  let refusal: AppError;
+  if (
+    !definition ||
+    (access.exposure === "external" && definition.exposure === "internal")
+  ) {
+    refusal = createAppError(
+      "OPERATION_NOT_FOUND",
+      `Unknown operation: ${operation}`,
+    );
+  } else if (isOperationOfKind(definition, access.kinds)) {
+    return { ok: true, definition };
+  } else {
+    refusal = createAppError(
+      "OPERATION_KIND_UNSUPPORTED",
+      `${operation} is a ${definition.kind}, not a ${access.kinds.join(" or ")}`,
+    );
+  }
+  return {
+    ok: false,
+    error: normalizeStartOperationError(
+      refusal,
+      "dispatch",
+      failure?.requestId,
+      failure && { ...failure, operation },
+    ).publicError,
+  };
+}
+
+/** Bind the verified principal to the span and to the request's freshness member. */
+export function enterOperationSpan(span: AppSpan, principal: Principal): void {
+  const { auth, actorContext } = principal.context;
+  registerFreshnessMember(auth);
+  span.setAttributes({
+    "cubby.authenticated": true,
+    ...actorSpanAttributes(auth.sessionId, actorContext),
+  });
+}
+
+/** Normalize a failure at its stage, classify it on the span, log server faults. */
+export function operationFailure<TError>(
+  span: AppSpan,
+  error: TError,
+  stage: OperationStage,
+  requestId: string | undefined,
+  context: OperationFailureContext,
+): NormalizedStartOperationError {
+  const normalized = normalizeStartOperationError(
+    error,
+    stage,
+    requestId,
+    context,
+  );
+  // Keep public failure classification outside the native error object,
+  // whose boolean error flag can obscure nested diagnostic attributes.
+  span.setAttributes({
+    "cubby.failure.stage": stage,
+    "cubby.failure.code": normalized.publicError.code,
+    "cubby.failure.reason": normalized.publicError.reason,
+  });
+  if (normalized.publicError.code === "INTERNAL_SERVER_ERROR") {
+    log.error("failure", {
+      operation: context.operation,
+      stage,
+      requestId,
+      cfRayId: cloudflareRayId(context.headers),
+      error: normalized.observedError,
+    });
+  }
+  return normalized;
+}
+
+/** Attach this member's write marker, when it has one, to a settled result. */
+export async function withReadMarker<Result extends { readMarker?: string }>(
+  result: Result,
+): Promise<Result> {
+  const readMarker = await memberWriteCookie();
+  if (readMarker) result.readMarker = readMarker;
+  return result;
+}
 
 export interface StartOperationRuntime {
   observe<Result>(
@@ -497,13 +611,22 @@ export type RunStartOperationOptions<
   ) => Promise<z.input<OutputSchema>>;
 };
 
-function runnerDefinition(operation: StartOperationId | AdHocOperation) {
+function runnerDefinition(
+  operation: StartOperationId | AdHocOperation,
+  type: StartOperationKind,
+) {
   if (typeof operation === "string") {
-    const registered = startOperationDefinitionFor(operation);
-    return registered && { ...registered, registered: operation };
+    const resolved = resolveOperation(operation, {
+      kinds: [type],
+      exposure: "internal",
+    });
+    if (!resolved.ok) throw new Error(resolved.error.message);
+    return { ...resolved.definition, registered: operation };
   }
   if (startOperationDefinitionFor(operation.id))
     throw new Error(`Ad hoc operation ${operation.id} shadows a registry id`);
+  if (operation.kind !== type)
+    throw new Error(`Ad hoc operation ${operation.id} is not a ${type}`);
   return { id: operation.id, kind: operation.kind, registered: undefined };
 }
 
@@ -518,12 +641,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
     const { principal } = options.request;
     const channel = CHANNEL_OBSERVATION[principal.channel];
     const workload = options.workload ?? channel.workload;
-    const definition = runnerDefinition(options.operation);
-    if (!definition || definition.kind !== options.type) {
-      throw new Error(
-        `Unregistered Start operation: ${definition?.id ?? String(options.operation)} (${options.type})`,
-      );
-    }
+    const definition = runnerDefinition(options.operation, options.type);
     const requestId = getRequestId(options.request.headers);
     const state: RunState = {
       stage: "context",
@@ -545,15 +663,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
         // Client cancellation, not the budget: work that finishes past its
         // deadline still parses its output and schedules its side effects.
         throwIfStartOperationAborted(options.request.signal);
-        const authenticated = principal.context;
-        registerFreshnessMember(authenticated.auth);
-        span.setAttributes({
-          "cubby.authenticated": true,
-          ...actorSpanAttributes(
-            authenticated.auth.sessionId,
-            authenticated.actorContext,
-          ),
-        });
+        enterOperationSpan(span, principal);
         if (options.type !== "query") assertClientMayWrite(principal);
         state.stage = "input";
         const input = options.inputSchema.parse(options.input);
@@ -581,7 +691,10 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             : options.readPolicy === "strong"
               ? "strong"
               : readPolicyFor(definition.id, "query", state.entity, slots);
-        const context = await selectOperationContext(authenticated, readPolicy);
+        const context = await selectOperationContext(
+          principal.context,
+          readPolicy,
+        );
         span.setAttributes({
           "cubby.request_origin": context.requestOrigin,
           "cubby.read.consistency":
@@ -646,28 +759,13 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             },
             observedError: parseObservedFailure(signal.reason),
           };
-        const normalized = normalizeStartOperationError(
+        const normalized = operationFailure(
+          span,
           error,
           state.stage,
           requestId,
           failureContext(),
         );
-        // Keep public failure classification outside the native error object,
-        // whose boolean error flag can obscure nested diagnostic attributes.
-        span.setAttributes({
-          "cubby.failure.stage": state.stage,
-          "cubby.failure.code": normalized.publicError.code,
-          "cubby.failure.reason": normalized.publicError.reason,
-        });
-        if (normalized.publicError.code === "INTERNAL_SERVER_ERROR") {
-          log.error("failure", {
-            operation: definition.id,
-            stage: state.stage,
-            requestId,
-            cfRayId: cloudflareRayId(options.request.headers),
-            error: normalized.observedError,
-          });
-        }
         const result: StartOperationResult<z.output<OutputSchema>> = {
           ok: false,
           error: normalized.publicError,
@@ -729,9 +827,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
           };
         },
       );
-      const readMarker = await memberWriteCookie();
-      if (readMarker) observed.result.readMarker = readMarker;
-      return observed.result;
+      return withReadMarker(observed.result);
     });
   };
 }

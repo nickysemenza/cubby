@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { derived } from "~/integrations/tanstack-query/generated/catalog/derived.gen";
+import { derived } from "~/integrations/tanstack-query/domains/derived";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { RecordList, RecordRow } from "~/ui/common/record-list";

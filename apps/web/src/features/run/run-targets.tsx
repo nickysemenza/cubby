@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import RTable from "~/entity/table/table";
-import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
+import { run as runOperations } from "~/integrations/tanstack-query/domains/run";
 import { useSectionCount } from "~/ui/data-table/detail-section-state";
 import {
   createCubbyColumnCollection,

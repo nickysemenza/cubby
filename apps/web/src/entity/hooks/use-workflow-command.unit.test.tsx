@@ -7,11 +7,10 @@ import {
 } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import superjson from "superjson";
 import { afterEach, expect, it, vi } from "vitest";
 
-import { loadWorkflowCommandOptions } from "~/integrations/tanstack-query/generated/commands.gen";
 import { getContext } from "~/integrations/tanstack-query/root-provider";
+import { loadWorkflowCommandOptions } from "~/integrations/tanstack-query/workflow-commands";
 
 import { useWorkflowCommand } from "./use-workflow-command";
 
@@ -24,12 +23,10 @@ it("serializes scoped operations while publishing their exact bodies and metadat
   const gate = Promise.withResolvers<void>();
   const fetchResponse = vi.fn(async () => {
     await gate.promise;
-    return Response.json(
-      superjson.serialize({
-        ok: true,
-        data: [{ assessmentId: null, ok: false, error: "Synthetic refusal" }],
-      }),
-    );
+    return Response.json({
+      ok: true,
+      data: [{ assessmentId: null, ok: false, error: "Synthetic refusal" }],
+    });
   });
   vi.stubGlobal("fetch", fetchResponse);
   const observed = vi.fn();
@@ -97,12 +94,10 @@ it("patches before catalog invalidation and finishes while refresh is pending", 
   vi.stubGlobal(
     "fetch",
     vi.fn(async () =>
-      Response.json(
-        superjson.serialize({
-          ok: true,
-          data: [{ assessmentId: null, ok: false, error: "Synthetic refusal" }],
-        }),
-      ),
+      Response.json({
+        ok: true,
+        data: [{ assessmentId: null, ok: false, error: "Synthetic refusal" }],
+      }),
     ),
   );
   const { queryClient: client } = getContext();

@@ -1,3 +1,4 @@
+import { dateTime } from "@cubby/schemas/codec";
 /**
  * Location tree and hierarchy operations.
  * Build location trees, type counts, and import updates.
@@ -48,10 +49,10 @@ const locationTreeRowSchema = z.object({
   name: z.string(),
   aliases: z.array(z.string()),
   tags: z.array(z.string()),
-  createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
-  deletedAt: z.coerce.date().nullable(),
-  lastBulkInventory: z.coerce.date().nullable(),
+  createdAt: dateTime,
+  updatedAt: dateTime,
+  deletedAt: dateTime.nullable(),
+  lastBulkInventory: dateTime.nullable(),
   parentId: locationIdSchema.nullable(),
   productId: productIdSchema.nullable(),
   type: locationType,

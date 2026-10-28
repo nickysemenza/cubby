@@ -7,8 +7,8 @@ import { page } from "vitest/browser";
 import { EntityAuditLink } from "~/entity/components/entity-ref-link";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { entityMedia } from "~/integrations/tanstack-query/generated/catalog/entityMedia.gen";
-import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
+import { entityMedia } from "~/integrations/tanstack-query/domains/entityMedia";
+import { entityReport } from "~/integrations/tanstack-query/domains/entityReport";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 

@@ -18,7 +18,7 @@ const httpFailureSchema = z.object({
   elapsedMs: z.number(),
 });
 
-const operationErrorDiagnosticsSchema = z.object({
+export const errorDiagnosticsSchema = z.object({
   origin: z.literal("server"),
   operation: z.string(),
   entity: z.string().optional(),
@@ -37,20 +37,6 @@ const operationErrorDiagnosticsSchema = z.object({
   cloudflareUrl: z
     .literal(
       "https://dash.cloudflare.com/?to=/:account/workers-and-pages/observability",
-    )
-    .optional(),
-});
-
-export const errorDiagnosticsSchema = operationErrorDiagnosticsSchema.extend({
-  retries: z
-    .array(
-      z.object({
-        attempt: z.number().int().positive(),
-        message: z.string(),
-        code: z.string().optional(),
-        requestId: z.string().optional(),
-        diagnostics: operationErrorDiagnosticsSchema.optional(),
-      }),
     )
     .optional(),
 });

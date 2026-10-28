@@ -4,40 +4,32 @@ import {
   STRONG_READ_HEADER,
 } from "~/lib/read-consistency";
 import {
+  parseOperationOutput,
+  StartOperationError,
+} from "~/lib/start-operation-error";
+import {
   isStartOperationEntity,
   registeredStartOperationKind,
   type StartOperationId,
 } from "~/lib/start-operation-observability";
-import type {
-  PublicStartOperationError,
-  StartOperationResult,
-  UnparsedStartOperationData,
-} from "~/server/operation-runtime/start-operation.contract";
 import {
+  type PublicStartOperationError,
+  type StartOperationResult,
+  type UnparsedStartOperationData,
   unparsedStartOperationDataSchema,
-  unparsedStartOperationResultSchema,
 } from "~/server/operation-runtime/start-operation.contract";
 
-import { dispatchBrowserOperation } from "./browser-operation-transport";
+import {
+  dispatchBrowserOperation,
+  type OperationTransportOptions,
+  postOperation,
+} from "./browser-operation-transport";
 import type { CubbyOperationMeta } from "./operation-meta";
 import {
   beginObservedOperation,
   finishObservedOperation,
   operationHeaders,
 } from "./operation-recorder";
-
-export class StartOperationError extends Error {
-  readonly data: Omit<PublicStartOperationError, "message">;
-  readonly requestId: string | undefined;
-
-  constructor(error: PublicStartOperationError) {
-    super(error.message);
-    this.name = "StartOperationError";
-    this.requestId = error.requestId;
-    const { message: _message, ...data } = error;
-    this.data = data;
-  }
-}
 
 export function unwrapStartOperationResult<T>(
   operation: string,
@@ -57,12 +49,39 @@ export function unwrapStartOperationResult<T>(
   return result.data;
 }
 
+type ObservedOutcome = Parameters<typeof finishObservedOperation>[1];
+
+/**
+ * Observe one call and fence this member's reads around a write: a mutation
+ * or workflow stream begins a member write before it starts, and again when
+ * it fails or is abandoned, so no read settles on data from before it.
+ */
+export function beginOperationCall(options: {
+  operation: StartOperationId;
+  kind: "query" | "mutation";
+  entity?: string;
+  speculative?: boolean;
+  input: UnparsedStartOperationData;
+}) {
+  const writes = registeredStartOperationKind(options.operation) !== "query";
+  const observed = beginObservedOperation({ ...options, transport: "start" });
+  if (writes) beginMemberWrite();
+  return {
+    headers: new Headers(operationHeaders(observed)),
+    finish(outcome: ObservedOutcome, abandoned = false) {
+      if (writes && (abandoned || outcome.error !== undefined))
+        beginMemberWrite();
+      finishObservedOperation(observed, outcome);
+    },
+  };
+}
+
 async function observedStartCall<T>(options: {
   operation: StartOperationId;
   kind?: "query" | "mutation";
   entity?: string;
   speculative?: boolean;
-  input: unknown;
+  input: UnparsedStartOperationData;
   call: (headers: Headers) => Promise<T>;
 }): Promise<T> {
   const registeredKind = registeredStartOperationKind(options.operation);
@@ -76,91 +95,72 @@ async function observedStartCall<T>(options: {
       `${options.operation} is registered as ${registeredKind}, not ${options.kind}`,
     );
   }
-  const observed = beginObservedOperation({
-    kind: registeredKind,
-    transport: "start",
-    operation: options.operation,
-    entity: options.entity,
-    speculative: options.speculative,
-    input: options.input,
-  });
+  const call = beginOperationCall({ ...options, kind: registeredKind });
   try {
-    if (registeredKind === "mutation") beginMemberWrite();
-    const result = await options.call(new Headers(operationHeaders(observed)));
-    finishObservedOperation(observed, { result });
+    const result = await options.call(call.headers);
+    call.finish({ result });
     return result;
   } catch (error) {
-    if (registeredKind === "mutation") beginMemberWrite();
-    finishObservedOperation(observed, { error });
+    call.finish({ error });
     throw error;
   }
 }
 
 export type StartCallOptions = {
-  /** Keep this read in its own Worker invocation while retaining shared admission/retry. */
+  /** Keep this read in its own Worker invocation while retaining shared admission. */
   batch?: boolean;
   signal?: AbortSignal;
   speculative?: boolean;
   consistency?: "strong";
 };
 
-/** Explicit adapter shape used by focused tests and in-process callers. */
-type StartTransportInvocation<Input> = (
-  input: Input,
-  transport: { signal?: AbortSignal; headers: HeadersInit; batch?: boolean },
-) => Promise<StartOperationResult<unknown>>;
-
-export interface StartTransportRuntime {
-  dispatch(
-    operation: StartOperationId,
-    input: UnparsedStartOperationData,
-    transport: { signal?: AbortSignal; headers: HeadersInit; batch?: boolean },
-  ): Promise<StartOperationResult<UnparsedStartOperationData>>;
-}
-
-async function dispatchServerOperation<Input>(
+type StartDispatch = (
   operation: StartOperationId,
-  input: Input,
-  transport: { signal?: AbortSignal; headers: HeadersInit; batch?: boolean },
+  input: UnparsedStartOperationData,
+  transport: OperationTransportOptions,
+) => Promise<StartOperationResult<UnparsedStartOperationData>>;
+
+/**
+ * SSR answers through the same `/api/operations` handler and response
+ * decoding as the browser, in process, under the page request's credential.
+ */
+async function dispatchServerOperation(
+  operation: StartOperationId,
+  input: UnparsedStartOperationData,
+  transport: OperationTransportOptions,
 ): Promise<StartOperationResult<UnparsedStartOperationData>> {
-  const [
-    { getRequest },
-    { dispatchStartOperation: dispatchOnServer },
-    { startOperationDispatchInput },
-  ] = await Promise.all([
-    import("@tanstack/react-start/server"),
-    import("~/server/operation-runtime/start-operation-dispatch.boundary"),
-    import("~/server/operation-runtime/start-operation-dispatch.contract"),
-  ]);
-  const request = getRequest();
-  const parsed = startOperationDispatchInput.parse({ operation, input });
-  const headers = new Headers(request.headers);
+  const [{ getRequest }, { handleBrowserOperationDispatch }] =
+    await Promise.all([
+      import("@tanstack/react-start/server"),
+      import("~/server/operation-runtime/browser-operation-dispatch"),
+    ]);
+  const page = getRequest();
+  const headers = new Headers(page.headers);
+  headers.delete("content-length");
   new Headers(transport.headers).forEach((value, name) =>
     headers.set(name, value),
   );
-  return unparsedStartOperationResultSchema.parse(
-    await dispatchOnServer({
-      ...parsed,
-      request: new Request(request.url, {
-        method: request.method,
-        headers,
-        signal: transport.signal ?? request.signal,
-      }),
-    }),
+  // The page request already passed the same-origin read rule; the operation
+  // it renders is this origin's own request.
+  headers.set("origin", new URL(page.url).origin);
+  return postOperation(
+    { operation, input },
+    headers,
+    transport.signal ?? page.signal,
+    (url, init) =>
+      handleBrowserOperationDispatch(new Request(new URL(url, page.url), init)),
   );
 }
 
-let dispatchOverride: StartTransportRuntime["dispatch"] | null = null;
+let dispatchOverride: StartDispatch | null = null;
 
 /**
- * Test seam: route every operation without its own transport through
- * `dispatch` until the returned restore runs. The browser test harness uses it
- * so an unmocked read fails inside the test instead of reaching the real
- * Start dispatcher and rejecting after teardown.
+ * Test seam: route every operation through `dispatch` until the returned
+ * restore runs. The browser test harness uses it so an unmocked read fails
+ * inside the test instead of reaching the real dispatcher and rejecting after
+ * teardown.
  */
-export function overrideStartDispatch(
-  dispatch: StartTransportRuntime["dispatch"],
-): () => void {
+export function overrideStartDispatch(dispatch: StartDispatch): () => void {
   const previous = dispatchOverride;
   dispatchOverride = dispatch;
   return () => {
@@ -168,14 +168,11 @@ export function overrideStartDispatch(
   };
 }
 
-const productionStartTransportRuntime: StartTransportRuntime = {
-  dispatch: async (operation, input, transport) => {
-    if (dispatchOverride) return dispatchOverride(operation, input, transport);
-    if (!import.meta.env.SSR) {
-      return dispatchBrowserOperation(operation, input, transport);
-    }
-    return dispatchServerOperation(operation, input, transport);
-  },
+const dispatchStart: StartDispatch = (operation, input, transport) => {
+  if (dispatchOverride) return dispatchOverride(operation, input, transport);
+  if (!import.meta.env.SSR)
+    return dispatchBrowserOperation(operation, input, transport);
+  return dispatchServerOperation(operation, input, transport);
 };
 
 export interface StartOperation<Input, Output> {
@@ -191,25 +188,25 @@ export interface StartOperation<Input, Output> {
 }
 
 /**
- * Bind an operation name, parser, and optional adapter once. Production calls
- * lazily import the one shared Start dispatcher; importing a domain catalog
- * never initializes Start or any server module.
+ * Bind an operation name and parser once. Production calls lazily import the
+ * one shared dispatcher; importing a domain catalog never initializes Start
+ * or any server module.
  */
-export function startOperation<Input, Output>(
-  config: {
-    operation: StartOperationId;
-    kind?: "query" | "mutation";
-    entity?: string;
-    /**
-     * Override the shared dispatcher. Production operations normally omit this;
-     * focused transport tests and exceptional adapters may still supply one.
-     */
-    transport?: StartTransportInvocation<Input>;
-    parse: (data: UnparsedStartOperationData, input: Input) => Output;
-    createError?: (error: PublicStartOperationError) => Error;
-  },
-  runtime: StartTransportRuntime = productionStartTransportRuntime,
-): StartOperation<Input, Output> {
+export function startOperation<Input, Output>(config: {
+  operation: StartOperationId;
+  kind?: "query" | "mutation";
+  entity?: string;
+  parse: (
+    data: UnparsedStartOperationData,
+    input: Input,
+  ) => Output | Promise<Output>;
+  createError?: (error: PublicStartOperationError) => Error;
+  /** `withTransport`'s bound answer, still observed and fenced like dispatch. */
+  dispatch?: (
+    input: Input,
+    transport: { signal?: AbortSignal },
+  ) => Promise<StartOperationResult<UnparsedStartOperationData>>;
+}): StartOperation<Input, Output> {
   if (
     config.entity &&
     !isStartOperationEntity(config.operation, config.entity)
@@ -228,40 +225,35 @@ export function startOperation<Input, Output>(
     return {
       operation: config.operation,
       meta,
-      call: (input, options) =>
-        observedStartCall({
+      call: (input, options) => {
+        const data = unparsedStartOperationDataSchema.parse(input);
+        return observedStartCall({
           operation: config.operation,
           kind: config.kind,
           entity,
           speculative: options?.speculative,
-          input,
+          input: data,
           call: async (headers) => {
             if (options?.consistency === "strong")
               headers.set(STRONG_READ_HEADER, "strong");
-            return config.parse(
-              unwrapStartOperationResult(
-                config.operation,
-                unparsedStartOperationResultSchema.parse(
-                  await (
-                    config.transport ??
-                    ((value, transport) =>
-                      runtime.dispatch(
-                        config.operation,
-                        unparsedStartOperationDataSchema.parse(value),
-                        transport,
-                      ))
-                  )(input, {
-                    signal: options?.signal,
-                    headers,
-                    ...(options?.batch === false ? { batch: false } : {}),
-                  }),
-                ),
-                config.createError,
-              ),
-              input,
+            const result = config.dispatch
+              ? await config.dispatch(input, { signal: options?.signal })
+              : await dispatchStart(config.operation, data, {
+                  signal: options?.signal,
+                  headers,
+                  ...(options?.batch === false ? { batch: false } : {}),
+                });
+            const value = unwrapStartOperationResult(
+              config.operation,
+              result,
+              config.createError,
+            );
+            return parseOperationOutput(config.operation, () =>
+              config.parse(value, input),
             );
           },
-        }),
+        });
+      },
       forEntity: (next) => {
         if (!isStartOperationEntity(config.operation, next)) {
           throw new Error(`${next} is not registered for ${config.operation}`);

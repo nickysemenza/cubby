@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateTime } from "./codec";
 import { externalIdSource } from "./external-id";
 import { money } from "./money";
 import { createSortPaginationFields } from "./pagination";
@@ -307,7 +308,7 @@ export const sourceTransactionRecordDriftCandidate = z.object({
       providerStatus: sourceTransactionRecordProviderStatus.nullable(),
       disposition: sourceTransactionRecordDisposition,
       importFingerprint: z.string(),
-      createdAt: z.date(),
+      createdAt: dateTime,
     }),
   ),
 });

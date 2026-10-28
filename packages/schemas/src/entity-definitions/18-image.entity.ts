@@ -15,6 +15,7 @@ import { defineEntity, defineEntityModel } from "./definition.js";
 import { labelField } from "./label-field.js";
 import { imageShortcode, ledgerPartyShortcode } from "../identifier-fields.js";
 import { z } from "zod";
+import { dateTime } from "../codec";
 export const generatedImageStatusValues = [
   "PENDING",
   "UPLOADED",
@@ -513,7 +514,7 @@ export const { definition, readSchemas } = defineEntityModel(
           nullable: true,
           display: { columnGroup: "Processing" },
           validation: {
-            read: z.date().nullable(),
+            read: dateTime.nullable(),
             create: null,
             update: null,
           },
@@ -526,9 +527,9 @@ export const { definition, readSchemas } = defineEntityModel(
           nullable: true,
           display: { columnGroup: "Provenance", format: "timestamp" },
           validation: {
-            read: z.date().nullable(),
+            read: dateTime.nullable(),
             create: null,
-            update: z.coerce.date().nullable().optional(),
+            update: dateTime.nullable().optional(),
           },
         },
         {

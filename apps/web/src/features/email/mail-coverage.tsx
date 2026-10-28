@@ -13,7 +13,7 @@ import { useCallback, useId, useMemo, useState, type ReactNode } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import RTable from "~/entity/table/table";
-import { run } from "~/integrations/tanstack-query/generated/catalog/run.gen";
+import { run } from "~/integrations/tanstack-query/domains/run";
 import { householdLocalDate } from "~/lib/household-date";
 import { DateDisplay } from "~/ui/common/date-display";
 import {

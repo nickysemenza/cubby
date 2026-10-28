@@ -17,7 +17,7 @@ import { MaintenanceTools } from "~/features/maintenance/maintenance-tools";
 import { DefinedRunSteps, WorkEffects } from "~/features/run/work-definition";
 import { WorkQueue } from "~/features/work-queue/work-queue-page";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { auditLog } from "~/integrations/tanstack-query/generated/catalog/auditLog.gen";
+import { auditLog } from "~/integrations/tanstack-query/domains/auditLog";
 import { pageTitle } from "~/lib/page-title";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Section, Stack } from "~/ui/layout";

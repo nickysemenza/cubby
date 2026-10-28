@@ -34,7 +34,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import type { InventoryDialogItem } from "~/features/inventory/dialog-item";
-import { inventory } from "~/integrations/tanstack-query/generated/catalog/inventory.gen";
+import { inventory } from "~/integrations/tanstack-query/domains/inventory";
 import { wasm } from "~/lib/wasm";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { Stack } from "~/ui/layout";

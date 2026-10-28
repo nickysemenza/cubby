@@ -11,7 +11,7 @@ import {
 } from "~/entity/actions/entity-operation-impact-preview";
 import { mergeConfigFor } from "~/entity/entities";
 import type { MergeDisplayRow, MergeableConfig } from "~/entity/types";
-import { product } from "~/integrations/tanstack-query/generated/catalog/product.gen";
+import { product } from "~/integrations/tanstack-query/domains/product";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { Panel } from "~/ui/layout/panel";

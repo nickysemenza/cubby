@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
-import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
+import { suggestions } from "~/integrations/tanstack-query/domains/suggestions";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";

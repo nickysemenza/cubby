@@ -23,7 +23,7 @@ import {
   ListWorkbench,
   useBoundedListWorkbench,
 } from "~/entity/table/list-workbench";
-import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog/purchase.gen";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/domains/purchase";
 import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import { formatCurrency } from "~/lib/number-format";
 import { purchaseLabel } from "~/lib/purchase-label";

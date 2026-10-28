@@ -30,6 +30,28 @@ const calendar = defineOperationDomain(calendarContract, {
 });
 
 describe("operation catalog", () => {
+  it("rejects invalid contract cache policy when the domain initializes", () => {
+    const schemas = { input: z.object({}), output: z.object({}) };
+    expect(() =>
+      defineOperationDomain(
+        defineContract("calendar", {
+          range: Object.assign(query(schemas), {
+            invalidates: ["calendarFeed"],
+          }),
+        }),
+      ),
+    ).toThrow("calendar.range is a query and cannot declare invalidates");
+    expect(() =>
+      defineOperationDomain(
+        defineContract("calendar", {
+          rotateFeed: Object.assign(mutation(schemas), {
+            cache: { tags: [["calendar"]] },
+          }),
+        }),
+      ),
+    ).toThrow("calendar.rotateFeed is a mutation and cannot declare cache");
+  });
+
   it("reads current data when an invalidated inactive baseline is fetched later", async () => {
     const restore = overrideStartDispatch(
       async (_operation, _input, { headers }) => ({

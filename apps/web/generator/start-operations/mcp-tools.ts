@@ -6,7 +6,7 @@ import {
   kernelActionName,
   type McpActionOverride,
 } from "../../src/contracts/mcp-define.ts";
-import { generatedHeader } from "../artifacts.ts";
+import { tsModule } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import {
   assertContractPurity,
@@ -358,98 +358,107 @@ const resolveMcpTools = async (): Promise<ResolvedTool[]> => {
   return resolved.sort((a, b) => a.name.localeCompare(b.name));
 };
 
-const property = (key: string) =>
-  /^[A-Za-z_$][\w$]*$/u.test(key) ? `.${key}` : `[${JSON.stringify(key)}]`;
+const renderServerBindings = (tools: ResolvedTool[]): string =>
+  tsModule({
+    imports: [
+      {
+        from: "~/server/mcp/tool-bindings",
+        names: ["McpToolData"],
+        typeOnly: true,
+      },
+    ],
+    consts: [
+      {
+        name: "MCP_TOOL_DATA",
+        satisfies: "McpToolData",
+        value: Object.fromEntries(
+          tools.map((tool) => [
+            tool.name,
+            {
+              readOnly: tool.readOnly,
+              destructive: tool.destructive,
+              openWorld: tool.openWorld,
+              actions: Object.fromEntries(
+                tool.actions.map((action) => [
+                  action.name,
+                  "kernel" in action
+                    ? { kind: action.kind, kernel: action.kernel }
+                    : {
+                        kind: action.kind,
+                        operation: action.operation,
+                        contract: action.contractExportName,
+                        member: action.contractMember,
+                      },
+                ]),
+              ),
+            },
+          ]),
+        ),
+      },
+      {
+        name: "MCP_TOOL_DECLARATIONS",
+        value: Object.fromEntries(
+          tools.map((tool) => [tool.name, { description: tool.description }]),
+        ),
+      },
+    ],
+  });
 
-const renderServerBindings = (tools: ResolvedTool[]): string => {
-  const imports = new Map<string, Set<string>>();
-  for (const tool of tools)
-    for (const action of tool.actions)
-      if ("contractModule" in action) {
-        const contractNames = imports.get(action.contractModule) ?? new Set();
-        contractNames.add(action.contractExportName);
-        imports.set(action.contractModule, contractNames);
-      }
-  const importLines = [...imports]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(
-      ([module, names]) =>
-        `import { ${[...names].sort().join(", ")} } from ${JSON.stringify(module)};`,
-    );
-  const body = tools
-    .map((tool) => {
-      const actions = tool.actions
-        .map((action) => {
-          const spec = `MCP_TOOLS${property(tool.name)}.actions${property(action.name)}`;
-          const target =
-            "kernel" in action
-              ? `kernel: KERNEL_MCP_ACTIONS${property(action.kernel)}`
-              : `operation: ${JSON.stringify(action.operation)}`;
-          const actionSpec =
-            "kernel" in action
-              ? spec
-              : `mcpCapabilityAction(${action.contractExportName}.ops${property(action.contractMember)}, MCP_ACTION_OVERRIDES[${JSON.stringify(action.operation)} as keyof typeof MCP_ACTION_OVERRIDES])`;
-          return `      ${JSON.stringify(action.name)}: { kind: ${JSON.stringify(action.kind)}, spec: ${actionSpec}, ${target} },`;
-        })
-        .join("\n");
-      return `  ${JSON.stringify(tool.name)}: {\n    readOnly: ${tool.readOnly},\n    destructive: ${tool.destructive},\n    openWorld: ${tool.openWorld},\n    actions: {\n${actions}\n    },\n  },`;
-    })
-    .join("\n");
-  return (
-    generatedHeader +
-    `import { MCP_ACTION_OVERRIDES, MCP_TOOLS } from "~/contracts/mcp-tools";\n` +
-    `import { mcpCapabilityAction } from "~/contracts/mcp-define";\n` +
-    `import { KERNEL_MCP_ACTIONS } from "~/server/mcp/kernel-actions";\n` +
-    `import type { McpToolBindings } from "~/server/mcp/tools/tool-registration";\n` +
-    `${importLines.join("\n")}\n\n` +
-    `/** Every MCP tool with its actions bound to operation ids; read by \`registerMcpTools\`. */\n` +
-    `export const MCP_TOOL_BINDINGS = {\n${body}\n} as const satisfies McpToolBindings;\n\n` +
-    `/** Each tool's resolved description; a kind-split tool inherits its contract group's. */\n` +
-    `export const MCP_TOOL_DECLARATIONS: Readonly<Record<keyof typeof MCP_TOOL_BINDINGS, { description: string }>> = {\n${tools.map((tool) => `  ${JSON.stringify(tool.name)}: { description: ${JSON.stringify(tool.description)} },`).join("\n")}\n};\n`
-  );
-};
-
-const renderNames = (tools: ResolvedTool[]): string => {
-  const table = tools
-    .map(
-      (tool) =>
-        `  ${JSON.stringify(tool.name)}: [${tool.actions.map((action) => JSON.stringify(action.name)).join(", ")}],`,
-    )
-    .join("\n");
-  const readOnly = tools
-    .filter((tool) => tool.readOnly)
-    .map((tool) => JSON.stringify(tool.name))
-    .join(", ");
-  const mutations = tools
-    .flatMap((tool) =>
-      tool.actions
-        .filter((action) => action.kind === "mutation")
-        .map((action) => JSON.stringify(`${tool.name}.${action.name}`)),
-    )
-    .join(", ");
-  const perTool = tools
-    .map(
-      (tool) =>
-        `export type ${pascalCase(tool.name)}Action = CubbyMcpToolActionName<${JSON.stringify(tool.name)}>;`,
-    )
-    .join("\n");
-  return (
-    generatedHeader +
-    `/** Capability actions come from operation contracts; kernel actions from \`apps/web/src/contracts/mcp-tools.ts\`. */\n` +
-    `export const CUBBY_MCP_TOOL_ACTIONS = {\n${table}\n} as const;\n\n` +
-    `/** Tools whose actions are all queries (MCP \`readOnlyHint\`). */\n` +
-    `export const CUBBY_MCP_READ_ONLY_TOOLS = [${readOnly}] as const;\n\n` +
-    `/** Every generated mutation action, including mutations in mixed tools. */\n` +
-    `export const CUBBY_MCP_MUTATION_ACTIONS = [${mutations}] as const;\n\n` +
-    `export type CubbyMcpToolName = keyof typeof CUBBY_MCP_TOOL_ACTIONS;\n` +
-    `export type CubbyMcpToolActionName<Tool extends CubbyMcpToolName> =\n  (typeof CUBBY_MCP_TOOL_ACTIONS)[Tool][number];\n` +
-    `/** \`\${tool}.\${action}\`: the unit the purchase agent is allowed and authorized by. */\n` +
-    `export type CubbyMcpToolAction = {\n  [Tool in CubbyMcpToolName]: \`\${Tool}.\${CubbyMcpToolActionName<Tool>}\`;\n}[CubbyMcpToolName];\n` +
-    `/** Every write action — each needs a purchase-agent capability decision. */\n` +
-    `export type CubbyMcpMutationAction = (typeof CUBBY_MCP_MUTATION_ACTIONS)[number];\n\n` +
-    `${perTool}\n`
-  );
-};
+const renderNames = (tools: ResolvedTool[]): string =>
+  tsModule({
+    imports: [
+      {
+        from: "../mcp-tool-name-types",
+        typeOnly: true,
+        names: ["ToolName", "ToolActionName", "ToolAction", "TupleMember"],
+      },
+    ],
+    consts: [
+      {
+        name: "CUBBY_MCP_TOOL_ACTIONS",
+        value: Object.fromEntries(
+          tools.map((tool) => [
+            tool.name,
+            tool.actions.map((action) => action.name),
+          ]),
+        ),
+      },
+      {
+        name: "CUBBY_MCP_READ_ONLY_TOOLS",
+        value: tools.filter((tool) => tool.readOnly).map((tool) => tool.name),
+      },
+      {
+        name: "CUBBY_MCP_MUTATION_ACTIONS",
+        value: tools.flatMap((tool) =>
+          tool.actions
+            .filter((action) => action.kind === "mutation")
+            .map((action) => `${tool.name}.${action.name}`),
+        ),
+      },
+    ],
+    types: [
+      {
+        name: "CubbyMcpToolName",
+        target: "ToolName<typeof CUBBY_MCP_TOOL_ACTIONS>",
+      },
+      {
+        name: "CubbyMcpToolActionName<Tool extends CubbyMcpToolName>",
+        target: "ToolActionName<typeof CUBBY_MCP_TOOL_ACTIONS, Tool>",
+      },
+      {
+        name: "CubbyMcpToolAction",
+        target: "ToolAction<typeof CUBBY_MCP_TOOL_ACTIONS>",
+      },
+      {
+        name: "CubbyMcpMutationAction",
+        target: "TupleMember<typeof CUBBY_MCP_MUTATION_ACTIONS>",
+      },
+      ...tools.map((tool) => ({
+        name: `${pascalCase(tool.name)}Action`,
+        target: `CubbyMcpToolActionName<${JSON.stringify(tool.name)}>`,
+      })),
+    ],
+  });
 
 /**
  * Stage 2b of `pnpm generate`: the MCP tool bindings (server) and the tool /
@@ -460,8 +469,19 @@ export const renderMcpToolArtifacts = async (): Promise<EntityArtifacts[]> => {
   const tools = await resolveMcpTools();
   return [
     {
-      relativePath: "apps/web/src/server/generated/mcp-tools.gen.ts",
+      relativePath: "apps/web/src/server/generated/mcp-tool-data.gen.ts",
       source: renderServerBindings(tools),
+    },
+    {
+      relativePath: "apps/web/src/server/generated/mcp-tools.gen.ts",
+      source: tsModule({
+        exports: [
+          {
+            from: "~/server/mcp/tool-bindings",
+            names: ["MCP_TOOL_BINDINGS", "MCP_TOOL_DECLARATIONS"],
+          },
+        ],
+      }),
     },
     {
       relativePath: "packages/schemas/src/generated/mcp-tool-names.gen.ts",

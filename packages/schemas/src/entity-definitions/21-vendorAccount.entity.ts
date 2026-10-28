@@ -1,5 +1,6 @@
 import { timestampField } from "./field-policy";
 import { z } from "zod";
+import { dateTime } from "../codec";
 import {
   ledgerPartyShortcode,
   vendorAccountShortcode,
@@ -185,7 +186,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         display: { columnGroup: "Imports", format: "timestamp" },
         validation: {
-          read: z.date().nullable(),
+          read: dateTime.nullable(),
           create: null,
           update: null,
         },
@@ -204,7 +205,7 @@ export const { definition, readSchemas } = defineEntityModel({
           format: "timestamp",
         },
         validation: {
-          read: z.date().nullable(),
+          read: dateTime.nullable(),
           create: null,
           update: null,
         },

@@ -19,7 +19,7 @@ import {
 } from "react";
 
 import { entities } from "~/entity/entities";
-import { search } from "~/integrations/tanstack-query/generated/catalog/search.gen";
+import { search } from "~/integrations/tanstack-query/domains/search";
 import { cn } from "~/lib/utils";
 import { MobileCard } from "~/ui/data-table/mobile-card";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

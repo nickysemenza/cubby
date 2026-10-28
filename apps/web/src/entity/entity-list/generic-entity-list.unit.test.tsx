@@ -28,11 +28,11 @@ import { listPage } from "~/entity/routing/list-page";
 import { mealNameUpdate } from "~/features/meal/list-columns";
 import { installFeatures } from "~/features/registry";
 import { mock } from "~/lib/test/mock-schema";
-import {
-  ledgerPartyListItem,
-  mealListItem,
-  productListItem,
-} from "~/server/generated/entity-lists.server.gen";
+import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
+const ledgerPartyListItem = getEntityListItemSchema("ledgerParty");
+const mealListItem = getEntityListItemSchema("meal");
+const productListItem = getEntityListItemSchema("product");
+
 import type {
   ListQueryOptionsFn,
   ListQueryResponse,

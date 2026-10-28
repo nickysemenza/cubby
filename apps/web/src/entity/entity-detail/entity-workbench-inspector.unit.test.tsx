@@ -12,8 +12,8 @@ import {
 } from "~/entity/fields/field-envelope.fixtures";
 import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { installFeatures } from "~/features/registry";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
-import { recommendations } from "~/integrations/tanstack-query/generated/catalog/recommendations.gen";
+import { entityGraph } from "~/integrations/tanstack-query/domains/entityGraph";
+import { recommendations } from "~/integrations/tanstack-query/domains/recommendations";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { loadEntityMetadata } from "~/server/entity-metadata/loader.server";
 

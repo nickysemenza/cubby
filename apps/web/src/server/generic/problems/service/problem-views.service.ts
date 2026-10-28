@@ -1,4 +1,4 @@
-import { amount } from "@cubby/schemas/codec";
+import { amount, dateTime } from "@cubby/schemas/codec";
 import type { SortParams } from "@cubby/schemas/pagination";
 import type {
   ProblemKey,
@@ -259,7 +259,7 @@ const withoutMappingsCardSchema = productWithoutMappingsSchema
 
 const staleLocationCardSchema = refSchema.extend({
   type: z.string().nullable(),
-  lastBulkInventory: z.date().nullable(),
+  lastBulkInventory: dateTime.nullable(),
   inventoryEntries: z.array(z.unknown()),
 });
 

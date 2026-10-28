@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { installFeatures } from "~/features/registry";
-import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
-import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
+import { entityMutation } from "~/integrations/tanstack-query/domains/entityMutation";
+import { StartOperationError } from "~/lib/start-operation-error";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 

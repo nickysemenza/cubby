@@ -9,7 +9,7 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/domains/entityGraph";
 import { RecordGroup, RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";

@@ -3,7 +3,7 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
+import { meal } from "~/integrations/tanstack-query/domains/meal";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { Button } from "~/ui/primitives/button";
 

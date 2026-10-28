@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import type { ChildTableDeclaration } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import { generatedHeader } from "../../artifacts.ts";
 import { stringValue } from "../declarations.ts";
@@ -46,26 +47,27 @@ export const renderEntityDatabaseArtifacts = (
     renderEntityEdgesArtifact(entities),
     {
       relativePath: "apps/web/src/server/db/generated/entity-tables.gen.ts",
-      source: entityTables.relations,
+      source: rawSource(entityTables.relations),
     },
     {
       relativePath:
         "apps/web/src/server/db/generated/entity-table-definitions.gen.ts",
-      source: entityTables.definitions,
+      source: rawSource(entityTables.definitions),
     },
     {
       relativePath:
         "apps/web/src/server/db/generated/identity-storage-tables.gen.ts",
-      source: renderIdentityStorageTablesArtifact(entities),
+      source: rawSource(renderIdentityStorageTablesArtifact(entities)),
     },
     {
       relativePath: "apps/web/src/server/generated/shortcode-tables.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        "// Generated table imports stay one entity per line.\n// oxfmt-ignore\n" +
-        `import {\n${shortcodeTableImportNames.map((name) => `  ${name},`).join("\n")}\n} from "~/server/db/generated/entity-table-definitions.gen";\n\n` +
-        "// Generated table bindings stay one entity per line.\n// oxfmt-ignore\n" +
-        `export const SHORTCODE_TABLE = {\n${shortcodeTableBindings}\n} as const;\n`,
+          "// Generated table imports stay one entity per line.\n// oxfmt-ignore\n" +
+          `import {\n${shortcodeTableImportNames.map((name) => `  ${name},`).join("\n")}\n} from "~/server/db/generated/entity-table-definitions.gen";\n\n` +
+          "// Generated table bindings stay one entity per line.\n// oxfmt-ignore\n" +
+          `export const SHORTCODE_TABLE = {\n${shortcodeTableBindings}\n} as const;\n`,
+      ),
     },
   ];
 };

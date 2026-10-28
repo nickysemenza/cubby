@@ -13,7 +13,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import pluralize from "pluralize";
 import { useCallback, useId, useMemo, useRef } from "react";
 
-import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
+import { recipe } from "~/integrations/tanstack-query/domains/recipe";
 import { flattenRecipes } from "~/lib/cookbook-graph";
 import { cookbookRecipeSignature } from "~/lib/recipe-signature";
 import { Disclosure } from "~/ui/layout/disclosure";

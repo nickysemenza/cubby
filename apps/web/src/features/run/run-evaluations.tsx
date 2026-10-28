@@ -16,7 +16,7 @@ import {
   formatMinutesLeft,
   formatPace,
 } from "~/features/activity/work-streams";
-import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
+import { runDetail } from "~/integrations/tanstack-query/domains/runDetail";
 import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";

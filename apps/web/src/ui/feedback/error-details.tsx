@@ -66,13 +66,9 @@ export function ErrorDetailsBody({ error }: { error: unknown }) {
       {diagnostics?.truncated && (
         <p>Repeated or cyclic causes are shown once.</p>
       )}
-      {(diagnostics?.http || diagnostics?.retries) && (
+      {diagnostics?.http && (
         <pre className="font-mono break-words whitespace-pre-wrap">
-          {JSON.stringify(
-            { http: diagnostics.http, retries: diagnostics.retries },
-            null,
-            2,
-          )}
+          {JSON.stringify({ http: diagnostics.http }, null, 2)}
         </pre>
       )}
       {detail.requestId && (

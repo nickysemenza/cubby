@@ -8,7 +8,7 @@ import { uniqBy } from "es-toolkit";
 import { Fragment, useMemo } from "react";
 
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { auditLog } from "~/integrations/tanstack-query/generated/catalog/auditLog.gen";
+import { auditLog } from "~/integrations/tanstack-query/domains/auditLog";
 import { authClient } from "~/lib/auth-client";
 import { householdLocalDate } from "~/lib/household-date";
 import { DateDisplay } from "~/ui/common/date-display";

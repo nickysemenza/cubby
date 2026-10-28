@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import {
   photoCategories,
@@ -359,7 +360,7 @@ export const renderImagePolicyArtifacts = (
   return [
     {
       relativePath: "packages/schemas/src/generated/image-policy.gen.ts",
-      source: ts,
+      source: rawSource(ts),
     },
     {
       relativePath:

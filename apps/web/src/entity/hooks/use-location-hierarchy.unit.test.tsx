@@ -5,7 +5,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
 import { locationReadFixture } from "~/features/location/location-read.fixtures";
-import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
+import { location } from "~/integrations/tanstack-query/domains/location";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { useLocationHierarchy } from "./use-location-hierarchy";

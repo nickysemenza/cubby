@@ -2,25 +2,15 @@ import type { z } from "zod";
 
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
-import {
-  recordDatabaseWrite,
-  registerFreshnessMember,
-  memberWriteCookie,
-} from "~/server/db/freshness/member-marker";
+import { recordDatabaseWrite } from "~/server/db/freshness/member-marker";
 import { withErrorReporting } from "~/server/errors/report-error";
-import {
-  authenticate,
-  type Authenticate,
-  BROWSER_AUTH,
-  challengeError,
-  isChallenge,
-} from "~/server/http/authenticate";
-import { actorSpanAttributes } from "~/server/http/request-context";
 import type { Workload } from "~/server/http/workload";
-import { observeOperation } from "~/server/observability/observed-request";
-import { getRequestId } from "~/server/observability/tracing";
 import {
-  type PublicStartOperationError,
+  type ObservedFailure,
+  observeOperation,
+} from "~/server/observability/observed-request";
+import { type AppSpan, getRequestId } from "~/server/observability/tracing";
+import {
   type StartOperationResult,
   type UnparsedStartOperationData,
   unparsedStartOperationDataSchema,
@@ -28,41 +18,44 @@ import {
 import {
   assertClientMayWrite,
   type AuthenticatedStartOperationContext,
+  CHANNEL_OBSERVATION,
+  deadlineClassOf,
+  deadlineExceededError,
+  enterOperationSpan,
   normalizeStartOperationError,
   type OperationStage,
+  operationFailure,
+  type StartOperationRequest,
+  type StartOperationRuntime,
   throwIfStartOperationAborted,
+  withinBudget,
+  withReadMarker,
 } from "~/server/operation-runtime/start-operation.server";
 
-export type WorkflowStream = ReadableStream<
-  StartOperationResult<UnparsedStartOperationData>
->;
+type StreamResult = StartOperationResult<UnparsedStartOperationData>;
 
-/** Keep diagnostic envelopes: Start's thrown Error transport preserves only message. */
-export const workflowStreamError = (
-  error: PublicStartOperationError,
-): WorkflowStream =>
-  new ReadableStream({
-    start(controller) {
-      controller.enqueue({ ok: false, error });
-      controller.close();
-    },
-  });
+export type WorkflowStream = ReadableStream<StreamResult>;
 
 export interface WorkflowStreamRuntime {
-  authenticate: Authenticate;
-  observe: typeof observeOperation;
-  recordDatabaseWrite: typeof recordDatabaseWrite;
+  observe: StartOperationRuntime["observe"];
+  recordDatabaseWrite: (operation: string) => Promise<void>;
 }
 
 const productionWorkflowStreamRuntime = {
-  authenticate,
   observe: observeOperation,
   recordDatabaseWrite,
 } satisfies WorkflowStreamRuntime;
 
-export async function workflowStream<InputSchema extends z.ZodType, Event>(
+/**
+ * Run one stream under the principal the endpoint authenticated, with the
+ * unary runner's lifecycle: channel observation, deadline budget, client-write
+ * gate, staged normalization, write records and read markers. Each event is
+ * a result envelope; the stream ends with a failure envelope or a data-less
+ * success envelope carrying the final read marker.
+ */
+export function workflowStream<InputSchema extends z.ZodType, Event>(
   options: {
-    request: Request;
+    request: StartOperationRequest;
     input: UnparsedStartOperationData;
     operation: StartOperationIdOfKind<"subscription">;
     inputSchema: InputSchema;
@@ -75,108 +68,146 @@ export async function workflowStream<InputSchema extends z.ZodType, Event>(
     ) => AsyncIterable<unknown> | Promise<AsyncIterable<unknown>>;
   },
   runtime: WorkflowStreamRuntime = productionWorkflowStreamRuntime,
-): Promise<WorkflowStream> {
-  const abortController = new AbortController();
-  const signal = AbortSignal.any([
-    options.request.signal,
-    abortController.signal,
-  ]);
+): WorkflowStream {
+  const { principal, headers } = options.request;
+  const definition = startOperationDefinition(options.operation);
+  const requestId = getRequestId(headers);
+  const cancelled = new AbortController();
+  const signal = AbortSignal.any([options.request.signal, cancelled.signal]);
+  const workload = options.workload ?? "import-stream";
+  let stage: OperationStage = "context";
   let mutationStarted = false;
+  let failed = false;
+  const failureContext = {
+    operation: options.operation,
+    authenticated: true,
+    headers,
+  };
+
   return new ReadableStream({
     start(controller) {
-      void withErrorReporting(async () => {
-        // Authentication and input parsing happen INSIDE the span, the same
-        // order `runStartOperation` uses, so a rejected actor is observed
-        // rather than silently short-circuited — and so an invalid payload
-        // never gets to report before an unauthorized caller does.
-        let stage: OperationStage = "context";
-        let actorVerified = false;
+      const pump = async (
+        span: AppSpan,
+        budgetSignal: AbortSignal,
+      ): Promise<{ observedError?: ObservedFailure }> => {
         try {
-          await runtime.observe(
-            startOperationDefinition(options.operation),
-            {
-              origin: "ui",
-              workload: options.workload ?? "import-stream",
-            },
-            async (span) => {
-              span.setAttribute("cubby.authenticated", false);
-              throwIfStartOperationAborted(signal);
-              const principal = await runtime.authenticate(
-                options.request,
-                BROWSER_AUTH,
-              );
-              if (isChallenge(principal)) throw challengeError(principal);
-              // A fresh request context has one database handle, the
-              // authoritative one, so a stream needs no read-policy selection.
-              const { context } = principal;
-              registerFreshnessMember(context.auth);
-              span.setAttributes({
-                "cubby.authenticated": true,
-                ...actorSpanAttributes(
-                  context.auth.sessionId,
-                  context.actorContext,
-                ),
-              });
+          throwIfStartOperationAborted(signal);
+          enterOperationSpan(span, principal);
+          assertClientMayWrite(principal);
+          stage = "input";
+          const input = options.inputSchema.parse(options.input);
 
-              actorVerified = true;
-              assertClientMayWrite(principal);
-              stage = "input";
-              const input = options.inputSchema.parse(options.input);
-
-              stage = "run";
-              mutationStarted = true;
-              const events = await options.run(context, input, signal);
-              for await (const event of events) {
-                throwIfStartOperationAborted(signal);
-                stage = "output";
-                const parsed = options.eventSchema.parse(event);
-                await runtime.recordDatabaseWrite(options.operation);
-                controller.enqueue({
-                  ok: true,
-                  data: unparsedStartOperationDataSchema.parse(parsed),
-                  readMarker: await memberWriteCookie(),
-                });
-                stage = "run";
-              }
-            },
+          stage = "run";
+          mutationStarted = true;
+          const events = await options.run(
+            // A fresh request context has one database handle, the
+            // authoritative one, so a stream needs no read-policy selection.
+            principal.context,
+            input,
+            budgetSignal,
           );
-        } catch (error) {
-          if (!signal.aborted) {
-            const normalized = normalizeStartOperationError(
-              error,
-              stage,
-              getRequestId(options.request.headers),
-              {
-                operation: options.operation,
-                authenticated: actorVerified,
-                headers: options.request.headers,
-              },
+          for await (const event of events) {
+            throwIfStartOperationAborted(budgetSignal);
+            stage = "output";
+            const parsed = options.eventSchema.parse(event);
+            await runtime.recordDatabaseWrite(options.operation);
+            controller.enqueue(
+              await withReadMarker<StreamResult>({
+                ok: true,
+                data: unparsedStartOperationDataSchema.parse(parsed),
+              }),
             );
-            if (mutationStarted) {
-              await runtime.recordDatabaseWrite(options.operation);
-              mutationStarted = false;
-            }
-            controller.enqueue({
-              ok: false,
-              error: normalized.publicError,
-              readMarker: await memberWriteCookie(),
-            });
+            stage = "run";
           }
-        } finally {
+          return {};
+        } catch (error) {
+          if (signal.aborted) throw error;
+          if (budgetSignal.aborted) return {};
+          const normalized = operationFailure(
+            span,
+            error,
+            stage,
+            requestId,
+            failureContext,
+          );
           if (mutationStarted) {
             await runtime.recordDatabaseWrite(options.operation);
-            const readMarker = await memberWriteCookie();
-            // A generator may commit after its last progress event. Deliver the
-            // final marker without inventing a domain progress event.
-            if (readMarker && !signal.aborted)
-              controller.enqueue({ ok: true, data: undefined, readMarker });
+            mutationStarted = false;
           }
-          if (!abortController.signal.aborted) controller.close();
+          failed = true;
+          controller.enqueue(
+            await withReadMarker<StreamResult>({
+              ok: false,
+              error: normalized.publicError,
+            }),
+          );
+          return { observedError: normalized.observedError };
+        }
+      };
+
+      void withErrorReporting(async () => {
+        try {
+          await withinBudget(
+            principal.budget,
+            deadlineClassOf("subscription"),
+            signal,
+            (budgetSignal) =>
+              runtime.observe<{ observedError?: ObservedFailure }>(
+                definition,
+                {
+                  origin: CHANNEL_OBSERVATION[principal.channel].origin,
+                  workload,
+                  requestId,
+                  inspectResult: (result) =>
+                    result.observedError
+                      ? {
+                          workload,
+                          error: result.observedError,
+                          reported: true,
+                        }
+                      : { workload },
+                },
+                (span) => pump(span, budgetSignal),
+              ),
+            async (budgetMs) => {
+              if (mutationStarted) {
+                await runtime.recordDatabaseWrite(options.operation);
+                mutationStarted = false;
+              }
+              failed = true;
+              controller.enqueue(
+                await withReadMarker<StreamResult>({
+                  ok: false,
+                  error: normalizeStartOperationError(
+                    deadlineExceededError(options.operation, budgetMs),
+                    stage,
+                    requestId,
+                    failureContext,
+                  ).publicError,
+                }),
+              );
+              return {};
+            },
+          );
+        } catch {
+          // SILENT: only cancellation escapes `pump`; the client that
+          // cancelled no longer reads this stream.
+        } finally {
+          if (mutationStarted)
+            await runtime.recordDatabaseWrite(options.operation);
+          // A completed stream ends with a data-less envelope, so the client
+          // tells completion from a cut-off body. It carries the marker for
+          // commits after the last progress event.
+          if (!failed && !signal.aborted)
+            controller.enqueue(
+              await withReadMarker<StreamResult>({ ok: true, data: undefined }),
+            );
+          if (!cancelled.signal.aborted) controller.close();
         }
       });
     },
     async cancel(reason) {
-      abortController.abort(reason);
+      cancelled.abort(reason);
       if (mutationStarted) await runtime.recordDatabaseWrite(options.operation);
     },
   });

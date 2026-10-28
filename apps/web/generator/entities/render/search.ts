@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import {
   isSlotListView,
   listViewId,
@@ -185,44 +186,50 @@ export const renderSearchArtifacts = (
   return [
     {
       relativePath: "apps/web/src/entity/generated/entity-search.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import type { Entity } from "@cubby/schemas/entity";\n' +
-        'import { CURRENT_MEMBER_FILTER } from "@cubby/shared";\n' +
-        `${imports}\n` +
-        'import { z } from "zod";\n\n' +
-        'import { tableSearchFields } from "~/ui/data-table/table-search";\n' +
-        `import { ${tokenImports} } from "~/entity/filters";\n` +
-        'import { urlEnumListParam, urlPlainDateParam, urlShortcodeListParam, urlStringParam } from "~/lib/search-params";\n\n' +
-        renderRecord({
-          name: "entityFilterUrlKeyRoster",
-          entries: Object.fromEntries(
-            filterEntities.map((entity) => {
-              const primarySearch = resolvedPrimarySearch(entity);
-              return [
-                entity.key,
-                primarySearch === null
-                  ? entity.filterUrlKeys
-                  : [...new Set([primarySearch.key, ...entity.filterUrlKeys])],
-              ];
-            }),
-          ),
-          satisfies: "Record<Entity, readonly string[]>",
-          comment: "// Generated data stays one entity per line.",
-          exported: false,
-        }) +
-        "\n" +
-        "/** The URL keys an entity accepts for its canonical filter assembly. */\n" +
-        "export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>\n" +
-        "  entityFilterUrlKeyRoster[entity] ?? [];\n\n" +
-        "// A filter list also accepts the tokens the filter UI writes into it.\n" +
-        "const withTokens = <T extends z.ZodType<string>>(\n" +
-        "  schema: T,\n" +
-        "  tokens: readonly [string, ...string[]],\n" +
-        ") => z.union([schema, z.enum(tokens)]);\n" +
-        "// `?create=true` opens the capture dialog; a real boolean, not a string.\n" +
-        "const createSearchField = z.boolean().optional().catch(undefined);\n\n" +
-        `export const entitySearch = {\n${entries}\n};\n`,
+          'import type { Entity } from "@cubby/schemas/entity";\n' +
+          'import { CURRENT_MEMBER_FILTER } from "@cubby/shared";\n' +
+          `${imports}\n` +
+          'import { z } from "zod";\n\n' +
+          'import { tableSearchFields } from "~/ui/data-table/table-search";\n' +
+          `import { ${tokenImports} } from "~/entity/filters";\n` +
+          'import { urlEnumListParam, urlPlainDateParam, urlShortcodeListParam, urlStringParam } from "~/lib/search-params";\n\n' +
+          renderRecord({
+            name: "entityFilterUrlKeyRoster",
+            entries: Object.fromEntries(
+              filterEntities.map((entity) => {
+                const primarySearch = resolvedPrimarySearch(entity);
+                return [
+                  entity.key,
+                  primarySearch === null
+                    ? entity.filterUrlKeys
+                    : [
+                        ...new Set([
+                          primarySearch.key,
+                          ...entity.filterUrlKeys,
+                        ]),
+                      ],
+                ];
+              }),
+            ),
+            satisfies: "Record<Entity, readonly string[]>",
+            comment: "// Generated data stays one entity per line.",
+            exported: false,
+          }) +
+          "\n" +
+          "/** The URL keys an entity accepts for its canonical filter assembly. */\n" +
+          "export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>\n" +
+          "  entityFilterUrlKeyRoster[entity] ?? [];\n\n" +
+          "// A filter list also accepts the tokens the filter UI writes into it.\n" +
+          "const withTokens = <T extends z.ZodType<string>>(\n" +
+          "  schema: T,\n" +
+          "  tokens: readonly [string, ...string[]],\n" +
+          ") => z.union([schema, z.enum(tokens)]);\n" +
+          "// `?create=true` opens the capture dialog; a real boolean, not a string.\n" +
+          "const createSearchField = z.boolean().optional().catch(undefined);\n\n" +
+          `export const entitySearch = {\n${entries}\n};\n`,
+      ),
     },
   ];
 };

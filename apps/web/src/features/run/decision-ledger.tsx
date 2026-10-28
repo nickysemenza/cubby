@@ -19,7 +19,7 @@ import {
   ImpactLabels,
 } from "~/entity/suggestions/queue/suggestion-values";
 import RTable from "~/entity/table/table";
-import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
+import { suggestions } from "~/integrations/tanstack-query/domains/suggestions";
 import { formatCount } from "~/lib/number-format";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {

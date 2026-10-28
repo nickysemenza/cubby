@@ -38,10 +38,7 @@ import {
   purchaseAgentSelfGoverned,
 } from "~/server/mcp/purchase-agent-protocol";
 import { getRequestId } from "~/server/observability/tracing";
-import {
-  dispatchStartOperation,
-  type StartOperationHandlerLoaders,
-} from "~/server/operation-runtime/start-operation-dispatch.server";
+import { dispatchOperation } from "~/server/operation-runtime/operation-dispatch.server";
 import {
   type PublicStartOperationError,
   publicStartOperationErrorSchema,
@@ -77,7 +74,7 @@ import { safeToJsonSchema, sdkOutputSchema } from "./tool-json-schema";
  * `{ action, input }` schemas with a `describe` action; the entity-kernel tools
  * keep detailed schemas. Every action runs through the shared runner
  * (`runStartOperation`): an operation action by id through
- * `dispatchStartOperation`, a kernel verb as an ad hoc runner operation named
+ * `dispatchOperation`, a kernel verb as an ad hoc runner operation named
  * by its tool action. The runner owns read policy, the per-principal deadline,
  * calendar and freshness bookkeeping; this adapter owns tool grouping,
  * published schemas, output projections, the error shape, and the
@@ -122,8 +119,8 @@ export type McpToolBindings = Readonly<
 >;
 
 export interface McpToolRegistrationRuntime {
-  /** Operation handlers by id; tests bind their own. */
-  loaders?: StartOperationHandlerLoaders;
+  /** Operation actions' dispatch; tests bind their own handlers. */
+  dispatchOperation?: typeof dispatchOperation;
   /** The kernel verbs' runner; tests observe its side effects. */
   runStartOperation?: typeof runStartOperation;
   /** A composite unit's overrun write; tests observe it. */
@@ -518,21 +515,22 @@ function compileAction(
   // keys, and feeds telemetry and the purchase-agent fingerprint.
   const runMember = async (raw: ActionValue, call: ActionCall) => {
     const member = toMember(z.looseObject({}).parse(raw ?? {}));
-    const result = settled<ActionValue>(
-      await dispatchStartOperation(
-        {
-          operation: operationId,
-          input: unparsedStartOperationDataSchema.parse(member),
-          request: {
-            principal: call.principal,
-            headers: call.headers ?? new Headers(),
-            signal: call.signal,
-            modelBacked: spec.modelBacked,
-          },
-        },
-        call.runtime.loaders,
-      ),
+    const dispatched = await (
+      call.runtime.dispatchOperation ?? dispatchOperation
+    )(
+      call.principal,
+      {
+        operation: operationId,
+        input: unparsedStartOperationDataSchema.parse(member),
+        headers: call.headers ?? new Headers(),
+        signal: call.signal,
+        modelBacked: spec.modelBacked,
+      },
+      [kind],
     );
+    if (!("result" in dispatched))
+      throw new Error(`${operationId} is not a ${kind}`);
+    const result = settled<ActionValue>(dispatched.result);
     return spec.project ? spec.project(result, member) : result;
   };
 

@@ -1,4 +1,3 @@
-import superjson from "superjson";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -127,8 +126,8 @@ describe("request correlation header", () => {
     await expect(
       fetchWithRequestDiagnostics(
         async () =>
-          // The operation route's shape: the bare error, superjson-encoded.
-          Response.json(superjson.serialize(error), { status: 403 }),
+          // The operation route's shape: the bare error under its status.
+          Response.json(error, { status: 403 }),
         "/api/operations/entity.list",
         { headers: { "x-cubby-operation": "entity.list" } },
       ),

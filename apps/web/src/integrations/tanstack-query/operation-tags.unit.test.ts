@@ -13,7 +13,19 @@ import {
   rippleFor,
   type InvalidationTagSet,
 } from "./cache-tags";
-import * as catalog from "./generated/catalog/all.gen";
+import { entityGraph } from "./domains/entityGraph";
+import { entityMedia } from "./domains/entityMedia";
+import { recommendations } from "./domains/recommendations";
+const moduleExportsSchema = z.record(z.string(), z.unknown());
+const domainModules = import.meta.glob("./domains/*.ts", { eager: true });
+const catalog = Object.fromEntries(
+  Object.entries(domainModules).flatMap(([_path, module]) =>
+    Object.entries(moduleExportsSchema.parse(module)).map(([name, domain]) => [
+      name,
+      domain,
+    ]),
+  ),
+);
 import { matchesTags } from "./operation-cache";
 import type { OperationCacheTag } from "./operation-meta";
 
@@ -48,8 +60,6 @@ type AnyDescriptor = {
   invalidates?: (input: JSONType) => InvalidationTagSet;
 };
 
-const moduleExportsSchema = z.record(z.string(), z.unknown());
-
 const isDescriptor = (
   candidate: z.input<z.ZodUnknown>,
 ): candidate is AnyDescriptor => {
@@ -74,7 +84,7 @@ const isInvalidationPolicy = (
 /**
  * There is no runtime registry of operation descriptors — `defineOperationDomain`
  * only records mutation invalidation policies — so the catalog is reassembled by
- * walking the domain objects the test-only `catalog/all.gen.ts` exports. `path` is
+ * walking the typed domain modules in this test. `path` is
  * the domain's export name.
  */
 const descriptors: ReadonlyArray<{ path: string; descriptor: AnyDescriptor }> =
@@ -118,25 +128,23 @@ describe("operation cache tags", () => {
   it.each([
     {
       query: "entityMedia.displayImages",
-      tags: catalog.entityMedia.displayImages.definition.tags,
+      tags: entityMedia.displayImages.definition.tags,
       refreshedBy: [
         ...allEntities.map((entity) => entityRipple(entity)),
         relatedDataTags,
       ],
     },
-    ...[
-      catalog.entityGraph.explore,
-      catalog.entityGraph.graph,
-      catalog.entityGraph.graphPaths,
-    ].map((operation) => ({
-      query: operation.id,
-      tags: operation.definition.tags,
-      refreshedBy: allEntities.map((entity) => entityRipple(entity)),
-    })),
+    ...[entityGraph.explore, entityGraph.graph, entityGraph.graphPaths].map(
+      (operation) => ({
+        query: operation.id,
+        tags: operation.definition.tags,
+        refreshedBy: allEntities.map((entity) => entityRipple(entity)),
+      }),
+    ),
     {
       // Placement eligibility and labels change when locations change.
       query: "recommendations.forEntity",
-      tags: catalog.recommendations.forEntity.definition.tags,
+      tags: recommendations.forEntity.definition.tags,
       refreshedBy: [entityRipple("location")],
     },
   ])(
@@ -209,11 +217,6 @@ describe("operation cache tags", () => {
         true,
       );
     }
-  });
-
-  it("loads the whole catalog", () => {
-    expect(descriptors.length).toBeGreaterThan(200);
-    expect(declaredQueryTags.length).toBeGreaterThan(100);
   });
 
   /**

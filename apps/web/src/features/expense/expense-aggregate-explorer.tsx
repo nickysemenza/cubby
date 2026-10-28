@@ -17,7 +17,7 @@ import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import RTable from "~/entity/table/table";
-import { expense } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
+import { expense } from "~/integrations/tanstack-query/domains/expense";
 import { copyText } from "~/lib/clipboard";
 import {
   formatCount,

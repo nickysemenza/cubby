@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { bulkSchemaFor } from "./edit-validation.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import { EntityDeclarationError } from "../declarations.ts";
@@ -339,73 +340,75 @@ export const renderEntitySchemaArtifacts = (
     {
       relativePath:
         "apps/web/src/server/generated/entity-write-bindings.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import type { Database, DrizzleTransaction } from "~/server/db";\n' +
-        'import type { EntityId } from "@cubby/schemas/identifiers";\n' +
-        'import type { ShortcodeFor } from "@cubby/shared";\n' +
-        'import type { ShortcodeInsertValues } from "~/server/generic/shortcode/repo/shortcode-utils";\n' +
-        'import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";\n' +
-        `${writeSchemaImports}\n` +
-        'import type { z } from "zod";\n' +
-        `export const ENTITY_STORED_WRITES = {\n${writeBindings}\n} as const;\n`,
+          'import type { Database, DrizzleTransaction } from "~/server/db";\n' +
+          'import type { EntityId } from "@cubby/schemas/identifiers";\n' +
+          'import type { ShortcodeFor } from "@cubby/shared";\n' +
+          'import type { ShortcodeInsertValues } from "~/server/generic/shortcode/repo/shortcode-utils";\n' +
+          'import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";\n' +
+          `${writeSchemaImports}\n` +
+          'import type { z } from "zod";\n' +
+          `export const ENTITY_STORED_WRITES = {\n${writeBindings}\n} as const;\n`,
+      ),
     },
     {
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import { bulkUpdateInputSchema, bulkCollectionPatchSchema } from "@cubby/schemas/entity-collection";\n' +
-        'import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";\n' +
-        'import { entityMutationItemFor, entityMutationAppliedFields } from "@cubby/schemas/entity-mutation";\n' +
-        'import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";\n' +
-        'import { withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
-        'import { compileListReadSchema, mergeReadSchemas } from "~/entity/model/list-read-fields";\n' +
-        'import { listChildCountSchema, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
-        'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
-        `${schemaImports}\n` +
-        'import { z } from "zod";\n\n' +
-        'import { entitySchema } from "@cubby/schemas/entity-schema-bindings";\n\n' +
-        "// Generated schema correlations stay one entity per line.\n// oxfmt-ignore\n" +
-        `export const ENTITY_SCHEMA_BINDINGS = {\n${schemaBindings}\n} as const;\n` +
-        `export const ENTITY_REPOSITORY_READ_SCHEMAS = {\n${repositoryListBindings}\n} as const;\n` +
-        "export type EntitySchemaBindingMap = typeof ENTITY_SCHEMA_BINDINGS;\n" +
-        "export type EntitySchemaBindingEntity = keyof EntitySchemaBindingMap;\n" +
-        "type EntitySchemaBinding = EntitySchemaBindingMap[EntitySchemaBindingEntity];\n" +
-        "type EntityBinding = { crud: EntitySchemaBinding | null };\n\n" +
-        "// Generated bindings stay one entity per line.\n// oxfmt-ignore\n" +
-        `export const ENTITY_BINDINGS = {\n${bindings}\n} satisfies Record<ShortcodeEntity, EntityBinding>;\n\n` +
-        "// One generated variant per entity.\n// oxfmt-ignore\n" +
-        `export const generatedEntityCreateCommandSchema = z.union([\n  ${commandVariants("create")}\n]);\n\n` +
-        "// One generated variant per entity.\n// oxfmt-ignore\n" +
-        `export const generatedEntityUpdateCommandSchema = z.union([\n  ${commandVariants("update")}\n]);\n\n` +
-        "// MCP command variants are filtered by each literal's declared exposure.\n" +
-        "// oxfmt-ignore\n" +
-        `export const generatedMcpEntityCreateCommandSchema = z.union([\n  ${commandVariants("create", true)}\n]);\n\n` +
-        "// oxfmt-ignore\n" +
-        `export const generatedMcpEntityUpdateCommandSchema = z.union([\n  ${commandVariants("update", true)}\n]);\n\n` +
-        "/** The kernel owns the shared 1-500 unique-id bound, so it injects `ids`. */\n" +
-        "// One generated variant per bulk-updatable entity.\n// oxfmt-ignore\n" +
-        `export const generatedEntityBulkUpdateCommandSchema = ${bulkUpdateCommandFactory};\n` +
-        `export const generatedMcpEntityBulkUpdateCommandSchema = ${mcpBulkUpdateCommandFactory};\n` +
-        "\n" +
-        `export const generatedEntityMutationCreateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("create")}\n]);\n\n` +
-        `export const generatedEntityMutationUpdateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("update")}\n]);\n` +
-        "// One generated query result per correlated entity output.\n// oxfmt-ignore\n" +
-        `export const generatedEntityGetResultSchema = z.discriminatedUnion("entity", [\n  ${queryResultVariants("get")}\n]);\n\n` +
-        "// One generated query result per correlated entity output.\n// oxfmt-ignore\n" +
-        `export const generatedEntityListResultSchema = z.discriminatedUnion("entity", [\n  ${queryResultVariants("list")}\n]);\n` +
-        "\n// Merge summaries are workflow-specific JSON; the surviving item remains entity-correlated.\n// oxfmt-ignore\n" +
-        `export const generatedEntityMergeResultSchema = z.discriminatedUnion("entity", [\n  ${mergeResultVariants()}\n]);\n` +
-        "\n// MCP variants preserve entity correlation while projecting storage-only child ids.\n// oxfmt-ignore\n" +
-        `export const generatedMcpEntityGetResultSchema = z.discriminatedUnion("entity", [\n  ${queryResultVariants("get", true)}\n]);\n\n` +
-        "// oxfmt-ignore\n" +
-        `export const generatedMcpEntityListResultSchema = z.discriminatedUnion("entity", [\n  ${queryResultVariants("list", true)}\n]);\n\n` +
-        "// oxfmt-ignore\n" +
-        `export const generatedMcpEntityMutationCreateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("create", true)}\n]);\n\n` +
-        "// oxfmt-ignore\n" +
-        `export const generatedMcpEntityMutationUpdateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("update", true)}\n]);\n\n` +
-        "// oxfmt-ignore\n" +
-        `export const generatedMcpEntityMergeResultSchema = z.discriminatedUnion("entity", [\n  ${mergeResultVariants(true)}\n]);\n`,
+          'import { bulkUpdateInputSchema, bulkCollectionPatchSchema } from "@cubby/schemas/entity-collection";\n' +
+          'import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";\n' +
+          'import { entityMutationItemFor, entityMutationAppliedFields } from "@cubby/schemas/entity-mutation";\n' +
+          'import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";\n' +
+          'import { withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
+          'import { compileListReadSchema, mergeReadSchemas } from "~/entity/model/list-read-fields";\n' +
+          'import { listChildCountSchema, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
+          'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
+          `${schemaImports}\n` +
+          'import { z } from "zod";\n\n' +
+          'import { entitySchema } from "@cubby/schemas/entity-schema-bindings";\n\n' +
+          "// Generated schema correlations stay one entity per line.\n// oxfmt-ignore\n" +
+          `export const ENTITY_SCHEMA_BINDINGS = {\n${schemaBindings}\n} as const;\n` +
+          `export const ENTITY_REPOSITORY_READ_SCHEMAS = {\n${repositoryListBindings}\n} as const;\n` +
+          "export type EntitySchemaBindingMap = typeof ENTITY_SCHEMA_BINDINGS;\n" +
+          "export type EntitySchemaBindingEntity = keyof EntitySchemaBindingMap;\n" +
+          "type EntitySchemaBinding = EntitySchemaBindingMap[EntitySchemaBindingEntity];\n" +
+          "type EntityBinding = { crud: EntitySchemaBinding | null };\n\n" +
+          "// Generated bindings stay one entity per line.\n// oxfmt-ignore\n" +
+          `export const ENTITY_BINDINGS = {\n${bindings}\n} satisfies Record<ShortcodeEntity, EntityBinding>;\n\n` +
+          "// One generated variant per entity.\n// oxfmt-ignore\n" +
+          `export const generatedEntityCreateCommandSchema = z.union([\n  ${commandVariants("create")}\n]);\n\n` +
+          "// One generated variant per entity.\n// oxfmt-ignore\n" +
+          `export const generatedEntityUpdateCommandSchema = z.union([\n  ${commandVariants("update")}\n]);\n\n` +
+          "// MCP command variants are filtered by each literal's declared exposure.\n" +
+          "// oxfmt-ignore\n" +
+          `export const generatedMcpEntityCreateCommandSchema = z.union([\n  ${commandVariants("create", true)}\n]);\n\n` +
+          "// oxfmt-ignore\n" +
+          `export const generatedMcpEntityUpdateCommandSchema = z.union([\n  ${commandVariants("update", true)}\n]);\n\n` +
+          "/** The kernel owns the shared 1-500 unique-id bound, so it injects `ids`. */\n" +
+          "// One generated variant per bulk-updatable entity.\n// oxfmt-ignore\n" +
+          `export const generatedEntityBulkUpdateCommandSchema = ${bulkUpdateCommandFactory};\n` +
+          `export const generatedMcpEntityBulkUpdateCommandSchema = ${mcpBulkUpdateCommandFactory};\n` +
+          "\n" +
+          `export const generatedEntityMutationCreateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("create")}\n]);\n\n` +
+          `export const generatedEntityMutationUpdateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("update")}\n]);\n` +
+          "// One generated query result per correlated entity output.\n// oxfmt-ignore\n" +
+          `export const generatedEntityGetResultSchema = z.discriminatedUnion("entity", [\n  ${queryResultVariants("get")}\n]);\n\n` +
+          "// One generated query result per correlated entity output.\n// oxfmt-ignore\n" +
+          `export const generatedEntityListResultSchema = z.discriminatedUnion("entity", [\n  ${queryResultVariants("list")}\n]);\n` +
+          "\n// Merge summaries are workflow-specific JSON; the surviving item remains entity-correlated.\n// oxfmt-ignore\n" +
+          `export const generatedEntityMergeResultSchema = z.discriminatedUnion("entity", [\n  ${mergeResultVariants()}\n]);\n` +
+          "\n// MCP variants preserve entity correlation while projecting storage-only child ids.\n// oxfmt-ignore\n" +
+          `export const generatedMcpEntityGetResultSchema = z.discriminatedUnion("entity", [\n  ${queryResultVariants("get", true)}\n]);\n\n` +
+          "// oxfmt-ignore\n" +
+          `export const generatedMcpEntityListResultSchema = z.discriminatedUnion("entity", [\n  ${queryResultVariants("list", true)}\n]);\n\n` +
+          "// oxfmt-ignore\n" +
+          `export const generatedMcpEntityMutationCreateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("create", true)}\n]);\n\n` +
+          "// oxfmt-ignore\n" +
+          `export const generatedMcpEntityMutationUpdateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("update", true)}\n]);\n\n` +
+          "// oxfmt-ignore\n" +
+          `export const generatedMcpEntityMergeResultSchema = z.discriminatedUnion("entity", [\n  ${mergeResultVariants(true)}\n]);\n`,
+      ),
     },
   ];
 };

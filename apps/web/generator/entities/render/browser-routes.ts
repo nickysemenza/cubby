@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { pascalCase } from "@cubby/shared/text-case";
 import { generatedHeader, yamlGeneratedHeader } from "../../artifacts.ts";
 import type {
@@ -195,7 +196,9 @@ export const renderBrowserRouteArtifacts = (
           : [
               {
                 relativePath: `${directory}/${basePath}.index.tsx`,
-                source: renderIndexRoute(entity, listed.has(entity.key)),
+                source: rawSource(
+                  renderIndexRoute(entity, listed.has(entity.key)),
+                ),
               },
             ]),
         ...(entity.route.detail === null
@@ -203,14 +206,14 @@ export const renderBrowserRouteArtifacts = (
           : [
               {
                 relativePath: `${directory}/${basePath}.$${detailParam}.tsx`,
-                source: renderDetailRoute(entity),
+                source: rawSource(renderDetailRoute(entity)),
               },
             ]),
         ...(entity.route.create === "dialog"
           ? [
               {
                 relativePath: `${directory}/${basePath}.new.tsx`,
-                source: renderNewRoute(entity),
+                source: rawSource(renderNewRoute(entity)),
               },
             ]
           : []),

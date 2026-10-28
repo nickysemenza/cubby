@@ -32,7 +32,7 @@ import {
   type QueuePassPersistence,
   useQueuePass,
 } from "~/features/work-queue/use-queue-pass";
-import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
+import { run as runOperations } from "~/integrations/tanstack-query/domains/run";
 import { cn } from "~/lib/utils";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Panel, Row, Stack } from "~/ui/layout";

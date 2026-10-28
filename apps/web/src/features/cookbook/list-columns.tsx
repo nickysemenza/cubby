@@ -8,7 +8,7 @@ import {
   useEntityDisplayImage,
 } from "~/entity/entity-media/entity-display-images";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
-import { cookbook } from "~/integrations/tanstack-query/generated/catalog/cookbook.gen";
+import { cookbook } from "~/integrations/tanstack-query/domains/cookbook";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

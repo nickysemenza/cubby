@@ -18,13 +18,17 @@ import type {
 } from "~/contracts/define";
 import { openWorkflowStream } from "~/integrations/tanstack-query/workflow-stream";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
+import { parseOperationInput } from "~/lib/start-operation-error";
 import {
   startOperationDefinitionFor,
   type StartOperationId,
 } from "~/lib/start-operation-observability";
+import { unparsedStartOperationDataSchema } from "~/server/operation-runtime/start-operation.contract";
 
 import {
   EMPTY_INVALIDATION_TAG_SET,
+  ripple,
+  rippleFor,
   type InvalidationTagSet,
 } from "./cache-tags";
 import type {
@@ -48,11 +52,12 @@ type OperationTransport<Input, Output> = (request: {
 }) => Promise<Output>;
 
 type SharedPolicy<Input extends z.ZodTypeAny, Output extends z.ZodTypeAny> = {
+  /** May load schemas lazily; the call awaits it before caching the result. */
   parse?: {
     bivarianceHack(
       data: RawOperationValue,
       input: z.output<Input>,
-    ): z.output<Output>;
+    ): z.output<Output> | Promise<z.output<Output>>;
   }["bivarianceHack"];
 };
 
@@ -83,7 +88,7 @@ export type MutationPolicy<
 
 /**
  * A contract member plus the resolved browser policy layered onto it. The
- * contract's own `cache` / `invalidates` are data the generated catalog
+ * contract's own `cache` / `invalidates` are data the catalog runtime
  * resolves into `tags`, `cache`, and `invalidates` here, so they are replaced,
  * not intersected.
  */
@@ -263,7 +268,7 @@ export type QueryDescriptor<
   ): QueryDescriptor<Input, Output>;
 };
 
-type MutationDescriptor<
+export type MutationDescriptor<
   Input extends z.ZodTypeAny,
   Output extends z.ZodTypeAny,
 > = {
@@ -415,27 +420,22 @@ function catalogOperation<
   >,
 ) {
   const { id, definition, entity, transport } = options;
+  const parse = (value: RawOperationValue, input: z.output<Input>) =>
+    definition.parse
+      ? definition.parse(value, input)
+      : definition.output.parse(value);
   const config: Parameters<
     typeof startOperation<z.output<Input>, z.output<Output>>
-  >[0] = {
-    operation: id,
-    kind: definition.kind,
-    parse: (value, input) =>
-      definition.parse
-        ? definition.parse(value, input)
-        : definition.output.parse(value),
-  };
+  >[0] = { operation: id, kind: definition.kind, parse };
   if (entity) config.entity = entity;
-  if (transport) {
-    config.transport = async (input, callOptions) => ({
+  // Test seam: a bound transport answers in place of dispatch.
+  if (transport)
+    config.dispatch = async (input, { signal }) => ({
       ok: true,
-      data: await transport({
-        operation: id,
-        input,
-        signal: callOptions.signal,
-      }),
+      data: unparsedStartOperationDataSchema.parse(
+        await transport({ operation: id, input, signal }),
+      ),
     });
-  }
   return startOperation(config);
 }
 
@@ -500,14 +500,20 @@ function buildMutationDescriptor<
     id,
     definition,
     meta,
-    call: (...args) => operation.call(definition.input.parse(args[0]), args[1]),
+    call: (...args) =>
+      operation.call(
+        parseOperationInput(id, () => definition.input.parse(args[0])),
+        args[1],
+      ),
     invalidates,
     mutationOptions: (mutationOptions = {}) =>
       tanstackMutationOptions({
         ...mutationOptions,
         mutationKey: ["operation", id],
         mutationFn: (input: z.input<Input>) =>
-          operation.call(definition.input.parse(input)),
+          operation.call(
+            parseOperationInput(id, () => definition.input.parse(input)),
+          ),
         meta,
       }),
     forEntity: (nextEntity) =>
@@ -560,7 +566,11 @@ function buildQueryDescriptor<
     id,
     definition,
     meta,
-    call: (...args) => operation.call(definition.input.parse(args[0]), args[1]),
+    call: (...args) =>
+      operation.call(
+        parseOperationInput(id, () => definition.input.parse(args[0])),
+        args[1],
+      ),
     policy: (input) => queryPolicy(definition.input.parse(input)),
     queryKey: (...args) => parsedQueryKey(definition.input.parse(args[0])),
     queryOptions: (...args) => {
@@ -663,13 +673,59 @@ const withoutCacheData = (member: OperationContractMember): object =>
     ),
   );
 
+function contractPolicy(
+  domain: string,
+  name: string,
+  member: OperationContractMember,
+) {
+  const operation = `${domain}.${name}`;
+  if (member.kind === "subscription") {
+    if ("cache" in member || "invalidates" in member)
+      throw new Error(
+        `${operation} is a subscription and takes no cache policy.`,
+      );
+    return {};
+  }
+  if (member.kind === "query") {
+    if ("invalidates" in member)
+      throw new Error(
+        `${operation} is a query and cannot declare invalidates.`,
+      );
+    const tags = member.cache?.tags ?? [[domain, name]];
+    if (
+      tags.some(
+        (tag) => tag.length === 0 || tag.some((part) => part.length === 0),
+      )
+    )
+      throw new Error(`${operation} declares an invalid cache tag.`);
+    return {
+      tags,
+      ...(member.cache?.profile === undefined
+        ? {}
+        : { cache: member.cache.profile }),
+    };
+  }
+  if ("cache" in member)
+    throw new Error(`${operation} is a mutation and cannot declare cache.`);
+  const keys = member.invalidates ?? [];
+  for (const key of keys)
+    if (String(key) === "none" || !Object.hasOwn(ripple, key))
+      throw new Error(
+        `${operation} invalidates unknown ripple row ${JSON.stringify(key)}.`,
+      );
+  // A single row is its own ripple; only a combination expands read
+  // dependents, matching the invalidations the generated catalogs declared.
+  const [only, ...rest] = keys;
+  if (only === undefined) return { invalidates: ripple.none };
+  if (rest.length === 0) return { invalidates: ripple[only] };
+  return { invalidates: rippleFor(keys) };
+}
+
 /**
- * Bind a transport-neutral contract to the browser transport, layering the
- * resolved cache/invalidation/parse policy each member needs. The generated
- * catalog modules (`generated/catalog/*.gen.ts`) are the production callers: it
- * resolves each contract member's cache data and passes the result here. The
- * contract is the only source of ids, kinds, and schemas; a policy for a
- * member the contract does not declare is a type error.
+ * Bind a contract to the browser transport. Resolve its declared cache data
+ * and defaults, then layer the domain's optional input-dependent policy.
+ * Callers import one typed domain module; no eager all-domain facade is needed.
+ * The contract remains the authority for ids, kinds and schemas.
  */
 export function defineOperationDomain<const Contract extends OperationContract>(
   contract: Contract,
@@ -680,6 +736,15 @@ export function defineOperationDomain<const Contract extends OperationContract>(
       policy ? [[name, policy] as const] : [],
     ),
   );
+  for (const name of policyByMember.keys()) {
+    const member = contract.ops[name];
+    if (!member)
+      throw new Error(`${contract.domain}.${name} has no contract member.`);
+    if (member.kind === "subscription")
+      throw new Error(
+        `${contract.domain}.${name} is a subscription and takes no override.`,
+      );
+  }
   // SAFETY: every entry is produced from the same contract member key and its
   // corresponding descriptor; Object.fromEntries alone erases that key/value
   // correlation from TypeScript's standard-library return type.
@@ -698,6 +763,7 @@ export function defineOperationDomain<const Contract extends OperationContract>(
       // browser definition.
       const definition = {
         ...withoutCacheData(member),
+        ...contractPolicy(contract.domain, name, member),
         ...policyByMember.get(name),
       } as AnyDefinition;
       return [name, buildDescriptor({ id: operation.id, definition })];

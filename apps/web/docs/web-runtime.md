@@ -25,20 +25,16 @@ detail schema from a mutation response; later picker queries own expanded rows.
 
 Browser query HTTP requests share one admission budget across batches, header
 groups, singleton reads and batch fallbacks, owned by
-`integrations/tanstack-query/browser-operation-transport.ts`. That transport
-retries explicit transient database failures with bounded backoff on fresh
-request scopes; cancellation stops queued requests and retry waits. Successful
-batch siblings are not replayed. Mutations are outside this read recovery
-policy, and exhausted retries retain the last raw diagnostics. Keep passive
+`integrations/tanstack-query/browser-operation-transport.ts`. Cancellation
+stops queued requests. The transport does not retry a settled failure; an item
+a batch could not answer (HTTP failure, broken or truncated stream) is resent
+alone, and answered siblings are not replayed. Keep passive
 mount/focus/reconnect defaults separate from recovery of an active read.
-Pass the optional per-call `{ batch: false }` for reads partitioned to fit a Worker invocation budget; all other calls keep batching, and opted-out reads retain shared admission, cancellation and retry.
+Pass the optional per-call `{ batch: false }` for reads partitioned to fit a Worker invocation budget; all other calls keep batching, and opted-out reads retain shared admission and cancellation.
 
 This bounds HTTP requests, not origin database connections: each server batch
 can run several operations using its request-scoped pool. It does not reserve
-origin capacity or guarantee that pool-slot errors cannot occur. Recovery needs
-an exposed transient database cause; failures before session verification have
-no public causes and do not qualify. Jitter is shared within a browser tab so
-siblings from a failed batch can coalesce again.
+origin capacity or guarantee that pool-slot errors cannot occur.
 
 A mutation function must not read changing selection state from its closure:
 observer options can lag the render that enabled the action.
@@ -58,19 +54,26 @@ Catalog query options validate input before `enabled` is evaluated. Construct
 child queries only for roots their identifier contract accepts; disabling an
 image-root query does not make its ID a valid Run ID.
 
-The server render uses TanStack Start's local function execution, never an HTTP
-request to itself. Keep `~/server` imports behind the `.server()` branch of an
-isomorphic function. `ssr: false` is a measured cost choice, not a correctness
-workaround; a loader may await `ensureQueryData` when that latency is warranted.
-Workflow streams use one typed Start server function and an `AbortSignal`;
-Start owns framing and serialization. The owning screen opens the stream
-explicitly. Shared operation result envelopes retain normalized diagnostics;
-domain input/events remain schema-validated inside the authenticated runtime.
-The shared serializable carrier checks supported values with a type-directed
-walk. It validates every container member without cloning the payload or
-allocating errors for unsuccessful union branches in a valid response.
-Producers observe the request signal, and early iterator return cancels the
-request. Global server-function middleware owns CSRF and private response headers.
+The server render dispatches operations in process through the same
+`/api/operations` handler the browser calls, never an HTTP request to itself,
+and decodes the response as the browser does. Keep `~/server` imports behind
+the `.server()` branch of an isomorphic function. `ssr: false` is a measured
+cost choice, not a correctness workaround; a loader may await `ensureQueryData`
+when that latency is warranted.
+Every client speaks plain JSON to `/api/operations/<id>`; the browser adds
+`x-cubby-surface: browser`, which selects browser authentication and internal
+operations. Dates cross as ISO strings and each operation's schemas restore them
+on parse; generic entity reads parse through their entity's lazily loaded read
+schema. The envelope is validated once per path, and a client-side schema
+rejection surfaces as a `StartOperationError`.
+Workflow streams POST to the same endpoint and answer with NDJSON result lines,
+ending with a data-less success line that carries the read marker; a body that
+ends without it is treated as cut off. The owning screen opens the stream
+explicitly, passing an `AbortSignal`. Shared operation result envelopes retain
+normalized diagnostics; domain input/events remain schema-validated inside the
+authenticated runtime. Producers observe the request signal, and early iterator
+return cancels the request. The authenticator owns the cookie same-origin rule
+for every operation request.
 Cookbook import stays busy until its recipe stream and photo phase finish.
 The stream's done event precedes iterator completion; hand off recipe progress
 to photo progress atomically, with the outer import cleanup owning completion.
@@ -93,7 +96,8 @@ shell before using its lazy content. Handwritten generic list routes use the
 same metadata admission and first-page loader as generated routes.
 Query dehydration uses Start's native serializer for Dates, collections and
 shared references. Do not wrap those query values in an additional JSON codec.
-The browser operation HTTP transport retains its separate SuperJSON wire codec.
+The browser operation HTTP transport speaks the same plain JSON as Apple; each
+catalog parser restores Dates from its output schema.
 Interaction-only authenticated reads can use `useHydrated() &&
 session`; passive loading branches use `useHydratedLoading`/`useHydrated`. Interactive controls in streamed sections, design showcases, and lazy
 detail slots stay disabled until their own
@@ -173,8 +177,8 @@ complete admitted bundles. Accessors take that explicit scope.
 The app's wrapper around TanStack's SSR Query integration replaces metadata query
 data with its entity admission identity on the existing initial state, streamed
 batches and pending promises. The browser reconstructs each complete bundle from
-lazy Vite chunks using the public `@cubby/schemas/entity-metadata/*` exports of
-the same canonical generated slices. It awaits reconstruction before passing
+lazy Vite chunks of the same canonical generated slices, resolved by
+`import.meta.glob` in `entity/metadata-loader.ts`. It awaits reconstruction before passing
 successful data to Query; pending query promises resolve through reconstruction.
 The installed router hydrate hook awaits initial admission before React renders.
 The stream transform awaits subsequent admissions before TanStack hydrates each

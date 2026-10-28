@@ -16,7 +16,7 @@ import type {
 } from "~/contracts/run-detail.contract";
 import { runDetailContract } from "~/contracts/run-detail.contract";
 import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
-import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
+import { runDetail } from "~/integrations/tanstack-query/domains/runDetail";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";

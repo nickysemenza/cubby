@@ -42,8 +42,8 @@ import {
   productTreeRowKey,
   productTreeSubRows,
 } from "~/features/product/product-kit-rows";
-import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog/product.gen";
-import { relatedData } from "~/integrations/tanstack-query/generated/catalog/relatedData.gen";
+import { product as productOperations } from "~/integrations/tanstack-query/domains/product";
+import { relatedData } from "~/integrations/tanstack-query/domains/relatedData";
 import { formatCurrency } from "~/lib/number-format";
 import { booleanCellOptions } from "~/lib/select-options";
 import type { PickerOption } from "~/ui/combobox/picker-option";

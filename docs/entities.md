@@ -516,23 +516,28 @@ pnpm generate
 pnpm check:clean
 ```
 
-One generator (`apps/web/generator/main.ts`) writes the entity artifacts first
-(`apps/web/generator/entities/`), then the artifacts derived from the operation
-contracts: the operation registry, handler loaders, the browser client catalog
-that resolves each contract's cache tags and invalidation data
-(`apps/web/generator/start-operations/`), and shared operation transport artifacts with their
-native derivations (`apps/web/generator/http-api/`). Generation fails on invalid
-metadata, duplicate entity keys or routes, invalid relation policies, and
-unsupported capabilities. Generated files are never committed:
-`pnpm check:clean` proves a generate run leaves the tree unchanged. Typecheck
-verifies declaration types and referenced exports.
+One generator (`apps/web/generator/main.ts`) writes entity artifacts first,
+then the operation registry, lazy handler data and MCP data, and shared HTTP
+transport artifacts with their native derivations. Generation rejects invalid
+metadata and unsupported capabilities. Generated app output is never committed.
 
-Artifact emitters project the same compiled declarations. Browser field and
-inspector descriptor types live in `packages/schemas/src/entity-projection-types.ts`,
-with field metadata derived from the declaration schema; generated files emit
-literal maps and re-export those types. Shared schema binding behavior lives in
-ordinary typed code rather than generator strings. HTTP and MCP exposure project
-one kernel capability owner; MCP remains an explicit subset.
+TypeScript artifact emitters use `tsModule` in `generator/artifacts.ts`. Its
+vocabulary is imports, exported literal constants (`as const`, optionally
+`satisfies` a named type), aliases of named types, and re-export aliases.
+Literal tables may reference imported values or their properties; they cannot
+call them. Behavior, Zod construction, mapped and conditional types, and parsing
+live in ordinary typed modules under `src/`, importing generated data directly.
+Named constraints live beside their owning typed contracts. Unmigrated emitters
+mark free-form source with the explicit `rawSource()` escape hatch; migrated
+emitters have no `rawSource` calls. This builder boundary needs no extra lint rule.
+
+Browser and server read contracts consume generated entity tuples and definition
+tables. The typed read factory owns filter validation, tree extensions and list
+outputs. Explicit list-item schema ids preserve the native `<Entity>ListItem`
+names independently of the emitter's export layout. Metadata tables contain data
+and imported references; typed modules own metadata loading and projections over
+the generated types. HTTP and MCP exposure project one kernel capability owner;
+MCP remains an explicit subset.
 
 The generated summary also lists read dependents from declared reference fields,
 derived paths and image fallback paths. Notifications add those consumers' cache
@@ -2081,8 +2086,8 @@ Specialized shapes such as Image and USDA Food are ordinary operations in
 validation, errors, cancellation checkpoints, tracing, and console
 observability.
 
-Ordinary browser calls POST a SuperJSON operation envelope to
-`/api/operations/<operation>`. Concurrent reads share a
+Browser calls POST the same plain JSON operation envelope Apple uses to
+`/api/operations/<operation>`, marked with `x-cubby-surface: browser`. Concurrent reads share a
 `/api/operations/batch~<operation>,<operation>` request and stream their results
 independently. URLs contain registered operation names, never input values;
 the server rejects a path/body mismatch. The Worker routes these paths directly
@@ -2154,26 +2159,21 @@ declares them only when they differ (`tags: []` opts out of tagging).
 The vocabulary types live in `contracts/cache-policy.ts`, which contracts may
 import; no contract holds React, query-client, or input-dependent code.
 
-The Start operation stage of `pnpm generate` resolves that data into
-`integrations/tanstack-query/generated/catalog/<domain>.gen.ts`. Call sites
-import their domain (`product`, `recipe`, ...), whose generated module imports
-only its contract and policy owner. `catalog/all.gen.ts` enumerates domains for
-tests only; production code must not import that facade.
+Browser call sites import small typed modules under
+`integrations/tanstack-query/domains/`, each importing its own contract.
+`defineOperationDomain` computes default query tags and mutation ripples from
+contract data, then applies optional input-dependent policies from
+`operation-overrides/<domain>.ts`. Module initialization rejects invalid cache
+policy and unknown override members. Domains stay independently loadable.
+Cache-tag rosters read generated entity keys and image policy directly.
 
-Policy that must read the input (per-entity output parsing and cache profiles,
-and the payload-keyed fan-out of `entity.mutate`) lives in the matching
-`integrations/tanstack-query/operation-overrides/<domain>.ts`. The generator
-checks the roster through `operation-overrides.ts`, but browser modules import
-the policy directly. Input and output schemas still validate every call.
-Cache-tag rosters read the generated entity keys and image policy directly;
-they do not initialize the full entity manifest to enumerate those keys.
+Workflow-command metadata lives on the operation registry. Rendering reads that
+data without initializing descriptors; execution loads the selected domain through
+a lazy module lookup and validates the submitted input using its contract schema.
+Handler tables similarly carry module paths and domain export names; the typed
+handler runtime owns lazy imports and member lookup. MCP binding composition
+lives in typed source over generated tool/action data.
 
-`generated/commands.gen.ts` carries plain workflow-command metadata and one
-lazy boundary to `generated/command-runtime.gen.ts`, which owns command dispatch
-and imports the relevant domain catalogs together. Report rendering reads
-labels, confirmations, and input declarations without importing the command
-runtime. Execution loads and validates the actual body inside the existing
-pending/error flow.
 Deferred specialized actions use `useDeferredActionMutation`, whose inner
 TanStack mutation retains operation metadata, key, scope and retry ownership;
 its outer mutation supplies loading state and presentation only.
@@ -2362,12 +2362,11 @@ comparisons show gains without regressions or recurring cost.
 
 `--mode operations --input <request.json>` measures the browser dispatch wire
 using a plain `{ operation, input }` or `{ batch: [...] }` request. Only
-registered queries are admitted; the harness serializes and decodes the existing
-SuperJSON and operation contracts. Use a single request for one query, or an
-explicit batch of 2–20 queries. The request codec header must match the
-SuperJSON body; without it, dispatch rejects the wrapper before running the query.
+registered queries are admitted; the harness sends and decodes the plain JSON
+operation contracts. Use a single request for one query, or an
+explicit batch of 2–20 queries.
 Each sample is one transport attempt, without
-browser retries or fallback. The schema-5 artifact separates HTTP, transport,
+batch fallback. The schema-5 artifact separates HTTP, transport,
 dispatch rejection, protocol and RPC failures, and reports successful per-operation settlement times
 as results arrive, separately from complete-response timing. Both batch
 settlement and the nested operation must succeed. Missing, duplicate,

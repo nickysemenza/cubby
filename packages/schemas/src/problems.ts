@@ -27,7 +27,7 @@ import {
 } from "./generated/entity-field-envelope-fields.expense.gen";
 import { z } from "zod";
 import { locationRefOut } from "./location-fields";
-import { amount, baseKind } from "./codec";
+import { amount, baseKind, dateTime } from "./codec";
 import { money, moneyNullable } from "./money";
 import { type ShortcodeEntity } from "./entity-manifest";
 import { shortcodeEntities } from "./generated/entity-roster.gen";
@@ -127,7 +127,7 @@ export const duplicateUniqueProductSchema = withFieldEnvelopes(
 
 export const rawOrphanedProductSchema = z.object({
   ...productProblemFields,
-  createdAt: z.date(),
+  createdAt: dateTime,
 });
 
 export const orphanedProductSchema = withFieldEnvelopes(
@@ -226,7 +226,7 @@ export const toolUsedOutsideOwnershipSchema = withFieldEnvelopes(
 
 export const rawProductWithoutMappingsSchema = z.object({
   ...productProblemFields,
-  createdAt: z.date(),
+  createdAt: dateTime,
   isIngredient: z.boolean(),
   usdaUnavailable: z.boolean(),
   ingredientId: ingredientShortcode.nullable(),
@@ -295,8 +295,8 @@ export const rawEmptyLocationSchema = z.object({
   id: locationShortcode,
   name: z.string(),
   type: z.string().nullable(),
-  createdAt: z.date(),
-  lastBulkInventory: z.date().nullable(),
+  createdAt: dateTime,
+  lastBulkInventory: dateTime.nullable(),
   aiDescription: z.string().nullable(),
   firstImageUrl: z.string().nullable(),
   firstImageId: z.string().nullable(),
@@ -677,7 +677,7 @@ export const runFindingProblemSchema = z.object({
   summary: z.string(),
   probability: z.number().nullable(),
   proposedFix: proposedImportFix.nullable(),
-  createdAt: z.date(),
+  createdAt: dateTime,
 });
 
 export const resolveRunFindingInput = z.object({
@@ -1207,7 +1207,7 @@ export const problemsFastSchema = z.object({
  */
 export const conversionCoverageFreshnessSchema = z.object({
   state: z.enum(["fresh", "stale", "unavailable"]),
-  computedAt: z.date().nullable(),
+  computedAt: dateTime.nullable(),
   expectedEngineVersion: z.string(),
   readyCount: z.number().int().nonnegative(),
   staleCount: z.number().int().nonnegative(),
@@ -1230,8 +1230,8 @@ export const problemsCoverageSchema = z.object({
  */
 export const upcEnrichmentFreshnessSchema = z.object({
   status: z.enum(["fresh", "stale", "unavailable"]),
-  checkedAt: z.date(),
-  oldestFetchedAt: z.date().nullable(),
+  checkedAt: dateTime,
+  oldestFetchedAt: dateTime.nullable(),
   unavailableCount: z.number().int().nonnegative(),
 });
 export type UpcEnrichmentFreshness = z.infer<

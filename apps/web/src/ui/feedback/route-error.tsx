@@ -11,7 +11,6 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
-import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { sentryEventUrl } from "~/lib/error-diagnostics";
 import {
   getAppErrorDetails,
@@ -19,6 +18,7 @@ import {
   isSupersededViewTransitionError,
   type UnparsedError,
 } from "~/lib/error-utils";
+import { StartOperationError } from "~/lib/start-operation-error";
 import { ErrorDetails } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";

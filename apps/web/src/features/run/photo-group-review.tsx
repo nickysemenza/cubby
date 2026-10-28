@@ -82,8 +82,8 @@ import {
   RUN_TARGET_STATE_VARIANT,
 } from "~/features/run/run-target-state";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { photoImport } from "~/integrations/tanstack-query/generated/catalog/photoImport.gen";
-import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog/purchaseImport.gen";
+import { photoImport } from "~/integrations/tanstack-query/domains/photoImport";
+import { purchaseImport } from "~/integrations/tanstack-query/domains/purchaseImport";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
 import { formatCurrency } from "~/lib/number-format";

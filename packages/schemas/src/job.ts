@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateTime } from "./codec";
 
 export const jobState = z.enum([
   "queued",
@@ -113,7 +114,7 @@ export const enqueueJobInput = z.object({
   priority: z.number().int().optional(),
   /** Defaults to the kind policy; null never exhausts. */
   maxAttempts: z.number().int().positive().nullable().optional(),
-  availableAt: z.date().optional(),
+  availableAt: dateTime.optional(),
   /** Explicit new input or member retry; routine recovery never revives failures. */
   invalidate: z.boolean().optional(),
 });
@@ -123,9 +124,9 @@ export const jobPage = z.object({
   done: z.boolean(),
   cursor: jobPayload.optional(),
   result: jobPayload.optional(),
-  availableAt: z.date().optional(),
+  availableAt: dateTime.optional(),
   waitReason: jobWaitReason.optional(),
-  waitUntil: z.date().optional(),
+  waitUntil: dateTime.optional(),
 });
 export type JobPage = z.infer<typeof jobPage>;
 

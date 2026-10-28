@@ -21,9 +21,9 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { useBulkStream } from "~/entity/hooks/use-bulk-stream";
-import { imageUpload } from "~/integrations/tanstack-query/generated/catalog/imageUpload.gen";
-import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
-import { recipeStreams } from "~/integrations/tanstack-query/generated/catalog/recipeStreams.gen";
+import { imageUpload } from "~/integrations/tanstack-query/domains/imageUpload";
+import { recipe } from "~/integrations/tanstack-query/domains/recipe";
+import { recipeStreams } from "~/integrations/tanstack-query/domains/recipeStreams";
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import {
   addWithDependencies,

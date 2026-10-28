@@ -8,7 +8,7 @@ import { actionsForSurface } from "~/entity/actions/action-items";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { mealListLabel } from "~/features/meal/meal-format";
-import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
+import { meal } from "~/integrations/tanstack-query/domains/meal";
 import { DenseCellContext } from "~/ui/common/stacked-value";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { EmptyState } from "~/ui/feedback/empty-state";

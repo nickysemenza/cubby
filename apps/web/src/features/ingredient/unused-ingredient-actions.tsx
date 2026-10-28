@@ -6,7 +6,7 @@ import {
   WorkActionTrigger,
   type WorkActionProps,
 } from "~/entity/work-queue/work-actions";
-import { problems } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
+import { problems } from "~/integrations/tanstack-query/domains/problems";
 
 type UnusedProblem =
   | "unusedIngredientsWithProduct"

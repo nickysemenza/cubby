@@ -6,7 +6,7 @@ import { labeledFieldProvenance } from "~/entity/fields/field-provenance";
 import { useFilenameEditable } from "~/entity/hooks/use-name-editable";
 import { useImageUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import { ImageAssociationLinks } from "~/features/image/image-associations";
-import { image } from "~/integrations/tanstack-query/generated/catalog/image.gen";
+import { image } from "~/integrations/tanstack-query/domains/image";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

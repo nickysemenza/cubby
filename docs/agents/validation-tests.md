@@ -592,9 +592,8 @@ lazy-fetch assertions sensitive to every envelope; after refusing a batch,
 count individual operation attempts separately from transport fallback.
 Browser diagnostics require decoded RPC success, not only HTTP 200. Reuse
 `operationResult` in `apps/web/tests/e2e/support/dispatch-wire.ts`: single
-responses require `ok === true`; streamed NDJSON items require decoding `r`
-with SuperJSON and checking both settlement `ok === true` and operation
-`value.ok === true`. A successful settlement can contain a failed operation.
+responses require `ok === true`; streamed NDJSON items require both settlement
+`r.ok === true` and operation `r.value.ok === true`. A successful settlement can contain a failed operation.
 Compare related layout bounds in one browser evaluation so their rectangles
 come from the same render state.
 

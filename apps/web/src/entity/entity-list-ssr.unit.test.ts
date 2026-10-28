@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
 import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
-import { publicEntityMetadataLoaders } from "~/entity/generated/entity-metadata-loaders.gen";
+import { publicEntityMetadataLoaders } from "~/entity/metadata-loader";
 import { entityMetadata, entityMetadataQueryOptions } from "~/entity/metadata";
 import { installEntityMetadataTransport } from "~/entity/metadata-transport";
 import { entityListDefaultSort } from "~/entity/sortable-fields";

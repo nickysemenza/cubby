@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
-import { task } from "~/integrations/tanstack-query/generated/catalog/task.gen";
+import { task } from "~/integrations/tanstack-query/domains/task";
 import { KeyNumbers } from "~/ui/common/key-numbers";
 
 const route = getRouteApi("/_authenticated/tasks/");

@@ -10,7 +10,7 @@ import { useState } from "react";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
-import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
+import { financialTransaction } from "~/integrations/tanstack-query/domains/financialTransaction";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";

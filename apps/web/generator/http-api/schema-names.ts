@@ -173,6 +173,16 @@ export async function registerSchemaNames(
       z.globalRegistry.add(value, { ...z.globalRegistry.get(value), id });
     }
   }
+  const { listEntities, getEntityListItemSchema } = await import(
+    new URL("server/entity-reads/list-contracts.ts", srcUrl).href
+  );
+  for (const entity of listEntities) {
+    const schema = getEntityListItemSchema(entity);
+    if (owners.has(schema)) continue;
+    const id = z.globalRegistry.get(schema)?.id ?? pascal(`${entity}ListItem`);
+    claim(id, schema, `entity list item ${entity}`);
+    z.globalRegistry.add(schema, { ...z.globalRegistry.get(schema), id });
+  }
   registerDiscriminatedMembers(named, claim);
   return named;
 }

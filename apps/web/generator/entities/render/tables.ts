@@ -1,4 +1,4 @@
-import { generatedHeader } from "../../artifacts.ts";
+import { generatedHeader, rawSource } from "../../artifacts.ts";
 import {
   childTableMetadataSchema,
   type ChildTableDeclaration,
@@ -342,7 +342,10 @@ export const renderEntityTableArtifacts = (
     "\n" +
     relationSource +
     "\n";
-  return { definitions, relations };
+  return {
+    definitions: rawSource(definitions),
+    relations: rawSource(relations),
+  };
 };
 
 /** Canonical FK-closed definitions; relations remain in the full assembly. */
@@ -365,19 +368,19 @@ export const renderIdentityStorageTablesArtifact = (
       }),
     )
     .join("\n\n");
-  return (
+  return rawSource(
     generatedHeader +
-    storageColumnImportsFor(
-      source,
-      renderTypeImports(declaredColumnTypeImports(tables)),
-    ) +
-    'import { sql } from "drizzle-orm";\n' +
-    referencedImports(
-      'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n',
-      source,
-    ) +
-    'import { entityIdentityFk } from "~/server/db/entity-identity-schema";\n\n' +
-    source +
-    "\n"
+      storageColumnImportsFor(
+        source,
+        renderTypeImports(declaredColumnTypeImports(tables)),
+      ) +
+      'import { sql } from "drizzle-orm";\n' +
+      referencedImports(
+        'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n',
+        source,
+      ) +
+      'import { entityIdentityFk } from "~/server/db/entity-identity-schema";\n\n' +
+      source +
+      "\n",
   );
 };

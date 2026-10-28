@@ -1,3 +1,4 @@
+import { rawSource } from "../artifacts.ts";
 import { z } from "zod";
 import { entityTimelineWindowFor } from "@cubby/schemas/entity-timeline";
 import { entityInspectorMetadata } from "@cubby/schemas/compiler/generated/entity-inspector.gen";
@@ -294,7 +295,8 @@ export const renderEntityKernelArtifacts = (
     },
     {
       relativePath: "apps/web/src/lib/generated/entity-native-coverage.gen.ts",
-      source: `${generatedHeader}import type { Entity } from "@cubby/schemas/entity";
+      source:
+        rawSource(`${generatedHeader}import type { Entity } from "@cubby/schemas/entity";
 
 /**
  * What the native app can do with an entity: the entity kernel actions its
@@ -312,7 +314,7 @@ export interface NativeCoverage {
 export const ENTITY_NATIVE_COVERAGE = {
 ${entityKeys.map((entity) => `  ${JSON.stringify(entity)}: ${JSON.stringify(coverage[entity])},`).join("\n")}
 } as const satisfies Record<Entity, NativeCoverage>;
-`,
+`),
     },
   ];
 };

@@ -6,7 +6,7 @@ import type {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/domains/entityGraph";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 
 import {

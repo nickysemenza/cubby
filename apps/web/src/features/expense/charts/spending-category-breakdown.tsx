@@ -3,7 +3,7 @@ import { TagIcon } from "@phosphor-icons/react/dist/csr/Tag";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { expense } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
+import { expense } from "~/integrations/tanstack-query/domains/expense";
 import { formatCurrency } from "~/lib/number-format";
 import { RankedBarBreakdown } from "~/ui/charts/kit";
 import { useHydrated } from "~/ui/hooks/use-hydrated";

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import type { z } from "zod";
 
-import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
+import { fieldExplanation } from "~/integrations/tanstack-query/domains/fieldExplanation";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";

@@ -17,10 +17,10 @@ import { listPage } from "~/entity/routing/list-page";
 import { installFeatures } from "~/features/registry";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { mock } from "~/lib/test/mock-schema";
-import {
-  productListItem,
-  taskListItem,
-} from "~/server/generated/entity-lists.server.gen";
+import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
+const productListItem = getEntityListItemSchema("product");
+const taskListItem = getEntityListItemSchema("task");
+
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 
 installFeatures();

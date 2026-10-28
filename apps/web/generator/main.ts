@@ -1,3 +1,4 @@
+import { rawSource } from "./artifacts.ts";
 import { modulesChildren } from "@cubby/schemas/compiler/child-tables/modules";
 import { retainedTableExports } from "@cubby/schemas/compiler/child-tables/retained";
 import { readFile, writeFile } from "node:fs/promises";
@@ -153,9 +154,10 @@ const main = async () => {
     {
       relativePath:
         "packages/schemas/src/generated/problem-classification.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        renderRecord({ name: "PROBLEM_CLASS", entries: PROBLEM_CLASS }),
+          renderRecord({ name: "PROBLEM_CLASS", entries: PROBLEM_CLASS }),
+      ),
     },
   ]);
   const missingRoutes = missingBrowserRouteFiles(entities);

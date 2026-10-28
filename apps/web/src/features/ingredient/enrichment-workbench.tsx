@@ -35,8 +35,8 @@ import {
 } from "~/features/product/product-streams";
 import { CoverageChips } from "~/features/units/coverage-chips";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
-import { ingredient } from "~/integrations/tanstack-query/generated/catalog/ingredient.gen";
+import { ai } from "~/integrations/tanstack-query/domains/ai";
+import { ingredient } from "~/integrations/tanstack-query/domains/ingredient";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";

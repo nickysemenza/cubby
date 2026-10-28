@@ -7,7 +7,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
-import { project } from "~/integrations/tanstack-query/generated/catalog/project.gen";
+import { project } from "~/integrations/tanstack-query/domains/project";
 import { householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { Picker } from "~/ui/combobox/picker";

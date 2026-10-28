@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { z } from "zod";
 
-import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
+import { meal } from "~/integrations/tanstack-query/domains/meal";
 import { useLocalStorage } from "~/ui/hooks/use-local-storage";
 
 import { getDefaultShoppingRange } from "./meal-search";

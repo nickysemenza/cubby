@@ -9,11 +9,11 @@ import {
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import {
   CLOUDFLARE_OBSERVABILITY_URL,
   sentryEventUrl,
 } from "~/lib/error-diagnostics";
+import { StartOperationError } from "~/lib/start-operation-error";
 
 import { errorToastId, showErrorToast } from "./error-details";
 import { ErrorDetailsDialogHost } from "./error-details-dialog";

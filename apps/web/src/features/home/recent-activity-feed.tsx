@@ -12,7 +12,7 @@ import type { AuditLogListOperations } from "~/entity/audit-log/audit-log-list";
 import { EntityAuditLink } from "~/entity/components/entity-ref-link";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { auditLog } from "~/integrations/tanstack-query/generated/catalog/auditLog.gen";
+import { auditLog } from "~/integrations/tanstack-query/domains/auditLog";
 import { formatCalendarDay } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
 import { getStatusBadgeProps } from "~/lib/status-colors";

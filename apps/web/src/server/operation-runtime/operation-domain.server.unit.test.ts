@@ -3,12 +3,12 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
-import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
 import { systemPrincipal } from "~/server/http/authenticate";
 import {
   createRequestContext,
   requireActor,
 } from "~/server/http/request-context";
+import type { StartOperationHandler } from "~/server/operation-runtime/operation-handlers.server";
 import type {
   AuthenticatedStartOperationContext,
   StartOperationRequest,

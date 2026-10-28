@@ -79,7 +79,9 @@ export function requestedReadMetadata(
   const contract = entityListInputSchema.options.find(
     (option) => option.shape.entity.value === entity.data,
   );
-  const allowed = Object.keys(contract?.shape.filters.shape ?? {});
+  const filterSchema = contract?.shape.filters;
+  const allowed =
+    filterSchema instanceof z.ZodObject ? Object.keys(filterSchema.shape) : [];
   return {
     evidence: "partial",
     kind: "list",

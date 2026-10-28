@@ -42,7 +42,7 @@ import {
   type TableStateReturn,
 } from "~/entity/table/use-table-state";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
+import { suggestions } from "~/integrations/tanstack-query/domains/suggestions";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";

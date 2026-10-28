@@ -8,7 +8,7 @@ import {
   getServingBasis,
   perUnitSuffix,
 } from "~/entity/presentation/recipe-utils";
-import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
+import { recipe as recipeOperations } from "~/integrations/tanstack-query/domains/recipe";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";

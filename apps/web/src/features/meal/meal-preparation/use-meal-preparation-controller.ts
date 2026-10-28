@@ -9,8 +9,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import type { ListRowOf } from "~/entity/display/list-renderer-types";
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
-import { meal as mealOperations } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/domains/entityFilterOptions";
+import { meal as mealOperations } from "~/integrations/tanstack-query/domains/meal";
 
 import type {
   MealPreparationsView,

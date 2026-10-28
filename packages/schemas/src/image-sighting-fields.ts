@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateTime } from "./codec";
 import { imageCaptureLocation } from "./image-capture-fields";
 
 import { deviceShortcode, ledgerPartyShortcode } from "./identifier-fields";
@@ -40,15 +41,15 @@ export const imageSightingOut = z.object({
   pixelWidth: z.number().int().nullable(),
   pixelHeight: z.number().int().nullable(),
   hasAdjustments: z.boolean(),
-  capturedAt: z.date().nullable(),
+  capturedAt: dateTime.nullable(),
   capturedAtOffsetMinutes: z.number().int().nullable(),
-  addedAt: z.date().nullable(),
+  addedAt: dateTime.nullable(),
   location: imageSightingLocation.nullable(),
   placeName: z.string().nullable(),
   camera: imageSightingCamera.nullable(),
   matchKind: imageSightingMatchKind,
   hashDistance: z.number().int().nullable(),
   aspectGate: z.boolean().nullable(),
-  observedAt: z.date(),
+  observedAt: dateTime,
 });
 export type ImageSightingOut = z.infer<typeof imageSightingOut>;

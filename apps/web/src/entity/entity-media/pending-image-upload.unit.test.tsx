@@ -2,7 +2,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { imageUpload } from "~/integrations/tanstack-query/generated/catalog/imageUpload.gen";
+import { imageUpload } from "~/integrations/tanstack-query/domains/imageUpload";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { PendingImageUpload } from "./pending-image-upload";

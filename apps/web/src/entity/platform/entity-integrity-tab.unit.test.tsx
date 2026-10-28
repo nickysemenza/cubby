@@ -2,8 +2,8 @@ import { integrityCatalogSchema } from "@cubby/schemas/entity-integrity";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { entityIntegrity } from "~/integrations/tanstack-query/generated/catalog/entityIntegrity.gen";
-import { integrityProblems } from "~/integrations/tanstack-query/generated/catalog/integrityProblems.gen";
+import { entityIntegrity } from "~/integrations/tanstack-query/domains/entityIntegrity";
+import { integrityProblems } from "~/integrations/tanstack-query/domains/integrityProblems";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {

@@ -2,20 +2,19 @@ import { vendorOut } from "@cubby/schemas/entities/vendor";
 import { request } from "@playwright/test";
 
 import { z } from "zod";
-import superjson from "superjson";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
 
 import { entityApi } from "./support/entity-api";
 import { expect, test } from "./support/e2e-test";
 
-test("browser dispatch preserves superjson dates and gates outdated Apple writes", async ({
+test("browser dispatch restores plain JSON dates and gates outdated Apple writes", async ({
   page,
   baseURL,
 }) => {
   const api = entityApi(page.request);
   const headers = { Origin: baseURL! };
-  const name = `SuperJSON date ${Date.now()}`;
+  const name = `Operation date ${Date.now()}`;
   const created = await api.create("vendor", { name }, { headers });
   expect(created.status(), await created.text()).toBe(200);
   const shortcode = z
@@ -24,16 +23,16 @@ test("browser dispatch preserves superjson dates and gates outdated Apple writes
   const outdatedHeaders = {
     Origin: baseURL!,
     "User-Agent": "cubby-apple/0.0.0 (iOS; synthetic-install)",
-    "x-cubby-value-codec": "superjson",
+    "x-cubby-surface": "browser",
   };
   try {
     const read = await page.request.post(
       browserOperationPath("entity.detail"),
       {
-        data: superjson.serialize({
+        data: {
           operation: "entity.detail",
           input: { entity: "vendor", shortcode },
-        }),
+        },
         headers: outdatedHeaders,
       },
     );
@@ -41,8 +40,9 @@ test("browser dispatch preserves superjson dates and gates outdated Apple writes
     expect(read.status(), JSON.stringify(readBody)).toBe(200);
     const result = z
       .object({ ok: z.literal(true), data: vendorOut })
-      .parse(superjson.deserialize(readBody)).data;
+      .parse(readBody).data;
     expect(result.id).toBe(shortcode);
+    // The shared dateTime schema restores the ISO string on parse.
     expect(result.createdAt).toBeInstanceOf(Date);
 
     // The stale write body is invalid for this operation; the runner's gate must
@@ -50,34 +50,31 @@ test("browser dispatch preserves superjson dates and gates outdated Apple writes
     const write = await page.request.post(
       browserOperationPath("ai.pauseSuggestionSweep"),
       {
-        data: superjson.serialize({
+        data: {
           operation: "ai.pauseSuggestionSweep",
           input: "invalid-for-the-operation",
-        }),
+        },
         headers: outdatedHeaders,
       },
     );
     expect(write.status()).toBe(426);
-    expect(superjson.deserialize(await write.json())).toMatchObject({
-      ok: false,
-      error: { code: "UPGRADE_REQUIRED", reason: "CLIENT_UPDATE_REQUIRED" },
+    expect(await write.json()).toMatchObject({
+      code: "UPGRADE_REQUIRED",
+      reason: "CLIENT_UPDATE_REQUIRED",
     });
 
     const mismatch = await page.request.post(
       browserOperationPath("dashboard.counts"),
       {
-        data: superjson.serialize({
-          operation: "auditLog.list",
-          input: { limit: 5 },
-        }),
+        data: { operation: "auditLog.list", input: { limit: 5 } },
         headers: { ...outdatedHeaders, "User-Agent": "cubby-cli/1.0.0" },
       },
     );
-    // The browser codec settles refusals as results, not HTTP errors.
-    expect(mismatch.status()).toBe(200);
-    expect(superjson.deserialize(await mismatch.json())).toMatchObject({
-      ok: false,
-      error: { code: "BAD_REQUEST", reason: "INVALID_INPUT" },
+    // Every client reads a refusal as the bare error under its status.
+    expect(mismatch.status()).toBe(400);
+    expect(await mismatch.json()).toMatchObject({
+      code: "BAD_REQUEST",
+      reason: "INVALID_INPUT",
     });
 
     const retired = await page.request.post("/api/browser/dispatch", {

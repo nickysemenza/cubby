@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { createRequire } from "node:module";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 import { generatedHeader } from "../../artifacts.ts";
@@ -35,26 +36,27 @@ export function renderOptionGlyphs(
   const sorted = [...names].sort();
   return {
     relativePath: "apps/web/src/ui/common/option-glyphs.gen.ts",
-    source:
+    source: rawSource(
       generatedHeader +
-      'import type {Icon} from "@phosphor-icons/react/lib";\n' +
-      [...eager]
-        .sort()
-        .map(
-          (name) =>
-            `import {${name}Icon} from "@phosphor-icons/react/dist/csr/${name}";`,
-        )
-        .join("\n") +
-      `\nexport const EAGER = new Map<string, Icon>([${[...eager]
-        .sort()
-        .map((name) => `["${name}", ${name}Icon]`)
-        .join(",")}]);\n` +
-      `export const LAZY = new Map<string, () => Promise<Icon>>([${sorted
-        .filter((name) => !eager.has(name))
-        .map(
-          (name) =>
-            `["${name}", () => import("@phosphor-icons/react/dist/csr/${name}").then(m => m.${name}Icon)]`,
-        )
-        .join(",")}]);\n`,
+        'import type {Icon} from "@phosphor-icons/react/lib";\n' +
+        [...eager]
+          .sort()
+          .map(
+            (name) =>
+              `import {${name}Icon} from "@phosphor-icons/react/dist/csr/${name}";`,
+          )
+          .join("\n") +
+        `\nexport const EAGER = new Map<string, Icon>([${[...eager]
+          .sort()
+          .map((name) => `["${name}", ${name}Icon]`)
+          .join(",")}]);\n` +
+        `export const LAZY = new Map<string, () => Promise<Icon>>([${sorted
+          .filter((name) => !eager.has(name))
+          .map(
+            (name) =>
+              `["${name}", () => import("@phosphor-icons/react/dist/csr/${name}").then(m => m.${name}Icon)]`,
+          )
+          .join(",")}]);\n`,
+    ),
   };
 }

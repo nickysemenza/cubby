@@ -1,7 +1,7 @@
 import type { RecipeUsage } from "@cubby/schemas/recipe";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
+import { recipe } from "~/integrations/tanstack-query/domains/recipe";
 
 /**
  * Re-parse one usage's stored line through `recipe.reparseLine`. The server parses the source

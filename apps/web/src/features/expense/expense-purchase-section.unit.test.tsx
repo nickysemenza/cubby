@@ -8,7 +8,7 @@ import { expenseContract } from "~/contracts/expense.contract";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
-import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
+import { expense as expenseOperations } from "~/integrations/tanstack-query/domains/expense";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {

@@ -27,8 +27,8 @@ import { z } from "zod";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { MobileCardView } from "~/entity/table/mobile-card-view";
-import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
-import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
+import { ai } from "~/integrations/tanstack-query/domains/ai";
+import { suggestions } from "~/integrations/tanstack-query/domains/suggestions";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

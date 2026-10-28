@@ -8,7 +8,7 @@ import { Link } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { aiFunding } from "~/integrations/tanstack-query/generated/catalog/aiFunding.gen";
+import { aiFunding } from "~/integrations/tanstack-query/domains/aiFunding";
 import { formatCurrency } from "~/lib/number-format";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";

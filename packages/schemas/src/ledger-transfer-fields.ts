@@ -2,6 +2,7 @@ import { wholeCentAmount } from "./money";
 import { plainDate, uniqueBy } from "./base-entity";
 import { financialTransactionShortcode } from "./identifier-fields";
 import { z } from "zod";
+import { dateTime } from "./codec";
 
 export const ledgerTransferAmount = wholeCentAmount.positive();
 
@@ -75,8 +76,8 @@ export const ledgerSourceClaimOut = z.object({
   sourceKey: z.string().min(1),
   sourceKeyVersion: z.number().int().positive(),
   targetAmountAtClaim: wholeCentAmount,
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: dateTime,
+  updatedAt: dateTime,
 });
 export const ledgerSourceClaimsOut = z.array(ledgerSourceClaimOut);
 export type LedgerSourceClaimOut = z.infer<typeof ledgerSourceClaimOut>;

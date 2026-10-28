@@ -18,7 +18,7 @@ import {
 } from "~/entity/fields/field-envelope.fixtures";
 import { sampleLocations } from "~/features/design/data/samples";
 import { locationReadFixture } from "~/features/location/location-read.fixtures";
-import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
+import { location } from "~/integrations/tanstack-query/domains/location";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 

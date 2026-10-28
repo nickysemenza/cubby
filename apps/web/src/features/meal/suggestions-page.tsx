@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { entityDetailLink } from "~/entity/entities";
-import { recipeAvailability } from "~/integrations/tanstack-query/generated/catalog/recipeAvailability.gen";
+import { recipeAvailability } from "~/integrations/tanstack-query/domains/recipeAvailability";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Panel, Row, Stack } from "~/ui/layout";

@@ -13,7 +13,7 @@ import {
   expenseOrderIdColumn,
   expenseVendorColumn,
 } from "~/features/project/shared";
-import { expense } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
+import { expense } from "~/integrations/tanstack-query/domains/expense";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

@@ -7,8 +7,8 @@ import {
   WorkActionDialogTrigger,
   type WorkActionProps,
 } from "~/entity/work-queue/work-actions";
-import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
-import { householdContribution } from "~/integrations/tanstack-query/generated/catalog/householdContribution.gen";
+import { financialTransaction } from "~/integrations/tanstack-query/domains/financialTransaction";
+import { householdContribution } from "~/integrations/tanstack-query/domains/householdContribution";
 import { formatCurrency } from "~/lib/number-format";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

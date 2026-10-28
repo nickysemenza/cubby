@@ -6,7 +6,7 @@ import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 
 import type { PricingStatus } from "~/entity/presentation/calculate-inventory-valuation";
-import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
+import { location } from "~/integrations/tanstack-query/domains/location";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 
 // Persisted location.valuation stores pricing as bare counts; the viz nodes use

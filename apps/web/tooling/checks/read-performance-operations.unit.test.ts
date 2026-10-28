@@ -5,7 +5,6 @@ import {
 } from "node:http";
 import { once } from "node:events";
 import type { BatchResult } from "@cubby/schemas/batch";
-import superjson from "superjson";
 import { describe, expect, it } from "vitest";
 import type {
   StartOperationResult,
@@ -34,7 +33,7 @@ const failure = {
 const line = (
   i: number,
   value: BatchResult<StartOperationResult<UnparsedStartOperationData>>,
-) => JSON.stringify({ i, r: superjson.serialize(value) }) + "\n";
+) => JSON.stringify({ i, r: value }) + "\n";
 
 async function serve<T>(
   respond: (response: ServerResponse, request: IncomingMessage) => void,
@@ -63,27 +62,25 @@ describe("operation performance evidence", () => {
     const sample = await serve(
       (response) =>
         response.end(
-          JSON.stringify(
-            superjson.serialize({
-              ok: true,
-              data: {
-                items: [
-                  {
-                    id: "synthetic-private-id",
-                    name: "synthetic-private-label",
-                  },
-                ],
-                meta: {
-                  pageIndex: 0,
-                  pageSize: 25,
-                  totalCount: 9,
-                  hasNextPage: false,
-                  unresolvedCount: 2,
-                  incompleteSums: ["synthetic-private-total"],
+          JSON.stringify({
+            ok: true,
+            data: {
+              items: [
+                {
+                  id: "synthetic-private-id",
+                  name: "synthetic-private-label",
                 },
+              ],
+              meta: {
+                pageIndex: 0,
+                pageSize: 25,
+                totalCount: 9,
+                hasNextPage: false,
+                unresolvedCount: 2,
+                incompleteSums: ["synthetic-private-total"],
               },
-            }),
-          ),
+            },
+          }),
         ),
       (origin) =>
         measureOperationRead(
@@ -108,20 +105,18 @@ describe("operation performance evidence", () => {
     const sample = await serve(
       (response) =>
         response.end(
-          JSON.stringify(
-            superjson.serialize({
-              ok: true,
-              data: {
-                items: [],
-                meta: {
-                  pageIndex: 0,
-                  pageSize: 25,
-                  totalCount: 0,
-                  hasNextPage: false,
-                },
+          JSON.stringify({
+            ok: true,
+            data: {
+              items: [],
+              meta: {
+                pageIndex: 0,
+                pageSize: 25,
+                totalCount: 0,
+                hasNextPage: false,
               },
-            }),
-          ),
+            },
+          }),
         ),
       (origin) =>
         measureOperationRead(
@@ -141,20 +136,20 @@ describe("operation performance evidence", () => {
     });
   });
   it.each([false, true])(
-    "declares the serialized request codec (batch=%s)",
+    "declares the browser surface (batch=%s)",
     async (batch) => {
-      let codec: string | string[] | undefined;
-      const headers = new Headers({ "x-cubby-value-codec": "json" });
+      let surface: string | string[] | undefined;
+      const headers = new Headers({ "x-synthetic-caller": "kept" });
       const sample = await serve(
         (response, request) => {
-          codec = request.headers["x-cubby-value-codec"];
+          surface = request.headers["x-cubby-surface"];
           if (batch) {
             response.setHeader("content-type", "application/x-ndjson");
             response.end(
               line(0, { ok: true, value: success }) +
                 line(1, { ok: true, value: success }),
             );
-          } else response.end(JSON.stringify(superjson.serialize(success)));
+          } else response.end(JSON.stringify(success));
         },
         (origin) =>
           measureOperationRead(
@@ -163,11 +158,10 @@ describe("operation performance evidence", () => {
             headers,
           ),
       );
-      // The dispatcher defaults to plain JSON without this header and rejects
-      // the SuperJSON wrapper before any operation can settle.
-      expect(codec).toBe("superjson");
+      // Browser reads reach internal operations under the `web` channel.
+      expect(surface).toBe("browser");
       expect(sample.success).toBe(true);
-      expect(headers.get("x-cubby-value-codec")).toBe("json");
+      expect([...headers.keys()]).toEqual(["x-synthetic-caller"]);
     },
   );
   it("retains duplicate query positions without repeating sample metadata", async () => {
@@ -202,7 +196,7 @@ describe("operation performance evidence", () => {
   it("carries only requested declaration metadata across measurement and aggregation", async () => {
     const samples = await serve(
       (response) => {
-        response.end(JSON.stringify(superjson.serialize(success)));
+        response.end(JSON.stringify(success));
       },
       async (origin) => [
         await measureOperationRead(
@@ -240,9 +234,7 @@ describe("operation performance evidence", () => {
           "server-timing",
           `db-query;dur=10;desc="n=${ok ? 7 : 0} max=10 conc=1"`,
         );
-        response.end(
-          JSON.stringify(superjson.serialize(ok ? success : failure)),
-        );
+        response.end(JSON.stringify(ok ? success : failure));
       },
       async (origin) => [
         await measureOperationRead(item, origin, new Headers()),
@@ -261,18 +253,15 @@ describe("operation performance evidence", () => {
   it("preserves server batch rejection codes without calling them malformed stream results", async () => {
     const sample = await serve(
       (response) => {
+        // A refused batch is the bare error under its status.
+        response.statusCode = 400;
         response.setHeader("content-type", "application/json");
         response.end(
-          JSON.stringify(
-            superjson.serialize({
-              ...failure,
-              error: {
-                ...failure.error,
-                code: "BAD_REQUEST",
-                requestId: "synthetic-correlation",
-              },
-            }),
-          ),
+          JSON.stringify({
+            ...failure.error,
+            code: "BAD_REQUEST",
+            requestId: "synthetic-correlation",
+          }),
         );
       },
       (origin) =>
@@ -294,7 +283,7 @@ describe("operation performance evidence", () => {
     const sample = await serve(
       (response) => {
         response.setHeader("content-type", "application/json");
-        response.end(JSON.stringify(superjson.serialize(failure)));
+        response.end(JSON.stringify(failure));
       },
       (origin) => measureOperationRead(item, origin, new Headers()),
     );
@@ -406,7 +395,7 @@ describe("operation performance evidence", () => {
     const sample = await serve(
       (response) => {
         response.statusCode = 503;
-        response.end(JSON.stringify(superjson.serialize(success)));
+        response.end(JSON.stringify(success));
       },
       (origin) => measureOperationRead(item, origin, new Headers()),
     );
@@ -444,7 +433,7 @@ it("writes public and private CLI artifacts without raw input even on RPC failur
       }),
     );
     const code = await serve(
-      (response) => response.end(JSON.stringify(superjson.serialize(failure))),
+      (response) => response.end(JSON.stringify(failure)),
       (origin) =>
         readPerformance(
           [
