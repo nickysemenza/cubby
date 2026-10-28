@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   CLOUDFLARE_ACCOUNT_ID: "9f10f078d35d86c78dedece2300a6b88"
@@ -32,13 +33,15 @@ jobs:
       - uses: ./.github/actions/deploy-worker
         with:
           package: "@cubby/web"
+          worker-name: "cubby"
+          verify-url: "https://cubby.nickysemenza.com/"
           workspace-filter: "@cubby/web..."
           wasm: "restore"
           build-command: "pnpm --filter @cubby/web run build:cf"
           sentry-auth-token: ${{ secrets.SENTRY_AUTH_TOKEN }}
           # deploy-worker writes the release values; cf uploads them with the
           # Worker version and inherits the existing secrets.
-          deploy-command: 'pnpm --filter @cubby/web exec cf deploy --prebuilt --mode production --secrets-file "$RUNNER_TEMP/source-release.json"'
+          deploy-command: 'pnpm --filter @cubby/web exec cf deploy --prebuilt --mode production --secrets-file "$RUNNER_TEMP/source-release.json" --tag "$CF_DEPLOY_TAG" --message "$CF_DEPLOY_MESSAGE"'
           production-direct-database-url: ${{ secrets.PRODUCTION_DIRECT_DATABASE_URL }}
           production-migration-through: ${{ vars.PRODUCTION_MIGRATION_THROUGH }}
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}

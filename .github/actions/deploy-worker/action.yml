@@ -33,6 +33,12 @@ inputs:
       devDependency. It may upload `$RUNNER_TEMP/source-release.json` as the
       version's secrets file.
     required: true
+  worker-name:
+    description: "Production Worker name for deployment read-back"
+    required: true
+  verify-url:
+    description: "Public application URL whose document exposes cubby-release"
+    required: true
   cloudflare-api-token:
     description: "Cloudflare API token"
     required: true
@@ -73,6 +79,44 @@ runs:
         SENTRY_AUTH_TOKEN: ${{ inputs.sentry-auth-token }}
       run: ${{ inputs.build-command }}
 
+    - name: Describe the source deployment
+      if: steps.current_main.outputs.current == 'true'
+      id: release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" > "$RUNNER_TEMP/source-prs.json"
+        python3 - <<'PYTHON'
+        import html
+        import json
+        import os
+        import pathlib
+        import subprocess
+        import uuid
+
+        env = os.environ
+        sha = env["GITHUB_SHA"]
+        repository = f'{env["GITHUB_SERVER_URL"]}/{env["GITHUB_REPOSITORY"]}'
+        run = f'{repository}/actions/runs/{env["GITHUB_RUN_ID"]}/attempts/{env["GITHUB_RUN_ATTEMPT"]}'
+        subject, author = subprocess.check_output(
+            ["git", "show", "-s", "--format=%s%n%an", sha, "--"], text=True
+        ).strip().split("\n", 1)
+        prs = json.loads(pathlib.Path(env["RUNNER_TEMP"], "source-prs.json").read_text())
+        pr = next((pr for pr in prs if pr["merged_at"] and pr["base"]["ref"] == "main"
+                   and pr["merge_commit_sha"] == sha), None)
+        attribution = f'PR #{pr["number"]} by @{pr["user"]["login"]}: {pr["html_url"]}' if pr else f'Commit author: {author}'
+        # Preserve links before truncating the subject to Cloudflare's 1000-byte limit.
+        message = f'{attribution}\nDeployed by @{env["GITHUB_ACTOR"]}; run by @{env["GITHUB_TRIGGERING_ACTOR"]}\n{run}\n{subject}'
+        message = message.encode("utf-8")[:1000].decode("utf-8", errors="ignore")
+        delimiter = uuid.uuid4().hex
+        with open(env["GITHUB_OUTPUT"], "a") as output:
+            output.write(f'tag={sha}\nmessage<<{delimiter}\n{message}\n{delimiter}\n')
+        with open(env["GITHUB_STEP_SUMMARY"], "a") as summary:
+            summary.write(f'### Production deployment\n\nSource: [{sha}]({repository}/commit/{sha})\n\n')
+            summary.write(f'{html.escape(subject)}\n\n{html.escape(attribution)}\n\n[Deployment run]({run})\n\n')
+        PYTHON
+
     - name: Apply production migrations
       if: steps.current_main.outputs.current == 'true'
       shell: bash
@@ -110,4 +154,96 @@ runs:
       env:
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
         CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        CF_DEPLOY_TAG: ${{ steps.release.outputs.tag }}
+        CF_DEPLOY_MESSAGE: ${{ steps.release.outputs.message }}
       run: ${{ inputs.deploy-command }}
+
+    - name: Verify the serving release
+      if: steps.deploy_current.outputs.current == 'true'
+      shell: bash
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        WORKER_NAME: ${{ inputs.worker-name }}
+        VERIFY_URL: ${{ inputs.verify-url }}
+      run: |
+        python3 - <<'PYTHON'
+        import json
+        import os
+        import pathlib
+        import time
+        import urllib.parse
+        import urllib.request
+        from html.parser import HTMLParser
+
+        env = os.environ
+        account = env["CLOUDFLARE_ACCOUNT_ID"]
+        worker = urllib.parse.quote(env["WORKER_NAME"], safe="")
+        api = f'https://api.cloudflare.com/client/v4/accounts/{account}/workers/scripts/{worker}'
+        dashboard = f'https://dash.cloudflare.com/{account}/workers/services/view/{worker}/production/deployments'
+        identity = json.loads(pathlib.Path(env["RUNNER_TEMP"], "source-release.json").read_text())
+        expected = f'cubby@{identity["CUBBY_SOURCE_COMMIT"]}'
+
+        def read_api(path):
+            request = urllib.request.Request(api + path, headers={
+                "Authorization": f'Bearer {env["CLOUDFLARE_API_TOKEN"]}',
+                "User-Agent": "cubby-release-verification/1.0",
+            })
+            with urllib.request.urlopen(request, timeout=15) as response:
+                body = json.load(response)
+            if not body.get("success"):
+                raise RuntimeError(f'Cloudflare read-back failed: {body.get("errors")}')
+            return body["result"]
+
+        class ReleaseParser(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.releases = []
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if tag == "meta" and attrs.get("name") == "cubby-release":
+                    self.releases.append(attrs.get("content"))
+
+        try:
+            deployment = read_api("/deployments")["deployments"][0]
+            versions = deployment["versions"]
+            if len(versions) != 1 or versions[0]["percentage"] != 100:
+                raise RuntimeError("Expected one Worker version serving 100% of traffic")
+            version = read_api(f'/versions/{versions[0]["version_id"]}')
+            if version["annotations"].get("workers/tag") != env["GITHUB_SHA"]:
+                raise RuntimeError(f'Active Worker version {version["id"]} has the wrong source tag')
+            with open(env["GITHUB_STEP_SUMMARY"], "a") as summary:
+                summary.write(f'Worker version: `{version["id"]}`\n\nDeployment: `{deployment["id"]}`\n\n[Cloudflare deployments]({dashboard})\n\n')
+            # Bound propagation checks; never re-run migrations or roll back code here.
+            for attempt in range(6):
+                try:
+                    request = urllib.request.Request(env["VERIFY_URL"], headers={
+                        "Cache-Control": "no-cache",
+                        "User-Agent": "cubby-release-verification/1.0",
+                    })
+                    with urllib.request.urlopen(request, timeout=10) as response:
+                        actual = urllib.parse.urlsplit(response.url)
+                        origin = urllib.parse.urlsplit(env["VERIFY_URL"])
+                        if (actual.scheme, actual.netloc) != (origin.scheme, origin.netloc):
+                            raise RuntimeError("Health request redirected away from the application origin")
+                        if response.status != 200:
+                            raise RuntimeError(f'Health request returned HTTP {response.status}')
+                        parser = ReleaseParser()
+                        parser.feed(response.read(2_000_000).decode("utf-8"))
+                    if parser.releases != [expected]:
+                        raise RuntimeError(f'Expected {expected}; observed release markers {parser.releases}')
+                    break
+                except Exception:
+                    if attempt == 5:
+                        raise
+                    time.sleep(5)
+            with open(env["GITHUB_STEP_SUMMARY"], "a") as summary:
+                summary.write(f'Verified HTTP 200 and serving release `{expected}`.\n')
+            print(f'Verified Worker version {version["id"]}, serving release {expected}')
+        except Exception as error:
+            with open(env["GITHUB_STEP_SUMMARY"], "a") as summary:
+                summary.write('**Release verification failed.** Inspect the step diagnostics and active deployment. No automatic rollback was attempted.\n')
+            print(f'::error::Release verification failed: {error}')
+            raise
+        PYTHON
