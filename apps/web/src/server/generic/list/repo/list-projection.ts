@@ -240,10 +240,16 @@ export function listReadPlan<Row>(
   );
   const modelFields: EntityFieldModel["fields"] =
     entityFieldModels[entity].fields;
+  const declaredBindings = options.bindings?.(bind) ?? [];
   const projections = modelFields.filter(
     (field) =>
       field.storedPath &&
       !field.storedProjection &&
+      // Explicit readers may supply a raw placeholder or contextual projection;
+      // the public constructor still owns publication availability and staleness.
+      !declaredBindings.some((binding) =>
+        Object.hasOwn(binding.schema.shape, field.readKey ?? field.key),
+      ) &&
       Object.hasOwn(schema.shape, field.readKey ?? field.key),
   );
   const resultBindings = projections.length
@@ -274,7 +280,7 @@ export function listReadPlan<Row>(
           ),
       ]
     : [];
-  const bindings = [...resultBindings, ...(options.bindings?.(bind) ?? [])];
+  const bindings = [...resultBindings, ...declaredBindings];
   const written = new Set<string>(["id", "dataQuality", "displayImages"]);
   // A key may have one page writer and one detail-scoped writer: the record
   // read takes the richer detail value, a page keeps its own.

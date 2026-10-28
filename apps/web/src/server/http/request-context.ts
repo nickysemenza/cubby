@@ -262,18 +262,18 @@ export interface DatabaseReadRouting {
   readMarker: typeof readMemberMarker;
 }
 
-const productionReadRouting: DatabaseReadRouting = {
-  cachedDb: boundedStaleDb,
-  readMarker: readMemberMarker,
-};
-
 /** Resolve per logical operation without a household freshness RPC. */
 export async function selectOperationContext<
   Context extends ReturnType<typeof requireActor>,
 >(
   context: Context,
   policy: "context" | "strong",
-  routing: DatabaseReadRouting = productionReadRouting,
+  routing: DatabaseReadRouting = {
+    // Only the root request handle has a cached peer. A scoped transaction
+    // or injected database must never escape to another database's pool.
+    cachedDb: context.db === db ? boundedStaleDb : context.db,
+    readMarker: readMemberMarker,
+  },
 ): Promise<Context> {
   const readConsistency: ReadConsistencyDecision =
     policy === "strong"

@@ -89,6 +89,7 @@ describe("member read routing", () => {
   });
   it("never lets a cached member context downgrade money entry, mutations or invalidation refetches", async () => {
     const browser = context("financial");
+    expect((await selectOperationContext(browser, "context")).db).toBe(db);
     expect(
       (
         await selectOperationContext(
