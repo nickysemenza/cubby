@@ -103,6 +103,7 @@ export type RunStepView = {
   position: number;
   label: string;
   purpose: string | null;
+  scope?: string;
   unit: string;
   mode: StepInputMode;
   phase: StepPhase;
@@ -262,6 +263,7 @@ function stepView(
     position: step.position,
     label: declaration?.label ?? step.label,
     purpose: declaration?.purpose ?? null,
+    scope: declaration?.scope,
     unit: declaration?.unit ?? "items",
     mode,
     phase,

@@ -111,6 +111,9 @@ describe("MaintenanceRunCard", () => {
     expect(
       await screen.findByText("2 steps with failures", { exact: false }),
     ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Backlog and image processing" }),
+    );
     expect(screen.getByText(/awaiting EXIF\/GPS extraction/)).toBeVisible();
     expect(screen.getByText(/missing in storage/)).toBeVisible();
     expect(screen.queryByText(/awaiting a search embedding/)).toBeNull();

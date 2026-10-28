@@ -1577,11 +1577,13 @@ export type MaintenanceCounts = z.infer<typeof maintenanceCountsSchema>;
 export const dryRunReparseOut = z.object({
   wouldChange: z.number().int(),
   total: z.number().int(),
+  sample: z.array(staleIngredientParseSchema).max(20),
 });
 
 export const dryRunPruneAliasesOut = z.object({
   wouldPrune: z.number().int(),
   ingredients: z.number().int(),
+  sample: z.array(ingredientWithUnusedAliasesSchema).max(20),
 });
 
 // These existing streams accept general numbers, unlike integer batch progress.

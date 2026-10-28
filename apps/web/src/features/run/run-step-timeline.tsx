@@ -25,6 +25,7 @@ import {
   STEP_PHASE_LABEL,
   type StepPhase,
 } from "./run-view-model";
+import { StepPurpose } from "./work-definition";
 
 const DOT_STATE = {
   done: "done",
@@ -456,7 +457,7 @@ export function RunStepTimeline({
             secondary={
               <>
                 {step.purpose ? (
-                  <span className="block max-w-[78ch]">{step.purpose}</span>
+                  <StepPurpose purpose={step.purpose} scope={step.scope} />
                 ) : null}
                 {expanded ? null : <StepSummary step={step} />}
               </>

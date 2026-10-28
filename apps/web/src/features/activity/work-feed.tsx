@@ -154,7 +154,9 @@ function streamPace(
 // eslint-disable-next-line complexity -- Feed freshness, caption and row states must use the same query snapshots.
 export function WorkFeed({
   onShowJobs,
+  attentionOnly = false,
 }: {
+  attentionOnly?: boolean;
   onShowJobs: (kind: string) => void;
 }) {
   const activity = useQuery({
@@ -223,25 +225,45 @@ export function WorkFeed({
       ? `${countLabel(activeCount, "kind")} of work in progress · ${formatCount(completedTotal + derivedUpdated)} finished in the last ${windows?.completedMinutes ?? 15} min`
       : `All quiet · ${formatCount(completedTotal + derivedUpdated)} finished in the last ${windows?.completedMinutes ?? 15} min`;
 
+  const visibleViews = attentionOnly
+    ? live.filter(
+        (view) =>
+          view.status === "stuck" ||
+          view.status === "failed" ||
+          view.status === "stale",
+      )
+    : [...live, ...finished];
+  const showDerived =
+    !attentionOnly || derivedStatus === "stuck" || derivedStatus === "stale";
   return (
     <Section
-      headingAs="h2"
+      headingAs={attentionOnly ? "h3" : "h2"}
       title={
-        <span className="inline-flex items-center gap-2">
-          Now
-          {working ? (
-            <>
-              <span
-                aria-hidden
-                className="size-1.5 rounded-full bg-info motion-safe:animate-pulse"
-              />
-              <span className="sr-only">Work is moving</span>
-            </>
-          ) : null}
-        </span>
+        attentionOnly ? (
+          "Stalled or failed work"
+        ) : (
+          <span className="inline-flex items-center gap-2">
+            Now
+            {working ? (
+              <>
+                <span
+                  aria-hidden
+                  className="size-1.5 rounded-full bg-info motion-safe:animate-pulse"
+                />
+                <span className="sr-only">Work is moving</span>
+              </>
+            ) : null}
+          </span>
+        )
       }
-      caption={caption}
-      id="now"
+      caption={
+        attentionOnly
+          ? unknown
+            ? "Problem status unavailable"
+            : "Work that has stopped progressing or keeps failing. Ordinary retries and waits stay in Now."
+          : caption
+      }
+      id={attentionOnly ? "attention-streams" : "now"}
     >
       <RecordList
         state={
@@ -260,7 +282,9 @@ export function WorkFeed({
           <span>
             {unknown
               ? "Current work status unavailable"
-              : "All quiet · Nothing running or waiting."}
+              : attentionOnly
+                ? "No stalled or failed streams observed."
+                : "All quiet · Nothing running or waiting."}
           </span>
         }
       >
@@ -283,15 +307,27 @@ export function WorkFeed({
               />
             }
           />
-        ) : (backlog.data && (derivedWaiting > 0 || derivedUpdated > 0)) ||
-          backlogStale ? (
+        ) : showDerived &&
+          ((backlog.data && (derivedWaiting > 0 || derivedUpdated > 0)) ||
+            backlogStale) ? (
           <FeedRow
             testId="work-stream-derived"
             status={derivedStatus}
             label={
-              <a href="#derived-values" className="hover:underline">
-                Derived values
-              </a>
+              attentionOnly ? (
+                <Link
+                  to="/activity"
+                  search={{ tab: "now" }}
+                  hash="derived-values"
+                  className="hover:underline"
+                >
+                  Derived values
+                </Link>
+              ) : (
+                <a href="#derived-values" className="hover:underline">
+                  Derived values
+                </a>
+              )
             }
             facts={
               backlogStale
@@ -307,7 +343,7 @@ export function WorkFeed({
             }
           />
         ) : null}
-        {[...live, ...finished].map((view) => {
+        {visibleViews.map((view) => {
           const facts =
             activityStale && activity.data
               ? `Data measured ${formatRelative(activity.data.measuredAt, now)}`

@@ -30,6 +30,7 @@ import {
   RunStepTimeline,
 } from "./run-step-timeline";
 import { humanizeKey, runOverview, type RunStepView } from "./run-view-model";
+import { RunDefinition } from "./work-definition";
 
 const LIVE_POLL_MS = 3_000;
 // The declared Run slot ids, which the detail page uses as section ids.
@@ -275,6 +276,7 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
 
   return (
     <div className="grid gap-4">
+      <RunDefinition purpose={record.purpose} />
       <RunStepStrip overview={overview} figures={figures} />
       <ReportBlocks
         blocks={runPlanBlocks({

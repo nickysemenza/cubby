@@ -378,8 +378,9 @@ the lease, live or expired) and `leaseExpiresAt`. Its saved views are
   only on hello), device attempt starts per minute (reclaims included) and the
   ETA at that pace.
 
-Web Activity presents the device backlog banner, compact lane/reason counts,
-Runs needing attention, then Jobs. Navigable counts use the Job entity
+Web Activity’s Now view presents the device backlog banner, compact lane/reason
+counts, Runs needing attention, then Jobs. Needs you also exposes Run and Job
+attention alongside the Work queue’s Decisions and Problems groups. Navigable counts use the Job entity
 population, hiding internal work with the table. Every supplied retry
 restriction intersects, including mixed entity filters, row IDs and Run scope.
 Count chips scope the Job table; web records that scope in Activity's URL.
@@ -609,3 +610,29 @@ Device work stops when the server refuses an older build's writes (HTTP 426):
 the worker stops pulling and shows "Update required to process images". Raise
 the minimum only for unsafe writes; see
 [breaking changes](agents/domain-rules.md#breaking-changes).
+
+## Member-facing work explanations
+
+Activity is the web entry point for Needs you, Now, History and Advanced
+maintenance (`tab=needs-you|now|history|maintenance`). Legacy Activity links
+with queue filters open Now; audit filters open History. Needs you reuses the
+canonical Work queue and Run/Job attention predicates. It does not add an
+alert engine or change retry policy. Normal retries, waits and dependencies
+remain in Now. Existing Work queue views remain usable.
+
+`RUN_KINDS` owns Run purpose, triggers, effects and declared steps.
+`JOB_KIND_POLICY` in `packages/schemas/src/job.ts` co-locates each Job kind’s
+member explanation with its unchanged execution policy; the server kind-policy
+module re-exports that policy. `/runs/types` renders the static reference.
+Run and Job execution views link to these definitions, while actual outcomes,
+waits, raw errors and retry controls remain on their existing records.
+Definitions are not evidence that execution happened. Retained unknown kinds
+keep their diagnostics and explicitly lack a current definition.
+
+Nightly maintenance is a `maintenance` Run, separate from the five-minute
+`jobs.maintenance` queue-upkeep Job. Its declared effects are inspectable before
+launch; it remains one standard action. Exact input populations become known
+at step start, provider estimates stay estimates, and one-call/admission
+tallies do not imply a fixed total or ETA. Image maintenance classification
+counts use the current processor revision and can overlap; uncertain cutout
+eligibility does not imply a human review queue.

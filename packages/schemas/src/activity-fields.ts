@@ -22,6 +22,8 @@ export type RunStepDeclaration = {
   label: string;
   /** What the step is for, in one sentence a member reads. */
   purpose: string;
+  /** Target eligibility and effects when a step needs additional explanation. */
+  scope?: string;
   /** The current action while it runs; a page may report a narrower one. */
   action: string;
   /** What one counted item is (`seeds`, `charges`, `evaluations`). */
@@ -36,7 +38,18 @@ export type RunStepDeclaration = {
   results?: { family: string };
 };
 
+/** Member-facing effects, shared by reference pages and execution views. */
+type WorkExplanation = {
+  targets: string;
+  exclusions: string;
+  effects: string;
+  dependencies: string;
+  cost: string;
+  recovery: string;
+};
+
 export type RunKindDeclaration = {
+  explanation: WorkExplanation;
   label: string;
   description: string;
   /** Who starts it: a member, the scheduler, an agent, or system work. */
@@ -76,6 +89,15 @@ const counted = { mode: "count" } as const;
  */
 export const RUN_KINDS = {
   account_sync: {
+    explanation: {
+      targets: "One vendor account’s order history.",
+      exclusions: "Historical type; no new Runs are created.",
+      effects: "Retained import targets and their recorded outcomes.",
+      dependencies: "The original vendor account and agent session.",
+      cost: "See the retained Run’s recorded AI usage.",
+      recovery:
+        "Inspect retained outcomes; use the current purchase workflow for new work.",
+    },
     label: "Account sync",
     description: "A vendor account's order history sync.",
     trigger: "agent",
@@ -83,12 +105,31 @@ export const RUN_KINDS = {
     progress: "targets",
   },
   mail_import: {
+    explanation: {
+      targets: "Purchase evidence selected from Emails and vendor accounts.",
+      exclusions: "Unrelated mail is not retained as purchase content.",
+      effects:
+        "Records research, evidence, imported purchases and unresolved decisions under the purchase workflow.",
+      dependencies: "Connected mail or vendor accounts and an agent session.",
+      cost: "AI calls use the configured model and funding policy; recorded usage belongs to the Run.",
+      recovery:
+        "Inspect each target and its evidence; continue or retry through the owning purchase workflow.",
+    },
     label: "Purchase research",
     description: "An agent researching purchases from Email and accounts.",
     trigger: "agent",
     progress: "targets",
   },
   purchase_validation: {
+    explanation: {
+      targets: "Previously imported purchases selected for validation.",
+      exclusions: "Historical type; no new Runs are created.",
+      effects: "Retains validation findings and recorded changes.",
+      dependencies: "Original purchase evidence and agent session.",
+      cost: "See the retained Run’s recorded usage.",
+      recovery:
+        "Inspect retained findings; use current purchase review for new work.",
+    },
     label: "Purchase validation",
     description: "An agent validating imported purchases.",
     trigger: "agent",
@@ -96,6 +137,15 @@ export const RUN_KINDS = {
     progress: "targets",
   },
   product_enrichment: {
+    explanation: {
+      targets: "Products selected for identity research.",
+      exclusions: "Historical type; no new Runs are created.",
+      effects: "Retains researched facts, evidence and recorded changes.",
+      dependencies: "Research sources and agent session.",
+      cost: "See the retained Run’s recorded usage.",
+      recovery:
+        "Use the current Research work queue for unresolved Product facts.",
+    },
     label: "Product enrichment",
     description: "An agent enriching Product identity facts.",
     trigger: "agent",
@@ -103,6 +153,19 @@ export const RUN_KINDS = {
     progress: "targets",
   },
   photo_inventory: {
+    explanation: {
+      targets:
+        "Photos uploaded to one photo inventory batch and its proposed belongings.",
+      exclusions:
+        "Approval and inventory decisions remain explicit; photo analysis alone does not receive stock.",
+      effects:
+        "Analyzes images, proposes Products and inventory decisions, and applies approved items through the review workspace.",
+      dependencies:
+        "Uploaded originals, configured AI models, and Apple processing where required.",
+      cost: "Image and grouping calls use the configured AI funding policy.",
+      recovery:
+        "Inspect image failures and grouping evidence, then resolve or approve items in the batch workspace.",
+    },
     label: "Photo inventory",
     description: "A batch of belongings photos turned into inventory.",
     trigger: "member",
@@ -111,12 +174,36 @@ export const RUN_KINDS = {
   // Every AI call belongs to a run; these purposes group work that is not an
   // import. Their lifetime is set by `trigger` (`ephemeral` or not).
   ai_suggest: {
+    explanation: {
+      targets: "The record and field whose suggestion was requested.",
+      exclusions:
+        "Only eligible suggestions are proposed; explicit member decisions remain authoritative.",
+      effects:
+        "Records AI evaluations and field Suggestions under the owning suggestion policy.",
+      dependencies:
+        "Current record evidence and the configured decision model.",
+      cost: "AI funding and model limits apply; inspect charged usage on this Run.",
+      recovery:
+        "Inspect the evaluation and its inputs; accept or reject the resulting Suggestion in its owning record.",
+    },
     label: "AI suggestions",
     description: "Decision-model suggestions requested while a member works.",
     trigger: "member",
     progress: "calls",
   },
   suggestion_sweep: {
+    explanation: {
+      targets:
+        "Eligible records of the selected entity and requested suggestion scope.",
+      exclusions:
+        "Records outside the selected scope or ineligible under the owning family policy are excluded.",
+      effects:
+        "Requests field evaluations and publishes their Suggestions; application follows the owning policy.",
+      dependencies: "Current record evidence and configured AI models.",
+      cost: "Uses AI funding; a funding wait is not a completed evaluation.",
+      recovery:
+        "Inspect evaluations and their outcomes; use supported Run controls and suggestion review.",
+    },
     label: "Suggestion sweep",
     description: "Field suggestions for one entity's records.",
     trigger: "member",
@@ -125,6 +212,18 @@ export const RUN_KINDS = {
     progress: "checkpoint",
   },
   ai_refresh: {
+    explanation: {
+      targets: "AI evaluations made stale by changed inputs or policy.",
+      exclusions:
+        "Current evaluations and explicit member decisions follow their existing eligibility rules.",
+      effects:
+        "Re-evaluates stale evidence and publishes eligible replacement results.",
+      dependencies:
+        "Current inputs, evaluation policy and configured AI models.",
+      cost: "Uses AI funding and pauses or waits under the existing funding policy.",
+      recovery:
+        "Inspect failed evaluations and Job diagnostics; use the supported Run recovery action.",
+    },
     label: "AI refresh",
     description: "AI evaluations whose inputs or policy changed.",
     trigger: "system",
@@ -133,18 +232,50 @@ export const RUN_KINDS = {
     progress: "checkpoint",
   },
   background: {
+    explanation: {
+      targets: "Background AI calls attributed to this Run.",
+      exclusions: "This is an attribution group, not a fixed multi-step plan.",
+      effects: "Records the operation and its domain-owned outcome.",
+      dependencies:
+        "The requesting feature, current evidence and configured model.",
+      cost: "Recorded charged AI usage is attributed to the Run.",
+      recovery:
+        "Inspect the operation and owning record for its supported recovery.",
+    },
     label: "Background",
     description: "Single background AI calls grouped for usage.",
     trigger: "system",
     progress: "operations",
   },
   file_import: {
+    explanation: {
+      targets:
+        "The receipt, order Email or vendor export selected by the member.",
+      exclusions:
+        "Unrelated records are outside the import; stock changes remain deliberate.",
+      effects:
+        "Parses source evidence and records imported entities and review decisions through the owning import flow.",
+      dependencies:
+        "Readable source material and any model required by the selected importer.",
+      cost: "AI parsing, when used, follows the configured funding policy.",
+      recovery:
+        "Inspect the imported results and source evidence; resolve outstanding work in the owning import flow.",
+    },
     label: "File import",
     description: "A member's receipt, order Email or vendor export import.",
     trigger: "member",
     progress: "records",
   },
   mail_search: {
+    explanation: {
+      targets:
+        "The Gmail query and messages selected by the original research session.",
+      exclusions: "Historical type; no new Runs are created.",
+      effects: "Retains search operations and research evidence.",
+      dependencies: "Original Gmail access and agent session.",
+      cost: "See the retained Run’s recorded usage.",
+      recovery: "Use current mail discovery or purchase research for new work.",
+    },
     label: "Mail search",
     description: "A Gmail search for purchase evidence.",
     trigger: "agent",
@@ -152,6 +283,18 @@ export const RUN_KINDS = {
     progress: "operations",
   },
   mail_discovery: {
+    explanation: {
+      targets: "New mail in one connected mailbox within its discovery cursor.",
+      exclusions:
+        "Unrelated mail retains sender, subject and received date, but no body or attachments.",
+      effects:
+        "Classifies mail and admits relevant purchase work under existing routing policies.",
+      dependencies:
+        "Connected mailbox access, Gmail availability and configured classification models.",
+      cost: "AI classification uses the configured funding policy.",
+      recovery:
+        "Inspect the mailbox checkpoint and failed evaluations; use supported Run controls or repair the connection.",
+    },
     label: "Mail discovery",
     description: "One mailbox's pass over new purchase mail.",
     trigger: "scheduled",
@@ -159,6 +302,18 @@ export const RUN_KINDS = {
     progress: "checkpoint",
   },
   mail_reclassify: {
+    explanation: {
+      targets: "The Emails explicitly selected for reclassification.",
+      exclusions:
+        "Emails outside the selection and unsupported candidates are excluded.",
+      effects:
+        "Evaluates relevance again and applies the owning Email classification policy.",
+      dependencies:
+        "Retained Email evidence and the configured relevance model.",
+      cost: "Uses AI funding under the existing model policy.",
+      recovery:
+        "Inspect per-Email outcomes and evaluations; retry supported failed work from the Run.",
+    },
     label: "Email reclassification",
     description: "A member's reclassification of selected Emails.",
     trigger: "member",
@@ -167,6 +322,16 @@ export const RUN_KINDS = {
     progress: "checkpoint",
   },
   connection_discovery: {
+    explanation: {
+      targets: "Records whose declared connection inputs changed.",
+      exclusions: "Records without eligible changed inputs are excluded.",
+      effects:
+        "Evaluates possible connections and records results under the connection policy.",
+      dependencies: "Current connection evidence and the configured model.",
+      cost: "Eligible evaluations use AI funding.",
+      recovery:
+        "Inspect failed evaluations and resulting Suggestions; existing Run and Job controls own recovery.",
+    },
     label: "Connection discovery",
     description:
       "The routine pass that evaluates records whose connection inputs changed.",
@@ -177,6 +342,19 @@ export const RUN_KINDS = {
     progress: "checkpoint",
   },
   maintenance: {
+    explanation: {
+      targets:
+        "Eligible household upkeep backlogs, connected mailboxes and images still needing processing.",
+      exclusions:
+        "Each step applies its own eligibility and cutoff. Later arrivals may wait for the next pass. This is separate from internal five-minute queue upkeep.",
+      effects:
+        "Repairs missing image executors, extracts metadata, deletes abandoned uploads and disposable Email originals, reconciles Runs, cleans search artifacts, refreshes the calendar, starts mail discovery and admits paid image work.",
+      dependencies:
+        "Original image storage, connected mailboxes, calendar configuration, AI funding and Apple devices for device work.",
+      cost: "Image admission can incur AI charges; funding pauses happen after the other maintenance steps.",
+      recovery:
+        "Open the actual Run for step outcomes and supported retries. Failed image processing can continue retrying independently of this pass.",
+    },
     label: "Maintenance",
     description: "The nightly pass over household backlogs and upkeep.",
     trigger: "scheduled",
@@ -185,6 +363,8 @@ export const RUN_KINDS = {
     steps: [
       {
         key: "image-repair",
+        scope:
+          "Repairs open image work without an executor; ordinary failed-image retry remains owned by its Job.",
         label: "Image processing repair",
         purpose: "Requeues image work that lost its executor.",
         action: "Repairing image work",
@@ -193,6 +373,8 @@ export const RUN_KINDS = {
       },
       {
         key: "exif",
+        scope:
+          "Reads original images whose metadata is missing or stale; writes capture time, location and extraction outcomes.",
         label: "EXIF/GPS extraction",
         purpose: "Reads capture time and location from image originals.",
         action: "Extracting metadata",
@@ -201,6 +383,8 @@ export const RUN_KINDS = {
       },
       {
         key: "pending-uploads",
+        scope:
+          "Deletes pending uploads abandoned for more than 24 hours, using the pass cutoff.",
         label: "Abandoned uploads",
         purpose: "Removes uploads abandoned after presign.",
         action: "Removing abandoned uploads",
@@ -209,6 +393,8 @@ export const RUN_KINDS = {
       },
       {
         key: "photo-runs",
+        scope:
+          "Advances photo Runs whose prerequisite image processing has finished; does not approve proposed inventory.",
         label: "Photo Run advance",
         purpose: "Advances photo Runs waiting on finished image work.",
         action: "Advancing photo Runs",
@@ -217,6 +403,7 @@ export const RUN_KINDS = {
       },
       {
         key: "coordinators",
+        scope: "Retires coordinators idle for more than 24 hours.",
         label: "Coordinator retirement",
         purpose: "Retires idle coordinators.",
         action: "Retiring coordinators",
@@ -225,6 +412,8 @@ export const RUN_KINDS = {
       },
       {
         key: "runs",
+        scope:
+          "Reconciles stale execution and recorded history; affected Runs can move to review.",
         label: "Stale Runs",
         purpose: "Moves stale Runs to review and reconciles Run history.",
         action: "Reconciling Runs",
@@ -233,6 +422,8 @@ export const RUN_KINDS = {
       },
       {
         key: "original-disposal",
+        scope:
+          "Disposes stored Email originals eligible under the existing retention policy.",
         label: "Email original disposal",
         purpose: "Disposes stored Email originals that are no longer needed.",
         action: "Disposing originals",
@@ -241,6 +432,8 @@ export const RUN_KINDS = {
       },
       {
         key: "derived-refresh",
+        scope:
+          "Retires search documents with no live source and queues retired vectors for deletion; source records remain.",
         label: "Search artifact cleanup",
         purpose:
           "Retires search documents of removed records and queues retired embedding vectors for deletion.",
@@ -250,6 +443,8 @@ export const RUN_KINDS = {
       },
       {
         key: "calendar",
+        scope:
+          "Refreshes the household feed when an application origin is configured.",
         label: "Calendar refresh",
         purpose: "Refreshes the household calendar feed.",
         action: "Refreshing the calendar",
@@ -258,6 +453,8 @@ export const RUN_KINDS = {
       },
       {
         key: "mail-discovery",
+        scope:
+          "Starts discovery for connected mailboxes; those Runs own subsequent classification and purchase work.",
         label: "Mail discovery",
         purpose: "Starts each connected mailbox's discovery Run.",
         action: "Starting mail discovery",
@@ -266,6 +463,8 @@ export const RUN_KINDS = {
       },
       {
         key: "image-backfill",
+        scope:
+          "Admits images still needing paid processing; AI funding can pause this step after the other upkeep steps.",
         label: "Image work admission",
         purpose: "Admits paid image work for images that still need it.",
         action: "Admitting image work",
@@ -275,6 +474,18 @@ export const RUN_KINDS = {
     ],
   },
   derived_refresh: {
+    explanation: {
+      targets:
+        "Changed search sources, stale recipe totals, conversion coverage and embedding backlogs.",
+      exclusions:
+        "Each declared family selects its own eligible records; current source records remain intact.",
+      effects:
+        "Rebuilds derived search data and recipe totals, checks conversions, admits embeddings and retires orphaned search artifacts.",
+      dependencies: "Source records and embedding service availability.",
+      cost: "Embedding work follows its configured service policy; this pass is not itself a promise of zero external cost.",
+      recovery:
+        "Inspect the family’s actual step results and diagnostic errors; existing derived work owns retries.",
+    },
     label: "Derived refresh",
     description:
       "A routine pass that rebuilt derived data (search, totals, embeddings).",
@@ -331,6 +542,18 @@ export const RUN_KINDS = {
     ],
   },
   sweep: {
+    explanation: {
+      targets: "Eligible records in the families selected for this sweep.",
+      exclusions:
+        "Unselected families and candidates rejected by their owning eligibility rules are excluded.",
+      effects:
+        "Checks transfer pairs, statement matches, connections and fields, and publishes Suggestions under each family’s policy.",
+      dependencies:
+        "Current financial and record evidence, declared family rules and configured decision models.",
+      cost: "AI labeling and evaluation steps use the configured funding policy.",
+      recovery:
+        "Review per-family outcomes and Suggestions; inspect failures and retry only supported work from the Run.",
+    },
     label: "Sweep",
     description: "A pass that refreshes Suggestions for chosen families.",
     trigger: "member",

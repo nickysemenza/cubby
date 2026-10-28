@@ -1,3 +1,4 @@
+import { JOB_KIND_POLICY } from "@cubby/schemas/job";
 import {
   RUN_KINDS,
   runPurpose,
@@ -13,20 +14,23 @@ import type { runCatalogActivityEntry } from "~/contracts/run.contract";
 import { EntityAuditLink } from "~/entity/components/entity-ref-link";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { Page } from "~/entity/page/page";
+import {
+  DefinedRunSteps,
+  JobDefinition,
+  WorkEffects,
+} from "~/features/run/work-definition";
 import { run } from "~/integrations/tanstack-query/generated/catalog/run.gen";
 import { formatDuration } from "~/lib/format-duration";
 import { pageTitle } from "~/lib/page-title";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Facts } from "~/ui/common/facts";
-import { InspectableValue } from "~/ui/common/inspectable-value";
 import {
-  RecordList,
-  RecordRow,
-  recordColumnsOf,
-} from "~/ui/common/record-list";
-import { IndexedSections } from "~/ui/data-table/indexed-sections";
+  type IndexedSectionGroup,
+  IndexedSections,
+} from "~/ui/data-table/indexed-sections";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
@@ -111,87 +115,13 @@ function RunTypeDetails({
   completed: ActivityEntry | undefined;
   activityReady: boolean;
 }) {
-  const steps = kind.steps?.map((step, index) => ({
-    key: step.key,
-    number: index + 1,
-    label: step.label,
-    purpose: step.purpose,
-    facts: [
-      { label: "Action", value: step.action },
-      {
-        label: "Input",
-        value: `${step.input.mode}${step.input.mode === "tally" ? ` (${step.input.reason})` : ""}`,
-        className: "font-mono",
-      },
-      { label: "Unit", value: step.unit },
-      { label: "Family", value: step.family, className: "font-mono break-all" },
-      {
-        label: "Produces Suggestions",
-        value: step.results?.family,
-        className: "font-mono break-all",
-      },
-    ].filter((fact) => fact.value !== undefined),
-  }));
   return (
     <Stack gap="lg">
+      <WorkEffects explanation={kind.explanation} />
       <Facts
         layout="list"
         facts={[
-          {
-            label: "Type",
-            value: (
-              <InspectableValue value={purpose}>{kind.label}</InspectableValue>
-            ),
-          },
-          {
-            label: "Started by",
-            value: (
-              <InspectableValue value={kind.trigger}>
-                {triggerLabels[kind.trigger]}
-              </InspectableValue>
-            ),
-          },
-          {
-            label: "Execution",
-            value: kind.execution ? (
-              <InspectableValue value={kind.execution}>
-                {executionDescriptions[kind.execution]}
-              </InspectableValue>
-            ) : (
-              "Domain-owned execution; no run.execute driver declared"
-            ),
-          },
-          {
-            label: "Progress",
-            value: (
-              <InspectableValue value={kind.progress}>
-                {progressDescriptions[kind.progress]}
-              </InspectableValue>
-            ),
-          },
-          {
-            label: "AI evaluations",
-            value: kind.aiWork ? (
-              <InspectableValue value={kind.aiWork}>
-                {kind.aiWork === "owned"
-                  ? "Owned directly by this Run"
-                  : kind.aiWork === "requested"
-                    ? "Requested by reference"
-                    : "No evaluation ownership declared"}
-              </InspectableValue>
-            ) : (
-              "No evaluation ownership declared"
-            ),
-          },
-          {
-            label: "Lifecycle",
-            value: kind.historical
-              ? "No longer created; retained runs remain readable"
-              : "Current type",
-            caption: kind.routine
-              ? "Routine: hidden from the default Runs list"
-              : undefined,
-          },
+          { label: "Started by", value: triggerLabels[kind.trigger] },
           {
             label: "Latest run",
             value: activityReady ? (
@@ -208,50 +138,50 @@ function RunTypeDetails({
               "Recent activity has not loaded."
             ),
           },
+          {
+            label: "Lifecycle",
+            value: kind.historical
+              ? "No longer created; retained Runs remain readable"
+              : kind.routine
+                ? "Routine; shown in this reference and execution history"
+                : "Current type",
+          },
         ]}
       />
       <Stack gap="sm">
         <h3 className="text-sm font-semibold">
-          {kind.steps ? `Steps · ${kind.steps.length}` : "Steps"}
+          {kind.steps
+            ? `Defined steps · ${kind.steps.length}`
+            : "How execution varies"}
         </h3>
-        {steps ? (
-          <RecordList
-            columns={recordColumnsOf(steps)}
-            aria-label={`${kind.label} steps`}
-          >
-            {steps.map((step) => (
-              <RecordRow
-                key={step.key}
-                leading={
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {step.number}.
-                  </span>
-                }
-                primary={
-                  <InspectableValue value={step.key} className="font-medium">
-                    {step.label}
-                  </InspectableValue>
-                }
-                secondary={step.purpose}
-                clip={false}
-                facts={step.facts}
-              />
-            ))}
-          </RecordList>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No fixed RunStep sequence is declared. Open a recorded run to
-            inspect its actual work, outcomes and diagnostics.
-          </p>
-        )}
+        <DefinedRunSteps kind={kind} />
       </Stack>
+      <Disclosure summary="Technical details">
+        <Facts
+          layout="list"
+          facts={[
+            { label: "Type", value: purpose },
+            {
+              label: "Execution",
+              value: kind.execution
+                ? executionDescriptions[kind.execution]
+                : "Domain-owned execution",
+            },
+            {
+              label: "Progress source",
+              value: progressDescriptions[kind.progress],
+            },
+            { label: "AI ownership", value: kind.aiWork ?? "Domain-owned" },
+          ]}
+        />
+      </Disclosure>
     </Stack>
   );
 }
 
 function RunTypesPage() {
   const activity = useQuery(run.catalogActivity.queryOptions(null));
-  const groups = [
+  const groups: IndexedSectionGroup[] = [
     { id: "detail-group-current", title: "Current types", historical: false },
     {
       id: "detail-group-historical",
@@ -297,10 +227,31 @@ function RunTypesPage() {
       ];
     }),
   }));
+  groups.push({
+    id: "detail-group-jobs",
+    title: "Job types",
+    sections: Object.entries(JOB_KIND_POLICY).map(([key, definition]) => ({
+      id: `job-${key}`,
+      title: definition.label,
+      description: definition.purpose,
+      icon: RobotIcon,
+      headerAction: (
+        <Button
+          variant="outline"
+          size="sm"
+          render={<Link to="/activity" search={{ tab: "now", kind: key }} />}
+          nativeButton={false}
+        >
+          View Jobs
+        </Button>
+      ),
+      content: <JobDefinition kind={key} defaultOpen />,
+    })),
+  });
   return (
     <Page
       variant="list"
-      title="Run types"
+      title="What does each Run do?"
       actions={
         <Row gap="sm">
           <Button
@@ -321,10 +272,9 @@ function RunTypesPage() {
       }
     >
       <p className="max-w-prose text-sm text-muted-foreground">
-        How Cubby runs imports, AI work and household upkeep. Explore each
-        type’s execution, progress and declared steps, then open its history.
-        Activity includes routine and ephemeral runs hidden from the default
-        list.
+        What each Run and Job targets, what it can change, and what happens if
+        it cannot finish. These are definitions, not live progress. Open a
+        recorded Run or Job for actual outcomes.
       </p>
       {activity.isPending && (
         <output className="text-sm text-muted-foreground">

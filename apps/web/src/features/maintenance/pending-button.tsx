@@ -9,17 +9,19 @@ import { Spinner } from "~/ui/primitives/spinner";
  */
 export function PendingButton({
   onClick,
+  disabled = false,
   isPending,
   idleLabel,
   pendingLabel,
 }: {
   onClick: () => void;
+  disabled?: boolean;
   isPending: boolean;
   idleLabel: ReactNode;
   pendingLabel: string;
 }) {
   return (
-    <Button size="sm" onClick={onClick} disabled={isPending}>
+    <Button size="sm" onClick={onClick} disabled={disabled || isPending}>
       {isPending ? (
         <>
           <Spinner className="mr-2" aria-hidden="true" />
