@@ -52,7 +52,10 @@ and consequential visible results. The agent's completion verdict never
 establishes a pass. Stable confirmation buttons use SDK locators where needed;
 completion is established by the dialog closing and independent read-back,
 not by asking the model to judge a write. The simple finding dismissal uses
-SDK actions directly. These are ordinary framework actions, not a custom
+SDK actions directly. Exact-value relationship pickers also use SDK actions:
+captured failures showed correct drafts followed by targetless model taps or
+contradictory completion judgments. Draft values, save and persisted assignments
+remain independently asserted. These are ordinary framework actions, not a custom
 replay driver or a second assertion system. Checks cover money, ownership/identity, unrelated data and
 forbidden writes before confirmation. Public read helpers understand both
 ordinary fields and governed field envelopes. They do not query retired storage

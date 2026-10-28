@@ -15,8 +15,16 @@ test("receiving purchase stock and adding inventory preserve existing units", as
 }) => {
   const { location, product, purchase, expense } = data.world.receive;
   await data.open(`/purchases/${purchase.id}`);
+  await screen.getByRole("button", "More actions").click();
+  await screen.getByRole("button", "Receive into inventory...").click();
+  await expect(
+    screen.getByRole("button", "Additional units arrived"),
+  ).toBeVisible();
   await agent.act(
-    'Open More actions and Receive into inventory. Choose Additional units arrived, location "Synthetic Journey Shelf", and Quantity to add 3. Leave the dialog open before Add to count.',
+    'In the open receive dialog, choose Additional units arrived, location "Synthetic Journey Shelf", and Quantity to add 3. Finish when Quantity to add shows 3 and Add to count is enabled; do not click Add to count.',
+  );
+  await expect(screen.getByRole("spinbutton", "Quantity to add")).toHaveValue(
+    "3",
   );
   await screen.getByRole("button", "Add to count").click();
   await expect(screen.getByRole("button", "Add to count")).toBeHidden();
