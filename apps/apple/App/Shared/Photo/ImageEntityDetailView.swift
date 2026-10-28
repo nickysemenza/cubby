@@ -9,7 +9,7 @@ struct ImageEntityDetailView: View {
     let id: ImageCode
     @Environment(AppModel.self) private var appModel
     @Environment(\.developerOverlays) private var developerOverlays
-    @State private var detail: ImageWithEntity?
+    @State private var detail: ImageDetailOut?
     @State private var error: String?
     @State private var diagnostics = ImageDiagnosticsCompareModel()
     @State private var processing = ImageProcessingHistoryModel()
@@ -129,7 +129,7 @@ struct ImageEntityDetailView: View {
 }
 
 private struct PhotoTab: View {
-    let detail: ImageWithEntity
+    let detail: ImageDetailOut
     let appModel: AppModel
     /// Reloads the image after a verb on its sections changed it.
     let onChanged: () -> Void
@@ -460,9 +460,9 @@ private struct ImageDetailDiagnostics: Encodable {
 }
 
 /// The "Provenance" section's rows: capture date/place/attribution, plus a small non-interactive
-/// map when a location is known. Detail-only data (`ImageWithEntity`, not the list projection).
+/// map when a location is known. Detail-only data (`ImageDetailOut`, not the list projection).
 private struct ProvenanceRows: View {
-    let detail: ImageWithEntity
+    let detail: ImageDetailOut
     let record: JSONValue
 
     var body: some View {

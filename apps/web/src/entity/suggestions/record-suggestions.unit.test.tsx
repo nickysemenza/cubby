@@ -7,7 +7,7 @@ import type {
   SettledSuggestionQuestion,
 } from "@cubby/schemas/ai";
 import { suggestionReviewRowSchema } from "@cubby/schemas/ai";
-import { productTopLevelOut } from "@cubby/schemas/product";
+import { productOut as productTopLevelOut } from "@cubby/schemas/entities/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { parseShortcode } from "@cubby/shared";
 import {

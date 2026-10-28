@@ -1,5 +1,7 @@
-import type { ProductListItem } from "@cubby/schemas/product";
-import { productListItemOut } from "@cubby/schemas/product";
+import {
+  type ProductListItemOut as ProductListItem,
+  productListItemOut,
+} from "@cubby/schemas/entities/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { act, render, renderHook, screen } from "@testing-library/react";
 import { expect, it } from "vitest";

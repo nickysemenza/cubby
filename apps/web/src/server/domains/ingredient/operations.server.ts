@@ -1,3 +1,4 @@
+import { ingredientOut } from "@cubby/schemas/entities/ingredient";
 import {
   parseShortcodeFor,
   type ProductShortcode,
@@ -6,7 +7,6 @@ import {
   type ingredientIdInput,
   mergeSummary,
   type ingredientMergeInput,
-  ingredientOut,
   type ingredientResolvableNamesInput,
 } from "@cubby/schemas/ingredient";
 import type { z } from "zod";

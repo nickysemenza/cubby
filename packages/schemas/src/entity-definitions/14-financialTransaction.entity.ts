@@ -1,11 +1,12 @@
 import { historicalDateRangePresets } from "../date-range";
+import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { financialTransactionReadSchemas } from "../financial-transaction-fields";
 import { financialTransactionChildren } from "../child-tables/financialTransaction.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
 import { financialTransactionCoverage } from "../purchase-evidence-policy";
 import { spendingCategoryShortcode } from "../identifier-fields";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { displayItemsField, labelField } from "./label-field.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -29,7 +30,7 @@ export const generatedFinancialTransactionKindValues =
   financialTransactionKind.options;
 export const generatedFinancialTransactionStatusValues =
   financialTransactionStatus.options;
-export default defineEntity(
+export const { definition, readSchemas } = defineEntityModel(
   {
     key: "financialTransaction",
     names: { singular: "Financial Transaction", plural: "Transactions" },
@@ -223,9 +224,24 @@ export default defineEntity(
     },
     model: {
       fields: [
-        { key: "bookingDecisionFingerprint", kind: "text", nullable: true },
-        { key: "bookingExpenseFingerprint", kind: "text", nullable: true },
-        { key: "bookingCorrectionReceipt", kind: "json", nullable: true },
+        {
+          output: false,
+          key: "bookingDecisionFingerprint",
+          kind: "text",
+          nullable: true,
+        },
+        {
+          output: false,
+          key: "bookingExpenseFingerprint",
+          kind: "text",
+          nullable: true,
+        },
+        {
+          output: false,
+          key: "bookingCorrectionReceipt",
+          kind: "json",
+          nullable: true,
+        },
         {
           key: "bookingCoverage",
           kind: "enum",
@@ -612,6 +628,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "purchaseId",
           kind: "identifier",
           nullable: true,
@@ -627,6 +644,7 @@ export default defineEntity(
           },
         },
         {
+          output: false,
           // Hosts the purchase-presence header filter: whether the charge is
           // linked to a purchase, read from the mirror column above.
           key: "purchasePresence",
@@ -937,6 +955,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "allocations",
           kind: "text-array",
           collection: { key: ["purchaseId"] },
@@ -1120,32 +1139,10 @@ export default defineEntity(
           kind: "text",
           validation: { read: z.string(), create: null, update: null },
         },
-        {
-          display: { detail: false, list: false },
-          key: "createdAt",
-          kind: "timestamp",
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        {
-          display: { detail: false, list: false },
-          key: "updatedAt",
-          kind: "timestamp",
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        { key: "shortcode", kind: "text" },
-        {
-          key: "deletedAt",
-          kind: "timestamp",
-          nullable: true,
-        },
+        timestampField("createdAt", { detail: false, list: false }),
+        timestampField("updatedAt", { detail: false, list: false }),
+        { output: false, key: "shortcode", kind: "text" },
+        { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
         // Server-composed text for the structured detail field above (`display.detailLabelPath`).
         labelField("sourceRefsLabel", "Settlement references"),
         displayItemsField(
@@ -1158,7 +1155,7 @@ export default defineEntity(
         "bookingDecisionFingerprint",
         "bookingExpenseFingerprint",
         "bookingCorrectionReceipt",
-        { key: "spendingCategoryId", reference: "spendingCategory" },
+        "spendingCategoryId",
         {
           key: "itemizationExpectation",
           specialized: "enum:itemizationExpectation",
@@ -1168,8 +1165,8 @@ export default defineEntity(
           specialized: "primary-key:FinancialTransactionId",
         },
         { key: "shortcode", specialized: "shortcode" },
-        { key: "accountId", reference: "financialAccount" },
-        { key: "ledgerTransferId", reference: "ledgerTransfer" },
+        "accountId",
+        "ledgerTransferId",
         { key: "kind", specialized: "enum:kind" },
         { key: "status", specialized: "enum:status" },
         { key: "amount", specialized: "double-precision" },
@@ -1183,52 +1180,7 @@ export default defineEntity(
         { key: "updatedAt", specialized: "updated-at" },
         "deletedAt",
       ],
-      create: [
-        "itemizationExpectation",
-        "accountId",
-        "purchaseId",
-        "kind",
-        "status",
-        "amount",
-        "transactionDate",
-        "postedDate",
-        "merchant",
-        "rawDescription",
-        "sourceCategory",
-        "sourceRefs",
-        "notes",
-        "allocations",
-      ],
-      update: [
-        "itemizationExpectation",
-        "accountId",
-        "purchaseId",
-        "kind",
-        "status",
-        "amount",
-        "transactionDate",
-        "postedDate",
-        "merchant",
-        "rawDescription",
-        "sourceCategory",
-        "sourceRefs",
-        "notes",
-        "allocations",
-      ],
-      audit: [
-        "itemizationExpectation",
-        "accountId",
-        "kind",
-        "status",
-        "amount",
-        "transactionDate",
-        "postedDate",
-        "merchant",
-        "rawDescription",
-        "sourceCategory",
-        "sourceRefs",
-        "notes",
-      ],
+
       rows: {
         runStepInputs: {
           label: "Run step inputs",
@@ -1329,41 +1281,6 @@ export default defineEntity(
         create: ["capture", "full"],
         update: ["full", "settlement"],
       },
-      output: [
-        "bookingCoverage",
-        "documentCoverage",
-        "itemizationCoverage",
-        "productsCoverage",
-        "coverage",
-        "spendingCategorySummary",
-        "spendingCategoryId",
-        "spendingCategoryName",
-        "itemizationExpectation",
-        "id",
-        "accountId",
-        "purchaseId",
-        "kind",
-        "status",
-        "amount",
-        "transactionDate",
-        "postedDate",
-        "merchant",
-        "rawDescription",
-        "sourceCategory",
-        "sourceRefs",
-        "sourceRefsLabel",
-        "allocationItems",
-        "possibleVendorLabel",
-        "notes",
-        "allocations",
-        "ledgerTransferId",
-        "accountName",
-        "itemization",
-        "vendorInference",
-        "displayName",
-        "createdAt",
-        "updatedAt",
-      ],
     },
     fields: {
       create: {
@@ -1373,10 +1290,6 @@ export default defineEntity(
       update: {
         module: "@cubby/schemas/financial-transaction",
         export: "financialTransactionUpdateData",
-      },
-      output: {
-        module: "@cubby/schemas/financial-transaction-raw-read",
-        export: "rawFinancialTransactionOut",
       },
     },
     // A settlement-side event. Amounts are evidence only: they never participate
@@ -1686,280 +1599,7 @@ export default defineEntity(
         },
       ],
     },
-    relations: [
-      {
-        key: "sourceRecords",
-        sources: [
-          {
-            key: "accepted",
-            label: "Accepted source observations",
-            provenance: { kind: "query", query: "transactionSourceRecords" },
-            inverse: {
-              steps: [
-                {
-                  edge: "Relationship.transactionSourceRecords",
-                  direction: "incoming",
-                },
-              ],
-            },
-          },
-        ],
-        label: "Source transaction records",
-        target: "sourceTransactionRecord",
-        cardinality: "many",
-        provenance: {
-          kind: "derived",
-          filter: "transactionId",
-          evidence: [
-            "EntityExternalId.settlement_ref",
-            "SourceTransactionRecord.chargeKey",
-          ],
-        },
-      },
-      {
-        key: "spendingCategory",
-        label: "Spending category",
-        target: "spendingCategory",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            {
-              edge: "FinancialTransaction.spendingCategoryId",
-              direction: "outgoing",
-            },
-          ],
-        },
-        inverse: {
-          steps: [
-            {
-              edge: "FinancialTransaction.spendingCategoryId",
-              direction: "incoming",
-            },
-          ],
-        },
-      },
-      {
-        key: "account",
-        label: "Financial account",
-        target: "financialAccount",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "FinancialTransaction.accountId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "FinancialTransaction.accountId", direction: "incoming" },
-          ],
-        },
-      },
-      {
-        key: "ledger-transfer",
-        label: "Ledger transfer",
-        target: "ledgerTransfer",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            {
-              edge: "FinancialTransaction.ledgerTransferId",
-              direction: "outgoing",
-            },
-          ],
-        },
-        inverse: {
-          steps: [
-            {
-              edge: "FinancialTransaction.ledgerTransferId",
-              direction: "incoming",
-            },
-          ],
-        },
-      },
-      {
-        key: "purchase",
-        label: "Purchase",
-        target: "purchase",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            {
-              edge: "FinancialTransactionAllocation.transactionId",
-              direction: "incoming",
-            },
-            {
-              edge: "FinancialTransactionAllocation.purchaseId",
-              direction: "outgoing",
-            },
-          ],
-        },
-        inverse: {
-          steps: [
-            {
-              edge: "FinancialTransactionAllocation.purchaseId",
-              direction: "incoming",
-            },
-            {
-              edge: "FinancialTransactionAllocation.transactionId",
-              direction: "outgoing",
-            },
-          ],
-        },
-      },
-      {
-        key: "vendor",
-        label: "Vendor",
-        target: "vendor",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            {
-              edge: "FinancialTransactionAllocation.transactionId",
-              direction: "incoming",
-            },
-            {
-              edge: "FinancialTransactionAllocation.purchaseId",
-              direction: "outgoing",
-            },
-            { edge: "Purchase.vendorId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "Purchase.vendorId", direction: "incoming" },
-            {
-              edge: "FinancialTransactionAllocation.purchaseId",
-              direction: "incoming",
-            },
-            {
-              edge: "FinancialTransactionAllocation.transactionId",
-              direction: "outgoing",
-            },
-          ],
-        },
-      },
-      {
-        key: "expenses",
-        label: "Expenses",
-        target: "expense",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            {
-              edge: "FinancialTransactionAllocation.transactionId",
-              direction: "incoming",
-            },
-            {
-              edge: "FinancialTransactionAllocation.purchaseId",
-              direction: "outgoing",
-            },
-            { edge: "Expense.purchaseId", direction: "incoming" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "Expense.purchaseId", direction: "outgoing" },
-            {
-              edge: "FinancialTransactionAllocation.purchaseId",
-              direction: "incoming",
-            },
-            {
-              edge: "FinancialTransactionAllocation.transactionId",
-              direction: "outgoing",
-            },
-          ],
-        },
-      },
-      {
-        key: "products",
-        label: "Products",
-        target: "product",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            {
-              edge: "FinancialTransactionAllocation.transactionId",
-              direction: "incoming",
-            },
-            {
-              edge: "FinancialTransactionAllocation.purchaseId",
-              direction: "outgoing",
-            },
-            { edge: "Expense.purchaseId", direction: "incoming" },
-            { edge: "Expense.productId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "Expense.productId", direction: "incoming" },
-            { edge: "Expense.purchaseId", direction: "outgoing" },
-            {
-              edge: "FinancialTransactionAllocation.purchaseId",
-              direction: "incoming",
-            },
-            {
-              edge: "FinancialTransactionAllocation.transactionId",
-              direction: "outgoing",
-            },
-          ],
-        },
-        // Explicit purchase links remain evidence before an Expense is itemized.
-        sources: [
-          {
-            key: "explicit",
-            label: "Explicit purchase product link",
-            provenance: {
-              kind: "local-path",
-              steps: [
-                {
-                  edge: "FinancialTransactionAllocation.transactionId",
-                  direction: "incoming",
-                },
-                {
-                  edge: "FinancialTransactionAllocation.purchaseId",
-                  direction: "outgoing",
-                },
-                {
-                  edge: "EntityLink[purchaseProduct].from",
-                  direction: "incoming",
-                },
-                {
-                  edge: "EntityLink[purchaseProduct].to",
-                  direction: "outgoing",
-                },
-              ],
-            },
-            inverse: {
-              steps: [
-                {
-                  edge: "EntityLink[purchaseProduct].to",
-                  direction: "incoming",
-                },
-                {
-                  edge: "EntityLink[purchaseProduct].from",
-                  direction: "outgoing",
-                },
-                {
-                  edge: "FinancialTransactionAllocation.purchaseId",
-                  direction: "incoming",
-                },
-                {
-                  edge: "FinancialTransactionAllocation.transactionId",
-                  direction: "outgoing",
-                },
-              ],
-            },
-          },
-        ],
-      },
-    ],
+
     // Related rows the search document reads (ADR 0021).
     search: {
       mode: "lexical",
@@ -2507,4 +2147,109 @@ export default defineEntity(
     },
   },
   financialTransactionReadSchemas,
+);
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .derived("sourceTransactionRecord", "many", "transactionId", [
+        "EntityExternalId.settlement_ref",
+        "SourceTransactionRecord.chargeKey",
+      ])
+      .named("sourceRecords", "Source transaction records", {
+        sources: [
+          r
+            .query("transactionSourceRecords", "many")
+            .source("accepted", "Accepted source observations"),
+        ],
+      }),
+    r
+      .field("spendingCategoryId")
+      .named("spendingCategory", "Spending category"),
+    r.field("accountId").named("account", "Financial account"),
+    r.field("ledgerTransferId").named("ledger-transfer", "Ledger transfer"),
+    r
+      .path("purchase", "many", [
+        {
+          edge: "FinancialTransactionAllocation.transactionId",
+          direction: "incoming",
+        },
+        {
+          edge: "FinancialTransactionAllocation.purchaseId",
+          direction: "outgoing",
+        },
+      ])
+      .named("purchase", "Purchase"),
+    r
+      .path("vendor", "many", [
+        {
+          edge: "FinancialTransactionAllocation.transactionId",
+          direction: "incoming",
+        },
+        {
+          edge: "FinancialTransactionAllocation.purchaseId",
+          direction: "outgoing",
+        },
+        { edge: "Purchase.vendorId", direction: "outgoing" },
+      ])
+      .named("vendor", "Vendor", {
+        view: { columnGroup: "Booking", defaultVisible: true },
+      }),
+    r
+      .path("expense", "many", [
+        {
+          edge: "FinancialTransactionAllocation.transactionId",
+          direction: "incoming",
+        },
+        {
+          edge: "FinancialTransactionAllocation.purchaseId",
+          direction: "outgoing",
+        },
+        { edge: "Expense.purchaseId", direction: "incoming" },
+      ])
+      .named("expenses", "Expenses", {
+        view: { columnGroup: "Booking", order: "newest" },
+      }),
+    // Explicit purchase links remain evidence before an Expense is itemized.
+    r
+      .path("product", "many", [
+        {
+          edge: "FinancialTransactionAllocation.transactionId",
+          direction: "incoming",
+        },
+        {
+          edge: "FinancialTransactionAllocation.purchaseId",
+          direction: "outgoing",
+        },
+        { edge: "Expense.purchaseId", direction: "incoming" },
+        { edge: "Expense.productId", direction: "outgoing" },
+      ])
+      .named("products", "Products", {
+        view: { columnGroup: "Booking" },
+        sources: [
+          r
+            .path("product", "many", [
+              {
+                edge: "FinancialTransactionAllocation.transactionId",
+                direction: "incoming",
+              },
+              {
+                edge: "FinancialTransactionAllocation.purchaseId",
+                direction: "outgoing",
+              },
+              {
+                edge: "EntityLink[purchaseProduct].from",
+                direction: "incoming",
+              },
+              {
+                edge: "EntityLink[purchaseProduct].to",
+                direction: "outgoing",
+              },
+            ])
+            .source("explicit", "Explicit purchase product link"),
+        ],
+      }),
+  ],
+  readSchemas,
 );

@@ -1,4 +1,4 @@
-import { expenseOut } from "@cubby/schemas/project";
+import { expenseOut } from "@cubby/schemas/entities/expense";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 

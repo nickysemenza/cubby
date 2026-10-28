@@ -1,4 +1,4 @@
-import { rawLedgerPartyOut } from "@cubby/schemas/ledger-party-raw-read";
+import { ledgerPartyRawOut as rawLedgerPartyOut } from "@cubby/schemas/entity-contracts/ledgerParty";
 import { z } from "zod";
 
 import {

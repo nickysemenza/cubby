@@ -8,6 +8,7 @@ import type { RawReadSchemas } from "@cubby/schemas/entity-definitions/definitio
 import { relationshipProvenanceSchema } from "./list-fields.ts";
 import { curatedConnectionViews } from "@cubby/schemas/compiler/connected-view-definitions";
 import { listViewId } from "@cubby/schemas/entity-definitions/definition";
+import { relationSectionPlanSchema } from "@cubby/schemas/entity-definitions/relation-plan";
 import type {
   CompiledEditSection,
   EntityDeclarationMetadata,
@@ -1232,3 +1233,125 @@ export const validateRelationSections = (
     }
   }
 };
+
+/** Resolve relation sections only after inverse relations, filters and sections exist. */
+export function resolveRelationSectionPlans(
+  entities: readonly CompiledEntity[],
+): CompiledEntity[] {
+  const byKey = new Map(entities.map((entity) => [entity.key, entity]));
+  return entities.map((entity) => ({
+    ...entity,
+    inspector: {
+      ...entity.inspector,
+      detail: {
+        ...entity.inspector.detail,
+        sections: entity.inspector.detail.sections.map((section) => {
+          if (section.kind !== "relation") return section;
+          const context = `${entity.key}.detail.sections.${section.id}`;
+          const relation = entity.relations.find(
+            (candidate) => candidate.key === section.relation,
+          );
+          const target = relation && byKey.get(relation.target);
+          if (!target || !relation)
+            throw new EntityDeclarationError(
+              `${context}: missing relation target.`,
+            );
+          const descriptor = target.filterDescriptors.find(
+            (candidate) => candidate.columnId === section.filter.descriptor,
+          );
+          if (!descriptor || descriptor.wire.kind !== "param")
+            throw new EntityDeclarationError(
+              `${context}: relation requires a scalar filter binding.`,
+            );
+          const intents = target.fieldModel.intents;
+          const compatible = (field: EntityField) =>
+            intents?.create.filter((intent) =>
+              intents.fields[intent]?.includes(field.key),
+            ) ?? [];
+          // Aliases are compared with actual declared fields; naming conventions stay out of clients.
+          const direct = target.fieldModel.fields.find(
+            (field) =>
+              field.key === descriptor.field ||
+              field.key === descriptor.columnId ||
+              `${field.key}Filter` === descriptor.field,
+          );
+          let seedField = section.prefill
+            ? target.fieldModel.fields.find(
+                (field) => field.key === section.prefill?.field,
+              )
+            : direct && compatible(direct).length > 0
+              ? direct
+              : undefined;
+          if (!seedField && !section.prefill) {
+            const candidates = target.fieldModel.fields.filter(
+              (field) =>
+                descriptor.brandRef !== null &&
+                field.reference?.entity === descriptor.brandRef.entity &&
+                compatible(field).length > 0,
+            );
+            if (candidates.length > 1)
+              throw new EntityDeclarationError(
+                `${context}: ambiguous create reference; declare prefill.field.`,
+              );
+            seedField = candidates[0];
+          }
+          const choices = seedField ? compatible(seedField) : [];
+          const explicitIntent = section.prefill?.intent;
+          const defaultIntent = intents?.create[0];
+          const intent =
+            explicitIntent ??
+            (defaultIntent && choices.includes(defaultIntent)
+              ? defaultIntent
+              : choices.length === 1
+                ? choices[0]
+                : undefined);
+          if (explicitIntent && !choices.includes(explicitIntent))
+            throw new EntityDeclarationError(
+              `${context}: prefill.intent does not create prefill.field.`,
+            );
+          if (!intent && choices.length > 1)
+            throw new EntityDeclarationError(
+              `${context}: ambiguous create intent; declare prefill.intent.`,
+            );
+          if (section.prefill && (!seedField || !intent))
+            throw new EntityDeclarationError(
+              `${context}: prefill has no compatible create intent.`,
+            );
+          const backReference =
+            direct?.reference?.entity === entity.key ? direct : undefined;
+          return {
+            ...section,
+            plan: relationSectionPlanSchema.parse({
+              target: target.key,
+              descriptorId: descriptor.columnId,
+              filterKey: descriptor.wire.name,
+              urlKey: descriptor.urlKey,
+              subtree: descriptor.subtree,
+              seed:
+                seedField && intent
+                  ? {
+                      field: seedField.key,
+                      intent,
+                      fields: [...(intents?.fields[intent] ?? [])],
+                    }
+                  : null,
+              seedMultiple: seedField?.reference?.multiple === true,
+              columns: section.columns,
+              sort: section.sort ?? {
+                field: target.fieldModel.sort?.default ?? "createdAt",
+                direction: target.fieldModel.sort?.direction ?? "desc",
+              },
+              limit: section.limit,
+              pageSize: section.limit ?? 50,
+              groupBy: section.groupBy,
+              backReferenceColumn: backReference
+                ? (backReference.display.columnId ?? backReference.key)
+                : null,
+              derived: relation.provenance.kind === "derived",
+            }),
+          };
+        }),
+      },
+    },
+  }));
+}

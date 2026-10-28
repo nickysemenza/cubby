@@ -1,5 +1,6 @@
 import { purchaseFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/purchase";
 import { vendorFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/vendor";
+import { productListItemOut } from "@cubby/schemas/entities/product";
 import type { Entity } from "@cubby/schemas/entity";
 import type {
   BrowserRoutedEntity,
@@ -10,35 +11,8 @@ import { displayGtin } from "@cubby/schemas/external-id";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { productShortcode } from "@cubby/schemas/identifiers";
 import { duplicateProductIdentitySchema } from "@cubby/schemas/problems";
-import { productListItemOut } from "@cubby/schemas/product";
 import { countLabel } from "@cubby/shared/pluralize";
-import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
-import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
-import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
-import { BowlFoodIcon } from "@phosphor-icons/react/dist/csr/BowlFood";
-import { CalendarDotsIcon } from "@phosphor-icons/react/dist/csr/CalendarDots";
-import { CarrotIcon } from "@phosphor-icons/react/dist/csr/Carrot";
-import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
-import { CreditCardIcon } from "@phosphor-icons/react/dist/csr/CreditCard";
-import { DeviceMobileIcon } from "@phosphor-icons/react/dist/csr/DeviceMobile";
-import { EnvelopeIcon } from "@phosphor-icons/react/dist/csr/Envelope";
-import { FilesIcon } from "@phosphor-icons/react/dist/csr/Files";
-import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
-import { HeartIcon } from "@phosphor-icons/react/dist/csr/Heart";
-import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
-import { ImageSquareIcon } from "@phosphor-icons/react/dist/csr/ImageSquare";
-import { KeyIcon } from "@phosphor-icons/react/dist/csr/Key";
-import { LeafIcon } from "@phosphor-icons/react/dist/csr/Leaf";
-import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
-import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
-import { PackageIcon } from "@phosphor-icons/react/dist/csr/Package";
-import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
-import { ReceiptIcon } from "@phosphor-icons/react/dist/csr/Receipt";
-import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
-import { StorefrontIcon } from "@phosphor-icons/react/dist/csr/Storefront";
-import { TagIcon } from "@phosphor-icons/react/dist/csr/Tag";
-import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
-import type { Icon, IconProps } from "@phosphor-icons/react/lib";
+import type { IconProps } from "@phosphor-icons/react/lib";
 import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
@@ -51,7 +25,7 @@ import {
   domainIconClass,
 } from "~/ui/navigation/domain-wayfinding";
 
-import { generatedBrowserRoutes } from "./generated/entity-routes.gen";
+import { generatedBrowserDefinitions } from "./generated/entity-icons.gen";
 import { generatedSortRoster } from "./sortable-fields";
 import {
   defineMergeableConfig,
@@ -156,118 +130,13 @@ const INK = {
   },
 } satisfies Record<string, EntityColor>;
 
-/**
- * Stamps every definition with the display names its own key already implies.
- *
- * Both come straight from the entity's manifest literal (`names` in
- * `packages/schemas/src/entity-definitions/*.entity.ts`, surfaced as `entityRoster`),
- * so neither is spelled here and neither can disagree with the key it sits
- * under — `wish: { label: ... }` naming a vendor is no longer expressible.
- *
- * `singular` is the UI label for one record; `plural` is the NAV/SECTION name,
- * read where context is already established, so it drops the qualifier the
- * singular needs. It is declared, NOT pluralized: `inventory` → "Inventory"
- * (not "Inventory Items"), `financialAccount` → "Accounts",
- * `financialTransaction` → "Transactions", `wish` → "Wishlist" (not "Wishes").
- * The other twelve coincide with a naive plural, which is exactly the trap —
- * `pluralize` is already a dependency and gets all four of those wrong.
- *
- * Names and the Phosphor icon (from `presentation.icons.phosphor`) are stamped
- * BEFORE the definition spreads in, so an entity that has a genuine reason to
- * depart can still say so and win.
- */
-type EntityDefinitionSeed = Pick<
-  EntityDefinition,
-  "basePath" | "color" | "routes"
->;
+/** Generated defaults retain each routed entity's concrete route literal types. */
+const defaultDefinitions = generatedBrowserDefinitions(INK.slate);
 
-/**
- * The Phosphor icons the declarations name in `presentation.icons.phosphor`.
- * Keyed by that literal union, so a declaration naming an icon this map does
- * not import fails to compile here — the compiler cannot import an unknown glyph, this
- * is where the name is checked. Imports stay explicit so the bundle carries
- * only these glyphs.
- */
-type DeclaredPhosphorIcon =
-  (typeof entityRoster)[BrowserRoutedEntity]["icons"]["phosphor"];
-const PHOSPHOR_ICONS = {
-  BowlFood: BowlFoodIcon,
-  ArrowsLeftRight: ArrowsLeftRightIcon,
-  Barcode: BarcodeIcon,
-  BookOpen: BookOpenIcon,
-  Robot: RobotIcon,
-  CalendarDots: CalendarDotsIcon,
-  Carrot: CarrotIcon,
-  ChefHat: ChefHatIcon,
-  CreditCard: CreditCardIcon,
-  Envelope: EnvelopeIcon,
-  Files: FilesIcon,
-  Hammer: HammerIcon,
-  Heart: HeartIcon,
-  Image: ImageIcon,
-  ImageSquare: ImageSquareIcon,
-  Key: KeyIcon,
-  ListChecks: ListChecksIcon,
-  MapPin: MapPinIcon,
-  Package: PackageIcon,
-  Receipt: ReceiptIcon,
-  Leaf: LeafIcon,
-  DeviceMobile: DeviceMobileIcon,
-  Plant: PlantIcon,
-  Storefront: StorefrontIcon,
-  Tag: TagIcon,
-  Users: UsersIcon,
-} satisfies Record<DeclaredPhosphorIcon, Icon>;
-const isBrowserEntityKey = (value: string): value is BrowserRoutedEntity =>
-  Object.hasOwn(entityRoster, value);
-
-const withEntityNames = <
-  const Definitions extends Record<BrowserRoutedEntity, EntityDefinitionSeed>,
->(
-  definitions: Definitions,
-): {
-  [Entity in keyof Definitions & BrowserRoutedEntity]: {
-    label: (typeof entityRoster)[Entity]["singular"];
-    pluralLabel: (typeof entityRoster)[Entity]["plural"];
-    phosphorIcon: Icon;
-  } & Definitions[Entity];
-} =>
-  // SAFETY: the runtime key guard preserves every entity key, while
-  // Object.fromEntries cannot retain that mapped key/value correlation.
-  Object.fromEntries(
-    Object.entries(definitions).map(([entity, definition]) => {
-      if (!isBrowserEntityKey(entity))
-        throw new Error(`Unknown entity ${entity}`);
-      return [
-        entity,
-        {
-          label: entityRoster[entity].singular,
-          pluralLabel: entityRoster[entity].plural,
-          phosphorIcon: PHOSPHOR_ICONS[entityRoster[entity].icons.phosphor],
-          ...definition,
-        },
-      ];
-    }),
-    // `Object.entries` widens the key to `string` and loses the pairing the
-    // signature above states; the mapped type is the real contract.
-  ) as never;
-
-const entityDefinitions = withEntityNames({
-  sourceTransactionRecord: {
-    ...generatedBrowserRoutes.sourceTransactionRecord,
-    color: INK.slate,
-  },
-  transactionImport: {
-    ...generatedBrowserRoutes.transactionImport,
-    color: INK.slate,
-  },
-  shipment: {
-    ...generatedBrowserRoutes.shipment,
-    color: INK.slate,
-  },
+const entityDefinitions = {
+  ...defaultDefinitions,
   spendingCategory: {
-    ...generatedBrowserRoutes.spendingCategory,
-    color: INK.slate,
+    ...defaultDefinitions.spendingCategory,
     // The selected categories in list order; the first starts as keeper.
     // Confirming opens the historical spending review that applies the merge.
     mergeable: defineMergeableConfig({
@@ -282,7 +151,7 @@ const entityDefinitions = withEntityNames({
     }),
   },
   ingredient: {
-    ...generatedBrowserRoutes.ingredient,
+    ...defaultDefinitions.ingredient,
     color: {
       accent: INK.slate.accent,
       bg: "bg-warning/20",
@@ -306,7 +175,7 @@ const entityDefinitions = withEntityNames({
     }),
   },
   product: {
-    ...generatedBrowserRoutes.product,
+    ...defaultDefinitions.product,
     color: INK.primary,
     // Note: product renders unit mappings as a custom section (coverage grid +
     // rows table, like ingredient); unit-mappings has no capability-derived
@@ -350,58 +219,33 @@ const entityDefinitions = withEntityNames({
     }),
   },
   recipe: {
-    ...generatedBrowserRoutes.recipe,
+    ...defaultDefinitions.recipe,
     color: INK.primary,
     // Cost/calorie column IDs sort the canonical estimates' known lower amount
     // via jsonb expressions. `source` (sourceType + its stored provenance)
     // and `yield` (→ servings) are also special-cased there. See recipe/crud.recipeList.
   },
   cookbook: {
-    ...generatedBrowserRoutes.cookbook,
+    ...defaultDefinitions.cookbook,
     color: INK.primary,
     // Keyed by FK id (rename-safe); no generic list columns or "new" form
     // (cookbooks are created by EPUB import, not a create form).
   },
-  location: {
-    ...generatedBrowserRoutes.location,
-    color: INK.slate,
-    // Note: location needs images in a specific position (before child
-    // locations), so it's excluded from the generic gallery-Images derivation
-    // in `useEntityDetail.ts` (`CUSTOM_IMAGE_PLACEMENT`) and handles its own
-    // placement instead. Location supplies its domain columns explicitly;
-    // audit dates are shared.
-  },
   inventory: {
-    ...generatedBrowserRoutes.inventory,
+    ...defaultDefinitions.inventory,
     color: INK.primary,
     // Inventory items have a simple single-section detail page
     // Inventory list has custom columns (image from product, amount instead of name)
   },
-  meal: {
-    ...generatedBrowserRoutes.meal,
-    // Neutral, not amber: the status ramp is reserved for entities whose accent
-    // encodes state, and a meal's encodes none. Amber is also already spent on
-    // overdue/planned expenses inside the same planning calendar, so a meal
-    // wearing it read as a warning about nothing.
-    color: INK.slate,
-    // Date/Name/Recipes/Cost columns are custom (meal-table.tsx) — Name needs
-    // `emptyLabel`, which useStandardColumns's automatic "name" column
-    // doesn't support. Audit dates are appended for every entity list.
-  },
   project: {
-    ...generatedBrowserRoutes.project,
+    ...defaultDefinitions.project,
     color: INK.plum,
     // No "new" route — projects are created from a dialog on the list page
     // (mirrors meal), not a dedicated /projects/new form.
   },
-  task: {
-    ...generatedBrowserRoutes.task,
-    color: INK.slate,
-  },
   vendor: {
-    ...generatedBrowserRoutes.vendor,
+    ...defaultDefinitions.vendor,
     // A quiet roster, not a live money surface — same neutral as location/task.
-    color: INK.slate,
     // Default sort ("spend") is declared on `model.sort` in
     // `11-vendor.entity.ts` now, not overridden here.
     // "fixed": the keeper is the vendor being viewed; candidates are every
@@ -429,33 +273,8 @@ const entityDefinitions = withEntityNames({
       },
     }),
   },
-  vendorAccount: {
-    ...generatedBrowserRoutes.vendorAccount,
-    color: INK.slate,
-  },
-  email: {
-    ...generatedBrowserRoutes.email,
-    color: INK.slate,
-  },
-  run: {
-    ...generatedBrowserRoutes.run,
-    color: INK.slate,
-  },
-  job: { ...generatedBrowserRoutes.job, color: INK.slate },
-  imageJob: {
-    ...generatedBrowserRoutes.imageJob,
-    color: INK.slate,
-  },
-  productCategory: {
-    ...generatedBrowserRoutes.productCategory,
-    color: INK.slate,
-  },
-  device: {
-    ...generatedBrowserRoutes.device,
-    color: INK.slate,
-  },
   purchase: {
-    ...generatedBrowserRoutes.purchase,
+    ...defaultDefinitions.purchase,
     color: INK.primary,
     // A Purchase carries its documents (invoices/receipts), like
     // project's photos — both derive their generic Images section from
@@ -498,42 +317,29 @@ const entityDefinitions = withEntityNames({
     }),
   },
   expense: {
-    ...generatedBrowserRoutes.expense,
+    ...defaultDefinitions.expense,
     color: INK.primary,
-  },
-  ledgerParty: {
-    ...generatedBrowserRoutes.ledgerParty,
-    color: INK.slate,
-    // Sort direction ("asc", a name roster reads A→Z) is declared on
-    // `model.sort` in `07-ledgerParty.entity.ts` now, not overridden here.
   },
   ledgerTransfer: {
-    ...generatedBrowserRoutes.ledgerTransfer,
+    ...defaultDefinitions.ledgerTransfer,
     color: INK.primary,
   },
-  financialAccount: {
-    ...generatedBrowserRoutes.financialAccount,
-    color: INK.slate,
-    // Sort direction ("asc", a name roster reads A→Z — the table's blanket
-    // descending default was opening this list backwards) is declared on
-    // `model.sort` in `13-financialAccount.entity.ts` now, not overridden here.
-  },
   financialTransaction: {
-    ...generatedBrowserRoutes.financialTransaction,
+    ...defaultDefinitions.financialTransaction,
     color: INK.primary,
   },
   wish: {
-    ...generatedBrowserRoutes.wish,
+    ...defaultDefinitions.wish,
     color: INK.plum,
   },
   "usda-food": {
-    ...generatedBrowserRoutes["usda-food"],
+    ...defaultDefinitions["usda-food"],
     color: INK.primary,
     // USDA foods are read-only, no detail conventions needed. Default sort
     // ("fdc_id") comes from `model.sort` in `17-usda-food.entity.ts`.
   },
   image: {
-    ...generatedBrowserRoutes.image,
+    ...defaultDefinitions.image,
     color: {
       accent: INK.slate.accent,
       bg: "bg-muted",
@@ -543,20 +349,20 @@ const entityDefinitions = withEntityNames({
     // Note: images use 'filename' not 'name', so we define columns explicitly in ImageList
   },
   plant: {
-    ...generatedBrowserRoutes.plant,
+    ...defaultDefinitions.plant,
     color: INK.plum,
   },
   planting: {
-    ...generatedBrowserRoutes.planting,
+    ...defaultDefinitions.planting,
     // House domain, matching project's ink — plantings and garden entries are
     // household work like projects/tasks, not a "positive" pantry-stock signal.
     color: INK.plum,
   },
   gardenEntry: {
-    ...generatedBrowserRoutes.gardenEntry,
+    ...defaultDefinitions.gardenEntry,
     color: INK.plum,
   },
-} as const) satisfies Record<BrowserRoutedEntity, EntityDefinition>;
+} satisfies Record<BrowserRoutedEntity, EntityDefinition>;
 
 /** Route unions are derived from the definitions so links cannot drift. */
 export type EntityDetailRoute =

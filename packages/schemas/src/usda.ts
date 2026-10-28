@@ -1,5 +1,5 @@
 import { productFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.product.gen";
-import usdaDefinition from "./entity-definitions/17-usda-food.entity";
+import { readSchemas as usdaReadSchemas } from "./entity-definitions/17-usda-food.entity";
 import { dataTypeEnum, foodLookupParam } from "@cubby/usda";
 import { z } from "zod";
 import {
@@ -39,10 +39,9 @@ export const usdaFoodEnrichmentsInput = z.object({
 // Enhanced food summary with unit mappings and linked products.
 const linkedProducts = z.array(productFieldEnvelopeSchemas.output);
 
-export const foodSummaryWithLinkedProducts =
-  usdaDefinition.readSchemas.output.extend({
-    linkedProducts,
-  });
+export const foodSummaryWithLinkedProducts = usdaReadSchemas.output.extend({
+  linkedProducts,
+});
 
 export type FoodSummaryWithLinkedProducts = z.infer<
   typeof foodSummaryWithLinkedProducts
@@ -56,7 +55,7 @@ export const foodSummaryEnrichment = foodSummaryWithLinkedProducts.pick({
 export type FoodSummaryEnrichment = z.infer<typeof foodSummaryEnrichment>;
 
 /** A USDA list or search row: the food without its full nutrient table. */
-export const usdaFoodListRow = usdaDefinition.readSchemas.list.extend({
+export const usdaFoodListRow = usdaReadSchemas.list.extend({
   linkedProducts,
 });
 

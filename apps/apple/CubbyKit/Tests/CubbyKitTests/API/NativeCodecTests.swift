@@ -52,7 +52,7 @@ struct NativeCodecTests {
                 "updatedAt": "2026-10-01T00:00:00Z",
                 "fields": .object(fields),
             ], uniquingKeysWith: { _, next in next })
-        let image: ImageWithEntity = try JSONValue.object(row).decoded()
+        let image: ImageDetailOut = try JSONValue.object(row).decoded()
         #expect(image.imageURL?.absoluteString == "https://example.com/transparent.png")
         #expect(image.originalImageURL?.absoluteString == "https://example.com/original.png")
         #expect(image.transparentImageURL?.absoluteString == "https://example.com/transparent.png")
@@ -83,7 +83,7 @@ struct NativeCodecTests {
         var root = node("LOC-4567", "Synthetic location", parent: parent)
         root["attachments"] = []
         root["children"] = [.object(node("LOC-5678", "Synthetic child"))]
-        let original: InfLocation = try JSONValue.object(root).decoded()
+        let original: LocationDetailOut = try JSONValue.object(root).decoded()
         #expect(original.parent?.parent?.name == "Synthetic ancestor")
         #expect(original.children?.first?.name == "Synthetic child")
         var changed = original
@@ -91,7 +91,7 @@ struct NativeCodecTests {
         #expect(original.parent?.parent?.name == "Synthetic ancestor")
         #expect(changed.parent?.parent?.name == "Synthetic changed ancestor")
         #expect(Set([original, changed]).count == 2)
-        let roundTrip: InfLocation = try JSONValue(encoding: changed).decoded()
+        let roundTrip: LocationDetailOut = try JSONValue(encoding: changed).decoded()
         #expect(roundTrip == changed)
     }
 

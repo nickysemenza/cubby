@@ -1,17 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  type DeviceCreateInput,
-  type DeviceUpdateData,
-} from "@cubby/schemas/device";
-import { rawDeviceOut } from "@cubby/schemas/device-raw-read";
+import { type DeviceCreateInput } from "@cubby/schemas/entities/device";
+import { deviceRawOut as rawDeviceOut } from "@cubby/schemas/entity-contracts/device";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import type {
-  DeviceId,
-  DeviceShortcode,
-  LedgerPartyId,
-  ProductId,
-} from "@cubby/schemas/identifiers";
+import type { DeviceId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -30,6 +22,7 @@ import {
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
+import { ENTITY_STORED_WRITES } from "~/server/generated/entity-write-bindings.gen";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -97,16 +90,11 @@ const deviceCrud = createEntityCrud({
   entity: "device",
   scaffold: deviceScaffold,
   output: rawDeviceOut,
-  toUpdate: (data: {
-    name?: string;
-    appVersion?: string | null;
-    osVersion?: string | null;
-    lastSeenAt?: Date | null;
-    automaticWork?: boolean;
-    remotePaused?: boolean;
-    ledgerPartyId?: LedgerPartyId | null;
-    productId?: ProductId | null;
-  }) => buildPartialUpdateValues(data),
+  toUpdate: (
+    data: Awaited<
+      ReturnType<typeof ENTITY_STORED_WRITES.device.update>
+    >["data"],
+  ) => buildPartialUpdateValues(data),
   auditUpdateFields: [...entityFieldModels.device.audit],
 });
 
@@ -165,62 +153,10 @@ export const createDevice = defineMutationWriter({
   },
 });
 
-export const updateDevice = defineMutationWriter({
-  entity: "device",
-  read: async (
-    receipt: MutationReceipt<"device">,
-    db: Database,
-    _shortcode: DeviceShortcode,
-    _data: DeviceUpdateData,
-    _actor: ActorContext,
-  ) => ({
-    output: await deviceCrud.getByID(db, receipt.entityId),
-    entityId: receipt.entityId,
-  }),
-  write: async (
-    readOutput,
-    db: Database,
-    shortcode: DeviceShortcode,
-    data: DeviceUpdateData,
-    actor: ActorContext,
-  ) => {
-    const id = await resolveOrThrow(db, "device", shortcode);
-    return withTransaction(db, async (tx) => {
-      const ledgerPartyId =
-        data.ledgerPartyId === undefined
-          ? undefined
-          : data.ledgerPartyId === null
-            ? null
-            : await resolveOrThrow(tx, "ledgerParty", data.ledgerPartyId);
-      const productId =
-        data.productId === undefined
-          ? undefined
-          : data.productId === null
-            ? null
-            : await resolveOrThrow(tx, "product", data.productId);
-      const receipt = await deviceCrud.update(
-        tx,
-        id,
-        {
-          name: data.name,
-          appVersion: data.appVersion,
-          osVersion: data.osVersion,
-          lastSeenAt: data.lastSeenAt,
-          automaticWork: data.automaticWork,
-          remotePaused: data.remotePaused,
-          ledgerPartyId,
-          productId,
-        },
-        actor,
-        async (_db, receipt) => receipt,
-      );
-      return readOutput(receipt, async () => ({
-        output: await deviceCrud.getByID(tx, id),
-        entityId: id,
-      }));
-    });
-  },
-});
+export const updateDevice = deviceCrud.updateWriter(
+  ENTITY_STORED_WRITES.device.update,
+  (output, entityId) => ({ output, entityId }),
+);
 
 /**
  * A device's reported sightings go with it, and every affected image is

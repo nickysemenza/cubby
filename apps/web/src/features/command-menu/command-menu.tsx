@@ -37,7 +37,6 @@ import { Spinner } from "~/ui/primitives/spinner";
 import { completeNavLeaves } from "../../entity/navigation/nav-items";
 import type { NavItem } from "../../entity/navigation/nav-items";
 import {
-  entityKindMap,
   getSearchMatchText,
   getSearchResultRoute,
   SearchResultMedia,
@@ -218,7 +217,7 @@ export function GlobalCommandMenu({
   }, [open]);
 
   const goToEntity = (entityKind: SearchableEntity, shortcode: string) => {
-    const entity = entities[entityKindMap[entityKind]];
+    const entity = entities[entityKind];
     if (entity) {
       navigate({
         to: entity.routes.detail,
@@ -247,9 +246,7 @@ export function GlobalCommandMenu({
   // Determine what to show based on search state
   const hasSearch = search.length > 0;
   const hasResults = (results?.length ?? 0) > 0;
-  const scopeLabel = searchScope
-    ? entities[entityKindMap[searchScope]].pluralLabel
-    : null;
+  const scopeLabel = searchScope ? entities[searchScope].pluralLabel : null;
 
   const handleSearchChange = (value: string) => {
     if (!searchScope) {
@@ -783,7 +780,7 @@ function SearchEntityResultItem({
       </div>
       <div className="max-w-28 shrink-0 self-start pt-1 text-right">
         <span className="block truncate text-xs font-medium text-slate">
-          {entities[entityKindMap[item.entityKind]].label}
+          {entities[item.entityKind].label}
         </span>
         <span className="block truncate font-mono text-2xs text-muted-foreground tabular-nums">
           {item.id}

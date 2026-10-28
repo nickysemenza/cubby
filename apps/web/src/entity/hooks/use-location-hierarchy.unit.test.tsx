@@ -1,4 +1,5 @@
-import { infLocation, locationValuation } from "@cubby/schemas/location";
+import { locationDetailOut as infLocation } from "@cubby/schemas/entities/location";
+import { locationValuation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";

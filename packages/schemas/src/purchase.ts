@@ -1,3 +1,4 @@
+import { expenseOut } from "@cubby/schemas/entities/expense";
 import {
   expenseFieldEnvelopeFields,
   expensePublicReadFields,
@@ -48,26 +49,19 @@ import {
 import { money, moneyNullable } from "./money";
 import {
   costTypeSchema,
-  expenseOut,
   PRODUCT_QUANTITY_DESCRIPTION,
   tradeSchema,
 } from "./project";
 import {
-  purchaseBaseFilterFields,
+  purchaseFilterFields as purchaseBaseFilterFields,
   purchaseOut,
-} from "./generated/purchase.gen";
+} from "@cubby/schemas/entities/purchase";
 
 /**
  * The purchase read shape is exactly the declaration's read projection —
  * every computed field (vendor join, order URL, expense rollups,
  * reconciliation, documents) is declared there with its constraints.
  */
-export {
-  purchaseOut,
-  purchaseListItemOut,
-  type PurchaseOut,
-  type PurchaseListItemOut,
-} from "./generated/purchase.gen";
 
 export const splitExpenseOut = z.array(expenseOut);
 

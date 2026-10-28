@@ -1,3 +1,4 @@
+import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import {
   historicalDateRangePresets,
@@ -6,7 +7,11 @@ import {
 } from "../date-range";
 import { imageAssociationStorage } from "./image-associations";
 import { recordEmojiField } from "../emoji";
-import { type DerivedStoredInput, defineEntity } from "./definition.js";
+import {
+  type DerivedStoredInput,
+  defineEntity,
+  defineEntityModel,
+} from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import {
   ledgerPartyShortcode,
@@ -210,7 +215,7 @@ const PROJECT_ROLLUP_INPUTS: DerivedStoredInput[] = [
   },
 ];
 const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "project",
   names: { singular: "Project", plural: "Projects" },
   route: { basePath: "projects" },
@@ -351,7 +356,12 @@ export default defineEntity({
           title: "Notes",
           fields: ["notes"],
         },
-        { kind: "slot", id: "schedule", title: "Schedule", placement: "full" },
+        {
+          kind: "slot",
+          id: "schedule",
+          title: "Schedule",
+          placement: "full",
+        },
         {
           kind: "fields",
           id: "schedule-dates",
@@ -464,6 +474,7 @@ export default defineEntity({
     },
     fields: [
       {
+        audit: false,
         ...recordEmojiField,
         control: {
           ...recordEmojiField.control,
@@ -574,6 +585,7 @@ Rules:
         },
       },
       {
+        output: false,
         key: "locationsMode",
         kind: "enum",
         validation: {
@@ -650,6 +662,7 @@ Rules:
         },
       },
       {
+        output: false,
         key: "assigneeMode",
         kind: "enum",
         validation: {
@@ -674,7 +687,11 @@ Rules:
         display: { detail: false, list: false },
         key: "assigneeName",
         kind: "text",
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "defaultTrade",
@@ -731,7 +748,11 @@ Rules:
         key: "costEstimate",
         kind: "number",
         nullable: true,
-        control: { kind: "number", renderer: "money", placeholder: "e.g. 500" },
+        control: {
+          kind: "number",
+          renderer: "money",
+          placeholder: "e.g. 500",
+        },
         display: {
           columnGroup: "Plan",
           columnBar: true,
@@ -764,7 +785,11 @@ Rules:
         key: "dates",
         kind: "dateRange",
         nullable: true,
-        dateRange: { start: "startDate", end: "endDate", semantics: "period" },
+        dateRange: {
+          start: "startDate",
+          end: "endDate",
+          semantics: "period",
+        },
         control: { kind: "dateRange" },
         display: { columnGroup: "Plan", columnIdOverride: "startDate" },
         validation: {
@@ -773,8 +798,8 @@ Rules:
           update: dateRangeSchema.nullable().optional(),
         },
       },
-      { key: "startDate", kind: "date", nullable: true },
-      { key: "endDate", kind: "date", nullable: true },
+      { output: false, key: "startDate", kind: "date", nullable: true },
+      { output: false, key: "endDate", kind: "date", nullable: true },
 
       {
         key: "notes",
@@ -823,6 +848,7 @@ Rules:
         },
       },
       {
+        audit: false,
         key: "blockedByIds",
         kind: "identifier",
         reference: { entity: "project", multiple: true },
@@ -897,26 +923,8 @@ Rules:
           update: null,
         },
       },
-      {
-        display: { detail: false, list: false },
-        key: "createdAt",
-        kind: "timestamp",
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
+      timestampField("createdAt", { detail: false, list: false }),
+      timestampField("updatedAt"),
       {
         display: { detail: false, list: false },
         key: "rollup",
@@ -996,12 +1004,8 @@ Rules:
           update: null,
         },
       },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
       "emoji",
@@ -1027,7 +1031,7 @@ Rules:
         defaultValue: "'inherit'",
         specialized: "enum:inheritance-mode",
       },
-      { key: "assigneeId", reference: "ledgerParty" },
+      "assigneeId",
       {
         key: "assigneeMode",
         defaultValue: "'inherit'",
@@ -1035,7 +1039,7 @@ Rules:
       },
       { key: "defaultTrade", specialized: "enum:defaultTrade" },
       { key: "costEstimate", specialized: "double-precision" },
-      { key: "parentProjectId", reference: "project" },
+      "parentProjectId",
       "startDate",
       "endDate",
       "notes",
@@ -1043,57 +1047,7 @@ Rules:
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "emoji",
-      "name",
-      "status",
-      "kind",
-      "locations",
-      "locationsMode",
-      "assigneeId",
-      "assigneeMode",
-      "defaultTrade",
-      "costEstimate",
-      "parentProjectId",
-      "dates",
-      "notes",
-      "googleDriveFolderUrl",
-      "notionPageUrl",
-    ],
-    update: [
-      "emoji",
-      "name",
-      "status",
-      "kind",
-      "locations",
-      "locationsMode",
-      "assigneeId",
-      "assigneeMode",
-      "defaultTrade",
-      "costEstimate",
-      "parentProjectId",
-      "dates",
-      "notes",
-      "googleDriveFolderUrl",
-      "notionPageUrl",
-      "blockedByIds",
-    ],
-    audit: [
-      "name",
-      "status",
-      "kind",
-      "locations",
-      "locationsMode",
-      "assigneeId",
-      "assigneeMode",
-      "defaultTrade",
-      "costEstimate",
-      "parentProjectId",
-      "dates",
-      "notes",
-      "googleDriveFolderUrl",
-      "notionPageUrl",
-    ],
+
     rows: {
       attentionItems: {
         label: "Attention items",
@@ -1225,47 +1179,17 @@ Rules:
       create: ["capture", "full"],
       update: ["full", "status", "kind", "dates", "parent"],
     },
-    output: [
-      "emoji",
-      "assigneeId",
-      "assigneeName",
-      "id",
-      "name",
-      "status",
-      "kind",
-      "locations",
-      "defaultTrade",
-      "costEstimate",
-      "parentProjectId",
-      "dates",
-      "notes",
-      "googleDriveFolderUrl",
-      "notionPageUrl",
-      "parentProjectName",
-      "childProjectIds",
-      "blockedByIds",
-      "blockingIds",
-      "createdAt",
-      "updatedAt",
-      "rollup",
-      "spent",
-      "taskProgress",
-      "dateWindow",
-    ],
   },
   fields: {
-    create: { module: "@cubby/schemas/project", export: "projectCreateInput" },
-    update: { module: "@cubby/schemas/project", export: "projectUpdateData" },
-    output: { module: "@cubby/schemas/work-raw-read", export: "rawProjectOut" },
     list: {
       module: "@cubby/schemas/work-raw-read",
       export: "rawProjectListItemOut",
     },
-    detail: { module: "@cubby/schemas/work-raw-read", export: "rawProjectOut" },
-    mcpOutput: {
+    detail: {
       module: "@cubby/schemas/work-raw-read",
       export: "rawProjectOut",
     },
+
     mcpList: {
       module: "@cubby/schemas/work-raw-read",
       export: "rawProjectListItemOut",
@@ -1301,7 +1225,10 @@ Rules:
   },
   filters: {
     audit: true,
-    schema: { module: "@cubby/schemas/project", export: "projectFilterFields" },
+    schema: {
+      module: "@cubby/schemas/project",
+      export: "projectFilterFields",
+    },
     descriptors: [
       {
         columnId: "assigneeId",
@@ -1565,243 +1492,11 @@ Rules:
       },
     ],
   },
-  relations: [
-    {
-      key: "assignee",
-      label: "Default assignee",
-      target: "ledgerParty",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Project.assigneeId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Project.assigneeId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "sub-projects",
-      label: "Sub-projects",
-      target: "project",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Project.parentProjectId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Project.parentProjectId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "purchases",
-      label: "Purchases",
-      target: "purchase",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Expense.projectId", direction: "incoming" },
-          { edge: "Expense.purchaseId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Expense.purchaseId", direction: "incoming" },
-          { edge: "Expense.projectId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "parent",
-      label: "Parent project",
-      target: "project",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Project.parentProjectId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Project.parentProjectId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "blocked-by",
-      label: "Blocked by",
-      target: "project",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "EntityLink[projectDependency].from", direction: "incoming" },
-          {
-            edge: "EntityLink[projectDependency].to",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "EntityLink[projectDependency].to",
-            direction: "incoming",
-          },
-          { edge: "EntityLink[projectDependency].from", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "resources",
-      label: "Reusable resources",
-      target: "product",
-      cardinality: "many",
-      sourceKey: "explicit",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "EntityLink[projectTool].from", direction: "incoming" },
-          { edge: "EntityLink[projectTool].to", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "EntityLink[projectTool].to", direction: "incoming" },
-          { edge: "EntityLink[projectTool].from", direction: "outgoing" },
-        ],
-      },
-      mutation: {
-        source: "explicit",
-        itemSchema: {
-          module: "@cubby/schemas/common",
-          export: "entityRelationReferenceItemSchema",
-        },
-        rowSchema: {
-          module: "@cubby/schemas/project",
-          export: "projectResourceOut",
-        },
-        adapter: {
-          module: "~/server/domains/project/repo/tools",
-          export: "projectResourcesRelationAdapter",
-        },
-        audiences: ["browser", "mcp"],
-      },
-    },
-    {
-      key: "defaultPurchases",
-      label: "Purchases using this default",
-      target: "purchase",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Purchase.defaultProjectId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Purchase.defaultProjectId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "tasks",
-      label: "Tasks",
-      target: "task",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Task.projectId", direction: "incoming" }],
-      },
-      inverse: { steps: [{ edge: "Task.projectId", direction: "outgoing" }] },
-    },
-    {
-      key: "expenses",
-      label: "Expenses",
-      target: "expense",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Expense.projectId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Expense.projectId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "task-products",
-      label: "Task products",
-      target: "product",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Task.projectId", direction: "incoming" },
-          { edge: "Task.subjectProductId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Task.subjectProductId", direction: "incoming" },
-          { edge: "Task.projectId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "purchased-products",
-      label: "Purchased products",
-      target: "product",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Expense.projectId", direction: "incoming" },
-          { edge: "Expense.productId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Expense.productId", direction: "incoming" },
-          { edge: "Expense.projectId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "vendors",
-      label: "Vendors",
-      target: "vendor",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Expense.projectId", direction: "incoming" },
-          { edge: "Expense.purchaseId", direction: "outgoing" },
-          { edge: "Purchase.vendorId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Purchase.vendorId", direction: "incoming" },
-          { edge: "Expense.purchaseId", direction: "incoming" },
-          { edge: "Expense.projectId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "images",
-      label: "Images",
-      target: "image",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "EntityAttachment.entityId", direction: "incoming" },
-          { edge: "EntityAttachment.imageId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.entityId", direction: "outgoing" },
-        ],
-      },
-    },
-  ],
-  search: { mode: "semantic", inputs: [...imageDescriptionInputs("project")] },
+
+  search: {
+    mode: "semantic",
+    inputs: [...imageDescriptionInputs("project")],
+  },
   capabilities: {
     images: {
       storage: imageAssociationStorage.shape.project.value,
@@ -2253,3 +1948,116 @@ Rules:
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r.field("assigneeId").named("assignee", "Default assignee"),
+    r
+      .path("project", "many", [
+        { edge: "Project.parentProjectId", direction: "incoming" },
+      ])
+      .named("sub-projects", "Sub-projects"),
+    r
+      .path("purchase", "many", [
+        { edge: "Expense.projectId", direction: "incoming" },
+        { edge: "Expense.purchaseId", direction: "outgoing" },
+      ])
+      .named("purchases", "Purchases"),
+    r.field("parentProjectId").named("parent", "Parent project"),
+    r.link("projectDependency", "outgoing").named("blocked-by", "Blocked by", {
+      view: {
+        key: "blockedBy",
+        columnGroup: "Dependencies",
+        defaultVisible: true,
+      },
+    }),
+    r.link("projectTool", "outgoing").named("resources", "Reusable resources", {
+      view: {
+        key: "usedTools",
+        columnGroup: "Work",
+        filterPrefix: "usedTool",
+        inverseKey: "product.usedOnProjects",
+        defaultVisible: true,
+      },
+      sourceKey: "explicit",
+      mutation: {
+        source: "explicit",
+        itemSchema: {
+          module: "@cubby/schemas/common",
+          export: "entityRelationReferenceItemSchema",
+        },
+        rowSchema: {
+          module: "@cubby/schemas/project",
+          export: "projectResourceOut",
+        },
+        adapter: {
+          module: "~/server/domains/project/repo/tools",
+          export: "projectResourcesRelationAdapter",
+        },
+        audiences: ["browser", "mcp"],
+      },
+    }),
+    r
+      .path("purchase", "many", [
+        { edge: "Purchase.defaultProjectId", direction: "incoming" },
+      ])
+      .named("defaultPurchases", "Purchases using this default"),
+    r
+      .path("task", "many", [{ edge: "Task.projectId", direction: "incoming" }])
+      .named("tasks", "Tasks", {
+        view: { columnGroup: "Work", order: "task" },
+      }),
+    r
+      .path("expense", "many", [
+        { edge: "Expense.projectId", direction: "incoming" },
+      ])
+      .named("expenses", "Expenses", {
+        view: { columnGroup: "Purchasing", order: "newest" },
+      }),
+    r
+      .path("product", "many", [
+        { edge: "Task.projectId", direction: "incoming" },
+        { edge: "Task.subjectProductId", direction: "outgoing" },
+      ])
+      .named("task-products", "Task products", {
+        view: {
+          key: "taskProducts",
+          columnGroup: "Work",
+          filterPrefix: "taskProduct",
+        },
+      }),
+    r
+      .path("product", "many", [
+        { edge: "Expense.projectId", direction: "incoming" },
+        { edge: "Expense.productId", direction: "outgoing" },
+      ])
+      .named("purchased-products", "Purchased products", {
+        view: {
+          key: "purchasedProducts",
+          columnGroup: "Purchasing",
+          filterPrefix: "purchasedProduct",
+          inverseKey: "product.projects",
+        },
+      }),
+    r
+      .path("vendor", "many", [
+        { edge: "Expense.projectId", direction: "incoming" },
+        { edge: "Expense.purchaseId", direction: "outgoing" },
+        { edge: "Purchase.vendorId", direction: "outgoing" },
+      ])
+      .named("vendors", "Vendors", {
+        view: {
+          columnGroup: "Purchasing",
+          inverseKey: "vendor.projects",
+        },
+      }),
+    r
+      .path("image", "many", [
+        { edge: "EntityAttachment.entityId", direction: "incoming" },
+        { edge: "EntityAttachment.imageId", direction: "outgoing" },
+      ])
+      .named("images", "Images"),
+  ],
+  readSchemas,
+);

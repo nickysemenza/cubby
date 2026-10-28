@@ -7,9 +7,7 @@ import {
   vendorShortcode,
 } from "./identifiers";
 import { oneOrMany, oneOrManyValues } from "./pagination";
-import { emailBaseFilterFields } from "./generated/email.gen";
-
-export { emailOut, type EmailOut } from "./generated/email.gen";
+import { emailFilterFields as emailBaseFilterFields } from "@cubby/schemas/entities/email";
 
 /** A scope filter's declared `singleValue`: one record, as a scalar or a one-element list. */
 const oneScopeValue = <T extends z.ZodTypeAny>(code: T) =>
@@ -32,5 +30,5 @@ export const emailFilterFields = {
   vendorAccountId: oneScopeValue(vendorAccountShortcode).optional(),
   linkState: oneOrMany(emailLinkState).optional(),
 };
-export const emailFilters = z.object(emailFilterFields);
-export type EmailFilters = z.infer<typeof emailFilters>;
+export const emailFiltersSchema = z.object(emailFilterFields);
+export type EmailFilters = z.infer<typeof emailFiltersSchema>;

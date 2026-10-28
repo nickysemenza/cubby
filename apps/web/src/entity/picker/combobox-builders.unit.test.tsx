@@ -346,23 +346,34 @@ describe("product stock picker evidence", () => {
     });
   });
 
-  it("derives mixed stock evidence from a full product detail result", () => {
-    const item = buildProductComboboxItem(
+  it("distinguishes absent and incomparable canonical stock without adding inventory amounts", () => {
+    const empty = buildProductComboboxItem(
+      { ...base, onHandUnits: null, inventoryEntry: [] },
+      "stock",
+    );
+    expect(empty.presentation).toMatchObject({
+      group: { id: "needs-stock" },
+      trailing: [{ text: "Need 1" }, { text: "0 on hand / 1 expected" }],
+    });
+
+    const mixed = buildProductComboboxItem(
       {
         ...base,
         onHandUnits: null,
-        inventoryEntry: [
-          { amount: { value: 1, unit: "each" } },
-          { amount: { value: 2, unit: "box" } },
-        ],
+        inventoryEntry: [{ id: testShortcode("inventory", "INV-2ABC") }],
       },
       "stock",
     );
-
-    expect(item.presentation).toMatchObject({ group: { id: "check" } });
-    expect(item.presentation?.trailing?.map((chip) => chip.text)).toContain(
+    expect(mixed.presentation).toMatchObject({ group: { id: "check" } });
+    expect(mixed.presentation?.trailing?.map((chip) => chip.text)).toContain(
       "Mixed units on hand",
     );
+
+    const incomplete = buildProductComboboxItem(
+      { ...base, onHandUnits: null },
+      "stock",
+    );
+    expect(incomplete.presentation).toBeUndefined();
   });
 });
 

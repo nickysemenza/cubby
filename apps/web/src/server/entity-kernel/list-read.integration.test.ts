@@ -1,8 +1,8 @@
+import { vendorOut } from "@cubby/schemas/entities/vendor";
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { type LedgerPartyShortcode } from "@cubby/schemas/identifiers";
-import { vendorOut } from "@cubby/schemas/vendor";
 import { sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";

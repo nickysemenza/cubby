@@ -1,4 +1,4 @@
-import { gardenEntryOut } from "@cubby/schemas/garden-entry";
+import { gardenEntryOut } from "@cubby/schemas/entities/gardenEntry";
 import { imageOut } from "@cubby/schemas/image";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";

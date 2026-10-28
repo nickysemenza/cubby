@@ -9,6 +9,7 @@ import type {
   ProductQuantitySummaryOut,
 } from "@cubby/schemas/product";
 import { productPrimaryPlacement } from "@cubby/schemas/product";
+import { classifyProductOnHand } from "@cubby/schemas/product-read-fields";
 import type { AnyColumn } from "drizzle-orm";
 import { and, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -602,12 +603,11 @@ export const loadProductPickerQuantities = async (
       amounts.map((amount) => ({ amount })),
       quantityLedger,
     );
-    const onHand: ProductPickerOnHandOut =
-      amounts.length === 0 && quantityLedger.locationCount === 0
-        ? { state: "none" }
-        : summary.onHandUnits === null
-          ? { state: "mixed" }
-          : { state: "counted", units: summary.onHandUnits };
+    const onHand = classifyProductOnHand({
+      units: summary.onHandUnits,
+      inventoryCount: amounts.length,
+      locationCount: quantityLedger.locationCount,
+    });
 
     quantities.set(id, { quantityLedger, onHand });
   }

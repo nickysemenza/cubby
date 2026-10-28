@@ -23,6 +23,7 @@ import type { ComboboxItem } from "../../ui/combobox/combobox-types";
 import {
   buildLocationComboboxItem,
   buildLocationComboboxItemFromDetail,
+  buildPickerDetailItem,
   buildProductComboboxItem,
   buildRecordComboboxItem,
   buildSearchHitComboboxItem,
@@ -173,7 +174,7 @@ function manifestConfig<E extends ManifestPickerEntity>(
     supportsGlobalSearch: entityRoster[entity].searchable,
     useListSource: manifestListSource(entity),
     build,
-    buildDetail: build,
+    buildDetail: (detail) => buildPickerDetailItem(queryClient, entity, detail),
     // SAFETY: only queried when `supportsGlobalSearch` (the manifest's
     // `searchable` trait) holds, so `entity` is a `SearchableEntity` here.
     buildSearchHit: (hit) =>
@@ -219,22 +220,26 @@ function useProductListSource(searchQuery: string, enabled: boolean) {
   return { data: data?.items, isLoading };
 }
 
-const locationConfig: UseEntitySearchConfig<
+const locationConfig = (
+  queryClient: QueryClient,
+): UseEntitySearchConfig<
   LocationShortcode,
   Parameters<typeof buildLocationComboboxItem>[0],
   Parameters<typeof buildLocationComboboxItemFromDetail>[0]
-> = {
+> => ({
   detailPlaceholder: detailPlaceholder("location"),
   splitBlankTyped: true,
   useListSource: useLocationListSource,
   build: buildLocationComboboxItem,
-  buildDetail: buildLocationComboboxItemFromDetail,
+  buildDetail: (detail) =>
+    buildPickerDetailItem(queryClient, "location", detail),
   buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "location"),
   useOnCreateNew: useDialogCreateNew,
   createNew: "dialog",
-};
+});
 
 function productConfig(
+  queryClient: QueryClient,
   intent: ProductPickerIntent,
 ): UseEntitySearchConfig<
   ProductShortcode,
@@ -248,7 +253,8 @@ function productConfig(
     splitBlankTyped: false,
     useListSource: useProductListSource,
     build,
-    buildDetail: build,
+    buildDetail: (detail) =>
+      buildPickerDetailItem(queryClient, "product", detail, intent),
     // Never queried (`splitBlankTyped: false`), but the config needs a value.
     buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "product"),
     useOnCreateNew: useProductCreateNew,
@@ -263,11 +269,6 @@ const dialogCreateEntities = new Set<string>([
   "product",
 ]);
 
-const productConfigs = {
-  reference: productConfig("reference"),
-  stock: productConfig("stock"),
-};
-
 function pickerConfig<E extends EntitySearchEntity>(
   queryClient: QueryClient,
   entity: E,
@@ -278,9 +279,9 @@ function pickerConfig<E extends EntitySearchEntity>(
   // flow only between that config's own source and builders.
   const config =
     entity === "product"
-      ? productConfigs[intent]
+      ? productConfig(queryClient, intent)
       : entity === "location"
-        ? locationConfig
+        ? locationConfig(queryClient)
         : manifestConfig(
             queryClient,
             entity as ManifestPickerEntity,

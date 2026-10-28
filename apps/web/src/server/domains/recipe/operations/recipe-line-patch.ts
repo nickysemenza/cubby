@@ -1,9 +1,11 @@
-import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import {
   type recipeOut,
+  type recipeUpdateData,
+} from "@cubby/schemas/entities/recipe";
+import type { RecipeShortcode } from "@cubby/schemas/identifiers";
+import {
   type recipeIngredientInput,
   recipeLineAsInput,
-  type recipeUpdateData,
 } from "@cubby/schemas/recipe";
 import type { z } from "zod";
 

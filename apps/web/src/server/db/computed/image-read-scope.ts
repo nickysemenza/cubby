@@ -1,3 +1,4 @@
+import type { EntityId } from "@cubby/schemas/identifiers";
 import { inArray, type SQL } from "drizzle-orm";
 
 import { image } from "~/server/db/retained-tables";
@@ -5,7 +6,7 @@ import { image } from "~/server/db/retained-tables";
 /** Embedded media has public codes; list prefetch already has internal IDs. */
 export type ImageReadScope =
   | readonly string[]
-  | { imageIds: readonly string[] };
+  | { imageIds: readonly EntityId<"image">[] };
 
 export const imageScopeEmpty = (scope: ImageReadScope): boolean =>
   ("imageIds" in scope ? scope.imageIds : scope).length === 0;

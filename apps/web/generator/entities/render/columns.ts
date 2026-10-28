@@ -1,3 +1,4 @@
+import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { compactLiteral } from "../../artifacts.ts";
 import { z } from "zod";
 import type {
@@ -6,117 +7,14 @@ import type {
   EntityStorageField,
 } from "../declarations.ts";
 
-export const identifierTypeNames = {
-  spendingCategory: "SpendingCategoryId",
-  cookbook: "CookbookId",
-  device: "DeviceId",
-  plant: "PlantId",
-  expense: "ExpenseId",
-  financialAccount: "FinancialAccountId",
-  financialTransaction: "FinancialTransactionId",
-  sourceTransactionRecord: "SourceTransactionRecordId",
-  transactionImport: "TransactionImportId",
-  shipment: "ShipmentId",
-  ingredient: "IngredientId",
-  inventory: "InventoryId",
-  ledgerParty: "LedgerPartyId",
-  ledgerTransfer: "LedgerTransferId",
-  location: "LocationId",
-  meal: "MealId",
-  product: "ProductId",
-  productCategory: "ProductCategoryId",
-  project: "ProjectId",
-  purchase: "PurchaseId",
-  run: "RunId",
-  job: "JobId",
-  recipe: "RecipeId",
-  task: "TaskId",
-  vendor: "VendorId",
-  vendorAccount: "VendorAccountId",
-  wish: "WishId",
-} as const satisfies Readonly<Record<string, string>>;
-
-const storageJsonTypes = {
-  "job.input": "JobPayload",
-  "job.cursor": "JobPayload",
-  "job.result": "JobPayload",
-  "shipment.extraTrackingNumbers": "ShipmentExtraTrackingNumber[]",
-  "cookbook.rawJson": "CookbookExtraction",
-  "cookbook.report": "CookbookRunReport | null",
-  "financialAccount.authorizedUsers": "FinancialAccountPartyPeriod[]",
-  "financialAccount.fundingPeriods": "FinancialAccountPartyPeriod[]",
-  "financialAccount.cardNumbers": "FinancialAccountCardNumber[]",
-  "financialAccount.identity": "FinancialAccountIdentity",
-  "financialAccount.sourceAliases": "FinancialAccountSourceAlias[]",
-  "ingredient.naKinds": "IngredientApplicabilityKey[]",
-  "image.sourceFingerprint": "ImageSourceFingerprint | null",
-  "image.captureLocation": "ImageCaptureLocation | null",
-  "image.provenanceEvidence": "ImageProvenanceEvidence | null",
-  "image.embeddedMetadata": "StoredImageEmbeddedMetadata | null",
-  "location.valuation": "LocationValuation | null",
-  "product.labelNutrition": "ProductLabelNutrition | null",
-  "recipe.meta": "RecipeStoredMeta | null",
-  "recipe.totals": "StoredRecipeTotals | null",
-  "recipe.yield": "RecipeYield",
-} as const satisfies Readonly<Record<string, string>>;
-
-const lookupGeneratedType = (
-  values: Readonly<Record<string, string>>,
-  key: string,
-): string | undefined => values[key];
-
 const enumColumnExpression = (
   entity: CompiledEntity,
   field: EntityStorageField,
 ): string | null => {
   const column = JSON.stringify(field.column);
-  const key = `${entity.key}.${field.key}`;
-  const expressions = {
-    "expense.economicRole": `text(${column},{enum:["vendor", "reimbursement"]})`,
-    "product.acquisitionOrigin": `text(${column},{enum:["unknown", "purchased", "gift", "previously_owned"]})`,
-    "product.kind": `text(${column},{enum:productKindValues})`,
-    "spendingCategory.itemizationExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
-    "vendor.itemizationExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
-    "purchase.itemizationExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
-    "financialTransaction.itemizationExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
-    "spendingCategory.productExpectation": `text(${column},{enum:["unknown", "required", "not_expected", "not_allowed"]})`,
-
-    "expense.costType": `text(${column},{enum:costTypeValues})`,
-    "expense.lineBasis": `text(${column},{enum:expenseLineBasisValues})`,
-    "expense.lineKind": `text(${column},{enum:expenseLineKindValues})`,
-    "expense.trade": `text(${column},{enum:tradeValues})`,
-    "imageJob.kind": `text(${column},{enum:["subject_lift", "describe_image", "identify_image"]})`,
-    "imageJob.state": `text(${column},{enum:["pending", "waiting_for_device", "leased", "ready", "skipped", "failed"]})`,
-    "image.metadataOutcome": `text(${column},{enum:["original_missing", "extraction_failed"]})`,
-    "inventory.placement": `text(${column},{enum:inventoryPlacementValues})`,
-    "meal.mealKind": `text(${column},{enum:mealKindValues})`,
-    "meal.mealType": `text(${column},{enum:mealTypeValues})`,
-    "inventory.ownershipMode": `text(${column},{enum:inventoryOwnershipModeValues})`,
-    "project.defaultTrade": `text(${column},{enum:tradeValues})`,
-    "purchase.defaultTrade": `text(${column},{enum:tradeValues})`,
-    "productCategory.feature": `text(${column},{enum:productCategoryFeatureValues})`,
-    "image.source": `text(${column},{enum:["own", "catalog", "unknown", "screenshot"]})`,
-    "image.captureAttribution": `text(${column},{enum:["none","derived","ambiguous","confirmed"]})`,
-    "project.kind": `text(${column},{enum:projectKindValues})`,
-    "project.status": `text(${column},{enum:projectStatusValues})`,
-    "recipe.sourceType": `text(${column},{enum:recipeSourceValues})`,
-    "task.status": `text(${column},{enum:taskStatusValues})`,
-    "task.trade": `text(${column},{enum:tradeValues})`,
-  } as const satisfies Readonly<Record<string, string>>;
-  const existing = lookupGeneratedType(expressions, key);
-  if (existing) return existing;
-  // Storage enums come from declarations at generation time so table imports
-  // do not evaluate public read schemas during Worker startup.
-  if (
-    ![
-      "enum:declaration",
-      "enum:inheritance-mode",
-      "enum:ImageStatus",
-      "enum:ImageRenderStatus",
-      "enum:ImageStorageStatus",
-    ].includes(field.specialized ?? "")
-  )
-    return null;
+  if (field.enumValues)
+    return `text(${column},{enum:${compactLiteral(field.enumValues)}})`;
+  // Resolve declaration schemas during generation; emitted tables need no runtime schema imports.
   const validation = entity.fieldModel.fields.find(
     ({ key }) => key === field.key,
   )?.validation;
@@ -169,11 +67,13 @@ export const renderStorageColumn = (
     const notNull = field.nullable ? "" : ".notNull()";
     return `${JSON.stringify(`${field.key}Value`)}:doublePrecision(${valueColumn})${notNull},${JSON.stringify(`${field.key}Unit`)}:text(${unitColumn})${notNull}`;
   }
-  const ownIdType = lookupGeneratedType(identifierTypeNames, entity.key);
+  const ownIdType = Object.hasOwn(SHORTCODE_PREFIX, entity.key)
+    ? `EntityId<${JSON.stringify(entity.key)}>`
+    : undefined;
   const referenceIdType =
-    field.reference === null
-      ? null
-      : lookupGeneratedType(identifierTypeNames, field.reference);
+    field.reference !== null && Object.hasOwn(SHORTCODE_PREFIX, field.reference)
+      ? `EntityId<${JSON.stringify(field.reference)}>`
+      : null;
   let expression: string;
   if (field.key === "id") {
     expression =
@@ -191,8 +91,6 @@ export const renderStorageColumn = (
       expression += `.$type<${referenceIdType}>()`;
   } else if (field.kind === "text-array") {
     expression = `text(${column}).array()`;
-    if (entity.key === "ingredient" && field.key === "naKinds")
-      expression += ".$type<IngredientApplicabilityKey[]>()";
   } else if (field.kind === "text") {
     expression = `text(${column})`;
   } else if (field.kind === "number") {
@@ -210,16 +108,11 @@ export const renderStorageColumn = (
     expression = `timestamp(${column},{mode:"date"})`;
   } else if (field.kind === "json") {
     expression = `jsonb(${column})`;
-    const jsonType = lookupGeneratedType(
-      storageJsonTypes,
-      `${entity.key}.${field.key}`,
-    );
-    if (jsonType !== undefined) expression += `.$type<${jsonType}>()`;
   } else {
     expression = enumColumnExpression(entity, field) ?? `text(${column})`;
-    if (entity.key === "ledgerParty" && field.key === "kind")
-      expression += ".$type<LedgerPartyKind>()";
   }
+  if (field.type)
+    expression += `.$type<${field.type.export}${field.type.array ? "[]" : ""}>()`;
   if (
     field.key !== "id" &&
     field.key !== "shortcode" &&
@@ -237,30 +130,6 @@ export const renderStorageColumn = (
     expression += `.references(${reference(field.reference, field.referenceOptions?.column)}${field.referenceOptions?.onUpdate || field.referenceOptions?.onDelete ? `, ${JSON.stringify({ onUpdate: field.referenceOptions.onUpdate, onDelete: field.referenceOptions.onDelete })}` : ""})`;
   return `${JSON.stringify(field.key)}:${expression}`;
 };
-
-/** The type and value-array imports the column builders above reference. */
-const storageColumnImports =
-  'import type { JobPayload } from "@cubby/schemas/job";\n' +
-  'import type { FinancialAccountPartyPeriod, FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
-  'import type { ShipmentExtraTrackingNumber } from "@cubby/schemas/shipment-fields";\n' +
-  `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
-  'import type { ImageSourceFingerprint, StoredImageEmbeddedMetadata } from "@cubby/schemas/image";\n' +
-  'import type { ImageCaptureLocation, ImageProvenanceEvidence } from "@cubby/schemas/image-capture-fields";\n' +
-  'import type { CookbookExtraction, CookbookRunReport } from "@cubby/schemas/cookbook";\n' +
-  'import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";\n' +
-  'import { mealKindValues, mealTypeValues } from "@cubby/schemas/meal-classification";\n' +
-  'import type { IngredientApplicabilityKey } from "@cubby/schemas/codec";\n' +
-  'import { productCategoryFeatureValues } from "@cubby/schemas/product-category-fields";\n' +
-  'import { productKindValues } from "@cubby/schemas/product-fields";\n' +
-  'import { costTypeValues } from "@cubby/schemas/expense-fields";\n' +
-  'import { projectKindValues, projectStatusValues } from "@cubby/schemas/project-fields";\n' +
-  'import { taskStatusValues, tradeValues } from "@cubby/schemas/task-fields";\n' +
-  'import { expenseLineBasisValues, expenseLineKindValues } from "@cubby/schemas/expense-line-kind";\n' +
-  'import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";\n' +
-  'import type { RecipeStoredMeta, RecipeYield, StoredRecipeTotals } from "@cubby/schemas/recipe-shared";\n' +
-  'import { recipeSourceValues } from "@cubby/schemas/recipe-shared";\n' +
-  'import { inventoryOwnershipModeValues } from "@cubby/schemas/inventory-ownership";\n' +
-  'import { inventoryPlacementValues } from "@cubby/shared";\n';
 
 /** Unrelated column imports would reconnect leaf groups to other schema types. */
 export const referencedImports = (imports: string, source: string): string => {
@@ -289,4 +158,9 @@ export const referencedImports = (imports: string, source: string): string => {
 export const storageColumnImportsFor = (
   source: string,
   declaredImports = "",
-): string => referencedImports(storageColumnImports + declaredImports, source);
+): string =>
+  referencedImports(
+    'import type { EntityId } from "@cubby/schemas/identifiers";\n' +
+      declaredImports,
+    source,
+  );

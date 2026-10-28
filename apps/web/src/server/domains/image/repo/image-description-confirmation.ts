@@ -1,3 +1,4 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { imageDescriptionConfirmationOwner } from "@cubby/schemas/image-processing";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -24,7 +25,12 @@ export async function writeImageDescriptionConfirmation(
   const [source] = await getDb(db)
     .select({ hash: image.sha256 })
     .from(image)
-    .where(and(eq(image.id, state.recordId), notDeleted(image)))
+    .where(
+      and(
+        eq(image.id, parseEntityId("image", state.recordId)),
+        notDeleted(image),
+      ),
+    )
     .for("update")
     .limit(1);
   if (!source || state.fingerprint !== source.hash)

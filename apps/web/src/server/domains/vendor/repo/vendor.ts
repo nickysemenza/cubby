@@ -1,10 +1,16 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { type VendorUpdateData } from "@cubby/schemas/entities/vendor";
 /** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
 import { entityRefKey } from "@cubby/schemas/entity";
+import {
+  vendorRawOut as rawVendorOut,
+  type VendorRawOut as RawVendorOut,
+} from "@cubby/schemas/entity-contracts/vendor";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type PurchaseId,
+  type ImageId,
   parseEntityId,
   parseShortcodeFor,
   type VendorId,
@@ -18,16 +24,10 @@ import {
 } from "@cubby/schemas/mailbox-research";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import type {
-  VendorCreateInput,
   VendorMergeSummaryOut,
   VendorOptionsOut,
-  VendorUpdateData,
 } from "@cubby/schemas/vendor";
 import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
-import {
-  rawVendorOut,
-  type RawVendorOut,
-} from "@cubby/schemas/vendor-raw-read";
 import {
   and,
   asc,
@@ -106,6 +106,7 @@ import {
 } from "~/server/entity-kernel/repo/singular-attachment";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
+import { ENTITY_STORED_WRITES } from "~/server/generated/entity-write-bindings.gen";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { loadVendorPurchaseEvidence } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
@@ -628,55 +629,10 @@ export const findOrCreateVendor = async (
   return row.id;
 };
 
-export const createVendor = defineMutationWriter({
-  entity: "vendor",
-  read: async (
-    receipt: MutationReceipt<"vendor">,
-    db: Database,
-    _data: VendorCreateInput,
-    _actor: ActorContext,
-  ) => ({
-    output: await readVendorById(db, receipt.entityId),
-    entityId: receipt.entityId,
-  }),
-  write: async (
-    readOutput,
-    db: Database,
-    data: VendorCreateInput,
-    actor: ActorContext,
-  ) => {
-    const id = await withTransaction(db, async (tx) => {
-      const created = await insertWithShortcode(tx, "vendor", {
-        name: data.name.trim(),
-        website: data.website,
-        orderUrlTemplate: data.orderUrlTemplate,
-        spendingProfile: data.spendingProfile,
-        defaultSpendingCategoryId: data.defaultSpendingCategoryId
-          ? await resolveOrThrow(
-              tx,
-              "spendingCategory",
-              data.defaultSpendingCategoryId,
-            )
-          : null,
-        itemizationExpectation: data.itemizationExpectation,
-        orderEvidence: data.orderEvidence,
-        aliases: data.aliases,
-        orderEmailSenders: data.orderEmailSenders,
-        browserDomains: data.browserDomains,
-        returnWindowDays: data.returnWindowDays,
-        agentHints: data.agentHints,
-        notes: data.notes,
-      });
-      await logAuditEntry(tx, actor, {
-        entityKind: "vendor",
-        entityId: created.id,
-        action: "create",
-      });
-      return created.id;
-    });
-    return readOutput({ entityId: id });
-  },
-});
+export const createVendor = vendorReader.createWriter(
+  ENTITY_STORED_WRITES.vendor.create,
+  (output, entityId) => ({ output, entityId }),
+);
 
 export const updateVendor = defineMutationWriter({
   entity: "vendor",
@@ -837,7 +793,7 @@ type VendorMergePlan = {
     vendorId: VendorId;
     notes: string | null;
   }>;
-  carried: { website?: string; notes?: string; logoImageId?: string };
+  carried: { website?: string; notes?: string; logoImageId?: ImageId };
 };
 
 /** Plan same-order folds before repointing through the partial unique index. */
@@ -1069,7 +1025,7 @@ export const mergeVendors = async (
       }
     }
 
-    const loserLogos: string[] = [];
+    const loserLogos: ImageId[] = [];
     let accountFold = { moved: 0, folded: 0 };
     await applyMergePolicy(tx, {
       entity: "vendor",

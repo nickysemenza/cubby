@@ -1,5 +1,6 @@
+import { type WishListItemOut } from "@cubby/schemas/entities/wish";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import type { WishFilters, WishListItemOut } from "@cubby/schemas/wish";
+import type { WishFilters } from "@cubby/schemas/wish";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";

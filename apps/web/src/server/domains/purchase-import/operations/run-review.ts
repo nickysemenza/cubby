@@ -101,7 +101,7 @@ function unreceivedWake(
 async function reconcileSettledRunOnce(
   db: Database,
   input: {
-    runId: string;
+    runId: RunId;
     operationId: string;
     generation: string | null;
     /** The activity window observed by stale recovery, rechecked at its terminal write. */
@@ -404,7 +404,7 @@ export async function expireStaleRuns(db: Database, now = new Date()) {
     .from(runTable)
     .where(staleRunWhere(cutoff));
   let expired = 0;
-  const failures: Array<{ runId: string; error: string }> = [];
+  const failures: Array<{ runId: RunId; error: string }> = [];
   for (const run of stale) {
     try {
       const reconciled = run.agentSessionId
@@ -459,7 +459,7 @@ export async function expireStaleRuns(db: Database, now = new Date()) {
 export async function auditImportBatch(
   db: Database,
   input: {
-    runId: string;
+    runId: RunId;
     operationId: string;
     offset: number;
     /** A stop for review audits a paused run's writes before it ends. */
@@ -598,7 +598,7 @@ export async function auditImportBatch(
 /** Server-side finalization guard: every run mutation is audited in pages of 25. */
 export async function auditAllImportBatches(
   db: Database,
-  input: { runId: string; operationId: string; allowPaused?: boolean },
+  input: { runId: RunId; operationId: string; allowPaused?: boolean },
 ) {
   let offset = 0;
   let findings = 0;
@@ -620,7 +620,7 @@ const SETTLED_MAIL_STATUSES = new Set(["completed", "excluded", "blocked"]);
 /** Pi's latest recorded reason for each unresolved Email, by Email id. */
 async function unresolvedMailReasons(
   tx: DrizzleTransaction,
-  runId: string,
+  runId: RunId,
   emailIds: readonly string[],
 ) {
   const rows = await tx
@@ -676,7 +676,7 @@ function unresolvedTargetsSummary(
 async function stopRunForReviewOnce(
   db: Database,
   input: {
-    runId: string;
+    runId: RunId;
     operationId: string;
     kind: string;
     summary: string;

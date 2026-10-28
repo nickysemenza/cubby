@@ -24,6 +24,7 @@ import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { parseLinkEdgeKey } from "~/server/generic/entity-links/repo/entity-links";
 import type { RemovableEntity } from "~/server/generic/removal/repo/core";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
+import { assertNoOrdinaryReferences } from "~/server/generic/removal/repo/ordinary-reference-guard";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** Preserve original text in keeper/donor order, deduplicating only exact note values. */
@@ -168,6 +169,7 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   const { entity, table, keepId, loserIds, removal, actor } = args;
   if (loserIds.length === 0) return { removed: 0 };
   const ids = [...loserIds];
+  await assertNoOrdinaryReferences(tx, entity, ids);
   // Field, Email link and import finding projections follow the survivor; a
   // duplicate open finding is retired there, never deleted.
   await repointAssessmentTargetsTx(tx, entity, keepId, loserIds);

@@ -1,5 +1,7 @@
+import { ENTITY_KEYS } from "@cubby/shared/entity-keys";
 import { pascalCase } from "@cubby/shared/text-case";
-import { readFileSync } from "node:fs";
+import { globSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 import { childSchemas, discriminatorOf } from "../../src/lib/operation-wire.ts";
@@ -66,8 +68,48 @@ const packageModules = (
       // Compiler inputs are authoring metadata, not HTTP schema-name owners.
       .filter(
         ([subpath]) =>
-          !subpath.startsWith("./compiler/") && !EXCLUDED_SUBPATHS.has(subpath),
+          !subpath.startsWith("./compiler/") &&
+          !subpath.startsWith("./entity-contracts/") &&
+          !EXCLUDED_SUBPATHS.has(subpath),
       )
+      .flatMap(([subpath, target]): [string, string][] => {
+        const path = z.string().parse(target);
+        if (!subpath.includes("*")) return [[subpath, path]];
+        const [prefix, suffix] = path.replace(/^\.\//, "").split("*");
+        if (prefix === undefined || suffix === undefined)
+          throw new Error(
+            `Pattern export ${name}/${subpath} requires a pattern target.`,
+          );
+        return (
+          globSync(path, {
+            cwd: fileURLToPath(new URL(".", packageJsonUrl)),
+          })
+            // Retired wrapper files survive until the final prune. They must not
+            // become schema owners while generating from a smaller source catalog.
+            .filter(
+              (file) =>
+                subpath !== "./entities/*" ||
+                ENTITY_KEYS.some(
+                  (key) =>
+                    key ===
+                    file.slice(
+                      prefix.length,
+                      suffix.length ? -suffix.length : undefined,
+                    ),
+                ),
+            )
+            .map((file) => [
+              subpath.replace(
+                "*",
+                file.slice(
+                  prefix.length,
+                  suffix.length ? -suffix.length : undefined,
+                ),
+              ),
+              file,
+            ])
+        );
+      })
       // Code-unit order, as `Object.keys(...).sort()` gave before the URLs
       // replaced bare specifiers: first-export-wins naming depends on it.
       .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))

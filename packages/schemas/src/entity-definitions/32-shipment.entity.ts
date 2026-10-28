@@ -1,3 +1,4 @@
+import { timestampField } from "./field-policy";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
@@ -9,7 +10,7 @@ import {
   shipmentPurpose,
   shipmentEventSummarySchema,
 } from "../shipment-fields";
-import { defineEntity } from "./definition";
+import { defineEntity, defineEntityModel } from "./definition";
 
 const SHIPMENT_PURPOSE_PRESENTATION = {
   incoming: {
@@ -26,7 +27,7 @@ const SHIPMENT_PURPOSE_PRESENTATION = {
   },
 } satisfies Record<ShipmentPurpose, { color: ColorToken; glyph: EnumIcon }>;
 
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "shipment",
   names: { singular: "Shipment", plural: "Shipments" },
   table: "Shipment",
@@ -136,12 +137,14 @@ export default defineEntity({
         },
       },
       {
+        audit: true,
         key: "name",
         kind: "text",
         display: {},
         validation: { read: z.string().min(1), create: null, update: null },
       },
       {
+        audit: true,
         key: "purchaseId",
         kind: "identifier",
         nullable: true,
@@ -169,9 +172,14 @@ export default defineEntity({
         key: "vendorName",
         kind: "text",
         nullable: true,
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
+        audit: true,
         key: "carrierId",
         kind: "identifier",
         nullable: true,
@@ -184,19 +192,26 @@ export default defineEntity({
         },
       },
       {
+        output: false,
         key: "purchaseAssociationReviewed",
         kind: "boolean",
         display: {},
         validation: { read: z.boolean(), create: null, update: null },
       },
       {
+        audit: true,
         key: "trackingNumber",
         kind: "text",
         nullable: true,
         display: { columnGroup: "Tracking" },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
+        audit: true,
         key: "extraTrackingNumbers",
         kind: "json",
         display: {
@@ -232,25 +247,41 @@ export default defineEntity({
         },
       },
       {
+        audit: true,
         key: "notes",
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "purchaseName",
         kind: "text",
         nullable: true,
         provenance: { kind: "derived", sources: [{ label: "Purchase" }] },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "carrierName",
         kind: "text",
         nullable: true,
-        provenance: { kind: "derived", sources: [{ label: "Carrier Vendor" }] },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Carrier Vendor" }],
+        },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "firstEventDate",
@@ -262,7 +293,11 @@ export default defineEntity({
           kind: "derived",
           sources: [{ label: "Tracking events" }],
         },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "lastEventDate",
@@ -274,7 +309,11 @@ export default defineEntity({
           kind: "derived",
           sources: [{ label: "Tracking events" }],
         },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "eventSpanHours",
@@ -304,7 +343,11 @@ export default defineEntity({
           kind: "derived",
           sources: [{ label: "Tracking events" }],
         },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "eventCount",
@@ -322,33 +365,28 @@ export default defineEntity({
           update: null,
         },
       },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { list: false, format: "timestamp" },
-        validation: { read: z.date(), create: null, update: null },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false, format: "timestamp" },
-        validation: { read: z.date(), create: null, update: null },
-      },
-      { key: "deletedAt", kind: "timestamp", nullable: true },
-      { key: "shortcode", kind: "text" },
+      timestampField("createdAt", { list: false, format: "timestamp" }),
+      timestampField("updatedAt", { list: false, format: "timestamp" }),
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
+      { output: false, key: "shortcode", kind: "text" },
     ],
     storage: [
       { key: "id", specialized: "primary-key:ShipmentId" },
       { key: "shortcode", specialized: "shortcode" },
       "name",
-      { key: "purchaseId", reference: "purchase" },
+      "purchaseId",
       { key: "purchaseAssociationReviewed", defaultValue: false },
-      { key: "carrierId", reference: "vendor" },
+      "carrierId",
       "trackingNumber",
       {
         key: "extraTrackingNumbers",
         defaultOverride: "generated",
         defaultSql: "'[]'::jsonb",
+        type: {
+          module: "@cubby/schemas/shipment-fields",
+          export: "ShipmentExtraTrackingNumber",
+          array: true,
+        },
       },
       { key: "purpose", defaultValue: "unknown" },
       "notes",
@@ -356,38 +394,7 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [],
-    update: ["purpose"],
-    audit: [
-      "name",
-      "purchaseId",
-      "carrierId",
-      "trackingNumber",
-      "extraTrackingNumbers",
-      "purpose",
-      "notes",
-    ],
-    output: [
-      "id",
-      "name",
-      "purchaseId",
-      "purchaseName",
-      "vendorId",
-      "vendorName",
-      "carrierId",
-      "carrierName",
-      "trackingNumber",
-      "extraTrackingNumbers",
-      "purpose",
-      "notes",
-      "firstEventDate",
-      "lastEventDate",
-      "eventSpanHours",
-      "eventSpanLabel",
-      "eventCount",
-      "createdAt",
-      "updatedAt",
-    ],
+
     derived: {
       vendorId: { via: "purchase.vendor" },
       firstEventDate: {
@@ -442,11 +449,6 @@ export default defineEntity({
   },
   fields: {
     create: null,
-    update: { module: "@cubby/schemas/shipment", export: "shipmentUpdateData" },
-    output: {
-      module: "@cubby/schemas/shipment-raw-read",
-      export: "rawShipmentOut",
-    },
   },
   storage: {
     indexes: [{ on: ["purchaseId"] }, { on: ["carrierId", "trackingNumber"] }],
@@ -503,69 +505,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "tracking-emails",
-      label: "Tracking evidence",
-      target: "email",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "ShipmentObservation.shipmentId", direction: "incoming" },
-          {
-            edge: "ShipmentObservationCapture.observationId",
-            direction: "incoming",
-          },
-          {
-            edge: "ShipmentObservationCapture.captureId",
-            direction: "outgoing",
-          },
-          { edge: "ShipmentSourceCapture.emailId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "ShipmentSourceCapture.emailId", direction: "incoming" },
-          {
-            edge: "ShipmentObservationCapture.captureId",
-            direction: "incoming",
-          },
-          {
-            edge: "ShipmentObservationCapture.observationId",
-            direction: "outgoing",
-          },
-          { edge: "ShipmentObservation.shipmentId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "purchase",
-      label: "Purchase",
-      target: "purchase",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Shipment.purchaseId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Shipment.purchaseId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "carrier",
-      label: "Carrier",
-      target: "vendor",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Shipment.carrierId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Shipment.carrierId", direction: "incoming" }],
-      },
-    },
-  ],
+
   search: "lexical",
   capabilities: {
     images: {
@@ -697,3 +637,26 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .path("email", "many", [
+        { edge: "ShipmentObservation.shipmentId", direction: "incoming" },
+        {
+          edge: "ShipmentObservationCapture.observationId",
+          direction: "incoming",
+        },
+        {
+          edge: "ShipmentObservationCapture.captureId",
+          direction: "outgoing",
+        },
+        { edge: "ShipmentSourceCapture.emailId", direction: "outgoing" },
+      ])
+      .named("tracking-emails", "Tracking evidence"),
+    r.field("purchaseId").named("purchase", "Purchase"),
+    r.field("carrierId").named("carrier", "Carrier"),
+  ],
+  readSchemas,
+);

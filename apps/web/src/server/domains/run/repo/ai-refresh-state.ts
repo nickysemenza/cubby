@@ -564,7 +564,7 @@ export async function uncertainEmailRefreshCandidates(
     )
     .where(
       and(
-        after ? gt(email.id, after) : undefined,
+        after ? gt(email.id, parseEntityId("email", after)) : undefined,
         notDeleted(email),
         eq(email.classification, "uncertain"),
         notInArray(email.status, [

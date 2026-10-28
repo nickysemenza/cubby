@@ -1,12 +1,13 @@
+import { timestampField, aliasList } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { ingredientReadSchemas } from "../ingredient-read-fields";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { ingredientShortcode, productShortcode } from "../identifier-fields.js";
 import { ingredientApplicabilityKey } from "../codec.js";
 import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 
-export default defineEntity(
+export const { definition, readSchemas } = defineEntityModel(
   {
     key: "ingredient",
     names: { singular: "Ingredient", plural: "Ingredients" },
@@ -178,6 +179,7 @@ export default defineEntity(
     model: {
       fields: [
         {
+          output: false,
           key: "nutritionSourceProductId",
           labelOverride: "Nutrition source Product",
           kind: "identifier",
@@ -233,12 +235,10 @@ export default defineEntity(
             read: z
               .array(z.string())
               .describe("Alternate names for this ingredient"),
-            create: z
-              .array(z.string())
+            create: aliasList
               .describe("Alternate names for this ingredient")
               .default([]),
-            update: z
-              .array(z.string())
+            update: aliasList
               .optional()
               .describe("New aliases (replaces existing list)"),
           },
@@ -285,27 +285,10 @@ export default defineEntity(
             update: null,
           },
         },
+        timestampField("createdAt"),
+        timestampField("updatedAt"),
         {
-          key: "createdAt",
-          kind: "timestamp",
-          display: { list: false },
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        {
-          key: "updatedAt",
-          kind: "timestamp",
-          display: { list: false },
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        {
+          output: false,
           key: "images",
           kind: "json",
           display: { standard: "image" },
@@ -315,13 +298,10 @@ export default defineEntity(
           },
           validation: { read: z.array(imageOut), create: null, update: null },
         },
-        { key: "shortcode", kind: "text" },
+        { output: false, key: "shortcode", kind: "text" },
+        { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
         {
-          key: "deletedAt",
-          kind: "timestamp",
-          nullable: true,
-        },
-        {
+          output: false,
           display: { detail: false },
           key: "recipeId",
           kind: "identifier",
@@ -345,16 +325,19 @@ export default defineEntity(
           key: "naKinds",
           defaultValue: "'{}'::text[]",
           specialized: "text-array",
+          type: {
+            module: "@cubby/schemas/codec",
+            export: "IngredientApplicabilityKey",
+            array: true,
+          },
         },
         { key: "usuallyOnHand", defaultValue: false },
         { key: "createdAt" },
         { key: "updatedAt", specialized: "updated-at" },
         "deletedAt",
-        { key: "recipeId", reference: "recipe" },
+        "recipeId",
       ],
-      create: ["name", "aliases", "naKinds", "usuallyOnHand"],
-      update: ["naKinds", "usuallyOnHand", "name", "aliases"],
-      audit: ["name", "aliases", "naKinds", "usuallyOnHand"],
+
       derived: {
         appearsInRecipes: { type: "number" },
         // The number of live Products mapped to the ingredient.
@@ -387,15 +370,6 @@ export default defineEntity(
         create: ["capture", "full"],
         update: ["full", "identity"],
       },
-      output: [
-        "id",
-        "name",
-        "aliases",
-        "naKinds",
-        "usuallyOnHand",
-        "createdAt",
-        "updatedAt",
-      ],
     },
     fields: {
       embedded: [
@@ -410,26 +384,7 @@ export default defineEntity(
           projections: ["detail", "mcpDetail"],
         },
       ],
-      create: {
-        module: "@cubby/schemas/ingredient",
-        export: "ingredientCreateInput",
-      },
-      update: {
-        module: "@cubby/schemas/ingredient",
-        export: "ingredientUpdateData",
-      },
-      output: {
-        module: "@cubby/schemas/ingredient-raw-read",
-        export: "rawIngredientOutput",
-      },
-      list: {
-        module: "@cubby/schemas/ingredient-raw-read",
-        export: "rawIngredientList",
-      },
-      detail: {
-        module: "@cubby/schemas/ingredient-raw-read",
-        export: "rawIngredientDetail",
-      },
+
       mcpList: {
         module: "@cubby/schemas/ingredient-raw-read",
         export: "rawIngredientMcpList",
@@ -572,120 +527,7 @@ export default defineEntity(
         },
       ],
     },
-    relations: [
-      {
-        key: "products",
-        label: "Products",
-        target: "product",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Product.ingredientId", direction: "incoming" }],
-        },
-        inverse: {
-          steps: [{ edge: "Product.ingredientId", direction: "outgoing" }],
-        },
-      },
-      {
-        key: "plants",
-        label: "Plants",
-        target: "plant",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Plant.ingredientId", direction: "incoming" }],
-        },
-        inverse: {
-          steps: [{ edge: "Plant.ingredientId", direction: "outgoing" }],
-        },
-      },
-      {
-        key: "recipes",
-        label: "Recipes",
-        target: "recipe",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            {
-              edge: "RecipeSectionIngredient.ingredientId",
-              direction: "incoming",
-            },
-            {
-              edge: "RecipeSectionIngredient.recipeSectionId",
-              direction: "outgoing",
-            },
-            { edge: "RecipeSection.recipeId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "RecipeSection.recipeId", direction: "incoming" },
-            {
-              edge: "RecipeSectionIngredient.recipeSectionId",
-              direction: "incoming",
-            },
-            {
-              edge: "RecipeSectionIngredient.ingredientId",
-              direction: "outgoing",
-            },
-          ],
-        },
-      },
-      {
-        key: "recipe",
-        label: "Recipe",
-        target: "recipe",
-        cardinality: "one",
-        inverseOmit:
-          "The recipe page is custom; its workflow slot shows where a recipe is used as an ingredient.",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Ingredient.recipeId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "Ingredient.recipeId", direction: "incoming" }],
-        },
-      },
-      {
-        key: "meals",
-        label: "Eaten at meals",
-        target: "meal",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
-            { edge: "MealFoodEntry.mealId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "MealFoodEntry.mealId", direction: "incoming" },
-            { edge: "MealFoodEntry.ingredientId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "eaters",
-        label: "Eaten by",
-        target: "ledgerParty",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
-            { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "MealFoodEntry.ledgerPartyId", direction: "incoming" },
-            { edge: "MealFoodEntry.ingredientId", direction: "outgoing" },
-          ],
-        },
-      },
-    ],
+
     search: {
       mode: "semantic",
       inputs: [...imageDescriptionInputs("ingredient")],
@@ -877,4 +719,58 @@ export default defineEntity(
     },
   },
   ingredientReadSchemas,
+);
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .path("product", "many", [
+        { edge: "Product.ingredientId", direction: "incoming" },
+      ])
+      .named("products", "Products"),
+    r
+      .path("plant", "many", [
+        { edge: "Plant.ingredientId", direction: "incoming" },
+      ])
+      .named("plants", "Plants"),
+    r
+      .path("recipe", "many", [
+        {
+          edge: "RecipeSectionIngredient.ingredientId",
+          direction: "incoming",
+        },
+        {
+          edge: "RecipeSectionIngredient.recipeSectionId",
+          direction: "outgoing",
+        },
+        { edge: "RecipeSection.recipeId", direction: "outgoing" },
+      ])
+      .named("recipes", "Recipes"),
+    r.field("recipeId").named("recipe", "Recipe", {
+      inverseOmit:
+        "The recipe page is custom; its workflow slot shows where a recipe is used as an ingredient.",
+    }),
+    r
+      .path("meal", "many", [
+        { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
+        { edge: "MealFoodEntry.mealId", direction: "outgoing" },
+      ])
+      .named("meals", "Eaten at meals", {
+        view: {
+          columnGroup: "Use",
+          order: "newest",
+          inverseKey: "meal.foodIngredients",
+        },
+      }),
+    r
+      .path("ledgerParty", "many", [
+        { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
+        { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
+      ])
+      .named("eaters", "Eaten by", {
+        view: { columnGroup: "Use", filterPrefix: "eater" },
+      }),
+  ],
+  readSchemas,
 );

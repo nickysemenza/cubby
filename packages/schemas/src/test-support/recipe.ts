@@ -1,6 +1,7 @@
+import { recipeOut } from "@cubby/schemas/entities/recipe";
 import { z } from "zod";
 
-import { recipeOut, sectionIngredientOut } from "../recipe";
+import { sectionIngredientOut } from "../recipe";
 import { testCompleteDataQuality } from "./identifiers";
 
 /** Shared builders for the recipe-shaped rows web tests render. */

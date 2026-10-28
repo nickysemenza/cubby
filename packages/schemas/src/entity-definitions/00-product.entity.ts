@@ -1,4 +1,5 @@
 import { historicalDateRangePresets } from "../date-range";
+import { timestampField, aliasList } from "./field-policy";
 import { PRODUCT_OWNERSHIP_INPUTS } from "./ownership-inputs";
 import { storedProductOwnership } from "@cubby/schemas/inventory-ownership";
 import { PRODUCT_PRICING_INPUTS } from "./product-pricing-inputs";
@@ -10,7 +11,11 @@ import {
   productReadFacts,
 } from "../product-read-fields";
 import { productChildren } from "../child-tables/product.js";
-import { type DerivedStoredInput, defineEntity } from "./definition.js";
+import {
+  type DerivedStoredInput,
+  defineEntity,
+  defineEntityModel,
+} from "./definition.js";
 import {
   CURRENT_MEMBER_FILTER,
   OWNER_FILTER_HOUSEHOLD,
@@ -111,7 +116,7 @@ const QUANTITY_INPUTS: DerivedStoredInput[] = [
 import { productKindSchema } from "../product-fields";
 import { labelField, displayItemsField } from "./label-field";
 import { selectControlOptions } from "./select-control-options";
-export default defineEntity(
+export const { definition, readSchemas } = defineEntityModel(
   {
     key: "product",
     names: { singular: "Product", plural: "Products" },
@@ -898,6 +903,7 @@ export default defineEntity(
           },
         },
         {
+          output: false,
           key: "primaryPlacement",
           storedKey: "readFacts",
           storedPath: ["primaryPlacement"],
@@ -928,10 +934,8 @@ export default defineEntity(
           control: { kind: "specialized", renderer: "tag-list" },
           validation: {
             read: z.array(z.string()),
-            create: z.array(z.string()).default([]),
-            update: z
-              .union([z.array(z.string()), valueCollectionPatch])
-              .optional(),
+            create: aliasList.default([]),
+            update: z.union([aliasList, valueCollectionPatch]).optional(),
           },
         },
         {
@@ -979,6 +983,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           key: "barcode",
           labelOverride: "Primary barcode",
           description:
@@ -1080,6 +1086,7 @@ Rules:
           },
         },
         {
+          audit: false,
           key: "notes",
           kind: "text",
           nullable: true,
@@ -1206,6 +1213,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "ingredientId",
           kind: "identifier",
           nullable: true,
@@ -1324,6 +1332,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           key: "unitMappings",
           collection: { key: ["a"] },
           kind: "json",
@@ -1398,6 +1408,7 @@ Rules:
           },
         },
         {
+          audit: false,
           key: "usdaUnavailable",
           kind: "boolean",
           nullable: true,
@@ -1413,6 +1424,7 @@ Rules:
           },
         },
         {
+          audit: false,
           key: "stockTracked",
           kind: "boolean",
           nullable: true,
@@ -1458,6 +1470,7 @@ Rules:
           },
         },
         {
+          audit: false,
           // Optional and independent of `stockTracked`: unset means undecided,
           // with no completeness check. It only informs project suggestions and
           // worklist filters; it never rewrites existing Expenses.
@@ -1499,6 +1512,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           // No editor `control`: the generic dialog shell renders the shared
           // photo-capture field itself for any intent whose roster includes
           // this key (`entity-edit-dialog-content.tsx`) — same convention as
@@ -1513,6 +1528,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           key: "pendingImagePurposes",
           semanticRole: "attachment",
           kind: "json",
@@ -1523,6 +1540,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           key: "removeImageIds",
           kind: "identifier",
           reference: { entity: "image", multiple: true },
@@ -1533,6 +1552,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           key: "imageOrder",
           semanticRole: "attachment",
           kind: "text",
@@ -1636,6 +1657,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "unitPrice",
           kind: "json",
           nullable: true,
@@ -1677,6 +1699,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "food",
           storedKey: "food",
           kind: "json",
@@ -1711,6 +1734,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "modelPresence",
           kind: "boolean",
           display: {
@@ -1743,6 +1767,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "upcPresence",
           kind: "boolean",
           display: {
@@ -1780,6 +1805,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "notesPresence",
           kind: "boolean",
           display: {
@@ -1812,6 +1838,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "owners",
           storedKey: "ownership",
           storedPath: ["owners"],
@@ -1858,6 +1885,7 @@ Rules:
         // `productlist.tsx` supplies, per docs/entities.md's "declaration
         // wins" rule.
         {
+          output: false,
           key: "expenseTotal",
           kind: "number",
           display: {
@@ -1889,6 +1917,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "componentCount",
           kind: "number",
           display: {
@@ -1916,6 +1945,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "servingAsLocations",
           kind: "number",
           // Nested under `quantityLedger.locationCount` on the list row — no
@@ -1953,6 +1983,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "ledgerExpectedQuantity",
           kind: "number",
           // Nested under `quantityLedger.expectedQuantity` on the list row; the
@@ -1986,6 +2017,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "stockStatus",
           storedKey: "readFacts",
           storedPath: ["stockStatus"],
@@ -2023,18 +2055,41 @@ Rules:
           },
         },
         {
+          output: false,
           ...displayItemsField("stockStatusItems", "Inventory evaluation"),
           display: { list: false, detail: false },
         },
-        labelField("ledgerExpectedQuantityLabel", "Expense quantity ledger"),
-        labelField("quantityVarianceLabel", "Counted inventory and ledger"),
-        labelField("unitPriceLabel", "Product price and unit mappings"),
-        labelField(
-          "unitPriceDetailLabel",
-          "Product accounting and unit mappings",
-        ),
-        labelField("externalIdsLabel", "Product identifiers"),
         {
+          ...labelField(
+            "ledgerExpectedQuantityLabel",
+            "Expense quantity ledger",
+          ),
+          output: false,
+        },
+        {
+          ...labelField(
+            "quantityVarianceLabel",
+            "Counted inventory and ledger",
+          ),
+          output: false,
+        },
+        {
+          ...labelField("unitPriceLabel", "Product price and unit mappings"),
+          output: false,
+        },
+        {
+          ...labelField(
+            "unitPriceDetailLabel",
+            "Product accounting and unit mappings",
+          ),
+          output: false,
+        },
+        {
+          ...labelField("externalIdsLabel", "Product identifiers"),
+          output: false,
+        },
+        {
+          output: false,
           key: "quantityVariance",
           kind: "number",
           nullable: true,
@@ -2073,6 +2128,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "purchaseDate",
           kind: "date",
           nullable: true,
@@ -2104,6 +2160,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "expenseCount",
           kind: "number",
           display: {
@@ -2129,6 +2186,7 @@ Rules:
           },
         },
         {
+          output: false,
           // Never its own column before this migration — a plain, generic,
           // hidden-by-default addition (same shape as the task entity's
           // `dueEndDate`/`sortOrder`), not part of the read-only cluster above.
@@ -2164,32 +2222,10 @@ Rules:
             update: null,
           },
         },
-        {
-          display: { detail: false, list: false },
-          key: "createdAt",
-          kind: "timestamp",
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        {
-          display: { detail: false, list: false },
-          key: "updatedAt",
-          kind: "timestamp",
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        { key: "shortcode", kind: "text" },
-        {
-          key: "deletedAt",
-          kind: "timestamp",
-          nullable: true,
-        },
+        timestampField("createdAt", { detail: false, list: false }),
+        timestampField("updatedAt", { detail: false, list: false }),
+        { output: false, key: "shortcode", kind: "text" },
+        { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
       ],
       storage: [
         {
@@ -2208,7 +2244,7 @@ Rules:
           defaultValue: "'{}'::text[]",
           specialized: "text-array",
         },
-        { key: "brandId", reference: "vendor" },
+        "brandId",
         "fdc_id",
         "model",
         "expectedQuantity",
@@ -2216,9 +2252,9 @@ Rules:
         { key: "createdAt" },
         { key: "updatedAt", specialized: "updated-at" },
         "deletedAt",
-        { key: "ingredientId", reference: "ingredient" },
-        { key: "growsPlantId", reference: "plant" },
-        { key: "categoryId", reference: "productCategory" },
+        "ingredientId",
+        "growsPlantId",
+        "categoryId",
         {
           key: "tags",
           defaultValue: "'{}'::text[]",
@@ -2229,77 +2265,16 @@ Rules:
         "stockTracked",
         { key: "kind", specialized: "enum:productKind" },
         { key: "commodity", defaultValue: false },
-        { key: "labelNutrition", specialized: "json:labelNutrition" },
+        {
+          key: "labelNutrition",
+          specialized: "json:labelNutrition",
+          type: {
+            module: "@cubby/schemas/nutrition",
+            export: "ProductLabelNutrition",
+          },
+        },
       ],
-      create: [
-        "acquisitionOrigin",
-        "name",
-        "aliases",
-        "tags",
-        "barcode",
-        "fdc_id",
-        "brandId",
-        "model",
-        "notes",
-        "expectedQuantity",
-        "categoryId",
-        "ingredientId",
-        "growsPlantId",
-        "price",
-        "unitMappings",
-        "labelNutrition",
-        "externalIds",
-        "usdaUnavailable",
-        "stockTracked",
-        "kind",
-        "commodity",
-        "pendingImageIds",
-        "pendingImagePurposes",
-      ],
-      update: [
-        "acquisitionOrigin",
-        "name",
-        "aliases",
-        "tags",
-        "barcode",
-        "fdc_id",
-        "brandId",
-        "model",
-        "notes",
-        "expectedQuantity",
-        "categoryId",
-        "ingredientId",
-        "growsPlantId",
-        "price",
-        "unitMappings",
-        "labelNutrition",
-        "externalIds",
-        "usdaUnavailable",
-        "stockTracked",
-        "kind",
-        "commodity",
-        "pendingImageIds",
-        "pendingImagePurposes",
-        "removeImageIds",
-        "imageOrder",
-      ],
-      audit: [
-        "acquisitionOrigin",
-        "name",
-        "aliases",
-        "tags",
-        "brandId",
-        "commodity",
-        "categoryId",
-        "externalIds",
-        "fdc_id",
-        "model",
-        "expectedQuantity",
-        "ingredientId",
-        "growsPlantId",
-        "price",
-        "labelNutrition",
-      ],
+
       rows: {
         barcodes: {
           label: "Barcodes",
@@ -2651,40 +2626,6 @@ Rules:
         create: ["capture", "full"],
         update: ["full", "identity", "price", "stock"],
       },
-      output: [
-        "acquisitionOrigin",
-        "id",
-        "name",
-        "aliases",
-        "tags",
-        "primaryGtin",
-        "fdc_id",
-        "brandId",
-        "brandName",
-        "model",
-        "notes",
-        "expectedQuantity",
-        "categoryId",
-        "growsPlantId",
-        "images",
-        "externalIds",
-        "price",
-        "cost",
-        "pricing",
-        "usdaUnavailable",
-        "stockTracked",
-        "kind",
-        "commodity",
-        "labelNutrition",
-        "createdAt",
-        "updatedAt",
-        "category",
-        "categoryFeature",
-        "itemImageCount",
-        "labelImageCount",
-        "labelImages",
-        "classificationEvidence",
-      ],
     },
     fields: {
       embedded: [
@@ -2740,23 +2681,7 @@ Rules:
           projections: ["list", "detail", "mcpList", "mcpDetail"],
         },
       ],
-      create: {
-        module: "@cubby/schemas/product",
-        export: "productCreateInput",
-      },
-      update: { module: "@cubby/schemas/product", export: "productUpdateData" },
-      output: {
-        module: "@cubby/schemas/product-raw-read",
-        export: "rawProductOutput",
-      },
-      list: {
-        module: "@cubby/schemas/product-raw-read",
-        export: "rawProductList",
-      },
-      detail: {
-        module: "@cubby/schemas/product-raw-read",
-        export: "rawProductDetail",
-      },
+
       mcpOutput: {
         module: "@cubby/schemas/product-raw-read",
         export: "rawProductMcpOutput",
@@ -3533,414 +3458,7 @@ Rules:
         },
       ],
     },
-    relations: [
-      {
-        key: "brand",
-        label: "Brand",
-        target: "vendor",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Product.brandId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "Product.brandId", direction: "incoming" }],
-        },
-      },
-      {
-        key: "category",
-        label: "Classification",
-        target: "productCategory",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Product.categoryId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "Product.categoryId", direction: "incoming" }],
-        },
-      },
-      {
-        key: "ingredient",
-        label: "Ingredient",
-        target: "ingredient",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Product.ingredientId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "Product.ingredientId", direction: "incoming" }],
-        },
-      },
-      {
-        key: "grows-plant",
-        label: "Grows plant",
-        target: "plant",
-        cardinality: "one",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Product.growsPlantId", direction: "outgoing" }],
-        },
-        inverse: {
-          steps: [{ edge: "Product.growsPlantId", direction: "incoming" }],
-        },
-      },
-      {
-        key: "plantings",
-        label: "Plantings",
-        target: "planting",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Planting.sourceProductId", direction: "incoming" }],
-        },
-        inverse: {
-          steps: [{ edge: "Planting.sourceProductId", direction: "outgoing" }],
-        },
-      },
-      {
-        key: "project-uses",
-        label: "Used on projects",
-        target: "project",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "EntityLink[projectTool].to", direction: "incoming" },
-            { edge: "EntityLink[projectTool].from", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "EntityLink[projectTool].from", direction: "incoming" },
-            { edge: "EntityLink[projectTool].to", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "vendors",
-        label: "Vendors",
-        target: "vendor",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "Expense.productId", direction: "incoming" },
-            { edge: "Expense.purchaseId", direction: "outgoing" },
-            { edge: "Purchase.vendorId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "Purchase.vendorId", direction: "incoming" },
-            { edge: "Expense.purchaseId", direction: "incoming" },
-            { edge: "Expense.productId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "purchased-projects",
-        label: "Projects",
-        target: "project",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "Expense.productId", direction: "incoming" },
-            { edge: "Expense.projectId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "Expense.projectId", direction: "incoming" },
-            { edge: "Expense.productId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "purchases",
-        label: "Purchases",
-        target: "purchase",
-        cardinality: "many",
-        sourceKey: "expense",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "Expense.productId", direction: "incoming" },
-            { edge: "Expense.purchaseId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "Expense.purchaseId", direction: "incoming" },
-            { edge: "Expense.productId", direction: "outgoing" },
-          ],
-        },
-        list: {
-          rowSchema: {
-            module: "@cubby/schemas/purchase",
-            export: "productPurchaseOut",
-          },
-          adapter: {
-            module: "~/server/domains/purchase/repo/purchase-products",
-            export: "productPurchasesRelationAdapter",
-          },
-        },
-        sources: [
-          {
-            key: "explicit",
-            label: "Explicit purchase link",
-            provenance: {
-              kind: "local-path",
-              steps: [
-                {
-                  edge: "EntityLink[purchaseProduct].to",
-                  direction: "incoming",
-                },
-                {
-                  edge: "EntityLink[purchaseProduct].from",
-                  direction: "outgoing",
-                },
-              ],
-            },
-            inverse: {
-              steps: [
-                {
-                  edge: "EntityLink[purchaseProduct].from",
-                  direction: "incoming",
-                },
-                {
-                  edge: "EntityLink[purchaseProduct].to",
-                  direction: "outgoing",
-                },
-              ],
-            },
-          },
-        ],
-      },
-      {
-        key: "expenses",
-        label: "Expenses",
-        target: "expense",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Expense.productId", direction: "incoming" }],
-        },
-        inverse: {
-          steps: [{ edge: "Expense.productId", direction: "outgoing" }],
-        },
-      },
-      {
-        key: "inventory",
-        label: "Inventory",
-        target: "inventory",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "InventoryEntry.productId", direction: "incoming" }],
-        },
-        inverse: {
-          steps: [{ edge: "InventoryEntry.productId", direction: "outgoing" }],
-        },
-      },
-      {
-        key: "tasks",
-        label: "Tasks",
-        target: "task",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Task.subjectProductId", direction: "incoming" }],
-        },
-        inverse: {
-          steps: [{ edge: "Task.subjectProductId", direction: "outgoing" }],
-        },
-      },
-      {
-        key: "meals",
-        label: "Eaten at meals",
-        target: "meal",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "MealFoodEntry.productId", direction: "incoming" },
-            { edge: "MealFoodEntry.mealId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "MealFoodEntry.mealId", direction: "incoming" },
-            { edge: "MealFoodEntry.productId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "eaters",
-        label: "Eaten by",
-        target: "ledgerParty",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "MealFoodEntry.productId", direction: "incoming" },
-            { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "MealFoodEntry.ledgerPartyId", direction: "incoming" },
-            { edge: "MealFoodEntry.productId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "wishes",
-        label: "Wishlist candidates",
-        target: "wish",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "EntityLink[wishCandidate].to", direction: "incoming" },
-            { edge: "EntityLink[wishCandidate].from", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "EntityLink[wishCandidate].from", direction: "incoming" },
-            { edge: "EntityLink[wishCandidate].to", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "locations",
-        label: "Serving as locations",
-        target: "location",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [{ edge: "Location.productId", direction: "incoming" }],
-        },
-        inverse: {
-          steps: [{ edge: "Location.productId", direction: "outgoing" }],
-        },
-      },
-      {
-        key: "images",
-        label: "Images",
-        target: "image",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "EntityAttachment.entityId", direction: "incoming" },
-            { edge: "EntityAttachment.imageId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "EntityAttachment.imageId", direction: "incoming" },
-            { edge: "EntityAttachment.entityId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "components",
-        label: "Components",
-        empty: "This isn't a kit yet — no components added.",
-        target: "product",
-        cardinality: "many",
-        sourceKey: "explicit",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            {
-              edge: "EntityLink[productComponent].from",
-              direction: "incoming",
-            },
-            {
-              edge: "EntityLink[productComponent].to",
-              direction: "outgoing",
-            },
-          ],
-        },
-        inverse: {
-          steps: [
-            {
-              edge: "EntityLink[productComponent].to",
-              direction: "incoming",
-            },
-            {
-              edge: "EntityLink[productComponent].from",
-              direction: "outgoing",
-            },
-          ],
-        },
-        mutation: {
-          source: "explicit",
-          itemSchema: {
-            module: "@cubby/schemas/common",
-            export: "productComponentRelationItemSchema",
-          },
-          rowSchema: {
-            module: "@cubby/schemas/product-components",
-            export: "productComponentOut",
-          },
-          adapter: {
-            module: "~/server/domains/product/repo/product-components",
-            export: "productComponentsRelationAdapter",
-          },
-          audiences: ["browser", "mcp"],
-        },
-      },
-      {
-        key: "containing-kits",
-        label: "Containing kits",
-        empty: "Not used as a component in any kit yet.",
-        target: "product",
-        cardinality: "many",
-        sourceKey: "explicit",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            {
-              edge: "EntityLink[productComponent].to",
-              direction: "incoming",
-            },
-            {
-              edge: "EntityLink[productComponent].from",
-              direction: "outgoing",
-            },
-          ],
-        },
-        inverse: {
-          steps: [
-            {
-              edge: "EntityLink[productComponent].from",
-              direction: "incoming",
-            },
-            {
-              edge: "EntityLink[productComponent].to",
-              direction: "outgoing",
-            },
-          ],
-        },
-      },
-      {
-        key: "usda-food",
-        label: "USDA food",
-        target: "usda-food",
-        cardinality: "one",
-        provenance: {
-          kind: "external",
-          system: "usda",
-          sourceColumns: ["EntityExternalId.externalId", "Product.fdc_id"],
-        },
-      },
-    ],
+
     // Related rows the search document reads (ADR 0021).
     search: {
       mode: "semantic",
@@ -4276,4 +3794,169 @@ Rules:
     },
   },
   productReadSchemas,
+);
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r.field("brandId").named("brand", "Brand"),
+    r.field("categoryId").named("category", "Classification"),
+    r.field("ingredientId").named("ingredient", "Ingredient"),
+    r.field("growsPlantId").named("grows-plant", "Grows plant"),
+    r
+      .path("planting", "many", [
+        { edge: "Planting.sourceProductId", direction: "incoming" },
+      ])
+      .named("plantings", "Plantings"),
+    r
+      .link("projectTool", "incoming")
+      .named("project-uses", "Used on projects", {
+        view: {
+          key: "usedOnProjects",
+          columnGroup: "Work",
+          filterPrefix: "usedOnProject",
+          inverseKey: "project.usedTools",
+        },
+      }),
+    r
+      .path("vendor", "many", [
+        { edge: "Expense.productId", direction: "incoming" },
+        { edge: "Expense.purchaseId", direction: "outgoing" },
+        { edge: "Purchase.vendorId", direction: "outgoing" },
+      ])
+      .named("vendors", "Vendors", {
+        view: {
+          columnGroup: "Purchasing",
+          inverseKey: "vendor.products",
+        },
+      }),
+    r
+      .path("project", "many", [
+        { edge: "Expense.productId", direction: "incoming" },
+        { edge: "Expense.projectId", direction: "outgoing" },
+      ])
+      .named("purchased-projects", "Projects", {
+        view: {
+          key: "projects",
+          columnGroup: "Work",
+          inverseKey: "project.purchasedProducts",
+        },
+      }),
+    r
+      .path("purchase", "many", [
+        { edge: "Expense.productId", direction: "incoming" },
+        { edge: "Expense.purchaseId", direction: "outgoing" },
+      ])
+      .named("purchases", "Purchases", {
+        view: { columnGroup: "Purchasing", order: "newest" },
+        sourceKey: "expense",
+        list: {
+          rowSchema: {
+            module: "@cubby/schemas/purchase",
+            export: "productPurchaseOut",
+          },
+          adapter: {
+            module: "~/server/domains/purchase/repo/purchase-products",
+            export: "productPurchasesRelationAdapter",
+          },
+        },
+        sources: [
+          r
+            .link("purchaseProduct", "incoming")
+            .source("explicit", "Explicit purchase link"),
+        ],
+      }),
+    r
+      .path("expense", "many", [
+        { edge: "Expense.productId", direction: "incoming" },
+      ])
+      .named("expenses", "Expenses", {
+        view: { columnGroup: "Purchasing", order: "newest" },
+      }),
+    r
+      .path("inventory", "many", [
+        { edge: "InventoryEntry.productId", direction: "incoming" },
+      ])
+      .named("inventory", "Inventory", {
+        view: {
+          columnGroup: "Stock",
+          order: "newest",
+          filterPrefix: "relatedInventory",
+        },
+      }),
+    r
+      .path("task", "many", [
+        { edge: "Task.subjectProductId", direction: "incoming" },
+      ])
+      .named("tasks", "Tasks", {
+        view: { columnGroup: "Work", order: "task" },
+      }),
+    r
+      .path("meal", "many", [
+        { edge: "MealFoodEntry.productId", direction: "incoming" },
+        { edge: "MealFoodEntry.mealId", direction: "outgoing" },
+      ])
+      .named("meals", "Eaten at meals", {
+        view: {
+          columnGroup: "Food",
+          order: "newest",
+          inverseKey: "meal.foodProducts",
+        },
+      }),
+    r
+      .path("ledgerParty", "many", [
+        { edge: "MealFoodEntry.productId", direction: "incoming" },
+        { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
+      ])
+      .named("eaters", "Eaten by", {
+        view: { columnGroup: "Food", filterPrefix: "eater" },
+      }),
+    r.link("wishCandidate", "incoming").named("wishes", "Wishlist candidates", {
+      view: { columnGroup: "Wish list" },
+    }),
+    r
+      .path("location", "many", [
+        { edge: "Location.productId", direction: "incoming" },
+      ])
+      .named("locations", "Serving as locations"),
+    r
+      .path("image", "many", [
+        { edge: "EntityAttachment.entityId", direction: "incoming" },
+        { edge: "EntityAttachment.imageId", direction: "outgoing" },
+      ])
+      .named("images", "Images"),
+    r.link("productComponent", "outgoing").named("components", "Components", {
+      empty: "This isn't a kit yet — no components added.",
+      sourceKey: "explicit",
+      mutation: {
+        source: "explicit",
+        itemSchema: {
+          module: "@cubby/schemas/common",
+          export: "productComponentRelationItemSchema",
+        },
+        rowSchema: {
+          module: "@cubby/schemas/product-components",
+          export: "productComponentOut",
+        },
+        adapter: {
+          module: "~/server/domains/product/repo/product-components",
+          export: "productComponentsRelationAdapter",
+        },
+        audiences: ["browser", "mcp"],
+      },
+    }),
+    r
+      .link("productComponent", "incoming")
+      .named("containing-kits", "Containing kits", {
+        empty: "Not used as a component in any kit yet.",
+        sourceKey: "explicit",
+      }),
+    r
+      .external("usda-food", "usda", [
+        "EntityExternalId.externalId",
+        "Product.fdc_id",
+      ])
+      .named("usda-food", "USDA food"),
+  ],
+  readSchemas,
 );

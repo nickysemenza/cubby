@@ -22,11 +22,11 @@ import {
   flattenCookbookRecipes,
   isLegacyCookbookRawJson,
 } from "@cubby/schemas/cookbook";
-import {
-  rawCookbookOutput,
-  type RawCookbookOutput,
-} from "@cubby/schemas/cookbook-raw-read";
 import { entityRefKey } from "@cubby/schemas/entity";
+import {
+  cookbookRawOut as rawCookbookOutput,
+  type CookbookRawOut as RawCookbookOutput,
+} from "@cubby/schemas/entity-contracts/cookbook";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type CookbookId,
@@ -70,10 +70,6 @@ import {
   upsertCookbookRecipeFromCookbook,
 } from "~/server/domains/recipe/repo/import-recipe-convert";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
-import {
-  type MutationReceipt,
-  defineMutationWriter,
-} from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import {
   replaceSingularAttachment,
@@ -84,6 +80,7 @@ import {
   isUniqueViolation,
   runWithConflictRecovery,
 } from "~/server/errors/db-errors";
+import { ENTITY_STORED_WRITES } from "~/server/generated/entity-write-bindings.gen";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import {
   loadCookbookRecipeEvidence,
@@ -467,30 +464,10 @@ export const setCookbookProduct = async (
  * Rename a cookbook or edit its author/subject lists (`cookbook.update`);
  * the caller's transaction (the kernel's) rolls back on a refused title.
  */
-export const updateCookbook = defineMutationWriter({
-  entity: "cookbook",
-  read: async (
-    receipt: MutationReceipt<"cookbook">,
-    db: Database,
-    _actor: ActorContext,
-    shortcode: CookbookShortcode,
-    _data: CookbookUpdateInput,
-  ) => ({
-    output: await cookbookSummaryOrThrow(db, shortcode),
-    entityId: receipt.entityId,
-  }),
-  write: async (
-    readOutput,
-    db: Database,
-    actor: ActorContext,
-    shortcode: CookbookShortcode,
-    data: CookbookUpdateInput,
-  ) => {
-    const id = await resolveOrThrow(db, "cookbook", shortcode);
-    await cookbookCrud.update(db, id, data, actor, async () => undefined);
-    return readOutput({ entityId: id, shortcode });
-  },
-});
+export const updateCookbook = cookbookCrud.updateWriter(
+  ENTITY_STORED_WRITES.cookbook.update,
+  (output, entityId) => ({ output, entityId }),
+);
 
 /**
  * The stored book tree, parsed. A legacy flat array (pre-tree rows) is a

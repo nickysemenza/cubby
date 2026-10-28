@@ -1,8 +1,8 @@
 import { activityIconEntity } from "@cubby/schemas/activity";
+import { runRawOut as rawRunOut } from "@cubby/schemas/entity-contracts/run";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { describeJobRollup } from "@cubby/schemas/job";
 import { runPurpose, runStatus, runWorkLabel } from "@cubby/schemas/run-fields";
-import { rawRunOut } from "@cubby/schemas/run-raw-read";
 import {
   runWorkSamples,
   readRunWorkPhase,

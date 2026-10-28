@@ -1,4 +1,4 @@
-import { gardenEntryOut } from "@cubby/schemas/garden-entry";
+import { gardenEntryOut } from "@cubby/schemas/entities/gardenEntry";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

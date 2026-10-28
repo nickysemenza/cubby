@@ -1,5 +1,5 @@
 import type { ConnectedRecordsOutput } from "@cubby/schemas/connected-records";
-import { emailOut } from "@cubby/schemas/email";
+import { emailOut } from "@cubby/schemas/entities/email";
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ProductId } from "@cubby/schemas/identifiers";

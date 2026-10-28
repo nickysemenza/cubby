@@ -1,30 +1,26 @@
+import {
+  ingredientOut,
+  ingredientDetailOut as ingredientWithFoodOut,
+  ingredientFilterFields as ingredientBaseFilterFields,
+} from "@cubby/schemas/entities/ingredient";
 import { withFieldEnvelopes } from "./field-envelope";
 import {
   ingredientFieldEnvelopeFields,
   ingredientPublicReadFields,
 } from "./generated/entity-field-envelope-fields.ingredient.gen";
 import { rawIngredientEnrichment } from "./ingredient-raw-read";
-import { ingredientFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.ingredient.gen";
-import ingredientDefinition from "./entity-definitions/02-ingredient.entity";
+
+import { readSchemas as ingredientReadSchemas } from "./entity-definitions/02-ingredient.entity";
 import { z } from "zod";
 import { productRefOut } from "./product-fields";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { ingredientShortcode, recipeShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import { recipeUsageOut } from "./recipe-fields";
-import { ingredientBaseFilterFields } from "./generated/ingredient.gen";
-
-export {
-  ingredientCreateInput,
-  ingredientUpdateData,
-  ingredientUpdateInput,
-  type IngredientCreateInput,
-  type IngredientUpdateInput,
-} from "./generated/ingredient.gen";
 
 export const ingredientBaseFields = {
-  name: ingredientDefinition.readSchemas.output.shape.name,
-  aliases: ingredientDefinition.readSchemas.output.shape.aliases,
+  name: ingredientReadSchemas.output.shape.name,
+  aliases: ingredientReadSchemas.output.shape.aliases,
 };
 
 export const ingredientBase = z.object(ingredientBaseFields);
@@ -65,10 +61,7 @@ export type IngredientFilters = z.infer<typeof ingredientFiltersSchema>;
 
 export type IngredientSortField = GeneratedEntitySortField<"ingredient">;
 
-const ingredientOutFields = ingredientDefinition.readSchemas.output.shape;
-
-export const ingredientOut = ingredientFieldEnvelopeSchemas.output;
-export type IngredientOut = z.infer<typeof ingredientOut>;
+const ingredientOutFields = ingredientReadSchemas.output.shape;
 
 /**
  * Per-cluster change summary returned by an ingredient merge — the serialized
@@ -131,12 +124,8 @@ export {
   ingredientNutritionProductOut,
   type IngredientNutritionProductOut,
 } from "./ingredient-read-fields";
-export const ingredientWithFoodOut = ingredientFieldEnvelopeSchemas.detail;
-export type IngredientWithFoodOut = z.infer<typeof ingredientWithFoodOut>;
 
 /** Generic MCP entity detail with storage-only child identifiers removed. */
-export const ingredientWithFoodMcpEntityOut =
-  ingredientFieldEnvelopeSchemas.mcpDetail;
 
 export const ingredientWithFoodLeanOut = ingredientOut.extend({
   product: ingredientWithFoodOut.shape.product,
@@ -147,12 +136,8 @@ export type IngredientWithFoodLeanOut = z.output<
 
 // The ingredient list row: lean ingredient + DB-only products, plus {id,name}
 // refs of recipes it appears in. USDA summaries hydrate separately.
-export const ingredientListItemOut = ingredientFieldEnvelopeSchemas.list;
-export type IngredientListItem = z.infer<typeof ingredientListItemOut>;
 
 /** Generic MCP entity list row with storage-only product child ids removed. */
-export const ingredientListItemMcpEntityOut =
-  ingredientFieldEnvelopeSchemas.mcpList;
 
 export { enrichmentFixKind } from "./ingredient-raw-read";
 export const enrichmentRowOut = withFieldEnvelopes(

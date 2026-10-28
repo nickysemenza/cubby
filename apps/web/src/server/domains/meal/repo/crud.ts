@@ -1,12 +1,12 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type MealCreateInput,
+  type MealUpdateInput,
+} from "@cubby/schemas/entities/meal";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type {
-  MealCreateInput,
-  MealRecipeInput,
-  MealUpdateInput,
-} from "@cubby/schemas/meal";
+import type { MealRecipeInput } from "@cubby/schemas/meal";
 import { mealTypeValues } from "@cubby/schemas/meal-classification";
 import {
   rawMealList,

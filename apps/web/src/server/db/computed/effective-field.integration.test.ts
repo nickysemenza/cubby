@@ -1,4 +1,4 @@
-import type { ProductCategoryFilters } from "@cubby/schemas/product-category";
+import { type ProductCategoryFilters } from "@cubby/schemas/entities/productCategory";
 import type { ProjectFilters, TaskFilters } from "@cubby/schemas/project";
 import { rawTaskOut } from "@cubby/schemas/work-raw-read";
 import { eq, sql } from "drizzle-orm";

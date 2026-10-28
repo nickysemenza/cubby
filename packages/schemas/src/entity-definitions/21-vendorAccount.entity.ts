@@ -1,3 +1,4 @@
+import { timestampField } from "./field-policy";
 import { z } from "zod";
 import {
   ledgerPartyShortcode,
@@ -5,9 +6,9 @@ import {
   vendorShortcode,
 } from "../identifier-fields.js";
 import { vendorAccountCursor } from "../vendor-account-fields.js";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "vendorAccount",
   names: { singular: "Vendor Account", plural: "Vendor Accounts" },
   route: {
@@ -248,24 +249,10 @@ export default defineEntity({
           update: null,
         },
       },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: { read: z.date(), create: null, update: null },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: { read: z.date(), create: null, update: null },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt"),
+      timestampField("updatedAt"),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
       {
@@ -273,8 +260,8 @@ export default defineEntity({
         specialized: "primary-key:VendorAccountId",
       },
       { key: "shortcode", specialized: "shortcode" },
-      { key: "vendorId", reference: "vendor" },
-      { key: "ledgerPartyId", reference: "ledgerParty" },
+      "vendorId",
+      "ledgerPartyId",
       {
         key: "inventoryOwnerDefaultEnabled",
         defaultValue: false,
@@ -289,9 +276,7 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: ["vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled"],
-    update: ["vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled"],
-    audit: ["vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled"],
+
     derived: {
       // The Vendor and member names; its SQL is `vendorAccountLabelSql`.
       displayName: { type: "text" },
@@ -309,36 +294,8 @@ export default defineEntity({
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
-    output: [
-      "id",
-      "displayName",
-      "vendorId",
-      "ledgerPartyId",
-      "inventoryOwnerDefaultEnabled",
-      "cursor",
-      "lastRunAt",
-      "lastSuccessAt",
-      "purchaseCount",
-      "vendorName",
-      "ledgerPartyName",
-      "createdAt",
-      "updatedAt",
-    ],
   },
-  fields: {
-    create: {
-      module: "@cubby/schemas/vendor-account",
-      export: "vendorAccountCreateInput",
-    },
-    update: {
-      module: "@cubby/schemas/vendor-account",
-      export: "vendorAccountUpdateData",
-    },
-    output: {
-      module: "@cubby/schemas/vendor-account-raw-read",
-      export: "rawVendorAccountOut",
-    },
-  },
+
   storage: {
     indexes: [
       {
@@ -351,10 +308,7 @@ export default defineEntity({
   },
   filters: {
     audit: true,
-    schema: {
-      module: "@cubby/schemas/vendor-account",
-      export: "vendorAccountFilterFields",
-    },
+
     descriptors: [
       {
         columnId: "related:vendorAccount.purchases",
@@ -404,74 +358,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "purchases",
-      label: "Purchases",
-      target: "purchase",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Purchase.vendorAccountId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Purchase.vendorAccountId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "emails",
-      sources: [
-        {
-          key: "accepted",
-          label: "Account Email evidence",
-          provenance: { kind: "query", query: "vendorAccountEmails" },
-          inverse: {
-            steps: [
-              {
-                edge: "Relationship.vendorAccountEmails",
-                direction: "incoming",
-              },
-            ],
-          },
-        },
-      ],
-      label: "Emails",
-      target: "email",
-      cardinality: "many",
-      // Its Vendor's Emails owned by the account's member (ADR 0011).
-      provenance: {
-        kind: "derived",
-        filter: "vendorAccountId",
-        evidence: ["ImportSourceOrder", "AssessmentState", "OrderMailEvent"],
-      },
-    },
-    {
-      key: "vendor",
-      label: "Vendor",
-      target: "vendor",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "VendorAccount.vendorId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "VendorAccount.vendorId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "ledger-party",
-      label: "Member",
-      target: "ledgerParty",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "VendorAccount.ledgerPartyId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "VendorAccount.ledgerPartyId", direction: "incoming" }],
-      },
-    },
-  ],
+
   search: false,
   capabilities: {
     images: {
@@ -490,3 +377,38 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .path("purchase", "many", [
+        { edge: "Purchase.vendorAccountId", direction: "incoming" },
+      ])
+      .named("purchases", "Purchases", {
+        view: {
+          columnGroup: "Imports",
+          order: "newest",
+          defaultVisible: true,
+          filter: false,
+        },
+      }),
+    // Its Vendor's Emails owned by the account's member (ADR 0011).
+    r
+      .derived("email", "many", "vendorAccountId", [
+        "ImportSourceOrder",
+        "AssessmentState",
+        "OrderMailEvent",
+      ])
+      .named("emails", "Emails", {
+        sources: [
+          r
+            .query("vendorAccountEmails", "many")
+            .source("accepted", "Account Email evidence"),
+        ],
+      }),
+    r.field("vendorId").named("vendor", "Vendor"),
+    r.field("ledgerPartyId").named("ledger-party", "Member"),
+  ],
+  readSchemas,
+);

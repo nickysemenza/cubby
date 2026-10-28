@@ -6,9 +6,11 @@ import {
   ledgerSourceClaimOut,
   ledgerSourceClaimInput,
   ledgerSourceClaims,
+} from "./ledger-transfer";
+import {
   ledgerTransferCreateInput,
   ledgerTransferUpdateData,
-} from "./ledger-transfer";
+} from "@cubby/schemas/entities/ledgerTransfer";
 
 const claim = {
   source: "splitwise",

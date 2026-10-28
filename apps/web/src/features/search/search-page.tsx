@@ -34,7 +34,6 @@ import {
   useEntityPreview,
 } from "../../entity/hooks/use-entity-preview";
 import {
-  entityKindMap,
   getSearchMatchText,
   getSearchResultHref,
   getSearchResultRoute,
@@ -67,7 +66,7 @@ const filterOptions: Array<{ value: SearchType; label: string }> = [
   { value: "all", label: "All" },
   ...searchableEntities.map((entityKind) => ({
     value: entityKind,
-    label: entities[entityKindMap[entityKind]].label,
+    label: entities[entityKind].label,
   })),
 ];
 
@@ -392,7 +391,7 @@ function SearchRow({
       <PreviewButton onClick={() => onPreview(previewRow)} />
       <div className="hidden max-w-44 shrink-0 text-right sm:block">
         <span className="block truncate text-xs font-medium text-muted-foreground">
-          {entities[entityKindMap[item.entityKind]].label}
+          {entities[item.entityKind].label}
         </span>
         <span className="block truncate font-mono text-2xs text-foreground tabular-nums">
           {item.id}
@@ -623,10 +622,7 @@ function MobileSearchResults({
                 : (searchHitContext(item) ?? undefined)
             }
             imageSlot={<SearchResultMedia item={item} variant="mobile" />}
-            rightValues={[
-              item.id,
-              entities[entityKindMap[item.entityKind]].label,
-            ]}
+            rightValues={[item.id, entities[item.entityKind].label]}
             detailsHref={getSearchResultHref(item)}
             onClick={() => navigate(getSearchResultRoute(item))}
           />

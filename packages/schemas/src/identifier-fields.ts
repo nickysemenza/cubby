@@ -165,54 +165,19 @@ export interface EntityRefFor<E extends ShortcodeEntity> {
   id: EntityId<E>;
 }
 
-type EntityRefParser<E extends ShortcodeEntity> = (
-  value: unknown,
-) => EntityRefFor<E>;
+const entityRefFields = z.object({ entity: z.string(), id: z.string() });
+const isEntityIdKind = (entity: string): entity is ShortcodeEntity =>
+  Object.hasOwn(ENTITY_ID_SCHEMA, entity);
 
-const entityRefParser =
-  <E extends ShortcodeEntity>(entity: E): EntityRefParser<E> =>
-  (value) => ({ entity, id: parseEntityId(entity, value) });
-
-/**
- * One parser per entity, keyed by its own literal so the compiler verifies the
- * `{ entity, id }` correlation per key (see `PARSE_CANONICAL_SHORTCODE` in
- * @cubby/shared for why this cannot be a `mapRecord`). `satisfies` fails to
- * compile when an entity is missing.
- */
-const PARSE_ENTITY_REF = {
-  email: entityRefParser("email"),
-  imageJob: entityRefParser("imageJob"),
-  job: entityRefParser("job"),
-  spendingCategory: entityRefParser("spendingCategory"),
-  cookbook: entityRefParser("cookbook"),
-  expense: entityRefParser("expense"),
-  sourceTransactionRecord: entityRefParser("sourceTransactionRecord"),
-  transactionImport: entityRefParser("transactionImport"),
-  financialAccount: entityRefParser("financialAccount"),
-  financialTransaction: entityRefParser("financialTransaction"),
-  image: entityRefParser("image"),
-  ingredient: entityRefParser("ingredient"),
-  inventory: entityRefParser("inventory"),
-  ledgerParty: entityRefParser("ledgerParty"),
-  ledgerTransfer: entityRefParser("ledgerTransfer"),
-  location: entityRefParser("location"),
-  meal: entityRefParser("meal"),
-  planting: entityRefParser("planting"),
-  gardenEntry: entityRefParser("gardenEntry"),
-  product: entityRefParser("product"),
-  productCategory: entityRefParser("productCategory"),
-  project: entityRefParser("project"),
-  purchase: entityRefParser("purchase"),
-  shipment: entityRefParser("shipment"),
-  recipe: entityRefParser("recipe"),
-  task: entityRefParser("task"),
-  vendor: entityRefParser("vendor"),
-  vendorAccount: entityRefParser("vendorAccount"),
-  run: entityRefParser("run"),
-  wish: entityRefParser("wish"),
-  device: entityRefParser("device"),
-  plant: entityRefParser("plant"),
-} as const satisfies { [E in ShortcodeEntity]: EntityRefParser<E> };
+/** The catalog owns both the discriminator and the schema validating its UUID brand. */
+const checkedEntityRef = z.custom<EntityRef>((value) => {
+  const pair = entityRefFields.safeParse(value);
+  return (
+    pair.success &&
+    isEntityIdKind(pair.data.entity) &&
+    ENTITY_ID_SCHEMA[pair.data.entity].safeParse(pair.data.id).success
+  );
+});
 
 /** Parse and correlate an internal entity discriminator with its UUID brand. */
 export function parseEntityRef<E extends ShortcodeEntity>(
@@ -223,7 +188,8 @@ export function parseEntityRef(
   entity: ShortcodeEntity,
   value: unknown,
 ): EntityRef {
-  return PARSE_ENTITY_REF[entity](value);
+  // Preserve the selected UUID schema's diagnostics at the input boundary.
+  return checkedEntityRef.parse({ entity, id: parseEntityId(entity, value) });
 }
 
 // Shortcode schemas re-exported from the shared package (single source of

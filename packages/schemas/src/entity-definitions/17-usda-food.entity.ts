@@ -1,4 +1,4 @@
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import {
   brandedFoodInfo,
@@ -13,7 +13,7 @@ import {
 } from "@cubby/usda";
 import { z } from "zod";
 import { rawProductOutput as productTopLevelOut } from "../product-raw-read.js";
-export default defineEntity(
+export const { definition, readSchemas } = defineEntityModel(
   {
     key: "usda-food",
     names: { singular: "USDA Food", plural: "USDA Foods" },
@@ -298,9 +298,7 @@ export default defineEntity(
         },
       ],
       storage: [],
-      create: [],
-      update: [],
-      audit: [],
+
       // Declared exception: a USDA list reads the external USDA release, not a
       // table, so the list field compiler builds no ORDER BY for it;
       // `usda.service.ts` orders by these values. `data_type` lives inside the
@@ -320,17 +318,6 @@ export default defineEntity(
           "linkedProducts",
         ],
       },
-      output: [
-        "fdc_id",
-        "description",
-        "brandedFoodInfo",
-        "foodInfo",
-        "legacyFoodInfo",
-        "nutritionInfo",
-        "portionInfoRaw",
-        "inferredUnitMappings",
-        "linkedProducts",
-      ],
     },
     fields: null,
     filters: {
@@ -380,7 +367,7 @@ export default defineEntity(
         },
       ],
     },
-    relations: [],
+
     search: false,
     capabilities: {
       auditable: false,
@@ -409,3 +396,5 @@ export default defineEntity(
     detail: base,
   }),
 );
+
+export default defineEntity(definition, () => [], readSchemas);

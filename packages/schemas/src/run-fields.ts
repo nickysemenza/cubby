@@ -7,6 +7,7 @@ import {
 } from "./ai-evaluation";
 import type { MailReclassificationCheckpoint } from "./email-actions.js";
 import { z } from "zod";
+import { entityIdSchema } from "./identifier-fields";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { RUN_KINDS, RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
 export {
@@ -381,7 +382,12 @@ export const mailReclassifyRunInput = z.strictObject({
   mode: z.enum(["relevance", "preview", "triage_preview"]),
   mailboxId: z.string().min(1),
   emails: z
-    .array(z.strictObject({ emailId: z.uuid(), checksum: z.string() }))
+    .array(
+      z.strictObject({
+        emailId: entityIdSchema("email"),
+        checksum: z.string(),
+      }),
+    )
     .min(1)
     .max(EMAIL_RECLASSIFY_LIMIT),
 });

@@ -1,4 +1,4 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { type ImageJobId, parseEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
@@ -73,7 +73,7 @@ describe("image execution history conservation", () => {
     if (!jobId) throw new Error("Missing test job");
     return { source, scheduled, jobId };
   }
-  async function claim(jobId: string) {
+  async function claim(jobId: ImageJobId) {
     const lease = await claimImageProcessingJob(ctx.db, {
       jobId,
       kinds: ["describe_image"],
@@ -82,7 +82,7 @@ describe("image execution history conservation", () => {
     if (!lease) throw new Error("Missing test lease");
     return lease;
   }
-  const assignCloud = (jobId: string, attemptId: string) =>
+  const assignCloud = (jobId: ImageJobId, attemptId: string) =>
     assignImageProcessingExecutor(ctx.db, {
       jobId,
       attemptId,
@@ -250,7 +250,7 @@ describe("image execution history conservation", () => {
   it("preserves assignments and rejects a reclaimed attempt's delivery once", async () => {
     const { jobId } = await setup();
     const lease = await claim(jobId);
-    const deviceId = crypto.randomUUID();
+    const deviceId = parseEntityId("device", crypto.randomUUID());
     const assignment = {
       jobId,
       attemptId: lease.attemptId,

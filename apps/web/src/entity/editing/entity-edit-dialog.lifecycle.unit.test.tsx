@@ -1,4 +1,4 @@
-import { vendorOut } from "@cubby/schemas/vendor";
+import { vendorOut } from "@cubby/schemas/entities/vendor";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

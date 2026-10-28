@@ -1,6 +1,8 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import type { ActorContext } from "@cubby/schemas/context";
 import { costTypeSchema } from "@cubby/schemas/expense-fields";
+import type { LedgerPartyId } from "@cubby/schemas/identifiers";
+import type { RunId } from "@cubby/schemas/identifiers";
 import {
   parseEntityId,
   runEntityId,
@@ -173,7 +175,7 @@ const assertFixTargetsFinding = (
 const assertRunProvenance = async (
   tx: DrizzleTransaction,
   finding: {
-    runId: string | null;
+    runId: RunId | null;
     entityKind: string;
     entityId: string;
   },
@@ -231,7 +233,7 @@ async function applyFix(
   >,
   actor: ActorContext,
   ledgerPartyId: string,
-  runId: string | null,
+  runId: RunId | null,
 ) {
   if (fix.kind === "reconcile_source_order") {
     await commitSourceOrderReconciliation(
@@ -339,7 +341,7 @@ async function applyAggregateReplacement(
     typeof purchase.$inferSelect,
     "id" | "date" | "displayLabel" | "vendorId"
   >,
-  source: { ledgerPartyId: string; runId: string | null },
+  source: { ledgerPartyId: LedgerPartyId; runId: RunId | null },
 ) {
   const purchaseId = targetPurchase.id;
   if (fix.lines.length === 0)

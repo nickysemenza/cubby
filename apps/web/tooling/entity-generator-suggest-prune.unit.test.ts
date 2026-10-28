@@ -82,10 +82,6 @@ function declarationWithTags(tagsField: TagsFieldFixture) {
     model: {
       fields: [subjectField, tagsField],
       storage: ["subject", "tags"],
-      create: ["subject", "tags"],
-      update: ["subject", "tags"],
-      output: ["subject", "tags"],
-      audit: [],
     },
   };
 }
@@ -111,10 +107,6 @@ describe('control.suggest.mode: "prune" compiles only onto a text-array target',
               },
             ],
             storage: ["subject"],
-            create: ["subject"],
-            update: ["subject"],
-            output: ["subject", "derived"],
-            audit: [],
           },
         },
       ]),

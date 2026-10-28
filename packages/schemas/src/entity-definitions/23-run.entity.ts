@@ -1,3 +1,4 @@
+import { timestampField, readOnly } from "./field-policy";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { runChildren } from "../child-tables/run.js";
 import { z } from "zod";
@@ -19,7 +20,7 @@ import {
   runTrigger,
 } from "../run-fields.js";
 import { runWorkProgress } from "../run-work-progress.js";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 
 const RUN_PURPOSE_GLYPH = {
   account_sync: { phosphor: "Bank", sfSymbol: "building.columns" },
@@ -94,12 +95,6 @@ const RUN_STATUS_OPTIONS = [
   color: ColorToken;
 }[];
 
-const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
-  read,
-  create: null,
-  update: null,
-});
-
 /**
  * One run: a purchase-agent account sync, validation or enrichment, a
  * photo-inventory batch a member uploads for an agent to work, a Gmail
@@ -109,7 +104,7 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
  * exposes it read-only so the generic list, detail, inspector and MCP get/list
  * render it like any other record.
  */
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "run",
   names: { singular: "Run", plural: "Runs" },
   route: { basePath: "runs" },
@@ -950,24 +945,10 @@ export default defineEntity({
         kind: "identifier",
         validation: readOnly(runShortcode),
       },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: readOnly(z.date()),
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: readOnly(z.date()),
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt"),
+      timestampField("updatedAt"),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     // The actor snapshot, dispatch fencing and history walk columns stay
     // hand-written on the table: they reference the auth user table, the run
@@ -978,10 +959,10 @@ export default defineEntity({
         specialized: "primary-key:RunId",
       },
       { key: "shortcode", specialized: "shortcode" },
-      { key: "ledgerPartyId", reference: "ledgerParty" },
+      "ledgerPartyId",
       "actorName",
-      { key: "vendorAccountId", reference: "vendorAccount" },
-      { key: "vendorId", reference: "vendor" },
+      "vendorAccountId",
+      "vendorId",
       {
         key: "purpose",
         defaultValue: "account_sync",
@@ -990,7 +971,7 @@ export default defineEntity({
       { key: "trigger", specialized: "enum:trigger" },
       { key: "cause", specialized: "enum:cause" },
       "attempt",
-      { key: "parentRunId", reference: "run" },
+      "parentRunId",
       {
         key: "status",
         defaultValue: "running",
@@ -1027,56 +1008,7 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [],
-    update: [],
-    output: [
-      "workProgress",
-      "activityAt",
-      "id",
-      "iconEntity",
-      "displayName",
-      "status",
-      "displayStatus",
-      "waitingOn",
-      "stalled",
-      "chargedCost",
-      "purpose",
-      "trigger",
-      "routine",
-      "vendorAccountId",
-      "vendorId",
-      "ledgerPartyId",
-      "actorName",
-      "startedAt",
-      "endedAt",
-      "retiredAt",
-      "retirementReason",
-      "wallTime",
-      "ordersSeen",
-      "imported",
-      "updated",
-      "skipped",
-      "failureCode",
-      "notes",
-      "coordinatorModel",
-      "skillRevision",
-      "runtimeRevision",
-      "decisionRevision",
-      "dispatchError",
-      "coordinatorStartedAt",
-      "auditedAt",
-      "predecessorRunId",
-      "successorRunId",
-      "parentRunId",
-      "cause",
-      "attempt",
-      "vendorAccountLabel",
-      "vendorName",
-      "ledgerPartyName",
-      "createdAt",
-      "updatedAt",
-    ],
-    audit: [],
+
     derived: {
       stalled: { type: "boolean" },
       needsAttention: { type: "boolean" },
@@ -1096,10 +1028,6 @@ export default defineEntity({
   fields: {
     create: null,
     update: null,
-    output: {
-      module: "@cubby/schemas/run-raw-read",
-      export: "rawRunOut",
-    },
   },
   // One durable attempt to discover, fetch, extract, write, and audit evidence.
   storage: {
@@ -1122,7 +1050,6 @@ export default defineEntity({
         key: "predecessorRunId",
         kind: "identifier",
         type: { module: "@cubby/schemas/identifiers", export: "RunId" },
-        reference: "run",
       },
       // Stable queue generation; duplicate and late deliveries are fenced to it.
       { key: "dispatchEventId", kind: "text" },
@@ -1271,10 +1198,6 @@ export default defineEntity({
     },
   },
   filters: {
-    schema: {
-      module: "@cubby/schemas/run",
-      export: "runFilterFields",
-    },
     descriptors: [
       {
         columnId: "status",
@@ -1300,7 +1223,11 @@ export default defineEntity({
             label: "Needs review",
             color: "var(--warning)",
           },
-          { value: "completed", label: "Completed", color: "var(--positive)" },
+          {
+            value: "completed",
+            label: "Completed",
+            color: "var(--positive)",
+          },
           { value: "failed", label: "Failed", color: "var(--destructive)" },
           {
             value: "dispatch_failed",
@@ -1389,120 +1316,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "source-images",
-      label: "Source images",
-      target: "image",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "PhotoRunImage.runId", direction: "incoming" },
-          { edge: "PhotoRunImage.imageId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "PhotoRunImage.imageId", direction: "incoming" },
-          { edge: "PhotoRunImage.runId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "vendor-account",
-      label: "Vendor account",
-      target: "vendorAccount",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Run.vendorAccountId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Run.vendorAccountId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "vendor",
-      label: "Vendor",
-      target: "vendor",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Run.vendorId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Run.vendorId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "ledger-party",
-      label: "Member",
-      target: "ledgerParty",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Run.ledgerPartyId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Run.ledgerPartyId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "predecessor",
-      label: "Predecessor",
-      target: "run",
-      cardinality: "one",
-      inverseOmit:
-        "A run links its predecessor; a retry chain is short and read from the newest run back.",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Run.predecessorRunId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Run.predecessorRunId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "parent",
-      label: "Parent Run",
-      target: "run",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Run.parentRunId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Run.parentRunId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "children",
-      label: "Child Runs",
-      target: "run",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Run.parentRunId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Run.parentRunId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "purchases",
-      label: "Purchases",
-      target: "purchase",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Purchase.runId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Purchase.runId", direction: "outgoing" }],
-      },
-    },
-  ],
+
   search: false,
   capabilities: {
     auditable: false,
@@ -1598,3 +1412,32 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .path("image", "many", [
+        { edge: "PhotoRunImage.runId", direction: "incoming" },
+        { edge: "PhotoRunImage.imageId", direction: "outgoing" },
+      ])
+      .named("source-images", "Source images"),
+    r.field("vendorAccountId").named("vendor-account", "Vendor account"),
+    r.field("vendorId").named("vendor", "Vendor"),
+    r.field("ledgerPartyId").named("ledger-party", "Member"),
+    r.field("predecessorRunId").named("predecessor", "Predecessor", {
+      inverseOmit:
+        "A run links its predecessor; a retry chain is short and read from the newest run back.",
+    }),
+    r.field("parentRunId").named("parent", "Parent Run"),
+    r
+      .path("run", "many", [{ edge: "Run.parentRunId", direction: "incoming" }])
+      .named("children", "Child Runs"),
+    r
+      .path("purchase", "many", [
+        { edge: "Purchase.runId", direction: "incoming" },
+      ])
+      .named("purchases", "Purchases"),
+  ],
+  readSchemas,
+);

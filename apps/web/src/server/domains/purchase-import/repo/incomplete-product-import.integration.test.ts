@@ -432,7 +432,7 @@ describe("incomplete itemized purchase identity", () => {
       await getDb(ctx.db)
         .select({ kind: runFinding.kind })
         .from(runFinding)
-        .where(eq(runFinding.runId, saved!.runId!)),
+        .where(eq(runFinding.runId, parseEntityId("run", saved!.runId!))),
     ).toEqual([]);
   });
 

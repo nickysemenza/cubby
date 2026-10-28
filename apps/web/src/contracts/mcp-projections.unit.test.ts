@@ -1,20 +1,24 @@
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import {
   ingredientOut,
-  ingredientWithFoodOut,
+  ingredientDetailOut as ingredientWithFoodOut,
   ingredientListItemOut,
+  ingredientMcpDetailOut as ingredientWithFoodMcpEntityOut,
+  ingredientMcpListItemOut as ingredientListItemMcpEntityOut,
+} from "@cubby/schemas/entities/ingredient";
+import {
+  recipeOut,
+  recipeListItemOut,
+  recipeMcpOut as recipeMcpEntityOut,
+} from "@cubby/schemas/entities/recipe";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import {
   ingredientWithFoodLeanOut,
   enrichmentRowOut,
-  ingredientWithFoodMcpEntityOut,
-  ingredientListItemMcpEntityOut,
 } from "@cubby/schemas/ingredient";
 import { rawProductOutput } from "@cubby/schemas/product-raw-read";
 import {
-  recipeOut,
   recipeTopLevel,
-  recipeListItemOut,
   recipeGraphOut,
-  recipeMcpEntityOut,
   recipeWithSideEffectsOut,
   recipesUsingIngredientOut,
 } from "@cubby/schemas/recipe";

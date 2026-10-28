@@ -1,3 +1,4 @@
+import { productOut as productTopLevelOut } from "@cubby/schemas/entities/product";
 import { z } from "zod";
 import { batchProgressEvent } from "./batch";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
@@ -32,7 +33,6 @@ import {
   productShortcodesInput,
   productSummariesInput,
   productSummariesOut,
-  productTopLevelOut,
   productWithFoodAndSideEffectsOut,
 } from "./product";
 import {

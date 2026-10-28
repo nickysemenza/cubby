@@ -11,6 +11,132 @@ import {
 import { renderFieldEnvelopeArtifacts } from "./field-envelopes.ts";
 
 describe("recursive field projections", () => {
+  it("builds a stored source declaration without a repository port and refuses unsupported ordinary writes", async () => {
+    const { declarations } = await loadEntityDeclarationBundle();
+    const source = z
+      .looseObject({
+        extensions: z.looseObject({ ports: z.looseObject({}) }),
+        capabilities: z.looseObject({}),
+        model: z.looseObject({}),
+      })
+      .parse(
+        declarations.find((declaration) => declaration.key === "ledgerParty"),
+      );
+    const compiled = compileEntity(
+      {
+        ...source,
+        extensions: {
+          ...source.extensions,
+          ports: { ...source.extensions.ports, repository: undefined },
+        },
+        capabilities: { ...source.capabilities, merge: false },
+        model: { ...source.model, intents: undefined },
+      },
+      0,
+    );
+    expect(compiled.fieldModel.intents).toMatchObject({
+      fields: {
+        create: compiled.fieldModel.create,
+        full: compiled.fieldModel.update,
+      },
+      create: ["create"],
+      update: ["full"],
+    });
+    const referenceSource = z
+      .looseObject({
+        extensions: z.looseObject({ ports: z.looseObject({}) }),
+        filters: z.looseObject({
+          descriptors: z.array(z.looseObject({ columnId: z.string() })),
+        }),
+      })
+      .parse(
+        declarations.find((declaration) => declaration.key === "planting"),
+      );
+    const references = compileEntity(
+      {
+        ...referenceSource,
+        extensions: {
+          ...referenceSource.extensions,
+          ports: { ...referenceSource.extensions.ports, repository: undefined },
+        },
+        filters: {
+          ...referenceSource.filters,
+          descriptors: referenceSource.filters.descriptors.filter(
+            (descriptor) => descriptor.columnId !== "locationId",
+          ),
+        },
+      },
+      0,
+    );
+    expect(
+      references.filterDescriptors.find(
+        (descriptor) => descriptor.columnId === "locationId",
+      ),
+    ).toMatchObject({
+      kind: "idMulti",
+      brandRef: { entity: "location" },
+      stored: { columns: ["locationId"] },
+      deriveSchema: true,
+    });
+    const createOnly = compileEntity(
+      {
+        ...source,
+        extensions: {
+          ...source.extensions,
+          ports: { ...source.extensions.ports, repository: undefined },
+        },
+        capabilities: { ...source.capabilities, merge: false },
+        fields: { update: null },
+        model: { ...source.model, intents: undefined },
+      },
+      0,
+    );
+    expect(createOnly.fieldModel.intents).toMatchObject({
+      fields: { create: createOnly.fieldModel.create },
+      create: ["create"],
+      update: [],
+    });
+    const artifacts = renderKernelBindingsArtifacts([compiled]);
+    const runtime = artifacts.find((artifact) =>
+      artifact.relativePath.endsWith("entity-kernel-bindings.gen.ts"),
+    );
+    expect(runtime?.source).toContain("createLedgerPartyDefaultRepository");
+    expect(runtime?.source).toContain(
+      "ledgerPartyDefaultRepository = createLedgerPartyDefaultRepository()",
+    );
+    expect(runtime?.source).toContain(".createWriter(ENTITY_STORED_WRITES");
+    expect(runtime?.source).toContain(".updateWriter(ENTITY_STORED_WRITES");
+    expect(() =>
+      renderKernelBindingsArtifacts([
+        {
+          ...compiled,
+          fieldModel: {
+            ...compiled.fieldModel,
+            create: [...compiled.fieldModel.create, "unsupportedProjection"],
+          },
+        },
+      ]),
+    ).toThrow("cannot prepare all declared stored fields");
+    expect(() =>
+      renderKernelBindingsArtifacts([
+        {
+          ...compiled,
+          readFields: [...compiled.readFields, "domainProjection"],
+        },
+      ]),
+    ).toThrow("cannot read undeclared stored projections (domainProjection)");
+    expect(() =>
+      renderKernelBindingsArtifacts([
+        {
+          ...compiled,
+          listScopes: {
+            scope: [],
+            scopes: { domain: { via: "domain", filters: "ledgerParty" } },
+          },
+        },
+      ]),
+    ).toThrow("requires domain list bindings (domain)");
+  });
   it("rejects stored-result projections whose path or scalar type cannot exist", async () => {
     const { declarations } = await loadEntityDeclarationBundle();
     const shipment = z
@@ -45,6 +171,12 @@ describe("recursive field projections", () => {
   it("publishes canonical wrappers while declaration inputs remain raw", async () => {
     const entities = await loadEntityDeclarations();
     const wrappers = renderSchemaWrapperArtifacts(entities);
+    expect(
+      entities.find((entity) => entity.key === "recipe")?.contract?.list,
+    ).toMatchObject({
+      module: "@cubby/schemas/entity-contracts/recipe",
+      export: "recipeRawListItemOut",
+    });
     for (const artifact of wrappers) {
       expect(artifact.source).not.toContain("definition.readSchemas");
       expect(artifact.source).not.toContain("withEntityListMedia");
@@ -60,7 +192,10 @@ describe("recursive field projections", () => {
     );
     expect(
       entities.find((entity) => entity.key === "planting")?.contract?.output,
-    ).toMatchObject({ export: "rawPlantingOut" });
+    ).toMatchObject({
+      module: "@cubby/schemas/entity-contracts/planting",
+      export: "plantingRawOut",
+    });
   });
   it("emits a typed lazy Location fixpoint without expanding Recipe scalar snapshots", async () => {
     const artifacts = renderFieldEnvelopeArtifacts(

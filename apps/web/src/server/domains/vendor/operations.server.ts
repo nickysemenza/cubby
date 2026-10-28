@@ -1,9 +1,6 @@
+import { vendorOut } from "@cubby/schemas/entities/vendor";
 import type { fetchVendorLogoInput } from "@cubby/schemas/vendor";
-import {
-  mergeVendorsOut,
-  vendorOut,
-  vendorCoverageOut,
-} from "@cubby/schemas/vendor";
+import { mergeVendorsOut, vendorCoverageOut } from "@cubby/schemas/vendor";
 
 import { vendorContract } from "~/contracts/vendor.contract";
 import { getVendorCoverage } from "~/server/domains/vendor/repo/vendor";

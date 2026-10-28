@@ -1,9 +1,11 @@
+import {
+  type RecipeCreateInput,
+  type RecipeUpdateInput,
+} from "@cubby/schemas/entities/recipe";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import type {
-  RecipeCreateInput,
   RecipeIngredientInput,
-  RecipeUpdateInput,
   recipeInstructionInput,
   recipeSectionInput,
 } from "@cubby/schemas/recipe";

@@ -1,4 +1,8 @@
-import { inventoryFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.inventory.gen";
+import {
+  inventoryListItemOut,
+  inventoryDetailOut as inventoryWithLocationAndProductOut,
+} from "@cubby/schemas/entities/inventory";
+
 import {
   inventoryFieldEnvelopeFields,
   inventoryPublicReadFields,
@@ -13,7 +17,7 @@ import { tradeSchema } from "./task-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { inventoryRelatedFilterFields } from "./related-view";
+import { relatedFilterFieldsByEntity } from "./generated/related-view-filters.gen";
 import { auditDateFilterFields, plainDate } from "./base-entity";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { positiveAmount } from "./codec";
@@ -67,7 +71,7 @@ export const inventoryPlacementFilter = z.enum([
 
 export const inventoryFilterFields = {
   ...auditDateFilterFields,
-  ...inventoryRelatedFilterFields,
+  ...relatedFilterFieldsByEntity.inventory,
   ...generatedInventoryItemFilterFields,
 };
 
@@ -77,8 +81,6 @@ export const inventoryFiltersSchema = z.object(inventoryFilterFields);
 // haven't I counted in ages?" is one click — NULLS LAST in both directions per
 // the house rule.
 export type InventorySortField = GeneratedEntitySortField<"inventory">;
-
-export const inventoryEntryOut = inventoryFieldEnvelopeSchemas.output;
 
 /**
  * `"<product name> · <location name>"`, or just the product name when the
@@ -95,25 +97,17 @@ export const inventoryDisplayName = ({
   locationName?: string | null;
 }): string => (locationName ? `${productName} · ${locationName}` : productName);
 
-export const inventoryListItemOut = inventoryFieldEnvelopeSchemas.list;
-export type InventoryListItemOut = z.output<typeof inventoryListItemOut>;
 export const inventoryListProductOut = inventoryListItemOut.shape.product;
 export type InventoryListProductOut = z.output<typeof inventoryListProductOut>;
 export const inventoryListLocationOut = inventoryListItemOut.shape.location;
 export type InventoryListLocationOut = z.output<
   typeof inventoryListLocationOut
 >;
-export const inventoryWithLocationAndProductOut =
-  inventoryFieldEnvelopeSchemas.detail;
+
 export const inventoryDetailProductOut =
   inventoryWithLocationAndProductOut.shape.product;
 const inventoryWithLocationAndProductFields =
   inventoryWithLocationAndProductOut.shape;
-export type InventoryWithLocationAndProductOut = z.output<
-  typeof inventoryWithLocationAndProductOut
->;
-export const inventoryWithLocationAndProductMcpEntityOut =
-  inventoryFieldEnvelopeSchemas.mcpDetail;
 
 export const inventoryWithLocationAndProductAndSideEffectsOut = z.object({
   ...inventoryWithLocationAndProductFields,

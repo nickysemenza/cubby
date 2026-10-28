@@ -1,3 +1,4 @@
+import { runEntityId } from "@cubby/schemas/identifiers";
 /**
  * The import agent's only authority over Cubby: one Run's services. Each call
  * opens its own database scope. Domain writes travel through the Run's
@@ -127,8 +128,9 @@ export function purchaseDispatchEnvironment(
 export function runServicesFor(
   env: Env,
   ctx: HostContext,
-  runId: string,
+  rawRunId: string,
 ): RunServices {
+  const runId = runEntityId.parse(rawRunId);
   const withDatabase = <T>(
     fn: Parameters<typeof withHostDatabase<T>>[2],
   ): Promise<T> => withHostDatabase(env, ctx, fn);

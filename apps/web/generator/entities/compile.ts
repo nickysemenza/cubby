@@ -1,9 +1,14 @@
+import { resolveDefaultContracts } from "./contracts.ts";
 import {
   withEntityListMedia,
   withEntityDetailMedia,
 } from "@cubby/schemas/entity-media-raw-read";
 import type { RawReadSchemas } from "@cubby/schemas/entity-definitions/definition";
-import { resolveFieldDisplay, schemaAtReadPath } from "./presentation.ts";
+import {
+  resolveFieldDisplay,
+  schemaAtReadPath,
+  resolveRelationSectionPlans,
+} from "./presentation.ts";
 import { deriveBulkUpdateFields } from "./bulk.ts";
 import { collectionArraySchema } from "@cubby/schemas/entity-collection";
 import type { ChildTableDeclaration } from "@cubby/schemas/compiler/entity-definitions/child-definition";
@@ -20,6 +25,7 @@ import {
   parseEntityDeclarationMetadata,
 } from "@cubby/schemas/entity-definitions/definition";
 import { z } from "zod";
+import { storedReference } from "@cubby/schemas/entity-definitions/field-policy";
 import { entitySchema } from "@cubby/schemas/entity-core";
 import {
   FILTER_ALL,
@@ -74,25 +80,6 @@ const SENTINELS = new Set([FILTER_ANY, FILTER_NONE]);
 /** Dotted keys, each with optional `[n]` index / `[]` projection segments. */
 const DISPLAY_READ_PATH =
   /^[A-Za-z_]\w*(?:\[\d*\])*(?:\.[A-Za-z_]\w*(?:\[\d*\])*)*$/u;
-
-const entityPorts = (
-  ports: EntityDeclarationMetadata["extensions"]["ports"],
-): EntityPorts => {
-  return {
-    repository: ports.repository,
-    fieldEnvelope: ports.fieldEnvelope,
-    references: {
-      label: ports.references.label,
-      resolver: ports.references.resolver,
-    },
-    filters: ports.filters,
-    search: {
-      projection: ports.search.projection,
-      semanticText: ports.search.semanticText,
-    },
-    timeline: ports.timeline,
-  };
-};
 
 const filterKinds = FILTER_KINDS;
 
@@ -856,6 +843,10 @@ const compileFieldModel = (
       throw new EntityDeclarationError(
         `${fieldContext} references undeclared field ${key}.`,
       );
+    if ("enum" in field && field.enum !== undefined && declared.kind !== "enum")
+      throw new EntityDeclarationError(
+        `${fieldContext}.enum requires an enum field.`,
+      );
     const defaultKind =
       field.default ??
       (key === "id"
@@ -877,10 +868,12 @@ const compileFieldModel = (
       nullable: field.nullable ?? declared.nullable,
       default: defaultKind,
       defaultValue,
-      reference: field.reference ?? null,
+      reference: storedReference(field.reference, declared),
       referenceOptions:
         "referenceOptions" in field ? field.referenceOptions : undefined,
       defaultSql: "defaultSql" in field ? field.defaultSql : undefined,
+      type: "type" in field ? field.type : undefined,
+      enumValues: "enum" in field ? field.enum?.values : undefined,
       specialized: field.specialized ?? null,
     };
   });
@@ -1624,6 +1617,9 @@ const compileMcpActions = (
   const capabilities = declaration.capabilities;
   const kernel =
     declaration.extensions.ports.repository !== null ||
+    (declaration.table !== null &&
+      declaration.fields !== null &&
+      declaration.identifiers.shortcode !== null) ||
     declaration.key === "image";
   if (!kernel) {
     if (capabilities.mcp === undefined)
@@ -1663,13 +1659,7 @@ const compileMcpActions = (
   );
 };
 
-const opaqueRelationProvenance = (
-  value: unknown,
-  context: string,
-): DeclarationObject => objectValue(value, context);
-
-// Cross-relation checks use parsed metadata; only graph provenance remains
-// opaque because its path semantics are validated against the full catalog.
+// Provenance shapes are strict source contracts; graph semantics are checked against the complete catalog.
 const normalizedDeclarationRelations = (
   relations: EntityDeclarationMetadata["relations"],
   context: string,
@@ -1683,10 +1673,7 @@ const normalizedDeclarationRelations = (
       );
     relationKeys.add(relation.key);
     const sourceKey = relation.sourceKey ?? relation.key;
-    const provenance = opaqueRelationProvenance(
-      relation.provenance,
-      `${relationContext}.provenance`,
-    );
+    const provenance = relation.provenance;
     if (provenance.kind === "local-path" && relation.inverse === undefined)
       throw new EntityDeclarationError(
         `${relationContext} local-path requires inverse.`,
@@ -1695,10 +1682,7 @@ const normalizedDeclarationRelations = (
     const sourceKeys = [sourceKey];
     for (const [sourceIndex, source] of sources.entries()) {
       sourceKeys.push(source.key);
-      const sourceProvenance = opaqueRelationProvenance(
-        source.provenance,
-        `${relationContext}.sources[${sourceIndex}].provenance`,
-      );
+      const sourceProvenance = source.provenance;
       if (
         sourceProvenance.kind === "local-path" &&
         source.inverse === undefined
@@ -1733,42 +1717,23 @@ const normalizedDeclarationRelations = (
 
 const serializedDeclarationRelations = (
   relations: EntityDeclarationMetadata["relations"],
-  context: string,
 ): DeclarationObject[] =>
-  relations.map((relation, index) => {
-    const relationContext = `${context}.relations[${index}]`;
+  relations.map((relation) => {
     const serialized: DeclarationObject = {
       key: relation.key,
       label: relation.label,
       target: relation.target,
       cardinality: relation.cardinality,
       sourceKey: relation.sourceKey ?? relation.key,
-      provenance: opaqueRelationProvenance(
-        relation.provenance,
-        `${relationContext}.provenance`,
-      ),
-      sources: (relation.sources ?? []).map((source, sourceIndex) => {
-        const serializedSource: DeclarationObject = {
-          key: source.key,
-          label: source.label,
-          provenance: opaqueRelationProvenance(
-            source.provenance,
-            `${relationContext}.sources[${sourceIndex}].provenance`,
-          ),
-        };
-        if (source.inverse !== undefined)
-          serializedSource.inverse = opaqueRelationProvenance(
-            source.inverse,
-            `${relationContext}.sources[${sourceIndex}].inverse`,
-          );
-        return serializedSource;
-      }),
+      provenance: relation.provenance,
+      sources: (relation.sources ?? []).map((source) => ({
+        key: source.key,
+        label: source.label,
+        provenance: source.provenance,
+        ...(source.inverse === undefined ? {} : { inverse: source.inverse }),
+      })),
     };
-    if (relation.inverse !== undefined)
-      serialized.inverse = opaqueRelationProvenance(
-        relation.inverse,
-        `${relationContext}.inverse`,
-      );
+    if (relation.inverse !== undefined) serialized.inverse = relation.inverse;
     if (relation.derived === true) serialized.derived = true;
     if (relation.inverseOmit !== undefined)
       serialized.inverseOmit = relation.inverseOmit;
@@ -1810,7 +1775,6 @@ const declarationDescriptor = (
   descriptor.countable = declaration.capabilities.countable;
   descriptor.relationships = serializedDeclarationRelations(
     declaration.relations,
-    context,
   );
   descriptor.lifecycle = {
     delete: declaration.capabilities.delete,
@@ -2253,7 +2217,7 @@ export const compileEntity = (
   const declared = raw;
   let declaration;
   try {
-    declaration = parseDeclaration(declared, context);
+    declaration = resolveDefaultContracts(parseDeclaration(declared, context));
   } catch (error) {
     if (error instanceof Error) throw new EntityDeclarationError(error.message);
     throw error;
@@ -2280,7 +2244,7 @@ export const compileEntity = (
         : rawReadSchemas.list,
     detail:
       declaration.fields !== null &&
-      (declaration.extensions.ports.repository !== null || key === "image")
+      (declaration.table !== null || key === "image")
         ? withEntityDetailMedia(rawReadSchemas.detail)
         : rawReadSchemas.detail,
   };
@@ -2324,10 +2288,42 @@ export const compileEntity = (
   const filters = declaration.filters;
   const filterAudit = filters.audit === undefined ? false : filters.audit;
   const filterSchema =
-    filters.schema === undefined || filters.schema === null
+    filters.schema === null
       ? null
       : { module: filters.schema.module, export: filters.schema.export };
-  const declaredDescriptors = filters.descriptors.map((value, index) =>
+  // A stored reference already owns its target and identifier policy. Ordinary
+  // repositories use that fact for filtering without a second enrollment.
+  const defaultReferenceFilters: RawFilterDescriptor[] =
+    declaration.extensions.ports.repository === null
+      ? declaredFieldModel.fields.flatMap((field) => {
+          const reference = field.reference;
+          if (
+            field.kind !== "identifier" ||
+            !reference ||
+            reference.multiple ||
+            !declaredFieldModel.storage.some(
+              (stored) => stored.key === field.key && stored.reference !== null,
+            ) ||
+            filters.descriptors.some(
+              (descriptor) => descriptor.columnId === field.key,
+            )
+          )
+            return [];
+          return [
+            {
+              columnId: field.key,
+              kind: "idMulti",
+              deriveSchema: true,
+              placeholder: `Filter by ${field.label ?? humanize(field.key)}...`,
+              brandRef: { entity: reference.entity },
+            },
+          ];
+        })
+      : [];
+  const declaredDescriptors = [
+    ...filters.descriptors,
+    ...defaultReferenceFilters,
+  ].map((value, index) =>
     filterDescriptor(
       value,
       declaredFieldModel.fields,
@@ -2505,7 +2501,7 @@ export const compileEntity = (
   }
   const route = declaration.route;
   validateRouteCreate(route, fieldModel, context);
-  const ports = entityPorts(declaration.extensions.ports);
+  const ports = declaration.extensions.ports;
   const inspector = compiledInspector(
     declaration,
     fieldModel,
@@ -2570,7 +2566,7 @@ export const compileEntity = (
     declaration.key,
     route,
     contract,
-    servesKernelGet({ key: declaration.key, contract, ports }),
+    servesKernelGet({ key: declaration.key, contract, ports, table }),
     declaration.capabilities.timeline,
     context,
   );
@@ -2617,6 +2613,18 @@ export const compileEntity = (
     context,
   );
   const compiled: CompiledEntity = {
+    currentMember: declaration.identifiers.currentMember === true,
+    readFields: [
+      ...new Set(
+        Object.values(rawReadSchemas).flatMap((schema) => {
+          if (!(schema instanceof z.ZodObject))
+            throw new EntityDeclarationError(
+              `${key}.readSchemas must expose object projections.`,
+            );
+          return Object.keys(schema.shape);
+        }),
+      ),
+    ],
     key,
     overrides: collectEntityOverrides(raw),
     shortcode,
@@ -3318,8 +3326,10 @@ export const compileEntityDeclarations = (
       overrides: declaredOverrides.get(String(declaration.key)) ?? [],
     }),
   );
-  const entities = compileListFields(
-    validateDataQualityDeclarations(deriveRelationSections(compiled)),
+  const entities = resolveRelationSectionPlans(
+    compileListFields(
+      validateDataQualityDeclarations(deriveRelationSections(compiled)),
+    ),
   );
   const routes = new Set<string>();
   for (const entity of entities) {

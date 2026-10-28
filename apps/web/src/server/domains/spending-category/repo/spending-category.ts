@@ -1,4 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type SpendingCategoryCreateInput,
+  type SpendingCategoryUpdateData,
+} from "@cubby/schemas/entities/spendingCategory";
+import { spendingCategoryRawOut as rawSpendingCategoryOut } from "@cubby/schemas/entity-contracts/spendingCategory";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { EntityId, ShortcodeFor } from "@cubby/schemas/identifiers";
@@ -6,11 +11,6 @@ import {
   ENTITY_NOT_FOUND_REASON,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import {
-  type SpendingCategoryCreateInput,
-  type SpendingCategoryUpdateData,
-} from "@cubby/schemas/spending-category";
-import { rawSpendingCategoryOut } from "@cubby/schemas/spending-category-raw-read";
 import { and, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { z } from "zod";

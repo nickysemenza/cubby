@@ -1,9 +1,7 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { z } from "zod";
 
 import { entityLabel } from "~/entity/entities";
 import { entityDetailFor } from "~/entity/entity-detail";
@@ -13,56 +11,7 @@ import type {
   ComboboxItem,
   PickerEntity,
 } from "../../ui/combobox/combobox-types";
-import {
-  buildLocationComboboxItemFromDetail,
-  buildProductComboboxItem,
-  buildRecordComboboxItem,
-  buildVendorComboboxItem,
-  pickerRecord,
-} from "./combobox-builders";
-
-const vendorDetail = z.object({
-  name: z.string(),
-  logo: z.object({ url: z.string() }).nullish(),
-});
-
-/** One detail read → the same row the entity's search provider builds. */
-function itemFromDetail(
-  queryClient: QueryClient,
-  entity: PickerEntity,
-  id: string,
-  detail: unknown,
-): ComboboxItem {
-  switch (entity) {
-    case "product":
-      // SAFETY: the product detail read is the shape the product provider's
-      // own `buildDetail` consumes for an exact-code lookup.
-      return buildProductComboboxItem(detail as never);
-    case "location":
-      // SAFETY: as above, for `buildLocationComboboxItemFromDetail`.
-      return buildLocationComboboxItemFromDetail(detail as never);
-    case "vendor": {
-      const vendor = vendorDetail.parse(detail);
-      return buildVendorComboboxItem(
-        {
-          id: parseShortcodeFor("vendor", id),
-          name: vendor.name,
-          logo: vendor.logo ?? null,
-        },
-        { itemId: "shortcode" },
-      );
-    }
-    default:
-      return buildRecordComboboxItem(
-        queryClient,
-        entity,
-        pickerRecord.parse(detail),
-      );
-  }
-}
-
-/** Product categories carry no picture; every other picker entity's rows do. */
-const entityHasThumb = (entity: PickerEntity) => entity !== "productCategory";
+import { buildPickerDetailItem } from "./combobox-builders";
 
 /**
  * A roster row can stand for the selection only when it is the record's own
@@ -78,7 +27,7 @@ function isComplete(
   // vendor) stands for itself.
   if (parseShortcode(id)?.type !== entity) return true;
   if (!item || item.pending || item.name === item.id) return false;
-  return item.thumb != null || !entityHasThumb(entity);
+  return item.thumb != null;
 }
 
 /**
@@ -127,7 +76,7 @@ export function useSelectedPickerItems(
       };
     }
     if (metadata.data && result?.data !== undefined) {
-      const built = itemFromDetail(queryClient, entity, id, result.data);
+      const built = buildPickerDetailItem(queryClient, entity, result.data);
       return held?.presentation
         ? { ...built, presentation: held.presentation }
         : built;

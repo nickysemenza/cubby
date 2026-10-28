@@ -1,3 +1,4 @@
+import { entityIdSchema } from "./identifier-fields";
 import { assessmentChildHandle } from "./assessment-reference";
 import { z } from "zod";
 
@@ -19,7 +20,7 @@ export const aiProvenance = z.object({
 export type AiProvenance = z.infer<typeof aiProvenance>;
 export const suggestionAcceptanceReceipt = z.object({
   mode: z.enum(["automatic", "member"]),
-  runId: z.uuid().nullable(),
+  runId: entityIdSchema("run").nullable(),
   auditIds: z.array(z.uuid()),
   acceptedAt: z.iso.datetime(),
   /** Authoritative evidence after application; absent on retained legacy receipts. */
@@ -111,7 +112,7 @@ export const aiEvaluationTarget = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal(aiEvaluationTargetKind.enum.email),
     entity: z.literal("email"),
-    recordId: z.uuid(),
+    recordId: entityIdSchema("email"),
     field: z.null(),
     assessmentIds: z.array(assessmentChildHandle).max(0),
   }),

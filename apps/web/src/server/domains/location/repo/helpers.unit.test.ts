@@ -1,4 +1,5 @@
 import { locationListRefOut } from "@cubby/schemas/location";
+import { locationType } from "@cubby/schemas/location-fields";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import {
   categorySummaryFixture,
@@ -52,7 +53,7 @@ const baseLocation = {
   name: "Pantry",
   aliases: [],
   tags: [],
-  type: "room",
+  type: locationType.parse("room"),
   parentId: null,
   lastBulkInventory: null,
   productId: null,
@@ -76,7 +77,7 @@ const childLocation = {
   id: CHILD_ID,
   shortcode: "LOC-3456",
   name: "Shelf",
-  type: "shelf",
+  type: locationType.parse("shelf"),
   parentId: LOCATION_ID,
   deletedAt: null,
 };
@@ -192,14 +193,14 @@ describe("location mappers", () => {
     expect(result.parent).toEqual({
       id: testShortcode("location", "LOC-2345"),
       name: "Kitchen",
-      type: "room",
+      type: locationType.parse("room"),
     });
     expect(locationListRefOut.parse(result.parent)).toEqual(result.parent);
     expect(result.children).toEqual([
       {
         id: testShortcode("location", "LOC-3456"),
         name: "Shelf",
-        type: "shelf",
+        type: locationType.parse("shelf"),
       },
     ]);
     expect(result.inventoryEntries).toEqual([

@@ -1,3 +1,4 @@
+import { timestampField, readOnly } from "./field-policy";
 import { humanize } from "@cubby/shared/text-case";
 import { z } from "zod";
 import {
@@ -14,17 +15,9 @@ import {
   JOB_LANE_LABEL,
   JOB_WAITING_ON_LABEL,
 } from "../job.js";
-import { defineEntity } from "./definition.js";
-import {
-  localRelationshipEntities,
-  queryRelationship,
-} from "../relationship-query-definitions.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
+import { localRelationshipEntities } from "../relationship-query-definitions.js";
 
-const readOnly = <T extends z.ZodType>(read: T) => ({
-  read,
-  create: null,
-  update: null,
-});
 const laneOptions = jobLane.options.map((value) => ({
   value,
   label: JOB_LANE_LABEL[value],
@@ -39,7 +32,7 @@ const stateOptions = jobState.options.map((value) => ({
 }));
 
 /** Execution records are read-only; their owning queue controls their lifecycle. */
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "job",
   names: { singular: "Job", plural: "Jobs" },
   route: { basePath: "jobs" },
@@ -210,25 +203,17 @@ export default defineEntity({
         display: { columnLabel: "Lease ends", format: "timestamp" },
         validation: readOnly(z.date().nullable()),
       },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { format: "timestamp" },
-        validation: readOnly(z.date()),
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { format: "timestamp" },
-        validation: readOnly(z.date()),
-      },
-      { key: "shortcode", kind: "text" },
+      timestampField("createdAt", { format: "timestamp" }),
+      timestampField("updatedAt", { format: "timestamp" }),
+      { output: false, key: "shortcode", kind: "text" },
       ...["key", "subjectKind", "subjectId"].map((key) => ({
+        output: false,
         key,
         kind: "text" as const,
         nullable: key !== "key",
       })),
       {
+        output: false,
         key: "waitReason",
         kind: "enum",
         nullable: true,
@@ -247,42 +232,57 @@ export default defineEntity({
         validation: readOnly(jobWaitReason.nullable()),
       },
       ...["waitUntil", "lastClaimedAt"].map((key) => ({
+        output: false,
         key,
         kind: "timestamp" as const,
         nullable: true,
       })),
-      { key: "availableAt", kind: "timestamp" },
-      { key: "leaseToken", kind: "identifier", nullable: true },
+      { output: false, key: "availableAt", kind: "timestamp" },
+      { output: false, key: "leaseToken", kind: "identifier", nullable: true },
       ...["input", "cursor", "result"].map((key) => ({
+        output: false,
         key,
         kind: "json" as const,
         nullable: key !== "input",
       })),
       ...["generation", "priority"].map((key) => ({
+        output: false,
         key,
         kind: "number" as const,
       })),
       // Null never exhausts: subject-owned work and drains retry with backoff.
-      { key: "maxAttempts", kind: "number", nullable: true },
+      { output: false, key: "maxAttempts", kind: "number", nullable: true },
     ],
     storage: [
       { key: "id", specialized: "primary-key:JobId" },
       { key: "shortcode", specialized: "shortcode" },
       "key",
       "kind",
-      { key: "state", specialized: "enum:declaration", defaultValue: "queued" },
+      {
+        key: "state",
+        specialized: "enum:declaration",
+        defaultValue: "queued",
+      },
       {
         key: "runId",
-        reference: "run",
         referenceOptions: { column: "id", onDelete: "set null" },
       },
       "subjectKind",
       "subjectId",
       { key: "waitReason", specialized: "enum:declaration" },
       "waitUntil",
-      "input",
-      "cursor",
-      "result",
+      {
+        key: "input",
+        type: { module: "@cubby/schemas/job", export: "JobPayload" },
+      },
+      {
+        key: "cursor",
+        type: { module: "@cubby/schemas/job", export: "JobPayload" },
+      },
+      {
+        key: "result",
+        type: { module: "@cubby/schemas/job", export: "JobPayload" },
+      },
       { key: "generation", defaultValue: 1 },
       { key: "priority", defaultValue: 0 },
       { key: "attempts", defaultValue: 0 },
@@ -295,25 +295,7 @@ export default defineEntity({
       "createdAt",
       { key: "updatedAt", specialized: "updated-at" },
     ],
-    create: [],
-    update: [],
-    audit: [],
-    output: [
-      "id",
-      "kind",
-      "lane",
-      "state",
-      "waitingOn",
-      "runId",
-      "runName",
-      "imageId",
-      "locationId",
-      "attempts",
-      "error",
-      "leaseExpiresAt",
-      "createdAt",
-      "updatedAt",
-    ],
+
     derived: {
       lane: { type: "enum", options: [...jobLane.options] },
       reason: { type: "enum", options: [...jobWaitingOnReason.options] },
@@ -334,7 +316,6 @@ export default defineEntity({
   fields: {
     create: null,
     update: null,
-    output: { module: "@cubby/schemas/job-raw-read", export: "rawJobOut" },
   },
   storage: {
     indexes: [
@@ -362,7 +343,10 @@ export default defineEntity({
     ],
   },
   filters: {
-    schema: { module: "@cubby/schemas/job-entity", export: "jobFilterFields" },
+    schema: {
+      module: "@cubby/schemas/job-entity",
+      export: "jobFilterFields",
+    },
     descriptors: [
       {
         columnId: "lane",
@@ -425,35 +409,7 @@ export default defineEntity({
     ],
   },
   search: false,
-  relations: [
-    queryRelationship({
-      key: "image-execution",
-      label: "Image processing",
-      target: "imageJob",
-      query: "imageExecution",
-      cardinality: "one",
-    }),
-    ...localRelationshipEntities.map((target) =>
-      queryRelationship({
-        key: `subject-${target}`,
-        label: "Subject",
-        target,
-        query: `jobSubject${target}`,
-        cardinality: "one",
-      }),
-    ),
-    {
-      key: "run",
-      label: "Run",
-      target: "run",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Job.runId", direction: "outgoing" }],
-      },
-      inverse: { steps: [{ edge: "Job.runId", direction: "incoming" }] },
-    },
-  ],
+
   capabilities: {
     auditable: false,
     images: { storage: false },
@@ -471,3 +427,19 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .query("imageExecution", "one")
+      .named("image-execution", "Image processing"),
+    ...localRelationshipEntities.map((target) =>
+      r
+        .query(`jobSubject${target}`, "one")
+        .named(`subject-${target}`, "Subject"),
+    ),
+    r.field("runId").named("run", "Run"),
+  ],
+  readSchemas,
+);

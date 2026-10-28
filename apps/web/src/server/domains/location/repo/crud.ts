@@ -1,5 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type LocationCreateInput,
+  type LocationUpdateInput,
+} from "@cubby/schemas/entities/location";
 import { entityRefKey } from "@cubby/schemas/entity";
+import type { ImageRawOut as RawImageOutput } from "@cubby/schemas/entity-contracts/image";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
@@ -7,17 +12,12 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import {
   locationPickerAncestorOut,
   locationPickerItemOut,
 } from "@cubby/schemas/location";
-import type {
-  LocationCreateInput,
-  LocationPickerItemOut,
-  LocationUpdateInput,
-} from "@cubby/schemas/location";
+import type { LocationPickerItemOut } from "@cubby/schemas/location";
 import { locationPickerSortableFields } from "@cubby/schemas/location";
 import { locationValuation } from "@cubby/schemas/location-fields";
 import {

@@ -181,70 +181,20 @@ export type ParsedShortcode = {
   [T in ShortcodeType]: ParsedShortcodeFor<T>;
 }[ShortcodeType];
 
-/**
- * One parser closure per entity, each typed to return its own
- * `ParsedShortcodeFor<T>`. Indexing the table with a union key and calling
- * the result yields the distributed union `ParsedShortcode`; a single generic
- * function would return `ParsedShortcodeFor<ShortcodeType>` — two independent
- * unions — and lose the discriminated-union guarantee. Guarded by the
- * type-level test in shortcode.unit.test.ts.
- */
-const shortcodeParser =
-  <T extends ShortcodeType>(type: T) =>
-  (code: string): ParsedShortcodeFor<T> | null => {
-    try {
-      return { type, shortcode: parseShortcodeFor(type, code) };
-    } catch {
-      return null;
-    }
-  };
+const parsedShortcodeFields = z.object({
+  type: z.string(),
+  shortcode: z.string(),
+});
 
-/**
- * One parser per entity, each keyed by its own literal so the compiler can
- * verify that `PARSE_CANONICAL_SHORTCODE[type]` returns `ParsedShortcodeFor`
- * of that exact type. Indexing with a union key and calling the result yields
- * the distributed union `ParsedShortcode`; a single generic call with a union
- * argument would return `ParsedShortcodeFor<ShortcodeType>` — two independent
- * unions — and a map built by `mapRecord` would need a cast into a branded
- * type, which the unsafe-identifier guard rightly rejects. So this stays a
- * literal-keyed list; `satisfies` fails to compile when an entity is missing.
- */
-const PARSE_CANONICAL_SHORTCODE = {
-  sourceTransactionRecord: shortcodeParser("sourceTransactionRecord"),
-  transactionImport: shortcodeParser("transactionImport"),
-  shipment: shortcodeParser("shipment"),
-  email: shortcodeParser("email"),
-  imageJob: shortcodeParser("imageJob"),
-  job: shortcodeParser("job"),
-  spendingCategory: shortcodeParser("spendingCategory"),
-  cookbook: shortcodeParser("cookbook"),
-  expense: shortcodeParser("expense"),
-  financialAccount: shortcodeParser("financialAccount"),
-  financialTransaction: shortcodeParser("financialTransaction"),
-  image: shortcodeParser("image"),
-  ingredient: shortcodeParser("ingredient"),
-  inventory: shortcodeParser("inventory"),
-  ledgerParty: shortcodeParser("ledgerParty"),
-  ledgerTransfer: shortcodeParser("ledgerTransfer"),
-  location: shortcodeParser("location"),
-  meal: shortcodeParser("meal"),
-  planting: shortcodeParser("planting"),
-  gardenEntry: shortcodeParser("gardenEntry"),
-  product: shortcodeParser("product"),
-  productCategory: shortcodeParser("productCategory"),
-  project: shortcodeParser("project"),
-  purchase: shortcodeParser("purchase"),
-  recipe: shortcodeParser("recipe"),
-  task: shortcodeParser("task"),
-  vendor: shortcodeParser("vendor"),
-  vendorAccount: shortcodeParser("vendorAccount"),
-  run: shortcodeParser("run"),
-  wish: shortcodeParser("wish"),
-  device: shortcodeParser("device"),
-  plant: shortcodeParser("plant"),
-} as const satisfies {
-  [T in ShortcodeType]: (code: string) => ParsedShortcodeFor<T> | null;
-};
+/** Validate the dependent pair with the same catalog-derived schema that owns its brand. */
+const canonicalParsedShortcode = z.custom<ParsedShortcode>((value) => {
+  const pair = parsedShortcodeFields.safeParse(value);
+  if (!pair.success || !isShortcodeType(pair.data.type)) return false;
+  const code = SHORTCODE_SCHEMA[pair.data.type].safeParse(pair.data.shortcode);
+  // ZodString normalization is allowed for ordinary input, but this pair promises
+  // its value is already canonical as well as belonging to its discriminator.
+  return code.success && code.data === pair.data.shortcode;
+});
 
 /**
  * Parse a shortcode into its entity type and canonical form, accepting both
@@ -266,9 +216,11 @@ export function parseShortcode(code: string): ParsedShortcode | null {
     : PREFIX_TO_TYPE[prefix];
   if (!type) return null;
 
-  return PARSE_CANONICAL_SHORTCODE[type](
-    `${SHORTCODE_PREFIX[type]}${normalized.slice(dash + 1)}`,
-  );
+  const parsed = canonicalParsedShortcode.safeParse({
+    type,
+    shortcode: `${SHORTCODE_PREFIX[type]}${normalized.slice(dash + 1)}`,
+  });
+  return parsed.success ? parsed.data : null;
 }
 
 /**

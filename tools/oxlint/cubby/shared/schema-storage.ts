@@ -39,15 +39,47 @@ export function softDeleteTableCatalog(
     .map(parse)
     .flatMap(declarations);
   const factories = new Map<string, Expression>();
+  const values = new Map<string, Expression>();
   for (const declaration of allDeclarations) {
     if (declaration.id.type !== "Identifier" || !declaration.init) continue;
     const init = expressionBody(declaration.init);
+    values.set(declaration.id.name, init);
     if (
       init.type === "ArrowFunctionExpression" &&
       init.body.type !== "BlockStatement"
     )
       factories.set(declaration.id.name, init.body);
   }
+  const staticValue = (
+    value: Expression,
+    seen = new Set<string>(),
+  ): Expression => {
+    const expression = expressionBody(value);
+    if (expression.type === "Identifier") {
+      const name = expression.name;
+      const target = values.get(name);
+      if (!target || seen.has(name)) return expression;
+      return staticValue(target, new Set([...seen, name]));
+    }
+    if (
+      expression.type === "MemberExpression" &&
+      !expression.computed &&
+      expression.property.type === "Identifier"
+    ) {
+      const object = staticValue(expression.object, seen);
+      if (object.type !== "ObjectExpression") return expression;
+      const key = expression.property.name;
+      const property = object.properties.find(
+        (candidate) =>
+          candidate.type === "Property" &&
+          candidate.key.type === "Identifier" &&
+          candidate.key.name === key,
+      );
+      if (property?.type === "Property")
+        return staticValue(property.value, seen);
+    }
+    return expression;
+  };
   const hasDeletedAt = (
     value: Expression,
     seen = new Set<string>(),
@@ -84,17 +116,19 @@ export function softDeleteTableCatalog(
     )
       continue;
     const [name, columns] = init.arguments;
+    const tableName =
+      name && name.type !== "SpreadElement" ? staticValue(name) : undefined;
     if (
-      name?.type !== "Literal" ||
-      typeof name.value !== "string" ||
+      tableName?.type !== "Literal" ||
+      typeof tableName.value !== "string" ||
       !columns ||
       columns.type === "SpreadElement"
     )
       throw new Error(`Cannot inspect table ${declaration.id.name}`);
     if (!hasDeletedAt(columns)) continue;
     varNames.add(declaration.id.name);
-    sqlNameToVar.set(name.value, declaration.id.name);
-    varToSqlName.set(declaration.id.name, name.value);
+    sqlNameToVar.set(tableName.value, declaration.id.name);
+    varToSqlName.set(declaration.id.name, tableName.value);
   }
   return { varNames, sqlNameToVar, varToSqlName };
 }

@@ -1,4 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type RecipeCreateInput,
+  type RecipeUpdateInput,
+} from "@cubby/schemas/entities/recipe";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
@@ -11,10 +15,6 @@ import {
   type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
-import {
-  type RecipeCreateInput,
-  type RecipeUpdateInput,
-} from "@cubby/schemas/recipe";
 import { rawRecipeList, rawRecipeOutput } from "@cubby/schemas/recipe-raw-read";
 import type {
   RawRecipeGraph as RecipeGraphOut,

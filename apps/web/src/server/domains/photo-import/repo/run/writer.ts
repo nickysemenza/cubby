@@ -8,6 +8,7 @@
  * `.agents/skills/photo-inventory-import/SKILL.md` for the workflow this serves.
  */
 import { type ActorContext, actorInRun } from "@cubby/schemas/context";
+import { productCreateInput } from "@cubby/schemas/entities/product";
 import {
   runEntityId,
   parseShortcodeFor,
@@ -25,7 +26,6 @@ import {
   type CommitPhotoGroupInput,
   type CommitPhotoGroupOutput,
 } from "@cubby/schemas/photo-import-run";
-import { productCreateInput } from "@cubby/schemas/product";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 

@@ -1,4 +1,4 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { type ImageJobId, parseEntityId } from "@cubby/schemas/identifiers";
 import {
   IMAGE_IDENTIFICATION_MODEL,
   IMAGE_IDENTIFICATION_PROMPT_REVISION,
@@ -69,7 +69,7 @@ describe("independent durable image identification", () => {
     return { row, identification, apple, cloud };
   }
 
-  async function lease(jobId: string) {
+  async function lease(jobId: ImageJobId) {
     const claimed = await claimImageProcessingJob(ctx.db, {
       jobId,
       kinds: ["identify_image"],
@@ -91,7 +91,7 @@ describe("independent durable image identification", () => {
     return claimed;
   }
 
-  function completion(jobId: string, attemptId: string) {
+  function completion(jobId: ImageJobId, attemptId: string) {
     return {
       result: {
         jobId,

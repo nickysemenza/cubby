@@ -2,10 +2,14 @@ import { randomUUID, createHash } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { generateShortcode, type ShortcodeType } from "@cubby/shared";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  type PurchaseId,
+  type UserId,
+} from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { shipmentObservationInput } from "@cubby/schemas/shipment-evidence";
-import type { PurchaseId, UserId } from "@cubby/schemas/identifiers";
+
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import type { Database } from "~/server/db";
 import {
@@ -215,8 +219,10 @@ export async function seedPerformanceCorpus(
       name: `${label} parcel`,
       purchaseId: orderId,
       trackingNumber: `SYNTHETIC-TRACK-${bundle + 1}`,
-      purpose: "incoming",
-    };
+      purpose: "incoming" satisfies NonNullable<
+        (typeof shipment.$inferInsert)["purpose"]
+      >,
+    } satisfies typeof shipment.$inferInsert;
     parcels.push(parcel);
     created("shipment", parcel.id);
     const packet = {
@@ -376,27 +382,32 @@ export async function seedPerformanceCorpus(
     // Incurred lines total 90: settled, mismatched, pending, split and
     // unsettled orders each take a different settlement branch.
     const tenderId = tenders[bundle % 2]!.id;
-    const settlement = {
-      0: [],
-      1: [{ status: "posted", amount: 90 }],
-      2: [{ status: "posted", amount: 85 }],
-      3: [{ status: "pending", amount: 90 }],
-      4: [
+    const settlements = [
+      [],
+      [{ status: "posted", amount: 90 }],
+      [{ status: "posted", amount: 85 }],
+      [{ status: "pending", amount: 90 }],
+      [
         { status: "posted", amount: 45 },
         { status: "posted", amount: 45 },
       ],
-    }[(bundle % 5) as 0 | 1 | 2 | 3 | 4];
+    ] satisfies Array<
+      Array<Pick<typeof financialTransaction.$inferInsert, "status" | "amount">>
+    >;
+    const settlement = settlements[bundle % settlements.length]!;
     for (const charge of settlement) {
       const row = {
         ...identity("financialTransaction"),
         accountId: tenderId,
-        kind: "purchase",
+        kind: "purchase" satisfies NonNullable<
+          (typeof financialTransaction.$inferInsert)["kind"]
+        >,
         status: charge.status,
         amount: charge.amount,
         transactionDate: "2026-01-16",
         postedDate: charge.status === "posted" ? "2026-01-17" : null,
         merchant: `${label} supplier charge`,
-      };
+      } satisfies typeof financialTransaction.$inferInsert;
       transactions.push(row);
       created("financialTransaction", row.id);
       allocations.push({

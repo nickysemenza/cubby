@@ -1,3 +1,4 @@
+import { timestampField } from "./field-policy";
 import { z } from "zod";
 import { devicePlatform } from "../device-fields.js";
 import {
@@ -5,9 +6,9 @@ import {
   ledgerPartyShortcode,
   productShortcode,
 } from "../identifier-fields.js";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "device",
   names: { singular: "Device", plural: "Devices" },
   route: {
@@ -103,6 +104,7 @@ export default defineEntity({
   model: {
     fields: [
       {
+        audit: false,
         key: "installationId",
         semanticRole: "externalIdentifier",
         kind: "text",
@@ -126,6 +128,7 @@ export default defineEntity({
         },
       },
       {
+        audit: false,
         key: "platform",
         kind: "enum",
         control: {
@@ -306,7 +309,11 @@ export default defineEntity({
           ruleId: "device.ledgerPartyName",
           description: "The current name of this device's owner, if set.",
         },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "productName",
@@ -321,7 +328,11 @@ export default defineEntity({
           description:
             "The current name of this device's linked hardware Product, if set.",
         },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         display: { detail: false, list: false },
@@ -333,24 +344,10 @@ export default defineEntity({
           update: null,
         },
       },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: { read: z.date(), create: null, update: null },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: { read: z.date(), create: null, update: null },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt"),
+      timestampField("updatedAt"),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
       {
@@ -367,43 +364,13 @@ export default defineEntity({
       { key: "automaticWork", defaultValue: true },
       { key: "remotePaused", defaultValue: false },
       "appleIntelligenceAvailable",
-      { key: "ledgerPartyId", reference: "ledgerParty" },
-      { key: "productId", reference: "product" },
+      "ledgerPartyId",
+      "productId",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "installationId",
-      "name",
-      "platform",
-      "appVersion",
-      "osVersion",
-      "automaticWork",
-      "remotePaused",
-      "ledgerPartyId",
-      "productId",
-    ],
-    update: [
-      "name",
-      "appVersion",
-      "osVersion",
-      "lastSeenAt",
-      "automaticWork",
-      "remotePaused",
-      "ledgerPartyId",
-      "productId",
-    ],
-    audit: [
-      "name",
-      "appVersion",
-      "osVersion",
-      "lastSeenAt",
-      "automaticWork",
-      "remotePaused",
-      "ledgerPartyId",
-      "productId",
-    ],
+
     sort: {
       fields: ["lastSeenAt", "name", "updatedAt"],
     },
@@ -427,41 +394,8 @@ export default defineEntity({
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
-    output: [
-      "id",
-      "installationId",
-      "name",
-      "platform",
-      "appVersion",
-      "osVersion",
-      "lastSeenAt",
-      "automaticWork",
-      "remotePaused",
-      "appleIntelligenceAvailable",
-      "updateRequired",
-      "inactive",
-      "ledgerPartyId",
-      "productId",
-      "ledgerPartyName",
-      "productName",
-      "createdAt",
-      "updatedAt",
-    ],
   },
-  fields: {
-    create: {
-      module: "@cubby/schemas/device",
-      export: "deviceCreateInput",
-    },
-    update: {
-      module: "@cubby/schemas/device",
-      export: "deviceUpdateData",
-    },
-    output: {
-      module: "@cubby/schemas/device-raw-read",
-      export: "rawDeviceOut",
-    },
-  },
+
   storage: {
     indexes: [
       { on: ["installationId"], unique: true, where: "{deletedAt} IS NULL" },
@@ -470,10 +404,7 @@ export default defineEntity({
   },
   filters: {
     audit: true,
-    schema: {
-      module: "@cubby/schemas/device",
-      export: "deviceFilterFields",
-    },
+
     descriptors: [
       {
         columnId: "name",
@@ -532,34 +463,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "owner",
-      label: "Owner",
-      target: "ledgerParty",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Device.ledgerPartyId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Device.ledgerPartyId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "hardware",
-      label: "Hardware",
-      target: "product",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Device.productId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Device.productId", direction: "incoming" }],
-      },
-    },
-  ],
+
   search: false,
   capabilities: {
     images: {
@@ -665,3 +569,12 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r.field("ledgerPartyId").named("owner", "Owner"),
+    r.field("productId").named("hardware", "Hardware"),
+  ],
+  readSchemas,
+);

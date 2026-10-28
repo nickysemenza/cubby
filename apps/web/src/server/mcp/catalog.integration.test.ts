@@ -1,10 +1,10 @@
+import { mealCreateInput } from "@cubby/schemas/entities/meal";
+import { vendorCreateInput } from "@cubby/schemas/entities/vendor";
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { imageId as parseImageId } from "@cubby/schemas/identifiers";
-import { mealCreateInput } from "@cubby/schemas/meal";
 import { recordShipmentEvidenceInput } from "@cubby/schemas/shipment-evidence";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
-import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { sql } from "drizzle-orm";
 import { StatusCodes } from "http-status-codes";

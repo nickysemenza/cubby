@@ -7,14 +7,46 @@ modules and emits references to the declared schemas; it never serializes Zod
 internals or reconstructs refinements.
 
 `definition.ts` owns the strict metadata schemas and their inferred declaration
-types. `defineEntity` preserves literals without parsing at runtime and checks
-that reference targets and cardinality agree with the branded identifiers in
-their read, create, and update schemas. References may project identifiers or
+types. Each module exports `{ definition, readSchemas }` from `defineEntityModel`:
+source fields and optional read composition are inferred before relationships.
+`defineEntity(definition, relationships, readSchemas)` then resolves source-owned
+relationship handles. Raw-read facades import the named `readSchemas`, never the
+completed entity: read inference must not depend on the relationship type graph.
+The constructors preserve field literals and check reference targets and
+cardinality against branded identifiers in read, create, and update schemas.
+References may project identifiers or
 records with a branded `id`; numeric related-record counts remain scalar
 projections. Storage-only references need no public schema. The compiler parses
 metadata and applies defaults before typed compilation. Cross-entity
 references, capability compatibility, field rosters, and physical storage remain
-semantic compiler checks. Field-validation Zod instances pass through unchanged.
+semantic compiler checks. Field-validation Zod instances pass through unchanged. Identifier
+policies own sentinel admission: `identifiers.currentMember` allows requesting-member
+references, and related-view filters derive their scalar and array schemas from
+that target policy.
+
+Fields own mutation eligibility and public visibility: create/update validators
+compile the corresponding rosters, read validation participates in output unless
+`output: false`, and writable fields participate in audit unless `audit: false`.
+Read-only audit exceptions declare `audit: true`. Separate authored model rosters
+are rejected. Generated storage enums reuse the field validator; stored JSON
+representations declare their type reference on the storage entry instead of
+joining a generator-maintained entity/type map.
+
+`field-policy.ts` owns shared timestamp validation and alias input normalization.
+Alias writes trim, remove blanks and deduplicate exact strings in first-seen
+order. Read schemas retain historical stored values. Collection patches keep
+their exact-key preconditions and normalize the completed list through the
+ordinary update schema before persistence.
+
+Ordinary stored entities without a repository override derive editor intents from
+field write eligibility and identifier filters from their stored reference fields.
+Explicit descriptors retain domain filtering semantics. The shared shortcode and
+entity-reference parsers consume the generated identifier catalog; neither has an
+entity enrollment map. Test factories derive creatable entities and text title/name
+filler from these same contracts, retaining only domain-specific fixture defaults.
+Browser definitions and static icon imports derive routed entity defaults from
+the declarations. Renderer coverage requires only declared custom renderers;
+data-quality rendering is shared across scored entities. Search consumers use the declared entity key directly, without an identity map.
 
 Declaration loading and artifact generation use the same effective compilation
 pass. It captures explicit overrides before deriving image sources and inverse
@@ -441,7 +473,8 @@ vocabulary such as `activity-fields.ts` owns primitive enums and labels so runti
 and native generation share exhaustive labels without a bootstrap cycle.
 Cross-client input limits live in bootstrap-safe `shared/client-constants.ts`;
 native constant rendering must not import an identifier-dependent input schema.
-The generator emits the AST-derived shortcode registry before importing read-schema
+The generator emits the AST-derived shortcode registry and a type-only index of
+source declaration bodies before importing read-schema
 compilers and renderers. Declaration source paths and errors live independently
 of compiler initialization so fresh-checkout generation needs no prior artifacts.
 Declaration helpers such as pagination import shared constants from their leaf
@@ -968,6 +1001,17 @@ stored `idMulti` back-filter on its target when none names this entity, so
 the generated predicate serves it without repository code. Every
 idMulti filter declares a `brandRef`, so its URL values stay shortcode-native
 and related-view filters stay usable as back-filters.
+Curated related list views belong on their owning relation's `.named` options as
+`view`. Source, target, label and relation path are inferred; `key` overrides only
+the persisted view suffix, and `filterPrefix` overrides only the target-based
+filter prefix. Alphabetical row order and hidden preview columns are defaults;
+preview columns follow source relation declaration order.
+The generator emits the literal related-view registry and per-entity ID, presence
+and search schemas. LedgerParty filters retain `@me`. `filter: false` retains a
+presentation-only view without adding a filter schema. Entities with no curated
+view need no separate enrollment or omission roster. Explicit `inverseKey` values
+must name reciprocal views with matching endpoints.
+
 Broad related-view filters over product-linked principal Expenses resolve
 effective Project assignments once per statement through the existing bulk
 inheritance owner. Bounded related-record reads retain scalar resolution.
@@ -1202,17 +1246,24 @@ Search presentation branches use current shared kind values; retired kind names
 must not survive as label conditions in SQL.
 
 The model owns scalar validation and physical column factories as well as
-presentation. `model.storage` declares stored columns; `create`, `update`,
-`output` and `audit` select fields for their respective consumers.
-`defineEntity` constructs the raw `readSchemas.output`, `list`, and `detail`
-objects once. Simple declarations share one base object; domain composers passed
-as its second argument extend or narrow that base in declaration-safe schema
+presentation. `model.storage` declares stored columns. A concrete
+`validation.create` or `validation.update` schema grants that field's respective
+write mode; null or omission excludes it. Fields enter the raw base read by
+default; `output: false` excludes storage-only and write-only fields. Writable
+fields audit by default. Use field-level `audit: false` for intentional exclusions
+or `audit: true` for retained read-only evidence. The compiler derives the
+create/update/output/audit arrays in field declaration order; source declarations
+never maintain those arrays separately.
+
+`defineEntityModel` constructs the raw `readSchemas.output`, `list`, and `detail`
+objects once. Simple declarations share one base object; a domain composer passed
+as its second argument extends or narrows that base in declaration-safe schema
 owners. Product keeps its richer food/detail composition, Location keeps its
 recursive detail shape, and Recipe keeps its lean list. Canonical public exports
 and generated wrappers reuse those instances; relationship and domain schema
-literals have one owner. `model.output` selects the base fields, not the complete
-list/detail roster. Generated field maps still select create/update/read
-validators by key, retaining their original Zod instances.
+literals have one owner. Output flags select base fields, not the complete
+list/detail composition. Generated field maps retain each original Zod instance
+under its field key.
 
 The base constructor owns the synthesized `dataQuality` field. Its composer
 facts include the declaration's own check-ID enum, built by the same
@@ -1241,8 +1292,6 @@ model: {
     },
   }],
   storage: ["name"],
-  create: ["name"], update: ["name"], output: ["name"],
-  audit: ["name"],
 }
 ```
 
@@ -1489,8 +1538,9 @@ column name, and no database default. An object such as
 `{ key: "importedAt", defaultOverride: "now" }` overrides only the differing
 storage facts: `nullableOverride` and `defaultOverride` replace the field's
 nullability and the storage default.
-Stored-field order and create/update/output/audit rosters remain explicit:
-presentation defaults never grant mutation capabilities or introduce columns.
+Stored-field order remains explicit. Write schemas own mutation eligibility;
+output and audit exceptions stay on their fields. Presentation defaults never
+grant mutation capabilities or introduce columns.
 
 The declaration's top-level `storage` block owns the rest of the entity's table,
 and the generator emits canonical Drizzle `pgTable` definitions separately from
@@ -3702,10 +3752,26 @@ Do not create another entity-specific category column or allocation renderer.
 
 ## Relations, deletion, and merge
 
-Every logical relation declares its target, cardinality, primary named source,
-provenance path, and inverse path. Query-backed sources name a read-only
-association in `relationship-query-definitions.ts`; `relationship-query.ts`
-owns its SQL condition. The shared traversal compiler follows these sources in
+Relationship authorship uses `entity-definitions/relationships.ts`. A stored
+singular identifier reference uses `r.field(key)`; its field owns the target used by storage,
+validation and the graph. Ordinary storage entries inherit that target; explicit
+null opts out. `r.link(kind, direction)` and `r.query(key, cardinality, reverse?)`
+inherit endpoints from their existing kind/query owners. `.named(key, label,
+options)` supplies presentation and explicit mutation policy; `.source(key,
+label)` adds a named evidence source. Traversable handles derive inverses
+mechanically, and `.through(next)` requires compatible endpoints.
+`r.path(target, cardinality, steps)` checks edge keys, direction, adjacency and the
+final entity against source field and child-storage declarations. The type-only
+`relationship-catalog.ts` assembles those independently inferred definitions from
+the bootstrap's automatically discovered, type-only `definition-catalog.gen.ts`.
+This source index imports no evaluated compiler output and requires no manual
+entity roster. Generation still verifies the complete physical
+catalog and semantic policies.
+
+Derived filters and external references remain explicit read handles; browsing
+membership never grants write, detach or cascade authority. Query-backed sources
+name a read-only association in `relationship-query-definitions.ts`;
+`relationship-query.ts` owns its SQL condition. The shared traversal compiler follows these sources in
 either direction and at any supported depth. They store no second graph or
 membership. Query sources distinguish retained history from current references.
 Expensive association queries enumerate a bounded candidate relation before
@@ -3720,6 +3786,15 @@ sightings do not imply inventory ownership. Reviewed Email financial evidence
 retains the account at review even if the transaction later changes account.
 Historical leaves may name tombstones, labelled `(deleted)`; ordinary
 references continue to require live targets.
+
+After inverse and section derivation, the presentation compiler resolves each
+relation section's filter binding, subtree scope, create seed and intent roster,
+sort, grouping and page size into one plan. Web and Apple consume that plan;
+neither guesses a reference from a filter suffix or selects the first matching
+field. The target's default create intent wins when compatible; otherwise the
+compatible intent must be unique or explicitly named by `prefill.intent`.
+Ambiguous create fields require `prefill.field`. Native editors use the same
+compiled intent roster. Both clients default relation pages to 50 rows.
 
 The generator renders query relationships in Connected records rather than
 manufacturing another filtered table. Public local reference fields must have
@@ -4841,34 +4916,55 @@ precedence rule.
 ## Adding an entity
 
 1. Add one typed `.entity.ts` declaration with field validation, storage, mutation
-   policies, presentation, capabilities, and logical relationships.
+   policies, presentation and capabilities through `defineEntityModel`; export
+   its independent `definition` and `readSchemas`, then construct relationships
+   with `defineEntity`. The bootstrap discovers its source body automatically so
+   composed paths see its real fields through the type-only source index.
    `presentation.titleField` must resolve to a non-nullable text read field;
    if the entity's natural title can be empty, declare a storage-less
    read-only `displayName` field instead (see above) and point `titleField`
    at it rather than at a nullable name column.
-2. Add its branded id, declare its table's indexes, checks, and Drizzle
-   relations in `storage`, and compose canonical input/output schemas from
-   the generated factories. Keep domain refinements and relationship
-   projections explicit. A physical change still requires a migration that
-   carries existing rows; generation does not apply production DDL.
-3. Declare its repository with `defineRepository(entity, { scaffold, … })`
-   (`apps/web/src/server/entity-kernel/repo/repository.ts`) and point
-   `extensions.ports.repository` at the export; the generator binds it to
-   the kernel. Methods take the kernel context (`(ctx, …)`); the declared
-   actions gate which ones the kernel exposes (`capabilities.lifecycle:
-   "readOnly"` exposes get/list/search), and `delete` defaults to the
-   declared `lifecycle.delete` policy plus `deleteHooks`. The kernel owns the
-   write transaction: a repository writes through `ctx.db` and never opens a
-   transaction on another handle. A declared `capabilities.resolve` needs no
-   code: `resolveEntity` serves it from `entity-kernel/resolve.ts`.
-4. Set `route.basePath` for the generic pages (`route.list: null`
+2. Declare its table's indexes, checks and Drizzle relations in `storage`.
+   IDs use `EntityId<"entityKey">`; named aliases need no enrollment.
+   Omitted `fields` refs compile raw contracts directly from `readSchemas`
+   and the field validation. Standard public schemas live at
+   `@cubby/schemas/entities/<entityKey>`; no schema façade or export roster is
+   required. Override individual refs only for domain refinements or distinct
+   projections; explicit null disables that operation. Stored JSON types that
+   differ from public values belong on the storage entry's `type` ref.
+   A physical change still requires a migration carrying existing rows.
+3. Ordinary stored declarations need no repository module. The generator
+   constructs the existing scaffold, CRUD writers and `defineRepository`
+   binding from their contracts and concrete table. Unsupported ordinary
+   writes, unbound raw read projections, or required domain SQL bindings fail
+   generation. Declared rollups and published-result projections use their shared
+   SQL plans. An explicit
+   `extensions.ports.repository` overrides this construction for concrete
+   domain rules or read projections; retain those reasons beside the override.
+   Ordinary search reads use the stored title and public text fields. A distinct
+   domain search projection binds `extensions.ports.search.read` without
+   requiring a repository wrapper. TransactionImport uses the default repository
+   with a declared record-count rollup; its search port retains statement-source
+   and fingerprint presentation. Public non-identifier reference values retain
+   their stored form, including external source slugs.
+   Generic deletion blocks incoming references. Domain detach/cascade and merge
+   policies remain explicit. The kernel owns the write transaction: a repository
+   writes through `ctx.db` and never opens a transaction on another handle.
+   A declared `capabilities.resolve` needs no code: `resolveEntity` serves it
+   from `entity-kernel/resolve.ts`.
+4. Use `timestampField` and `readOnly` for common field policy instead of copying
+   validation triples. Set `route.basePath` for the generic pages (`route.list: null`
    hand-writes the list route module; detail is always generic, with
    specialized UI in detail slots); add workflow extensions where needed.
    Every `many` relation gets a detail table and every FK a derived inverse
    unless you omit it with a reason (`detail.omitRelations`, `inverseOmit`).
 5. Run `pnpm generate`; review generated source like handwritten source.
-6. Declare physical edge semantics and operation-specific lifecycle policies,
-   when the entity participates in deletion or merge. A new shortcode table
+6. Constrained entity-id storage references compile physical incoming edges with
+   the `reference` role and `must-target-live` liveness. Ordinary edges block
+   deletion and merge while live references remain, without target-side enrollment.
+   `ENTITY_EDGE_OVERRIDES` owns explicit domain semantics; those keys still require
+   exhaustive operation policies. Financial, ownership, history, child and link
+   semantics remain explicit rather than inheriting ordinary detach or repoint behavior. A new shortcode table
    gets its identity FK and shortcode index generated; its writer uses the shared
    transactional identity helper, and the production cutover for an existing
    database must backfill `Entity`. A new join or child table that

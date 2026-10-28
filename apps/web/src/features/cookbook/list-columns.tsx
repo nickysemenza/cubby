@@ -1,5 +1,5 @@
+import { type CookbookOut as CookbookSummary } from "@cubby/schemas/entities/cookbook";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";

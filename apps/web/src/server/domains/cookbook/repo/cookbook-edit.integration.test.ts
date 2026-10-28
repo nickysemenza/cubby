@@ -30,11 +30,16 @@ describe("cookbook edits and recipe re-pointing", () => {
     const first = await makeBook("Edit book one");
     const second = await makeBook("Edit book two");
 
-    const renamed = await updateCookbook(ctx.db, ctx.actor, first.output.id, {
-      name: "Edit book uno",
-      author: ["Ada Author"],
-      subjects: ["Baking"],
-    });
+    const renamed = await updateCookbook(
+      ctx.db,
+      first.output.id,
+      {
+        name: "Edit book uno",
+        author: ["Ada Author"],
+        subjects: ["Baking"],
+      },
+      ctx.actor,
+    );
     expect(renamed.output).toMatchObject({
       name: "Edit book uno",
       author: ["Ada Author"],
@@ -42,9 +47,14 @@ describe("cookbook edits and recipe re-pointing", () => {
     });
 
     await expect(
-      updateCookbook(ctx.db, ctx.actor, second.output.id, {
-        name: "Edit book uno",
-      }),
+      updateCookbook(
+        ctx.db,
+        second.output.id,
+        {
+          name: "Edit book uno",
+        },
+        ctx.actor,
+      ),
     ).rejects.toThrow(/already used by/);
   });
 

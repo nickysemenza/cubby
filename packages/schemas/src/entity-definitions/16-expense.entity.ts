@@ -1,4 +1,5 @@
 import { historicalDateRangePresets } from "../date-range";
+import { timestampField } from "./field-policy";
 import { expenseBeneficiaryResult } from "../expense-beneficiaries";
 import { EXPENSE_BENEFICIARY_INPUTS } from "./beneficiary-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
@@ -6,7 +7,7 @@ import { expenseChildren } from "../child-tables/expense.js";
 import { spendingCategoryAllocationsSchema } from "@cubby/schemas/spending-classification";
 import { financialTransactionShortcode } from "../identifier-fields";
 import { spendingCategoryShortcode } from "../identifier-fields";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -38,7 +39,7 @@ import { FILTER_NONE } from "../filter-sentinel-fields.js";
 import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 import { optionalProjectAllocationsSchema } from "@cubby/schemas/field-resolution";
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "expense",
   names: { singular: "Expense", plural: "Expenses" },
   route: {
@@ -156,7 +157,12 @@ export default defineEntity({
             "orderId",
           ],
         },
-        { kind: "fields", id: "schedule", title: "Schedule", fields: ["date"] },
+        {
+          kind: "fields",
+          id: "schedule",
+          title: "Schedule",
+          fields: ["date"],
+        },
         {
           kind: "fields",
           id: "purchase",
@@ -441,7 +447,11 @@ export default defineEntity({
         key: "spendingCategoryName",
         kind: "text",
         nullable: true,
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "economicRole",
@@ -836,6 +846,7 @@ Rules:
         },
       },
       {
+        audit: false,
         key: "vendor",
         kind: "text",
         nullable: true,
@@ -868,6 +879,7 @@ Rules:
         },
       },
       {
+        audit: false,
         key: "orderId",
         semanticRole: "externalIdentifier",
         kind: "text",
@@ -934,6 +946,7 @@ Rules:
         },
       },
       {
+        audit: false,
         display: { detail: false, list: false },
         key: "beneficiaries",
         collection: { key: ["partyId"] },
@@ -960,6 +973,7 @@ Rules:
         },
       },
       {
+        audit: false,
         display: { detail: false, list: false },
         key: "funders",
         collection: { key: ["partyId"] },
@@ -986,6 +1000,7 @@ Rules:
         },
       },
       {
+        audit: false,
         display: { detail: false, list: false },
         key: "sourceClaims",
         semanticRole: "externalIdentifier",
@@ -994,7 +1009,10 @@ Rules:
           kind: "specialized",
           renderer: "structured-field",
         },
-        provenance: { kind: "relation", sources: [{ label: "Source claims" }] },
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Source claims" }],
+        },
         explanation: {
           ruleId: "expense.source-claims",
           description:
@@ -1098,27 +1116,10 @@ Rules:
           update: null,
         },
       },
+      timestampField("createdAt", { detail: false, list: false }),
+      timestampField("updatedAt", { detail: false, list: false }),
       {
-        display: { detail: false, list: false },
-        key: "createdAt",
-        kind: "timestamp",
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        display: { detail: false, list: false },
-        key: "updatedAt",
-        kind: "timestamp",
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
+        output: false,
         key: "images",
         kind: "json",
         display: { standard: "image" },
@@ -1131,16 +1132,12 @@ Rules:
         },
         validation: { read: z.array(imageOut), create: null, update: null },
       },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
       "bookingTransactionCode",
-      { key: "spendingCategoryId", reference: "spendingCategory" },
+      "spendingCategoryId",
       {
         key: "economicRole",
         specialized: "enum:economicRole",
@@ -1169,78 +1166,15 @@ Rules:
       "url",
       "notes",
       { key: "future", defaultValue: false },
-      { key: "projectId", reference: "project" },
-      { key: "productId", reference: "product" },
+      "projectId",
+      "productId",
       { key: "productQuantity", specialized: "double-precision" },
-      { key: "purchaseId", reference: "purchase" },
+      "purchaseId",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "spendingCategoryId",
-      "economicRole",
-      "name",
-      "cost",
-      "date",
-      "lineKind",
-      "lineBasis",
-      "costType",
-      "trade",
-      "url",
-      "notes",
-      "future",
-      "projectId",
-      "productId",
-      "productQuantity",
-      "vendor",
-      "orderId",
-      "purchaseId",
-      "beneficiaries",
-      "funders",
-      "sourceClaims",
-    ],
-    update: [
-      "spendingCategoryId",
-      "economicRole",
-      "name",
-      "cost",
-      "date",
-      "lineKind",
-      "lineBasis",
-      "costType",
-      "trade",
-      "url",
-      "notes",
-      "future",
-      "projectId",
-      "productId",
-      "productQuantity",
-      "vendor",
-      "orderId",
-      "purchaseId",
-      "beneficiaries",
-      "funders",
-      "sourceClaims",
-    ],
-    audit: [
-      "spendingCategoryId",
-      "economicRole",
-      "name",
-      "cost",
-      "date",
-      "lineKind",
-      "lineBasis",
-      "costType",
-      "trade",
-      "url",
-      "notes",
-      "future",
-      "projectId",
-      "productId",
-      "productQuantity",
-      "purchaseId",
-    ],
+
     stored: {
       beneficiaryResult: {
         compute: "expense.beneficiaries",
@@ -1375,58 +1309,22 @@ Rules:
         "settle",
       ],
     },
-    output: [
-      "bookingTransactionCode",
-      "spendingCategoryId",
-      "spendingCategoryName",
-      "economicRole",
-      "spendingCategoryAllocations",
-      "projectAllocations",
-      "id",
-      "name",
-      "cost",
-      "date",
-      "lineKind",
-      "lineBasis",
-      "costType",
-      "trade",
-      "url",
-      "notes",
-      "future",
-      "projectId",
-      "productId",
-      "productQuantity",
-      "vendor",
-      "orderId",
-      "purchaseId",
-      "purchaseDate",
-      "purchaseDisplayLabel",
-      "vendorId",
-      "vendorLogo",
-      "orderUrl",
-      "projectName",
-      "productName",
-      "beneficiaries",
-      "effectiveBeneficiaries",
-      "funders",
-      "sourceClaims",
-      "createdAt",
-      "updatedAt",
-    ],
   },
   fields: {
-    create: { module: "@cubby/schemas/project", export: "expenseCreateInput" },
-    update: { module: "@cubby/schemas/project", export: "expenseUpdateData" },
-    output: { module: "@cubby/schemas/work-raw-read", export: "rawExpenseOut" },
+    create: {
+      module: "@cubby/schemas/project",
+      export: "expenseCreateInput",
+    },
+
     list: {
       module: "@cubby/schemas/work-raw-read",
       export: "rawExpenseListItemOut",
     },
-    detail: { module: "@cubby/schemas/work-raw-read", export: "rawExpenseOut" },
-    mcpOutput: {
+    detail: {
       module: "@cubby/schemas/work-raw-read",
       export: "rawExpenseOut",
     },
+
     mcpList: {
       module: "@cubby/schemas/work-raw-read",
       export: "rawExpenseListItemOut",
@@ -1486,7 +1384,10 @@ Rules:
   },
   filters: {
     audit: true,
-    schema: { module: "@cubby/schemas/project", export: "expenseFilterFields" },
+    schema: {
+      module: "@cubby/schemas/project",
+      export: "expenseFilterFields",
+    },
     descriptors: [
       {
         columnId: "name",
@@ -1660,7 +1561,11 @@ Rules:
           { value: "gte500", label: "$500 and up", expand: { costMin: 500 } },
           { value: "gte200", label: "$200 and up", expand: { costMin: 200 } },
           { value: "gte100", label: "$100 and up", expand: { costMin: 100 } },
-          { value: "credits", label: "Credits (≤ $0)", expand: { costMax: 0 } },
+          {
+            value: "credits",
+            label: "Credits (≤ $0)",
+            expand: { costMax: 0 },
+          },
         ],
       },
       {
@@ -1879,93 +1784,7 @@ Rules:
       },
     ],
   },
-  relations: [
-    {
-      key: "spendingCategory",
-      label: "Category override",
-      target: "spendingCategory",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Expense.spendingCategoryId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Expense.spendingCategoryId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "purchase",
-      label: "Purchase",
-      target: "purchase",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Expense.purchaseId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Expense.purchaseId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "project",
-      label: "Project",
-      target: "project",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Expense.projectId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Expense.projectId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "product",
-      label: "Product",
-      target: "product",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Expense.productId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Expense.productId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "transactions",
-      label: "Purchase transactions",
-      target: "financialTransaction",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "Expense.purchaseId", direction: "outgoing" },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "outgoing",
-          },
-          { edge: "Expense.purchaseId", direction: "incoming" },
-        ],
-      },
-    },
-  ],
+
   // Related rows the search document reads (ADR 0021).
   search: {
     mode: "lexical",
@@ -2532,3 +2351,31 @@ Rules:
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .field("spendingCategoryId")
+      .named("spendingCategory", "Category override"),
+    r.field("purchaseId").named("purchase", "Purchase"),
+    r.field("projectId").named("project", "Project"),
+    r.field("productId").named("product", "Product"),
+    r
+      .path("financialTransaction", "many", [
+        { edge: "Expense.purchaseId", direction: "outgoing" },
+        {
+          edge: "FinancialTransactionAllocation.purchaseId",
+          direction: "incoming",
+        },
+        {
+          edge: "FinancialTransactionAllocation.transactionId",
+          direction: "outgoing",
+        },
+      ])
+      .named("transactions", "Purchase transactions", {
+        view: { columnGroup: "Evidence", order: "newest" },
+      }),
+  ],
+  readSchemas,
+);

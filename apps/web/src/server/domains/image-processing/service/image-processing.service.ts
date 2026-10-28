@@ -2,6 +2,8 @@ import {
   parseEntityId,
   parseShortcodeFor,
   type RunId,
+  type ImageJobId,
+  type DeviceId,
 } from "@cubby/schemas/identifiers";
 import {
   imageProcessingHello,
@@ -9,12 +11,10 @@ import {
   imageProcessingTerminalResult,
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
-} from "@cubby/schemas/image-processing";
-import type {
-  ImageProcessingCommand,
-  ImageProcessingJobKind,
-  ImageProcessingTerminalResult as ImageProcessingResult,
-  ImageProcessingResult as CompanionImageProcessingResult,
+  type ImageProcessingCommand,
+  type ImageProcessingJobKind,
+  type ImageProcessingTerminalResult as ImageProcessingResult,
+  type ImageProcessingResult as CompanionImageProcessingResult,
 } from "@cubby/schemas/image-processing";
 import { readResponseWithLimit } from "@cubby/shared/external-fetch";
 import { z } from "zod";
@@ -80,7 +80,7 @@ export async function scheduleImageProcessingJobs(
     /** The Run that requested this scheduling, when the caller has one. */
     runId?: RunId | null;
   },
-): Promise<{ jobIds: string[]; submissionId?: string }> {
+): Promise<{ jobIds: ImageJobId[]; submissionId?: string }> {
   const scheduled = await persistImageProcessingSubmission(db, input);
   if (input.publish !== false)
     await publishImageProcessingWakeups(db, scheduled.jobIds);
@@ -102,7 +102,7 @@ export async function cleanupExpiredImageProcessingOrphans(
 export async function scheduleAppleImageDescriptionEvaluation(
   db: Database,
   input: { id: string },
-): Promise<{ jobId: string | null }> {
+): Promise<{ jobId: ImageJobId | null }> {
   const scheduled = await persistAppleImageDescriptionSubmission(db, input);
   if (scheduled.jobId)
     await publishImageProcessingWakeups(db, [scheduled.jobId]);
@@ -610,7 +610,7 @@ export async function claimCompanionImageCommands(
 
 export async function completeAssignedCompanionImageProcessing(
   db: Database,
-  input: { deviceId: string; result: CompanionImageProcessingResult },
+  input: { deviceId: DeviceId; result: CompanionImageProcessingResult },
   userId: string,
 ) {
   if (

@@ -1,3 +1,4 @@
+import { type FinancialTransactionRawOut as RawFinancialTransactionOut } from "@cubby/schemas/entity-contracts/financialTransaction";
 /**
  * Declared review-only ranking over the complete bounded candidate set. Split
  * amounts, merchant aliases and different dates remain evidence for the model,
@@ -5,7 +6,6 @@
  * never authorizes a settlement write.
  */
 import { SETTLEMENT_CANDIDATE_LIMIT } from "@cubby/schemas/financial-transaction";
-import { type RawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
 import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
 import {
   type PurchaseSettlementSuggestOut,

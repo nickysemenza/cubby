@@ -46,6 +46,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import {
   edgeScopeWhere,
+  effectiveIncomingEdgePolicy,
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
@@ -114,7 +115,7 @@ const physicalEdges = <E extends RemovableEntity>(
     const index = order.indexOf(key);
     return index === -1 ? order.length : index;
   };
-  return Object.entries(policy)
+  return Object.entries(effectiveIncomingEdgePolicy(entity, policy))
     .map(([key, disposition]) => {
       // SAFETY: each policy `satisfies IncomingEdgePolicy<E, …>`, so every key
       // names an edge of this entity.

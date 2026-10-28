@@ -2,7 +2,7 @@ import { rawRecipeMcpReference } from "./recipe-raw-read";
 import { ingredientShortcode } from "./identifier-fields";
 import { baseKind } from "./problems";
 /** Repository/compiler projections. Public Ingredient reads use generated envelopes. */
-import definition from "./entity-definitions/02-ingredient.entity";
+import { readSchemas as definitionSchemas } from "./entity-definitions/02-ingredient.entity";
 import { z } from "zod";
 import {
   rawProductWithMappings,
@@ -13,9 +13,9 @@ import {
 import { rawRecipeTopLevel, recipeRefOut } from "./recipe-shared";
 import { recipeUsageOut, recipeUsageMcpEntityOut } from "./recipe-fields";
 
-export const rawIngredientOutput = definition.readSchemas.output;
-export const rawIngredientList = definition.readSchemas.list;
-export const rawIngredientDetail = definition.readSchemas.detail;
+export const rawIngredientOutput = definitionSchemas.output;
+export const rawIngredientList = definitionSchemas.list;
+export const rawIngredientDetail = definitionSchemas.detail;
 export const rawIngredientMcpList = rawIngredientList.extend({
   product: z.array(rawProductMcpWithMappings),
 });

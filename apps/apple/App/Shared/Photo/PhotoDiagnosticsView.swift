@@ -357,7 +357,7 @@ final class ImageDiagnosticsCompareModel {
     private(set) var error: String?
     private var task: Task<Void, Never>?
 
-    func run(id: ImageCode, detail: ImageWithEntity, client: CubbyClient) {
+    func run(id: ImageCode, detail: ImageDetailOut, client: CubbyClient) {
         guard server == nil, device == nil, !loading else { return }
         loading = true
         error = nil
@@ -407,7 +407,7 @@ final class ImageDiagnosticsCompareModel {
         try? await client.imageAnalysis(id)
     }
 
-    private static func analyzeDevice(detail: ImageWithEntity) async -> (
+    private static func analyzeDevice(detail: ImageDetailOut) async -> (
         PhotoLocalAnalysis, PhotoDiagnosticsReport
     )? {
         guard let url = detail.imageURL else { return nil }
@@ -441,7 +441,7 @@ final class ImageDiagnosticsCompareModel {
     }
 
     private func reconcile(
-        id: ImageCode, detail: ImageWithEntity, stored: ImageAnalysisOutputValue?,
+        id: ImageCode, detail: ImageDetailOut, stored: ImageAnalysisOutputValue?,
         deviceAnalysis: PhotoLocalAnalysis, client: CubbyClient
     ) async {
         let isStale = stored.map { $0.analysisVersion < PhotoLocalAnalysis.currentVersion } ?? true

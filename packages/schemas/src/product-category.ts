@@ -1,4 +1,4 @@
-import { productCategoryOut } from "./generated/productCategory.gen";
+import { productCategoryOut } from "@cubby/schemas/entities/productCategory";
 import { createPaginatedResponseSchema } from "./pagination";
 
 export type {
@@ -7,19 +7,6 @@ export type {
   ProductCategorySummary,
   RawProductCategorySummary,
 } from "./product-category-fields";
-
-export {
-  productCategoryCreateInput,
-  productCategoryFilterFields,
-  productCategoryFilters,
-  productCategoryOut,
-  productCategoryUpdateData,
-  productCategoryUpdateInput,
-  type ProductCategoryCreateInput,
-  type ProductCategoryFilters,
-  type ProductCategoryOut,
-  type ProductCategoryUpdateData,
-} from "./generated/productCategory.gen";
 
 export const productCategoryListResponse =
   createPaginatedResponseSchema(productCategoryOut);

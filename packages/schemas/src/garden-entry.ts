@@ -3,18 +3,9 @@ import { z } from "zod";
 import { plantingShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
 import {
-  gardenEntryBaseFilterFields,
+  gardenEntryFilterFields as gardenEntryBaseFilterFields,
   gardenEntryListItemOut,
-} from "./generated/gardenEntry.gen";
-
-export {
-  gardenEntryCreateInput,
-  gardenEntryUpdateData,
-  gardenEntryUpdateInput,
-  gardenEntryOut,
-  gardenEntryListItemOut,
-  type GardenEntryOut,
-} from "./generated/gardenEntry.gen";
+} from "@cubby/schemas/entities/gardenEntry";
 
 export const gardenEntryFilterFields = {
   ...gardenEntryBaseFilterFields,

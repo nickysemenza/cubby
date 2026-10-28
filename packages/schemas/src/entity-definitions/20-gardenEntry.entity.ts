@@ -1,6 +1,7 @@
+import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
   gardenEntryShortcode,
@@ -13,7 +14,7 @@ import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 
 const optionalText = z.string().trim().min(1).nullable();
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "gardenEntry",
   names: { singular: "Garden Entry", plural: "Garden Entries" },
   route: {
@@ -153,7 +154,10 @@ export default defineEntity({
             {
               value: "note",
               label: "Note",
-              glyph: { phosphor: "NotePencil", sfSymbol: "square.and.pencil" },
+              glyph: {
+                phosphor: "NotePencil",
+                sfSymbol: "square.and.pencil",
+              },
               description: "A note, observation, or photo record",
             },
             {
@@ -206,7 +210,10 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text" },
-        display: { columnGroup: "Plantings & harvest", columnLabel: "Harvest" },
+        display: {
+          columnGroup: "Plantings & harvest",
+          columnLabel: "Harvest",
+        },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -214,6 +221,8 @@ export default defineEntity({
         },
       },
       {
+        output: false,
+        audit: false,
         key: "pendingImageIds",
         kind: "identifier",
         reference: { entity: "image", multiple: true },
@@ -224,6 +233,8 @@ export default defineEntity({
         },
       },
       {
+        output: false,
+        audit: false,
         key: "removeImageIds",
         kind: "identifier",
         reference: { entity: "image", multiple: true },
@@ -234,6 +245,8 @@ export default defineEntity({
         },
       },
       {
+        output: false,
+        audit: false,
         key: "imageOrder",
         semanticRole: "attachment",
         kind: "text",
@@ -296,26 +309,16 @@ export default defineEntity({
         display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
-        validation: { read: gardenEntryShortcode, create: null, update: null },
+        validation: {
+          read: gardenEntryShortcode,
+          create: null,
+          update: null,
+        },
       },
-      {
-        display: { detail: false, list: false },
-        key: "createdAt",
-        kind: "timestamp",
-        validation: { read: z.date(), create: null, update: null },
-      },
-      {
-        display: { detail: false, list: false },
-        key: "updatedAt",
-        kind: "timestamp",
-        validation: { read: z.date(), create: null, update: null },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt", { detail: false, list: false }),
+      timestampField("updatedAt", { detail: false, list: false }),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
       {
@@ -323,7 +326,7 @@ export default defineEntity({
         specialized: "primary-key:GardenEntryId",
       },
       { key: "shortcode", specialized: "shortcode" },
-      { key: "locationId", reference: "location" },
+      "locationId",
       {
         key: "kind",
         specialized: "enum:kind",
@@ -336,34 +339,7 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "locationId",
-      "plantingIds",
-      "kind",
-      "observedOn",
-      "notes",
-      "harvestAmount",
-      "pendingImageIds",
-    ],
-    update: [
-      "locationId",
-      "plantingIds",
-      "kind",
-      "observedOn",
-      "notes",
-      "harvestAmount",
-      "pendingImageIds",
-      "removeImageIds",
-      "imageOrder",
-    ],
-    audit: [
-      "locationId",
-      "plantingIds",
-      "kind",
-      "observedOn",
-      "notes",
-      "harvestAmount",
-    ],
+
     rows: {
       // The plantings whose journal holds the entry: its own live planting
       // links, or for a whole-area entry (no planting links), every planting
@@ -398,21 +374,6 @@ export default defineEntity({
       create: ["full", "capture"],
       update: ["full"],
     },
-    output: [
-      "id",
-      "locationId",
-      "plantingIds",
-      "kind",
-      "observedOn",
-      "notes",
-      "harvestAmount",
-      "images",
-      "displayName",
-      "locationName",
-      "plantings",
-      "createdAt",
-      "updatedAt",
-    ],
   },
   fields: {
     embedded: [
@@ -429,18 +390,7 @@ export default defineEntity({
         ],
       },
     ],
-    create: {
-      module: "@cubby/schemas/garden-entry",
-      export: "gardenEntryCreateInput",
-    },
-    update: {
-      module: "@cubby/schemas/garden-entry",
-      export: "gardenEntryUpdateData",
-    },
-    output: {
-      module: "@cubby/schemas/garden-entry-raw-read",
-      export: "rawGardenEntryOut",
-    },
+
     list: {
       module: "@cubby/schemas/garden-entry-raw-read",
       export: "rawGardenEntryListItemOut",
@@ -500,7 +450,7 @@ export default defineEntity({
       },
       {
         // A planting's journal: its own entries plus whole-location entries
-        // observed during one of its confirmed location periods.
+        // observed at its current location during its active window.
         columnId: "journalPlantingId",
         kind: "idMulti",
         placeholder: "Journal for planting...",
@@ -508,65 +458,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "location",
-      label: "Location",
-      target: "location",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "GardenEntry.locationId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "GardenEntry.locationId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "plantings",
-      label: "Plantings",
-      target: "planting",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "EntityLink[gardenEntryPlanting].from",
-            direction: "incoming",
-          },
-          { edge: "EntityLink[gardenEntryPlanting].to", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "EntityLink[gardenEntryPlanting].to", direction: "incoming" },
-          {
-            edge: "EntityLink[gardenEntryPlanting].from",
-            direction: "outgoing",
-          },
-        ],
-      },
-    },
-    {
-      key: "images",
-      label: "Images",
-      target: "image",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "EntityAttachment.entityId", direction: "incoming" },
-          { edge: "EntityAttachment.imageId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.entityId", direction: "outgoing" },
-        ],
-      },
-    },
-  ],
+
   // `displayName` is a non-null projected title (kind · date · location), so
   // Cmd-K / `/search` can index garden entries like every other named entity.
   // Related rows the search document reads (ADR 0021).
@@ -690,3 +582,18 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r.field("locationId").named("location", "Location"),
+    r.link("gardenEntryPlanting", "outgoing").named("plantings", "Plantings"),
+    r
+      .path("image", "many", [
+        { edge: "EntityAttachment.entityId", direction: "incoming" },
+        { edge: "EntityAttachment.imageId", direction: "outgoing" },
+      ])
+      .named("images", "Images"),
+  ],
+  readSchemas,
+);

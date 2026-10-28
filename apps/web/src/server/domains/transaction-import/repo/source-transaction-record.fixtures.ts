@@ -1,3 +1,4 @@
+import { transactionImportFiltersSchema as transactionImportFilters } from "@cubby/schemas/entities/transactionImport";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import {
@@ -5,19 +6,17 @@ import {
   type SourceTransactionRecordLegacyFilters,
 } from "@cubby/schemas/source-transaction-record";
 import { rawSourceTransactionRecordOut } from "@cubby/schemas/source-transaction-record-raw-read";
-import { transactionImportFilters } from "@cubby/schemas/transaction-import";
 import { rawTransactionImportOut } from "@cubby/schemas/transaction-import-raw-read";
 import { eq } from "drizzle-orm";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_ACTOR } from "tooling/test-setup";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { sourceTransactionRecord, transactionImport } from "~/server/db/schema";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 
-import {
-  sourceTransactionRecordScaffold,
-  transactionImportScaffold,
-} from "./entity-repositories";
+import { sourceTransactionRecordScaffold } from "./entity-repositories";
 import { recordSourceTransactionRecords } from "./source-transaction-record";
 
 export async function listSourceTransactionRecords(
@@ -42,11 +41,13 @@ export async function listSourceTransactionRecords(
 }
 
 export async function listTransactionImports(db: Database, source?: string) {
-  const page = await transactionImportScaffold.read(db, {
-    filters: transactionImportFilters.parse({ source }),
-    sorts: [{ orderBy: "createdAt", direction: "desc" }],
-    pagination: { pageIndex: 0, pageSize: 50 },
-  });
+  const page =
+    await ENTITY_KERNEL_BINDINGS.transactionImport.repository.listRead(
+      buildKernelContext(db, TEST_ACTOR.userId),
+      transactionImportFilters.parse({ source }),
+      [{ orderBy: "createdAt", direction: "desc" }],
+      { pageIndex: 0, pageSize: 50 },
+    );
   return {
     ...page,
     data: page.data.map((row) => rawTransactionImportOut.parse(row)),

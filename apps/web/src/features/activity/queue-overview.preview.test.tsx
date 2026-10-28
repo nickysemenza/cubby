@@ -1,6 +1,6 @@
+import { jobOut } from "@cubby/schemas/entities/job";
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { shortcode } from "@cubby/schemas/identifiers";
-import { jobOut } from "@cubby/schemas/job-entity";
 import { onlineManager } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";

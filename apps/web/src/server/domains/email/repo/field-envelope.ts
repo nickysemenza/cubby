@@ -1,5 +1,5 @@
 import { emailImportOutcome } from "@cubby/schemas/email-fields";
-import { rawEmailOut } from "@cubby/schemas/email-raw-read";
+import { emailRawOut as rawEmailOut } from "@cubby/schemas/entity-contracts/email";
 import { fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
 
 import type { FieldEnvelopeProjector } from "~/server/generic/derived/repo/envelope";

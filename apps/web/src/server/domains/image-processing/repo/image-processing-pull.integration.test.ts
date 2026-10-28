@@ -1,4 +1,8 @@
-import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
+import {
+  type ImageJobId,
+  parseEntityId,
+  type RunId,
+} from "@cubby/schemas/identifiers";
 import { IMAGE_PROCESSING_PROTOCOL_VERSION } from "@cubby/schemas/image-processing";
 import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
@@ -24,8 +28,10 @@ import {
 } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { deviceOwnedStreak } from "~/server/generic/jobs/repo/device-admission";
-import { DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE } from "~/server/generic/jobs/repo/device-admission";
+import {
+  deviceOwnedStreak,
+  DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE,
+} from "~/server/generic/jobs/repo/device-admission";
 import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
 
 import {
@@ -47,7 +53,7 @@ import { assignImageProcessingExecutor } from "./image-processing-history";
 describe("background companion leases", () => {
   const ctx = withTestDb();
   const userId = "synthetic-background-user";
-  const deviceId = crypto.randomUUID();
+  const deviceId = parseEntityId("device", crypto.randomUUID());
   async function job(
     processorRevision: number,
     contentType = "image/jpeg",
@@ -82,7 +88,7 @@ describe("background companion leases", () => {
       deviceId: fromDevice,
     });
   const assign = (
-    lease: { id: string; attemptId: string },
+    lease: { id: ImageJobId; attemptId: string },
     toDevice = deviceId,
   ) =>
     assignImageProcessingExecutor(ctx.db, {
@@ -98,12 +104,12 @@ describe("background companion leases", () => {
         osVersion: "26",
       },
     });
-  const expire = (jobId: string) =>
+  const expire = (jobId: ImageJobId) =>
     getDb(ctx.db)
       .update(durableJob)
       .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
       .where(eq(durableJob.key, `image-processing:${jobId}`));
-  const failure = (lease: { id: string; attemptId: string }) => ({
+  const failure = (lease: { id: ImageJobId; attemptId: string }) => ({
     result: {
       jobId: lease.id,
       attemptId: lease.attemptId,
@@ -117,7 +123,9 @@ describe("background companion leases", () => {
     },
   });
 
-  const hello = (installationId = crypto.randomUUID()) =>
+  const hello = (
+    installationId = parseEntityId("device", crypto.randomUUID()),
+  ) =>
     ({
       protocolVersion: IMAGE_PROCESSING_PROTOCOL_VERSION,
       type: "hello",
@@ -551,7 +559,7 @@ describe("background companion leases", () => {
         "image/jpeg",
         first,
       );
-      const lease = await claim(crypto.randomUUID());
+      const lease = await claim(parseEntityId("device", crypto.randomUUID()));
       if (!lease) throw new Error("Expected Run lease");
       await assign(lease);
     }
@@ -565,7 +573,9 @@ describe("background companion leases", () => {
     });
     await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION, "image/jpeg", next);
     const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-    expect((await claim(crypto.randomUUID()))?.id).toBe(backfill);
+    expect(
+      (await claim(parseEntityId("device", crypto.randomUUID())))?.id,
+    ).toBe(backfill);
   });
 
   // Review findings: the streak was counted when a claim was admitted, so a
@@ -590,7 +600,7 @@ describe("background companion leases", () => {
       const owner = await activeRun();
       for (let index = 0; index < count; index++) {
         await runJob(owner);
-        const lease = await claim(crypto.randomUUID());
+        const lease = await claim(parseEntityId("device", crypto.randomUUID()));
         if (!lease) throw new Error("Expected Run lease");
         await assign(lease);
       }
@@ -617,7 +627,7 @@ describe("background companion leases", () => {
         (
           await claimCompanionImageCommands(ctx.db, {
             device: {
-              deviceId: installationId,
+              deviceId: parseEntityId("device", installationId),
               platform: "ios",
               appVersion: "1",
               deviceName: "Synthetic phone",
@@ -669,10 +679,12 @@ describe("background companion leases", () => {
     it("counts a reclaimed lease once, for the hand-off that committed", async () => {
       const owner = await activeRun();
       const owned = await runJob(owner);
-      const stalled = await claim(crypto.randomUUID());
+      const stalled = await claim(parseEntityId("device", crypto.randomUUID()));
       expect(stalled?.id).toBe(owned);
       await expire(owned);
-      const successor = await claim(crypto.randomUUID());
+      const successor = await claim(
+        parseEntityId("device", crypto.randomUUID()),
+      );
       expect(successor?.id).toBe(owned);
       expect(await assign(successor!)).toBe(true);
       // The stalled claim's late assignment finds its token replaced.
@@ -771,7 +783,7 @@ describe("background companion leases", () => {
     const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
     const order: string[] = [];
     for (let pull = 0; pull < 8; pull++) {
-      const lease = await claim(crypto.randomUUID());
+      const lease = await claim(parseEntityId("device", crypto.randomUUID()));
       if (!lease) continue;
       await assign(lease);
       order.push(lease.id);
@@ -799,7 +811,7 @@ describe("background companion leases", () => {
     const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
     const order: string[] = [];
     for (let pull = 0; pull < 5; pull++) {
-      const device = crypto.randomUUID();
+      const device = parseEntityId("device", crypto.randomUUID());
       const lease = await claim(device);
       if (!lease) continue;
       await assign(lease, device);
@@ -873,7 +885,7 @@ describe("background companion leases", () => {
         jobId: first.id,
         attemptId: first.attemptId,
         userId,
-        deviceId: crypto.randomUUID(),
+        deviceId: parseEntityId("device", crypto.randomUUID()),
       }),
     ).toBe(false);
     expect(
@@ -939,11 +951,13 @@ describe("background companion leases", () => {
     expect(
       await renewAssignedImageProcessingLease(ctx.db, {
         ...input,
-        deviceId: crypto.randomUUID(),
+        deviceId: parseEntityId("device", crypto.randomUUID()),
       }),
     ).toEqual({ ok: false, reason: "lease_lost" });
     await expire(jobId);
-    const replacement = await claim(crypto.randomUUID());
+    const replacement = await claim(
+      parseEntityId("device", crypto.randomUUID()),
+    );
     expect(replacement?.id).toBe(jobId);
     expect(await renewAssignedImageProcessingLease(ctx.db, input)).toEqual({
       ok: false,
@@ -983,7 +997,7 @@ describe("background companion leases", () => {
     if (!next) throw new Error("Expected retry lease");
     await assign(next);
     await expire(jobId);
-    const newest = await claim(crypto.randomUUID());
+    const newest = await claim(parseEntityId("device", crypto.randomUUID()));
     expect(newest?.id).toBe(jobId);
     // A newer attempt owns it: not adopted, but the failure is history.
     expect(

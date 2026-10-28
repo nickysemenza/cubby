@@ -200,11 +200,9 @@ describe("parseShortcode", () => {
   });
 
   /**
-   * The schema and parser tables are built by `mapRecord` and cast to their
-   * per-entity mapped types (see the SAFETY comments in shortcode.ts). These
-   * assertions are what make that cast honest: every entity's brand is its
-   * own, so a product code can never satisfy a location parameter, and the
-   * parsed union narrows per entity rather than collapsing to one brand.
+   * The generated registry supplies every schema; the parser validates its
+   * discriminator and canonical value together. These assertions preserve
+   * distinct entity brands and the distributed parsed union.
    */
   it("keeps every entity's brand distinct through the derived tables", () => {
     expectTypeOf<ShortcodeFor<"product">>().not.toEqualTypeOf<

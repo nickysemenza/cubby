@@ -1,25 +1,17 @@
-import type { ActorContext } from "@cubby/schemas/context";
+import { type ShipmentUpdateData } from "@cubby/schemas/entities/shipment";
+import { shipmentRawOut as rawShipmentOut } from "@cubby/schemas/entity-contracts/shipment";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { ShortcodeFor } from "@cubby/schemas/identifiers";
-import { type ShipmentUpdateData } from "@cubby/schemas/shipment";
-import { rawShipmentOut } from "@cubby/schemas/shipment-raw-read";
 
-import type { Database } from "~/server/db";
-import {
-  buildPartialUpdateValues,
-  withTransactionDatabase,
-} from "~/server/db/helpers";
+import { buildPartialUpdateValues } from "~/server/db/helpers";
 import { shipment } from "~/server/db/schema";
 import { shipmentSearch } from "~/server/domains/shipment/repo/search-read-shipment";
 import {
   createEntityCrud,
   defineRepository,
-  defineMutationWriter,
   asActor,
-  type MutationReceipt,
 } from "~/server/entity-kernel/repo/repository";
+import { ENTITY_STORED_WRITES } from "~/server/generated/entity-write-bindings.gen";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 export const shipmentScaffold = listScaffold("shipment", shipment, {
   read: {
@@ -49,35 +41,10 @@ const reader = createEntityCrud({
   auditUpdateFields: [...entityFieldModels.shipment.audit],
 });
 
-const update = defineMutationWriter({
-  entity: "shipment",
-  read: async (
-    receipt: MutationReceipt<"shipment">,
-    db: Database,
-    _code: ShortcodeFor<"shipment">,
-    _data: ShipmentUpdateData,
-    _actor: ActorContext,
-  ) => ({
-    output: await reader.getByID(db, receipt.entityId),
-    entityId: receipt.entityId,
-  }),
-  write: (
-    readOutput,
-    db: Database,
-    code: ShortcodeFor<"shipment">,
-    data: ShipmentUpdateData,
-    actor: ActorContext,
-  ) =>
-    withTransactionDatabase(db, async (tx) => {
-      const id = await resolveOrThrow(tx, "shipment", code);
-      return reader.update(tx, id, data, actor, (db, receipt) =>
-        readOutput(receipt, async () => ({
-          output: await reader.getByID(db, id),
-          entityId: id,
-        })),
-      );
-    }),
-});
+const update = reader.updateWriter(
+  ENTITY_STORED_WRITES.shipment.update,
+  (output, entityId) => ({ output, entityId }),
+);
 
 export const shipmentRepository = defineRepository("shipment", {
   scaffold: shipmentScaffold,

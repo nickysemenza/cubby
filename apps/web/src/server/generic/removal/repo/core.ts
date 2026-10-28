@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * The shared tail of every non-merge entity removal.
  *
@@ -48,8 +49,6 @@
  * caller needs a mode flag — see `merge/core.ts` and `inventory/bulk.ts` for
  * the two hard-delete paths that rely on this.
  */
-
-import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
 import type {
   AuditableEntity,
@@ -68,6 +67,8 @@ import { retireAssessmentTargetsTx } from "~/server/generic/assessment/repo/asse
 import type { AuditEntryInput } from "~/server/generic/audit-log/repo/audit-log";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
+
+import { assertNoOrdinaryReferences } from "./ordinary-reference-guard";
 
 /**
  * An entity a removal path can operate on: it writes audit rows and it has a
@@ -165,6 +166,7 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
   const { entity, ids, audit } = args;
   if (ids.length === 0) return;
 
+  await assertNoOrdinaryReferences(tx, entity, ids);
   await tombstoneEntityIdentities(tx, ids);
   if (isSearchable(entity)) {
     await softDeleteEntitySearchArtifactsTx(tx, entity, [...ids]);

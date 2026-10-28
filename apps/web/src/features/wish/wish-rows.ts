@@ -1,4 +1,5 @@
-import type { WishCandidateOut, WishListItemOut } from "@cubby/schemas/wish";
+import { type WishListItemOut } from "@cubby/schemas/entities/wish";
+import type { WishCandidateOut } from "@cubby/schemas/wish";
 
 /**
  * A row in the wishlist table: either a Wish, or one of its candidate

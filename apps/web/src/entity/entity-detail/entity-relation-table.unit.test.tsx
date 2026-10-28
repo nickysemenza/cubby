@@ -58,7 +58,9 @@ describe("planRelationSection", () => {
       columns: ["amount", "placement", "ownerLedgerPartyId", "verifiedAt"],
     });
     // The create button prefills the real field, not the filter alias.
-    expect(plan.seed).toEqual({ intent: "capture", field: "productId" });
+    expect(plan.seed).toMatchObject({ intent: "capture", field: "productId" });
+    expect(plan.seed?.fields).toContain("productId");
+    expect(plan.pageSize).toBe(50);
   });
 
   it("switches off a hierarchical filter's subtree toggle for the direct relation", () => {
@@ -99,7 +101,8 @@ describe("planRelationSection", () => {
     // or domain-specific field name.
     const plan = planFor("planting", "garden-history");
     expect(plan.filterKey).toBe("journalPlantingId");
-    expect(plan.seed).toEqual({ intent: "full", field: "plantingIds" });
+    expect(plan.seed).toMatchObject({ intent: "full", field: "plantingIds" });
+    expect(plan.seed?.fields).toContain("plantingIds");
     expect(plan.seedMultiple).toBe(true);
   });
 });

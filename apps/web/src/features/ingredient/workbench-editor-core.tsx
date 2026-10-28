@@ -1,5 +1,5 @@
+import { type ProductCreateInput } from "@cubby/schemas/entities/product";
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
-import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import {
   manualUnitMapping,

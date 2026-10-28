@@ -1,5 +1,5 @@
+import { locationOut } from "@cubby/schemas/entities/location";
 import { imageOut } from "@cubby/schemas/image";
-import { locationOut } from "@cubby/schemas/location";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

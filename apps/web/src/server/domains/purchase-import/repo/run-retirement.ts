@@ -44,7 +44,7 @@ async function closeRetiredExecutionFindings(db: Database) {
   );
 }
 
-const TERMINAL = ["completed", "failed", "needs_review", "cancelled"] as const;
+const TERMINAL = ["completed", "failed", "needs_review"] as const;
 
 export async function coordinatorRetired(db: Database, runId: string) {
   const [row] = await getDb(db)

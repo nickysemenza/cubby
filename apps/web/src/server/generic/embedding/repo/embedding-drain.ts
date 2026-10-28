@@ -436,7 +436,7 @@ async function lockPublicationSources(
     return sql`${sql.identifier(`sources_${index}`)} AS MATERIALIZED (
       SELECT ${source.id} AS id, ${kind}::text AS kind FROM ${source}
       WHERE ${inArray(
-        source.id,
+        sql`${source.id}`,
         refs
           .filter((ref) => ref.entityKind === kind)
           .map((ref) => ref.entityId),

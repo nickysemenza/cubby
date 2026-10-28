@@ -1,3 +1,4 @@
+import { projectOut } from "@cubby/schemas/entities/project";
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import { COST_TYPE_LABELS } from "@cubby/schemas/expense-fields";
 import { projectContributionInput } from "@cubby/schemas/household-contribution";
@@ -7,7 +8,7 @@ import {
   type ProjectId,
 } from "@cubby/schemas/identifiers";
 import { LEDGER_PARTY_KIND_LABELS } from "@cubby/schemas/ledger-party-fields";
-import { type ExpenseAnalyticsOut, projectOut } from "@cubby/schemas/project";
+import { type ExpenseAnalyticsOut } from "@cubby/schemas/project";
 import { rawTaskListItemOut } from "@cubby/schemas/work-raw-read";
 import { countLabel } from "@cubby/shared/pluralize";
 import { sum } from "es-toolkit";

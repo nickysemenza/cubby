@@ -1,11 +1,131 @@
 import { bulkSchemaFor } from "./edit-validation.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import { EntityDeclarationError } from "../declarations.ts";
-import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
+import type {
+  CompiledEntity,
+  EntityArtifacts,
+  SourceRef,
+} from "../declarations.ts";
 import { kernelEntitiesFor } from "./shared.ts";
 import { entityProjectionMaps } from "./capabilities.ts";
 import { treeRowExtension } from "./capabilities.ts";
 import { kernelActionsFor } from "./capabilities.ts";
+
+/** Direct stored values supported by the existing ordinary writer. */
+export const ordinaryWriteFields = (
+  entity: CompiledEntity,
+  operation: "create" | "update",
+) => {
+  const { fieldModel, contract } = entity;
+  if (!contract) return null;
+  const keys = fieldModel[operation];
+  if (!contract[operation] || keys.length === 0) return null;
+  // A scalar whose reset only clears itself still writes one column; inherited
+  // values and policies touching companion fields require their domain writer.
+  const fields = keys.map((key) => {
+    const field = fieldModel.fields.find((candidate) => candidate.key === key);
+    const storage = fieldModel.storage.find(
+      (candidate) => candidate.key === key,
+    );
+    if (
+      !field ||
+      !storage ||
+      (field.collection && field.kind !== "text-array") ||
+      field.reference?.multiple ||
+      (field.reference !== null && storage.reference === null) ||
+      (field.resolution !== null &&
+        (field.resolution.inherit !== undefined ||
+          field.resolution.confirm !== null ||
+          field.resolution.none !== null ||
+          Object.keys(field.resolution.reset ?? {}).length !== 1 ||
+          !Object.hasOwn(field.resolution.reset ?? {}, field.key))) ||
+      (storage.kind === "json" && field.kind !== "json") ||
+      (storage.specialized !== null &&
+        storage.specialized !== "text-array" &&
+        !storage.specialized.startsWith("enum:") &&
+        !(
+          storage.kind === "json" &&
+          field.kind === "json" &&
+          storage.specialized.startsWith("json:")
+        )) ||
+      ![
+        "text",
+        "enum",
+        "number",
+        "boolean",
+        "date",
+        "timestamp",
+        "text-array",
+        "identifier",
+        "json",
+      ].includes(storage.kind) ||
+      (storage.reference !== null &&
+        field.reference?.entity !== storage.reference)
+    )
+      return null;
+    return { key, storage };
+  });
+  if (fields.some((field) => field === null)) return null;
+  if (
+    operation === "create" &&
+    fieldModel.storage.some(
+      (storage) =>
+        !storage.nullable &&
+        storage.default === "none" &&
+        storage.key !== "shortcode" &&
+        !keys.includes(storage.key),
+    )
+  )
+    return null;
+  return fields.filter((field) => field !== null);
+};
+
+/** Emit only complete direct stored operations; domain workflows keep their writers. */
+const ordinaryWriteSource = (
+  entity: CompiledEntity,
+  importSchema: (schema: SourceRef) => void,
+): string => {
+  if (!entity.table || !entity.shortcode || !entity.contract) return "{}";
+  const { contract } = entity;
+  const create = ordinaryWriteFields(entity, "create");
+  const update = ordinaryWriteFields(entity, "update");
+  if (!create && !update) return "{}";
+  const entityKey = JSON.stringify(entity.key);
+  const values = (
+    fields: NonNullable<ReturnType<typeof ordinaryWriteFields>>,
+  ) =>
+    fields
+      .map(({ key, storage }) => {
+        const input = `data[${JSON.stringify(key)}]`;
+        const value =
+          storage.reference === null
+            ? input
+            : `${input} === undefined || ${input} === null ? ${input} : await resolveOrThrow(db, ${JSON.stringify(storage.reference)}, ${input})`;
+        return `${JSON.stringify(key)}: ${value}`;
+      })
+      .join(",");
+  const declarations: string[] = [];
+  const members: string[] = [];
+  if (create && contract.create) {
+    importSchema(contract.create);
+    members.push(
+      `create: async (${create.some(({ storage }) => storage.reference !== null) ? "db" : "_db"}: Database | DrizzleTransaction, input: z.input<typeof ${contract.create.export}>) => { const data = ${contract.create.export}.parse(input); return {${values(create)}} satisfies ShortcodeInsertValues<${entityKey}>; }`,
+    );
+  }
+  if (update && contract.update) {
+    importSchema(contract.update);
+    declarations.push(
+      `const updateValues = async (${update.some(({ storage }) => storage.reference !== null) ? "db" : "_db"}: Database | DrizzleTransaction, input: z.input<typeof ${contract.update.export}>) => { const data = ${contract.update.export}.parse(input); return {${values(update)}} satisfies Partial<ShortcodeInsertValues<${entityKey}>>; };`,
+    );
+    members.push(
+      `update: async (db: Database | DrizzleTransaction, code: ShortcodeFor<${entityKey}>, input: z.input<typeof ${contract.update.export}>) => ({id: await resolveOrThrow(db, ${entityKey}, code), data: await updateValues(db, input)})`,
+    );
+    members.push(
+      `updateById: async (db: Database | DrizzleTransaction, id: EntityId<${entityKey}>, input: z.input<typeof ${contract.update.export}>) => ({id, data: await updateValues(db, input)})`,
+    );
+  }
+  return `(() => { ${declarations.join("\n")} return {${members.join(",")}}; })()`;
+};
 
 export const renderEntitySchemaArtifacts = (
   entities: readonly CompiledEntity[],
@@ -195,7 +315,41 @@ export const renderEntitySchemaArtifacts = (
         return `z.object({action:z.literal("merge"),entity:z.literal(${JSON.stringify(entity.key)}),item:entityFieldEnvelopeSchemas[${JSON.stringify(entity.key)}].${projection},mergeSummary:z.json(),sideEffects:mutationSideEffectsSchema})`;
       })
       .join(",\n  ");
+  // Read contracts are client-reachable; preparation implementations belong only to server writers.
+  const writeImports = new Map<string, Set<string>>();
+  const importWriteSchema = (schema: SourceRef) => {
+    const exports = writeImports.get(schema.module) ?? new Set<string>();
+    exports.add(schema.export);
+    writeImports.set(schema.module, exports);
+  };
+  const writeBindings = schemaEntitySpecs
+    .map(
+      (entity) =>
+        `${JSON.stringify(entity.key)}: ${ordinaryWriteSource(entity, importWriteSchema)},`,
+    )
+    .join("\n");
+  const writeSchemaImports = [...writeImports.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([module, exports]) =>
+        `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+    )
+    .join("\n");
   return [
+    {
+      relativePath:
+        "apps/web/src/server/generated/entity-write-bindings.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Database, DrizzleTransaction } from "~/server/db";\n' +
+        'import type { EntityId } from "@cubby/schemas/identifiers";\n' +
+        'import type { ShortcodeFor } from "@cubby/shared";\n' +
+        'import type { ShortcodeInsertValues } from "~/server/generic/shortcode/repo/shortcode-utils";\n' +
+        'import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";\n' +
+        `${writeSchemaImports}\n` +
+        'import type { z } from "zod";\n' +
+        `export const ENTITY_STORED_WRITES = {\n${writeBindings}\n} as const;\n`,
+    },
     {
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:

@@ -1,10 +1,13 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type FinancialAccountCreateInput,
+  type FinancialAccountUpdateData,
+} from "@cubby/schemas/entities/financialAccount";
+import { financialAccountRawOut as rawFinancialAccountOut } from "@cubby/schemas/entity-contracts/financialAccount";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import {
-  type FinancialAccountCreateInput,
-  type FinancialAccountUpdateData,
   financialAccountIdentity,
   financialAccountIdentityKind,
 } from "@cubby/schemas/financial-account";
@@ -12,7 +15,6 @@ import {
   financialAccountCardNumbers,
   financialAccountSourceAliases,
 } from "@cubby/schemas/financial-account-fields";
-import { rawFinancialAccountOut } from "@cubby/schemas/financial-account-raw-read";
 import {
   type FinancialAccountId,
   type FinancialAccountShortcode,

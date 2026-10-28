@@ -13,6 +13,7 @@ import type {
   LocationAncestorOut,
   LocationInventoryBreakdownOut,
 } from "@cubby/schemas/location";
+import { locationType } from "@cubby/schemas/location-fields";
 import type { RawLocationDetail } from "@cubby/schemas/location-raw-read";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -53,7 +54,7 @@ const locationTreeRowSchema = z.object({
   lastBulkInventory: z.coerce.date().nullable(),
   parentId: locationIdSchema.nullable(),
   productId: productIdSchema.nullable(),
-  type: z.string(),
+  type: locationType,
   aiDescription: z.string().nullable(),
   notes: z.string().nullable(),
   depth: z.coerce.number().int().nonnegative(),
@@ -65,7 +66,7 @@ const ancestorRowSchema = z.object({
   depth: z.coerce.number().int().nonnegative(),
   shortcode: z.string(),
   name: z.string(),
-  type: z.string(),
+  type: locationType,
 });
 
 const breakdownLocationRowSchema = z.object({
@@ -73,7 +74,7 @@ const breakdownLocationRowSchema = z.object({
   parentId: locationIdSchema.nullable(),
   shortcode: z.string(),
   name: z.string(),
-  type: z.string(),
+  type: locationType,
 });
 
 /**

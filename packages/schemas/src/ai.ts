@@ -1,3 +1,4 @@
+import { entityIdSchema } from "./identifier-fields";
 import { assessmentChildHandle } from "./assessment-reference";
 import { aiCallCostFields, aiCostSummaryFields } from "./ai-cost";
 import {
@@ -690,7 +691,7 @@ export const suggestionSweepStartInput = z.object({
 });
 export const suggestionSweepStartOut = z.object({ id: z.string().uuid() });
 export const suggestionSweepControlInput = z.object({
-  runId: z.string().uuid(),
+  runId: entityIdSchema("run"),
 });
 export const suggestionSweepStatusOut = z.object({
   latestRunId: z.string().uuid().nullable(),

@@ -1,3 +1,4 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { createPostgresPool } from "./postgres-pool";
 import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
@@ -375,8 +376,12 @@ async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
          AND (j.kind <> 'describe_image' OR j."processorRevision" = $2)`,
       [imageIDs, processing.IMAGE_DESCRIPTION_PROCESSOR_REVISION],
     );
+    const jobs = result.rows.map((row) => ({
+      ...row,
+      jobId: parseEntityId("imageJob", row.jobId),
+    }));
     for (const [index, imageID] of imageIDs.entries()) {
-      const job = result.rows.find(
+      const job = jobs.find(
         (row) => row.imageId === imageID && row.kind === "describe_image",
       );
       if (!job) throw new Error(`Missing description job for ${imageID}`);
@@ -432,7 +437,7 @@ async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
       if (!completed.adopted)
         throw new Error(`Description result was not adopted for ${imageID}`);
     }
-    for (const row of result.rows.filter((job) => job.kind === "subject_lift"))
+    for (const row of jobs.filter((job) => job.kind === "subject_lift"))
       await dispatch.dispatchImageProcessingWakeup(db, row.jobId);
     const states = await pool.query<{
       imageId: string;

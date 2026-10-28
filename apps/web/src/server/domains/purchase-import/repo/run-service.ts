@@ -578,7 +578,7 @@ async function armPhotoCoordinator(
  */
 export async function acknowledgeRunCoordinator(
   db: Database,
-  input: { runId: string; eventId: string },
+  input: { runId: RunId; eventId: string },
 ) {
   const [run] = await getDb(db)
     .update(runTable)
@@ -604,7 +604,7 @@ export async function acknowledgeRunCoordinator(
  */
 export async function canDispatchRunCoordinator(
   db: Database,
-  input: { runId: string; eventId: string },
+  input: { runId: RunId; eventId: string },
 ) {
   await waitForMailImportPermission(db, runEntityId.parse(input.runId));
   const [run] = await getDb(db)
@@ -622,7 +622,7 @@ export async function canDispatchRunCoordinator(
   return Boolean(run);
 }
 
-export async function loadRunScope(db: Database, runId: string) {
+export async function loadRunScope(db: Database, runId: RunId) {
   const parsedRunId = runEntityId.parse(runId);
   const [row] = await getDb(db)
     .select({
@@ -976,7 +976,7 @@ export async function updateAgentProgress(
   return recordRunProgress(db, input);
 }
 
-export async function pauseRunForAuthorization(db: Database, runId: string) {
+export async function pauseRunForAuthorization(db: Database, runId: RunId) {
   const [run] = await getDb(db)
     .update(runTable)
     .set({ status: "paused_auth", updatedAt: new Date() })
@@ -1166,7 +1166,7 @@ export const assertRunActive = (status: string) => {
 };
 
 /** Photo coordination reads only its explicit pending image targets. */
-export async function claimPhotoInventoryWork(db: Database, runId: string) {
+export async function claimPhotoInventoryWork(db: Database, runId: RunId) {
   const scope = await loadRunScope(db, runId);
   if (scope.public.purpose !== "photo_inventory")
     throw new Error("Photo work selection requires a photo inventory run");
@@ -1203,7 +1203,7 @@ export async function claimPhotoInventoryWork(db: Database, runId: string) {
 export async function markRunFailed(
   db: Database,
   input: {
-    runId: string;
+    runId: RunId;
     failureCode: "agent_failed" | "agent_aborted";
     detail?: string;
     dispatchEventId?: string | null;
@@ -1243,7 +1243,7 @@ export async function markRunFailed(
 
 const iso = (value: Date | null) => value?.toISOString() ?? null;
 
-async function loadPreparedReviewRows(db: Database, runId: string) {
+async function loadPreparedReviewRows(db: Database, runId: RunId) {
   const database = getDb(db);
   return database
     .select({

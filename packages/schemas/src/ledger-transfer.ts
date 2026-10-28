@@ -2,20 +2,10 @@ import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { createPaginatedResponseSchema } from "./pagination";
 import {
-  ledgerTransferBaseFilterFields,
+  ledgerTransferFilterFields as ledgerTransferBaseFilterFields,
   ledgerTransferOut,
-} from "./generated/ledgerTransfer.gen";
+} from "@cubby/schemas/entities/ledgerTransfer";
 
-export {
-  ledgerTransferCreateInput,
-  ledgerTransferUpdateData,
-  ledgerTransferUpdateInput,
-  ledgerTransferOut,
-  type LedgerTransferCreateInput,
-  type LedgerTransferUpdateData,
-  type LedgerTransferUpdateInput,
-  type LedgerTransferOut,
-} from "./generated/ledgerTransfer.gen";
 export {
   ledgerSourceClaimInput,
   ledgerSourceClaimNormalizedEvidence,

@@ -1,4 +1,4 @@
-import { financialAccountOut } from "@cubby/schemas/financial-account";
+import { financialAccountOut } from "@cubby/schemas/entities/financialAccount";
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 

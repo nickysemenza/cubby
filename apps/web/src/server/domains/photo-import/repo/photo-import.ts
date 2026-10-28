@@ -8,6 +8,7 @@ import {
   type GalleryEntity,
   type LogoEntity,
 } from "@cubby/schemas/entity-manifest";
+import type { ImageId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   and,
@@ -79,7 +80,7 @@ export const photoRunImageOrder = (
 ];
 
 export interface ImportImageRow {
-  id: string;
+  id: ImageId;
   shortcode: string;
   key: string;
   filename: string;

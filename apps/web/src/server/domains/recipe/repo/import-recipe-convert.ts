@@ -6,11 +6,11 @@ import {
   type CookbookRecipe,
   flattenCookbookRecipes,
 } from "@cubby/schemas/cookbook";
+import { type RecipeCreateInput } from "@cubby/schemas/entities/recipe";
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { IngredientShortcode, RecipeId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
-import { type RecipeCreateInput } from "@cubby/schemas/recipe";
 
 import {
   cookbookRecipeNotes,

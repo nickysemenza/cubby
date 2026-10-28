@@ -1,3 +1,9 @@
+import {
+  type ImageJobId,
+  parseEntityId,
+  purchaseShortcode,
+  userId,
+} from "@cubby/schemas/identifiers";
 import type {
   TransactionImportInput,
   SourceTransactionRecordInput,
@@ -8,11 +14,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { type ActorContext, buildActorContext } from "@cubby/schemas/context";
-import {
-  parseEntityId,
-  purchaseShortcode,
-  userId,
-} from "@cubby/schemas/identifiers";
+
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
@@ -407,7 +409,7 @@ export function listDescribeImageJobs(
  */
 export async function completeDescribeImageJobs(
   db: Database,
-  jobs: Array<{ id: string }>,
+  jobs: Array<{ id: ImageJobId }>,
   description: string,
   onRefused?: (jobId: string) => Promise<string>,
 ) {

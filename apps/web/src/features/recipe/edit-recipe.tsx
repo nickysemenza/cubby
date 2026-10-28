@@ -1,4 +1,4 @@
-import type { RecipeUpdateInput } from "@cubby/schemas/recipe";
+import { type RecipeUpdateInput } from "@cubby/schemas/entities/recipe";
 import { toast } from "sonner";
 
 import { useEntityDetailController } from "~/entity/editing/use-entity-detail-controller";

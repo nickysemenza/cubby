@@ -1,5 +1,6 @@
+import { vendorOut } from "@cubby/schemas/entities/vendor";
 import { request } from "@playwright/test";
-import { vendorOut } from "@cubby/schemas/vendor";
+
 import { z } from "zod";
 import superjson from "superjson";
 

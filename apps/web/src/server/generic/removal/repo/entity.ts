@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * The front door `cascadeRemoval` is the tail of: remove an entity's own rows,
  * its declared child rows, and everything derived from them, in one call.
@@ -34,10 +35,9 @@
  *  - **Refresh intent.** Audit writes and the entity kernel register source
  *    changes in the caller's transaction; broad Jobs own derived cleanup.
  */
-
-import type { ActorContext } from "@cubby/schemas/context";
 import {
   type EntityId,
+  type ImageId,
   type ImageShortcode,
   imageId as imageIdSchema,
 } from "@cubby/schemas/identifiers";
@@ -63,6 +63,8 @@ import {
   SHORTCODE_TABLE,
   type ShortcodeTable,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
+
+import { assertNoOrdinaryReferences } from "./ordinary-reference-guard";
 
 /** A table a `mode: "soft"` cascade can write `deletedAt` on. */
 type SoftDeletableTable = PgTable & { deletedAt: PgColumn };
@@ -199,8 +201,8 @@ const collectCascadingImageIds = async (
   tx: DrizzleTransaction,
   children: readonly ChildCascade[],
   ids: readonly string[],
-): Promise<string[]> => {
-  const imageIds: string[] = [];
+): Promise<ImageId[]> => {
+  const imageIds: ImageId[] = [];
   for (const child of children) {
     const imageColumn = imageJoinColumnFor(child.table);
     if (!imageColumn) continue;
@@ -282,6 +284,7 @@ export const removeEntity = async <E extends RemovableEntity>(
   }
 
   return await withTransactionOn(dbOrTx, async (tx) => {
+    await assertNoOrdinaryReferences(tx, entity, ids);
     // Every count is taken before any statement runs: counting between removals
     // would report a child's rows against a parent whose earlier sibling edge
     // had already cleared them.

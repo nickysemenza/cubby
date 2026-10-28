@@ -11,20 +11,9 @@ import {
   financialAccountLast4 as last4,
 } from "./financial-account-fields";
 import {
-  financialAccountBaseFilterFields,
+  financialAccountFilterFields as financialAccountBaseFilterFields,
   financialAccountOut,
-} from "./generated/financialAccount.gen";
-
-export {
-  financialAccountCreateInput,
-  financialAccountUpdateData,
-  financialAccountUpdateInput,
-  financialAccountOut,
-  type FinancialAccountCreateInput,
-  type FinancialAccountUpdateData,
-  type FinancialAccountUpdateInput,
-  type FinancialAccountOut,
-} from "./generated/financialAccount.gen";
+} from "@cubby/schemas/entities/financialAccount";
 
 export {
   cardLastFoursOn,

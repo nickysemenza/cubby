@@ -1,7 +1,8 @@
+import { financialAccountOut } from "@cubby/schemas/entities/financialAccount";
+import { projectOut } from "@cubby/schemas/entities/project";
+import { taskOut } from "@cubby/schemas/entities/task";
 import { EXPENSE_DATE_REQUIRED_MESSAGE } from "@cubby/schemas/expense-fields";
-import { financialAccountOut } from "@cubby/schemas/financial-account";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
-import { projectOut, taskOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";

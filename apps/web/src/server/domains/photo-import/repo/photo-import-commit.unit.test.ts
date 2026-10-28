@@ -1,4 +1,4 @@
-import { shortcode } from "@cubby/schemas/identifiers";
+import { parseEntityId, shortcode } from "@cubby/schemas/identifiers";
 import { testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
@@ -15,7 +15,7 @@ import {
 const database = {} as Database;
 const imageCode = shortcode("IMG-ABCD");
 const imageRow = (status: "PENDING" | "UPLOADED") => ({
-  id: "00000000-0000-4000-8000-000000000001",
+  id: parseEntityId("image", "00000000-0000-4000-8000-000000000001"),
   shortcode: imageCode,
   key: "images/photo.jpg",
   filename: "photo.jpg",

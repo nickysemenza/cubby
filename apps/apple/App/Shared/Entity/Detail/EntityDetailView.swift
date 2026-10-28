@@ -115,7 +115,8 @@ struct EntityDetailView: View {
             }
             .sheet(item: $creatingRelation) { section in
                 EntityEditorSheet(
-                    key: section.target.key, mode: .create(prefill: section.createPrefill)
+                    key: section.target.key, mode: .create(prefill: section.createPrefill),
+                    createFields: section.createFields
                 ) { _ in
                     Task {
                         await section.list.refresh()
@@ -216,6 +217,7 @@ struct EntityDetailView: View {
         let declared = relationSections.filter { section in
             descriptor.presentation.detailSections.contains(where: { $0.id == section.id })
                 && section.target.key.nativeActions.contains(.create)
+                && section.spec.plan.seed != nil
         }
         if !declared.isEmpty {
             Section("Create") {
@@ -246,7 +248,9 @@ struct EntityDetailView: View {
         var groups: [[RelationSectionModel]] = []
         for section in sections {
             if let index = groups.firstIndex(where: { $0.first?.target.key == section.target.key }) {
-                if !groups[index].contains(where: { $0.createPrefill == section.createPrefill }) {
+                if !groups[index].contains(where: {
+                    $0.createPrefill == section.createPrefill && $0.createFields == section.createFields
+                }) {
                     groups[index].append(section)
                 }
             } else {

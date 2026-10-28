@@ -20,6 +20,8 @@ import {
 import { fieldPolicyValue } from "../field-policy-fields";
 import { photoCategoryKeys } from "../photo-categories";
 import { childTableMetadataSchema } from "./child-definition";
+import { createRelationships } from "./relationships";
+import { entityRelationMetadataSchema } from "./relationship-shape";
 
 /** The scalar shapes the entity compiler can persist and project. */
 /** One `model.derived.<key>.stored.inputs` row (ADR 0021), for shared input lists. */
@@ -162,6 +164,7 @@ export type CompiledEntityPresentation = Omit<
     sections: Array<
       NonNullable<EntityPresentation["detail"]["sections"]>[number] & {
         overview: boolean;
+        plan?: import("./relation-plan").CompiledRelationSectionPlan;
       }
     >;
     /** Field keys declaring `display.preview`, in model order. */
@@ -674,6 +677,10 @@ const buildMetadataSchemas = () => {
     .object({
       key: nonEmptyString(),
       kind: z.enum(entityFieldKinds),
+      /** Raw record membership; storage-only and write-only fields explicitly opt out. */
+      output: z.boolean().optional().default(true),
+      /** Writable fields audit by default; retained source facts can opt in explicitly. */
+      audit: z.boolean().optional(),
       /** One public value backed by existing calendar-date columns. */
       dateRange: z
         .strictObject({
@@ -881,6 +888,10 @@ const buildMetadataSchemas = () => {
       }),
     );
 
+  const sourceRefMetadataSchema = z
+    .object({ module: nonEmptyString(), export: nonEmptyString() })
+    .strict();
+
   const entityStorageMetadataSchema = z.union([
     nonEmptyString().transform((key) => ({
       key,
@@ -924,6 +935,14 @@ const buildMetadataSchemas = () => {
           .strict()
           .optional(),
         defaultSql: nonEmptyString().optional(),
+        /** The stored value type; array wraps the referenced item type once. */
+        type: sourceRefMetadataSchema
+          .extend({ array: z.literal(true).optional() })
+          .optional(),
+        enum: z
+          .object({ values: z.array(nonEmptyString()).min(1) })
+          .strict()
+          .optional(),
         specialized: nonEmptyString().nullable().optional(),
       })
       .strict()
@@ -936,6 +955,8 @@ const buildMetadataSchemas = () => {
           reference,
           referenceOptions,
           defaultSql,
+          type,
+          enum: storageEnum,
           specialized,
         }) => ({
           key,
@@ -945,6 +966,8 @@ const buildMetadataSchemas = () => {
           reference,
           referenceOptions,
           defaultSql,
+          type,
+          enum: storageEnum,
           specialized,
         }),
       ),
@@ -1268,10 +1291,6 @@ const buildMetadataSchemas = () => {
     .object({
       fields: z.array(entityFieldMetadataSchema),
       storage: z.array(entityStorageMetadataSchema),
-      create: z.array(nonEmptyString()),
-      update: z.array(nonEmptyString()),
-      output: z.array(nonEmptyString()),
-      audit: z.array(nonEmptyString()),
       /** Evidence-backed research may fill these ordinary editable fields. */
       research: z
         .object({ fillFields: z.array(nonEmptyString()).min(1) })
@@ -1311,11 +1330,27 @@ const buildMetadataSchemas = () => {
       groupingOmit: z.array(nonEmptyString()).optional().default([]),
       intents: entityFieldModelIntentsMetadataSchema.optional(),
     })
-    .strict();
-
-  const sourceRefMetadataSchema = z
-    .object({ module: nonEmptyString(), export: nonEmptyString() })
-    .strict();
+    .strict()
+    .transform((model) => ({
+      ...model,
+      create: model.fields
+        .filter((field) => field.validation.create !== null)
+        .map((field) => field.key),
+      update: model.fields
+        .filter((field) => field.validation.update !== null)
+        .map((field) => field.key),
+      output: model.fields
+        .filter((field) => field.output)
+        .map((field) => field.key),
+      audit: model.fields
+        .filter(
+          (field) =>
+            field.audit ??
+            (field.validation.create !== null ||
+              field.validation.update !== null),
+        )
+        .map((field) => field.key),
+    }));
 
   /**
    * Browser route ownership. `list` / `detail` `true` generates the page
@@ -1371,6 +1406,8 @@ const buildMetadataSchemas = () => {
       brand: nonEmptyString().nullable(),
       shortcode: nonEmptyString().nullable(),
       shortcodeLength: z.int().min(5).max(32).optional(),
+      /** References to this entity may select the requesting member. */
+      currentMember: z.literal(true).optional(),
     })
     .strict();
 
@@ -1433,6 +1470,7 @@ const buildMetadataSchemas = () => {
         prefill: z
           .object({
             field: fieldKey,
+            intent: nonEmptyString().optional(),
           })
           .strict()
           .nullable()
@@ -1664,7 +1702,10 @@ const buildMetadataSchemas = () => {
                 .object({
                   descriptor: nonEmptyString(),
                   prefill: z
-                    .object({ field: nonEmptyString() })
+                    .object({
+                      field: nonEmptyString(),
+                      intent: nonEmptyString().optional(),
+                    })
                     .strict()
                     .nullable()
                     .optional(),
@@ -2580,9 +2621,9 @@ const buildMetadataSchemas = () => {
 
   const entityContractMetadataSchema = z
     .object({
-      create: sourceRefMetadataSchema.nullable(),
-      update: sourceRefMetadataSchema.nullable(),
-      output: sourceRefMetadataSchema,
+      create: sourceRefMetadataSchema.nullable().optional(),
+      update: sourceRefMetadataSchema.nullable().optional(),
+      output: sourceRefMetadataSchema.optional(),
       list: sourceRefMetadataSchema.optional(),
       detail: sourceRefMetadataSchema.optional(),
       mcpOutput: sourceRefMetadataSchema.optional(),
@@ -2811,55 +2852,6 @@ const buildMetadataSchemas = () => {
     })
     .strict();
 
-  const entityRelationSourceMetadataSchema = z
-    .object({
-      key: nonEmptyString(),
-      label: nonEmptyString(),
-      provenance: z.unknown(),
-      inverse: z.unknown().optional(),
-    })
-    .strict();
-
-  const entityRelationMetadataSchema = z
-    .object({
-      key: nonEmptyString(),
-      label: nonEmptyString(),
-      target: nonEmptyString(),
-      cardinality: z.enum(["one", "many"]),
-      sourceKey: nonEmptyString().optional(),
-      provenance: z.unknown(),
-      inverse: z.unknown().optional(),
-      sources: z.array(entityRelationSourceMetadataSchema).optional(),
-      /** Set by the compiler on the `many` inverse it derived from another
-       * entity's `one` foreign-key relation; never declared by hand. */
-      derived: z.literal(true).optional(),
-      /** On a single-FK `one` relation: why its target gets no derived
-       * `many` inverse. */
-      inverseOmit: nonEmptyString("must give a reason").optional(),
-      /** Empty-state copy for this `many` relation's derived detail table,
-       * replacing the generic "No <plural> yet." sentence. */
-      empty: nonEmptyString().optional(),
-      list: z
-        .object({
-          rowSchema: sourceRefMetadataSchema,
-          adapter: sourceRefMetadataSchema,
-        })
-        .strict()
-        .optional(),
-      mutation: z
-        .object({
-          source: nonEmptyString(),
-          itemSchema: sourceRefMetadataSchema,
-          /** One listed row; `listRelation` returns a counted page of these rows. */
-          rowSchema: sourceRefMetadataSchema,
-          adapter: sourceRefMetadataSchema,
-          audiences: z.array(z.enum(["browser", "mcp"])).min(1),
-        })
-        .strict()
-        .optional(),
-    })
-    .strict();
-
   /**
    * Everything about an entity's own table beyond its model columns, so the
    * generator emits canonical Drizzle `pgTable` definitions separately from
@@ -2980,6 +2972,7 @@ const buildMetadataSchemas = () => {
     .strict();
 
   const documentSearchPorts = {
+    read: null,
     projection: {
       module: "~/server/generic/search/repo/search-document",
       export: "refreshSearchDocument",
@@ -3021,7 +3014,10 @@ const buildMetadataSchemas = () => {
         .default(null),
       ports: z
         .object({
-          repository: sourceRefMetadataSchema.nullable(),
+          repository: sourceRefMetadataSchema
+            .nullable()
+            .optional()
+            .default(null),
           /** Pure final projection over selected envelopes and already loaded facts. */
           fieldEnvelope: sourceRefMetadataSchema
             .nullable()
@@ -3050,6 +3046,10 @@ const buildMetadataSchemas = () => {
               z.literal("document").transform(() => documentSearchPorts),
               z
                 .object({
+                  read: sourceRefMetadataSchema
+                    .nullable()
+                    .optional()
+                    .default(null),
                   projection: sourceRefMetadataSchema.nullable(),
                   semanticText: sourceRefMetadataSchema.nullable(),
                 })
@@ -3057,6 +3057,7 @@ const buildMetadataSchemas = () => {
             ])
             .optional()
             .default({
+              read: null,
               projection: null,
               semanticText: null,
             }),
@@ -3086,7 +3087,7 @@ const buildMetadataSchemas = () => {
       table: nonEmptyString().nullable(),
       identifiers: entityIdentifiersMetadataSchema,
       presentation: entityPresentationMetadataSchema,
-      fields: entityContractMetadataSchema.nullable(),
+      fields: entityContractMetadataSchema.nullable().optional(),
       readSchemas: z
         .object({
           output: declaredZodSchema,
@@ -3349,35 +3350,77 @@ export function defaultReadSchemas<
   return { output: base, list: base, detail: base };
 }
 
-/** Preserve exact Zod instances and literal declaration types; composers run once. */
-export function defineEntity<
-  const T extends EntityDeclaration,
+type EntityInput = Omit<EntityDeclaration, "relations">;
+type DefinedEntity<T> = Omit<T, "relations"> & {
+  relations: EntityDeclaration["relations"];
+};
+
+/** Source facts and read schemas are inferred independently of relationship graph construction. */
+export function defineEntityModel<
+  const T extends EntityInput,
   S extends RawReadSchemas,
 >(
   declaration: T &
     (InvalidReferenceFields<NoInfer<T>> extends never
       ? unknown
       : { invalidReferenceField: InvalidReferenceFields<NoInfer<T>> }),
-  compose: (base: BaseReadSchema<T>, facts: ReadSchemaFacts<T>) => S,
-): T & { readSchemas: S };
-export function defineEntity<const T extends EntityDeclaration>(
+  compose: (
+    base: BaseReadSchema<NoInfer<T>>,
+    facts: ReadSchemaFacts<NoInfer<T>>,
+  ) => S,
+): { definition: T; readSchemas: S };
+export function defineEntityModel<const T extends EntityInput>(
   declaration: ValidDeclaration<T>,
-): T & { readSchemas: DefaultReadSchemas<T> };
-export function defineEntity<const T extends EntityDeclaration>(
+): { definition: T; readSchemas: DefaultReadSchemas<T> };
+export function defineEntityModel<const T extends EntityInput>(
   declaration: T,
   compose?: (
     base: BaseReadSchema<T>,
     facts: ReadSchemaFacts<T>,
   ) => RawReadSchemas,
-): EntityDeclaration & { readSchemas: RawReadSchemas } {
+) {
   const schemas = defaultReadSchemas(declaration);
   return {
-    ...declaration,
+    definition: declaration,
     readSchemas: compose
       ? compose(schemas.output, {
           ownDataCheck: ownDataCheckSchema(declaration),
         })
       : schemas,
+  };
+}
+
+/** Relationship compilation and read schemas meet only after their independent source types exist. */
+export function defineEntity<
+  const T extends EntityInput,
+  S extends RawReadSchemas,
+>(
+  declaration: T &
+    (InvalidReferenceFields<NoInfer<T>> extends never
+      ? unknown
+      : { invalidReferenceField: InvalidReferenceFields<NoInfer<T>> }),
+  relationships: (
+    self: ReturnType<typeof createRelationships<NoInfer<T>>>,
+  ) => EntityDeclaration["relations"],
+  readSchemas: S,
+): DefinedEntity<T> & { readSchemas: S };
+export function defineEntity<const T extends EntityInput>(
+  declaration: ValidDeclaration<T>,
+  relationships: (
+    self: ReturnType<typeof createRelationships<NoInfer<T>>>,
+  ) => EntityDeclaration["relations"],
+): DefinedEntity<T> & { readSchemas: DefaultReadSchemas<T> };
+export function defineEntity<const T extends EntityInput>(
+  declaration: T,
+  relationships: (
+    self: ReturnType<typeof createRelationships<NoInfer<T>>>,
+  ) => EntityDeclaration["relations"],
+  readSchemas?: RawReadSchemas,
+) {
+  return {
+    ...declaration,
+    relations: relationships(createRelationships(declaration)),
+    readSchemas: readSchemas ?? defaultReadSchemas(declaration),
   };
 }
 
@@ -3428,17 +3471,23 @@ type ReadableDeclaration = {
       key: string;
       readKeyOverride?: string | null;
       readKey?: string | null;
+      output?: boolean;
       validation?: { read?: z.ZodType | null; publicRead?: z.ZodType };
     }[];
-    output: readonly string[];
   };
 };
+// Storage-only map helpers can widen their key to string and output flag to boolean.
+// Exclude fields without read schemas before key remapping so they cannot add a never-valued string index.
 type ReadFieldSchemas<D extends ReadableDeclaration> = {
   [
-    F in D["model"]["fields"][number] as F["key"] extends D["model"]["output"][number]
-      ? F extends { readKeyOverride: infer R extends string }
-        ? R
-        : F["key"]
+    F in D["model"]["fields"][number] as F extends {
+      validation: { read: z.ZodType };
+    }
+      ? F extends { output: false }
+        ? never
+        : F extends { readKeyOverride: infer R extends string }
+          ? R
+          : F["key"]
       : never
   ]: F extends { validation: { read: infer S extends z.ZodType } } ? S : never;
 };
@@ -3495,12 +3544,10 @@ type MutableDeclaration = {
     fields: readonly {
       key: string;
       validation?: {
-        create: z.ZodType | null;
-        update: z.ZodType | null;
+        create?: z.ZodType | null;
+        update?: z.ZodType | null;
       };
     }[];
-    create: readonly string[];
-    update: readonly string[];
   };
 };
 type ModeFieldSchemas<
@@ -3508,7 +3555,9 @@ type ModeFieldSchemas<
   M extends "create" | "update",
 > = {
   [
-    F in D["model"]["fields"][number] as F["key"] extends D["model"][M][number]
+    F in D["model"]["fields"][number] as F extends {
+      validation: { [K in M]: z.ZodType };
+    }
       ? F["key"]
       : never
   ]: F extends { validation: { [K in M]: infer S extends z.ZodType } }
@@ -3523,20 +3572,17 @@ const modeFieldSchemas = <
   definition: D,
   mode: M,
 ): ModeFieldSchemas<D, M> => {
-  const entries = definition.model[mode].map((key) => {
-    const field = definition.model.fields.find((field) => field.key === key);
-    const schema = field?.validation?.[mode];
-    if (!schema) throw new Error(`Missing declared ${mode} schema for ${key}`);
-    return [key, schema];
+  const entries = definition.model.fields.flatMap((field) => {
+    const schema = field.validation?.[mode];
+    return schema ? [[field.key, schema]] : [];
   });
-  // SAFETY: the explicit roster selects exact declared keys, each paired with
-  // that field's own `validation[mode]` instance; a missing schema fails above.
+  // SAFETY: only fields with a concrete schema enter the map, under their declared key.
   return Object.fromEntries(entries) as ModeFieldSchemas<D, M>;
 };
 
 /**
  * The create/update/read field-schema maps a canonical module composes from.
- * Keyed by the roster rather than by field index, so inserting a field
+ * Keyed by field identity rather than by field index, so inserting a field
  * mid-declaration cannot shift another field's schema, and the map hands
  * back the declaration's own Zod instances (the field-map-drift test relies
  * on that identity).
@@ -3598,15 +3644,17 @@ export function publicReadFieldSchemas<const D extends ReadableDeclaration>(
 export function readFieldSchemas<const D extends ReadableDeclaration>(
   definition: D,
 ): ReadFieldSchemas<D> {
-  const entries = definition.model.output.map((key) => {
-    const field = definition.model.fields.find((field) => field.key === key);
-    if (!field?.validation?.read)
-      throw new Error(`Missing declared read schema for ${key}`);
+  const entries = definition.model.fields.flatMap((field) => {
+    if (field.output === false) return [];
+    if (!field.validation?.read)
+      throw new Error(`Missing declared read schema for ${field.key}`);
     return [
-      field.readKeyOverride ?? field.readKey ?? key,
-      field.validation.read,
+      [
+        field.readKeyOverride ?? field.readKey ?? field.key,
+        field.validation.read,
+      ],
     ];
   });
-  // SAFETY: the explicit output roster selects exact declared keys; missing schemas fail above.
+  // SAFETY: only output fields enter the map; every field retains its declared read schema.
   return Object.fromEntries(entries) as ReadFieldSchemas<D>;
 }

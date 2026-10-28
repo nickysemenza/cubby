@@ -1,6 +1,7 @@
 import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
 import { mailReclassificationRead } from "@cubby/schemas/email-actions";
+import { runOut } from "@cubby/schemas/entities/run";
 import {
   runShortcode,
   imageShortcode,
@@ -32,7 +33,7 @@ import {
   commitPurchaseImportOut,
   preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
-import { runHistoryOut, runOut } from "@cubby/schemas/run";
+import { runHistoryOut } from "@cubby/schemas/run";
 import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { runRestartInput } from "@cubby/schemas/run-fields";
 import {

@@ -1,3 +1,4 @@
+import { imageDetailOut as imageWithEntitySchema } from "@cubby/schemas/entities/image";
 import {
   attachableImageEntity,
   validateAttachmentRole,
@@ -8,7 +9,6 @@ import {
   cullPendingImagesResponseSchema,
   cullPendingImagesSchema,
   getImageByIdSchema,
-  imageWithEntitySchema,
   importImageFromUrlResponseSchema,
   importImageFromUrlSchema,
   initiateDocumentUploadSchema,

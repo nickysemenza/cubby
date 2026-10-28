@@ -1,5 +1,8 @@
-import { shortcode } from "@cubby/schemas/identifiers";
-import type { LedgerPartyShortcode } from "@cubby/schemas/identifiers";
+import {
+  type ImageId,
+  shortcode,
+  type LedgerPartyShortcode,
+} from "@cubby/schemas/identifiers";
 import type { ImageSightingRecordItem } from "@cubby/schemas/image-sighting";
 import { parseShortcode } from "@cubby/shared";
 import { eq } from "drizzle-orm";
@@ -192,7 +195,7 @@ describe("image-sighting", () => {
     },
   );
 
-  const sightingRows = (imageId: string) =>
+  const sightingRows = (imageId: ImageId) =>
     getDb(ctx.db)
       .select()
       .from(imageSighting)

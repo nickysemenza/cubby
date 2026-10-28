@@ -1,5 +1,5 @@
+import { locationDetailOut as infLocation } from "@cubby/schemas/entities/location";
 import {
-  infLocation,
   infLocationListOut,
   locationFiltersSchema,
   locationInventoryBreakdownOut,

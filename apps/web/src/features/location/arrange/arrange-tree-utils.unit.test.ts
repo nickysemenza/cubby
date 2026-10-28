@@ -1,7 +1,5 @@
-import type {
-  InfLocation,
-  InventoryItemForTree,
-} from "@cubby/schemas/location";
+import { type LocationDetailOut as InfLocation } from "@cubby/schemas/entities/location";
+import type { InventoryItemForTree } from "@cubby/schemas/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 

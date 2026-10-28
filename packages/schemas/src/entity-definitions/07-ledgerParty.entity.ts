@@ -1,14 +1,19 @@
-import { defineEntity } from "./definition.js";
+import { timestampField } from "./field-policy";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { ledgerPartyShortcode } from "../identifier-fields.js";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party-fields";
 import { z } from "zod";
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "ledgerParty",
   names: { singular: "Ledger Party", plural: "Ledger Parties" },
   route: { basePath: "ledger-parties" },
   table: "LedgerParty",
-  identifiers: { brand: "LedgerPartyId", shortcode: "LPY-" },
+  identifiers: {
+    brand: "LedgerPartyId",
+    shortcode: "LPY-",
+    currentMember: true,
+  },
   presentation: {
     list: {},
     titleField: "name",
@@ -159,32 +164,10 @@ export default defineEntity({
           update: null,
         },
       },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt"),
+      timestampField("updatedAt"),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
       {
@@ -193,15 +176,20 @@ export default defineEntity({
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
-      { key: "kind", specialized: "enum:kind" },
+      {
+        key: "kind",
+        specialized: "enum:kind",
+        type: {
+          module: "@cubby/schemas/ledger-party-fields",
+          export: "LedgerPartyKind",
+        },
+      },
       "notes",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: ["name", "kind", "notes"],
-    update: ["name", "kind", "notes"],
-    audit: ["name", "kind", "notes"],
+
     sort: {
       fields: ["name", "kind", "createdAt", "updatedAt"],
       // A name roster reads A→Z, unlike the blanket descending default.
@@ -213,22 +201,8 @@ export default defineEntity({
       create: ["full"],
       update: ["full"],
     },
-    output: ["id", "name", "kind", "notes", "createdAt", "updatedAt"],
   },
-  fields: {
-    create: {
-      module: "@cubby/schemas/ledger-party",
-      export: "ledgerPartyCreateInput",
-    },
-    update: {
-      module: "@cubby/schemas/ledger-party",
-      export: "ledgerPartyUpdateData",
-    },
-    output: {
-      module: "@cubby/schemas/ledger-party-raw-read",
-      export: "rawLedgerPartyOut",
-    },
-  },
+
   // A durable economic participant in the household ledger.
   storage: {
     columns: [
@@ -283,10 +257,7 @@ export default defineEntity({
   },
   filters: {
     audit: true,
-    schema: {
-      module: "@cubby/schemas/ledger-party",
-      export: "ledgerPartyFilterFields",
-    },
+
     descriptors: [
       {
         columnId: "name",
@@ -350,166 +321,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "purchases",
-      sources: [
-        {
-          key: "effective-purchaser",
-          label: "Effective purchaser",
-          provenance: { kind: "query", query: "memberPurchases" },
-          inverse: {
-            steps: [
-              { edge: "Relationship.memberPurchases", direction: "incoming" },
-            ],
-          },
-        },
-      ],
-      label: "Purchases",
-      target: "purchase",
-      cardinality: "many",
-      // The Purchases whose effective purchaserId is this member (ADR 0011).
-      provenance: {
-        kind: "derived",
-        filter: "purchaserId",
-        evidence: [
-          "Purchase",
-          "FinancialTransactionAllocation",
-          "VendorAccount",
-          "ImportSourceOrder",
-          "OrderMailEvent",
-        ],
-      },
-    },
-    {
-      key: "expenses",
-      label: "Attributed expenses",
-      target: "expense",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "ExpenseAttribution.ledgerPartyId", direction: "incoming" },
-          { edge: "ExpenseAttribution.expenseId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "ExpenseAttribution.expenseId", direction: "incoming" },
-          { edge: "ExpenseAttribution.ledgerPartyId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "financial-accounts",
-      label: "Financial accounts",
-      target: "financialAccount",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "FinancialAccount.ledgerPartyId", direction: "incoming" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "FinancialAccount.ledgerPartyId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "outgoing-transfers",
-      label: "Outgoing transfers",
-      target: "ledgerTransfer",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "LedgerTransfer.fromPartyId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "LedgerTransfer.fromPartyId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "incoming-transfers",
-      label: "Incoming transfers",
-      target: "ledgerTransfer",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "LedgerTransfer.toPartyId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "LedgerTransfer.toPartyId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "meals",
-      label: "Meals eaten",
-      target: "meal",
-      cardinality: "many",
-      sourceKey: "food-entries",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "MealFoodEntry.ledgerPartyId", direction: "incoming" },
-          { edge: "MealFoodEntry.mealId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "MealFoodEntry.mealId", direction: "incoming" },
-          { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
-        ],
-      },
-      sources: [
-        {
-          key: "portions",
-          label: "Served portions",
-          provenance: {
-            kind: "local-path",
-            steps: [
-              {
-                edge: "MealRecipePortion.ledgerPartyId",
-                direction: "incoming",
-              },
-              { edge: "MealRecipePortion.mealId", direction: "outgoing" },
-            ],
-          },
-          inverse: {
-            steps: [
-              { edge: "MealRecipePortion.mealId", direction: "incoming" },
-              {
-                edge: "MealRecipePortion.ledgerPartyId",
-                direction: "outgoing",
-              },
-            ],
-          },
-        },
-      ],
-    },
-    {
-      key: "recipes-eaten",
-      label: "Recipes eaten",
-      target: "recipe",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "MealRecipePortion.ledgerPartyId", direction: "incoming" },
-          { edge: "MealRecipePortion.mealRecipeId", direction: "outgoing" },
-          { edge: "MealRecipe.recipeId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "MealRecipe.recipeId", direction: "incoming" },
-          { edge: "MealRecipePortion.mealRecipeId", direction: "incoming" },
-          { edge: "MealRecipePortion.ledgerPartyId", direction: "outgoing" },
-        ],
-      },
-    },
-  ],
+
   search: false,
   capabilities: {
     images: { storage: false },
@@ -547,3 +359,80 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    // The Purchases whose effective purchaserId is this member (ADR 0011).
+    r
+      .derived("purchase", "many", "purchaserId", [
+        "Purchase",
+        "FinancialTransactionAllocation",
+        "VendorAccount",
+        "ImportSourceOrder",
+        "OrderMailEvent",
+      ])
+      .named("purchases", "Purchases", {
+        sources: [
+          r
+            .query("memberPurchases", "many")
+            .source("effective-purchaser", "Effective purchaser"),
+        ],
+      }),
+    r
+      .path("expense", "many", [
+        { edge: "ExpenseAttribution.ledgerPartyId", direction: "incoming" },
+        { edge: "ExpenseAttribution.expenseId", direction: "outgoing" },
+      ])
+      .named("expenses", "Attributed expenses"),
+    r
+      .path("financialAccount", "many", [
+        { edge: "FinancialAccount.ledgerPartyId", direction: "incoming" },
+      ])
+      .named("financial-accounts", "Financial accounts"),
+    r
+      .path("ledgerTransfer", "many", [
+        { edge: "LedgerTransfer.fromPartyId", direction: "incoming" },
+      ])
+      .named("outgoing-transfers", "Outgoing transfers"),
+    r
+      .path("ledgerTransfer", "many", [
+        { edge: "LedgerTransfer.toPartyId", direction: "incoming" },
+      ])
+      .named("incoming-transfers", "Incoming transfers"),
+    r
+      .path("meal", "many", [
+        { edge: "MealFoodEntry.ledgerPartyId", direction: "incoming" },
+        { edge: "MealFoodEntry.mealId", direction: "outgoing" },
+      ])
+      .named("meals", "Meals eaten", {
+        view: {
+          columnGroup: "Meals",
+          order: "newest",
+          inverseKey: "meal.eaters",
+        },
+        sourceKey: "food-entries",
+        sources: [
+          r
+            .path("meal", "many", [
+              {
+                edge: "MealRecipePortion.ledgerPartyId",
+                direction: "incoming",
+              },
+              { edge: "MealRecipePortion.mealId", direction: "outgoing" },
+            ])
+            .source("portions", "Served portions"),
+        ],
+      }),
+    r
+      .path("recipe", "many", [
+        { edge: "MealRecipePortion.ledgerPartyId", direction: "incoming" },
+        { edge: "MealRecipePortion.mealRecipeId", direction: "outgoing" },
+        { edge: "MealRecipe.recipeId", direction: "outgoing" },
+      ])
+      .named("recipes-eaten", "Recipes eaten", {
+        view: { key: "recipesEaten", columnGroup: "Meals" },
+      }),
+  ],
+  readSchemas,
+);

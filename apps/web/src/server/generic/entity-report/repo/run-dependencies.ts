@@ -1,8 +1,8 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
+import { type RunOut } from "@cubby/schemas/entities/run";
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { EntityReportOut } from "@cubby/schemas/entity-report";
 import { parseEntityRef, runShortcode } from "@cubby/schemas/identifiers";
-import type { RunOut } from "@cubby/schemas/run";
 import {
   hasImportRunReports,
   isExecutedRunPurpose,

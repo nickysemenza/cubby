@@ -1,3 +1,4 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -77,7 +78,7 @@ describe("Run AI work cancel", () => {
       target: {
         kind: "email" as const,
         entity: "email" as const,
-        recordId: crypto.randomUUID(),
+        recordId: parseEntityId("email", crypto.randomUUID()),
         field: null,
         assessmentIds: [],
       },

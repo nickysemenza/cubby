@@ -1,9 +1,6 @@
+import { type MealCreateInput } from "@cubby/schemas/entities/meal";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import {
-  type MealCreateInput,
-  mealAddRecipeInput,
-  shoppingListInput,
-} from "@cubby/schemas/meal";
+import { mealAddRecipeInput, shoppingListInput } from "@cubby/schemas/meal";
 import {
   buildNutrition,
   hasKnownEstimate,

@@ -12,6 +12,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import {
+  spendingCategoryFiltersSchema,
+  spendingCategoryOut,
+} from "@cubby/schemas/entities/spendingCategory";
+import {
   entityFieldModels,
   type GeneratedSuggestFieldKey,
 } from "@cubby/schemas/entity-fields";
@@ -21,10 +25,6 @@ import {
   type Trade,
   type ProjectOptionsOut,
 } from "@cubby/schemas/project";
-import {
-  spendingCategoryFilters,
-  spendingCategoryOut,
-} from "@cubby/schemas/spending-category";
 import {
   redundantTokens,
   type RedundantTokenMatch,
@@ -363,7 +363,7 @@ async function loadSpendingCategoryRoster(
   const rows: z.infer<typeof spendingRosterRow>[] = [];
   for (let pageIndex = 0; ; pageIndex++) {
     const page = await spendingCategoryScaffold.read(db, {
-      filters: spendingCategoryFilters.parse({}),
+      filters: spendingCategoryFiltersSchema.parse({}),
       sorts: [{ orderBy: "name", direction: "asc" }],
       pagination: { pageIndex, pageSize: MAX_PAGE_SIZE },
       projection: ["id", "name", "parentId"],

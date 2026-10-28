@@ -1,7 +1,8 @@
 import { buildActorContext } from "@cubby/schemas/context";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import type { ProjectId } from "@cubby/schemas/identifiers";
 import {
+  type ImageId,
+  type ProjectId,
   parseEntityId,
   parseShortcodeFor,
   runEntityId,
@@ -127,7 +128,7 @@ const mkRunTargetRow = (
   db: Database,
   values: {
     runId: string;
-    imageId: string;
+    imageId: ImageId;
     position?: number;
     state?: string;
     createdAt?: Date;
@@ -1172,7 +1173,7 @@ describe("image repository — purchase (charge) documents", () => {
     const makeProject = async (name: string) =>
       (await createRepoEntity(ctx, "project", { name })).entityId;
 
-    const rawImageRows = async (imageId: string) =>
+    const rawImageRows = async (imageId: ImageId) =>
       await getDb(ctx.db).select().from(image).where(eq(image.id, imageId));
 
     it("deletes the file and returns its key when nothing else references it", async () => {

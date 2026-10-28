@@ -1,3 +1,5 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import type { Faker } from "@faker-js/faker";
 import { z } from "zod";
 
@@ -8,9 +10,8 @@ import { type Filler, fillerFor } from "./filler";
 /**
  * One factory for every kernel-creatable entity, driven by the generated
  * `ENTITY_SCHEMA_BINDINGS`. The entity list and input types come from the
- * entity declarations' create schemas; the only hand-written part is
- * `ENTITY_DEFAULTS`, which a new creatable entity cannot omit (the table is
- * exhaustive, so a missing entry fails typecheck).
+ * entity declarations' create schemas. Shared title filler follows the field
+ * model; only concrete domain requirements need fixture defaults.
  *
  * A factory fills what a test does not care about. It does NOT invent a
  * relation: a foreign key is never defaulted, so a test that forgets
@@ -48,71 +49,60 @@ const SOME_DAY = "2024-01-15";
  * (`vendorId`, `productId`, `accountId`, ...) and external identifiers
  * (`installationId`) are deliberately absent: the caller supplies them.
  */
-const ENTITY_DEFAULTS = {
-  product: (f) => ({ name: f.name("Product") }),
-  recipe: (f) => ({ name: f.name("Recipe"), meta: null, sections: [] }),
-  ingredient: (f) => ({ name: f.name("Ingredient") }),
-  // The kernel refuses a location with no type (only a Product instance may omit it).
-  location: (f) => ({ name: f.name("Location"), type: "room" }),
+const DOMAIN_DEFAULTS = {
+  recipe: () => ({ meta: null, sections: [] }),
+  // Only a Product instance may omit the location type.
+  location: () => ({ type: "room" }),
   inventory: () => ({ amount: { value: 1, unit: "each" } }),
-  meal: (f) => ({ name: f.name("Meal"), date: SOME_DAY }),
-  ledgerParty: (f) => ({ name: f.name("Party"), kind: "guest" }),
+  meal: () => ({ date: SOME_DAY }),
+  ledgerParty: () => ({ kind: "guest" }),
   ledgerTransfer: () => ({ amount: 10, date: SOME_DAY }),
-  project: (f) => ({ name: f.name("Project") }),
-  task: (f) => ({ name: f.name("Task") }),
-  vendor: (f) => ({ name: f.name("Vendor") }),
   purchase: () => ({ date: SOME_DAY }),
-  financialAccount: (f) => ({
-    name: f.name("Account"),
-    identity: { kind: "cash" },
-  }),
+  financialAccount: () => ({ identity: { kind: "cash" } }),
   financialTransaction: () => ({
     kind: "purchase",
     status: "expected",
     amount: 10,
   }),
-  wish: (f) => ({ name: f.name("Wish") }),
-  // `trade` and `cost` stay unset on purpose: an absent trade is inherited from
-  // the project/purchase, and a default would silently break that.
-  expense: (f) => ({
+  // An absent trade is inherited; defaulting it would change that behavior.
+  expense: () => ({
     lineKind: "principal",
-    name: f.name("Expense"),
     date: SOME_DAY,
     costType: "materials",
   }),
-  planting: () => ({}),
   gardenEntry: () => ({ observedOn: SOME_DAY }),
-  vendorAccount: () => ({}),
-  productCategory: (f) => ({ name: f.name("Category") }),
-  device: (f) => ({ name: f.name("Device"), platform: "ios" }),
-  plant: (f) => ({ name: f.name("Plant") }),
-  spendingCategory: (f) => ({ name: f.name("Spending") }),
+  device: () => ({ platform: "ios" }),
 } satisfies {
-  [E in CreatableEntity]: (filler: Filler) => EntityOverrides<E>;
+  [E in CreatableEntity]?: (filler: Filler) => EntityOverrides<E>;
 };
 
 function creatableEntities(): CreatableEntity[] {
-  // SAFETY: `satisfies` above makes ENTITY_DEFAULTS keyed exactly by CreatableEntity.
-  return Object.keys(ENTITY_DEFAULTS) as CreatableEntity[];
+  return entityKeys.filter((entity): entity is CreatableEntity =>
+    Object.entries(ENTITY_SCHEMA_BINDINGS).some(
+      ([key, binding]) => key === entity && binding.createInput !== null,
+    ),
+  );
 }
 export const CREATABLE_ENTITIES = creatableEntities();
-
-/**
- * `undefined` means "not provided", as it does in the optional-argument
- * seeders (`dueDate: opts.dueDate`). A bare spread would let it erase a default.
- */
-const definedEntries = <E extends CreatableEntity>(
-  record: EntityOverrides<E>,
-): [string, unknown][] =>
-  Object.entries(record).filter(([, value]) => value !== undefined);
 
 /** The un-parsed field bag: defaults first, then the caller's overrides. */
 function entityDefaults<E extends CreatableEntity>(
   entity: E,
   opts: BuildOptions = {},
-): EntityOverrides<E> {
-  // SAFETY: each ENTITY_DEFAULTS entry is typed for its own entity key.
-  return ENTITY_DEFAULTS[entity](fillerFor(opts.faker)) as EntityOverrides<E>;
+) {
+  const filler = fillerFor(opts.faker);
+  const summary = entitySummary[entity];
+  const fields = entityFieldModels[entity].fields;
+  const title = fields.find(
+    (field) =>
+      (field.key === summary.titleField || field.key === "name") &&
+      field.kind === "text" &&
+      entityFieldModels[entity].create.some((key) => key === field.key),
+  );
+  return {
+    ...(title ? { [title.key]: filler.name(summary.singular) } : {}),
+    ...Object.entries(DOMAIN_DEFAULTS).find(([key]) => key === entity)?.[1](),
+  };
 }
 
 /** Build a parsed create input: defaults, then overrides, through the entity's own schema. */
@@ -124,10 +114,12 @@ export function buildEntity<E extends CreatableEntity>(
   const schema = ENTITY_SCHEMA_BINDINGS[entity].createInput;
   if (!schema) throw new Error(`factory ${entity}: no create input`);
   const parsed = schema.safeParse(
-    Object.fromEntries([
-      ...definedEntries(entityDefaults(entity, opts)),
-      ...definedEntries(overrides),
-    ]),
+    Object.fromEntries(
+      [entityDefaults(entity, opts), overrides].flatMap((record) =>
+        // An undefined override is absent, so it must not erase a default.
+        Object.entries(record).filter(([, value]) => value !== undefined),
+      ),
+    ),
   );
   if (!parsed.success) {
     throw new Error(

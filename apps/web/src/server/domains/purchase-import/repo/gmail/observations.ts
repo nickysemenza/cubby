@@ -9,6 +9,8 @@ import {
   emailClassificationPublicationEvidence,
   type EmailClassificationPublicationEvidence,
 } from "@cubby/schemas/email-observations";
+import type { RunId } from "@cubby/schemas/identifiers";
+import type { EmailId } from "@cubby/schemas/identifiers";
 import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq } from "drizzle-orm";
@@ -267,7 +269,7 @@ export async function recordEmailRetrievalFailure(
     ledgerPartyId: string;
     mailboxId: string;
     messageId: string;
-    runId?: string;
+    runId?: RunId;
     httpStatus: number | null;
     error: string;
   },
@@ -307,7 +309,7 @@ export async function recordEmailRetrievalFailure(
 /** Persist a checksum-fenced immutable preview; selection grants no import authority. */
 export async function recordEmailCandidateObservation(
   db: Database,
-  input: { emailId: string; preview: EmailCandidatePreview },
+  input: { emailId: EmailId; preview: EmailCandidatePreview },
 ) {
   const preview = emailCandidatePreview.parse(input.preview);
   if (preview.status === "selected") {

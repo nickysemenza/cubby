@@ -1,5 +1,5 @@
 /** Repository/compiler projections. Public Recipe reads use generated envelopes. */
-import definition from "./entity-definitions/01-recipe.entity";
+import { readSchemas as definitionSchemas } from "./entity-definitions/01-recipe.entity";
 import { z } from "zod";
 import { displayImagesField } from "./display-images";
 import { imageUrlSummary } from "./image-summary";
@@ -11,10 +11,10 @@ import {
 } from "./recipe-fields";
 import { rawRecipeTopLevel, recipeTotals } from "./recipe-shared";
 
-export const rawRecipeOutput = definition.readSchemas.output.extend({
+export const rawRecipeOutput = definitionSchemas.output.extend({
   displayImages: displayImagesField.optional(),
 });
-export const rawRecipeList = definition.readSchemas.list;
+export const rawRecipeList = definitionSchemas.list;
 const rawRecipeMcpSection = recipeSectionOut
   .omit({ id: true, ingredients: true })
   .extend({

@@ -1,4 +1,4 @@
-import { inventoryListItemOut } from "@cubby/schemas/inventory";
+import { inventoryListItemOut } from "@cubby/schemas/entities/inventory";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

@@ -1,8 +1,10 @@
+import {
+  locationDetailOut as infLocation,
+  type LocationDetailOut as InfLocation,
+} from "@cubby/schemas/entities/location";
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import {
-  infLocation,
   inventoryItemForTree,
-  type InfLocation,
   type LocationType,
 } from "@cubby/schemas/location";
 import { z } from "zod";

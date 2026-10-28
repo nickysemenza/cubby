@@ -2,6 +2,7 @@ import type { compileEnumOptions } from "@cubby/shared/enum-palette";
 import type { Entity } from "./entity-core";
 import type { RelationshipPathStep } from "./entity-integrity";
 import type {
+  EntityDeclarationMetadata,
   CompiledEntityPresentation,
   EntityFieldKind,
   EntityFieldControlKind,
@@ -484,21 +485,6 @@ type EntityFilterDescriptorMetadata = {
     | { kind: "range"; from: string; to: string; presence?: string };
 };
 
-type EntityPortSourceRoster = {
-  repository: EntityPortSourceRef | null;
-  fieldEnvelope: EntityPortSourceRef | null;
-
-  references: {
-    label: EntityPortSourceRef | null;
-    resolver: EntityPortSourceRef | null;
-  };
-
-  filters: EntityPortSourceRef | null;
-
-  search: {
-    projection: EntityPortSourceRef | null;
-    semanticText: EntityPortSourceRef | null;
-  };
-
-  timeline: EntityPortSourceRef | null;
-};
+type EntityPortSourceRoster = ReadonlyMetadata<
+  EntityDeclarationMetadata["extensions"]["ports"]
+>;

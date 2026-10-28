@@ -9,6 +9,7 @@ export {
 } from "./assessment-reference";
 import {
   productShortcode,
+  entityIdSchema,
   imageShortcode,
   anyShortcodeSchema,
   nonEmptyTuple,
@@ -76,7 +77,7 @@ export const assessmentSubjects = {
     entity: z.literal("email"),
     recordId: z.uuid(),
     checksum: z.string(),
-    runId: z.uuid(),
+    runId: entityIdSchema("run"),
   }),
   email_link: z.object({
     kind: z.literal("email_link"),
@@ -90,7 +91,7 @@ export const assessmentSubjects = {
   image_description: z.object({
     kind: z.literal("image_description"),
     entity: z.literal("image"),
-    recordId: z.uuid(),
+    recordId: entityIdSchema("image"),
     contentHash: z.string().nullable(),
   }),
   product_pair: z
@@ -129,7 +130,7 @@ export const assessmentSubjects = {
     kind: z.literal("run_finding"),
     entity: runFindingEntity,
     recordId: z.uuid(),
-    ledgerPartyId: z.uuid(),
+    ledgerPartyId: entityIdSchema("ledgerParty"),
   }),
   /** A frozen evaluation roster; it has no current target or review state. */
   evaluation_sample: z.object({
@@ -205,7 +206,7 @@ export const assessmentProjectionTargets = {
     ),
   image_description: z.object({
     entity: z.literal("image"),
-    recordId: z.uuid(),
+    recordId: entityIdSchema("image"),
   }),
   product_pair: z.object({ entity: z.literal("product"), recordId: z.uuid() }),
   recommendation: publicAssessmentTarget,
@@ -279,7 +280,7 @@ export const assessmentProducer = z.object({
   kind: z.enum(["model", "rule", "agent"]),
   model: z.string().nullable(),
   revision: z.string().nullable(),
-  runId: z.uuid().nullable(),
+  runId: entityIdSchema("run").nullable(),
   evaluationId: z.uuid().nullable(),
 });
 export const assessmentPublication = z

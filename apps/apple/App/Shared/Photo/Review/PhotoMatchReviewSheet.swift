@@ -225,7 +225,7 @@ struct MatchCandidateView: View {
     @Environment(AppModel.self) private var appModel
     let candidate: DedupCandidate
     var selections: [PhotoSelectionItem] = []
-    @State private var detail: ImageWithEntity?
+    @State private var detail: ImageDetailOut?
     @State private var error: String?
 
     var body: some View {

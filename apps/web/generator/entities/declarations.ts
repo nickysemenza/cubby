@@ -144,17 +144,9 @@ export const dateRangeBounds = (
   return dates ? { from, to } : null;
 };
 
-export type EntityPorts = Readonly<{
-  repository: SourceRef | null;
-  fieldEnvelope: SourceRef | null;
-  references: Readonly<{ label: SourceRef | null; resolver: SourceRef | null }>;
-  filters: SourceRef | null;
-  search: Readonly<{
-    projection: SourceRef | null;
-    semanticText: SourceRef | null;
-  }>;
-  timeline: SourceRef | null;
-}>;
+export type EntityPorts = Readonly<
+  EntityDeclarationMetadata["extensions"]["ports"]
+>;
 type RelationList = Pick<
   RelationMutation,
   "entity" | "relation" | "rowSchema" | "adapter"
@@ -240,6 +232,8 @@ export type EntityStorageField = Readonly<{
       | "set default";
   }>;
   defaultSql?: string;
+  type?: SourceRef & Readonly<{ array?: true }>;
+  enumValues?: readonly string[];
   specialized: string | null;
 }>;
 type EntityFieldModelSort = Readonly<{
@@ -337,6 +331,8 @@ export type CompiledEntity = Readonly<{
   key: string;
   overrides: readonly Readonly<{ path: string; value: string }>[];
   shortcode: string | null;
+  /** The identifier policy allows a requesting-member filter sentinel. */
+  currentMember: boolean;
   /** Names plus the declaration's `presentation` block, passed through as one unit. */
   inspector: Readonly<
     { singular: string; plural: string | null } & CompiledPresentation
@@ -385,6 +381,8 @@ export type CompiledEntity = Readonly<{
     merge: OperationOwner;
   }>;
   fieldModel: EntityFieldModel;
+  /** Raw schema keys the default repository must be able to project. */
+  readFields: readonly string[];
   /** `presentation.list.scope`/`scopes` as declared; server-only. */
   listScopes: Readonly<{
     scope: readonly string[];

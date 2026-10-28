@@ -1,4 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type ProductCategoryCreateInput,
+  type ProductCategoryUpdateData,
+} from "@cubby/schemas/entities/productCategory";
+import { productCategoryRawOut as rawProductCategoryOut } from "@cubby/schemas/entity-contracts/productCategory";
+import { normalizeAliases } from "@cubby/schemas/entity-definitions/field-policy";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -12,17 +18,14 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import {
-  type ProductCategoryCreateInput,
   type ProductCategoryFeature,
   type RawProductCategorySummary,
-  type ProductCategoryUpdateData,
 } from "@cubby/schemas/product-category";
 import {
   PRODUCT_CATEGORY_MAX_DEPTH as MAX_PRODUCT_CATEGORY_DEPTH,
   productCategoryFeature,
   rawProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
-import { rawProductCategoryOut } from "@cubby/schemas/product-category-raw-read";
 import type { categoryMappingSchema } from "@cubby/schemas/spending-classification";
 import {
   and,
@@ -419,10 +422,6 @@ const crud = createEntityCrud({
 /** One live product category by public code, or null. */
 export const readProductCategory = crud.getByShortcode;
 
-const cleanAliases = (aliases: string[]) => [
-  ...new Set(aliases.map((alias) => alias.trim()).filter(Boolean)),
-];
-
 export const assertValidParent = async (
   db: Database | DrizzleTransaction,
   id: ProductCategoryId | null,
@@ -548,7 +547,7 @@ export const createProductCategory = defineMutationWriter({
         );
       const row = await insertWithShortcode(tx, "productCategory", {
         name: data.name.trim(),
-        aliases: cleanAliases(data.aliases),
+        aliases: normalizeAliases(data.aliases),
         description: data.description,
         parentId,
         sortOrder: data.sortOrder,
@@ -672,7 +671,7 @@ export const updateProductCategory = defineMutationWriter({
         spendingCategoryMode: data.spendingCategoryMode,
         spendingCategoryId,
         name: data.name?.trim(),
-        aliases: data.aliases ? cleanAliases(data.aliases) : undefined,
+        aliases: data.aliases ? normalizeAliases(data.aliases) : undefined,
         description: data.description,
         parentId,
         sortOrder: data.sortOrder,

@@ -1,4 +1,5 @@
 import { assessmentSubjects } from "@cubby/schemas/assessment";
+import { entityIdSchema } from "@cubby/schemas/identifiers";
 import {
   imageDescriptionCorrectionOwner,
   imageDescriptionCorrectionReceipt,
@@ -36,7 +37,7 @@ const previousEffect = imageEffectReceipt.extend({
 });
 const imageRepairPlan = z.object({
   contentHash: z.string().min(1),
-  recordId: z.uuid(),
+  recordId: entityIdSchema("image"),
   description: z.string(),
   previous: previousEffect.nullable(),
   owner: imageDescriptionCorrectionOwner,
@@ -182,7 +183,7 @@ async function inspectTarget(db: Database, input: SuggestionCorrectionPlan) {
     );
   return {
     status: "eligible" as const,
-    state: target.state,
+    state: { ...target.state, recordId: subject.data.recordId },
     contentHash,
     description: resolution.description,
     previous,

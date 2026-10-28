@@ -1,4 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type LedgerPartyCreateInput,
+  type LedgerPartyUpdateData,
+} from "@cubby/schemas/entities/ledgerParty";
+import { ledgerPartyRawOut as rawLedgerPartyOut } from "@cubby/schemas/entity-contracts/ledgerParty";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -6,11 +11,6 @@ import type {
   LedgerPartyShortcode,
 } from "@cubby/schemas/identifiers";
 import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
-import type {
-  LedgerPartyCreateInput,
-  LedgerPartyUpdateData,
-} from "@cubby/schemas/ledger-party";
-import { rawLedgerPartyOut } from "@cubby/schemas/ledger-party-raw-read";
 import { type MealFoodAmount } from "@cubby/schemas/meal";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -45,6 +45,7 @@ import {
 } from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
+import { ENTITY_STORED_WRITES } from "~/server/generated/entity-write-bindings.gen";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import {
@@ -56,7 +57,6 @@ import {
   applyMergePolicy,
   policyDelete,
 } from "~/server/generic/removal/repo/dispositions";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
@@ -477,34 +477,10 @@ export const createLedgerParty = defineMutationWriter({
   },
 });
 
-export const updateLedgerParty = defineMutationWriter({
-  entity: "ledgerParty",
-  read: async (
-    receipt: MutationReceipt<"ledgerParty">,
-    db: Database,
-    _shortcode: LedgerPartyShortcode,
-    _data: LedgerPartyUpdateData,
-    _actor: ActorContext,
-  ) => ({
-    output: await reader.getByID(db, receipt.entityId),
-    entityId: receipt.entityId,
-  }),
-  write: async (
-    readOutput,
-    db: Database,
-    shortcode: LedgerPartyShortcode,
-    data: LedgerPartyUpdateData,
-    actor: ActorContext,
-  ) => {
-    const id = await resolveOrThrow(db, "ledgerParty", shortcode);
-    return reader.update(db, id, data, actor, async (readDb, receipt) =>
-      readOutput(receipt, async () => ({
-        output: await reader.getByID(readDb, id),
-        entityId: id,
-      })),
-    );
-  },
-});
+export const updateLedgerParty = reader.updateWriter(
+  ENTITY_STORED_WRITES.ledgerParty.update,
+  (output, entityId) => ({ output, entityId }),
+);
 
 const refuseHouseholdParty = async (
   tx: DrizzleTransaction,

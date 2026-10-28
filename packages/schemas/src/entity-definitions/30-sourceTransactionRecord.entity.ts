@@ -1,6 +1,7 @@
+import { timestampField } from "./field-policy";
 import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { plainDate } from "../base-entity";
 import { shortcodeSchema } from "../identifier-fields";
 import { merchantVendorInference } from "../financial-transaction-fields";
@@ -10,7 +11,7 @@ import {
   sourceTransactionRecordProviderStatus,
   sourceTransactionRecordMatchState,
 } from "../source-transaction-record-fields";
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "sourceTransactionRecord",
   names: {
     singular: "Source transaction record",
@@ -178,6 +179,7 @@ export default defineEntity({
         validation: { read: z.string().min(1), create: null, update: null },
       },
       {
+        audit: true,
         key: "batchId",
         kind: "identifier",
         labelOverride: "First import",
@@ -190,12 +192,14 @@ export default defineEntity({
         },
       },
       {
+        audit: true,
         key: "source",
         kind: "text",
         display: { columnGroup: "Source" },
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        audit: true,
         key: "externalId",
         kind: "text",
         labelOverride: "Source reference",
@@ -203,6 +207,7 @@ export default defineEntity({
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        audit: true,
         key: "rowPosition",
         kind: "number",
         nullable: true,
@@ -214,38 +219,57 @@ export default defineEntity({
         },
       },
       {
+        audit: true,
         key: "providerTransactionId",
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
+        audit: true,
         key: "legacyExternalId",
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
+        output: false,
+        audit: true,
         key: "legacyReference",
         kind: "text",
         nullable: true,
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
+        audit: true,
         key: "chargeKey",
         kind: "text",
         display: { list: false },
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        audit: true,
         key: "current",
         kind: "boolean",
         display: { columnGroup: "Disposition" },
         validation: { read: z.boolean(), create: null, update: null },
       },
       {
+        audit: true,
         key: "withdrawnAt",
         kind: "timestamp",
         nullable: true,
@@ -253,6 +277,7 @@ export default defineEntity({
         validation: { read: z.date().nullable(), create: null, update: null },
       },
       {
+        audit: true,
         key: "withdrawalImportId",
         kind: "identifier",
         nullable: true,
@@ -266,6 +291,7 @@ export default defineEntity({
         },
       },
       {
+        audit: true,
         key: "lastObservedAt",
         kind: "timestamp",
         labelOverride: "Last observed",
@@ -273,13 +299,19 @@ export default defineEntity({
         validation: { read: z.date(), create: null, update: null },
       },
       {
+        audit: true,
         key: "providerAccountId",
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
+        audit: true,
         key: "providerData",
         kind: "json",
         nullable: true,
@@ -288,12 +320,14 @@ export default defineEntity({
         validation: { read: z.json().nullable(), create: null, update: null },
       },
       {
+        audit: true,
         key: "accountDescriptor",
         kind: "text",
         display: { columnGroup: "Source" },
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        audit: true,
         key: "statementDate",
         kind: "date",
         labelOverride: "Source date",
@@ -301,12 +335,18 @@ export default defineEntity({
         validation: { read: plainDate, create: null, update: null },
       },
       {
+        audit: true,
         key: "amount",
         kind: "number",
-        display: { columnGroup: "Source", columnBar: true, format: "currency" },
+        display: {
+          columnGroup: "Source",
+          columnBar: true,
+          format: "currency",
+        },
         validation: { read: z.number(), create: null, update: null },
       },
       {
+        audit: true,
         key: "providerAmount",
         kind: "number",
         labelOverride: "Original signed amount",
@@ -314,26 +354,38 @@ export default defineEntity({
         validation: { read: z.number(), create: null, update: null },
       },
       {
+        audit: true,
         key: "merchant",
         kind: "text",
         nullable: true,
         display: { columnGroup: "Source" },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
+        audit: true,
         key: "rawDescription",
         kind: "text",
         display: { columnGroup: "Source" },
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        audit: true,
         key: "sourceCategory",
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
+        audit: true,
         key: "providerStatus",
         kind: "enum",
         nullable: true,
@@ -361,11 +413,16 @@ export default defineEntity({
         },
       },
       {
+        audit: true,
         key: "providerNotes",
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "accountId",
@@ -471,25 +528,17 @@ export default defineEntity({
           update: z.string().nullable().optional(),
         },
       },
+      timestampField("createdAt", { format: "timestamp" }),
+      timestampField("updatedAt", { list: false, format: "timestamp" }),
       {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { format: "timestamp" },
-        validation: { read: z.date(), create: null, update: null },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { list: false, format: "timestamp" },
-        validation: { read: z.date(), create: null, update: null },
-      },
-      {
+        output: false,
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
         validation: { read: z.date().nullable(), create: null, update: null },
       },
       {
+        output: false,
         key: "shortcode",
         kind: "text",
         validation: { read: z.string(), create: null, update: null },
@@ -513,7 +562,11 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         display: { columnGroup: "Reconciliation" },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "supersededBy",
@@ -524,7 +577,11 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "matchState",
@@ -590,7 +647,7 @@ export default defineEntity({
     storage: [
       { key: "id", specialized: "primary-key:SourceTransactionRecordId" },
       { key: "shortcode", specialized: "shortcode" },
-      { key: "batchId", reference: "transactionImport" },
+      "batchId",
       {
         key: "source",
         reference: "externalSource",
@@ -608,7 +665,7 @@ export default defineEntity({
       },
       { key: "current", defaultValue: true },
       { key: "withdrawnAt" },
-      { key: "withdrawalImportId", reference: "transactionImport" },
+      "withdrawalImportId",
       { key: "lastObservedAt", defaultOverride: "now" },
       { key: "providerAccountId" },
       { key: "providerData" },
@@ -621,96 +678,17 @@ export default defineEntity({
       { key: "sourceCategory" },
       { key: "providerStatus" },
       { key: "providerNotes" },
-      { key: "accountId", reference: "financialAccount" },
+      "accountId",
       { key: "disposition", defaultValue: "open" },
       { key: "dispositionReason" },
       { key: "dispositionNote" },
-      { key: "supersededByRowId", reference: "sourceTransactionRecord" },
+      "supersededByRowId",
       { key: "notes" },
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       { key: "deletedAt" },
     ],
-    create: [],
-    update: [
-      "accountId",
-      "disposition",
-      "dispositionNote",
-      "dispositionReason",
-      "notes",
-      "supersededByRowId",
-    ],
-    audit: [
-      "batchId",
-      "source",
-      "externalId",
-      "rowPosition",
-      "providerTransactionId",
-      "legacyExternalId",
-      "legacyReference",
-      "chargeKey",
-      "current",
-      "withdrawnAt",
-      "withdrawalImportId",
-      "lastObservedAt",
-      "providerAccountId",
-      "providerData",
-      "accountDescriptor",
-      "statementDate",
-      "amount",
-      "providerAmount",
-      "merchant",
-      "rawDescription",
-      "sourceCategory",
-      "providerStatus",
-      "providerNotes",
-      "accountId",
-      "disposition",
-      "dispositionReason",
-      "dispositionNote",
-      "supersededByRowId",
-      "notes",
-    ],
-    output: [
-      "id",
-      "displayName",
-      "batchId",
-      "source",
-      "externalId",
-      "rowPosition",
-      "providerTransactionId",
-      "legacyExternalId",
-      "chargeKey",
-      "current",
-      "withdrawnAt",
-      "withdrawalImportId",
-      "lastObservedAt",
-      "providerAccountId",
-      "providerData",
-      "accountDescriptor",
-      "statementDate",
-      "amount",
-      "providerAmount",
-      "merchant",
-      "rawDescription",
-      "sourceCategory",
-      "providerStatus",
-      "providerNotes",
-      "accountId",
-      "disposition",
-      "dispositionReason",
-      "dispositionNote",
-      "supersededByRowId",
-      "notes",
-      "createdAt",
-      "updatedAt",
-      "importFingerprint",
-      "accountName",
-      "supersededBy",
-      "matchState",
-      "transactionId",
-      "vendorInference",
-    ],
+
     rows: {
       runStepInputs: {
         label: "Run step inputs",
@@ -720,7 +698,10 @@ export default defineEntity({
       acceptedTransactions: {
         label: "Accepted transactions",
         repository: {
-          transaction: { reference: "financialTransaction", connection: true },
+          transaction: {
+            reference: "financialTransaction",
+            connection: true,
+          },
         },
       },
     },
@@ -760,14 +741,6 @@ export default defineEntity({
   },
   fields: {
     create: null,
-    update: {
-      module: "@cubby/schemas/source-transaction-record",
-      export: "sourceTransactionRecordUpdateData",
-    },
-    output: {
-      module: "@cubby/schemas/source-transaction-record-raw-read",
-      export: "rawSourceTransactionRecordOut",
-    },
   },
   storage: {
     indexes: [
@@ -804,7 +777,9 @@ export default defineEntity({
       {
         name: "SourceTransactionRecord_transfer_seed_idx",
         on: [
-          { sql: "('stmt:' || {source} || ':' || {chargeKey}) COLLATE \"C\"" },
+          {
+            sql: "('stmt:' || {source} || ':' || {chargeKey}) COLLATE \"C\"",
+          },
         ],
         where: "{deletedAt} IS NULL AND {sourceCategory} IS NOT NULL",
       },
@@ -1026,169 +1001,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "account",
-      label: "Account",
-      target: "financialAccount",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "SourceTransactionRecord.accountId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "SourceTransactionRecord.accountId", direction: "incoming" },
-        ],
-      },
-    },
-    {
-      key: "firstImport",
-      label: "First import",
-      target: "transactionImport",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "SourceTransactionRecord.batchId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "SourceTransactionRecord.batchId", direction: "incoming" },
-        ],
-      },
-    },
-    {
-      key: "withdrawalProof",
-      label: "Withdrawal proof",
-      target: "transactionImport",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "SourceTransactionRecord.withdrawalImportId",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "SourceTransactionRecord.withdrawalImportId",
-            direction: "incoming",
-          },
-        ],
-      },
-    },
-    {
-      key: "supersededByRecord",
-      label: "Superseded by",
-      target: "sourceTransactionRecord",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "SourceTransactionRecord.supersededByRowId",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "SourceTransactionRecord.supersededByRowId",
-            direction: "incoming",
-          },
-        ],
-      },
-    },
-    {
-      key: "predecessors",
-      label: "Superseded records",
-      target: "sourceTransactionRecord",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "SourceTransactionRecord.supersededByRowId",
-            direction: "incoming",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "SourceTransactionRecord.supersededByRowId",
-            direction: "outgoing",
-          },
-        ],
-      },
-    },
-    {
-      key: "imports",
-      label: "Imports",
-      target: "transactionImport",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "TransactionImportRecord.statementRowId",
-            direction: "incoming",
-          },
-          { edge: "TransactionImportRecord.importId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "TransactionImportRecord.importId", direction: "incoming" },
-          {
-            edge: "TransactionImportRecord.statementRowId",
-            direction: "outgoing",
-          },
-        ],
-      },
-    },
-    {
-      key: "transactions",
-      sources: [
-        {
-          key: "accepted",
-          label: "Accepted settlement",
-          provenance: {
-            kind: "query",
-            query: "transactionSourceRecords",
-            reverse: true,
-          },
-          inverse: {
-            steps: [
-              {
-                edge: "Relationship.transactionSourceRecords",
-                direction: "outgoing",
-              },
-            ],
-          },
-        },
-      ],
-      label: "Transactions",
-      target: "financialTransaction",
-      cardinality: "many",
-      provenance: {
-        kind: "derived",
-        filter: "sourceTransactionRecordId",
-        evidence: [
-          "EntityExternalId.settlement_ref",
-          "SourceTransactionRecord.chargeKey",
-        ],
-      },
-    },
-  ],
+
   search: "lexical",
   capabilities: {
     images: { storage: false },
@@ -1206,3 +1019,43 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r.field("accountId").named("account", "Account"),
+    r.field("batchId").named("firstImport", "First import"),
+    r.field("withdrawalImportId").named("withdrawalProof", "Withdrawal proof"),
+    r.field("supersededByRowId").named("supersededByRecord", "Superseded by"),
+    r
+      .path("sourceTransactionRecord", "many", [
+        {
+          edge: "SourceTransactionRecord.supersededByRowId",
+          direction: "incoming",
+        },
+      ])
+      .named("predecessors", "Superseded records"),
+    r
+      .path("transactionImport", "many", [
+        {
+          edge: "TransactionImportRecord.statementRowId",
+          direction: "incoming",
+        },
+        { edge: "TransactionImportRecord.importId", direction: "outgoing" },
+      ])
+      .named("imports", "Imports"),
+    r
+      .derived("financialTransaction", "many", "sourceTransactionRecordId", [
+        "EntityExternalId.settlement_ref",
+        "SourceTransactionRecord.chargeKey",
+      ])
+      .named("transactions", "Transactions", {
+        sources: [
+          r
+            .query("transactionSourceRecords", "many", true)
+            .source("accepted", "Accepted settlement"),
+        ],
+      }),
+  ],
+  readSchemas,
+);

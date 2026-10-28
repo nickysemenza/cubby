@@ -18,6 +18,7 @@ import {
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
 import { financialTransactionProviderStatus } from "@cubby/schemas/financial-transaction-fields";
+import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
 import {
@@ -2657,7 +2658,7 @@ async function publishRuleGenerationPage(
   );
 }
 
-const ruleProducer = (runId: string | null): AssessmentProducer => ({
+const ruleProducer = (runId: RunId | null): AssessmentProducer => ({
   kind: "rule",
   model: null,
   revision: STATEMENT_SUGGESTION_REVISION,
@@ -2785,7 +2786,7 @@ async function admitRetriedCharge(
 export async function retryStatementGenerationRefs(
   db: Database,
   input: {
-    runId: string | null;
+    runId: RunId | null;
     scope?: StatementSuggestionScope;
     refs: readonly string[];
     work?: PageWork;
@@ -2861,7 +2862,7 @@ export async function generateStatementSuggestionPage(
   db: Database,
   input: {
     after: ChargeRef | null;
-    runId: string | null;
+    runId: RunId | null;
     limit?: number;
     scope?: StatementSuggestionScope;
     /** A Run step's page recorder; receives the same timings the log line carries. */
@@ -3002,7 +3003,7 @@ export async function generateStatementHoldVoidPage(
   db: Database,
   input: {
     after: string | null;
-    runId: string | null;
+    runId: RunId | null;
     limit?: number;
     scope?: StatementSuggestionScope;
   },

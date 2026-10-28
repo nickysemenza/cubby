@@ -3,6 +3,7 @@ import { z } from "zod";
 import { retainedTableExports } from "@cubby/schemas/compiler/child-tables/retained";
 
 import type { EntityDeclarationMetadata } from "@cubby/schemas/entity-definitions/definition";
+import { storedReference } from "@cubby/schemas/entity-definitions/field-policy";
 import {
   type CompiledEntity,
   type CompiledEntityTable,
@@ -79,7 +80,10 @@ export const compileEntityTable = (
     kind: column.kind,
     notNull: column.notNull === true,
     defaultValue: column.defaultValue ?? null,
-    reference: column.reference ?? null,
+    reference: storedReference(
+      column.reference,
+      fieldModel.fields.find((field) => field.key === column.key),
+    ),
     type: column.type ?? null,
   }));
   /** Column key → SQL column name, model columns first. */

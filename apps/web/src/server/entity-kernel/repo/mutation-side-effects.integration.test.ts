@@ -1,11 +1,9 @@
 import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
+import { projectCreateInput } from "@cubby/schemas/entities/project";
+import { taskCreateInput } from "@cubby/schemas/entities/task";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { EntityRef } from "@cubby/schemas/identifiers";
-import {
-  expenseCreateInput,
-  projectCreateInput,
-  taskCreateInput,
-} from "@cubby/schemas/project";
+import { expenseCreateInput } from "@cubby/schemas/project";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";

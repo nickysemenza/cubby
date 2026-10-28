@@ -1,3 +1,8 @@
+import {
+  projectOut,
+  projectCreateInput,
+  projectUpdateData,
+} from "@cubby/schemas/entities/project";
 import { describe, expect, it } from "vitest";
 import { generatedEntitySort } from "./generated/entity-sort.gen";
 import {
@@ -7,10 +12,7 @@ import {
   expenseFiltersSchema,
   projectDashboardSummaryOut,
   projectPortfolioAnalyticsOut,
-  projectCreateInput,
-  projectOut,
   type ProjectAttentionDescribable,
-  projectUpdateData,
 } from "./project";
 
 // Native's JSON adapter formats these server-owned figures. Keep its field paths pinned here

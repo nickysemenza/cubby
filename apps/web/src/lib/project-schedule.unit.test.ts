@@ -1,4 +1,4 @@
-import type { ProjectOut } from "@cubby/schemas/project";
+import { type ProjectOut } from "@cubby/schemas/entities/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";

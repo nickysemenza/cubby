@@ -38,6 +38,7 @@ export const childTableDependencies = (
 
 export const renderChildTables = (
   tables: readonly ChildTableMetadata[],
+  entityReferences: ReadonlyMap<string, string> = new Map(),
 ): string =>
   tables
     .map((table) => {
@@ -57,6 +58,11 @@ export const renderChildTables = (
         if (column.primaryKey) value += ".primaryKey()";
         if (column.notNull) value += ".notNull()";
         if (column.type) value += `.$type<${column.type}>()`;
+        else if (column.kind === "uuid" && column.reference?.column === "id") {
+          const target = entityReferences.get(column.reference.table);
+          if (target !== undefined)
+            value += `.$type<EntityId<${JSON.stringify(target)}>>()`;
+        }
         if (column.default !== undefined)
           value +=
             column.default.kind === "now"

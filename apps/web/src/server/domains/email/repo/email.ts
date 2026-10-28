@@ -1,7 +1,7 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
-import { emailFilters, type EmailFilters } from "@cubby/schemas/email";
-import { rawEmailOut } from "@cubby/schemas/email-raw-read";
+import { emailFiltersSchema, type EmailFilters } from "@cubby/schemas/email";
+import { emailRawOut as rawEmailOut } from "@cubby/schemas/entity-contracts/email";
 import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import {
   mailboxClassification,
@@ -208,7 +208,7 @@ const emailScope = listPrepare(async (db, filters) => {
     fixedLinkState: oneOrManyValues(parsed.linkState)?.length === 1,
   };
 });
-const emailScopeFilters = emailFilters.pick({
+const emailScopeFilters = emailFiltersSchema.pick({
   purchaseId: true,
   vendorId: true,
   vendorAccountId: true,

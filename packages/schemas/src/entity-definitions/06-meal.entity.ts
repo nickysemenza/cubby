@@ -1,8 +1,9 @@
+import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { mealReadSchemas } from "../meal-fields";
 import { mealChildren } from "../child-tables/meal.js";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { imageShortcode, mealShortcode } from "../identifier-fields.js";
 import {
@@ -19,7 +20,7 @@ import { mealDate } from "@cubby/schemas/meal-shared";
 import { imageOut } from "./field-primitives.js";
 import { labelField } from "./label-field.js";
 import { z } from "zod";
-export default defineEntity(
+export const { definition, readSchemas } = defineEntityModel(
   {
     key: "meal",
     names: { singular: "Meal", plural: "Meals" },
@@ -177,6 +178,7 @@ export default defineEntity(
     model: {
       fields: [
         {
+          audit: false,
           key: "date",
           kind: "date",
           control: {
@@ -195,6 +197,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "name",
           kind: "text",
           nullable: true,
@@ -207,6 +210,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "sortOrder",
           kind: "number",
           nullable: true,
@@ -219,6 +223,7 @@ export default defineEntity(
           },
         },
         {
+          audit: false,
           key: "mealType",
           kind: "enum",
           nullable: true,
@@ -259,6 +264,7 @@ Rules:
           },
         },
         {
+          audit: false,
           key: "mealKind",
           kind: "enum",
           control: {
@@ -299,6 +305,7 @@ Rules:
           },
         },
         {
+          audit: false,
           key: "recipes",
           kind: "json",
           control: { kind: "specialized", renderer: "structured-field" },
@@ -327,6 +334,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           key: "pendingImageIds",
           kind: "identifier",
           reference: { entity: "image", multiple: true },
@@ -337,6 +346,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           key: "removeImageIds",
           kind: "identifier",
           reference: { entity: "image", multiple: true },
@@ -347,6 +358,8 @@ Rules:
           },
         },
         {
+          output: false,
+          audit: false,
           key: "imageOrder",
           semanticRole: "attachment",
           kind: "text",
@@ -453,6 +466,7 @@ Rules:
           },
         },
         {
+          output: false,
           key: "costTotal",
           kind: "json",
           nullable: true,
@@ -486,7 +500,7 @@ Rules:
             ],
           },
         },
-        labelField("costTotalLabel", "Meal cost total"),
+        { ...labelField("costTotalLabel", "Meal cost total"), output: false },
         {
           // The names of `recipes[].recipe`, so a generic row or facts list can
           // show what the meal is without decoding the composition.
@@ -508,32 +522,10 @@ Rules:
           },
           validation: { read: z.array(z.string()), create: null, update: null },
         },
-        {
-          key: "createdAt",
-          kind: "timestamp",
-          display: { list: false },
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        {
-          key: "updatedAt",
-          kind: "timestamp",
-          display: { list: false },
-          validation: {
-            read: z.date(),
-            create: null,
-            update: null,
-          },
-        },
-        { key: "shortcode", kind: "text" },
-        {
-          key: "deletedAt",
-          kind: "timestamp",
-          nullable: true,
-        },
+        timestampField("createdAt"),
+        timestampField("updatedAt"),
+        { output: false, key: "shortcode", kind: "text" },
+        { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
       ],
       storage: [
         {
@@ -554,26 +546,7 @@ Rules:
         { key: "updatedAt", specialized: "updated-at" },
         "deletedAt",
       ],
-      create: [
-        "date",
-        "name",
-        "sortOrder",
-        "mealType",
-        "mealKind",
-        "recipes",
-        "pendingImageIds",
-      ],
-      update: [
-        "date",
-        "name",
-        "sortOrder",
-        "mealType",
-        "mealKind",
-        "pendingImageIds",
-        "removeImageIds",
-        "imageOrder",
-      ],
-      audit: [],
+
       // Slot order (`mealTypeValues` is clock order), not slug order.
       derived: {
         mealType: { type: "enum", options: [...mealTypeValues] },
@@ -610,23 +583,6 @@ Rules:
         create: ["capture", "full"],
         update: ["full", "calendar"],
       },
-      output: [
-        "id",
-        "date",
-        "name",
-        "sortOrder",
-        "mealType",
-        "mealKind",
-        "recipes",
-        "totals",
-        "cost",
-        "calories",
-        "images",
-        "displayName",
-        "recipeNames",
-        "createdAt",
-        "updatedAt",
-      ],
     },
     fields: {
       embedded: [
@@ -655,17 +611,7 @@ Rules:
           ],
         },
       ],
-      create: { module: "@cubby/schemas/meal", export: "mealCreateInput" },
-      update: { module: "@cubby/schemas/meal", export: "mealUpdateData" },
-      output: {
-        module: "@cubby/schemas/meal-raw-read",
-        export: "rawMealOutput",
-      },
-      list: { module: "@cubby/schemas/meal-raw-read", export: "rawMealList" },
-      detail: {
-        module: "@cubby/schemas/meal-raw-read",
-        export: "rawMealDetail",
-      },
+
       mcpOutput: {
         module: "@cubby/schemas/meal-raw-read",
         export: "rawMealMcpOutput",
@@ -831,156 +777,7 @@ Rules:
         },
       ],
     },
-    relations: [
-      {
-        key: "recipes",
-        label: "Recipes",
-        target: "recipe",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "MealRecipe.mealId", direction: "incoming" },
-            { edge: "MealRecipe.recipeId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "MealRecipe.recipeId", direction: "incoming" },
-            { edge: "MealRecipe.mealId", direction: "outgoing" },
-          ],
-        },
-        sources: [
-          {
-            key: "served-portions",
-            label: "Served portions",
-            provenance: {
-              kind: "local-path",
-              steps: [
-                { edge: "MealRecipePortion.mealId", direction: "incoming" },
-                {
-                  edge: "MealRecipePortion.mealRecipeId",
-                  direction: "outgoing",
-                },
-                { edge: "MealRecipe.recipeId", direction: "outgoing" },
-              ],
-            },
-            inverse: {
-              steps: [
-                { edge: "MealRecipe.recipeId", direction: "incoming" },
-                {
-                  edge: "MealRecipePortion.mealRecipeId",
-                  direction: "incoming",
-                },
-                { edge: "MealRecipePortion.mealId", direction: "outgoing" },
-              ],
-            },
-          },
-        ],
-      },
-      {
-        key: "food-products",
-        label: "Food products",
-        target: "product",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "MealFoodEntry.mealId", direction: "incoming" },
-            { edge: "MealFoodEntry.productId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "MealFoodEntry.productId", direction: "incoming" },
-            { edge: "MealFoodEntry.mealId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "food-ingredients",
-        label: "Food ingredients",
-        target: "ingredient",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "MealFoodEntry.mealId", direction: "incoming" },
-            { edge: "MealFoodEntry.ingredientId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
-            { edge: "MealFoodEntry.mealId", direction: "outgoing" },
-          ],
-        },
-      },
-      {
-        key: "eaters",
-        label: "Eaters",
-        target: "ledgerParty",
-        cardinality: "many",
-        sourceKey: "food-entries",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "MealFoodEntry.mealId", direction: "incoming" },
-            { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "MealFoodEntry.ledgerPartyId", direction: "incoming" },
-            { edge: "MealFoodEntry.mealId", direction: "outgoing" },
-          ],
-        },
-        sources: [
-          {
-            key: "portions",
-            label: "Served portions",
-            provenance: {
-              kind: "local-path",
-              steps: [
-                { edge: "MealRecipePortion.mealId", direction: "incoming" },
-                {
-                  edge: "MealRecipePortion.ledgerPartyId",
-                  direction: "outgoing",
-                },
-              ],
-            },
-            inverse: {
-              steps: [
-                {
-                  edge: "MealRecipePortion.ledgerPartyId",
-                  direction: "incoming",
-                },
-                { edge: "MealRecipePortion.mealId", direction: "outgoing" },
-              ],
-            },
-          },
-        ],
-      },
-      {
-        key: "images",
-        label: "Images",
-        target: "image",
-        cardinality: "many",
-        provenance: {
-          kind: "local-path",
-          steps: [
-            { edge: "EntityAttachment.entityId", direction: "incoming" },
-            { edge: "EntityAttachment.imageId", direction: "outgoing" },
-          ],
-        },
-        inverse: {
-          steps: [
-            { edge: "EntityAttachment.imageId", direction: "incoming" },
-            { edge: "EntityAttachment.entityId", direction: "outgoing" },
-          ],
-        },
-      },
-    ],
+
     search: {
       mode: "semantic",
       inputs: [
@@ -1120,4 +917,87 @@ Rules:
     },
   },
   mealReadSchemas,
+);
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .path("recipe", "many", [
+        { edge: "MealRecipe.mealId", direction: "incoming" },
+        { edge: "MealRecipe.recipeId", direction: "outgoing" },
+      ])
+      .named("recipes", "Recipes", {
+        view: { columnGroup: "Food", inverseKey: "recipe.meals" },
+        sources: [
+          r
+            .path("recipe", "many", [
+              { edge: "MealRecipePortion.mealId", direction: "incoming" },
+              {
+                edge: "MealRecipePortion.mealRecipeId",
+                direction: "outgoing",
+              },
+              { edge: "MealRecipe.recipeId", direction: "outgoing" },
+            ])
+            .source("served-portions", "Served portions"),
+        ],
+      }),
+    r
+      .path("product", "many", [
+        { edge: "MealFoodEntry.mealId", direction: "incoming" },
+        { edge: "MealFoodEntry.productId", direction: "outgoing" },
+      ])
+      .named("food-products", "Food products", {
+        view: {
+          key: "foodProducts",
+          columnGroup: "Food",
+          filterPrefix: "foodProduct",
+          inverseKey: "product.meals",
+        },
+      }),
+    r
+      .path("ingredient", "many", [
+        { edge: "MealFoodEntry.mealId", direction: "incoming" },
+        { edge: "MealFoodEntry.ingredientId", direction: "outgoing" },
+      ])
+      .named("food-ingredients", "Food ingredients", {
+        view: {
+          key: "foodIngredients",
+          columnGroup: "Food",
+          filterPrefix: "foodIngredient",
+          inverseKey: "ingredient.meals",
+        },
+      }),
+    r
+      .path("ledgerParty", "many", [
+        { edge: "MealFoodEntry.mealId", direction: "incoming" },
+        { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
+      ])
+      .named("eaters", "Eaters", {
+        view: {
+          columnGroup: "People",
+          filterPrefix: "eater",
+          inverseKey: "ledgerParty.meals",
+        },
+        sourceKey: "food-entries",
+        sources: [
+          r
+            .path("ledgerParty", "many", [
+              { edge: "MealRecipePortion.mealId", direction: "incoming" },
+              {
+                edge: "MealRecipePortion.ledgerPartyId",
+                direction: "outgoing",
+              },
+            ])
+            .source("portions", "Served portions"),
+        ],
+      }),
+    r
+      .path("image", "many", [
+        { edge: "EntityAttachment.entityId", direction: "incoming" },
+        { edge: "EntityAttachment.imageId", direction: "outgoing" },
+      ])
+      .named("images", "Images"),
+  ],
+  readSchemas,
 );

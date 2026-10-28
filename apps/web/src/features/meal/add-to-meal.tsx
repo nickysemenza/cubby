@@ -1,6 +1,6 @@
+import { mealOut } from "@cubby/schemas/entities/meal";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
-import { mealOut } from "@cubby/schemas/meal";
 import {
   MEAL_KIND_LABELS,
   type MealKind,

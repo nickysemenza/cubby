@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { compileRelatedViewRegistry } from "@cubby/schemas/related-view";
+import { compileRelatedViews } from "./related-views.ts";
 
 import { entitySchema } from "@cubby/schemas/entity-core";
 import { createConnectionCatalog } from "@cubby/schemas/connected-view-definitions";
@@ -87,17 +87,13 @@ export const renderEntityMetadataArtifacts = (
       .parse(entity.descriptor.relationships),
   }));
   const connectionCatalog = createConnectionCatalog(relationshipCatalog);
-  const relatedViews = compileRelatedViewRegistry((source, key) => {
-    const relationship = relationshipCatalog
-      .find((entity) => entity.key === source)
-      ?.relationships.find((item) => item.key === key);
-    if (!relationship)
-      throw new EntityDeclarationError(
-        `Unknown related view relationship ${source}.${key}`,
-      );
-    return relationship;
-  });
+  const relatedViews = compileRelatedViews(entities);
   const projections = entityProjectionMaps(entities);
+  const browserIcons = [
+    ...new Set(
+      projections.routes.map((entity) => entity.inspector.icons.phosphor),
+    ),
+  ].sort();
   const resultEntities = entities.filter((entity) =>
     Object.values(entity.fieldModel.stored).some(
       (stored) => stored.resultSchema,
@@ -245,6 +241,8 @@ export const renderEntityMetadataArtifacts = (
             ({
               referenceOptions: _referenceOptions,
               defaultSql: _defaultSql,
+              type: _type,
+              enumValues: _enumValues,
               ...storage
             }) => storage,
           ),
@@ -948,6 +946,29 @@ export const renderEntityMetadataArtifacts = (
           satisfies: "Record<Entity, EntityInspectorMetadata>",
           comment: "// Generated inspector metadata stays one entity per line.",
         }),
+    },
+    {
+      relativePath: "apps/web/src/entity/generated/entity-icons.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Icon } from "@phosphor-icons/react/lib";\n' +
+        browserIcons
+          .map(
+            (name) =>
+              `import { ${name}Icon } from "@phosphor-icons/react/dist/csr/${name}";\n`,
+          )
+          .join("") +
+        'import { entityRoster } from "@cubby/schemas/entity-roster";\n' +
+        'import type { EntityColor } from "../types";\n' +
+        'import { generatedBrowserRoutes } from "./entity-routes.gen";\n' +
+        `const PHOSPHOR_ICONS = {\n${browserIcons.map((name) => `  ${JSON.stringify(name)}: ${name}Icon,`).join("\n")}\n} satisfies Record<string, Icon>;\n` +
+        `export const generatedBrowserDefinitions = (color: EntityColor) => ({\n${projections.routes
+          .map((entity) => {
+            const key = JSON.stringify(entity.key);
+            const icon = JSON.stringify(entity.inspector.icons.phosphor);
+            return `  ${key}: { ...generatedBrowserRoutes[${key}], label: entityRoster[${key}].singular, pluralLabel: entityRoster[${key}].plural, phosphorIcon: PHOSPHOR_ICONS[${icon}], color },`;
+          })
+          .join("\n")}\n});\n`,
     },
     {
       relativePath: "apps/web/src/entity/generated/entity-routes.gen.ts",

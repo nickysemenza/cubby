@@ -1,9 +1,12 @@
+import { scoredEntities } from "@cubby/schemas/data-quality";
 import { dataQuality } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
+import { allEntities } from "@cubby/schemas/entity-manifest";
 import type { ListRendererId } from "@cubby/schemas/entity-manifest";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import { mapRecord } from "@cubby/shared";
 import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
@@ -31,7 +34,7 @@ import {
 } from "../presentation-coverage";
 import { DataQualityValue } from "./data-quality-value";
 import { SpendingCategorySummaryValue } from "./detail-field-renderers/spending-category-summary";
-import type { ListRenderer, ListRowOf } from "./list-renderer-types";
+import type { ListRenderer } from "./list-renderer-types";
 import { emailListRenderers } from "./list-renderers/email";
 import { mealListRenderers } from "./list-renderers/meal";
 import { productListRenderers } from "./list-renderers/product";
@@ -54,12 +57,14 @@ type ClientListRenderer<TRow extends object> = (
 // Ranges over every entity, not just `ListEntity`: an entity with no generic
 // list read (usda-food) still carries a disposition for each renderer id.
 type ListRendererEntity = {
-  [E in Entity]: ListRendererId<E> extends never ? never : E;
+  [E in Entity]: Exclude<ListRendererId<E>, "data-quality"> extends never
+    ? never
+    : E;
 }[Entity];
 
 type EntityListRendererCoverage<E extends ListRendererEntity> = Readonly<
   Record<
-    ListRendererId<E>,
+    Exclude<ListRendererId<E>, "data-quality">,
     E extends ListEntity
       ? PresentationCoverage<ListRenderer<E>>
       : E extends keyof ClientListRows
@@ -98,13 +103,6 @@ const recipeSourceRenderer: ListRenderer<"recipe"> = (helper) =>
       ),
     );
   });
-
-type ScoredRow = { fields: { dataQuality: { result: unknown } } };
-
-/** List entities whose rows carry a `dataQuality` (manifest `capabilities.dataQuality`). */
-type ScoredListEntity = {
-  [E in ListEntity]: ListRowOf<E> extends ScoredRow ? E : never;
-}[ListEntity];
 
 /**
  * The one `dataQuality` column every scored entity shares: one status pill
@@ -155,20 +153,6 @@ export const createDataQualityColumn = <TRow extends object>(
       }),
     );
   });
-
-const unscoredCoverage = <
-  E extends Exclude<ListEntity, ScoredListEntity>,
->() => ({
-  "data-quality": implemented<ListRenderer<E>>((helper) =>
-    createDataQualityColumn(helper, false),
-  ),
-});
-
-const scoredCoverage = <E extends ScoredListEntity>() => ({
-  "data-quality": implemented<ListRenderer<E>>((helper) =>
-    createDataQualityColumn(helper),
-  ),
-});
 
 /**
  * The image entity's own thumbnail: a row IS an image, shown only once its
@@ -235,17 +219,14 @@ const buildListRendererCoverage = () => {
   return {
     recipe: {
       "recipe-source": implemented(recipeSourceRenderer),
-      ...scoredCoverage<"recipe">(),
       "estimate-cost": implemented(recipeListRenderers["estimate-cost"]),
       "estimate-kcal": implemented(recipeListRenderers["estimate-kcal"]),
     },
     product: {
-      ...scoredCoverage<"product">(),
       "tag-links": implemented(productListRenderers["tag-links"]),
       "usda-food-link": implemented(productListRenderers["usda-food-link"]),
     },
     purchase: {
-      ...scoredCoverage<"purchase">(),
       "spending-category-summary": implemented<ListRenderer<"purchase">>(
         (helper) => categorySummaryRenderer(helper),
       ),
@@ -259,37 +240,23 @@ const buildListRendererCoverage = () => {
       ),
     },
     // pantry and garden entities
-    ingredient: scoredCoverage<"ingredient">(),
-    cookbook: scoredCoverage<"cookbook">(),
     image: {
-      "data-quality": implemented<ListRenderer<"image">>((helper) =>
-        createDataQualityColumn(helper),
-      ),
       "uploaded-image": implemented(uploadedImageRenderer),
     },
     location: {
-      ...scoredCoverage<"location">(),
       "product-link": implemented(locationListRenderers["product-link"]),
       "valuation-summary": implemented(
         locationListRenderers["valuation-summary"],
       ),
     },
-    inventory: scoredCoverage<"inventory">(),
     meal: {
-      ...scoredCoverage<"meal">(),
       "recipe-links": implemented(mealListRenderers["recipe-links"]),
     },
-    productCategory: scoredCoverage<"productCategory">(),
     // finance and project entities
     project: {
-      ...scoredCoverage<"project">(),
       "task-progress": implemented(projectListRenderers["task-progress"]),
     },
-    task: scoredCoverage<"task">(),
-    vendor: scoredCoverage<"vendor">(),
-    financialAccount: scoredCoverage<"financialAccount">(),
     financialTransaction: {
-      ...scoredCoverage<"financialTransaction">(),
       "possible-vendor": implemented(
         financialTransactionListRenderers["possible-vendor"],
       ),
@@ -297,45 +264,36 @@ const buildListRendererCoverage = () => {
         ListRenderer<"financialTransaction">
       >((helper) => categorySummaryRenderer(helper)),
     },
-    expense: scoredCoverage<"expense">(),
-    wish: scoredCoverage<"wish">(),
-    plant: scoredCoverage<"plant">(),
-    planting: scoredCoverage<"planting">(),
-    gardenEntry: scoredCoverage<"gardenEntry">(),
-    ledgerParty: scoredCoverage<"ledgerParty">(),
-    ledgerTransfer: scoredCoverage<"ledgerTransfer">(),
-    device: scoredCoverage<"device">(),
-    spendingCategory: scoredCoverage<"spendingCategory">(),
-    vendorAccount: unscoredCoverage<"vendorAccount">(),
     email: {
-      ...scoredCoverage<"email">(),
       "purchase-links": implemented(emailListRenderers["purchase-links"]),
     },
     run: {
-      ...scoredCoverage<"run">(),
       "run-throughput": implemented(runListRenderers["run-throughput"]),
       "run-activity": implemented(runListRenderers["run-activity"]),
-    },
-    imageJob: scoredCoverage<"imageJob">(),
-    job: unscoredCoverage<"job">(),
-    sourceTransactionRecord: unscoredCoverage<"sourceTransactionRecord">(),
-    transactionImport: unscoredCoverage<"transactionImport">(),
-    shipment: scoredCoverage<"shipment">(),
-    "usda-food": {
-      "data-quality": implemented<
-        ClientListRenderer<ClientListRows["usda-food"]>
-      >((helper) => createDataQualityColumn(helper, false)),
     },
   } satisfies {
     [E in ListRendererEntity]: EntityListRendererCoverage<E>;
   };
 };
 
-let listCoverage: ReturnType<typeof buildListRendererCoverage> | undefined;
+const buildEffectiveListRendererCoverage = () => {
+  const custom = buildListRendererCoverage();
+  const scored = new Set<string>(scoredEntities);
+  return mapRecord(allEntities, (entity) => ({
+    "data-quality": implemented((helper: CubbyColumnHelper<object>) =>
+      createDataQualityColumn(helper, scored.has(entity)),
+    ),
+    ...Object.entries(custom).find(([key]) => key === entity)?.[1],
+  }));
+};
 
-/** Every list renderer disposition; transaction, location and purchase fills come from the feature registry. */
+let listCoverage:
+  | ReturnType<typeof buildEffectiveListRendererCoverage>
+  | undefined;
+
+/** Shared quality rendering plus only the declared domain renderer overrides. */
 export const listRendererCoverage = () =>
-  (listCoverage ??= buildListRendererCoverage());
+  (listCoverage ??= buildEffectiveListRendererCoverage());
 
 /**
  * Resolves one named list renderer through a single audited erasure boundary.

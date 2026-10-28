@@ -1,9 +1,4 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import type {
-  SearchableEntity,
-  SearchDestination,
-  SearchHit,
-} from "@cubby/schemas/search";
+import type { SearchDestination, SearchHit } from "@cubby/schemas/search";
 import { locationTypeValues } from "@cubby/shared";
 
 import { EntityCover } from "~/entity/components/entity-cover";
@@ -16,35 +11,6 @@ import { getLocationIcon, getLocationTypeColor } from "./location-type-theme";
 
 export type { SearchHit } from "@cubby/schemas/search";
 
-export const entityKindMap = {
-  sourceTransactionRecord: "sourceTransactionRecord",
-  transactionImport: "transactionImport",
-  shipment: "shipment",
-  product: "product",
-  recipe: "recipe",
-  ingredient: "ingredient",
-  cookbook: "cookbook",
-  location: "location",
-  inventory: "inventory",
-  meal: "meal",
-  project: "project",
-  task: "task",
-  vendor: "vendor",
-  purchase: "purchase",
-  financialAccount: "financialAccount",
-  financialTransaction: "financialTransaction",
-  expense: "expense",
-  wish: "wish",
-  image: "image",
-  plant: "plant",
-  planting: "planting",
-  gardenEntry: "gardenEntry",
-} satisfies Record<SearchableEntity, BrowserRoutedEntity>;
-
-function getSearchResultEntity(item: SearchDestination): BrowserRoutedEntity {
-  return entityKindMap[item.entityKind];
-}
-
 /**
  * Identifying context under a hit's title: the declared facts, else the
  * projection's subtitle, so kinds without facts keep what tells same-titled
@@ -55,7 +21,7 @@ export function searchHitContext(item: SearchDestination): string | null {
 }
 
 export function getSearchResultRoute(item: SearchDestination) {
-  const entity = getSearchResultEntity(item);
+  const entity = item.entityKind;
   return {
     to: entities[entity].routes.detail,
     params: entityDetailParams(item.id),
@@ -64,7 +30,7 @@ export function getSearchResultRoute(item: SearchDestination) {
 
 /** String href for the same route as `getSearchResultRoute`, for `MobileCard`'s `detailsHref`. */
 export function getSearchResultHref(item: SearchDestination): string {
-  return `/${entities[getSearchResultEntity(item)].basePath}/${item.id}`;
+  return `/${entities[item.entityKind].basePath}/${item.id}`;
 }
 
 /**
@@ -96,7 +62,7 @@ function SearchHitIcon({
   item: SearchDestination;
   className?: string;
 }) {
-  const entity = entityKindMap[item.entityKind];
+  const entity = item.entityKind;
   if (item.emoji)
     return (
       <RecordEmoji
@@ -141,7 +107,7 @@ export function SearchResultMedia({
   variant?: keyof typeof mediaVariants;
 }) {
   const media = mediaVariants[variant];
-  const entity = getSearchResultEntity(item);
+  const entity = item.entityKind;
   if (item.imageUrl)
     return (
       <EntityCover

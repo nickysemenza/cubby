@@ -1,5 +1,15 @@
 import { z } from "zod";
 import { entitySchema } from "./entity-core";
+import {
+  relationshipEdgeKeySchema as edgeKeySchema,
+  relationshipPathStepSchema,
+  relationshipProvenanceSchema,
+  entityRelationSourceMetadataSchema as relationshipSourceSchema,
+} from "./entity-definitions/relationship-shape";
+export {
+  relationshipPathStepSchema,
+  relationshipProvenanceSchema,
+} from "./entity-definitions/relationship-shape";
 
 /**
  * Serializable shapes for the entity-integrity system.
@@ -14,15 +24,7 @@ import { entitySchema } from "./entity-core";
  * `.parse()`d in drift tests. Nothing here parses on client import.
  */
 
-export const edgeKeySchema = z
-  .string()
-  .regex(
-    /^(?:[A-Z][A-Za-z0-9_]*\.[a-z][A-Za-z0-9_]*|EntityLink\[[a-z][A-Za-z0-9]*\]\.(?:from|to))$/,
-    "expected `Table.column` (e.g. `PurchaseImage.imageId`) or `EntityLink[kind].from|to`",
-  )
-  // The test fixture generator can't synthesize a string matching a regex, so
-  // hand it one real edge key. See `mockValueHint` in lib/test/mock-schema.ts.
-  .meta({ mockValue: "EntityAttachment.imageId" });
+export { relationshipEdgeKeySchema as edgeKeySchema } from "./entity-definitions/relationship-shape";
 export type EdgeKey = z.infer<typeof edgeKeySchema>;
 
 /**
@@ -97,10 +99,6 @@ export const operationDispositionSchema = z.object({
 });
 export type OperationDisposition = z.infer<typeof operationDispositionSchema>;
 
-export const relationshipPathStepSchema = z.object({
-  edge: edgeKeySchema,
-  direction: z.enum(["outgoing", "incoming"]),
-});
 export type RelationshipPathStep = z.infer<typeof relationshipPathStepSchema>;
 
 /**
@@ -123,44 +121,9 @@ export type RelationshipPathStep = z.infer<typeof relationshipPathStepSchema>;
  *   graph walker follows its separately declared query sources, when present;
  *   the filtered table can additionally retain review/proposal states.
  */
-export const relationshipProvenanceSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("query"),
-    query: z.string().min(1),
-    reverse: z.boolean().optional(),
-  }),
-  z.object({
-    kind: z.literal("local-path"),
-    steps: z.array(relationshipPathStepSchema).min(1),
-  }),
-  z.object({
-    kind: z.literal("unconstrained"),
-    edge: edgeKeySchema,
-  }),
-  z.object({
-    kind: z.literal("external"),
-    system: z.string().min(1),
-    sourceColumns: z.array(edgeKeySchema).min(1),
-  }),
-  z.object({
-    kind: z.literal("derived"),
-    filter: z.string().min(1),
-    /** The stored evidence the derivation reads, named for integrity views. */
-    evidence: z.array(z.string().min(1)).min(1),
-  }),
-]);
 export type RelationshipProvenance = z.infer<
   typeof relationshipProvenanceSchema
 >;
-
-const relationshipSourceSchema = z.object({
-  key: z.string().min(1),
-  label: z.string().min(1),
-  provenance: relationshipProvenanceSchema,
-  inverse: z
-    .object({ steps: z.array(relationshipPathStepSchema).min(1) })
-    .optional(),
-});
 
 const sourceRefSchema = z.object({
   module: z.string().min(1),

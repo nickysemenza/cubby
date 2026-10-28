@@ -15,6 +15,7 @@ import type { ComboboxItem } from "../../ui/combobox/combobox-types";
 import {
   buildSearchHitComboboxItem,
   buildVendorComboboxItem,
+  vendorPickerInputFromDetail,
 } from "./combobox-builders";
 import {
   type EntitySearchScope,
@@ -84,7 +85,8 @@ function VendorSearch<TId extends string>({
       splitBlankTyped: true,
       useListSource: useVendorListSource,
       build,
-      buildDetail: build,
+      buildDetail: (detail: unknown) =>
+        build(vendorPickerInputFromDetail(detail)),
       buildSearchHit,
       useOnCreateNew: () => onCreateNew,
       createNew: "none",

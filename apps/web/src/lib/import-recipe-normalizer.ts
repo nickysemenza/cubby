@@ -1,11 +1,11 @@
 import type { WIngredient } from "@cubby/recipebridge";
 import { amount, sanitizeSectionName } from "@cubby/schemas/codec";
 import type { CookbookRecipe } from "@cubby/schemas/cookbook";
+import { type RecipeCreateInput } from "@cubby/schemas/entities/recipe";
 import {
   composeNotesMarkdown,
   type ImportRecipe,
 } from "@cubby/schemas/import-recipe";
-import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";

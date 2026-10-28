@@ -1,3 +1,4 @@
+import { type FinancialTransactionRawOut as RawFinancialTransactionOut } from "@cubby/schemas/entity-contracts/financialTransaction";
 import {
   financialTransactionSettlementViolation,
   type MerchantVendorCandidate,
@@ -5,7 +6,6 @@ import {
   merchantVendorInference,
   purchaseSettlementKinds,
 } from "@cubby/schemas/financial-transaction";
-import { type RawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
 import {
   parseEntityId,
   parseShortcodeFor,

@@ -1,5 +1,6 @@
+import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { defineEntity } from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import { ingredientShortcode, plantShortcode } from "../identifier-fields.js";
 import { plantBreeding, plantVerdict } from "@cubby/schemas/garden-fields";
 import {
@@ -50,7 +51,7 @@ const derivedText = <const K extends string>(
   validation: { read: z.string().nullable(), create: null, update: null },
 });
 
-export default defineEntity({
+export const { definition, readSchemas } = defineEntityModel({
   key: "plant",
   names: { singular: "Plant", plural: "Plants" },
   route: { basePath: "plants" },
@@ -233,6 +234,7 @@ export default defineEntity({
         },
       },
       {
+        audit: false,
         key: "latinName",
         kind: "text",
         nullable: true,
@@ -245,6 +247,7 @@ export default defineEntity({
         },
       },
       {
+        audit: false,
         key: "breeding",
         kind: "enum",
         nullable: true,
@@ -275,10 +278,22 @@ export default defineEntity({
       },
       // Cultivar days to first harvest, from the packet or vendor listing only;
       // crop-level estimates live in `garden-practice.ts`.
-      daysField("daysFromSowMin", "Days from sowing (min)"),
-      daysField("daysFromSowMax", "Days from sowing (max)"),
-      daysField("daysFromTransplantMin", "Days from transplant (min)"),
-      daysField("daysFromTransplantMax", "Days from transplant (max)"),
+      {
+        ...daysField("daysFromSowMin", "Days from sowing (min)"),
+        audit: false,
+      },
+      {
+        ...daysField("daysFromSowMax", "Days from sowing (max)"),
+        audit: false,
+      },
+      {
+        ...daysField("daysFromTransplantMin", "Days from transplant (min)"),
+        audit: false,
+      },
+      {
+        ...daysField("daysFromTransplantMax", "Days from transplant (max)"),
+        audit: false,
+      },
       {
         key: "notes",
         kind: "text",
@@ -295,7 +310,11 @@ export default defineEntity({
         key: "ingredientName",
         kind: "text",
         nullable: true,
-        validation: { read: z.string().nullable(), create: null, update: null },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       derivedText(
         "guideSowWindow",
@@ -326,24 +345,10 @@ export default defineEntity({
         kind: "identifier",
         validation: { read: plantShortcode, create: null, update: null },
       },
-      {
-        display: { detail: false, list: false },
-        key: "createdAt",
-        kind: "timestamp",
-        validation: { read: z.date(), create: null, update: null },
-      },
-      {
-        display: { detail: false, list: false },
-        key: "updatedAt",
-        kind: "timestamp",
-        validation: { read: z.date(), create: null, update: null },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
+      timestampField("createdAt", { detail: false, list: false }),
+      timestampField("updatedAt", { detail: false, list: false }),
+      { output: false, key: "shortcode", kind: "text" },
+      { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
       {
@@ -354,7 +359,7 @@ export default defineEntity({
       "name",
       "gardenGuideKey",
       "verdict",
-      { key: "ingredientId", reference: "ingredient" },
+      "ingredientId",
       "latinName",
       "breeding",
       "daysFromSowMin",
@@ -366,33 +371,7 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: [
-      "name",
-      "gardenGuideKey",
-      "verdict",
-      "ingredientId",
-      "latinName",
-      "breeding",
-      "daysFromSowMin",
-      "daysFromSowMax",
-      "daysFromTransplantMin",
-      "daysFromTransplantMax",
-      "notes",
-    ],
-    update: [
-      "name",
-      "gardenGuideKey",
-      "verdict",
-      "ingredientId",
-      "latinName",
-      "breeding",
-      "daysFromSowMin",
-      "daysFromSowMax",
-      "daysFromTransplantMin",
-      "daysFromTransplantMax",
-      "notes",
-    ],
-    audit: ["name", "gardenGuideKey", "verdict", "ingredientId", "notes"],
+
     sort: {
       fields: ["name", "createdAt", "updatedAt"],
     },
@@ -416,33 +395,8 @@ export default defineEntity({
       create: ["full", "capture"],
       update: ["full"],
     },
-    output: [
-      "id",
-      "name",
-      "gardenGuideKey",
-      "verdict",
-      "ingredientId",
-      "latinName",
-      "breeding",
-      "daysFromSowMin",
-      "daysFromSowMax",
-      "daysFromTransplantMin",
-      "daysFromTransplantMax",
-      "notes",
-      "displayName",
-      "ingredientName",
-      "guideSowWindow",
-      "guideTransplantWindow",
-      "routes",
-      "createdAt",
-      "updatedAt",
-    ],
   },
-  fields: {
-    create: { module: "@cubby/schemas/plant", export: "plantCreateInput" },
-    update: { module: "@cubby/schemas/plant", export: "plantUpdateData" },
-    output: { module: "@cubby/schemas/plant-raw-read", export: "rawPlantOut" },
-  },
+
   storage: {
     indexes: [{ on: ["gardenGuideKey"] }],
     relations: {
@@ -502,47 +456,7 @@ export default defineEntity({
       },
     ],
   },
-  relations: [
-    {
-      key: "ingredient",
-      label: "Ingredient",
-      target: "ingredient",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Plant.ingredientId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Plant.ingredientId", direction: "incoming" }],
-      },
-    },
-    {
-      key: "plantings",
-      label: "Plantings",
-      target: "planting",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Planting.plantId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Planting.plantId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "products",
-      label: "Seeds and plants",
-      target: "product",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Product.growsPlantId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Product.growsPlantId", direction: "outgoing" }],
-      },
-    },
-  ],
+
   search: { mode: "semantic", inputs: [...imageDescriptionInputs("plant")] },
   capabilities: {
     images: {
@@ -728,3 +642,21 @@ export default defineEntity({
     },
   },
 });
+
+export default defineEntity(
+  definition,
+  (r) => [
+    r.field("ingredientId").named("ingredient", "Ingredient"),
+    r
+      .path("planting", "many", [
+        { edge: "Planting.plantId", direction: "incoming" },
+      ])
+      .named("plantings", "Plantings"),
+    r
+      .path("product", "many", [
+        { edge: "Product.growsPlantId", direction: "incoming" },
+      ])
+      .named("products", "Seeds and plants"),
+  ],
+  readSchemas,
+);

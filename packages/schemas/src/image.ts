@@ -3,7 +3,7 @@ import {
   imageFieldEnvelopeFields,
   imagePublicReadFields,
 } from "./generated/entity-field-envelope-fields.image.gen";
-import { imageFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.image.gen";
+
 import {
   imageProcessingIssue,
   imageAssociationEntity,
@@ -630,9 +630,6 @@ export {
   importTargetSummarySchema,
   type ImportTargetSummary,
 } from "./image-processing";
-export const imageWithEntitySchema = imageFieldEnvelopeSchemas.detail;
-
-export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;
 
 export const imageBrowserUpdateInput = z.object({
   id: imageShortcode,

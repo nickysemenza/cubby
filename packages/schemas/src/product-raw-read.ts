@@ -2,20 +2,20 @@ import { productCategoryFeature } from "./product-category-fields";
 import { positiveMoneyNullable } from "./money";
 import {
   productQuantityLedgerOut,
-  productPickerOnHand,
+  productPickerOnHandOut,
   productDisplayFactsState,
 } from "./product-read-fields";
 /** Repository/compiler projections. Public entity reads use generated field envelopes. */
-import productDefinition from "./entity-definitions/00-product.entity";
+import { readSchemas as productDefinitionSchemas } from "./entity-definitions/00-product.entity";
 import { z } from "zod";
 import { foodSummary, foodSummaryCompact } from "@cubby/usda";
 import { unitMappingOut } from "./unitmapping";
 import { externalIdOut } from "./external-id";
 import { recipeUsageMcpEntityOut } from "./recipe-fields";
 
-export const rawProductOutput = productDefinition.readSchemas.output;
-export const rawProductList = productDefinition.readSchemas.list;
-export const rawProductDetail = productDefinition.readSchemas.detail;
+export const rawProductOutput = productDefinitionSchemas.output;
+export const rawProductList = productDefinitionSchemas.list;
+export const rawProductDetail = productDefinitionSchemas.detail;
 export const rawProductWithMappings = rawProductOutput.extend({
   unitMappings: z.array(unitMappingOut),
 });
@@ -75,7 +75,7 @@ export const rawProductResolveCandidate = z.object({
 export const rawProductPickerItem = rawProductResolveCandidate.extend({
   quantityLedger: productQuantityLedgerOut.nullable(),
   onHand: z.union([
-    productPickerOnHand,
+    productPickerOnHandOut,
     z.object({ state: z.literal("unavailable") }),
   ]),
   displayFacts: productDisplayFactsState,

@@ -1,8 +1,8 @@
+import { type LocationListItemOut } from "@cubby/schemas/entities/location";
 import {
   locationShortcode,
   type LocationShortcode,
 } from "@cubby/schemas/identifiers";
-import type { LocationListItemOut } from "@cubby/schemas/location";
 import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";

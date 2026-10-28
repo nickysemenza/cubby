@@ -1,9 +1,9 @@
+import { productListItemOut } from "@cubby/schemas/entities/product";
 import {
   productShortcode,
   inventoryShortcode,
   locationShortcode,
 } from "@cubby/schemas/identifiers";
-import { productListItemOut } from "@cubby/schemas/product";
 import { useQueryClient } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { z } from "zod";

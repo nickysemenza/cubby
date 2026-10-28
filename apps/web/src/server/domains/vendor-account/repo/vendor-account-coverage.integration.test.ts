@@ -1,5 +1,5 @@
+import { vendorAccountFiltersSchema } from "@cubby/schemas/entities/vendorAccount";
 import { relatedPreviewInput } from "@cubby/schemas/related-view";
-import { vendorAccountFilters } from "@cubby/schemas/vendor-account";
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -256,7 +256,9 @@ describe("vendor identity and purchase account coverage", () => {
       (await readVendorAccount(ctx.db, second.shortcode))?.purchaseCount,
     ).toBe(1);
     const filtered = await vendorAccountScaffold.read(ctx.db, {
-      filters: vendorAccountFilters.parse({ purchaseId: [other.shortcode] }),
+      filters: vendorAccountFiltersSchema.parse({
+        purchaseId: [other.shortcode],
+      }),
       sorts: [],
       pagination: { pageIndex: 0, pageSize: 10 },
     });

@@ -1,5 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { dateRangeFromDates } from "@cubby/schemas/date-range";
+import {
+  type TaskCreateInput,
+  type TaskUpdateInput,
+} from "@cubby/schemas/entities/task";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
@@ -12,11 +16,7 @@ import type {
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type {
-  TaskBulkReorderInput,
-  TaskCreateInput,
-  TaskUpdateInput,
-} from "@cubby/schemas/project";
+import type { TaskBulkReorderInput } from "@cubby/schemas/project";
 import { taskFiltersSchema } from "@cubby/schemas/project";
 import type { Trade } from "@cubby/schemas/task-fields";
 import { rawTaskOut, type RawTaskOut } from "@cubby/schemas/work-raw-read";

@@ -1,3 +1,4 @@
+import { entityIdSchema, type ImageJobId } from "@cubby/schemas/identifiers";
 import { IMAGE_IDENTIFICATION_MODEL } from "@cubby/schemas/image-identification";
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
@@ -63,7 +64,7 @@ const cloudExecutor = (name: string) => ({
  */
 export async function dispatchImageProcessingWakeup(
   db: Database,
-  jobId: string,
+  jobId: ImageJobId,
   options: CloudImageDispatchOptions = {},
 ): Promise<"completed" | "deferred" | "failed" | "skipped"> {
   const claimed = await claimImageProcessingJob(db, {
@@ -155,7 +156,7 @@ export async function dispatchImageProcessingWakeup(
  */
 export async function deferCloudAttemptForTypedWait(
   db: Database,
-  attempt: { jobId: string; attemptId: string },
+  attempt: { jobId: ImageJobId; attemptId: string },
   error: UnparsedError,
 ): Promise<boolean> {
   const deferred = findErrorCause(
@@ -274,7 +275,7 @@ export async function reserveCompanionAnalysisOutput(
 
 /** The server drain's `image.cloud` handler; device work is claimed by device pulls. */
 export const imageProcessingJobHandler = defineJobHandler(
-  z.object({ processingId: z.uuid() }),
+  z.object({ processingId: entityIdSchema("imageJob") }),
   async (db, _claim, input) => {
     const outcome = await dispatchImageProcessingWakeup(db, input.processingId);
     return { page: { done: true, result: { outcome } } };

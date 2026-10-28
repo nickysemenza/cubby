@@ -1,4 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  imageRawDetailOut as rawImageDetail,
+  type ImageRawDetailOut as RawImageDetail,
+} from "@cubby/schemas/entity-contracts/image";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 /** Image data boundary: derive association and cascade behavior from INCOMING_EDGES.image. */
 import type {
@@ -35,10 +39,6 @@ import {
   type ImageMetadataOutcome,
   type ImageProvenanceEvidence,
 } from "@cubby/schemas/image-capture-fields";
-import {
-  rawImageDetail,
-  type RawImageDetail,
-} from "@cubby/schemas/image-raw-read";
 import type { ImageSightingOut } from "@cubby/schemas/image-sighting";
 import {
   imageSightingSourceType,
@@ -718,7 +718,7 @@ function isGardenEntryAssociationKindLabel(
  * for a whole page rather than one join per row. */
 async function loadCapturedByParties(
   db: Database | DrizzleTransaction,
-  imageIds: readonly string[],
+  imageIds: readonly ImageId[],
 ): Promise<Map<LedgerPartyId, { shortcode: string; name: string }>> {
   if (!imageIds.length) return new Map();
   const rows = await unwrapDb(db)
@@ -796,7 +796,7 @@ export async function getImageEmbeddedMetadataForCapture(
  * owner and reporting device named. Images with none are absent. */
 export async function listImageSightings(
   db: Database | DrizzleTransaction,
-  imageIds: readonly string[],
+  imageIds: readonly ImageId[],
 ): Promise<Map<string, ImageSightingOut[]>> {
   const grouped = new Map<string, ImageSightingOut[]>();
   if (imageIds.length === 0) return grouped;
@@ -954,7 +954,7 @@ export async function selectImagesForProvenanceClassification(
     .where(
       and(
         provenanceClassificationCandidateWhere,
-        afterId ? gt(image.id, afterId) : undefined,
+        afterId ? gt(image.id, parseEntityId("image", afterId)) : undefined,
       ),
     )
     .orderBy(asc(image.id))
@@ -1348,7 +1348,7 @@ const loadImportTargets = async (
 /** Each image's live attachments with their subjects, by image id. */
 const loadImageAttachments = async (
   db: Database | DrizzleTransaction,
-  ids: readonly string[],
+  ids: readonly ImageId[],
 ) => {
   const rows = await unwrapDb(db).query.image.findMany({
     where: inArray(image.id, [...ids]),
@@ -1375,24 +1375,45 @@ export const imageScaffold = listScaffold("image", image, {
     orderBy: (filters) => imageRunOrder(filters as Partial<ImageListFilters>),
     bindings: (bind) => {
       const attachments = bind.ids(({ db, ids }) =>
-        loadImageAttachments(db, ids),
+        loadImageAttachments(
+          db,
+          ids.map((id) => parseEntityId("image", id)),
+        ),
       );
       const representations = bind.ids(({ db, ids }) =>
-        loadImageRepresentations(db, { imageIds: ids }),
+        loadImageRepresentations(db, {
+          imageIds: ids.map((id) => parseEntityId("image", id)),
+        }),
       );
       // The derived expression qualifies its subqueries by the bare image
       // columns, which a single-table select would bind to the job alias.
       const issues = bind.ids(({ db, ids }) =>
-        loadImageProcessingIssues(db, { imageIds: ids }),
+        loadImageProcessingIssues(db, {
+          imageIds: ids.map((id) => parseEntityId("image", id)),
+        }),
       );
       const targets = bind.ids(({ db, ids }) =>
-        loadImportTargets(db, { imageIds: ids }),
+        loadImportTargets(db, {
+          imageIds: ids.map((id) => parseEntityId("image", id)),
+        }),
       );
       const analyses = bind.ids(({ db, ids }) =>
-        loadImageAnalysisSummaries(db, { imageIds: ids }),
+        loadImageAnalysisSummaries(db, {
+          imageIds: ids.map((id) => parseEntityId("image", id)),
+        }),
       );
-      const parties = bind.ids(({ db, ids }) => loadCapturedByParties(db, ids));
-      const sightings = bind.ids(({ db, ids }) => listImageSightings(db, ids));
+      const parties = bind.ids(({ db, ids }) =>
+        loadCapturedByParties(
+          db,
+          ids.map((id) => parseEntityId("image", id)),
+        ),
+      );
+      const sightings = bind.ids(({ db, ids }) =>
+        listImageSightings(
+          db,
+          ids.map((id) => parseEntityId("image", id)),
+        ),
+      );
       return [
         bind(
           rawImageDetail.pick({
@@ -1500,7 +1521,7 @@ const imageReader = createEntityReader<
  */
 export const readImageById = (
   db: Database | DrizzleTransaction,
-  imageId: string,
+  imageId: ImageId,
 ): Promise<RawImageDetail> =>
   imageReader.getByID(db, parseEntityId("image", imageId));
 
@@ -1529,13 +1550,13 @@ export const updateImage = defineMutationWriter({
   read: async (
     receipt: MutationReceipt<"image">,
     db: Database,
-    _imageId: string,
+    _imageId: ImageId,
     _data: ImageUpdateInput,
   ) => readImageById(db, receipt.entityId),
   write: async (
     readOutput,
     db: Database,
-    imageId: string,
+    imageId: ImageId,
     data: ImageUpdateInput,
   ) => {
     // A manual write to either capture field is a confirmation: it always sets
@@ -1592,7 +1613,7 @@ export const updateImage = defineMutationWriter({
  */
 export const markImageUploaded = async (
   db: Database,
-  imageId: string,
+  imageId: ImageId,
   /** The stored bytes' SHA-256: processing reads only an upload with one. */
   sha256: string,
 ): Promise<RawImageDetail> => {
@@ -1609,7 +1630,7 @@ export const getImageByKey = async (
   db: Database,
   key: string,
 ): Promise<{
-  id: string;
+  id: ImageId;
   shortcode: string;
   url: string;
   key: string;
@@ -1772,10 +1793,10 @@ export const IMAGE_HARD_DELETE = {
 } satisfies IncomingEdgePolicy<"image", OperationDisposition>;
 
 type ImageEdgeOperation = {
-  clear: (tx: DrizzleTransaction, imageIds: string[]) => Promise<void>;
+  clear: (tx: DrizzleTransaction, imageIds: ImageId[]) => Promise<void>;
   findReferenced: (
     dbc: DrizzleClient | DrizzleTransaction,
-    imageIds?: string[],
+    imageIds?: ImageId[],
   ) => Promise<string[]>;
   joinColumn?: PgColumn;
   /** Processing metadata must cascade on delete but is never user ownership. */
@@ -1796,7 +1817,7 @@ const PROCESSING_EDGES: ReadonlySet<string> = new Set([
  */
 const dropFromProposedGroups = async (
   tx: DrizzleTransaction,
-  imageIds: string[],
+  imageIds: ImageId[],
 ) => {
   const keep = (column: SQL) =>
     sql`COALESCE((SELECT jsonb_agg(entry) FROM jsonb_array_elements(${column}) entry
@@ -1895,7 +1916,7 @@ const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
  */
 const fetchExistingImages = async (
   tx: DrizzleTransaction,
-  imageIds: string[],
+  imageIds: ImageId[],
 ): Promise<Array<{ id: ImageId; shortcode: string; key: string }>> => {
   const rows = await tx
     .select({ id: image.id, shortcode: image.shortcode, key: image.key })
@@ -1957,7 +1978,7 @@ export const deleteImages = async (
  */
 const deleteImagesTx = async (
   tx: DrizzleTransaction,
-  imageIds: string[],
+  imageIds: ImageId[],
 ): Promise<DeletedImages> => {
   if (imageIds.length === 0)
     return {
@@ -2050,7 +2071,7 @@ const deleteImagesTx = async (
 /** Referenced-image detection shares the image edge registry so delete and detach cannot drift. */
 const findReferencedImageIds = async (
   dbc: DrizzleClient | DrizzleTransaction,
-  imageIds?: string[],
+  imageIds?: ImageId[],
 ): Promise<Set<string>> => {
   const referenced = new Set<string>();
   // Sequential, not Promise.all: a pg transaction is a single connection, and
@@ -2188,7 +2209,7 @@ export const detachImagesFromEntity = async (
  */
 export const reapUnreferencedImages = async (
   tx: DrizzleTransaction,
-  imageIds: string[],
+  imageIds: ImageId[],
 ): Promise<DeletedImages> => {
   if (imageIds.length === 0)
     return {
@@ -2234,14 +2255,13 @@ export const imageJoinColumnFor = (table: PgTable): PgColumn | undefined => {
  * @param db Database client
  * @param productId Product ID to associate the image with
  * @param imageIds Public `IMG-` shortcodes to associate — what
- *   `importImageFromUrl` (image-storage.service.ts) hands back, e.g. from
- *   `importImageFromUPC`. Resolved to uuids here since `associatePendingImages`
- *   writes straight into `ProductImage.imageId`, an unbranded uuid FK.
+ *   `importImageFromUrl` hands back, e.g. from `importImageFromUPC`.
+ *   Resolve them to private Image IDs before writing EntityAttachment.imageId.
  */
 export const associateImagesWithProduct = async (
   db: Database,
   productId: ProductId,
-  imageIds: string[],
+  imageIds: ImageShortcode[],
 ): Promise<void> => {
   const resolvedImageIds = await resolveAllPresent(db, "image", imageIds);
   await associatePendingImages(
@@ -2261,7 +2281,7 @@ export const associateImagesWithProduct = async (
 export const associateImagesWithRecipe = async (
   db: Database,
   recipeId: RecipeId,
-  imageIds: string[],
+  imageIds: ImageShortcode[],
 ): Promise<void> => {
   const resolvedImageIds = await resolveAllPresent(db, "image", imageIds);
   await associatePendingImages(
@@ -2406,7 +2426,7 @@ export const getImagesAttachedToEntity = async (
 
 export const updateImageIntegrity = async (
   db: Database,
-  imageId: string,
+  imageId: ImageId,
   values: Pick<
     typeof image.$inferInsert,
     | "width"
@@ -2649,7 +2669,9 @@ export async function selectImageIdsMissingSearchDocument(
     .where(
       and(
         missingSearchDocumentWhere,
-        options.afterId ? gt(image.id, options.afterId) : undefined,
+        options.afterId
+          ? gt(image.id, parseEntityId("image", options.afterId))
+          : undefined,
       ),
     )
     .orderBy(asc(image.id))
@@ -2821,7 +2843,7 @@ const associateImageWithEntity = async (
   imageId: ImageId,
   documentKind?: PurchaseDocumentKind,
   purpose?: ProductImagePurpose,
-): Promise<string | null> => {
+): Promise<ImageId | null> => {
   const role = attachmentRoleForEntity(entity.entity);
   if (role !== "attachment") {
     return (await replaceSingularAttachment(dbc, entity.id, role, imageId))

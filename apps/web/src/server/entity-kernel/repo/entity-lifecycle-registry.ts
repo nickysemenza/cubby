@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 
+import { effectiveIncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { generatedEntityKernelEntities } from "~/server/generated/entity-kernel-entities.gen";
 
@@ -24,14 +25,20 @@ export const ENTITY_LIFECYCLE_REGISTRY: EntityLifecycleRegistryEntry[] =
       // An immutable entity (`capabilities.delete: null`) binds an adapter
       // with no delete policy; it claims no lifecycle operation here.
       ...(entityManifest[entity].lifecycle.delete !== null
-        ? [{ entity, operation: "delete" as const, policy: lifecycle.delete }]
+        ? [
+            {
+              entity,
+              operation: "delete" as const,
+              policy: effectiveIncomingEdgePolicy(entity, lifecycle.delete),
+            },
+          ]
         : []),
       ...(lifecycle.merge
         ? [
             {
               entity,
               operation: "merge" as const,
-              policy: lifecycle.merge,
+              policy: effectiveIncomingEdgePolicy(entity, lifecycle.merge),
             },
           ]
         : []),

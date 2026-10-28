@@ -193,10 +193,6 @@ const model = {
     },
   ],
   storage: ["name"],
-  create: ["name"],
-  update: ["name"],
-  output: ["name"],
-  audit: ["name"],
 };
 
 describe("surface schema compilation", () => {
@@ -221,6 +217,7 @@ describe("surface schema compilation", () => {
         compile(
           [
             {
+              output: false,
               key: "parentId",
               kind: "identifier",
               reference: { entity: "alpha" },
@@ -247,6 +244,7 @@ describe("surface schema compilation", () => {
       compile(
         [
           {
+            output: false,
             key: "caption",
             kind: "text",
             display: { list: true, readPath: "rows[].label" },
@@ -277,6 +275,7 @@ describe("surface schema compilation", () => {
   });
   it("rejects named renderer inputs missing from or mistyped in the real projection", () => {
     const renderer = {
+      output: false,
       key: "caption",
       kind: "text",
       display: { renderer: { list: "usda-food-link" } },
@@ -288,11 +287,21 @@ describe("surface schema compilation", () => {
   });
   it("rejects an object projected as a generic numeric field", () => {
     expect(() =>
-      compile([{ key: "total", kind: "number", display: { list: true } }], {
-        output,
-        list: output.extend({ total: z.object({ amount: z.number() }) }),
-        detail: output,
-      }),
+      compile(
+        [
+          {
+            output: false,
+            key: "total",
+            kind: "number",
+            display: { list: true },
+          },
+        ],
+        {
+          output,
+          list: output.extend({ total: z.object({ amount: z.number() }) }),
+          detail: output,
+        },
+      ),
     ).toThrow(/total.*list.*unavailable/u);
   });
   it("walks finite recursive paths through optional array references", () => {
@@ -307,6 +316,7 @@ describe("surface schema compilation", () => {
       compile(
         [
           {
+            output: false,
             key: "parentId",
             kind: "identifier",
             reference: { entity: "alpha" },
@@ -377,7 +387,6 @@ describe("typed entity compiler", () => {
                 validation: { read: z.string(), create: null, update: null },
               },
             ],
-            output: ["name", "accountId", "accountLabel"],
           },
         },
       ]);
@@ -554,6 +563,7 @@ describe("typed entity compiler", () => {
         ...base,
         model: {
           ...model,
+          storage: [...model.storage, "kind"],
           fields: [
             ...model.fields,
             {
@@ -870,30 +880,25 @@ describe("typed entity compiler", () => {
   });
 
   it("preserves literal model keys through the inferred declaration contract", () => {
-    const definition = defineEntity({
-      ...base,
-      model: {
-        fields: [
-          {
-            key: "displayName",
-            kind: "text",
-            readKeyOverride: "display_name",
-            validation: { read: z.string() },
-          },
-        ],
-        storage: ["displayName"],
-        create: ["displayName"],
-        update: ["displayName"],
-        output: ["displayName"],
-        audit: [],
+    const definition = defineEntity(
+      {
+        ...base,
+        model: {
+          fields: [
+            {
+              key: "displayName",
+              kind: "text",
+              readKeyOverride: "display_name",
+              validation: { read: z.string() },
+            },
+          ],
+          storage: ["displayName"],
+        },
       },
-    });
+      () => base.relations,
+    );
     type FieldKey = (typeof definition.model.fields)[number]["key"];
-    const outputFields = ["displayName"] as const satisfies readonly FieldKey[];
-    // @ts-expect-error A declaration policy cannot name a field it does not declare.
-    const invalidOutputFields: readonly FieldKey[] = ["missing"];
-    void invalidOutputFields;
-    expectTypeOf(outputFields).toEqualTypeOf<readonly ["displayName"]>();
+    expectTypeOf<FieldKey>().toEqualTypeOf<"displayName">();
     expectTypeOf(readFieldSchemas(definition)).toEqualTypeOf<{
       display_name: z.ZodString;
     }>();
@@ -906,10 +911,6 @@ describe("typed entity compiler", () => {
       {
         fields: [{ key: "displayName", kind: "text", validation: { read } }],
         storage: ["displayName"],
-        create: [],
-        update: [],
-        output: ["displayName"],
-        audit: [],
       },
       "example.model",
     );
@@ -923,6 +924,18 @@ describe("typed entity compiler", () => {
       validation: { create: null, read, update: null },
     });
     expect(parsed?.fields[0]?.validation.read).toBe(read);
+    expect(parsed).toMatchObject({
+      create: [],
+      update: [],
+      output: ["displayName"],
+      audit: [],
+    });
+    expect(() =>
+      parseEntityFieldModelMetadata(
+        { ...model, output: ["name"] },
+        "example.model",
+      ),
+    ).toThrow("output is not allowed");
   });
 
   it("retains actual schemas and explicit policies while defaulting presentation and storage", () => {
@@ -965,7 +978,7 @@ describe("typed entity compiler", () => {
           ...base,
           model: {
             ...model,
-            fields: [{ key: "name", kind: "text", ...patch }],
+            fields: [{ output: false, key: "name", kind: "text", ...patch }],
           },
         },
       ]),
@@ -980,13 +993,14 @@ describe("typed entity compiler", () => {
           ...model,
           fields: [
             {
+              output: false,
               key: "name",
               kind: "text",
               labelOverride: "Title",
               nullable: true,
             },
           ],
-          output: [],
+
           storage: [
             {
               key: "name",
@@ -1249,6 +1263,7 @@ describe("typed entity compiler", () => {
       ).toThrow("needs a scalar numeric SQL field");
       for (const format of ["amount", "currency"] as const) {
         const field = {
+          output: false,
           key: "observation",
           kind: "number" as const,
           display: { format },
@@ -1392,7 +1407,7 @@ describe("typed entity compiler", () => {
     ];
     const displayed = {
       ...base,
-      model: { ...model, fields, output: ["name", "notes"] },
+      model: { ...model, fields },
     };
     const detail = (
       declared: Partial<EntityDeclaration["presentation"]["detail"]>,
@@ -1455,7 +1470,10 @@ describe("typed entity compiler", () => {
       compileEntityDeclarations([
         {
           ...base,
-          model: { ...model, fields: [{ key: "name", kind, display }] },
+          model: {
+            ...model,
+            fields: [{ output: false, key: "name", kind, display }],
+          },
         },
       ]);
     expect(() => compile({ standard: "unknown" })).toThrow(/./u);
@@ -1527,6 +1545,7 @@ describe("typed entity compiler", () => {
           presentation: { ...presentation, titleField: "book" },
           model: {
             ...model,
+            storage: [...model.storage, "other"],
             fields: [
               { ...model.fields[0], readKeyOverride: readKey },
               { key: "other", kind: "text", validation: { read: z.string() } },
@@ -1630,7 +1649,13 @@ describe("typed entity compiler", () => {
         {
           ...metadata,
           relations: [
-            { ...relation, inverse: { steps: [] }, deletionPolicy: "restrict" },
+            {
+              ...relation,
+              inverse: {
+                steps: [{ edge: "Ingredient.recipeId", direction: "incoming" }],
+              },
+              deletionPolicy: "restrict",
+            },
           ],
         },
       ]),
@@ -1717,11 +1742,12 @@ describe("typed entity compiler", () => {
   it("validates stored and anyOf filter shapes against the storage model", () => {
     const fields = [
       { ...model.fields[0] },
-      { key: "tags", kind: "text-array", nullable: true },
-      { key: "flag", kind: "boolean" },
-      { key: "at", kind: "timestamp", nullable: true },
-      { key: "amount", kind: "number" },
+      { output: false, key: "tags", kind: "text-array", nullable: true },
+      { output: false, key: "flag", kind: "boolean" },
+      { output: false, key: "at", kind: "timestamp", nullable: true },
+      { output: false, key: "amount", kind: "number" },
       {
+        output: false,
         key: "parentId",
         kind: "identifier",
         reference: { entity: "alpha" },
@@ -1958,7 +1984,6 @@ describe("typed entity compiler", () => {
             validation: { read: z.string(), create: null, update: null },
           },
         ],
-        output: ["name", "status", "dueOn"],
       },
       relations: [
         {
@@ -2135,6 +2160,7 @@ describe("typed entity compiler", () => {
                 },
               },
               {
+                output: false,
                 key: "pendingImageIds",
                 kind: "text",
                 control: { kind: "text" },
@@ -2150,9 +2176,6 @@ describe("typed entity compiler", () => {
               },
             ],
             storage: ["name", "notes"],
-            create: ["name", "notes", "pendingImageIds"],
-            update: ["name", "notes", "pendingImageIds"],
-            output: ["name", "notes"],
           },
           presentation: {
             ...base.presentation,
@@ -2238,7 +2261,6 @@ describe("typed entity compiler", () => {
               validation: { read: z.string(), create: null, update: null },
             },
           ],
-          output: ["name", "kind"],
         },
         capabilities: {
           ...base.capabilities,
@@ -2512,12 +2534,14 @@ describe("entity table storage", () => {
     validation: { read: z.string().nullable(), create: null, update: null },
   };
   const betaId = {
+    output: false,
     key: "betaId",
     kind: "identifier",
     nullable: true,
     validation: { read: null, create: null, update: null },
   };
   const deletedAt = {
+    output: false,
     key: "deletedAt",
     kind: "timestamp",
     nullable: true,
@@ -2551,7 +2575,13 @@ describe("entity table storage", () => {
       {
         ...beta,
         storage: {
-          columns: [{ key: "alphaId", kind: "identifier", reference: "alpha" }],
+          columns: [
+            {
+              key: "alphaId",
+              kind: "identifier",
+              reference: "alpha",
+            },
+          ],
         },
       },
       { ...base, key: "gamma", table: "Gamma", model },

@@ -1,11 +1,12 @@
+import { inventoryDetailOut as inventoryWithLocationAndProductOut } from "@cubby/schemas/entities/inventory";
+import { productDetailOut as productWithFoodOut } from "@cubby/schemas/entities/product";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { entityApi } from "./support/entity-api";
 import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { initiateUploadWithoutEntityResponseSchema } from "@cubby/schemas/image";
-import { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
-import { productWithFoodOut } from "@cubby/schemas/product";
+
 import { productCreateWithInventoryOut } from "@cubby/schemas/product-capture";
 import { scanAtLocationOut } from "@cubby/schemas/scan";
 import type { APIResponse, Page } from "@playwright/test";

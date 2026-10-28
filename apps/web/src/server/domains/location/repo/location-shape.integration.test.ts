@@ -1,4 +1,4 @@
-import type { LocationCreateInput } from "@cubby/schemas/location";
+import { type LocationCreateInput } from "@cubby/schemas/entities/location";
 import { TEST_ACTOR, TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 

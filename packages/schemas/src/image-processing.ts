@@ -1,11 +1,16 @@
 import { computedFieldEnvelope } from "./field-envelope";
 import { imageRepresentations } from "./image-summary";
-import { imageShortcode } from "./identifier-fields";
+import {
+  entityIdSchema,
+  imageShortcode,
+  runShortcode,
+} from "./identifier-fields";
 import { assessmentChildHandle } from "./assessment-reference";
 import { z } from "zod";
 import {
   imageProcessingJobKind,
   imageProcessingJobState,
+  runTargetState,
 } from "./activity-fields";
 export { imageProcessingJobKind } from "./activity-fields";
 export type { ImageProcessingJobKind } from "./activity-fields";
@@ -131,7 +136,7 @@ export type ImageProcessingParticipation = z.infer<
 export const imageProcessingHello = z.object({
   protocolVersion: z.literal(IMAGE_PROCESSING_PROTOCOL_VERSION),
   type: z.literal("hello"),
-  deviceId: z.uuid(),
+  deviceId: entityIdSchema("device"),
   platform: z.enum(["macos", "ios"]),
   appVersion: z.string().trim().min(1).max(100),
   deviceName: z.string().max(200).optional(),
@@ -154,7 +159,7 @@ export const imageProcessingSource = z.object({
 });
 
 const commandBase = z.object({
-  jobId: z.uuid(),
+  jobId: entityIdSchema("imageJob"),
   attemptId: z.uuid(),
   deadline: isoDateTime,
   source: imageProcessingSource,
@@ -243,7 +248,7 @@ export const imageProcessingDiagnostics = z.object({
 });
 export const imageProcessingResult = z.object({
   diagnostics: imageProcessingDiagnostics.optional(),
-  jobId: z.uuid(),
+  jobId: entityIdSchema("imageJob"),
   attemptId: z.uuid(),
   completedAt: isoDateTime,
   outcome: z.union([
@@ -316,7 +321,7 @@ export const imageDescriptionConfirmationOwner = z.discriminatedUnion("kind", [
 
 export const imageDescriptionCorrectionReceipt = z.object({
   kind: z.literal("image_description"),
-  recordId: z.uuid(),
+  recordId: entityIdSchema("image"),
   contentHash: z.string().min(1),
   description: z.string(),
   owner: imageDescriptionCorrectionOwner,
@@ -459,7 +464,7 @@ export const scheduleImageProcessingInput = z.object({
     .default(["subject_lift", "describe_image", "identify_image"]),
 });
 export const scheduleImageProcessingOutput = z.object({
-  jobIds: z.array(z.uuid()),
+  jobIds: z.array(entityIdSchema("imageJob")),
   submissionId: z.string().optional(),
 });
 
@@ -468,7 +473,7 @@ export const evaluateAppleImageDescriptionInput = z.object({
   id: imageShortcode,
 });
 export const evaluateAppleImageDescriptionOutput = z.object({
-  jobId: z.uuid().nullable(),
+  jobId: entityIdSchema("imageJob").nullable(),
 });
 
 /**
@@ -487,15 +492,15 @@ export const pullCompanionImageProcessingOutput = z.object({
   remotePaused: z.boolean(),
 });
 export const completeCompanionImageProcessingInput = z.object({
-  deviceId: z.uuid(),
+  deviceId: entityIdSchema("device"),
   result: imageProcessingResult,
 });
 export const completeCompanionImageProcessingOutput = z.object({
   adopted: z.boolean(),
 });
 export const releaseCompanionImageProcessingInput = z.object({
-  deviceId: z.uuid(),
-  jobId: z.uuid(),
+  deviceId: entityIdSchema("device"),
+  jobId: entityIdSchema("imageJob"),
   attemptId: z.uuid(),
 });
 export const releaseCompanionImageProcessingOutput = z.object({
@@ -503,8 +508,8 @@ export const releaseCompanionImageProcessingOutput = z.object({
 });
 /** A heartbeat every 15 s keeps a device attempt's 60 s lease alive. */
 export const renewCompanionImageProcessingInput = z.object({
-  deviceId: z.uuid(),
-  jobId: z.uuid(),
+  deviceId: entityIdSchema("device"),
+  jobId: entityIdSchema("imageJob"),
   attemptId: z.uuid(),
 });
 export const renewCompanionImageProcessingOutput = z.discriminatedUnion("ok", [
@@ -520,9 +525,8 @@ export const renewCompanionImageProcessingOutput = z.discriminatedUnion("ok", [
   }),
 ]);
 
-import { runShortcode } from "./identifier-fields";
 import { imageAssociationStorage } from "./entity-definitions/image-associations";
-import { runTargetState } from "./activity-fields";
+
 import { imageAnalysisSummarySchema } from "./image-identification";
 export const imageProcessingIssue = z.enum(["failed", "review_needed"]);
 export const imageAssociationEntity = imageAssociationStorage.keyof();

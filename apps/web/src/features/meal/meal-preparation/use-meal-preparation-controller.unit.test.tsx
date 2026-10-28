@@ -1,8 +1,5 @@
-import {
-  getMealPreparationsOut,
-  mealOut,
-  mealRecipeOut,
-} from "@cubby/schemas/meal";
+import { mealOut } from "@cubby/schemas/entities/meal";
+import { getMealPreparationsOut, mealRecipeOut } from "@cubby/schemas/meal";
 import {
   buildNutrition,
   type NutritionTotals,

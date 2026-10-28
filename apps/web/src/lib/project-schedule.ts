@@ -1,8 +1,9 @@
+import { type ProjectOut } from "@cubby/schemas/entities/project";
+import { type TaskOut } from "@cubby/schemas/entities/task";
 // The one place a Project or Task becomes a schedule row, shared by the server
 // (the `project.schedule` report both clients draw) and the web portfolio list.
 import type { ReportScheduleRow } from "@cubby/schemas/entity-report";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
 
 export type ProjectScheduleRow = ReportScheduleRow;
 

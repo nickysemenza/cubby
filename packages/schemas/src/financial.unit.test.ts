@@ -4,9 +4,11 @@ import {
   currentLast4,
   type FinancialAccountCardNumber,
   type FinancialAccountCardNumberKind,
+} from "./financial-account";
+import {
   financialAccountCreateInput,
   financialAccountUpdateData,
-} from "./financial-account";
+} from "@cubby/schemas/entities/financialAccount";
 import { financialTransactionCreateInput } from "./financial-transaction";
 
 const card = (

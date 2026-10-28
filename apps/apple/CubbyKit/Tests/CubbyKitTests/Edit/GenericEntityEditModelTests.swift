@@ -25,9 +25,13 @@ struct GenericEntityEditModelTests {
     @Test func dirtyStateTracksChangesAgainstSeededDefaultsAndPrefills() throws {
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.gardenEntry],
-            mode: .create(prefill: ["locationId": "LOC-2345"]), client: try makeClient())
+            mode: .create(prefill: ["locationId": "LOC-2345", "kind": "note"]), client: try makeClient(),
+            createFields: ["locationId", "observedOn", "notes"])
         #expect(!model.isDirty)
         #expect(model.draft["observedOn"] != .null)
+        #expect(model.draft["kind"] == nil)
+        #expect(!model.stage(["kind": "note"]))
+        #expect(model.createBody()["kind"] == nil)
         model.markEdited("notes")
         #expect(!model.isDirty)
         model.draft["locationId"] = .null
