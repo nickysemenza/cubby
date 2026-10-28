@@ -1,0 +1,217 @@
+apps/web/generator/http-api/native-artifacts.ts
+  s_7ade3430b17d59::t_6491b8dc8d7615 7
+apps/web/generator/http-api/native-contract.ts
+  s_7ade3430b17d59::t_62b274575e5ecb 3
+apps/web/generator/http-api/native-contract.unit.test.ts
+  s_7ade3430b17d59::t_28320413482131 4
+apps/web/generator/http-api/swift-models.unit.test.ts
+  s_7ade3430b17d59::t_6d7b896540db39 4
+apps/web/generator/main.ts
+  s_7ade3430b17d59::t_5cc97b26d4fb4b 172,177-179,184
+apps/web/generator/operations/collect.ts
+  s_7ade3430b17d59::t_bca4b2350a6072 29,402,417,520,531
+apps/web/generator/operations/mcp-tools.ts
+  s_7ade3430b17d59::t_a0c9dd312b4c27 13,248
+apps/web/generator/operations/render.ts
+  s_7ade3430b17d59::t_9c9ea9406d7823 5,7,11-12,54,76-77,80-81,84-85,91-92,119,132,138-139,143-144
+apps/web/src/entity/editing/entity-edit-dialog.lifecycle.unit.test.tsx
+  s_7ade3430b17d59::t_823ceadebcc88c 10,158
+apps/web/src/entity/editing/use-entity-commands.unit.test.tsx
+  s_7ade3430b17d59::t_929ec372847fad 11,20,31,88,119,137,149
+apps/web/src/entity/entity-detail/detail-summary.preview.test.tsx
+  s_7ade3430b17d59::t_3dc8ca3655c754 24,129,252
+apps/web/src/entity/entity-detail/mail-report-commands.unit.test.tsx
+  s_7ade3430b17d59::t_ad82892389c652 9,45
+apps/web/src/entity/entity-detail/report-slot.unit.test.tsx
+  s_7ade3430b17d59::t_2209d6316c9c14 19,39,112
+apps/web/src/entity/entity-detail/spend-chart.preview.test.tsx
+  s_7ade3430b17d59::t_aa4c678c07040b 6,22
+apps/web/src/entity/entity-list/list-capabilities.preview.test.tsx
+  s_7ade3430b17d59::t_332ad2bd27f853 18,329
+apps/web/src/entity/fields/field-explanation.preview.test.tsx
+  s_7ade3430b17d59::t_288afe0a6ad48a 11,93,192
+apps/web/src/entity/fields/field-resolution-bulk.unit.test.tsx
+  s_7ade3430b17d59::t_c32d5f4dd8addf 9,42,54
+apps/web/src/entity/presentation/category-label.unit.test.tsx
+  s_7ade3430b17d59::t_13d3bf0b28583b 15,106,124,184,230
+apps/web/src/entity/suggestions/record-suggestion-batch.ts
+  s_7ade3430b17d59::t_a24a63c608f813 6,25,58
+apps/web/src/entity/suggestions/record-suggestions.tsx
+  s_7ade3430b17d59::t_30e31012517081 86,262,280,285,304,309,1059,1186,1330
+apps/web/src/entity/suggestions/use-auto-field-suggestion.unit.test.tsx
+  s_7ade3430b17d59::t_f12302b3298387 29,58
+apps/web/src/features/account/ai-funding.unit.test.tsx
+  s_7ade3430b17d59::t_4ae31d46d12b89 5,58,96
+apps/web/src/features/activity/queue-overview.preview.test.tsx
+  s_7ade3430b17d59::t_0045d781371c2d 14,92
+apps/web/src/features/ai/server-functions/ai-smoke.ts
+  s_7ade3430b17d59::t_5a50f944915402 28,41
+apps/web/src/features/expense/expense-analytics-view.unit.test.tsx
+  s_7ade3430b17d59::t_b3fc0435424175 16,85
+apps/web/src/features/finance/financial-booking-review.preview.test.tsx
+  s_7ade3430b17d59::t_956b39a3e95ac3 17,102
+apps/web/src/features/home/home-rows.preview.test.tsx
+  s_7ade3430b17d59::t_e0290f656691f6 12,113
+apps/web/src/features/home/house-card-project-icon.unit.test.tsx
+  s_7ade3430b17d59::t_ab3d814655d0ac 9,62
+apps/web/src/features/inventory/location-tree-view.unit.test.tsx
+  s_7ade3430b17d59::t_d0a9fef1493fa7 22,299,322
+apps/web/src/features/meal/meal-preparation/meal-portions-section.unit.test.tsx
+  s_7ade3430b17d59::t_884321dde39b49 9,22
+apps/web/src/features/purchase/link-expenses-dialog.unit.test.tsx
+  s_7ade3430b17d59::t_dbf5b16830c5b8 14,106,154
+apps/web/src/features/purchase/match-statement.unit.test.tsx
+  s_7ade3430b17d59::t_b5e0d1a873e64c 12,76,166,232
+apps/web/src/features/purchase/purchase-import-run-detail.unit.test.tsx
+  s_7ade3430b17d59::t_c19c2d3bc47b92 10,108
+apps/web/src/features/run/photo-run-detail.preview.test.tsx
+  s_7ade3430b17d59::t_1256cde178b397 31,33,44-45,419,454,751,847,1045,1143,1208,1323,1494,1585
+apps/web/src/features/run/run-detail.preview.test.tsx
+  s_7ade3430b17d59::t_74caa829d71410 20,22,225,262
+apps/web/src/integrations/tanstack-query/browser-operation-transport.ts
+  s_7ade3430b17d59::t_c7f362db0e8f5f 12,14-18,20-24,27-28,31,68,98,103,140,172-173,257,338,375-376,380
+apps/web/src/integrations/tanstack-query/browser-operation-transport.unit.test.ts
+  s_7ade3430b17d59::t_7dddeaae176b12 4-5,93,200
+apps/web/src/integrations/tanstack-query/operation-call.ts
+  s_7ade3430b17d59::t_e275d1a6b661a1 1-6,13-17,31,33-35,57,61,63,77,81,84,106,115-116,118,125-126,128,160,175-176,182,184,192-193,196-197,202-204,209,220,238,249
+apps/web/src/integrations/tanstack-query/operation-call.unit.test.ts
+  s_7ade3430b17d59::t_046e00666cd01e 4,6,9-12,18,23-24,45-48,61-62,78,94-95,103,110,117,130,152,156,158
+apps/web/src/integrations/tanstack-query/operation-catalog.ts
+  s_7ade3430b17d59::t_5f3ce26d269b16 20,22-25,33,48,143,148,171,186,207,217,226-227,273,278-279,298,338,392-394,404,426,433,437,444,639,736
+apps/web/src/integrations/tanstack-query/operation-catalog.unit.test.ts
+  s_7ade3430b17d59::t_4a99ea1e77ecf3 9,56
+apps/web/src/integrations/tanstack-query/operation-recorder.ts
+  s_7ade3430b17d59::t_bff60e46a9e2f7 5-9,25,58,130,132
+apps/web/src/integrations/tanstack-query/workflow-command-runtime.ts
+  s_7ade3430b17d59::t_6d25b9989a0843 5,16
+apps/web/src/integrations/tanstack-query/workflow-commands.ts
+  s_7ade3430b17d59::t_2d6277813a6d16 3,6
+apps/web/src/integrations/tanstack-query/workflow-stream.ts
+  s_7ade3430b17d59::t_63e316da544072 6-9,11,22,28,63,67
+apps/web/src/lib/error-utils.ts
+  s_7ade3430b17d59::t_397b7f2b55949e 8,14,104
+apps/web/src/lib/operation-error.ts
+  s_7ade3430b17d59::t_b9ae0cb0219cf8 1,7-8,11,13
+apps/web/src/lib/operation-observability.ts
+  s_7ade3430b17d59::t_efc6e0fa5696e6 9-12,14-16,19-22,25-26,29,31,33,39-41,45,47,49-50,52,54-55,57-58,60-61,63,65,67-68,72,74,76-77,80,85,92-94,96-101,103-104,110,112-118,122,126-127,131,134-136,138
+apps/web/src/lib/operation-observability.unit.test.ts
+  s_7ade3430b17d59::t_cacd6a6862d1f2 3,5-10,14-15,22,24,27,33,40,46,56,65,74,83
+apps/web/src/lib/request-id.ts
+  s_7ade3430b17d59::t_74fb252131538d 14-15,56,104,106
+apps/web/src/lib/test/browser-harness.tsx
+  s_7ade3430b17d59::t_5196acf61b8d90 23,73
+apps/web/src/server/domains/product/repo/write/product-writes.ts
+  s_7ade3430b17d59::t_3cbe498dc9c815 29,148
+apps/web/src/server/domains/recipe/operations/recipe-import.server.ts
+  s_7ade3430b17d59::t_dc80a9903e2f57 99,132,171,180,250,271,351-352,370,397,434,462,470,479,541,551,562,587,626,654,662,684,702,714,775,803,814,848,870
+apps/web/src/server/domains/recipe/operations/recipe.server.ts
+  s_7ade3430b17d59::t_fb8167c377155f 64,88,130,291,538
+apps/web/src/server/domains/run/operations/ai.server.ts
+  s_7ade3430b17d59::t_7af42b7d13fd6c 98,115,138-140,169,198,222,260
+apps/web/src/server/generic/problems/operations/problem-counts.server.ts
+  s_7ade3430b17d59::t_2168c129fcf217 3,6
+apps/web/src/server/generic/problems/operations/problem-workflows.server.ts
+  s_7ade3430b17d59::t_33e6254211b721 14,28
+apps/web/src/server/mcp/http-handler.ts
+  s_7ade3430b17d59::t_03ecc566bcd35a 12,157
+apps/web/src/server/mcp/tool-bindings.ts
+  s_7ade3430b17d59::t_fddfe848d5e4b2 9,29
+apps/web/src/server/mcp/tools/progressive-disclosure.ts
+  s_7ade3430b17d59::t_a10562cda6468d 10,128
+apps/web/src/server/mcp/tools/tool-registration.ts
+  s_7ade3430b17d59::t_c7adefe1e3f20e 13,43-47,49,52,54,76,95,125,161,246,264,405,477,524
+apps/web/src/server/observability/observed-request.ts
+  s_7ade3430b17d59::t_656ecd0e37f7d3 5-6,108,122
+apps/web/src/server/operation-runtime/entity-runtime.server.ts
+  s_7ade3430b17d59::t_1ebf995021dfcc 46,180
+apps/web/src/server/operation-runtime/middleware/entity-server-functions.ts
+  s_7ade3430b17d59::t_ed546faf3f21b5 10
+apps/web/src/server/operation-runtime/middleware/tracing.ts
+  s_7ade3430b17d59::t_cd39f6a955a36a 13,15-16,27,44
+apps/web/src/server/operation-runtime/operation-dispatch.server.ts
+  s_7ade3430b17d59::t_b48f54a0ede81b 6,24-28,31,35,57,61,69,109,137,163,167,203,212,239
+apps/web/src/server/operation-runtime/operation-dispatch.server.unit.test.ts
+  s_7ade3430b17d59::t_f252db73300dab 11,19
+apps/web/src/server/operation-runtime/operation-domain.server.ts
+  s_7ade3430b17d59::t_d14db28c2cc4f9 7,10,12,14-15,17,20,22,36,87,90,97,135,146,178
+apps/web/src/server/operation-runtime/operation-domain.server.unit.test.ts
+  s_7ade3430b17d59::t_425a0286c0a070 11,13-15,28,32-33,136,141
+apps/web/src/server/operation-runtime/operation-handlers.server.ts
+  s_7ade3430b17d59::t_95d9867a95a347 1,3,5,7-10,13-14,21-25,30,51,68-69
+apps/web/src/server/operation-runtime/operation.contract.ts
+  s_7ade3430b17d59::t_91484170715474 41,53-54,63,70-71,73,78-79,81,83,86,91
+apps/web/src/server/operation-runtime/operation.server.ts
+  s_7ade3430b17d59::t_1fdbcfcd7757dd 10,12-17,68-70,72,74,84,94-95,98,100-102,112-113,123,154,159,169,178,196,218,227,258,263,345,445,451,454,456,458-459,461,469,474,494,520-521,550,552,589,593,598,602,610-611,621,628,630,634-635,660,669,705,712,719,731,761,787,812,827,840,842-843
+apps/web/src/server/operation-runtime/operation.server.unit.test.ts
+  s_7ade3430b17d59::t_cede83aefb079f 15-18,26,44-45,49,60,78,86,112,137-138,151,174,195,219,238,257,273,290,328,343,382,398,412,440,476,500,552,563,589,602
+apps/web/src/server/operation-runtime/subscription-domain.server.ts
+  s_7ade3430b17d59::t_6ae266975da1e5 7-8,10,12-13,20,33,43-44,51
+apps/web/src/server/operation-runtime/workflow-stream.server.ts
+  s_7ade3430b17d59::t_4e3d8c02c55e6f 3-4,14-17,20,25,28-30,33,35,40,58-60,65,73,94,110,117,181
+apps/web/src/server/operation-runtime/workflow-stream.server.unit.test.ts
+  s_7ade3430b17d59::t_e4dd18170e8fc4 15,17-19,36,46,96
+apps/web/src/server/testing/mcp-test-utils.ts
+  s_7ade3430b17d59::t_e0d2a17c8f4604 30-32,88,101,130-131,179,196
+apps/web/src/server/worker/http.ts
+  s_7ade3430b17d59::t_e7b5f34df5bda3 16-20,281,308,341
+apps/web/src/server/workflows/ai-smoke-run.ts
+  s_7ade3430b17d59::t_7da58783563913 90,132,160,186,992
+apps/web/src/ui/feedback/error-details.unit.test.tsx
+  s_7ade3430b17d59::t_7a92186af61a16 16,28
+apps/web/src/ui/feedback/route-error.tsx
+  s_7ade3430b17d59::t_0815c602c14efd 21,111,114
+apps/web/tests/e2e/companion-doorbell.spec.ts
+  s_7ade3430b17d59::t_0247508da66089 15,134,140,160,167
+apps/web/tests/e2e/finance-evidence-journey.spec.ts
+  s_7ade3430b17d59::t_cb3fde015ba475 7,18
+apps/web/tests/e2e/meal-nutrition.spec.ts
+  s_7ade3430b17d59::t_1ad31878e1a999 1,82
+apps/web/tests/e2e/photo-group-review.spec.ts
+  s_7ade3430b17d59::t_06bb445761c1ad 5,98-107,109-112,187,206-209,284-287,355-358,415-418,568-571,632,755,807,968,1114,1273,1337-1340
+apps/web/tests/e2e/purchase-import-run.spec.ts
+  s_7ade3430b17d59::t_f638e910174a20 14,397
+apps/web/tests/e2e/suggestions.spec.ts
+  s_7ade3430b17d59::t_e5e330e0bec1c7 48,80
+apps/web/tests/e2e/support/import-order-convergence.helpers.ts
+  s_7ade3430b17d59::t_005c7db12fe234 21,34
+apps/web/tests/e2e/support/operation.ts
+  s_7ade3430b17d59::t_94eca5a5129e84 11
+apps/web/tests/tester-army/journey.fixtures.ts
+  s_7ade3430b17d59::t_754c348551c811 25,95
+apps/web/tooling/checks/read-performance-operations.ts
+  s_7ade3430b17d59::t_3b2326a62f80fb 6,8-11,21,24,33,90,98,154,156
+apps/web/tooling/checks/read-performance-operations.unit.test.ts
+  s_7ade3430b17d59::t_da0f0f3344f6a5 10-12,35
+apps/web/tooling/checks/read-performance-shape.ts
+  s_7ade3430b17d59::t_23d94132f0c452 3,32
+apps/web/tooling/checks/read-performance.ts
+  s_7ade3430b17d59::t_b540f784d9ba10 9,227
+apps/web/tooling/checks/typecheck-boundaries.ts
+  s_7ade3430b17d59::t_ccd04e1a192d51 14
+apps/web/tooling/mcp-tools-generator.unit.test.ts
+  s_7ade3430b17d59::t_76a3143a756bc6 7
+apps/web/tooling/sim-e2e.ts
+  s_7ade3430b17d59::t_4fd00a92f97cc9 37,737,756-759
+apps/web/tooling/tester-army/scenarios.ts
+  s_7ade3430b17d59::t_03fb477ce60f6b 38,167
+apps/web/tooling/typecheck-repositories.ts
+  s_7ade3430b17d59::t_d22a2df9a3f0c7 88
+docs/agents/mcp.md
+  s_7ade3430b17d59::t_16e318e34e2789 164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8540730d8aec9005e95a937d778fda73f30a46cd",
+  "prompts": {},
+  "sessions": {
+    "s_7ade3430b17d59": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18490-0e73-77a3-a48e-f936cb9c19dd",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
