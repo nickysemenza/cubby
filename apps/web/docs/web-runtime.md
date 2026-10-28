@@ -164,9 +164,11 @@ and freezes each compiler-owned slice, and returns them in one loader read.
 Dependencies are not traversed transitively. Query's SSR dehydration owns their
 transport; a document's QueryClient owns their cache. Accessors take that explicit
 scope, and `useEntityMetadata` consumes the same cache without a hydration-time read.
-Slice storage and dependency admission use separate cache entries: a slice seeded
-as another entity's dependency does not establish that its own dependencies are
-available on a later navigation. Dependency slices live with the document cache.
+Each query stores the requested slice and its direct dependencies together, so
+SSR transports the complete admission rather than side-effect cache writes. A
+dependency slice alone does not establish that its own dependencies are available:
+later navigation admits that entity's complete bundle. Synchronous dependency
+reads consult only bundles already admitted to the document's QueryClient.
 Dynamic pickers, previews and graph nodes admit their requested slice through that
 hook; non-entity Calendar loads its declared source slices before pure compilation.
 The shell uses only the generated names/icons/routes/capabilities roster.

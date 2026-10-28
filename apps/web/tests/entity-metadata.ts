@@ -9,10 +9,9 @@ export async function metadataQueryClient() {
   const queryClient = new QueryClient();
   await Promise.all(
     entityKeys.map(async (entity) => {
-      const { primary } = await loadEntityMetadata(entity);
       queryClient.setQueryData(
         entityMetadataQueryOptions(entity).queryKey,
-        primary,
+        await loadEntityMetadata(entity),
       );
     }),
   );

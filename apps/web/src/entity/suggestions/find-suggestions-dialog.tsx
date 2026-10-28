@@ -228,7 +228,7 @@ export function FindSuggestionsDialog({
     [selectedEntity],
   );
   const [metadata] = useQueries({ queries: metadataQueries });
-  const metadataSlice = metadata?.data;
+  const metadataSlice = metadata?.data?.primary;
   const entityFields = useMemo(
     () =>
       metadataSlice?.fields.fields.flatMap((field) =>

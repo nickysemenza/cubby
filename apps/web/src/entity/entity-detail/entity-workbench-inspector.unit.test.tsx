@@ -133,13 +133,10 @@ beforeEach(async () => {
   harness = createBrowserTestHarness();
   await Promise.all(
     (["vendor", "image"] as const).map(async (entity) => {
-      const { primary, dependencies } = await loadEntityMetadata(entity);
-      for (const metadata of [primary, ...dependencies]) {
-        harness.queryClient.setQueryData(
-          entityMetadataQueryOptions(metadata.entity).queryKey,
-          metadata,
-        );
-      }
+      harness.queryClient.setQueryData(
+        entityMetadataQueryOptions(entity).queryKey,
+        await loadEntityMetadata(entity),
+      );
     }),
   );
 });

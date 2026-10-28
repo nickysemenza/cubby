@@ -12,12 +12,18 @@ import { entityMetadataLoaders } from "~/server/generated/entity-metadata-loader
 const slices = await Promise.all(
   Object.values(entityMetadataLoaders).map((load) => load()),
 );
+const bundleFor = (primary: (typeof slices)[number]) => ({
+  primary,
+  dependencies: slices.filter((slice) =>
+    primary.dependencies.some((entity) => entity === slice.entity),
+  ),
+});
 
 export function seedEditorTestMetadata(queryClient: QueryClient) {
   for (const slice of slices)
     queryClient.setQueryData(
       entityMetadataQueryOptions(slice.entity).queryKey,
-      slice,
+      bundleFor(slice),
     );
 }
 
@@ -29,7 +35,7 @@ export function createEditorTestQueryClient(entities?: readonly Entity[]) {
     if (!entities || entities.includes(slice.entity))
       queryClient.setQueryData(
         entityMetadataQueryOptions(slice.entity).queryKey,
-        slice,
+        bundleFor(slice),
       );
   return queryClient;
 }
