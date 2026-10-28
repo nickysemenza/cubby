@@ -345,35 +345,44 @@ const displaySourceBranch = (
   };
 };
 
-const DECLARED_DISPLAY_BRANCHES: readonly DisplayBranch[] = [
-  ...allEntities.flatMap((entity) => {
-    const branch = directStorageBranch(entity);
-    return branch === null
-      ? []
-      : [
-          {
-            entity,
-            branch,
-            usesExpenseProjectRelation: false,
-            inheritedRelations: [],
-          },
-        ];
-  }),
-  ...DISPLAY_SOURCES.map((source, index) => ({
-    entity: source.entity,
-    ...displaySourceBranch(source, index),
-  })),
-];
+let compiledDisplayBranches: readonly DisplayBranch[] | undefined;
 
-// Accepted evidence wins; a uniquely supported merchant logo is a later visual fallback.
-const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
-  ...DECLARED_DISPLAY_BRANCHES,
-  ...DECLARED_DISPLAY_BRANCHES.filter(
-    ({ entity }) => entity === "financialTransaction",
-  ).map((transactionBranch): DisplayBranch => ({
-    ...transactionBranch,
-    entity: "sourceTransactionRecord",
-    branch: sql`
+/** Compile SQL after the module graph initializes: traversal and list filters
+ * can import each other while repository declarations are being constructed. */
+function displayBranches(): readonly DisplayBranch[] {
+  return (compiledDisplayBranches ??= compileDisplayBranches());
+}
+
+function compileDisplayBranches(): readonly DisplayBranch[] {
+  const declared: readonly DisplayBranch[] = [
+    ...allEntities.flatMap((entity) => {
+      const branch = directStorageBranch(entity);
+      return branch === null
+        ? []
+        : [
+            {
+              entity,
+              branch,
+              usesExpenseProjectRelation: false,
+              inheritedRelations: [],
+            },
+          ];
+    }),
+    ...DISPLAY_SOURCES.map((source, index) => ({
+      entity: source.entity,
+      ...displaySourceBranch(source, index),
+    })),
+  ];
+
+  // Accepted evidence wins; a uniquely supported merchant logo is a later visual fallback.
+  return [
+    ...declared,
+    ...declared
+      .filter(({ entity }) => entity === "financialTransaction")
+      .map((transactionBranch): DisplayBranch => ({
+        ...transactionBranch,
+        entity: "sourceTransactionRecord",
+        branch: sql`
         SELECT media.*
         FROM (${sourceTransactionSettlements}) accepted
         JOIN LATERAL (
@@ -384,12 +393,12 @@ const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
         ) media ON true
         WHERE refs."entityKind" = ${entitySchema.enum.sourceTransactionRecord}
           AND accepted."record" = refs."entityId"`,
-  })),
-  {
-    entity: "sourceTransactionRecord",
-    usesExpenseProjectRelation: false,
-    inheritedRelations: [],
-    branch: sql`
+      })),
+    {
+      entity: "sourceTransactionRecord",
+      usesExpenseProjectRelation: false,
+      inheritedRelations: [],
+      branch: sql`
       SELECT candidate.key, candidate.shortcode,
              ${DISPLAY_SOURCES.length + 1}::integer AS priority,
              ${displayGroupColumns([])}, candidate."sortOrder", candidate."createdAt", candidate."imageId"
@@ -407,8 +416,9 @@ const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
       ) candidate ON true
       WHERE refs."entityKind" = ${entitySchema.enum.sourceTransactionRecord}
         AND record.id = refs."entityId" AND record."deletedAt" IS NULL`,
-  },
-];
+    },
+  ];
+}
 
 /** One history scan for all source-record merchants requested by this image batch. */
 const sourceMerchantImagesSql = (enabled: boolean): SQL => {
@@ -426,7 +436,7 @@ const sourceMerchantImagesSql = (enabled: boolean): SQL => {
 
 /** Filter/order mixed lists by the same direct and borrowed media as thumbnails. */
 export const entityDisplayImagePresenceSql = (entity: Entity, id: SQL): SQL => {
-  const selected = DISPLAY_BRANCHES.filter(
+  const selected = displayBranches().filter(
     (branch) => branch.entity === entity,
   );
   const expenseRelation = selected.some(
@@ -558,10 +568,10 @@ async function resolveRankedDisplayImages(
 }> {
   // Unrelated entity arms still incur planner/JIT costs even when their WHERE
   // clauses can never match. Compile only the source types in this batch.
-  const selectedBranches = DISPLAY_BRANCHES.filter(({ entity }) =>
+  const selectedBranches = displayBranches().filter(({ entity }) =>
     sourceTypes.has(entity),
   );
-  const displayBranches = selectedBranches.map(({ branch }) => branch);
+  const branchSql = selectedBranches.map(({ branch }) => branch);
   // Explicit and purchase assignments identify page candidates through their
   // indexes. The effective-project expression still decides precedence; food
   // fallback requires the wider set only when the household project is in refs.
@@ -595,8 +605,8 @@ async function resolveRankedDisplayImages(
           )
       )`
     : sql``;
-  const borrowedImages = displayBranches.length
-    ? sql`UNION ALL ${sql.join(displayBranches, sql` UNION ALL `)}`
+  const borrowedImages = branchSql.length
+    ? sql`UNION ALL ${sql.join(branchSql, sql` UNION ALL `)}`
     : sql``;
   const result = await unwrapDb(db).execute(sql`
     WITH ${refsSql}

@@ -85,11 +85,8 @@ const enumColumnExpression = (
     "expense.lineBasis": `text(${column},{enum:expenseLineBasisValues})`,
     "expense.lineKind": `text(${column},{enum:expenseLineKindValues})`,
     "expense.trade": `text(${column},{enum:tradeValues})`,
-    "image.renderStatus": `text(${column},{enum:imageRenderStatusValues})`,
-    "image.status": `text(${column},{enum:imageStatusValues})`,
     "imageJob.kind": `text(${column},{enum:["subject_lift", "describe_image", "identify_image"]})`,
     "imageJob.state": `text(${column},{enum:["pending", "waiting_for_device", "leased", "ready", "skipped", "failed"]})`,
-    "image.storageStatus": `text(${column},{enum:imageStorageStatusValues})`,
     "image.metadataOutcome": `text(${column},{enum:["original_missing", "extraction_failed"]})`,
     "inventory.placement": `text(${column},{enum:inventoryPlacementValues})`,
     "meal.mealKind": `text(${column},{enum:mealKindValues})`,
@@ -108,9 +105,16 @@ const enumColumnExpression = (
   } as const satisfies Readonly<Record<string, string>>;
   const existing = lookupGeneratedType(expressions, key);
   if (existing) return existing;
+  // Storage enums come from declarations at generation time so table imports
+  // do not evaluate public read schemas during Worker startup.
   if (
-    field.specialized !== "enum:declaration" &&
-    field.specialized !== "enum:inheritance-mode"
+    ![
+      "enum:declaration",
+      "enum:inheritance-mode",
+      "enum:ImageStatus",
+      "enum:ImageRenderStatus",
+      "enum:ImageStorageStatus",
+    ].includes(field.specialized ?? "")
   )
     return null;
   const validation = entity.fieldModel.fields.find(
@@ -240,7 +244,6 @@ const storageColumnImports =
   'import type { FinancialAccountPartyPeriod, FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
   'import type { ShipmentExtraTrackingNumber } from "@cubby/schemas/shipment-fields";\n' +
   `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
-  'import { imageRenderStatusValues, imageStatusValues, imageStorageStatusValues } from "@cubby/schemas/image";\n' +
   'import type { ImageSourceFingerprint, StoredImageEmbeddedMetadata } from "@cubby/schemas/image";\n' +
   'import type { ImageCaptureLocation, ImageProvenanceEvidence } from "@cubby/schemas/image-capture-fields";\n' +
   'import type { CookbookExtraction, CookbookRunReport } from "@cubby/schemas/cookbook";\n' +
@@ -249,7 +252,9 @@ const storageColumnImports =
   'import type { IngredientApplicabilityKey } from "@cubby/schemas/codec";\n' +
   'import { productCategoryFeatureValues } from "@cubby/schemas/product-category-fields";\n' +
   'import { productKindValues } from "@cubby/schemas/product-fields";\n' +
-  'import { costTypeValues, projectKindValues, projectStatusValues, taskStatusValues, tradeValues } from "@cubby/schemas/project";\n' +
+  'import { costTypeValues } from "@cubby/schemas/expense-fields";\n' +
+  'import { projectKindValues, projectStatusValues } from "@cubby/schemas/project-fields";\n' +
+  'import { taskStatusValues, tradeValues } from "@cubby/schemas/task-fields";\n' +
   'import { expenseLineBasisValues, expenseLineKindValues } from "@cubby/schemas/expense-line-kind";\n' +
   'import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";\n' +
   'import type { RecipeStoredMeta, RecipeYield, StoredRecipeTotals } from "@cubby/schemas/recipe-shared";\n' +

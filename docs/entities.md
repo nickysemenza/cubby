@@ -1603,7 +1603,11 @@ Inventory's `fields.ownerLedgerPartyId` separates the stored choice from the
 effective owner, so its Use inherited, Keep this value, and Set
 to Household actions are the generic resolution actions (`resolution.confirm`
 pins the inherited value; `resolution.labels` names a null value Household or
-Unknown). Its filter matches the effective owner by running the ownership
+Unknown). Saved explicit intent retains its declared reset action before a
+derived resolution is published. The selected-record explanation loads the
+current ownership ladder and exact reset outcome on demand; a successful empty
+outcome is known absence, not a missing projection key.
+Its filter matches the effective owner by running the ownership
 resolver and narrowing by id before paging; the declaration's filter
 `sentinels` (`@household`, `@unknown`) are tokens every client offers beside
 the roster and sends unbranded. Values are ORed and match any entry. Product's
@@ -2101,7 +2105,7 @@ Each repository supplies `listScaffold` as its read port to
 `defineRepository`. Its `read` declaration supplies columns and bindings;
 `{ scope: "detail" }` bindings load only for record reads. `scaffold.get`
 and `getByIds` use the same read plan as pages, including for get-by-id.
-See [ADR 0023](adr/0023-repository-read-declaration.md).
+See [ADR 0024](adr/0024-repository-read-declaration.md).
 
 Ingredient costing and nutrition graphs retain their graph readers, but source
 Ingredient records and embedded Products from their respective scaffolds. The
@@ -3468,7 +3472,9 @@ expiry strictly after the evaluation instant. Problems and Work queue reads
 filter that eligibility without changing stored status or resolution history.
 Explicit Apply checks expiry before changing business records, even if no
 Problems read has run. Expired findings remain visible in Run history and can
-still be explicitly dismissed; reports offer no Apply action for them. An
+still be explicitly dismissed; reports offer no Apply action for them. Every
+Run purpose exposes its findings and dismissal commands on the Run detail,
+including photo inventory; finding history does not require an import report. An
 already-applied idempotent reconciliation remains governed by its existing
 receipt contract, rather than becoming invalid when its old deadline passes.
 The retained open-evidence unique key depends on stored status, not expiry.
@@ -3890,7 +3896,7 @@ Every shortcode entity has one durable `Entity` row (ADR 0006): payloads bind
 to it with a composite `(id, shortcode)` FK. Shared transactional writers create
 identity before payload insertion and retain tombstones on soft and hard deletes. `finalizeMerge` records one-hop,
 path-compressed `mergedIntoId` links. Reads and writes through a merged-away
-code refuse with the survivor's code ([ADR 0023](adr/0023-repository-read-declaration.md));
+code refuse with the survivor's code ([ADR 0024](adr/0024-repository-read-declaration.md));
 a deleted code refuses with the deletion date. Except for [pruned Job identities](jobs.md#job-entity-and-identity-retention),
 codes are never reused, even a
 hard-deleted payload's.
@@ -3898,8 +3904,8 @@ hard-deleted payload's.
 Direct files are `EntityAttachment` rows: gallery photos and purchase documents
 (`attachment`), a cookbook `cover`, a vendor `logo`. `galleryBinding` and
 `imageCascadeChild` all target that one table; `purpose` is Product-only and
-`documentKind` Purchase-only. Gallery writes leave both null; readers treat a
-null purpose as `item` and a null document kind as `other`. Detach soft-deletes, a removed subject's
+`documentKind` Purchase-only. Product gallery writes store `item`; other galleries
+leave purpose null. Readers treat a null document kind as `other`. Detach soft-deletes, a removed subject's
 attachments are detached and reaped, and an upload's idempotency key belongs to
 the attachment rather than the file.
 

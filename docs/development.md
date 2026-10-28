@@ -464,6 +464,9 @@ native PostgreSQL installation remain owned by their existing runners.
   verbatim; ordinary responses, including socket refusals, receive correlation.
   Keep feature imports at their protocol/event owner. Dynamic syntax alone does not
   establish emitted size or startup savings.
+  Generated table enum imports use leaf field modules; enums owned by entity
+  declarations are emitted as literal values at generation time. Importing public
+  read-schema modules just for enum arrays evaluates their schema graph at startup.
 - **Deployment identities.** `apps/web/worker-identity.json` owns queue names and cron
   expressions. Config reads its bytes to avoid making runtime modules Vite-denied
   configuration dependencies. Runtime/local adapters use `server/worker-identity.ts`.

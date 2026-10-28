@@ -1,6 +1,6 @@
 # ADR 0006: Durable entity identity and one attachment table
 
-Status: Accepted. Superseded in part by ADR 0007 (generic `EntityLink` table; `RunMutation` and `ImageSighting` amendments below) and ADR 0023 (reads no longer follow merge redirects).
+Status: Accepted. Superseded in part by ADR 0007 (generic `EntityLink` table; `RunMutation` and `ImageSighting` amendments below) and ADR 0024 (reads no longer follow merge redirects).
 
 ## Context
 
@@ -116,7 +116,7 @@ path's destination.
   the `IMS-` prefix left the shortcode registry. ADR 0005's amendment records
   the same change from the sighting side.
 
-## Amendment (ADR 0023: reads no longer follow merge redirects)
+## Amendment (ADR 0024: reads no longer follow merge redirects)
 
 Reads no longer follow a merge redirect. Detail, connection and graph reads
 treat a merged-away code like any other code with no live row: it is not

@@ -90,6 +90,17 @@ evaluation results, pending work on the feature drains, and embedding cleanup
 work before declaring the cutover complete. Do not reset the migration ledger
 or overlap Actions with a manual migration.
 
+Large identity retirements must check foreign-key indexes before applying SQL.
+An index restricted to live rows cannot support checks against every referring
+row. In particular, `SearchDocument`'s live-row identity index does not cover
+tombstones. For a one-time populated cutover, the exclusive operator may create
+a temporary full index on `SearchDocument ("entityId", "entityKind")` before
+the retirement transaction. Verify the query plan and preserve the exact
+committed migration SQL and ledger hashes. After the migration commits and
+preservation readback passes, drop that support index and confirm the schema
+matches the committed journal. Record creation, application, readback and
+cleanup evidence; never overlap this operator sequence with an Actions deploy.
+
 ## Job entity identity backfill
 
 `0036_job_entity_identity` uses the migration runner's explicit

@@ -8,11 +8,11 @@ export {
   workItem,
   workTicket,
 } from "./job-schema";
+import type { AiAnalysisRuntime } from "@cubby/schemas/ai";
 import {
   aiAnalysisEntityKind,
   type AiAnalysisEntityKind,
-  type AiAnalysisRuntime,
-} from "@cubby/schemas/ai";
+} from "@cubby/schemas/ai-analysis-fields";
 import type { AuditEntityKind, AuditFieldChange } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
 import { auditChannelSchema, type AuditChannel } from "@cubby/schemas/context";
@@ -32,10 +32,8 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { productImagePurpose } from "@cubby/schemas/image-summary";
 import type { LedgerSourceClaimNormalizedEvidence } from "@cubby/schemas/ledger-transfer";
-import {
-  type PurchaseDocumentKind,
-  purchaseDocumentKindValues,
-} from "@cubby/schemas/purchase";
+import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
+import { purchaseDocumentKindValues } from "@cubby/schemas/purchase-fields";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import {
   aiUsageTransportValues,

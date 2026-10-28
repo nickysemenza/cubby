@@ -96,7 +96,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `WorkSource` (`server/generic/work-queue/repo/work-source.ts`,
   `selectWorkCandidates`). `declaredFilterPredicates` /
   The scaffold owns the repository read port, including `getByIds` (see
-  [repository read declarations](../adr/0023-repository-read-declaration.md)).
+  [repository read declarations](../adr/0024-repository-read-declaration.md)).
   `listScaffold` (`server/generic/list/repo/list.ts`; public rows go through `read`,
   explicit repository-only selections through `raw`,
   passing its own `where`, `orderBy`, plain `select`, relation `load`, or joined

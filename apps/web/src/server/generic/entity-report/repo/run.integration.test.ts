@@ -16,6 +16,7 @@ import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/ru
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
 import {
   buildEntityReport as buildReport,
@@ -319,7 +320,7 @@ describe("Run detail reports", () => {
   // targets, prepared orders, or restart inputs on each report poll. Private
   // provider receipts stay hidden and the next request must see new work.
   it("polls photo Run reports with only their public operation evidence", async () => {
-    await insertWithShortcode(ctx.db, "ledgerParty", {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic photo report member",
       kind: "member",
       userId: ctx.actor.userId,
@@ -328,6 +329,15 @@ describe("Run detail reports", () => {
       actorUserId: ctx.actor.userId,
     });
     const id = runShortcode.parse(run.publicId);
+    const finding = await seedRunFinding(ctx.db, {
+      runId: run.id,
+      ledgerPartyId: party.id,
+      entityId: run.id,
+      entityKind: "run",
+      kind: "synthetic_note",
+      summary: "Synthetic photo finding",
+      evidenceFingerprint: "d".repeat(64),
+    });
     const operationId = "synthetic-photo-work";
     await getDb(ctx.db)
       .insert(runOperation)
@@ -358,9 +368,22 @@ describe("Run detail reports", () => {
     );
     expect(rows?.map((row) => row.key)).toEqual([operationId]);
     expect(JSON.stringify(timeline)).not.toContain("Synthetic result");
+    const findings = batch.reports.find(
+      (entry) => entry.slot === "run.import-findings",
+    )?.report;
+    const findingRows = findings?.blocks.flatMap((block) =>
+      block.kind === "records" ? block.rows : [],
+    );
+    expect(findingRows?.[0]).toMatchObject({
+      key: finding.id,
+      lines: [expect.objectContaining({ text: "Synthetic photo finding" })],
+      commands: [expect.objectContaining({ label: "Dismiss" })],
+    });
     const importReports = batch.reports.filter(
       ({ slot }) =>
-        slot !== "run.live-progress" && slot !== "run.import-timeline",
+        slot !== "run.live-progress" &&
+        slot !== "run.import-timeline" &&
+        slot !== "run.import-findings",
     );
     expect(importReports.flatMap(({ report }) => report.blocks)).toEqual([]);
     await getDb(ctx.db)

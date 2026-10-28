@@ -6,9 +6,11 @@ import type {
 import { taskShortcode, mealShortcode } from "@cubby/schemas/identifiers";
 import type { MealType } from "@cubby/schemas/meal-classification";
 import { mealTypeSchema } from "@cubby/schemas/meal-classification";
-import type { TaskStatus } from "@cubby/schemas/project";
-import { taskStatusSchema } from "@cubby/schemas/project";
-import type { Trade } from "@cubby/schemas/task-fields";
+import {
+  taskStatusSchema,
+  type TaskStatus,
+  type Trade,
+} from "@cubby/schemas/task-fields";
 import { z } from "zod";
 
 import type { CalDavCollection } from "../operations/rpc";

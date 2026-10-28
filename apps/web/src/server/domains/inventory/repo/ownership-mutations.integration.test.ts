@@ -15,6 +15,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
 import {
+  expense,
   financialAccount,
   financialTransactionAllocation,
   inventoryEntry,
@@ -294,7 +295,7 @@ describe("inventory ownership mutations", () => {
     expect(await markExpiredClockDerived(ctx.db)).toBeGreaterThan(0);
     expect(await read()).toMatchObject({ stale: true, pending: true });
     await getDb(ctx.db).execute(sql`
-      UPDATE "DerivedDirty" SET "lastError" = 'synthetic retry', "readyAt" = (now() AT TIME ZONE 'UTC') + interval '1 hour'
+      UPDATE "WorkItem" SET "lastError" = 'synthetic retry', "readyAt" = (now() AT TIME ZONE 'UTC') + interval '1 hour'
       WHERE target = 'inventory.ownership' AND ref = ${subject.entryId}`);
     expect(await markExpiredClockDerived(ctx.db)).toBe(0);
     expect(await read()).toMatchObject({
@@ -302,7 +303,7 @@ describe("inventory ownership mutations", () => {
       pending: true,
     });
     await getDb(ctx.db).execute(sql`
-      UPDATE "DerivedDirty" SET "readyAt" = now() AT TIME ZONE 'UTC'
+      UPDATE "WorkItem" SET "readyAt" = now() AT TIME ZONE 'UTC'
       WHERE target = 'inventory.ownership' AND ref = ${subject.entryId}`);
     await drainStoredDerived(ctx.db);
     expect(await read()).toMatchObject({
@@ -489,6 +490,15 @@ describe("inventory ownership mutations", () => {
       const before = await Promise.all(
         acquired.expenses.map((row) => readExpenseById(ctx.db, row.entityId)),
       );
+      // Warming derived beneficiary results may enrich reads. Ownership
+      // inference must preserve the stored Expense evidence and allocations.
+      const storedExpenses = () =>
+        Promise.all(
+          acquired.expenses.map((row) =>
+            dbc.select().from(expense).where(eq(expense.id, row.entityId)),
+          ),
+        );
+      const storedBefore = await storedExpenses();
       expect(before.map((row) => row.beneficiaries)).toEqual([
         [{ partyId: null, weight: 1 }],
         [{ partyId: null, weight: 1 }],
@@ -546,11 +556,16 @@ describe("inventory ownership mutations", () => {
       expect(inventory.data.map((row) => row.displayName)).toEqual([
         expect.stringContaining("Unknown attribution product"),
       ]);
+      expect(await storedExpenses()).toEqual(storedBefore);
       expect(
-        await Promise.all(
-          acquired.expenses.map((row) => readExpenseById(ctx.db, row.entityId)),
-        ),
-      ).toEqual(before);
+        (
+          await Promise.all(
+            acquired.expenses.map((row) =>
+              readExpenseById(ctx.db, row.entityId),
+            ),
+          )
+        ).map((row) => row.beneficiaries),
+      ).toEqual(before.map((row) => row.beneficiaries));
     },
   );
 

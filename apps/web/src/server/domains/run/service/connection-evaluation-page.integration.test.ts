@@ -132,7 +132,7 @@ describe("connection evaluation pages", () => {
       {},
       { pages: 1 },
     );
-    return { result: result[0] };
+    return result[0];
   }
 
   const states = async (ids: readonly string[]) =>

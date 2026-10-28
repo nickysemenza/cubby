@@ -96,7 +96,18 @@ export const renderFilterArtifacts = (
     ),
     "filterRef",
   );
-  const runtimeDescriptor = (descriptor: FilterDescriptor): string => {
+  const coreRefs = sourceRefImports(
+    filterEntities.flatMap(({ filterDescriptors }) =>
+      filterDescriptors.flatMap(({ expandRef }) =>
+        expandRef ? [expandRef] : [],
+      ),
+    ),
+    "filterRef",
+  );
+  const runtimeDescriptor = (
+    descriptor: FilterDescriptor,
+    core = false,
+  ): string => {
     const properties = [
       `columnId:${JSON.stringify(descriptor.columnId)}`,
       ...(descriptor.field === null
@@ -106,8 +117,10 @@ export const renderFilterArtifacts = (
         ? []
         : [`urlKey:${JSON.stringify(descriptor.urlKey)}`]),
       `kind:${JSON.stringify(descriptor.kind)}`,
-      `placeholder:${JSON.stringify(descriptor.placeholder)}`,
-      ...(descriptor.options === null
+      ...(core
+        ? []
+        : [`placeholder:${JSON.stringify(descriptor.placeholder)}`]),
+      ...(core || descriptor.options === null
         ? []
         : [
             `options:${compactLiteral(
@@ -116,13 +129,13 @@ export const renderFilterArtifacts = (
               ),
             )}`,
           ]),
-      ...(descriptor.optionsRef === null
+      ...(core || descriptor.optionsRef === null
         ? []
         : [`options:${alias(descriptor.optionsRef)}`]),
-      ...(descriptor.optionsKey === null
+      ...(core || descriptor.optionsKey === null
         ? []
         : [`optionsKey:${JSON.stringify(descriptor.optionsKey)}`]),
-      ...(descriptor.label === null
+      ...(core || descriptor.label === null
         ? []
         : [`label:${JSON.stringify(descriptor.label)}`]),
       ...(descriptor.brandRef === null
@@ -138,7 +151,7 @@ export const renderFilterArtifacts = (
           ]),
       ...(descriptor.expandRef === null
         ? []
-        : [`expand:${alias(descriptor.expandRef)}`]),
+        : [`expand:${(core ? coreRefs.alias : alias)(descriptor.expandRef)}`]),
       ...(presetTable(descriptor) === null
         ? []
         : [`expand:presetExpand(${compactLiteral(presetTable(descriptor))})`]),
@@ -190,7 +203,7 @@ export const renderFilterArtifacts = (
   const runtimeRoster = filterEntities
     .map(
       ({ key, filterDescriptors }) =>
-        `${JSON.stringify(key)}:[${filterDescriptors.map(runtimeDescriptor).join(",")}],`,
+        `${JSON.stringify(key)}:[${filterDescriptors.map((descriptor) => runtimeDescriptor(descriptor)).join(",")}],`,
     )
     .join("\n");
   return [
@@ -208,6 +221,27 @@ export const renderFilterArtifacts = (
         'import type { FilterSpec } from "../filter-manifest";\n\n' +
         "// Generated runtime filter assembly stays one entity per line.\n// oxfmt-ignore\n" +
         `export const generatedEntityFilters = {\n${runtimeRoster}\n} satisfies Record<Entity, readonly FilterSpec[]>;\n`,
+    },
+    {
+      relativePath: "apps/web/src/entity/generated/entity-filter-codecs.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "@cubby/schemas/entity";\n' +
+        'import { parseShortcodeFor } from "@cubby/schemas/identifiers";\n' +
+        (usesPresets
+          ? 'import { presetExpand } from "~/entity/filter-presets";\n'
+          : "") +
+        `${coreRefs.imports}\n` +
+        'import type { FilterSpecCore } from "../filters";\n\n' +
+        "// Server-safe codecs exclude picker presentation and option renderers.\n// oxfmt-ignore\n" +
+        `export const generatedEntityFilterCodecs = {\n${filterEntities
+          .map(
+            ({ key, filterDescriptors }) =>
+              `${JSON.stringify(key)}:[${filterDescriptors.map((descriptor) => runtimeDescriptor(descriptor, true)).join(",")}],`,
+          )
+          .join(
+            "\n",
+          )}\n} satisfies Record<Entity, readonly FilterSpecCore[]>;\n`,
     },
   ];
 };

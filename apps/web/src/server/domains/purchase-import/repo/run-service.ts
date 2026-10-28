@@ -34,7 +34,6 @@ import {
   agentProgressEvent,
 } from "@cubby/schemas/purchase-agent-services";
 import {
-  storedImportFix,
   extractedPurchaseLine,
   preparePurchaseImportOut,
   commitPurchaseImportOut,
@@ -103,7 +102,6 @@ import {
   run as runTable,
   runApproval,
   runControlEvent,
-  assessmentState,
   runOperation,
   photoRunImage,
   user,
@@ -148,7 +146,7 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { dispatchStartedRun } from "./dispatch";
-import { isRunFinding, runFindingColumns } from "./run-finding";
+import { loadRunFindings } from "./run-finding";
 import { listRunTargetOutcomes } from "./run-target";
 
 /**
@@ -1469,21 +1467,7 @@ export async function loadRunDetail(
       .where(
         and(eq(auditLog.runId, run.id), eq(auditLog.entityKind, "purchase")),
       ),
-    database
-      .select({
-        id: runFindingColumns.id,
-        kind: runFindingColumns.kind,
-        summary: runFindingColumns.summary,
-        status: runFindingColumns.status,
-        proposedFix: runFindingColumns.proposedFix,
-        autoApplied: runFindingColumns.autoApplied,
-        probability: runFindingColumns.probability,
-        createdAt: runFindingColumns.createdAt,
-        expiresAt: runFindingColumns.expiresAt,
-      })
-      .from(assessmentState)
-      .where(and(isRunFinding, eq(assessmentState.runId, run.id)))
-      .orderBy(asc(assessmentState.createdAt), asc(assessmentState.id)),
+    loadRunFindings(db, run.id),
     database
       .select({
         action: runControlEvent.action,
@@ -1675,12 +1659,7 @@ export async function loadRunDetail(
       completedAt: iso(target.completedAt),
     })),
     affectedPurchases,
-    findings: findings.map((finding) => ({
-      ...finding,
-      proposedFix: storedImportFix.parse(finding.proposedFix),
-      createdAt: finding.createdAt.toISOString(),
-      expiresAt: iso(finding.expiresAt),
-    })),
+    findings,
     controllingMembers: [
       ...new Map(
         controlHistory.map((event) => [event.userId, controller(event)]),

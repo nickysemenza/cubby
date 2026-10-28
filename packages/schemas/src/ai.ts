@@ -101,14 +101,10 @@ export const locationDescriptionSchema = z.object({
 });
 export type LocationDescription = z.infer<typeof locationDescriptionSchema>;
 
-export const aiAnalysisEntityKind = z.enum([
-  "image",
-  "location",
-  "product",
-  "recipe",
-  "global",
-]);
-export type AiAnalysisEntityKind = z.infer<typeof aiAnalysisEntityKind>;
+export {
+  aiAnalysisEntityKind,
+  type AiAnalysisEntityKind,
+} from "./ai-analysis-fields";
 
 export const aiCacheStatus = z.enum(["hit", "miss"]);
 export type AiCacheStatus = z.infer<typeof aiCacheStatus>;

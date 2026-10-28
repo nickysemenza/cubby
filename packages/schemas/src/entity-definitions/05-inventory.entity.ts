@@ -433,7 +433,7 @@ export default defineEntity(
             sourceDependencies: [
               { path: "storedResult", label: "Published ownership snapshot" },
               {
-                path: "fields.ownerLedgerPartyId.result.decision.provenance.source",
+                path: "fields.ownerLedgerPartyId.result.decision.provenance",
                 label: "Source",
               },
               {

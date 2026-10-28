@@ -330,7 +330,7 @@ const detailSlots = {
       isImportRun,
     ),
     "import-purchases": runReportSlot("import-purchases", isImportRun),
-    "import-findings": runReportSlot("import-findings", isImportRun),
+    "import-findings": runReportSlot("import-findings"),
     "import-targets": slot(
       () => named(import("~/features/run/run-targets"), "RunTargets"),
       isImportRun,

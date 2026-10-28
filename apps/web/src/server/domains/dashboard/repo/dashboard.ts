@@ -6,6 +6,11 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import { type SQL, sql } from "drizzle-orm";
 
 import {
+  buildFiltersFromManifest,
+  filterGetterFromColumnFilters,
+} from "~/entity/filters";
+import { generatedEntityFilterCodecs } from "~/entity/generated/entity-filter-codecs.gen";
+import {
   listEntities,
   parseEntityListInput,
 } from "~/entity/generated/entity-lists.gen";
@@ -21,8 +26,8 @@ type LocalCountEntity = keyof DashboardLocalCounts;
  * The WHERE behind each entity's homepage/footer/`/entities` total: the
  * entity's own list scaffold over its declared opening filter
  * (`presentation.list.initialFilter`), so a total counts exactly what the
- * list opens on. Each declared opening filter is keyed by its list filter
- * key, so it parses as the request's filter record. Job keeps its own read.
+ * list opens on. Opening filters use column IDs; the shared compiler maps
+ * those to request filter keys before validation. Job keeps its own read.
  */
 const countWhere = (entity: LocalCountEntity): SQL | undefined => {
   if (entity === "job") return jobEntityWhere({});
@@ -32,11 +37,11 @@ const countWhere = (entity: LocalCountEntity): SQL | undefined => {
     throw new Error(`No list scaffold counts ${entity}`);
   const { filters } = parseEntityListInput(listEntity, {
     entity: listEntity,
-    filters: Object.fromEntries(
-      entitySummary[listEntity].list.initialFilter.map((filter) => [
-        filter.id,
-        filter.value,
-      ]),
+    filters: buildFiltersFromManifest(
+      generatedEntityFilterCodecs[listEntity],
+      filterGetterFromColumnFilters<unknown>(
+        entitySummary[listEntity].list.initialFilter,
+      ),
     ),
   });
   return scaffold.where(filters);

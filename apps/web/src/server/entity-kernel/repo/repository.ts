@@ -68,7 +68,6 @@ import type {
   EntitySortContract,
 } from "~/server/entity-kernel/adapter";
 import { deletedWithImages } from "~/server/entity-kernel/adapter";
-import { registerReadPorts } from "~/server/entity-kernel/repo/read-ports";
 import { createAppError } from "~/server/errors/app-error";
 import {
   ENTITY_SCHEMA_BINDINGS,
@@ -646,15 +645,6 @@ export function defineRepository<
   };
 
   const { create, update, merge, scaffold } = spec;
-  registerReadPorts(entity, {
-    title: scaffold.title,
-    fieldReads: async (db, codes) => {
-      // SAFETY: the repository boundary erases the assembled schema, not the
-      // native Drizzle transaction passed by its callers.
-      const readDb = db as Database | DrizzleTransaction;
-      return (await scaffold.get(readDb, codes, [])).fieldReads;
-    },
-  });
   const listRead: EntityRepository<E, SchemasFor<E>>["listRead"] = async (
     ctx,
     filters,

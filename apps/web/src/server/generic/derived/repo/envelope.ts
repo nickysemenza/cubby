@@ -128,6 +128,7 @@ function currentAssignment({
 }
 
 function currentControls({
+  assignment,
   preview,
   allocated,
   refused,
@@ -137,6 +138,7 @@ function currentControls({
   key,
   resolution,
 }: {
+  assignment: Assignment | null;
   preview: Result | undefined;
   allocated: boolean;
   refused: boolean;
@@ -162,8 +164,11 @@ function currentControls({
         kind: "editable",
         canSetNone: field?.resolution?.none != null,
         canConfirm: field?.resolution?.confirm != null,
+        // Current explicit intent can reset before a derived resolution exists.
+        // A loaded resolver still owns any explicit refusal.
         reset:
-          resolution?.canReset &&
+          (resolution?.canReset ??
+            (assignment !== null && assignment.kind !== "inherit")) &&
           field?.resolution?.reset &&
           Object.keys(field.resolution.reset).length > 0
             ? {
@@ -440,6 +445,7 @@ export function buildFieldEnvelopeRow<S extends z.ZodObject>({
       owner,
     });
     const controls = currentControls({
+      assignment,
       preview: resetPreviews[key],
       allocated,
       refused,

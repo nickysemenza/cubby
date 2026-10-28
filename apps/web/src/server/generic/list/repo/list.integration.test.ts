@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { email, task } from "~/server/db/schema";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
+import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
@@ -124,6 +125,12 @@ describe("list selection and relation loading", () => {
     );
     expect(page.count).toBe(1);
     expect(page.data.map((row) => row.name)).toEqual(["Test Aliased Task"]);
+    const qualities = await loadDataQualities(
+      ctx.db,
+      "task",
+      page.data.map((row) => row.id),
+    );
+    expect(qualities.size).toBe(1);
   });
 
   it("keeps quality aliases and exact totals when loading an ordered page", async () => {
