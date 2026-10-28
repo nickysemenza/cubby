@@ -157,6 +157,13 @@ export const productReadFacts = z.object({
   pricing: productPricingOut,
   ownershipEvidence: productOwnershipEvidenceOut,
   pickerOnHand: productPickerOnHandOut,
+  stockEvidence: z
+    .object({
+      inventoryAmounts: z.array(amount),
+      stockTracked: z.boolean().nullable(),
+      service: z.boolean(),
+    })
+    .optional(),
 });
 
 /**

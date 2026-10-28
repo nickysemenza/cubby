@@ -167,6 +167,12 @@ Recipe's null-as-stale nutrition marker. Known fresh timestamps are copied;
 unknown legacy timestamps are never invented. Stored totals remain intact, and
 active Recipes without a publication identity are marked through the existing
 ticketed drain. The Recipe trigger ignores its own publication timestamp.
+Search enrollment also ignores both publication/freshness timestamps, preserving
+content invalidation without adding search work when only readiness changes.
+Inventory ownership and Product stock-input evidence are backfilled through
+reconciliation-priority work. Existing tickets, retry state and member-edit
+priority remain intact. Product category ancestry/policy edits enqueue Product
+read facts conservatively; the migration replaces that trigger function too.
 After authorized deployment, verify retained totals, pending work, subsequent
 publication, and strict stale-nutrition reads separately.
 

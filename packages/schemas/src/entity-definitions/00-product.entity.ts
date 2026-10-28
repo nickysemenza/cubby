@@ -2039,16 +2039,25 @@ Rules:
             resolver: "productQuantity",
             readPath: "stockStatus",
             sourceDependencies: [
-              { path: "stockStatusItems", label: "Inventory evaluation" },
               {
-                path: "fields.stockTracked",
-                label: "Tracking policy and source",
+                path: "storedResult.stockStatusItems",
+                label: "Inventory evaluation",
               },
-              { path: "quantityLedger", label: "Acquisitions and exits" },
-              { path: "inventoryEntry", label: "Recorded inventory" },
               {
-                path: "quantityLedger.locationCount",
-                label: "Installed locations",
+                path: "storedResult.quantityLedger",
+                label: "Quantity history and installed locations",
+              },
+              {
+                path: "storedResult.stockEvidence.inventoryAmounts",
+                label: "Recorded inventory amounts",
+              },
+              {
+                path: "storedResult.stockEvidence.stockTracked",
+                label: "Resolved tracking policy",
+              },
+              {
+                path: "storedResult.stockEvidence.service",
+                label: "Service category",
               },
             ],
           },
@@ -2213,11 +2222,22 @@ Rules:
           explanation: {
             ruleId: "product.on-hand-units",
             description:
-              "On-hand units are the sum of live inventory quantities after applying each entry's unit mapping; unknown mappings make the result unavailable.",
+              "On-hand units combine inventory recorded in each units with installed locations; incompatible inventory units make the result unavailable.",
             resolver: "productQuantity",
             readPath: "onHandUnits",
             sourceDependencies: [
-              { path: "inventoryEntry", label: "Live inventory entries" },
+              {
+                path: "storedResult.stockEvidence.inventoryAmounts",
+                label: "Recorded inventory amounts",
+              },
+              {
+                path: "storedResult.quantityLedger.locationCount",
+                label: "Installed locations",
+              },
+              {
+                path: "storedResult.stockEvidence.service",
+                label: "Service category",
+              },
             ],
           },
           validation: {
@@ -2314,6 +2334,20 @@ Rules:
               table: "Location",
               match: { id: "id" },
               columns: ["name", "parentId", "deletedAt"],
+              targetWhere: { deletedAt: null },
+            },
+            // Tracking and service behavior inherit through category ancestors.
+            // Rare taxonomy edits conservatively refresh the complete Product set.
+            {
+              table: "ProductCategory",
+              match: { id: "id" },
+              columns: [
+                "stockTracked",
+                "parentId",
+                "name",
+                "feature",
+                "deletedAt",
+              ],
               targetWhere: { deletedAt: null },
             },
           ],

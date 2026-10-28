@@ -25,6 +25,18 @@ it("retains Recipe payloads and only backfills missing publication identities", 
       );
     }
     await client.query(`DELETE FROM "WorkItem" WHERE target='recipe.totals'`);
+    await client.query(
+      `INSERT INTO "WorkItem" (drain,target,ref,priority)
+      VALUES ('derived:drain','recipe.totals',$1,0)`,
+      [fresh],
+    );
+    const existingWork = (
+      await client.query(
+        `SELECT * FROM "WorkItem"
+      WHERE target='recipe.totals' AND ref=$1`,
+        [fresh],
+      )
+    ).rows;
     const preserved = async () =>
       (
         await client.query(
@@ -51,9 +63,19 @@ it("retains Recipe payloads and only backfills missing publication identities", 
     expect(
       (
         await client.query(
-          `SELECT ref FROM "WorkItem" WHERE target='recipe.totals'`,
+          `SELECT ref,priority FROM "WorkItem" WHERE target='recipe.totals' AND ref=$1`,
+          [stale],
         )
       ).rows,
-    ).toEqual([{ ref: stale }]);
+    ).toEqual([{ ref: stale, priority: 2 }]);
+    expect(
+      (
+        await client.query(
+          `SELECT * FROM "WorkItem"
+      WHERE target='recipe.totals' AND ref=$1`,
+          [fresh],
+        )
+      ).rows,
+    ).toEqual(existingWork);
   });
 });

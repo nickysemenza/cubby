@@ -2898,6 +2898,9 @@ the freshness marker. Nested cost/calorie projections inherit that publication
 identity and status without inheriting edit controls. Legacy totals without a
 trustworthy publication time remain unavailable until the existing drain replaces
 them; the migration preserves their stored payload.
+Search invalidation ignores the publication and freshness timestamp columns
+declared by `recordSource`. Advancing bookkeeping alone cannot change searchable
+content; payload and authored-content changes retain their normal enrollment.
 
 Direct nullable stored fields use the generic `storedPath` reader. An explicit
 raw binding replaces that default only when it must supply a required raw shape
@@ -2965,6 +2968,12 @@ controls remain explicitly separate from that evidence. Additional evidence not
 captured in the publication is unavailable rather than reconstructed from current
 sources. Expense beneficiary portions use this binding to keep
 contributor references out of ordinary list payloads.
+An absent optional evidence path in a legacy publication leaves the value and
+available aggregate evidence readable, but reports the explanation unavailable.
+It must not throw, reconstruct the missing inputs live, or certify partial
+capture as complete. Product stock publications retain inventory amounts,
+resolved tracking policy and the service predicate; ancestor-category policy
+edits conservatively refresh Product read facts through deferred fanout.
 
 Inventory ownership publications capture their already-resolved precedence steps,
 using public party references. Older publications remain readable without those

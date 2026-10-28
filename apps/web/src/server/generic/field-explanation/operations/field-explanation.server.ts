@@ -1085,7 +1085,16 @@ function explainPublication({
       : capturedDependencies.length
         ? dependencySources(
             { storedResult: publishedFacts },
-            { ...explanation, sourceDependencies: capturedDependencies },
+            {
+              ...explanation,
+              sourceDependencies: capturedDependencies.filter(
+                (dependency) =>
+                  readExplanationPath(
+                    { storedResult: publishedFacts },
+                    dependency.path,
+                  ).found,
+              ),
+            },
           )
         : [{ label: "Published facts", entity: null, value: publishedFacts }];
   const bounded = boundExplanationSources([
@@ -1137,7 +1146,14 @@ function explainPublication({
       : publishedFacts != null &&
           ((capturedDependencies.length > 0 &&
             capturedDependencies.length ===
-              explanation.sourceDependencies?.length) ||
+              explanation.sourceDependencies?.length &&
+            capturedDependencies.every(
+              (dependency) =>
+                readExplanationPath(
+                  { storedResult: publishedFacts },
+                  dependency.path,
+                ).found,
+            )) ||
             qualityBreakdown)
         ? { kind: "current" }
         : {

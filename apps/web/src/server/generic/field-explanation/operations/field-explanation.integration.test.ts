@@ -25,6 +25,7 @@ import {
 import { expenseSpendingCategoryResolutionSql } from "~/server/domains/expense/repo/expense-category-resolution";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
+import { updateProductCategory } from "~/server/domains/product-category/repo/product-category";
 import { loadProductPricing } from "~/server/domains/product/repo/pricing";
 import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -51,6 +52,69 @@ describe("derived field explanations against canonical records", () => {
     entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
+
+  it("retains available Product publication facts when legacy stock evidence is absent", async () => {
+    const parent = await createRepoEntity(ctx, "productCategory", {
+      name: "Synthetic inherited tracking",
+      stockTracked: true,
+    });
+    const child = await createRepoEntity(ctx, "productCategory", {
+      name: "Synthetic tracking child",
+      parentId: parent.output.id,
+      stockTracked: null,
+    });
+    const product = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic captured stock inputs",
+        categoryId: child.output.id,
+      }),
+      ctx.actor,
+    );
+    await drainStoredDerived(ctx.db);
+    const request = {
+      entityKind: "product" as const,
+      entityId: product.id,
+      field: "stockStatus",
+      surface: "list" as const,
+    };
+    const complete = await explainField(context(), request);
+    expect(complete.publication?.kind).toBe("current");
+    expect(
+      complete.sources.find(
+        (source) => source.label === "Resolved tracking policy",
+      )?.value,
+    ).toBe(true);
+    // Historical publications predate optional stock-input capture.
+    await unwrapDb(ctx.db)
+      .execute(sql`UPDATE "DerivedValue" SET value=value-'stockEvidence'
+      WHERE "entityId"=${product.entityId} AND key='readFacts'`);
+    const legacy = await explainField(context(), {
+      ...request,
+      displayedResult: complete.envelope.result,
+    });
+    expect(legacy.publication?.kind).toBe("unavailable");
+    expect(fieldValueOf(legacy.envelope)).toEqual(
+      fieldValueOf(complete.envelope),
+    );
+    expect(
+      legacy.sources.some((source) => source.label === "Inventory evaluation"),
+    ).toBe(true);
+    await updateProductCategory(
+      ctx.db,
+      parent.output.id,
+      { stockTracked: false },
+      ctx.actor,
+    );
+    await drainStoredDerived(ctx.db);
+    const revised = await explainField(context(), request);
+    expect(revised.publication?.kind).toBe("current");
+    expect(
+      revised.sources.find(
+        (source) => source.label === "Resolved tracking policy",
+      )?.value,
+    ).toBe(false);
+  });
 
   it("explains the published beneficiary revision separately from the live comparison", async () => {
     const first = await createRepoEntity(ctx, "ledgerParty", {
