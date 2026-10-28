@@ -525,8 +525,7 @@ export const renderEntityMetadataArtifacts = (
               `  ${JSON.stringify(key)}: async () => { const { metadata } = await import("@cubby/schemas/compiler/generated/entity-metadata/${key}"); return immutableMetadataSchema(metadata).parse(metadata); },\n`,
           )
           .join("") +
-        "} satisfies Record<Entity, () => Promise<unknown>>;\n" +
-        'export type { EntityMetadataSlice } from "~/entity/generated/entity-metadata-types.gen";\n',
+        "} satisfies Record<Entity, () => Promise<unknown>>;\n",
     },
     {
       relativePath:

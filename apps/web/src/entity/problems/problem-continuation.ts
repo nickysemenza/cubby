@@ -17,7 +17,7 @@ const readProblemContinuation = createServerFn({ method: "GET" })
       : null;
   });
 
-export const problemContinuationQueryOptions = (key: string | undefined) =>
+const problemContinuationQueryOptions = (key: string | undefined) =>
   queryOptions({
     queryKey: ["problem-continuation", key ?? null],
     queryFn: () => (key ? readProblemContinuation({ data: key }) : null),

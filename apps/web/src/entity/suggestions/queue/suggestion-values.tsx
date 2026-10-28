@@ -164,7 +164,7 @@ export function RecordLink({
   return <EntityRefLink entity={record.entity} id={record.id} name={name} />;
 }
 
-export const fieldLabel = (
+const fieldLabel = (
   queryClient: QueryClient,
   entity: ShortcodeEntity,
   field: string,

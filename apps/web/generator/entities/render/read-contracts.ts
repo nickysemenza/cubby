@@ -21,21 +21,11 @@ export const renderEntityReadArtifacts = (
       source:
         'import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";',
     },
-    {
-      module: "@cubby/schemas/identifiers",
-      source: 'import { shortcodeSchema } from "@cubby/schemas/identifiers";',
-    },
     { module: "zod", source: 'import { z } from "zod";' },
   ]
     .sort((left, right) => left.module.localeCompare(right.module))
     .map(({ source }) => source)
     .join("\n");
-  const detailInputVariants = detailEntities
-    .map(
-      ({ key }) =>
-        `z.object({entity:z.literal(${JSON.stringify(key)}),shortcode:shortcodeSchema(${JSON.stringify(key)})})`,
-    )
-    .join(",\n  ");
 
   const listEntitySpecs = projections.list;
   const listEntityKeys = listEntitySpecs.map(({ key }) => key);
@@ -94,28 +84,6 @@ export const renderEntityReadArtifacts = (
         `  ${JSON.stringify(key)}: z.object({items:z.array(${key}ListItem),meta:entityListMetaSchema}),`,
     )
     .join("\n");
-  const filterFieldImports = new Map<string, Set<string>>();
-  for (const { filterSchema } of entities) {
-    if (filterSchema === null) continue;
-    const exports =
-      filterFieldImports.get(filterSchema.module) ?? new Set<string>();
-    exports.add(filterSchema.export);
-    filterFieldImports.set(filterSchema.module, exports);
-  }
-  const filterFieldImportSource = [...filterFieldImports.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(
-      ([module, exports]) =>
-        `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
-    )
-    .join("\n");
-  const filterFieldBindings = entities
-    .flatMap(({ key, filterSchema }) =>
-      filterSchema === null
-        ? []
-        : [`  ${JSON.stringify(key)}: ${filterSchema.export},`],
-    )
-    .join("\n");
   const artifacts: EntityArtifacts[] = [
     {
       relativePath:
@@ -127,23 +95,7 @@ export const renderEntityReadArtifacts = (
         "export type DetailEntity = (typeof detailEntities)[number];\n\n" +
         "// One generated detail schema per entity.\n// oxfmt-ignore\n" +
         `const ENTITY_DETAIL_OUTPUT_SCHEMAS: { [E in DetailEntity]: (typeof entityFieldEnvelopeSchemas)[E]["detail"] } = {\n${detailSchemas}\n};\n\n` +
-        "// One generated detail input variant per entity.\n// oxfmt-ignore\n" +
-        `export const entityDetailInputSchema = z.discriminatedUnion("entity", [\n  ${detailInputVariants}\n]);\n\n` +
-        "type EntityDetailInput = z.input<typeof entityDetailInputSchema>;\n" +
-        "type ParsedEntityDetailInput = z.output<typeof entityDetailInputSchema>;\n" +
         "export type EntityDetailByEntity = { [E in DetailEntity]: z.output<(typeof ENTITY_DETAIL_OUTPUT_SCHEMAS)[E]> };\n" +
-        "export type EntityDetailInputByEntity = { [E in DetailEntity]: Extract<EntityDetailInput, { entity: E }> };\n" +
-        "export type ParsedEntityDetailInputByEntity = { [E in DetailEntity]: Extract<ParsedEntityDetailInput, { entity: E }> };\n\n" +
-        'export function entityDetailInputFor<E extends DetailEntity>(entity: E, shortcode: EntityDetailInputByEntity[E]["shortcode"]): EntityDetailInputByEntity[E];\n' +
-        'export function entityDetailInputFor(entity: DetailEntity, shortcode: EntityDetailInputByEntity[DetailEntity]["shortcode"]) {\n' +
-        "  return { entity, shortcode };\n" +
-        "}\n\n" +
-        "export function parseEntityDetailInput<E extends DetailEntity>(entity: E, value: EntityDetailInputByEntity[E]): ParsedEntityDetailInputByEntity[E];\n" +
-        "export function parseEntityDetailInput(entity: DetailEntity, value: EntityDetailInputByEntity[DetailEntity]) {\n" +
-        "  const parsed = entityDetailInputSchema.parse(value);\n" +
-        '  if (parsed.entity !== entity) throw new Error("Entity detail input discriminator mismatch");\n' +
-        "  return parsed;\n" +
-        "}\n\n" +
         "export function getEntityDetailOutputSchema<E extends DetailEntity>(entity: E): z.ZodType<EntityDetailByEntity[E]>;\n" +
         "export function getEntityDetailOutputSchema(entity: DetailEntity): z.ZodType {\n" +
         "  return ENTITY_DETAIL_OUTPUT_SCHEMAS[entity];\n" +
@@ -157,8 +109,7 @@ export const renderEntityReadArtifacts = (
         `${listFilterFieldImports}\n` +
         'import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";\n' +
         'import { compileListReadSchema } from "../../entity/model/list-read-fields";\n' +
-        'import { listChildCountSchema, listNestingSchema, listResultMembership, listGroupByDimensionsSchema, type ListGroupBy, MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
-        'import type { FilterPatch } from "../../entity/filters";\n' +
+        'import { listChildCountSchema, listNestingSchema, listResultMembership, listGroupByDimensionsSchema, MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import { z } from "zod";\n\n' +
         `export const listEntities = ${compactLiteral(listEntityKeys)} as const;\n` +
         "export type ListEntity = (typeof listEntities)[number];\n\n" +
@@ -172,39 +123,12 @@ export const renderEntityReadArtifacts = (
         `export const entityListInputSchema = z.discriminatedUnion("entity", [\n  ${listInputVariants}\n]);\n\n` +
         `${listItemSchemas}\n\n` +
         `export const ENTITY_LIST_READ_SCHEMAS = {\n${listReadSchemas}\n} as const;\n\n` +
-        "export const ENTITY_LIST_OUTPUT_SCHEMAS = {\n" +
+        "const ENTITY_LIST_OUTPUT_SCHEMAS = {\n" +
         `${listOutputSchemas}\n` +
         "} as const;\n\n" +
-        "type EntityListInputFiltersByEntity = { [E in ListEntity]: z.input<(typeof ENTITY_LIST_FILTER_SCHEMAS)[E]> };\n" +
-        "type EntityListParsedFiltersByEntity = { [E in ListEntity]: z.output<(typeof ENTITY_LIST_FILTER_SCHEMAS)[E]> };\n" +
-        "type EntityListSort = z.input<typeof entityListSortSchema>;\n" +
-        "export type EntityListInputByEntity = {\n" +
-        "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: ListGroupBy[]; resultMembership?: z.input<typeof listResultMembership>; includeCount?: boolean; nesting?: z.input<typeof listNestingSchema> };\n" +
-        "};\n" +
-        "export type ParsedEntityListInputByEntity = {\n" +
-        '  [E in ListEntity]: Omit<EntityListInputByEntity[E], "filters"> & { filters: EntityListParsedFiltersByEntity[E] };\n' +
-        "};\n\n" +
-        'export type EntityListParamsByEntity = { [E in ListEntity]: Omit<EntityListInputByEntity[E], "entity"> };\n' +
-        "export function entityListInputFor<E extends ListEntity>(entity: E, input: EntityListParamsByEntity[E]): EntityListInputByEntity[E];\n" +
-        "export function entityListInputFor(entity: ListEntity, input: EntityListParamsByEntity[ListEntity]) {\n" +
-        "  return { entity, ...input };\n" +
-        "}\n\n" +
-        "export function entityListParamsFromParsed<E extends ListEntity>(entity: E, input: ParsedEntityListInputByEntity[E]): EntityListParamsByEntity[E];\n" +
-        "export function entityListParamsFromParsed(entity: ListEntity, input: ParsedEntityListInputByEntity[ListEntity]) {\n" +
-        '  if (input.entity !== entity) throw new Error("Entity list input discriminator mismatch");\n' +
-        "  const { entity: _entity, ...params } = input;\n" +
-        "  return params;\n" +
-        "}\n\n" +
-        "export type EntityListParseInput = EntityListInputByEntity[ListEntity] | { entity: ListEntity; filters: FilterPatch; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: ListGroupBy[]; resultMembership?: z.input<typeof listResultMembership>; includeCount?: boolean; nesting?: z.input<typeof listNestingSchema> };\n\n" +
         "export type EntityListResultByEntity = {\n" +
         "  [E in ListEntity]: z.output<(typeof ENTITY_LIST_OUTPUT_SCHEMAS)[E]>;\n" +
         "};\n\n" +
-        "export function parseEntityListInput<E extends ListEntity>(entity: E, value: EntityListInputByEntity[E] | EntityListParseInput): ParsedEntityListInputByEntity[E];\n" +
-        "export function parseEntityListInput(entity: ListEntity, value: EntityListParseInput) {\n" +
-        "  const parsed = entityListInputSchema.parse(value);\n" +
-        '  if (parsed.entity !== entity) throw new Error("Entity list input discriminator mismatch");\n' +
-        "  return parsed;\n" +
-        "}\n\n" +
         "export function getEntityListOutputSchema<E extends ListEntity>(entity: E): z.ZodType<EntityListResultByEntity[E]>;\n" +
         "export function getEntityListOutputSchema(entity: ListEntity): z.ZodType {\n" +
         "  return ENTITY_LIST_OUTPUT_SCHEMAS[entity];\n" +
@@ -227,16 +151,6 @@ export const renderEntityReadArtifacts = (
         "  shortcodeSchema(entity).parse(item.id);\n" +
         "  return item;\n" +
         "}\n",
-    },
-    {
-      relativePath: "apps/web/src/entity/generated/entity-filter-fields.gen.ts",
-      source:
-        generatedHeader +
-        'import type { Entity } from "@cubby/schemas/entity";\n' +
-        'import type { z } from "zod";\n' +
-        `${filterFieldImportSource}\n\n` +
-        "// Generated filter field assembly stays one entity per line.\n// oxfmt-ignore\n" +
-        `export const entityFilterFieldMaps = {\n${filterFieldBindings}\n} satisfies Partial<Record<Entity, Record<string, z.ZodType>>>;\n`,
     },
   ];
   const entityReads = entities.filter(

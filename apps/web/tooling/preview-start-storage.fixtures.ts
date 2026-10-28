@@ -6,4 +6,8 @@ export function getStartContext(): never {
     "Server request context is unavailable in a component preview",
   );
 }
-export const runWithStartContext = getStartContext;
+export function runWithStartContext(): never {
+  throw new Error(
+    "Server request context is unavailable in a component preview",
+  );
+}

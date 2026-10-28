@@ -172,7 +172,7 @@ export const withManualTrace = async <T>(
 };
 
 /** Synchronous work uses the native runtime warmed by its enclosing span. */
-export const withSynchronousManualTrace = <T>(
+const withSynchronousManualTrace = <T>(
   name: string,
   fn: (span: AppSpan, end: () => void) => T,
 ): T => {

@@ -46,7 +46,7 @@ export function calendarEntityFilterSpecs(
 }
 
 /** Namespacing changes addresses and labels, never the source's filter rules. */
-export const calendarFilterSpecs = (
+const calendarFilterSpecs = (
   queryClient: QueryClient,
 ): readonly FilterSpec[] => [
   {
