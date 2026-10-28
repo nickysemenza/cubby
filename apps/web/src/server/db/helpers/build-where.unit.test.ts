@@ -396,7 +396,7 @@ describe("recipeScaffold.where", () => {
     expect(rendered).toMatch(
       /"cookbookId" in \(select ref\."id" from "Cookbook" ref/i,
     );
-    expect(rendered).toContain('ref."deletedAt" IS NULL');
+    expect(rendered).toMatch(/"?ref"?\."deletedAt" is null/i);
     expect(await where({ sourcePresenceFilter: "none" })).toMatch(
       /"cookbookId" is null or not/i,
     );
