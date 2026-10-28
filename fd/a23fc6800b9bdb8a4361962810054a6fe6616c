@@ -1,0 +1,23 @@
+apps/web/generator/start-operations/render.ts
+  s_f9b38eae28f662::t_cb1749d87a8a07 100-104
+apps/web/src/server/operation-runtime/operation-handlers.server.ts
+  s_f9b38eae28f662::t_8ef3f48217b0f8 49-57
+docs/entities.md
+  s_f9b38eae28f662::t_bdc9433a7adc45 2082-2083,2358-2360,2362
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fda23fc6800b9bdb8a4361962810054a6fe6616c",
+  "prompts": {},
+  "sessions": {
+    "s_f9b38eae28f662": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15d31a0c-0fdb-4745-b359-8664bbd5360e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
