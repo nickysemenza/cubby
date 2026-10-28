@@ -17,10 +17,6 @@ inputs:
     description: 'setup-node-with-deps "wasm" input: restore or false'
     required: false
     default: "false"
-  prepare-command:
-    description: "Optional idempotent deploy binding setup before the build"
-    required: false
-    default: ""
   build-command:
     description: "Shell command that builds the package. Skipped entirely when empty."
     required: false
@@ -70,15 +66,6 @@ runs:
         wasm: ${{ inputs.wasm }}
         workspace-filter: ${{ inputs.workspace-filter }}
 
-    - name: Prepare ${{ inputs.package }} bindings
-      if: steps.current_main.outputs.current == 'true' && inputs.prepare-command != ''
-      shell: bash
-      env:
-        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
-        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
-        PRODUCTION_DIRECT_DATABASE_URL: ${{ inputs.production-direct-database-url }}
-      run: ${{ inputs.prepare-command }}
-
     - name: Build ${{ inputs.package }}
       if: steps.current_main.outputs.current == 'true' && inputs.build-command != ''
       shell: bash
@@ -86,14 +73,14 @@ runs:
         SENTRY_AUTH_TOKEN: ${{ inputs.sentry-auth-token }}
       run: ${{ inputs.build-command }}
 
-    - name: Apply pre-deploy production migrations
+    - name: Apply production migrations
       if: steps.current_main.outputs.current == 'true'
       shell: bash
       env:
         PRODUCTION_DIRECT_DATABASE_URL: ${{ inputs.production-direct-database-url }}
         PRODUCTION_MIGRATION_THROUGH: ${{ inputs.production-migration-through }}
       run: |
-        args=(--target=production --before-deploy)
+        args=(--target=production)
         if [[ -n "$PRODUCTION_MIGRATION_THROUGH" ]]; then
           args+=("--through=$PRODUCTION_MIGRATION_THROUGH")
         fi
@@ -124,18 +111,3 @@ runs:
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
         CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
       run: ${{ inputs.deploy-command }}
-
-    # Consumer-dependent backfills must never be claimed by the predecessor.
-    # A failed/skipped upload skips this pass; a retry reuses journal receipts.
-    - name: Apply consumer-dependent production migrations
-      if: steps.deploy_current.outputs.current == 'true'
-      shell: bash
-      env:
-        PRODUCTION_DIRECT_DATABASE_URL: ${{ inputs.production-direct-database-url }}
-        PRODUCTION_MIGRATION_THROUGH: ${{ inputs.production-migration-through }}
-      run: |
-        args=(--target=production)
-        if [[ -n "$PRODUCTION_MIGRATION_THROUGH" ]]; then
-          args+=("--through=$PRODUCTION_MIGRATION_THROUGH")
-        fi
-        pnpm --filter "${{ inputs.package }}" db:migrate "${args[@]}"

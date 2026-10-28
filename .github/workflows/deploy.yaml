@@ -34,12 +34,11 @@ jobs:
           package: "@cubby/web"
           workspace-filter: "@cubby/web..."
           wasm: "restore"
-          prepare-command: "node apps/web/tooling/deploy-hyperdrive.ts prepare"
           build-command: "pnpm --filter @cubby/web run build:cf"
           sentry-auth-token: ${{ secrets.SENTRY_AUTH_TOKEN }}
           # deploy-worker writes the release values; cf uploads them with the
           # Worker version and inherits the existing secrets.
-          deploy-command: 'node apps/web/tooling/deploy-hyperdrive.ts apply && pnpm --filter @cubby/web exec cf deploy --prebuilt --mode production --secrets-file "$RUNNER_TEMP/source-release.json"'
+          deploy-command: 'pnpm --filter @cubby/web exec cf deploy --prebuilt --mode production --secrets-file "$RUNNER_TEMP/source-release.json"'
           production-direct-database-url: ${{ secrets.PRODUCTION_DIRECT_DATABASE_URL }}
           production-migration-through: ${{ vars.PRODUCTION_MIGRATION_THROUGH }}
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}

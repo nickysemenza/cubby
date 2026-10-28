@@ -1,5 +1,3 @@
--- cubby:after-deploy
--- The predecessor retires these unfamiliar targets; admit them only after its replacement is available.
 CREATE INDEX "WorkItem_target_prefix_idx" ON "WorkItem" USING btree ("target" COLLATE "C");
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION derived_mark_entityexternalid() RETURNS trigger

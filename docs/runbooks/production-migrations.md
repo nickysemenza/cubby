@@ -1,12 +1,7 @@
 # Production migrations
 
 The GitHub production deployment applies pending committed migrations before
-deploying the already-built Worker. A migration failure stops deployment. A
-migration marked `-- cubby:after-deploy` in its first statement and any pending
-successors wait until the matching Worker uploads successfully. The normal
-runner then applies the remaining journal prefix idempotently. Failed or skipped
-uploads never admit these migrations; retries resume from verified receipts.
-Once a marked migration is applied, it imposes no boundary on later releases. The
+deploying the already-built Worker. A migration failure stops deployment. The
 runner uses only `PRODUCTION_DIRECT_DATABASE_URL` for production; it never
 falls back to `DATABASE_URL`. Ordinary migrations must work with the currently
 deployed code. Verify preservation with synthetic predecessor data before merge,
@@ -168,18 +163,26 @@ not performed; migration success alone is not deployment verification.
 
 ### Product facts and prefix index (0053)
 
-0053 adds the WorkItem prefix index, declaration-generated Product fact/food
-invalidation triggers and initial work for every live Product. It preserves all
-member assignments and retained evidence. The predecessor deletes unfamiliar
-derived target names, so this migration carries `-- cubby:after-deploy` and the
-normal GitHub pipeline applies it only after the matching consumer is deployed.
-No manual production write, writer hold or environment-variable cutover is needed.
+0053 adds the WorkItem prefix index, Product fact/food invalidation and initial
+work for every live Product. It preserves member assignments and retained
+evidence. Its predecessor can discard unfamiliar derived targets, so this
+authorized release uses the exclusive-operator cutover from the laptop before
+merge; the general GitHub migration-before-deploy order remains unchanged.
 
-Read back live Product populations against successful `product.readFacts` and
-`product.food` publications, then verify ready/error work and backlog drainage.
-A zero backlog without publication coverage does not establish success. Missing
-food (a valid null publication) counts as published; a missing result does not.
-Record catch-up duration separately from route latency.
+Use the exact reviewed PR head with required CI green, rebased onto current
+main. With no Deploy queued/running and no other main merge in flight, run
+`pnpm --filter @cubby/web run deploy:cf` and verify the live Worker. Obtain a
+direct connection with `neon connection-string --project-id purple-wildflower-50486824`
+and pass it only as `PRODUCTION_DIRECT_DATABASE_URL` to
+`pnpm --filter @cubby/web db:migrate --target=production --through=0053_work_item_prefix_and_product_facts`.
+Read back schema, retained populations and successful `product.readFacts` /
+`product.food` publication coverage. Valid null food publications count;
+missing results do not. A zero backlog alone is insufficient.
+
+Merge immediately without changing the deployed PR head. The merge-triggered
+Deploy must find no pending migrations and redeploy identical code. Do not set
+`PRODUCTION_MIGRATION_THROUGH` for this sequence. If main changes between laptop
+deployment and merge, stop and report rather than rebasing the live release.
 
 ### Remaining result materialization (0046)
 

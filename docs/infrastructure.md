@@ -364,30 +364,20 @@ Reverting the range also restarts the endpoint. See
 [Neon compute management](https://neon.com/docs/manage/computes) and
 [Hyperdrive pool tuning](https://developers.cloudflare.com/hyperdrive/configuration/tune-connection-pool/).
 
-Cloudflare has three Hyperdrive configurations pointing at the same direct Neon
-origin and role:
+Runtime database roles use Hyperdrive bindings to the same direct Neon origin:
 
-| Binding                 | Hyperdrive identity                                  | Desired deploy policy                                                                          |
-| ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `HYPERDRIVE`            | `adc9757dfffd45bc94d5c2a66b2ad410`                   | Authoritative reads and writes; caching disabled; origin limit 12                              |
-| `HYPERDRIVE_CACHED`     | `427dd7a2876c4dccbe056d37fa7374ff`                   | Ordinary display reads; max age 60 seconds, stale-while-revalidate 15 seconds; origin limit 20 |
-| `HYPERDRIVE_BACKGROUND` | Named `cubby-background`, resolved during deployment | `withInvocationDb` queue/cron/DO/coordinator work; caching disabled; origin limit 10           |
+| Binding                 | Purpose                                                              |
+| ----------------------- | -------------------------------------------------------------------- |
+| `HYPERDRIVE`            | Authoritative reads and writes; caching disabled.                    |
+| `HYPERDRIVE_CACHED`     | Ordinary bounded-stale display reads.                                |
+| `HYPERDRIVE_BACKGROUND` | `withInvocationDb` queue/cron/DO/coordinator work; caching disabled. |
 
-`apps/web/tooling/deploy-hyperdrive.ts` runs only through the serialized normal
-GitHub main deployment. Before the build, `prepare` finds the background config
-by its unique name, creating it once from `PRODUCTION_DIRECT_DATABASE_URL` when
-absent, and writes its id to `GITHUB_ENV`. The production config consumes that
-id as `CUBBY_BACKGROUND_HYPERDRIVE_ID`; local/test builds substitute their guarded
-checkout URL. The all-zero non-deploy placeholder is never a production binding.
-After the deploy action's second current-main check, `apply` patches only changed
-connection/cache policy fields and reads them back before Worker publication.
-It never resets or restarts pools, changes origin credentials on existing
-configs, creates another database or writes household records. API responses and
-origin credentials stay out of logs. Duplicate background names, unavailable
-Hyperdrive edit permission or read-back mismatches fail the deployment.
-[Hyperdrive's API](https://developers.cloudflare.com/api/resources/hyperdrive/subresources/configs/)
-owns those provider-side settings; do not perform an ad-hoc production config
-change to provision this binding. A retry reuses the named background config.
+Hyperdrive configurations and their origin/cache limits are operator-managed.
+Builds and deployments do not create configurations, tune pools, restart them or
+change credentials. The background binding must reference an existing approved
+configuration before release. Local/test profiles substitute the guarded checkout
+URL for all three bindings. The per-invocation code budget reserves connection
+slots for non-database subrequests independently of provider pool settings.
 
 Local `.env` and CI use `DATABASE_URL`. Deployed Worker code receives the
 database URLs from Hyperdrive and does not need a `DATABASE_URL` secret.

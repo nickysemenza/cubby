@@ -552,10 +552,7 @@ GitHub can disable public-repository schedules after 60 inactive days; the
 without waiting for post-merge CI. Required PR checks gate merging. It uses
 `.github/actions/deploy-worker` to build once, apply committed production migrations
 with the existing runner, then run `cf deploy --prebuilt --mode production`
-against `.cloudflare/output/v0/`. Migrations marked `-- cubby:after-deploy` and
-their pending successors wait for the matching upload; the action then resumes
-the same verified migration journal. A skipped or failed upload cannot admit
-consumer-dependent backfill work. The bundle carries no commit: the action's
+against `.cloudflare/output/v0/`. The bundle carries no commit: the action's
 `Record source release` step writes `CUBBY_SOURCE_COMMIT` (short SHA),
 `CUBBY_SOURCE_BRANCH` and `CUBBY_SOURCE_DATE` from `tooling/source-identity.ts`,
 and `--secrets-file` uploads them with the Worker version while existing
@@ -565,11 +562,9 @@ output from `cloudflare.config.ts`. It checks
 current main before building and again after migration, before deployment.
 Keep build, migration and deployment as named steps in the existing action;
 avoid standalone wrappers and multi-operation command inputs.
-Pre-deploy migration failure blocks deployment; post-deploy migration failure
-fails the release and resumes safely on retry. The migration and deploy share the existing
+Migration failure blocks deployment. The migration and deploy share the existing
 non-cancelling production concurrency group. The required database credential is
-scoped to migration passes and the idempotent binding preparation step. The
-Cloudflare credential is scoped to binding preparation and deployment.
+scoped to the migration step; the Cloudflare credential is scoped to deployment.
 
 Retry a failed release by manually dispatching `Deploy` on `main`; the runner
 verifies and skips the already-applied migration prefix. If schema application
