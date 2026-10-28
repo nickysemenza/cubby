@@ -4,13 +4,14 @@ import {
   type ProductId,
   type ProductShortcode,
 } from "@cubby/schemas/identifiers";
+import { rawProductDetail } from "@cubby/schemas/product-raw-read";
 import type { TagPropagationRecommendationOut } from "@cubby/schemas/recommendations";
 import type { RelatednessOut } from "@cubby/schemas/relatedness";
 import type { SimilarEntitiesOut } from "@cubby/schemas/search";
 
 import type { Database } from "~/server/db";
 import { getProductsSharingTags } from "~/server/domains/product/repo/analytics";
-import { readProducts } from "~/server/domains/product/repo/crud";
+import { productScaffold } from "~/server/domains/product/repo/crud";
 import {
   getActiveAssessmentSuppressionKeys,
   assessmentCandidateKey,
@@ -46,11 +47,19 @@ export interface RelatednessDependencies {
   makeCandidateKey: typeof assessmentCandidateKey;
 }
 
+const productTagEvidence = rawProductDetail.pick({ id: true, tags: true });
 const productionRelatednessDependencies: RelatednessDependencies = {
   resolveSourceId: resolveOrThrow,
   findSimilarEntities: findSimilarEntitiesWorkflow,
   getProductsSharingTags,
-  readProducts,
+  readProducts: async (db, shortcodes) => {
+    const { data } = await productScaffold.get(
+      db,
+      shortcodes.map((code) => code.toUpperCase()),
+      ["tags"],
+    );
+    return data.map((row) => productTagEvidence.parse(row));
+  },
   getActiveDismissalKeys: getActiveAssessmentSuppressionKeys,
   makeCandidateKey: assessmentCandidateKey,
 };
