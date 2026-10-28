@@ -1,5 +1,13 @@
 import { getDomain } from "tldts";
 
+/** The bare address from a From header, without its display name. */
+export const senderAddress = (sender: string | null): string | null => {
+  const address = (/<([^>]+)>/u.exec(sender ?? "")?.[1] ?? sender ?? "")
+    .trim()
+    .toLowerCase();
+  return address.includes("@") ? address : null;
+};
+
 /**
  * Registrable domains many unrelated merchants send from or are hosted on:
  * free mail, storefront and payment platforms, and mail relays. A match on

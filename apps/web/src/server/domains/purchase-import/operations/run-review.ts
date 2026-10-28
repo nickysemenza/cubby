@@ -49,6 +49,7 @@ import {
 } from "~/server/db/schema";
 import {
   readMailRunSources,
+  readMailSourceTransfers,
   releaseUnsettledMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
@@ -262,9 +263,17 @@ async function reconcileSettledRunOnce(
       )
         return false;
       const sources = await readMailRunSources(tx, scope.public.runId);
+      const transferred = await readMailSourceTransfers(tx, scope.public.runId);
+      // Only an immutable, checksum-matched transfer receipt may remove a
+      // source from a live Run's settlement responsibility.
+      const remaining = sources.filter(
+        (source) =>
+          source.owned ||
+          transferred.get(source.orderMailId) !== source.checksum,
+      );
       if (
         !sources.length ||
-        sources.some(
+        remaining.some(
           (source) =>
             !source.owned ||
             !source.unchanged ||
@@ -272,7 +281,7 @@ async function reconcileSettledRunOnce(
         )
       )
         return null;
-      const unresolved = sources.filter(
+      const unresolved = remaining.filter(
         (source) => source.email.status === "blocked",
       );
       const findings = await tx

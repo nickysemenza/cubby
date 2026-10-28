@@ -148,6 +148,8 @@ const actionCapability = {
   "run.lifecycle": "start_run",
   "run.set_mail_import": "member_decision",
   "run.discover_mail": "member_decision",
+  "run.controlled_mail_import": "member_decision",
+  "run.resume_controlled_mail_import": "member_decision",
   "run.sweep": "member_decision",
   "run.commit_prepared": "member_decision",
   "activity.resolve_run_finding": "member_decision",

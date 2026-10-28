@@ -15,23 +15,36 @@ import {
   coordinatorModelFor,
   importRunAgentIdentity,
 } from "@cubby/schemas/import-run-agent";
+import { jobState } from "@cubby/schemas/job";
 import {
   mailboxDiscoveryInput,
   MAILBOX_RESEARCH_VERSION,
 } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, eq, inArray, isNull, ne, notInArray, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   getDb,
+  databaseForTransaction,
   notDeleted,
   withTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
   ledgerParty,
+  job,
   email as emailTable,
   orderMail,
   run,
@@ -41,6 +54,16 @@ import {
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
 import {
+  findControlledMailImport,
+  CONTROLLED_MAIL_SOURCE_STATUSES,
+} from "~/server/domains/purchase-import/repo/controlled-mail-import";
+import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-import-settings";
+import {
+  transferMailRunSources,
+  mailSourceTransferReceipt,
+  MAIL_SOURCE_TRANSFER_OPERATION,
+} from "~/server/domains/purchase-import/repo/mail-run-membership";
+import {
   assertMailSourceIdentityReady,
   HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
 } from "~/server/domains/purchase-import/repo/mail-source-identity";
@@ -48,11 +71,12 @@ import {
   actorSnapshot,
   assertRunParent,
 } from "~/server/domains/run/repo/ensure-run";
+import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { dispatchStartedRun } from "./dispatch";
-import { mailImportEnabled } from "./mail-import-settings";
 
 const CLASSIFICATION_RUN_PURPOSES: (typeof run.$inferSelect.purpose)[] = [
   "mail_discovery",
@@ -108,6 +132,7 @@ async function partitionOwnership(
   tx: DrizzleTransaction,
   partyId: NonNullable<typeof run.$inferSelect.ledgerPartyId>,
   sources: RetainedMail[],
+  controlledParentRunId?: RunId,
 ) {
   const messages = await tx
     .select()
@@ -128,12 +153,21 @@ async function partitionOwnership(
     .for("update");
   const owners = new Map<string, typeof run.$inferSelect>();
   const fresh: RetainedMail[] = [];
+  const transfers = new Map<RunId, RetainedMail[]>();
   for (const source of sources) {
     const message = messages.find(
       (candidate) =>
         candidate.mailboxId === source.mailboxId &&
         candidate.messageId === source.messageId,
     );
+    if (
+      controlledParentRunId &&
+      message &&
+      !CONTROLLED_MAIL_SOURCE_STATUSES.some(
+        (status) => status === message.status,
+      )
+    )
+      continue;
     if (message && ["excluded", "deleted"].includes(message.status))
       throw new Error(
         "Mail source was excluded or deleted from the connected mailbox.",
@@ -161,11 +195,41 @@ async function partitionOwnership(
       owner &&
       !owner.retiredAt &&
       !CLASSIFICATION_RUN_PURPOSES.includes(owner.purpose)
-    )
-      owners.set(owner.id, owner);
-    else fresh.push(source);
+    ) {
+      const transferable =
+        controlledParentRunId &&
+        owner.purpose === "mail_import" &&
+        owner.trigger === "discovery" &&
+        owner.status === "running" &&
+        owner.parentRunId !== controlledParentRunId &&
+        !owner.coordinatorStartedAt &&
+        message?.status === "researching";
+      if (transferable) {
+        // A dispatch accepted before the mailbox pause may not have written
+        // coordinatorStartedAt yet. Its live Job must finish before transfer.
+        const [dispatching] = await tx
+          .select({ id: job.id })
+          .from(job)
+          .where(
+            and(
+              eq(job.runId, owner.id),
+              eq(job.kind, "purchase.dispatch"),
+              eq(job.state, jobState.enum.running),
+              sql`${job.leaseExpiresAt}>now()`,
+            ),
+          )
+          .limit(1);
+        if (dispatching)
+          throw new JobDeferredError(
+            "Waiting for the queued Mail import's dispatch to finish before transferring its selected sources",
+            new Date(Date.now() + 15_000),
+            "provider_capacity",
+          );
+        transfers.set(owner.id, [...(transfers.get(owner.id) ?? []), source]);
+      } else owners.set(owner.id, owner);
+    } else fresh.push(source);
   }
-  return { owners, fresh };
+  return { owners, fresh, transfers };
 }
 
 export async function admitMailImport(
@@ -187,6 +251,22 @@ export async function admitMailImport(
     !input.parentRunId &&
     input.messageIds.every((id) => selectedSources.has(id));
   return withTransaction(db, async (tx) => {
+    const [parent] = input.parentRunId
+      ? await tx
+          .select({
+            purpose: run.purpose,
+            input: run.input,
+            vendorId: run.vendorId,
+          })
+          .from(run)
+          .where(eq(run.id, input.parentRunId))
+      : [];
+    const parentPolicy = mailboxDiscoveryInput.safeParse(parent?.input);
+    const discoveryParent =
+      parent?.purpose === "mail_discovery" && parentPolicy.success
+        ? parentPolicy.data
+        : null;
+    const controlled = discoveryParent?.controlled;
     const [party] = await tx
       .select()
       .from(ledgerParty)
@@ -204,8 +284,15 @@ export async function admitMailImport(
     // Serialize the switch with automatic admission; already admitted Runs keep their controls.
     if (
       input.automatic &&
+      !controlled &&
       (!input.mailboxId ||
-        !(await mailImportEnabled(tx, input.mailboxId, true)))
+        !(await mailImportEnabled(tx, input.mailboxId, true)) ||
+        Boolean(
+          await findControlledMailImport(
+            databaseForTransaction(tx),
+            input.mailboxId,
+          ),
+        ))
     )
       return [];
     if (input.parentRunId)
@@ -214,96 +301,142 @@ export async function admitMailImport(
         ledgerPartyId: partyId,
       });
     if (input.parentRunId) {
-      const [parent] = await tx
-        .select({
-          purpose: run.purpose,
-          input: run.input,
-        })
-        .from(run)
-        .where(eq(run.id, input.parentRunId));
-      const policy = mailboxDiscoveryInput.safeParse(parent?.input);
       if (
         parent?.purpose === "mail_discovery" &&
-        (!policy.success ||
-          policy.data.executionPolicy === "classification_only")
+        (!parentPolicy.success ||
+          parentPolicy.data.executionPolicy === "classification_only")
       )
         throw new Error(
           "Classification-only discovery cannot admit Emails to Pi.",
         );
     }
-    const sources = await lockMailSources(tx, input, partyId);
-    const { owners, fresh } = await partitionOwnership(tx, partyId, sources);
+    const selected = await lockMailSources(tx, input, partyId);
+    if (
+      controlled &&
+      (!parent?.vendorId ||
+        selected.some(
+          (source) => source.mailboxId !== discoveryParent.mailboxId,
+        ))
+    )
+      throw new Error(
+        "A controlled import admits only its selected Vendor's mailbox sources.",
+      );
+    const sources = controlled
+      ? selected.filter(
+          (source) => !source.vendorId || source.vendorId === parent?.vendorId,
+        )
+      : selected;
+    if (!sources.length) return [];
+    const { owners, fresh, transfers } = await partitionOwnership(
+      tx,
+      partyId,
+      sources,
+      controlled ? input.parentRunId : undefined,
+    );
     const existing = [...owners.values()].map((row) => ({
       created: false,
       row,
     }));
-    if (fresh.length === 0) return existing;
-    const sourceSet = mailResearchRunInput.parse({
-      kind: "mail_research",
-      sources: fresh.map((source) => ({
-        orderMailId: source.id,
-        checksum: source.rawChecksum,
-      })),
-    });
-    const clientKey = `mail-research:${party.id}:${await sha256Hex(
-      JSON.stringify([MAILBOX_RESEARCH_VERSION, sourceSet]),
-    )}`;
-    const [replayed] = await tx
-      .select()
-      .from(run)
-      .where(eq(run.clientKey, clientKey))
-      .limit(1);
-    if (replayed) return [...existing, { created: false, row: replayed }];
-    const snapshot = await actorSnapshot(tx, actorId);
-    const id = runEntityId.parse(crypto.randomUUID());
-    const row = await insertWithShortcode(tx, "run", {
-      id,
-      ledgerPartyId: party.id,
-      purpose: "mail_import",
-      trigger: memberSelected ? "foreground" : "discovery",
-      status: "running",
-      channel: "system",
-      actorUserId: actorId,
-      actorName: snapshot.actorName,
-      actorEmail: snapshot.actorEmail,
-      actorLedgerPartyShortcode: snapshot.ledgerPartyShortcode,
-      actorLedgerPartyName: snapshot.ledgerPartyName,
-      actorLedgerPartyKind: snapshot.ledgerPartyKind,
-      parentRunId: input.parentRunId ?? null,
-      cause: memberSelected ? "member_request" : "source_discovered",
-      coordinatorModel: coordinatorModelFor("mail_import"),
-      input: sourceSet,
-      clientKey,
-      startedAt: new Date(),
-      dispatchEventId: crypto.randomUUID(),
-      agentSessionId: importRunAgentIdentity(id, "mail_import"),
-    });
-    const assigned = await tx
-      .update(emailTable)
-      .set({ status: "researching", runId: id })
-      .where(
-        or(
-          ...fresh.map((source) =>
-            and(
-              eq(emailTable.ledgerPartyId, source.ledgerPartyId),
-              eq(emailTable.mailboxId, source.mailboxId),
-              eq(emailTable.messageId, source.messageId),
-              eq(emailTable.orderMailId, source.id),
-              eq(emailTable.checksum, source.rawChecksum),
+    const start = async (
+      admittedSources: RetainedMail[],
+      transferFrom?: RunId,
+    ) => {
+      const sourceSet = mailResearchRunInput.parse({
+        kind: "mail_research",
+        sources: admittedSources.map((source) => ({
+          orderMailId: source.id,
+          checksum: source.rawChecksum,
+        })),
+      });
+      const clientKey = `mail-research:${party.id}:${controlled ? `controlled:${input.parentRunId}:` : ""}${await sha256Hex(
+        JSON.stringify([MAILBOX_RESEARCH_VERSION, sourceSet]),
+      )}`;
+      const [replayed] = await tx
+        .select()
+        .from(run)
+        .where(eq(run.clientKey, clientKey))
+        .limit(1);
+      if (replayed) return { created: false, row: replayed };
+      const snapshot = await actorSnapshot(tx, actorId);
+      const id = runEntityId.parse(crypto.randomUUID());
+      const row = await insertWithShortcode(tx, "run", {
+        id,
+        ledgerPartyId: party.id,
+        purpose: "mail_import",
+        trigger: memberSelected ? "foreground" : "discovery",
+        status: "running",
+        channel: "system",
+        actorUserId: actorId,
+        actorName: snapshot.actorName,
+        actorEmail: snapshot.actorEmail,
+        actorLedgerPartyShortcode: snapshot.ledgerPartyShortcode,
+        actorLedgerPartyName: snapshot.ledgerPartyName,
+        actorLedgerPartyKind: snapshot.ledgerPartyKind,
+        parentRunId: input.parentRunId ?? null,
+        vendorId: controlled ? (parent?.vendorId ?? null) : null,
+        cause: memberSelected ? "member_request" : "source_discovered",
+        coordinatorModel: coordinatorModelFor("mail_import"),
+        input: sourceSet,
+        clientKey,
+        startedAt: new Date(),
+        dispatchEventId: crypto.randomUUID(),
+        agentSessionId: importRunAgentIdentity(id, "mail_import"),
+      });
+      if (transferFrom) {
+        // transferMailRunSources preserves the old frozen roster and outcomes;
+        // each successor names just this owner's selected, still-held sources.
+        await transferMailRunSources(
+          tx,
+          transferFrom,
+          id,
+          admittedSources.map((source) => source.id),
+        );
+        const receipt = mailSourceTransferReceipt.parse({
+          toRunId: id,
+          sources: sourceSet.sources,
+        });
+        await insertOperation(tx, {
+          runId: transferFrom,
+          operationId: `controlled-transfer:${id}`,
+          kind: MAIL_SOURCE_TRANSFER_OPERATION,
+          inputFingerprint: await sha256Hex(JSON.stringify(receipt)),
+          state: "completed",
+          result: receipt,
+        });
+      } else {
+        const assigned = await tx
+          .update(emailTable)
+          .set({ status: "researching", runId: id })
+          .where(
+            or(
+              ...admittedSources.map((source) =>
+                and(
+                  eq(emailTable.ledgerPartyId, source.ledgerPartyId),
+                  eq(emailTable.mailboxId, source.mailboxId),
+                  eq(emailTable.messageId, source.messageId),
+                  eq(emailTable.orderMailId, source.id),
+                  eq(emailTable.checksum, source.rawChecksum),
+                ),
+              ),
             ),
-          ),
-        ),
-      )
-      .returning({ orderMailId: emailTable.orderMailId });
-    if (assigned.length !== fresh.length)
-      throw new Error("Mail source ownership assignment is incomplete.");
-    await recordChange(tx, { kind: "source", categories: ["email"] });
-    await dispatchStartedRun(tx, {
-      id: row.id,
-      eventId: row.dispatchEventId!,
-      purpose: row.purpose,
-    });
-    return [...existing, { created: true, row }];
+          )
+          .returning({ orderMailId: emailTable.orderMailId });
+        if (assigned.length !== admittedSources.length)
+          throw new Error("Mail source ownership assignment is incomplete.");
+      }
+      await recordChange(tx, { kind: "source", categories: ["email"] });
+      await dispatchStartedRun(tx, {
+        id: row.id,
+        eventId: row.dispatchEventId!,
+        purpose: row.purpose,
+      });
+      return { created: true, row };
+    };
+    const admitted = [...existing];
+    if (fresh.length) admitted.push(await start(fresh));
+    for (const [fromRunId, transferred] of transfers)
+      admitted.push(await start(transferred, fromRunId));
+    return admitted;
   });
 }
 
@@ -322,7 +455,8 @@ export async function startMailImport(
 export async function importPendingEmails(db: Database) {
   const { listMemberMailboxes } =
     await import("~/server/domains/purchase-import/repo/gmail/targets");
-  const { mailImportEnabled } = await import("./mail-import-settings");
+  const { mailImportEnabled } =
+    await import("~/server/domains/purchase-import/repo/mail-import-settings");
   const { retainedEmailImportContentCondition } =
     await import("~/server/domains/purchase-import/repo/email-content");
   const errors: unknown[] = [];

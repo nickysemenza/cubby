@@ -296,8 +296,25 @@ describe("Mail import switch and discovery through MCP", () => {
       userId: ctx.actor.userId,
     });
     await connect(mailboxId);
-    await insertWithShortcode(ctx.db, "vendor", {
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic MCP discovery vendor",
+    });
+    // Coverage must expose unsearched relationships without inventing an account
+    // or claiming that absent sender identity means Gmail contains no matches.
+    const coverage = await call("run_read", { action: "mail_coverage" });
+    expect(coverage.isError).not.toBe(true);
+    expect(coverage.structuredContent).toMatchObject({
+      mailboxes: [{ mailboxId, enabled: false, canControl: true }],
+      rows: [
+        {
+          vendorId: vendor.shortcode,
+          vendorAccountId: null,
+          state: "no_search_identity",
+          scanned: 0,
+          retained: 0,
+          linkedPurchases: 0,
+        },
+      ],
     });
     expect(
       (await call("run_read", { action: "mail_import" })).structuredContent,
@@ -491,6 +508,31 @@ describe("Mail import switch and discovery through MCP", () => {
     await connect(mailboxId);
     const refused = await call("run", enable(), run.id);
     expect(refused.isError).toBe(true);
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic delegated control Vendor",
+    });
+    expect(
+      (
+        await call(
+          "run",
+          {
+            action: "controlled_mail_import",
+            mailboxId,
+            vendorId: vendor.shortcode,
+          },
+          run.id,
+        )
+      ).isError,
+    ).toBe(true);
+    expect(
+      (
+        await call(
+          "run",
+          { action: "resume_controlled_mail_import", mailboxId },
+          run.id,
+        )
+      ).isError,
+    ).toBe(true);
     expect(await getDb(ctx.db).select().from(appSettings)).toEqual([]);
   });
 

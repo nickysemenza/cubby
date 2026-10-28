@@ -20,6 +20,9 @@ or logos through the shared queue. A VendorAccount records a member's vendor
 relationship, not proof of a login, and is not a prerequisite for discovery.
 VendorAccounts have no active/disabled status. The Mail import switch, the AI
 budget and explicit Run controls own whether work can proceed.
+Importing purchase evidence attributed to a known Vendor and member creates
+or reuses that member's Vendor Account automatically. Scanning unrelated mail
+or leaving Vendor identity unresolved does not establish this relationship.
 
 Mail import is one switch per connected mailbox (Settings → Mail import, or
 `run.set_mail_import` over MCP). While it is on, the daily discovery pass needs
@@ -46,18 +49,46 @@ authorize an identifier issuer namespace.
 Search completion describes the scope actually scanned, not proof that every
 purchase from that Vendor has been found.
 
-Each search records its finish time and the Emails its pages retained
-(`completedAt`, `emailCount`); searches finished before that was tracked show
-neither. The Mail import card shows, per mailbox, finished Vendor and charge
-searches over today's targets only (a finished search whose target is gone
-stays in the cursor but is not counted), the search in progress, the next five
-queued searches, and a link to Mail import Runs that need review; it
-refreshes every 30 seconds while a switched-on mailbox has searches left. The Vendor
+Mail coverage, alongside Emails and linked from Settings, shows every known
+Vendor in each connected member mailbox. Existing Vendor Accounts provide the
+member/Vendor record context; unsearched rows do not create accounts. Each row
+separates search coverage from local scanned, classified and retained Emails,
+linked Emails and distinct linked Purchases. Several Emails can describe one
+Purchase. Local sender/domain matches are candidates, not Vendor attribution
+or a Gmail-wide total. Domains shared by Vendors can contribute candidates to
+more than one row, so row counts are not additive.
+
+Each search records its finish time, retained Email count and newly tracked
+message count (`completedAt`, `emailCount`, `messageCount`). Older checkpoints
+retain unknown counts. No matches means every current search finished with a
+known zero message count; zero retained Emails alone never establishes it.
+The Vendor
 list's derived Mail search column is done when every current search of that
 Vendor has finished in every member's connected mailbox, in progress once any
 has a finished page or a page token, not started otherwise, and blank for a
 Vendor with no searches; the Vendor's Mail search section lists each search
 per mailbox.
+
+Choose a coverage row to import only that Vendor's mail from the selected
+mailbox. Optional received-date bounds default to all history. The request
+pauses other automatic imports for that mailbox, lets active work finish and
+runs the selected scope next. Automatic imports stay paused after completion
+until explicitly resumed. The selected scope covers both search and import;
+normal relevance, Vendor attribution, duplicate and purchase-evidence rules
+still apply. Paid AI is allowed within the household budget without an
+over-budget grant. Existing evidence, completed work and member decisions are
+reused. Follow the persisted Run to distinguish waiting, discovery and import
+from completion. Settings keeps mailbox connections and automatic-import
+switches, with review work in the Work queue.
+Resuming restores the previous automatic-import setting, so a mailbox that
+was off stays off while its previously queued work can continue. Settled
+Emails and review stops are preserved. Source transfers keep the older Run's
+roster and outcomes, with an immutable transfer receipt releasing its
+responsibility for those sources. Pausing a controlled Run keeps its mailbox
+fenced until that scope is resumed or cancelled and the mailbox pause is
+explicitly released.
+Changing the Settings switch is an explicit on/off override; an active
+controlled scope still finishes first.
 
 Discovery admits retained candidates to Pi, which imports what is unambiguous
 under the writer contracts and leaves the rest in the Work queue. Keep a

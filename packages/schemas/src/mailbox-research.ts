@@ -11,6 +11,7 @@ import {
 } from "./identifier-fields";
 import { importSourceIdentity } from "./import-source";
 import type { MailSearchState } from "./mail-search-fields";
+import { controlledMailDateRange } from "./mail-coverage-control";
 
 export const MAILBOX_RESEARCH_VERSION = "2026-10-11.1";
 /** One Reclassify request records at most this many Emails in its Run. */
@@ -92,6 +93,8 @@ const scopedQueryPosition = mailboxScopedQuery.extend({
   completedAt: z.iso.datetime().optional(),
   /** Emails retained from this search's pages; absent before it was recorded. */
   emailCount: z.number().int().nonnegative().optional(),
+  /** All Gmail matches in committed pages; absent when older pages never counted them. */
+  messageCount: z.number().int().nonnegative().optional(),
 });
 export type MailboxScopedPosition = z.infer<typeof scopedQueryPosition>;
 /** Tokens move only after that page's acquisition and research dispatch succeed. */
@@ -145,6 +148,8 @@ export const mailboxDiscoveryInput = z.object({
     .default("classification_only"),
   mailboxId: z.string().min(1),
   scopedQueries: z.array(mailboxScopedQuery),
+  /** A member-selected Vendor uses only its searches and never the history lane. */
+  controlled: controlledMailDateRange.optional(),
 });
 export const mailboxDiscoveryProgress = z.object({
   attempt: z.number().int().nonnegative(),
@@ -828,10 +833,29 @@ export {
 export const currentScopedPosition = (
   coverage: MailboxCoverage | null,
   query: MailboxScopedQuery,
-) =>
-  coverage?.scoped.find(
+  completedSearches?: ReadonlyMap<string, MailboxScopedPosition>,
+): MailboxScopedPosition | undefined => {
+  const position = coverage?.scoped.find(
     (entry) => entry.key === query.key && entry.query === query.query,
   );
+  const receipt = completedSearches?.get(query.query);
+  if (
+    receipt &&
+    !(
+      position?.completedAt &&
+      position.completedAt > (receipt.completedAt ?? "")
+    )
+  ) {
+    const saved = coverage?.scoped.find(
+      (entry) =>
+        entry.key === receipt.key &&
+        entry.query === query.query &&
+        entry.completed,
+    );
+    return saved ?? receipt;
+  }
+  return position;
+};
 
 export const scopedPositionState = (
   position: MailboxScopedPosition | undefined,

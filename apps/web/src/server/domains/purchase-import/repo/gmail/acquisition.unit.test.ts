@@ -223,8 +223,15 @@ describe("durable Gmail page acquisition", () => {
         query: "forge",
         pageToken: "scoped-two",
         completed: false,
+        messageCount: 0,
       },
-      { key: "charge", query: "platform", pageToken: null, completed: false },
+      {
+        key: "charge",
+        query: "platform",
+        pageToken: null,
+        completed: false,
+        messageCount: 0,
+      },
     ]);
   });
 

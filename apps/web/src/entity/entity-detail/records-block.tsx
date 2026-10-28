@@ -227,6 +227,19 @@ export function RecordsBlockView({
           <ShortcodeProse>{block.footer}</ShortcodeProse>
         </p>
       ) : null}
+      {block.links?.length ? (
+        <Row gap="sm" className="flex-wrap">
+          {block.links.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="text-sm underline underline-offset-2"
+            >
+              {link.label}
+            </a>
+          ))}
+        </Row>
+      ) : null}
       {form ? (
         <ChoiceFormFooter
           form={form}

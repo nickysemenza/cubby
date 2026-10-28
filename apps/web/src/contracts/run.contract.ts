@@ -7,6 +7,11 @@ import {
   productShortcode,
   purchaseShortcode,
 } from "@cubby/schemas/identifiers";
+import { mailCoverage } from "@cubby/schemas/mail-coverage";
+import {
+  controlledMailImportInput,
+  controlledMailImportOutput,
+} from "@cubby/schemas/mail-coverage-control";
 import {
   mailImportStatus,
   paidOverBudgetUsd,
@@ -266,6 +271,30 @@ const runControlOutput = z.object({
 export const runContract = defineContract(
   "run",
   {
+    mailCoverage: query({
+      description:
+        "Vendor-by-mailbox search coverage, local scanned/classified/retained Email counts and distinct linked Purchases, with existing Vendor Account context. Local counts are not Gmail totals; absent search identities and unknown historical match totals remain explicit.",
+      input: z.strictObject({}),
+      output: mailCoverage,
+      cache: {
+        tags: [["run"], ["email"], ["vendor"], ["vendorAccount"]],
+        profile: "live-status",
+      },
+    }),
+    controlledMailImport: mutation({
+      description:
+        "Import one Vendor's mail from a connected member mailbox, optionally within inclusive received-date bounds (omitted means all history). Pauses other automatic imports for that mailbox until explicitly resumed; active work finishes before this scope starts. Allows paid AI within the existing household budget, never an over-budget grant. Sender/domain search is candidate retrieval; normal attribution and purchase-evidence rules still apply.",
+      input: controlledMailImportInput,
+      output: controlledMailImportOutput,
+      invalidates: ["runOnly"],
+    }),
+    resumeControlledMailImport: mutation({
+      description:
+        "Release a mailbox's controlled-import pause and restore its previous automatic-import setting. A mailbox that was off stays off; already queued work may continue after the active controlled scope finishes.",
+      input: setMailImportInput.pick({ mailboxId: true }),
+      output: mailImportStatus,
+      invalidates: ["runOnly"],
+    }),
     mailImport: query({
       description:
         "The member's connected Gmail mailboxes with their automatic Mail import switch and targeted-search progress. AI funding for the imports is household-wide: ai_funding_read.status.",

@@ -12,6 +12,7 @@ import { ingestGmailMessages } from "~/server/domains/purchase-import/service/gm
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import {
   createEvidenceHarnessContext,
+  createEntityFixture,
   ensureMemberParty,
 } from "./fixtures/core";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";
@@ -42,6 +43,12 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     parseShortcodeFor("ledgerParty", member.shortcode),
     actor,
   );
+  const vendorName = `Synthetic Gmail retailer ${token}`;
+  await createEntityFixture(page, "vendor", {
+    name: vendorName,
+    website: "https://synthetic-retailer.example.test",
+    orderEmailSenders: [sender],
+  });
   const session = z
     .object({ user: z.object({ email: z.email() }) })
     .parse(await (await page.request.get("/api/auth/get-session")).json());
@@ -183,4 +190,27 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
       `GET /gmail/v1/users/me/messages/${messageId}`,
     ]),
   );
+  await gotoAuthenticatedPage(page, "/settings");
+  const coverageLink = page.getByRole("link", {
+    name: "View Mail coverage and import a Vendor",
+  });
+  // Revealing content-visibility sections can move the target during the
+  // first scroll; settle that layout before Playwright calculates its click.
+  await coverageLink.scrollIntoViewIfNeeded();
+  await coverageLink.click({ trial: true });
+  await coverageLink.click();
+  await expect(
+    page.getByRole("heading", { name: "Mail coverage", exact: true }),
+  ).toBeVisible();
+  const coverage = page.getByRole("table", {
+    name: "Mail coverage by Vendor and mailbox",
+  });
+  const row = coverage.getByRole("row").filter({ hasText: vendorName });
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect(
+    page.getByRole("button", { name: "Start controlled import", exact: true }),
+  ).toBeEnabled();
+  await expect(page.getByLabel("From", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Through", { exact: true })).toHaveValue("");
 });

@@ -111,6 +111,7 @@ describe("application-owned AI feature observation", () => {
     expect(restored?.observationEpoch).toBeGreaterThan(first!.observationEpoch);
     expect(await readMailImportSettings(ctx.db)).toEqual({
       enabledMailboxes: [mailboxId],
+      controlledPauses: [],
     });
     await setMailImport(ctx.db, { mailboxId, enabled: false });
     expect(

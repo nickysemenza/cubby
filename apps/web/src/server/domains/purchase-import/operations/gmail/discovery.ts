@@ -14,7 +14,7 @@ import {
   type MailboxCoverage,
   type MailboxDiscoveryStartOutput,
 } from "@cubby/schemas/mailbox-research";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
@@ -25,6 +25,13 @@ import {
 } from "~/server/db/helpers";
 import { email as emailTable, run as runTable } from "~/server/db/schema";
 import { recordDiscoveryEmailReceipt } from "~/server/domains/email/repo/discovery-email-audit";
+import { launchQueuedControlledMailImport } from "~/server/domains/purchase-import/operations/gmail/controlled-import";
+import {
+  findControlledMailImport,
+  retainedControlledMailIds,
+  CONTROLLED_MAIL_SOURCE_STATUSES,
+  waitForActiveMailboxImports,
+} from "~/server/domains/purchase-import/repo/controlled-mail-import";
 import {
   listGmailSyncTargets,
   type GmailSyncTarget,
@@ -33,6 +40,7 @@ import {
   GmailApiError,
   type GmailProvider,
 } from "~/server/domains/purchase-import/repo/gmail/types";
+import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
@@ -63,7 +71,6 @@ import {
 } from "../../repo/gmail/sync";
 import { GmailAuthorizationError } from "../../repo/gmail/tokens";
 import type { startMailImport } from "../../repo/mail-import-run";
-import { mailImportEnabled } from "../../repo/mail-import-settings";
 import { ingestGmailMessages } from "../../service/gmail/ingest";
 import type { MailRelevance } from "../../service/gmail/relevance";
 import type { MailTriage } from "../../service/gmail/triage";
@@ -268,6 +275,11 @@ export async function startMailDiscovery(
       "Selected discovery mailbox is not connected to this member.",
     );
   for (const target of selected) {
+    if (await findControlledMailImport(db, target.mailboxId)) {
+      await launchQueuedControlledMailImport(db, target.mailboxId);
+      running += 1;
+      continue;
+    }
     const waiting = await fundingPausedDiscovery(db, target, "paused_auth");
     if (waiting) {
       if (!options.paidGrant) {
@@ -332,6 +344,12 @@ export async function beginMailDiscovery(
   params: WorkflowRunParams,
 ): Promise<{ kind: "stopped" } | { kind: "page"; index: number }> {
   const claimed = await claimDiscovery(db, params);
+  if (claimed?.input.controlled && claimed.progress.pagesDone === 0)
+    await waitForActiveMailboxImports(db, {
+      mailboxId: claimed.input.mailboxId,
+      memberId: claimed.ledgerPartyId,
+      controlRunId: claimed.row.id,
+    });
   return claimed
     ? { kind: "page", index: claimed.progress.pagesDone }
     : { kind: "stopped" };
@@ -347,7 +365,15 @@ export async function listMailDiscovery(
   if (!claimed) return { kind: "stopped" };
   // A new-mail catch-up keeps paginating; each targeted page is its own pass.
   const continuing = (coverage: MailboxCoverage) =>
-    Boolean(coverage.history.pageToken);
+    claimed.input.controlled
+      ? coverage.scoped.some(
+          (query) =>
+            !query.completed &&
+            claimed.input.scopedQueries.some(
+              (selected) => selected.key === query.key,
+            ),
+        )
+      : Boolean(coverage.history.pageToken);
   if (claimed.progress.page)
     return {
       kind: "listed",
@@ -378,7 +404,14 @@ export async function listMailDiscovery(
         return { kind: "stopped" };
       coverage = baseline;
     }
-    const merged = mergeMailboxQueries(coverage, claimed.input.scopedQueries);
+    // The member's bounded selection must not prune other searches' durable
+    // positions or advance the mailbox's history cursor.
+    const merged = mergeMailboxQueries(
+      coverage,
+      claimed.input.controlled
+        ? [...coverage.scoped, ...claimed.input.scopedQueries]
+        : claimed.input.scopedQueries,
+    );
     if (JSON.stringify(merged) !== JSON.stringify(coverage)) {
       if (
         !(await checkpointMailboxCoverage(db, {
@@ -395,7 +428,10 @@ export async function listMailDiscovery(
       provider,
       claimed.input.mailboxId,
       coverage,
-      discoveryMode(coverage),
+      claimed.input.controlled ? "targeted" : discoveryMode(coverage),
+      claimed.input.controlled
+        ? claimed.input.scopedQueries.map((query) => query.key)
+        : undefined,
     );
     const frozen = await (
       await import("~/server/domains/run/repo/ai-work-state")
@@ -457,11 +493,44 @@ export async function saveMailDiscoveryBatch(
       storage: ports.storage,
     });
     if (!(await claimDiscovery(db, params))) return { kind: "stopped" };
-    const retained = [
+    // Reused classifications still need import admission when automatic
+    // import was previously off. Limit the replay to this selected Gmail page.
+    const pageImportMailIds =
+      claimed.input.controlled && page.messageIds.length
+        ? (
+            await getDb(db)
+              .select({ id: emailTable.orderMailId })
+              .from(emailTable)
+              .where(
+                and(
+                  eq(emailTable.ledgerPartyId, claimed.ledgerPartyId),
+                  eq(emailTable.mailboxId, claimed.input.mailboxId),
+                  inArray(emailTable.messageId, page.messageIds),
+                  eq(emailTable.classification, "related"),
+                  inArray(emailTable.status, CONTROLLED_MAIL_SOURCE_STATUSES),
+                  isNotNull(emailTable.orderMailId),
+                  or(
+                    isNull(emailTable.classificationVersion),
+                    ne(
+                      emailTable.classificationVersion,
+                      HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+                    ),
+                  ),
+                  notDeleted(emailTable),
+                ),
+              )
+          ).flatMap((row) => (row.id ? [row.id] : []))
+        : ingested.orderMailIds;
+    const importMailIds = [
       ...new Set([
-        ...(page.retainedOrderMailIds ?? []),
-        ...ingested.orderMailIds,
+        ...pageImportMailIds,
+        ...(claimed.input.controlled && index === 0
+          ? await retainedControlledMailIds(db, claimed.row.id)
+          : []),
       ]),
+    ];
+    const retained = [
+      ...new Set([...(page.retainedOrderMailIds ?? []), ...pageImportMailIds]),
     ];
     if (retained.length !== (page.retainedOrderMailIds?.length ?? 0)) {
       const [saved] = await getDb(db)
@@ -478,7 +547,7 @@ export async function saveMailDiscoveryBatch(
     for (
       let offset = 0;
       claimed.input.executionPolicy === "import" &&
-      offset < ingested.orderMailIds.length;
+      offset < importMailIds.length;
       offset += 50
     ) {
       if (!(await claimDiscovery(db, params))) return { kind: "stopped" };
@@ -491,7 +560,7 @@ export async function saveMailDiscoveryBatch(
         parentRunId: claimed.row.id,
         automatic: true,
         mailboxId: claimed.input.mailboxId,
-        messageIds: ingested.orderMailIds.slice(offset, offset + 50),
+        messageIds: importMailIds.slice(offset, offset + 50),
       });
       if (results.some((result) => result.status === "dispatch_failed"))
         throw new Error(
@@ -609,6 +678,13 @@ export async function continueMailDiscovery(
     .limit(1);
   if (!previous?.ledgerPartyId) return;
   const input = mailboxDiscoveryInput.parse(previous.input);
+  const control = await findControlledMailImport(db, input.mailboxId);
+  if (control) {
+    await launchQueuedControlledMailImport(db, input.mailboxId);
+    return;
+  }
+  // A selected Vendor finishes in this Run; it never fans out to the history lane.
+  if (input.controlled) return;
   const clientKey = `mailbox-continuation:${previous.id}`;
   const [existing] = await getDb(db)
     .select()

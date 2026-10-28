@@ -33,6 +33,7 @@ export const listMemberMailboxes = (db: Database) =>
   getDb(db)
     .selectDistinct({
       ledgerPartyId: ledgerParty.id,
+      memberShortcode: ledgerParty.shortcode,
       name: ledgerParty.name,
       userId: ledgerParty.userId,
       mailboxId: account.accountId,

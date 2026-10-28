@@ -1,5 +1,8 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
-import type { MailImportStatus } from "@cubby/schemas/mail-import-settings";
+import type {
+  MailImportStatus,
+  SetMailImportInput,
+} from "@cubby/schemas/mail-import-settings";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import type { SweepFamilyScope } from "@cubby/schemas/run-fields";
 import type { SweepStartInput } from "@cubby/schemas/sweep";
@@ -8,18 +11,21 @@ import type { z } from "zod";
 
 import { runContract } from "~/contracts/run.contract";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
-import { account } from "~/server/db/auth.schema";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { oauthRefreshToken, run as runTable } from "~/server/db/schema";
+import { startControlledMailImport } from "~/server/domains/purchase-import/operations/gmail/controlled-import";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { commitPurchaseImport } from "~/server/domains/purchase-import/operations/import-orders";
 import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/domains/purchase-import/repo/agent-auth";
+import { readMailCoverage } from "~/server/domains/purchase-import/repo/gmail/mail-coverage";
 import { withMailSearchProgress } from "~/server/domains/purchase-import/repo/gmail/search-progress";
+import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
 import {
   readMailImportSettings,
+  resumeControlledMailImport,
   setMailImport,
 } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import {
@@ -166,57 +172,71 @@ async function mailImportStatusFor(
   context: Parameters<typeof memberParty>[0],
 ): Promise<MailImportStatus> {
   const party = await memberParty(context);
-  const [connected, settings] = await Promise.all([
-    getDb(context.db)
-      .selectDistinct({ mailboxId: account.accountId })
-      .from(account)
-      .where(
-        and(
-          eq(account.userId, context.auth.userId),
-          eq(account.providerId, "google"),
-        ),
-      )
-      .orderBy(account.accountId),
+  const [members, settings] = await Promise.all([
+    listMemberMailboxes(context.db),
     readMailImportSettings(context.db),
   ]);
+  const connected = members.filter(
+    (member) =>
+      member.userId === context.auth.userId &&
+      member.ledgerPartyId === party.id,
+  );
   return {
     mailboxes: await withMailSearchProgress(
       context.db,
       party.id,
-      connected.map(({ mailboxId }) => ({
+      connected.map(({ mailboxId, name }, index) => ({
         mailboxId,
+        label: `${name} · Gmail${connected.length > 1 ? ` ${index + 1}` : ""}`,
         enabled: settings.enabledMailboxes.includes(mailboxId),
       })),
     ),
   };
 }
 
+async function changeMailImport(
+  context: Parameters<typeof memberParty>[0],
+  change:
+    | ({ kind: "switch" } & SetMailImportInput)
+    | ({ kind: "resume" } & Pick<SetMailImportInput, "mailboxId">),
+): Promise<MailImportStatus> {
+  const { mailboxes } = await mailImportStatusFor(context);
+  if (!mailboxes.some((mailbox) => mailbox.mailboxId === change.mailboxId))
+    throw new Error(
+      `Mailbox ${change.mailboxId} is not connected to this member.`,
+    );
+  await withTransactionDatabase(context.db, async (tx) => {
+    if (change.kind === "switch") await setMailImport(tx, change);
+    else await resumeControlledMailImport(tx, change.mailboxId);
+    await (
+      await import("~/server/workflows/background-tasks/publish")
+    ).publishBackgroundTasks(
+      tx,
+      [
+        {
+          kind: "maintenance.purchase-discovery",
+          requestedAt: new Date().toISOString(),
+        },
+      ],
+      { source: "mail-import-setting" },
+    );
+  });
+  return mailImportStatusFor(context);
+}
+
 export const runHandlers = implementOperationDomain(runContract, {
+  mailCoverage: async (context) =>
+    readMailCoverage(context.db, context.auth.userId),
+  controlledMailImport: async (context, input) => {
+    await memberParty(context);
+    return startControlledMailImport(context.db, context.actorContext, input);
+  },
+  resumeControlledMailImport: async (context, input) =>
+    changeMailImport(context, { kind: "resume", ...input }),
   catalogActivity: async (context) => readRunCatalogActivity(context.db),
   mailImport: async (context) => mailImportStatusFor(context),
-  setMailImport: async (context, input) => {
-    const { mailboxes } = await mailImportStatusFor(context);
-    if (!mailboxes.some((mailbox) => mailbox.mailboxId === input.mailboxId))
-      throw new Error(
-        `Mailbox ${input.mailboxId} is not connected to this member.`,
-      );
-    await withTransactionDatabase(context.db, async (tx) => {
-      await setMailImport(tx, input);
-      await (
-        await import("~/server/workflows/background-tasks/publish")
-      ).publishBackgroundTasks(
-        tx,
-        [
-          {
-            kind: "maintenance.purchase-discovery",
-            requestedAt: new Date().toISOString(),
-          },
-        ],
-        { source: "mail-import-setting" },
-      );
-    });
-    return mailImportStatusFor(context);
-  },
+  setMailImport: async (context, input) =>
+    changeMailImport(context, { kind: "switch", ...input }),
   discoverMail: async (context, input) => {
     const party = await memberParty(context);
     if (input.paidAllowed)

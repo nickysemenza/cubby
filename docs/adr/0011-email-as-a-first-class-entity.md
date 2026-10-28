@@ -110,6 +110,22 @@ A full 50-source admission page commits its next catch-up Job with the source
 claims, draining larger retained backlogs without waiting for another app open.
 A switch-off race that admits nothing creates no continuation.
 
+Member-directed controlled import selects one Vendor and mailbox, optionally
+bounded by received dates. It pauses automatic imports for that mailbox until
+the member resumes them, waits for active work and then runs the selected
+scope next. Queued automatic coordinators retain their sources and Jobs while
+waiting; already-started work finishes. The controlled discovery Run owns the
+Vendor reference and selected search scope. No broad/new-mail search or
+foreign-Vendor Purchase writes are authorized by it. Normal attribution and
+evidence requirements still apply, and paid execution stays within the
+household budget. Mail coverage reports Vendor × mailbox combinations with
+existing Vendor Account context; reporting alone establishes no account.
+The pause records the previous automatic-import setting; resuming restores
+it rather than opting a disabled mailbox in. Settled and blocked Emails are
+not readmitted by a new control. Live queued-source transfers append an
+immutable receipt, allowing the old Run to settle its remaining work without
+discarding its original roster or prior outcome evidence.
+
 Pi/Luna/Sol authorization remains separate. Classification and import are
 separate operations, allowing members to assess Relevance before import.
 A classifier-version refresh defers Emails already assigned to a frozen import
