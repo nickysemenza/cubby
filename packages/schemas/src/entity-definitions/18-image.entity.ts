@@ -717,6 +717,7 @@ export const { definition, readSchemas } = defineEntityModel(
             standard: "image",
             listOrderOverride: 0,
             renderer: { list: "uploaded-image" },
+            readFields: ["url", "status", "filename"],
           },
           provenance: {
             kind: "derived",

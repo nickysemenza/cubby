@@ -1326,6 +1326,10 @@ export function EntityBasicInfo<TRecord extends object>({
               field={field.explanation ? field.key : "dataQuality"}
               label={field.label}
               qualityChecks={checks}
+              resolution={fieldResolutionFor(
+                record,
+                field.explanation ? field.key : "dataQuality",
+              )}
               surface="detail"
               onSet={!refusal ? (onAdd ?? undefined) : undefined}
             />
@@ -2182,6 +2186,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             id: columnId,
             meta: attachCubbyColumnMeta({
               ...column.meta,
+              readFields: field.display.readFields,
               entityColumnRole: column.meta?.entityColumnRole ?? "fact",
               provenance: field.provenance ?? undefined,
               explanation: field.explanation

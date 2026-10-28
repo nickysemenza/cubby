@@ -21,6 +21,7 @@ import {
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
+import { ValueChangeScope } from "~/ui/derived/value-change";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QueryRefreshStatus } from "~/ui/feedback/query-refresh-status";
 import { Stack } from "~/ui/layout";
@@ -931,7 +932,17 @@ export default function RTable<TItem extends RowData>(
       </TableWithEntityActions>
     );
   }
-  return content;
+  const state = table.state;
+  const scope = JSON.stringify([
+    entity,
+    table.options.meta?.valueChangeScope,
+    state.columnFilters,
+  ]);
+  return (
+    <ValueChangeScope.Provider value={scope}>
+      {content}
+    </ValueChangeScope.Provider>
+  );
 }
 
 function DesktopTableView<TItem extends RowData>({

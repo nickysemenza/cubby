@@ -5,8 +5,23 @@ import { entityRefSchema } from "./entity";
 import { reportRecordsBlock } from "./entity-report";
 import { fieldResolutionSourceSchema } from "./field-resolution";
 
+/** Comparison data only: its JSON is never trusted as provenance or entity references. */
+const displayedFieldResult = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("missing") }),
+  z.object({ kind: z.literal("live"), decision: z.json() }),
+  z.object({
+    kind: z.literal("cached"),
+    computedAt: z.iso.datetime(),
+    decision: z.json(),
+  }),
+]);
+
 export const fieldExplanationInput = entityRefSchema.extend({
   field: z.string().min(1),
+  /** The result visible on the requesting surface, including its publication revision. */
+  displayedResult: displayedFieldResult.optional(),
+  /** Live recomputation is an explicit diagnostic, never part of opening an explanation. */
+  diagnostic: z.boolean().optional(),
   /** The singular list scope whose contextual value is being explained. */
   scope: entityRefSchema.optional(),
   surface: z.enum(["list", "detail", "summary"]).default("detail"),
@@ -150,6 +165,13 @@ export const fieldExplanationOutput = z.object({
   label: z.string(),
   envelope: fieldEnvelope(z.json(), z.json()),
   evaluatedAt: z.iso.datetime(),
+  publication: z
+    .discriminatedUnion("kind", [
+      z.object({ kind: z.literal("current") }),
+      z.object({ kind: z.literal("superseded"), reason: z.string() }),
+      z.object({ kind: z.literal("unavailable"), reason: z.string() }),
+    ])
+    .optional(),
   interpretation: z
     .object({
       result: z.string(),
@@ -159,6 +181,8 @@ export const fieldExplanationOutput = z.object({
     })
     .optional(),
   qualityBreakdown: qualityBreakdown.optional(),
+  /** Current member decisions and available controls, separate from published score evidence. */
+  currentQualityControls: qualityBreakdown.shape.checks.optional(),
   comparison: fieldLiveComparison,
   imageChain: imageChainExplanation.optional(),
   rule: z.object({

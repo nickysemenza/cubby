@@ -2108,7 +2108,10 @@ See [Cloudflare's timer contract](https://developers.cloudflare.com/workers/runt
 
 The operation boundary chooses the read policy before invoking its handler.
 `apps/web/src/server/db/read-policy.ts` owns that policy; ordinary interactive
-operations currently use authoritative reads without a freshness RPC.
+display operations use the bounded-stale binding, subject to the member's
+read-your-writes marker. Authentication, financial decisions and mutation
+authority retain strong reads. No read performs a freshness RPC; see
+[read consistency](../apps/web/docs/web-runtime.md#read-consistency).
 Specialized snapshot/external-service readers select their own sources.
 Transport methods do not determine policy.
 
@@ -2192,7 +2195,7 @@ Picker count and kind projections are declared by their repository, with counts
 compiled from the entity's declared rollup. The shortcode table registry stays
 independent of repositories so identity writers can use it without a cycle.
 
-Each page is one `entity.list` request returning complete canonical rows and
+Each canonical page is one `entity.list` request returning complete rows and
 `meta.hasNextPage`, full-filter `meta.sums` / `meta.totalLabels`, grouping and
 membership metadata. Governed values live only in each row's typed `fields`
 envelopes, with assignment/control facts, result provenance and background work.
@@ -2207,6 +2210,19 @@ Public serialization reuses the scaffold's field-read contexts when available;
 otherwise, it batches missing root and nested codes through each entity's scaffold
 get and uses those reads' contexts.
 Inheritance resolutions produced during hydration contribute their provenance.
+
+Browser rosters can send an explicit `fields` projection through the same
+selected reader used by narrow consumers. Their result carries `selectedFields`
+and honestly partial rows, with the requested canonical field envelopes rather
+than a new envelope format. The pure read plan is shared by SSR and the mounted
+list, so their default cache keys agree. It includes visible declared fields,
+identity and image requirements, and explicit specialist/action dependencies;
+membership, sorting, grouping and totals retain independent server predicates.
+An entity route with specialist columns opts in through its declaration's
+`listReadProjection` source. Other specialist routes retain full reads. Product's
+pure plan shares the discard, stock and specialist column dependencies with their
+owners. Selection-action validation reloads complete records under the original
+scope before acting. Selecting a nested value retains its canonical nested shape.
 
 List inputs default `includeCount` to true for API, MCP and native callers.
 Standalone browser rosters send `includeCount: false`: selection fetches at most
@@ -2924,7 +2940,13 @@ On-demand field explanations expose a stored root as `storedResult` in the
 source-dependency projection. A manifest can bind evidence paths there while
 ordinary field paths project only compact values. The explanation reads the root
 and displayed envelope in one MVCC snapshot; it labels live recomputation as a
-separate comparison. Expense beneficiary portions use this binding to keep
+separate, explicitly requested comparison. A popover supplies its displayed
+result and scope; a superseded publication returns no substitute explanation.
+Refresh updates the displayed record and explanation together. Published value,
+decision and captured facts describe the same computation. Current exception
+controls remain explicitly separate from that evidence. Additional evidence not
+captured in the publication is unavailable rather than reconstructed from current
+sources. Expense beneficiary portions use this binding to keep
 contributor references out of ordinary list payloads.
 
 A declaration names its compute adapter and its `inputs`. An input pairs one
@@ -3348,8 +3370,9 @@ defaults to live evaluation for record and detail reads; list pages and the Work
 queue population reads pass `"stored"`. A single-record Work strip evaluates
 that record's quality live and reuses it for gap admission, messages and counts,
 so a record page does not wait for a household-wide refresh pass. This does not
-publish or repair the stored snapshot. Lazy explanations evaluate the same TypeScript functions
-live without publishing repairs. SQL predicates (`generic/data-quality/repo/sql.ts`)
+publish or repair the stored snapshot. Lazy explanations read the displayed
+publication's captured facts; live comparison is an explicit diagnostic action
+and never publishes repairs. SQL predicates (`generic/data-quality/repo/sql.ts`)
 are primary-key lookups on the published value; the status predicate derives
 the same status as the TypeScript core from those check states.
 

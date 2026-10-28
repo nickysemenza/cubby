@@ -159,6 +159,13 @@ describe("household change invalidation", () => {
     const stop = subscribeDatabaseChanges(client);
     Socket.current.dispatchEvent(new Event("open"));
     await vi.advanceTimersByTimeAsync(0);
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(queryA.state.isInvalidated).toBe(false);
+    expect(queryB.state.isInvalidated).toBe(false);
+    Socket.current.dispatchEvent(new Event("close"));
+    await vi.advanceTimersByTimeAsync(1000);
+    Socket.current.dispatchEvent(new Event("open"));
+    await vi.advanceTimersByTimeAsync(0);
     expect(invalidate).toHaveBeenCalledTimes(1);
     Socket.current.ring({ imageJob: ["IPR-A3F2"] });
     await vi.advanceTimersByTimeAsync(0);

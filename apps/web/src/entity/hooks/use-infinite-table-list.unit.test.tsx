@@ -230,6 +230,7 @@ describe("useInfiniteTableList", () => {
 
   it("keeps stale rows visible but blocks pagination until the new first page swaps in", async () => {
     const nextFirstPage = Promise.withResolvers<ListQueryResponse<TestRow>>();
+    const widerPage = Promise.withResolvers<ListQueryResponse<TestRow>>();
     const requested: string[] = [];
     const queryOptions = ({
       filters,
@@ -244,12 +245,14 @@ describe("useInfiniteTableList", () => {
         if (filters.scope === "new" && pagination.pageIndex === 0) {
           return nextFirstPage.promise;
         }
+        if (filters.scope === "wide") return widerPage.promise;
         const result = page(
           `${filters.scope}-${pagination.pageIndex}`,
           pagination.pageIndex,
           2,
         );
         result.meta.sums = { cost: 999 };
+        result.selectedFields = ["id"];
         return result;
       },
     });
@@ -258,6 +261,7 @@ describe("useInfiniteTableList", () => {
       ({ scope }) =>
         useInfiniteTableList<TestFilters, TestRow>({
           queryOptions,
+          requiredFields: scope === "wide" ? ["id", "food"] : ["id"],
           buildFilters: () => ({ scope }),
           tableState,
         }),
@@ -279,6 +283,7 @@ describe("useInfiniteTableList", () => {
     act(() =>
       nextFirstPage.resolve({
         ...page("new-0", 0, 2),
+        selectedFields: ["id"],
         meta: {
           pageIndex: 0,
           pageSize: 1,
@@ -293,5 +298,17 @@ describe("useInfiniteTableList", () => {
       expect(result.current.data).toEqual([{ id: "new-0" }]);
       expect(result.current.sums).toEqual({ cost: -10 });
     });
+    rerender({ scope: "wide" });
+    await waitFor(() => expect(result.current.isLoading).toBe(true));
+    expect(result.current.data).toEqual([]);
+    act(() =>
+      widerPage.resolve({
+        ...page("wide-0", 0, 1),
+        selectedFields: ["id", "food"],
+      }),
+    );
+    await waitFor(() =>
+      expect(result.current.data).toEqual([{ id: "wide-0" }]),
+    );
   });
 });

@@ -478,6 +478,8 @@ const buildMetadataSchemas = () => {
        * `sourceRefs[].source`, `category.path[0].name`).
        */
       readPath: nonEmptyString().nullable().optional().default(null),
+      /** Additional canonical envelopes consumed by the list renderer. */
+      readFields: z.array(nonEmptyString()).optional(),
       /**
        * Where a list row carries the human-readable text of this field's
        * value, in `readPath`'s grammar (a `[]` projection joins its strings
@@ -611,6 +613,7 @@ const buildMetadataSchemas = () => {
         listOrderOverride,
         width,
         readPath,
+        readFields,
         labelPath,
         emptyLabel,
         detailLabelPath,
@@ -636,6 +639,7 @@ const buildMetadataSchemas = () => {
         listOrder: listOrderOverride,
         width,
         readPath,
+        readFields,
         labelPath,
         emptyLabel,
         detailLabelPath,
@@ -1376,6 +1380,8 @@ const buildMetadataSchemas = () => {
       list: z.literal(true).nullable().optional().default(true),
       /** Specialist columns are imported only by this route component. */
       listColumns: sourceRefMetadataSchema.optional(),
+      /** Pure list demand shared by SSR and a specialist browser roster. */
+      listReadProjection: sourceRefMetadataSchema.optional(),
       /**
        * Which detail page renders: `true` the generic page over the kernel
        * `get` (the default), or `null` a hand-written detail route.
@@ -1390,6 +1396,7 @@ const buildMetadataSchemas = () => {
         createOverride,
         list,
         listColumns,
+        listReadProjection,
         detail,
       }) => ({
         basePath,
@@ -1397,6 +1404,7 @@ const buildMetadataSchemas = () => {
         create: createOverride,
         list,
         listColumns,
+        listReadProjection,
         detail,
       }),
     );

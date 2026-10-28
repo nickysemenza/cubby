@@ -38,6 +38,8 @@ import { listMemberMailboxes, listGmailSyncTargets } from "./targets";
 import { vendorSearchTerms } from "./vendor-identity";
 import { vendorMailQueries } from "./vendor-mail-scope";
 
+const activeRunStatuses = new Set<string>(ACTIVE_RUN_STATUSES);
+
 /** Queue activity and import admission are distinct from historical search coverage. */
 function summarizeQueue({
   controlledRun,
@@ -58,7 +60,7 @@ function summarizeQueue({
 }): MailCoverageRow["queue"] {
   const controlledActive =
     controlledRun &&
-    (new Set<string>(ACTIVE_RUN_STATUSES).has(controlledRun.status) ||
+    (activeRunStatuses.has(controlledRun.status) ||
       controlledRun.imports.running > 0 ||
       controlledRun.imports.paused > 0);
   const controlledRunning =
@@ -292,6 +294,12 @@ export async function readMailCoverage(
     listGmailSyncTargets(db),
   ]);
   const terms = new Map(vendors.map((row) => [row.id, vendorSearchTerms(row)]));
+  const vendorQueries = new Map(
+    vendors.map((row) => [
+      row.id,
+      vendorMailQueries(row.id, terms.get(row.id) ?? []),
+    ]),
+  );
   const identities = new Map<string, Set<string>>();
   for (const row of vendors) {
     for (const term of terms.get(row.id) ?? []) {
@@ -367,61 +375,64 @@ export async function readMailCoverage(
   }
   const controlRuns = new Map<string, MailCoverageRow["controlledRun"]>();
   const completedSearches = completedControlledSearches(controls);
+  const importsByParent = new Map<
+    string,
+    NonNullable<MailCoverageRow["controlledRun"]>["imports"]
+  >();
+  for (const child of importRuns) {
+    if (!child.parentId) continue;
+    const imports = importsByParent.get(child.parentId) ?? {
+      running: 0,
+      paused: 0,
+      needsReview: 0,
+      failed: 0,
+      completed: 0,
+    };
+    switch (child.status) {
+      case "running":
+        imports.running += child.total;
+        break;
+      case "paused":
+      case "paused_auth":
+      case "paused_offline":
+        imports.paused += child.total;
+        break;
+      case "needs_review":
+        imports.needsReview += child.total;
+        break;
+      case "failed":
+      case "dispatch_failed":
+        imports.failed += child.total;
+        break;
+      case "completed":
+        imports.completed += child.total;
+        break;
+    }
+    importsByParent.set(child.parentId, imports);
+  }
   for (const control of controls) {
     if (!control.vendorId || !control.ledgerPartyId) continue;
     const id = key(control.vendorId, control.ledgerPartyId, control.mailboxId);
+    if (controlRuns.has(id)) continue;
     const scope = mailboxDiscoveryInput.safeParse(control.input);
-    if (!controlRuns.has(id))
-      controlRuns.set(
-        id,
-        mailCoverageRow.shape.controlledRun.parse({
-          id: control.id,
-          status: control.status,
-          queued: control.failureCode === "controlled_mail_queued",
-          phase: control.phase,
-          from: scope.success ? (scope.data.controlled?.from ?? null) : null,
-          to: scope.success ? (scope.data.controlled?.to ?? null) : null,
-          imports: {
-            running: importRuns
-              .filter(
-                (child) =>
-                  child.parentId === control.internalId &&
-                  child.status === "running",
-              )
-              .reduce((total, child) => total + child.total, 0),
-            paused: importRuns
-              .filter(
-                (child) =>
-                  child.parentId === control.internalId &&
-                  ["paused", "paused_auth", "paused_offline"].includes(
-                    child.status,
-                  ),
-              )
-              .reduce((total, child) => total + child.total, 0),
-            needsReview: importRuns
-              .filter(
-                (child) =>
-                  child.parentId === control.internalId &&
-                  child.status === "needs_review",
-              )
-              .reduce((total, child) => total + child.total, 0),
-            failed: importRuns
-              .filter(
-                (child) =>
-                  child.parentId === control.internalId &&
-                  ["failed", "dispatch_failed"].includes(child.status),
-              )
-              .reduce((total, child) => total + child.total, 0),
-            completed: importRuns
-              .filter(
-                (child) =>
-                  child.parentId === control.internalId &&
-                  child.status === "completed",
-              )
-              .reduce((total, child) => total + child.total, 0),
-          },
-        }),
-      );
+    controlRuns.set(
+      id,
+      mailCoverageRow.shape.controlledRun.parse({
+        id: control.id,
+        status: control.status,
+        queued: control.failureCode === "controlled_mail_queued",
+        phase: control.phase,
+        from: scope.success ? (scope.data.controlled?.from ?? null) : null,
+        to: scope.success ? (scope.data.controlled?.to ?? null) : null,
+        imports: importsByParent.get(control.internalId) ?? {
+          running: 0,
+          paused: 0,
+          needsReview: 0,
+          failed: 0,
+          completed: 0,
+        },
+      }),
+    );
   }
   const accountCodes = new Map(
     accounts.map((row) => [`${row.vendorId}/${row.memberId}`, row]),
@@ -470,21 +481,30 @@ export async function readMailCoverage(
           completed: false,
           pageToken: null,
         }));
+    const queryKey = (query: { key: string; query: string }) =>
+      JSON.stringify([query.key, query.query]);
+    const targetQueries = new Set((target?.scopedQueries ?? []).map(queryKey));
     // Positions count all pending targeted queries, including unmatched-charge queries.
-    const pending = ordered.filter(
-      (entry) =>
-        !entry.completed &&
-        target?.scopedQueries.some(
-          (query) => query.key === entry.key && query.query === entry.query,
-        ),
-    );
+    const pendingPositions = new Map<string, number>();
+    let pendingCount = 0;
+    for (const entry of ordered) {
+      const id = queryKey(entry);
+      if (entry.completed || !targetQueries.has(id)) continue;
+      pendingCount += 1;
+      if (!pendingPositions.has(id)) pendingPositions.set(id, pendingCount);
+    }
+    const progress = mailboxDiscoveryProgress.safeParse(active?.progress);
+    // A pending cursor is not proof that the worker is processing this query now.
+    const activeQueryKey = progress.success
+      ? progress.data.page?.scopedKey
+      : undefined;
     const pause = settings.controlledPauses.some(
       (entry) => entry.mailboxId === member.mailboxId,
     );
     const enabled = settings.enabledMailboxes.includes(member.mailboxId);
     return vendors.map((row) => {
       const searchTerms = terms.get(row.id) ?? [];
-      const queries = vendorMailQueries(row.id, searchTerms);
+      const queries = vendorQueries.get(row.id) ?? [];
       const searched = queries.map((query) =>
         currentScopedPosition(
           coverage,
@@ -526,17 +546,10 @@ export async function readMailCoverage(
         controlRuns.get(key(row.id, member.ledgerPartyId, member.mailboxId)) ??
         null;
       const queued = queries.flatMap((query) => {
-        const index = pending.findIndex(
-          (entry) => entry.key === query.key && entry.query === query.query,
-        );
-        return index < 0 ? [] : [index + 1];
+        const position = pendingPositions.get(queryKey(query));
+        return position === undefined ? [] : [position];
       });
       const position = queued.length ? Math.min(...queued) : null;
-      const progress = mailboxDiscoveryProgress.safeParse(active?.progress);
-      // A pending cursor is not proof that the worker is processing this query now.
-      const activeQueryKey = progress.success
-        ? progress.data.page?.scopedKey
-        : undefined;
       const running =
         active?.status === "running" &&
         !!activeQueryKey &&
@@ -579,13 +592,7 @@ export async function readMailCoverage(
                 : "not_started",
             completedAt: position?.completedAt ?? null,
             runId: position?.runId ?? null,
-            queuePosition: (() => {
-              const index = pending.findIndex(
-                (entry) =>
-                  entry.key === query.key && entry.query === query.query,
-              );
-              return index < 0 ? null : index + 1;
-            })(),
+            queuePosition: pendingPositions.get(queryKey(query)) ?? null,
           };
         }),
         queue,

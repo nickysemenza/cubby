@@ -179,6 +179,7 @@ export const renderEntityReadArtifacts = (
             `export const listInput = z.object({entity:z.literal(${JSON.stringify(key)}),filters,sort:z.array(z.object({orderBy:z.string().min(1),direction:z.enum(["asc","desc"])})).min(1).max(MAX_SORTS).optional(),pagination:z.object({pageIndex:z.number().int().min(0),pageSize:z.number().int().min(1).max(MAX_PAGE_SIZE)}).optional(),groupBy:listGroupByDimensionsSchema.optional(),resultMembership:listResultMembership.optional(),includeCount:z.boolean().optional()${entity.inspector.list.tree === null ? "" : ",nesting:listNestingSchema.optional()"}});\n` +
             `export const listItem = envelopes.list${treeRowExtension(entity.inspector)};\n` +
             "export const listOutput = z.object({items:z.array(listItem),meta:paginatedMetaSchema});\n" +
+            "export const selectedListOutput = z.object({items:z.array(listItem.partial().extend({id:listItem.shape.id,fields:listItem.shape.fields.partial()})),meta:paginatedMetaSchema,selectedFields:z.array(z.string())});\n" +
             "export const listRead = compileListReadSchema(listItem);\n"
           : ""),
     };

@@ -679,6 +679,7 @@ const compileFieldModel = (
         standard: field.display.standard,
         width: field.display.width ?? null,
         readPath: field.display.readPath ?? null,
+        readFields: field.display.readFields,
         labelPath: field.display.labelPath ?? null,
         emptyLabel: field.display.emptyLabel ?? null,
         // Left undefined (so not emitted) unless declared: the model ships in the budgeted Worker bundle.

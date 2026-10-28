@@ -63,6 +63,18 @@ export function requestedReadMetadata(
       ? Object.keys(fields.shape).map((key) => `fields.${key}`)
       : []),
   ];
+  const selected =
+    input.fields === undefined
+      ? null
+      : z
+          .array(
+            z.enum(declared.map((field) => field.replace(/^fields\./, ""))),
+          )
+          .min(1)
+          .max(500)
+          .safeParse(input.fields);
+  if (selected && !selected.success) return null;
+  const selectedNames = selected?.success ? new Set(selected.data) : null;
   const filters = record.safeParse(input.filters ?? {});
   const contract = entityListInputSchema.options.find(
     (option) => option.shape.entity.value === entity.data,
@@ -72,8 +84,12 @@ export function requestedReadMetadata(
     evidence: "partial",
     kind: "list",
     entity: entity.data,
-    projection: "full",
-    declaredFields: declared,
+    projection: selectedNames ? "selected" : "full",
+    declaredFields: selectedNames
+      ? declared.filter((field) =>
+          selectedNames.has(field.replace(/^fields\./, "")),
+        )
+      : declared,
     requestedSort: null,
     requestedGrouping: null,
     filterFields: filters.success

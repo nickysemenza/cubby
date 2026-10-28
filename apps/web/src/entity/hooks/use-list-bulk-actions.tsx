@@ -198,6 +198,9 @@ export function ListBulkActionBar<TData extends { id: string }>({
   if (!config) return null;
   const selectedRows: Row<TData>[] = table.getSelectedRowModel().rows;
   const incomplete = selectedRows.length !== state.selectedCount;
+  // Loaded roster rows may be display projections. Resolve complete records
+  // before evaluating eligibility even when every selected identity is loaded.
+  const requiresResolution = incomplete || resolveSelectedRows !== undefined;
   return (
     <BulkActionBar
       selectedCount={state.selectedCount}
@@ -208,7 +211,7 @@ export function ListBulkActionBar<TData extends { id: string }>({
           : tableMoneyTotals(table.getVisibleLeafColumns(), selectedRows)
       }
       actions={
-        incomplete
+        requiresResolution
           ? config.actions.filter(
               (action) =>
                 (action.minSelection ?? 1) <= state.selectedCount &&
@@ -216,9 +219,9 @@ export function ListBulkActionBar<TData extends { id: string }>({
             )
           : state.getAvailableActions(selectedRows)
       }
-      selectionIncomplete={incomplete}
+      selectionIncomplete={requiresResolution}
       onExecute={async (action, rows) => {
-        if (!incomplete) return state.executeAction(action, rows);
+        if (!requiresResolution) return state.executeAction(action, rows);
         if (!resolveSelectedRows) return;
         const snapshot = selectionKey;
         setIsResolving(true);

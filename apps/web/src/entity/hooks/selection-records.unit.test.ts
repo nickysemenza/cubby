@@ -16,15 +16,18 @@ describe("selected-record action admission", () => {
       calls.push(ids);
       return {
         queryKey: ["selection", ids],
-        execute: async () => ({
-          items: [...ids].reverse().map((id) => ({ id })),
-          meta: {
-            hasNextPage: false,
-            pageIndex: 0,
-            pageSize: 100,
-            totalCount: ids.length,
-          },
-        }),
+        execute: async (_signal, consistency) => {
+          expect(consistency).toBe("strong");
+          return {
+            items: [...ids].reverse().map((id) => ({ id })),
+            meta: {
+              hasNextPage: false,
+              pageIndex: 0,
+              pageSize: 100,
+              totalCount: ids.length,
+            },
+          };
+        },
       };
     };
     const ids = Array.from({ length: 101 }, (_, index) => `synthetic-${index}`);

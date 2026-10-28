@@ -19,6 +19,7 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
   let socket: WebSocket | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;
   let attempt = 0;
+  let hasConnected = false;
   let refreshing = false;
   let resync = false;
   let fullRing = false;
@@ -78,9 +79,13 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
     socket = current;
     current.addEventListener("open", () => {
       attempt = 0;
-      // Subscribe before reading: writes during initial load/reconnect cannot fall between them.
-      resync = true;
-      requestRefresh();
+      // First connection reuses SSR. Missed hints may leave display data stale;
+      // reconnect and resume still provide an explicit recovery opportunity.
+      if (hasConnected) {
+        resync = true;
+        requestRefresh();
+      }
+      hasConnected = true;
     });
     current.addEventListener("message", (event: MessageEvent<unknown>) => {
       try {

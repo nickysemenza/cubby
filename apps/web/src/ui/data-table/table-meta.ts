@@ -204,6 +204,8 @@ export interface CubbyTableMeta {
    */
   filterFields?: readonly FilterBarField[];
   rowContentVersion?: unknown;
+  /** Semantic server scope, including filters not represented by table controls. */
+  valueChangeScope?: string;
   /** Code-defined layout a "Customized" badge and "Restore default" compare against. */
   defaultLayout?: CubbyDefaultTableLayout;
   /**

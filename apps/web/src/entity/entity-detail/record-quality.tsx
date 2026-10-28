@@ -35,6 +35,7 @@ const QualityContext = createContext<{
   id: string;
   prefix: string;
   checks: readonly RecordQualityCheck[];
+  resolution?: FieldExplanationOutput["envelope"];
 } | null>(null);
 const scored = new Set<Entity>(scoredEntities);
 
@@ -111,6 +112,7 @@ function QualityCheckRows({
                 id={context.id}
                 field="dataQuality"
                 label={check.label}
+                resolution={context.resolution}
               />
             </div>
           </LedgerCell>
@@ -323,13 +325,16 @@ function AssessedRecordQuality({
             id={id}
             field="dataQuality"
             label="Score calculation"
+            resolution={result.data?.envelope}
           />
         </div>
       ) : null}
     </>
   );
   return (
-    <QualityContext value={{ entity, id, prefix, checks }}>
+    <QualityContext
+      value={{ entity, id, prefix, checks, resolution: result.data?.envelope }}
+    >
       <Stack gap="sm">
         {target === undefined
           ? summary

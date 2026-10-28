@@ -9,6 +9,7 @@ import { kernelRecordWire } from "~/contracts/entity-kernel-wire";
 import {
   type EntityListInputByEntity,
   type EntityListResultByEntity,
+  type EntitySelectedListResultByEntity,
   listEntities,
   type ListEntity,
 } from "~/entity/generated/entity-lists.gen";
@@ -119,7 +120,10 @@ export const entityListContract = defineContract(
     list: query({
       note: "The browser list read; agents use entity_read.list",
       input: z.custom<EntityListInputByEntity[ListEntity]>(),
-      output: z.custom<EntityListResultByEntity[ListEntity]>(),
+      output: z.custom<
+        | EntityListResultByEntity[ListEntity]
+        | EntitySelectedListResultByEntity[ListEntity]
+      >(),
       nativeModels: { input: "json", output: "json" },
       operationWire: kernelRecordWire,
       observability: { entities: listEntities },

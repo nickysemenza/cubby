@@ -977,6 +977,7 @@ Rules:
           detail: false,
           preview: true,
           labelPath: "taskProgress",
+          readFields: ["rollup"],
           renderer: { list: "task-progress" },
         },
         validation: {

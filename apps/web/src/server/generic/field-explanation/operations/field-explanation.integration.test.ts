@@ -87,6 +87,55 @@ describe("derived field explanations against canonical records", () => {
     });
     expect(JSON.stringify(explanation.sources)).toContain(first.output.id);
     expect(JSON.stringify(explanation.sources)).not.toContain(second.output.id);
+    expect(explanation.comparison.kind).toBe("unavailable");
+    expect(explanation.resolutionEvidence).toBeNull();
+    const diagnostic = await explainField(context(), {
+      entityKind: "expense",
+      entityId: line.output.id,
+      field: "effectiveBeneficiaries",
+      surface: "detail",
+      displayedResult: explanation.envelope.result,
+      diagnostic: true,
+    });
+    expect(diagnostic.comparison).toMatchObject({
+      kind: "available",
+      result: {
+        decision: {
+          outcome: {
+            kind: "value",
+            value: [expect.objectContaining({ partyId: second.output.id })],
+          },
+        },
+      },
+    });
+    if (explanation.envelope.result.kind !== "cached")
+      throw new Error("Expected a retained publication");
+    const mismatched = await explainField(context(), {
+      entityKind: "expense",
+      entityId: line.output.id,
+      field: "effectiveBeneficiaries",
+      surface: "detail",
+      displayedResult: {
+        ...explanation.envelope.result,
+        decision: {
+          ...explanation.envelope.result.decision,
+          outcome: { kind: "empty", reason: "unset" },
+        },
+      },
+    });
+    expect(mismatched.publication?.kind).toBe("superseded");
+    expect(mismatched.sources).toEqual([]);
+    // A replaced publication cannot explain the browser's still-visible old value.
+    await drainStoredDerived(ctx.db);
+    const superseded = await explainField(context(), {
+      entityKind: "expense",
+      entityId: line.output.id,
+      field: "effectiveBeneficiaries",
+      surface: "detail",
+      displayedResult: explanation.envelope.result,
+    });
+    expect(superseded.publication?.kind).toBe("superseded");
+    expect(superseded.sources).toEqual([]);
   });
 
   async function explainExpenseCategory(line: {

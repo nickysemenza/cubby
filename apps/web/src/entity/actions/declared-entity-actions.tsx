@@ -20,6 +20,7 @@ import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { featureRegistry } from "~/entity/feature-registry";
 
 import { useUpdateMutation } from "../hooks/use-update-mutation";
+import { PRODUCT_DISCARD_READ_FIELDS } from "./action-read-fields";
 import { VerbMenuItem } from "./action-verb-ui";
 import { useBulkEditEntityAction } from "./bulk-edit-entity-action";
 import { defineEntityAction } from "./entity-action-definition";
@@ -300,6 +301,7 @@ export const declaredEntityActionDefinitions = [
   }),
   defineEntityAction({
     id: "discard-product",
+    readFields: PRODUCT_DISCARD_READ_FIELDS,
     verb: "discard",
     entities: ["product"],
     arity: "single",

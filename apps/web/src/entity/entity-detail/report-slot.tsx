@@ -62,7 +62,10 @@ export function CollectionReportSlot(input: EntityReportInput) {
     );
   return (
     <Stack gap="sm">
-      <ReportBlocks blocks={mergePages(query.data.pages)} />
+      <ReportBlocks
+        scope={JSON.stringify(input)}
+        blocks={mergePages(query.data.pages)}
+      />
       {query.hasNextPage ? (
         <Button
           type="button"
@@ -94,13 +97,26 @@ const TONE_FILL = {
 const formatValue = (value: number, format: "money" | "count" | "text") =>
   format === "money" ? formatCurrency(value) : String(value);
 
-function Stats({ block }: { block: Extract<ReportBlock, { kind: "stats" }> }) {
+function Stats({
+  block,
+  scope,
+}: {
+  block: Extract<ReportBlock, { kind: "stats" }>;
+  scope?: string;
+}) {
   return (
     <KeyNumbers
       layout="inline"
       label={block.title ?? "Figures"}
       items={block.figures.map((figure) => ({
         label: figure.label,
+        change:
+          scope === undefined
+            ? undefined
+            : {
+                identity: `${scope}:${figure.label}`,
+                value: figure.format === "text" ? figure.text : figure.value,
+              },
         tone: figure.tone,
         money: figure.format === "money",
         value:
@@ -297,7 +313,7 @@ function Table({ block }: { block: Extract<ReportBlock, { kind: "table" }> }) {
 }
 
 /** Blocks have no id; a kind plus its title or text names each one within a report. */
-const blockKey = (block: ReportBlock, index: number) =>
+export const reportBlockKey = (block: ReportBlock, index: number) =>
   block.kind === "records" && block.form
     ? // A form keeps its answers while other batches appear or the block's title changes.
       `form:${block.form.command.id}`
@@ -315,7 +331,9 @@ export function ReportBlocks({
   record,
   entity,
   recordsList,
+  scope,
 }: {
+  scope?: string;
   slot?: EntityReportInput["slot"];
   blocks: readonly ReportBlock[];
   record?: object;
@@ -327,7 +345,7 @@ export function ReportBlocks({
   return (
     <Stack gap="xs" className="min-w-0">
       {blocks.map((block, index) => {
-        const key = blockKey(block, index);
+        const key = reportBlockKey(block, index);
         switch (block.kind) {
           case "progress":
             return (
@@ -354,7 +372,13 @@ export function ReportBlocks({
               </section>
             );
           case "stats":
-            return <Stats key={key} block={block} />;
+            return (
+              <Stats
+                key={key}
+                block={block}
+                scope={scope === undefined ? undefined : `${scope}:${key}`}
+              />
+            );
           case "chart":
             return <Chart key={key} block={block} />;
           case "table":
@@ -591,6 +615,7 @@ export function EntityReportSlot({
           )}
           <ReportBlocks
             slot={input.slot}
+            scope={JSON.stringify(input)}
             blocks={query.blocks}
             record={record}
             entity={entity}
@@ -628,7 +653,7 @@ export function ReportDetailActions({
       {query.blocks.map((block, index) =>
         block.kind === "records" ? (
           <RecordsDetailActions
-            key={blockKey(block, index)}
+            key={reportBlockKey(block, index)}
             block={block}
             detailActions={placement}
             entity={slot.split(".")[0]}

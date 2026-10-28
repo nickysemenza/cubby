@@ -25,7 +25,6 @@ const taskProgress: ListRenderer<"project"> = (helper) =>
         header: "Tasks",
         enableSorting: false,
         meta: attachCubbyColumnMeta<ListRowOf<"project">>({
-          readFields: ["rollup"],
           className: "w-32",
           mono: true,
           cellData: textCellData("text", (row) => {

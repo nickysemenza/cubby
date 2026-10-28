@@ -2,6 +2,10 @@ import { rawProductList } from "@cubby/schemas/product-raw-read";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
+import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
+import { listEntities } from "~/entity/generated/entity-lists.gen";
+import { entityMetadata } from "~/entity/metadata";
 import { db } from "~/server/db";
 import {
   selectListReadRows,
@@ -194,7 +198,22 @@ describe("list projection group execution", () => {
   });
   // Selected reads must reject misspelled demand even for empty pages, and
   // never let schema defaults hide unloaded fields.
-  it("rejects absent defaulted fields", () => {
+  it("rejects absent defaulted fields", async () => {
+    const client = await metadataQueryClient();
+    for (const entity of listEntities) {
+      const visibility = Object.fromEntries(
+        entityMetadata(client, entity).fields.fields.map((field) => [
+          field.display.columnId ?? field.key,
+          true,
+        ]),
+      );
+      for (const visible of [undefined, visibility]) {
+        const demand = declaredListReadProjection(client, entity, visible);
+        expect(() =>
+          selectedListProjection(entity, demand ?? []),
+        ).not.toThrow();
+      }
+    }
     const projection = selectedListProjection("product", ["unitPrice"]);
     expect(() =>
       selectListReadRows("product", [{ id: "PRD-4K7M" }], projection),

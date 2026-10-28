@@ -27,6 +27,10 @@ import { entities } from "~/entity/entities";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityListFor } from "~/entity/entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
+import {
+  declaredListReadProjection,
+  type ListReadProjection,
+} from "~/entity/entity-list/list-read-demand";
 import { ListTotalSummary } from "~/entity/entity-list/list-total-summary";
 import { readRecordField } from "~/entity/entity-references";
 import { getEntityFilters } from "~/entity/filter-manifest";
@@ -292,6 +296,7 @@ export interface GenericEntityListProps {
   /** Test seam: replaces the entity's generic list read. */
   operations?: { list?: ListQueryOptionsFn<object, BaseListRow> };
   override?: AnyEntityListOverride;
+  readProjection?: ListReadProjection | null;
 }
 
 /** A scoped roster uses the same columns, reads, selection and workbench as a page. */
@@ -479,6 +484,7 @@ export function GenericEntityList({
   entity,
   operations,
   override = NO_OVERRIDE,
+  readProjection,
 }: GenericEntityListProps) {
   const { search, navigate } = useListSearch();
   const { view } = resolveListView(useQueryClient(), entity, search);
@@ -504,6 +510,13 @@ export function GenericEntityList({
       entity={entity}
       view={view}
       override={override}
+      readProjection={
+        readProjection === undefined
+          ? override === NO_OVERRIDE
+            ? declaredListReadProjection
+            : null
+          : readProjection
+      }
       context={{ search, navigate }}
       operations={operations}
     />
@@ -514,12 +527,14 @@ function ServerListBody({
   entity,
   view,
   override,
+  readProjection,
   context,
   operations,
 }: {
   entity: BrowserRoutedEntity;
   view: "table" | "shelf" | "timeline";
   override: AnyEntityListOverride;
+  readProjection?: ListReadProjection | null;
   context: ListOverrideContext;
   operations: GenericEntityListProps["operations"];
 }) {
@@ -569,6 +584,14 @@ function ServerListBody({
     return entityListFor(entity).listQueryPlan;
   }, [entity, operations?.list]);
 
+  const selectedQueryOptions = useMemo(():
+    | ListQueryOptionsFn<object, BaseListRow>
+    | undefined => {
+    if (operations?.list || !readProjection || !isListEntity(entity))
+      return undefined;
+    return entityListFor(entity).selectedListQueryPlan;
+  }, [entity, operations?.list, readProjection]);
+
   // `deletable` defaults ON: a top-level list page owns its entity's rows,
   // where an embedded relationship ledger does not.
   const initialColumnVisibility = useListInitialColumnVisibility(
@@ -578,6 +601,8 @@ function ServerListBody({
   const list = useEntityList<BaseListRow, object, BaseListRow>({
     entity,
     queryOptions,
+    selectedQueryOptions,
+    readProjection,
     columns,
     deletable: true,
     preview: DEFAULT_PREVIEW,

@@ -125,6 +125,10 @@ export const { definition, readSchemas } = defineEntityModel(
         module: "~/features/product/list-columns",
         export: "productListOverride",
       },
+      listReadProjection: {
+        module: "~/features/product/list-read",
+        export: "productListReadProjection",
+      },
       basePath: "products",
     },
     table: "Product",

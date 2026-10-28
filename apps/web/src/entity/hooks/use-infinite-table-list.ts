@@ -5,13 +5,11 @@ import type {
   ListNesting,
   ListResultMembership,
 } from "@cubby/schemas/pagination";
-import {
-  keepPreviousData,
-  useInfiniteQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef } from "react";
 
+import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
   infiniteOperationQueryKey,
   isOperationQueryKey,
@@ -43,6 +41,8 @@ interface UseInfiniteTableListOptions<
   nesting?: ListNesting;
   resultMembership?: ListResultMembership;
   includeCount?: boolean;
+  /** Envelopes required by the currently visible columns. Undefined requests complete rows. */
+  requiredFields?: readonly string[];
 }
 
 export interface InfiniteScrollControls<
@@ -216,6 +216,7 @@ export function useInfiniteTableList<
   nesting,
   resultMembership,
   includeCount = false,
+  requiredFields,
 }: UseInfiniteTableListOptions<
   TFilters,
   TData,
@@ -250,7 +251,19 @@ export function useInfiniteTableList<
     // Filter/sort changes swap the queryKey; without this the accumulated
     // pages vanish for the refetch window, blanking rows AND the header
     // count (useEntityList withholds totalCount while isLoading).
-    placeholderData: keepPreviousData,
+    // Filter changes can retain rows, but revealing a column must not hand its
+    // renderer an older projection that lacks the newly required envelope.
+    placeholderData: (previous) =>
+      previous?.pages.every(
+        (page) =>
+          !page.selectedFields ||
+          (requiredFields !== undefined &&
+            requiredFields.every((field) =>
+              page.selectedFields?.includes(field),
+            )),
+      )
+        ? previous
+        : undefined,
     queryKey: infiniteQueryKey,
     // The infinite adapter owns a different key but the same operation. Carry
     // the descriptor metadata so root mutation invalidation can still match
@@ -414,7 +427,15 @@ export function useInfiniteTableList<
     infiniteScroll,
     refreshControls: {
       onRefresh: async () => {
-        await refetch();
+        const tags = firstPageOptions.meta?.cacheTags;
+        if (!tags?.length) {
+          await refetch();
+          return;
+        }
+        const query = { queryKey: infiniteQueryKey, exact: true };
+        await queryClient.cancelQueries(query);
+        // Invalidation is the existing signal for a strong operation refetch.
+        await invalidateOperationTags(queryClient, exactRippleTags(tags));
       },
       isRefreshing: isRefetching && !isFetchingNextPage,
     },

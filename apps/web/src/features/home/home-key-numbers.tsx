@@ -51,6 +51,13 @@ export function HomeKeyNumbers({ asOf }: { asOf: HomeAsOfWindow }) {
     {
       id: "tasks-due",
       label: "Tasks due",
+      change: {
+        identity: `home:tasks:${today}`,
+        value:
+          briefing.rows === undefined
+            ? undefined
+            : briefing.count("Overdue") + briefing.count("Due this week"),
+      },
       value: figure(
         { data: briefing.rows, isError: briefing.query.isError },
         () =>
@@ -66,12 +73,20 @@ export function HomeKeyNumbers({ asOf }: { asOf: HomeAsOfWindow }) {
     {
       id: "needs-you",
       label: "Needs you",
+      change: {
+        identity: "home:needs-you",
+        value: needsYou.data?.meta.totalCount,
+      },
       value: figure(needsYou, (data) => formatCount(data.meta.totalCount)),
       context: "To review",
     },
     {
       id: "spent",
       label: "Spent this month",
+      change: {
+        identity: `home:spent:${today.slice(0, 7)}`,
+        value: spend.monthly?.at(-1)?.net,
+      },
       value: figure(
         { data: spend.monthly, isError: spend.query.isError },
         (monthly) => formatCurrency(monthly.at(-1)?.net ?? 0),
@@ -81,6 +96,7 @@ export function HomeKeyNumbers({ asOf }: { asOf: HomeAsOfWindow }) {
     {
       id: "pantry",
       label: "Pantry on hand",
+      change: { identity: "home:pantry", value: pantry.data?.total },
       value: figure(pantry, (data) => formatCurrency(data.total)),
       context: "Recorded value",
     },

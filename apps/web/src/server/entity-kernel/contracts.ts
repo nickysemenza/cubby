@@ -96,6 +96,7 @@ const listFields = {
     .optional(),
   groupBy: listGroupByDimensionsSchema.optional(),
   resultMembership: listResultMembership.optional(),
+  includeCount: z.boolean().optional(),
   nesting: listNestingSchema
     .optional()
     .describe(

@@ -89,6 +89,7 @@ interface EntityListPageOptions {
   /** Test seam, forwarded to the generic list. */
   operations?: GenericEntityListProps["operations"];
   override?: GenericEntityListProps["override"];
+  readProjection?: GenericEntityListProps["readProjection"];
 }
 
 const VIEW_ICONS = {
@@ -397,6 +398,7 @@ export function listPage({
   actions,
   operations,
   override,
+  readProjection,
 }: EntityListPageOptions) {
   const { singular, plural } = entityRoster[entity];
   return listChromePage({
@@ -407,6 +409,7 @@ export function listPage({
         entity={entity}
         operations={operations}
         override={override}
+        readProjection={readProjection}
       />
     ),
     workbenchControls: () => <ListWorkbenchMenus entity={entity} />,

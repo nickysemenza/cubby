@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
+import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
 import { entityListDefaultSort } from "~/entity/sortable-fields";
+import { productListReadProjection } from "~/features/product/list-read";
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 
 import {
@@ -75,6 +77,7 @@ describe("ensureEntityListSsr", () => {
       queryClient,
       entity: "product",
       search: {},
+      readProjection: productListReadProjection,
     });
     await ensureEntityListSsr({
       queryClient,
@@ -84,6 +87,23 @@ describe("ensureEntityListSsr", () => {
     });
 
     expect(ensure).toHaveBeenCalledOnce();
+    const mountedPlan = entityListFor("product").selectedListQueryPlan(
+      compileEntityListInput(
+        queryClient,
+        "product",
+        {},
+        {
+          defaultSort: entityListDefaultSort(queryClient, "product"),
+          fields: productListReadProjection(queryClient, "product", {
+            createdAt: true,
+            updatedAt: true,
+          }),
+        },
+      ),
+    );
+    expect(ensure.mock.calls[0]?.[0].queryKey).toEqual(
+      infiniteOperationQueryKey(mountedPlan.queryKey),
+    );
   });
 
   it("uses declared sort defaults for secondary lists without route options", () => {
@@ -101,6 +121,25 @@ describe("ensureEntityListSsr", () => {
   });
 
   it("compiles a route renderer's explicit opening sort", () => {
+    expect(declaredListReadProjection(metadataClient, "project")).toEqual(
+      expect.arrayContaining(["taskProgress", "rollup"]),
+    );
+    const imageFields = declaredListReadProjection(metadataClient, "image");
+    expect(imageFields).toEqual(
+      expect.arrayContaining(["url", "status", "filename"]),
+    );
+    expect(imageFields).not.toContain("images");
+    expect(
+      productListReadProjection(metadataClient, "product", { tags: true }),
+    ).toEqual(
+      expect.arrayContaining([
+        "aliases",
+        "brandId",
+        "brandName",
+        "categoryId",
+        "tags",
+      ]),
+    );
     const input = compileEntityListInput(
       metadataClient,
       "project",
@@ -135,12 +174,15 @@ describe("ensureEntityListSsr", () => {
       entity: "task",
       search: { view: "timeline", groupBy: [{ key: "status" }] },
     });
-    const ungrouped = entityListFor("task").infiniteQueryOptions(
+    const ungrouped = entityListFor("task").browserInfiniteQueryOptions(
       compileEntityListInput(
         metadataClient,
         "task",
         {},
-        { defaultSort: entityListDefaultSort(metadataClient, "task") },
+        {
+          defaultSort: entityListDefaultSort(metadataClient, "task"),
+          fields: declaredListReadProjection(metadataClient, "task"),
+        },
       ),
     );
     expect(ensure.mock.calls[0]?.[0].queryKey).toEqual(ungrouped.queryKey);

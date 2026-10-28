@@ -130,6 +130,7 @@ export function EntityQualityFact({
         field="dataQuality"
         label="Data quality"
         surface="list"
+        resolution={envelope}
       />
     </div>
   );

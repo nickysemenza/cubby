@@ -12,6 +12,7 @@ import { entitySummaryFields } from "~/contracts/mcp-projections";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { buildFiltersFromManifest } from "~/entity/filters";
 import { viewsForEntity } from "~/entity/model/view-manifest";
+import { productListReadProjection } from "~/features/product/list-read";
 import { getDb } from "~/server/db/helpers";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { setInventoryOwnership } from "~/server/domains/inventory/repo/ownership-mutations";
@@ -70,6 +71,19 @@ describe("complete list composition", () => {
         },
         ["id", "name"],
       );
+      const complete = await executeEntity(context, {
+        action: "list",
+        entity: "vendor",
+        ...input,
+        sort: [{ orderBy: "name", direction: "asc" }],
+        pagination: { pageIndex, pageSize: 1 },
+      });
+      if (complete.action !== "list") throw new Error("Wrong list action");
+      expect(complete.meta.totalCount).toBeUndefined();
+      expect(complete.items.map((row) => row.id)).toEqual(
+        page.items.map((row) => row.id),
+      );
+      expect(complete.meta.hasNextPage).toBe(page.meta.hasNextPage);
       expect(page.meta.totalCount).toBeUndefined();
       expect(page.meta.hasNextPage).toBe(pageIndex === 0);
       expect(page.items.map((row) => row.id)).toEqual(
@@ -376,7 +390,10 @@ describe("complete list composition", () => {
         expect(row).not.toHaveProperty("fieldResolutions");
         expect(row).not.toHaveProperty("derived");
       }
-      const fields = entitySummaryFields(entity);
+      const fields =
+        entity === "product"
+          ? (productListReadProjection(queryClient, entity) ?? [])
+          : entitySummaryFields(entity);
       const selected = await listOperations(entity).listFields(
         context,
         { filters: {}, pagination: { pageIndex: 0, pageSize: 2 } },

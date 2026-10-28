@@ -28,6 +28,18 @@ export const entityListHandlers = implementOperationDomain(entityListContract, {
         schemas.listInput,
         parsed,
       );
+      if (input.fields !== undefined) {
+        const result = await listOperations(input.entity).listFields(
+          context,
+          resolved,
+          input.fields,
+        );
+        return schemas.selectedListOutput.parse({
+          items: result.items,
+          meta: result.meta,
+          selectedFields: input.fields,
+        });
+      }
       const result = await executeEntityAs(context, "list", resolved);
       return schemas.listOutput.parse({
         items: result.items,
