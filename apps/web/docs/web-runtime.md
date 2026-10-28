@@ -66,6 +66,9 @@ Workflow streams use one typed Start server function and an `AbortSignal`;
 Start owns framing and serialization. The owning screen opens the stream
 explicitly. Shared operation result envelopes retain normalized diagnostics;
 domain input/events remain schema-validated inside the authenticated runtime.
+The shared serializable carrier checks supported values with a type-directed
+walk. It validates every container member without cloning the payload or
+allocating errors for unsuccessful union branches in a valid response.
 Producers observe the request signal, and early iterator return cancels the
 request. Global server-function middleware owns CSRF and private response headers.
 Cookbook import stays busy until its recipe stream and photo phase finish.
@@ -88,6 +91,9 @@ record so review actions and deep links into those slots are available before
 scrolling. Other below-fold journeys navigate or scroll to the retained section
 shell before using its lazy content. Handwritten generic list routes use the
 same metadata admission and first-page loader as generated routes.
+Query dehydration uses Start's native serializer for Dates, collections and
+shared references. Do not wrap those query values in an additional JSON codec.
+The browser operation HTTP transport retains its separate SuperJSON wire codec.
 Interaction-only authenticated reads can use `useHydrated() &&
 session`; passive loading branches use `useHydratedLoading`/`useHydrated`. Interactive controls in streamed sections, design showcases, and lazy
 detail slots stay disabled until their own

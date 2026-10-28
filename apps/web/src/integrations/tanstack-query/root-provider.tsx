@@ -4,7 +4,6 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
-import superjson from "superjson";
 import { z } from "zod";
 
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
@@ -76,11 +75,9 @@ export function getContext(
   mutationSuccessRuntime: RootMutationSuccessRuntime = productionMutationSuccessRuntime,
 ) {
   const queryClient = new QueryClient({
-    defaultOptions: {
-      ...QUERY_CLIENT_DEFAULT_OPTIONS,
-      dehydrate: { serializeData: superjson.serialize },
-      hydrate: { deserializeData: superjson.deserialize },
-    },
+    // Start already transports Dates, collections and shared references. A
+    // second codec here copies every query before Start serializes it again.
+    defaultOptions: QUERY_CLIENT_DEFAULT_OPTIONS,
     queryCache: new QueryCache({
       onError: (error, query) => {
         if (!shouldToastQueryError(error, query)) return;

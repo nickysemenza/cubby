@@ -22,12 +22,15 @@ describe("Start operation serializable carrier", () => {
 
   it("preserves TanStack-supported undefined, Date, collections, and nesting", () => {
     const occurredAt = new Date("2026-08-28T00:00:00.000Z");
+    const shared = { enabled: true };
     const input = {
       occurredAt,
       optional: undefined,
-      nested: [{ value: 1 }, undefined],
+      nested: [{ value: 1 }, undefined, shared, shared],
       selected: new Set(["one", "two"]),
       indexed: new Map([["created", occurredAt]]),
+      bytes: new Uint8Array([1, 2]),
+      integer: 42n,
     };
 
     expect(unparsedStartOperationDataSchema.parse(input)).toEqual(input);
@@ -40,5 +43,16 @@ describe("Start operation serializable carrier", () => {
     expect(() =>
       unparsedStartOperationDataSchema.parse(Symbol("invalid")),
     ).toThrow(/Invalid input/);
+    for (const invalid of [
+      NaN,
+      Infinity,
+      new Date(NaN),
+      new URL("https://example.test"),
+      new Set([() => undefined]),
+      new Map([["nested", { callback: () => undefined }]]),
+    ])
+      expect(unparsedStartOperationDataSchema.safeParse(invalid).success).toBe(
+        false,
+      );
   });
 });
