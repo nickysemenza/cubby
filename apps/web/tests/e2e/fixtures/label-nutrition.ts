@@ -4,10 +4,8 @@ import { entityAttachment, image, product } from "~/server/db/schema";
 import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/repo/description-policy";
 import { getDb } from "~/server/db/helpers";
 import { saveImageDescriptionAnalysis } from "~/server/domains/image-processing/repo/image-processing";
-import {
-  normalizeImageDescriptionResult,
-  imageDescriptionInputFingerprint,
-} from "~/server/domains/image/service/image-description.service";
+import { normalizeImageDescriptionResult } from "~/server/domains/image/service/image-description.service";
+import { imageDescriptionInputFingerprint } from "~/server/domains/image-processing/repo/description-policy";
 import { getFixtureDb } from "./core";
 
 /** Synthetic provider output for a verified, servable label; review/save remain real. */
