@@ -5,14 +5,14 @@ import { repositoryQueries as getDb } from "~/server/db/repository-access.bounda
 import { product } from "~/server/db/retained-tables";
 
 /**
- * Bare `SELECT 1` round-trip — dev-only latency probe, no rows returned.
+ * Bare `SELECT 1` round-trip for authenticated diagnostics, no rows returned.
  */
 export const pingDb = async (db: Database): Promise<void> => {
   await getDb(db).execute(sql`SELECT 1`);
 };
 
 /**
- * Scalar product count — dev-only latency probe for a trivial indexed query.
+ * Scalar product count for authenticated diagnostics.
  */
 export const countProducts = async (db: Database): Promise<number> => {
   const rows = await getDb(db).select({ n: count() }).from(product);
