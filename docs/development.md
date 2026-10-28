@@ -475,8 +475,8 @@ native PostgreSQL installation remain owned by their existing runners.
 - **Background queue messages wake durable Jobs** on `cubby-background`. The minute
   recovery cron repairs missed wakes; domain consumers retain per-message ack/retry.
   Unknown transport queues are rejected before message parsing or DB access.
-  - Daily maintenance is a `maintenance` Run (cron `scheduled`, the Problems
-    card's Run now `manual`; one active pass at a time) whose steps
+  - Daily maintenance is a `maintenance` Run (cron `scheduled`, Activity's
+    Advanced maintenance Run now `manual`; one active pass at a time) whose steps
     (`domains/maintenance/service/maintenance-run.ts`) drain every backlog page
     by page: image-processing repair, EXIF/GPS, embeddings, stale recipe
     totals, abandoned uploads, Run housekeeping, original disposal, vector
@@ -503,7 +503,7 @@ native PostgreSQL installation remain owned by their existing runners.
   - Image processing always accepts uploads and queued work; historical
     enabled/paused settings are ignored. Device availability and capability
     still determine which companion work can execute. Exceptional repair tools
-    live on Problems; Settings contains connection diagnostics. The read-only
+    live in Activity's Advanced maintenance view; Settings contains connection diagnostics. The read-only
     `/api/debug/timing` endpoint requires a member session in every environment
     and returns private, non-cacheable timings and individual errors for the
     database, active USDA release, and UPCitemdb. The UPC probe uses a synthetic
