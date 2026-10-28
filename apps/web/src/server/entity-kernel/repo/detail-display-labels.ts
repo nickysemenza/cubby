@@ -174,7 +174,7 @@ export const provenanceEvidenceLabel = (
 
 /**
  * The vendor a card line probably came from, only while the inference is worth
- * showing: a single prior match (`insufficient_history`) or none says nothing.
+ * showing: one confirmed historical Vendor identifies the statement label.
  */
 export const possibleVendorLabel = (
   inference: Pick<MerchantVendorInference, "status" | "candidates"> | null,

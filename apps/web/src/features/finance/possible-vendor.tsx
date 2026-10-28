@@ -14,12 +14,7 @@ export function PossibleVendor({
   inference: MerchantVendorInference | null;
   compact?: boolean;
 }) {
-  if (
-    inference === null ||
-    inference.status === "none" ||
-    inference.status === "insufficient_history"
-  )
-    return null;
+  if (inference === null || inference.status === "none") return null;
 
   if (compact) {
     // Dense list rows: one line; the detail page shows the full evidence.

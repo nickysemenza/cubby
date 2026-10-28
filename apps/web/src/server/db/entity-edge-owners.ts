@@ -156,7 +156,6 @@ export const ENTITY_EDGE_OWNERS = {
   ImportSourceProduct: { excluded: WORKFLOW },
   LedgerSourceClaim: { excluded: WORKFLOW },
   MailboxCursor: { excluded: WORKFLOW },
-  MerchantVendorRule: { excluded: WORKFLOW },
   OrderMail: { excluded: WORKFLOW },
   OrderMailAttachment: { excluded: WORKFLOW },
 } satisfies Record<NonEntityEdgeTable, EntityEdgeOwner>;

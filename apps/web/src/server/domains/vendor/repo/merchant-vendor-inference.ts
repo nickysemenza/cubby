@@ -6,7 +6,11 @@ import {
   purchaseSettlementKinds,
 } from "@cubby/schemas/financial-transaction";
 import { type RawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseShortcodeFor,
+  type VendorId,
+} from "@cubby/schemas/identifiers";
 import { sql, type SQL } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
@@ -32,34 +36,28 @@ type CandidateRow = {
   lastSeenDate: string | null;
 };
 
-const MIN_MERCHANT_SUPPORT = 2;
-
 const inferenceFromCandidates = (
   candidates: MerchantVendorCandidate[],
 ): MerchantVendorInference => {
   if (candidates.length === 0) return noInference();
   if (candidates.length >= 2)
     return merchantVendorInference.parse({ status: "ambiguous", candidates });
-  const [candidate] = candidates;
   return merchantVendorInference.parse({
-    status:
-      candidate!.supportingTransactionCount >= MIN_MERCHANT_SUPPORT
-        ? "suggested"
-        : "insufficient_history",
+    status: "suggested",
     candidates,
   });
 };
 
-/** A lone supported candidate is safe for a decorative fallback, never a write. */
+/** One confirmed Vendor identifies the label; conflicting history stays unresolved. */
 export const suggestedMerchantVendorCandidatesSql = (keys: SQL): SQL => sql`
   SELECT candidates.* FROM (
     SELECT history.*, count(*) OVER (PARTITION BY "merchantKey") AS "candidateCount"
     FROM (${merchantVendorCandidatesSql(keys)}) history
   ) candidates
-  WHERE "candidateCount" = 1 AND "supportingTransactionCount" >= ${MIN_MERCHANT_SUPPORT}`;
+  WHERE "candidateCount" = 1`;
 
 /** Shared history query for advisory labels and batched display-image fallbacks. */
-function merchantVendorCandidatesSql(keys: SQL): SQL {
+function merchantVendorCandidatesSql(keys?: SQL): SQL {
   const settlementKinds = sql.join(
     purchaseSettlementKinds.map((kind) => sql`${kind}`),
     sql`, `,
@@ -69,9 +67,9 @@ function merchantVendorCandidatesSql(keys: SQL): SQL {
       SELECT
         ft.id AS "transactionId",
         btrim(regexp_replace(lower(ft.merchant), '\\s+', ' ', 'g')) AS "merchantKey",
-        min(v.id::text) AS "vendorId",
-        min(v.shortcode) AS "vendorShortcode",
-        min(v.name) AS "vendorName",
+        v.id::text AS "vendorId",
+        v.shortcode AS "vendorShortcode",
+        v.name AS "vendorName",
         max(COALESCE(ft."postedDate", ft."transactionDate")) AS "lastSeenDate"
       FROM "FinancialTransaction" ft
       JOIN "FinancialTransactionAllocation" fta
@@ -85,12 +83,14 @@ function merchantVendorCandidatesSql(keys: SQL): SQL {
         AND ft."ledgerTransferId" IS NULL
         AND ft.kind IN (${settlementKinds})
         AND ft.merchant IS NOT NULL
-        AND btrim(regexp_replace(lower(ft.merchant), '\\s+', ' ', 'g')) IN (${keys})
-      GROUP BY ft.id, btrim(regexp_replace(lower(ft.merchant), '\\s+', ' ', 'g'))
-      HAVING count(DISTINCT v.id) = 1
+        AND btrim(regexp_replace(lower(ft.merchant), '\\s+', ' ', 'g')) <> ''
+        ${keys ? sql`AND btrim(regexp_replace(lower(ft.merchant), '\\s+', ' ', 'g')) IN (${keys})` : sql``}
+      GROUP BY ft.id, btrim(regexp_replace(lower(ft.merchant), '\\s+', ' ', 'g')), v.id, v.shortcode, v.name
+      HAVING bool_or(fta."confirmsMerchant")
     )
     SELECT
       "merchantKey",
+      "vendorId",
       "vendorShortcode",
       "vendorName",
       count(DISTINCT "transactionId")::int AS "supportingTransactionCount",
@@ -105,12 +105,45 @@ function merchantVendorCandidatesSql(keys: SQL): SQL {
   `;
 }
 
+/** Batch the derived statement labels for the requested Vendor page. */
+export async function vendorStatementLabels(
+  db: Database | DrizzleTransaction,
+  ids: readonly VendorId[],
+): Promise<Map<VendorId, string[]>> {
+  if (ids.length === 0) return new Map();
+  const rows = await unwrapDb(db).execute<{
+    vendorId: string;
+    labels: string[];
+  }>(sql`
+    SELECT "vendorId", array_agg(DISTINCT "merchantKey" ORDER BY "merchantKey") AS labels
+    FROM (${merchantVendorCandidatesSql()}) history
+    WHERE "vendorId" IN (${sql.join(
+      ids.map((id) => sql`${id}`),
+      sql`, `,
+    )})
+    GROUP BY "vendorId"
+  `);
+  return new Map(
+    rows.rows.map((row) => [parseEntityId("vendor", row.vendorId), row.labels]),
+  );
+}
+
+/** Independent order proof may settle an unknown label, but cannot contradict history. */
+export const merchantVendorAllowsSettlementSql = (
+  merchant: SQL,
+  vendorId: VendorId,
+): SQL => sql`
+  NOT EXISTS (
+    SELECT 1 FROM (${merchantVendorCandidatesSql(sql`btrim(regexp_replace(lower(${merchant}), '\\s+', ' ', 'g'))`)}) history
+    WHERE "vendorId" <> ${vendorId}
+  )`;
+
 /**
  * Load advisory Vendor evidence for a whole page in one query.
  *
- * The first grouping deliberately collapses each historical transaction to one
- * Vendor. Several allocations to Purchases from that Vendor remain one vote;
- * a transaction spanning Vendors fails the HAVING clause and casts no vote.
+ * Several confirmed allocations to Purchases from the same Vendor remain one
+ * vote per transaction. A split across Vendors retains each confirmed Vendor,
+ * so that label stays ambiguous rather than silently losing its evidence.
  */
 export async function merchantVendorInferences(
   db: Database | DrizzleTransaction,

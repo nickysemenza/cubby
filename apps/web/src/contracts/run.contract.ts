@@ -22,7 +22,6 @@ import {
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
   proposedImportFix,
-  confirmMerchantVendorRuleInput,
   commitPurchaseImportInput,
   commitPurchaseImportOut,
   preparePurchaseImportOut,
@@ -224,17 +223,6 @@ export type RunLogEntry = z.infer<typeof runLogEntry>;
 const agentConnection = z.object({
   authorized: z.boolean(),
   expiresAt: z.iso.datetime().nullable(),
-});
-
-const merchantRules = z.object({
-  rules: z.array(
-    z.object({
-      merchant: z.string(),
-      vendorId: z.string(),
-      vendorName: z.string(),
-    }),
-  ),
-  vendors: z.array(z.object({ shortcode: z.string(), name: z.string() })),
 });
 
 const runControlInput = z.object({
@@ -517,17 +505,6 @@ export const runContract = defineContract(
       input: z.undefined(),
       output: agentConnection,
       invalidates: ["runOnly"],
-    }),
-    merchantRules: query({
-      exposure: "view",
-      input: z.undefined(),
-      output: merchantRules,
-      cache: { tags: [] },
-    }),
-    confirmMerchantRule: mutation({
-      exposure: "view",
-      input: confirmMerchantVendorRuleInput,
-      output: merchantRules,
     }),
     aiUsage: query({
       exposure: "view",

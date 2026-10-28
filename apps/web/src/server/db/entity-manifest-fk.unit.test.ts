@@ -341,14 +341,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "scopes an operational review finding to a household member",
   },
-  "MerchantVendorRule.ledgerPartyId": {
-    classification: "metadata",
-    reason: "member-scoped merchant classification rule",
-  },
-  "MerchantVendorRule.vendorId": {
-    classification: "metadata",
-    reason: "merchant classification rule output",
-  },
   "MailboxCursor.ledgerPartyId": {
     classification: "metadata",
     reason: "member-scoped mailbox synchronization checkpoint",

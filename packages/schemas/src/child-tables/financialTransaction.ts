@@ -27,6 +27,12 @@ export const financialTransactionChildren = [
       },
       { key: "amount", kind: "doublePrecision", notNull: true },
       {
+        key: "confirmsMerchant",
+        kind: "boolean",
+        notNull: true,
+        default: { sql: "false" },
+      },
+      {
         key: "createdAt",
         kind: "timestamp",
         notNull: true,

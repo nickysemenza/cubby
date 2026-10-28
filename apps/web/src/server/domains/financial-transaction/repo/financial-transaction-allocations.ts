@@ -35,12 +35,14 @@ import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-res
 export type AllocationInput = {
   purchaseId: PurchaseId;
   amount: number;
+  confirmsMerchant?: boolean;
 };
 
 type AllocationRow = {
   purchaseId: PurchaseId;
   purchaseShortcode: PurchaseShortcode;
   amount: number;
+  confirmsMerchant: boolean;
 };
 
 /** Allocations per transaction, for the audit diff and the quality-target union. */
@@ -62,6 +64,7 @@ export async function readAllocations(
       purchaseId: financialTransactionAllocation.purchaseId,
       purchaseShortcode: purchase.shortcode,
       amount: financialTransactionAllocation.amount,
+      confirmsMerchant: financialTransactionAllocation.confirmsMerchant,
     })
     .from(financialTransactionAllocation)
     .innerJoin(
@@ -82,6 +85,7 @@ export async function readAllocations(
       purchaseId: row.purchaseId,
       purchaseShortcode: parseShortcodeFor("purchase", row.purchaseShortcode),
       amount: Number(row.amount),
+      confirmsMerchant: row.confirmsMerchant,
     });
     snapshot.set(row.transactionId, list);
   }
@@ -124,14 +128,29 @@ export async function applyAllocationChanges(
   for (const id of ids) {
     const from = allocationAuditRows(opts.before.get(id) ?? []);
     const to = allocationAuditRows(after.get(id) ?? []);
-    if (from.length === to.length && from.every((v, i) => v === to[i]))
+    const confirmedBefore = (opts.before.get(id) ?? [])
+      .filter((row) => row.confirmsMerchant)
+      .map((row) => row.purchaseShortcode)
+      .sort();
+    const confirmedAfter = (after.get(id) ?? [])
+      .filter((row) => row.confirmsMerchant)
+      .map((row) => row.purchaseShortcode)
+      .sort();
+    if (
+      from.length === to.length &&
+      from.every((v, i) => v === to[i]) &&
+      JSON.stringify(confirmedBefore) === JSON.stringify(confirmedAfter)
+    )
       continue;
     changedTransactionIds.push(id);
     await logAuditEntry(tx, opts.actor, {
       entityKind: "financialTransaction",
       entityId: id,
       action: "update",
-      changes: { allocations: { from, to } },
+      changes: {
+        allocations: { from, to },
+        merchantConfirmations: { from: confirmedBefore, to: confirmedAfter },
+      },
     });
   }
 
@@ -231,6 +250,7 @@ export async function writeAllocationSet(
   transactionId: FinancialTransactionId,
   next: readonly AllocationInput[],
   before: AllocationSnapshot,
+  actor: ActorContext,
 ): Promise<void> {
   const existing = before.get(transactionId) ?? [];
   const nextByPurchase = new Map(next.map((row) => [row.purchaseId, row]));
@@ -256,18 +276,32 @@ export async function writeAllocationSet(
   );
   for (const row of next) {
     const prior = existingByPurchase.get(row.purchaseId);
+    // Automation preserves independent confirmation but cannot create it by default.
+    const memberDecision = actor.channel !== "system" && actor.runId === null;
+    const confirmsMerchant =
+      prior?.confirmsMerchant && !memberDecision
+        ? true
+        : (row.confirmsMerchant ?? memberDecision);
     if (!prior) {
       await tx.insert(financialTransactionAllocation).values({
         transactionId,
         purchaseId: row.purchaseId,
         amount: row.amount,
+        confirmsMerchant,
       });
       continue;
     }
-    if (cents(prior.amount) !== cents(row.amount))
+    if (
+      cents(prior.amount) !== cents(row.amount) ||
+      prior.confirmsMerchant !== confirmsMerchant
+    )
       await tx
         .update(financialTransactionAllocation)
-        .set({ amount: row.amount, updatedAt: new Date() })
+        .set({
+          amount: row.amount,
+          confirmsMerchant,
+          updatedAt: new Date(),
+        })
         .where(
           and(
             eq(financialTransactionAllocation.transactionId, transactionId),
@@ -281,7 +315,11 @@ export async function writeAllocationSet(
 /** Resolve caller-supplied `PUR-` codes to ids, preserving order. */
 export async function resolveAllocationInputs(
   db: Database | DrizzleTransaction,
-  rows: readonly { purchaseId: PurchaseShortcode; amount: number }[],
+  rows: readonly {
+    purchaseId: PurchaseShortcode;
+    amount: number;
+    confirmsMerchant?: boolean;
+  }[],
 ): Promise<AllocationInput[]> {
   if (rows.length === 0) return [];
   const ids = await resolveAllOrThrow(
@@ -293,6 +331,7 @@ export async function resolveAllocationInputs(
   return rows.map((row, index) => ({
     purchaseId: ids[index]!,
     amount: row.amount,
+    confirmsMerchant: row.confirmsMerchant,
   }));
 }
 

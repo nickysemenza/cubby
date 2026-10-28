@@ -35,7 +35,6 @@ import {
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
-  merchantVendorRule,
   orderMail,
   orderMailAttachment,
   assessmentState as suggestion,
@@ -814,16 +813,6 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "MerchantVendorRule.ledgerPartyId": async (db, targetId) => {
-    const [vendor, actor] = await Promise.all([mkVendor(db), mkUser(db)]);
-    return insertAndReturn(db, merchantVendorRule, {
-      ledgerPartyId: parseEntityId("ledgerParty", targetId),
-      normalizedMerchant: uniq("merchant"),
-      vendorId: vendor.id,
-      confirmedByUserId: actor.id,
-    });
-  },
-
   "MailboxCursor.ledgerPartyId": (db, targetId) =>
     insertAndReturn(db, mailboxCursor, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
@@ -861,16 +850,6 @@ const SOURCE_FACTORIES = {
 
   "Run.vendorId": (db, targetId) =>
     mkRun(db, { vendorId: parseEntityId("vendor", targetId) }),
-
-  "MerchantVendorRule.vendorId": async (db, targetId) => {
-    const [party, actor] = await Promise.all([mkLedgerParty(db), mkUser(db)]);
-    return insertAndReturn(db, merchantVendorRule, {
-      ledgerPartyId: party.id,
-      normalizedMerchant: uniq("merchant"),
-      vendorId: parseEntityId("vendor", targetId),
-      confirmedByUserId: actor.id,
-    });
-  },
 
   "OrderMail.vendorId": (db, targetId) =>
     mkOrderMail(db, { vendorId: parseEntityId("vendor", targetId) }),

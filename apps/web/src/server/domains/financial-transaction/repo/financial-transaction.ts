@@ -153,8 +153,10 @@ export const financialTransactionScaffold = listScaffold(
         accountShortcode: sql<string>`(SELECT fa.shortcode FROM "FinancialAccount" fa WHERE fa.id = "FinancialTransaction"."accountId")`,
         // Ordered by shortcode so the field is stable across reads rather than
         // following whatever order the planner happens to produce.
-        allocationRows: sql<{ purchaseId: string; amount: number }[]>`COALESCE((
-          SELECT jsonb_agg(jsonb_build_object('purchaseId', ap.shortcode, 'amount', aa."amount") ORDER BY ap.shortcode)
+        allocationRows: sql<
+          { purchaseId: string; amount: number; confirmsMerchant: boolean }[]
+        >`COALESCE((
+          SELECT jsonb_agg(jsonb_build_object('purchaseId', ap.shortcode, 'amount', aa."amount", 'confirmsMerchant', aa."confirmsMerchant") ORDER BY ap.shortcode)
           FROM "FinancialTransactionAllocation" aa
           JOIN "Purchase" ap ON ap."id" = aa."purchaseId"
           WHERE aa."transactionId" = "FinancialTransaction"."id" AND ${notDeleted("aa")}
@@ -167,7 +169,11 @@ export const financialTransactionScaffold = listScaffold(
           spendingCategoryShortcode: z.string().nullable(),
           accountShortcode: z.string(),
           allocationRows: z.array(
-            z.object({ purchaseId: z.string(), amount: z.coerce.number() }),
+            z.object({
+              purchaseId: z.string(),
+              amount: z.coerce.number(),
+              confirmsMerchant: z.boolean(),
+            }),
           ),
         });
         const refs = bind.batch(({ db, rows }) =>
@@ -272,6 +278,7 @@ export const financialTransactionScaffold = listScaffold(
               const allocations = values.allocationRows.map((value) => ({
                 purchaseId: parseShortcodeFor("purchase", value.purchaseId),
                 amount: value.amount,
+                confirmsMerchant: value.confirmsMerchant,
               }));
               return {
                 allocations,
@@ -404,7 +411,7 @@ export const createFinancialTransaction = defineMutationWriter({
           transactionId: created.id,
           purchaseIds: requested.map((row) => row.purchaseId),
         });
-        await writeAllocationSet(tx, created.id, requested, new Map());
+        await writeAllocationSet(tx, created.id, requested, new Map(), actor);
         await applyAllocationChanges(tx, {
           transactionIds: [created.id],
           before: new Map(),
@@ -548,7 +555,13 @@ const requestedUpdateAllocations = async (
   if (!state.amountChanged || state.allocationCount !== 1) return null;
   const sole = before.get(id)?.[0];
   return sole
-    ? [{ purchaseId: sole.purchaseId, amount: state.nextAmount }]
+    ? [
+        {
+          purchaseId: sole.purchaseId,
+          amount: state.nextAmount,
+          confirmsMerchant: sole.confirmsMerchant,
+        },
+      ]
     : null;
 };
 
@@ -573,7 +586,7 @@ const applyUpdatedAllocations = async (
       kind: financialTransactionKind.parse(state.nextKind),
       next,
     });
-    await writeAllocationSet(tx, id, next, before);
+    await writeAllocationSet(tx, id, next, before, actor);
   }
   // Every write that names a purchase or changes the charge's account, kind
   // or dates is checked; a conflict the charge already carried before this

@@ -15,7 +15,6 @@ const LEGACY_TOOL_ACTIONS = {
   clear_data_exception: "data_exception.clear_exception",
   commit_photo_group: "photo_run.commit_group",
   commit_purchase_import: "purchase_import.commit",
-  confirm_purchase_merchant_vendor: "purchase_import.confirm_merchant_vendor",
   create_file_uploads: "image.create_file_upload",
   create_recipe_from_text: "recipe_insights.create_from_text",
   delete_statement_rows: "entity.delete",

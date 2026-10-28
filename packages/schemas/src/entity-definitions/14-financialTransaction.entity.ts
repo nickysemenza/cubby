@@ -1085,7 +1085,7 @@ export default defineEntity(
           explanation: {
             ruleId: "financial-transaction.vendor-inference",
             description:
-              "Possible vendors come from prior settled transactions with the same normalized merchant label; confirmed allocations, transfers, and void transactions suppress the suggestion.",
+              "Statement labels identify Vendors from independently confirmed purchase allocations across the household. One distinct Vendor is a match; competing Vendors stay ambiguous. Allocated, transfer, and void transactions suppress this fallback.",
             resolver: "merchantVendorInference",
             readPath: "vendorInference",
             sourceDependencies: [
@@ -1104,7 +1104,7 @@ export default defineEntity(
               .nullable()
               .default(null)
               .describe(
-                "Advisory Vendor evidence from prior settled transactions with the same Merchant label. Null when suppressed. It neither matches nor links anything; Allocations remain the only confirmed relationship.",
+                "Vendor identification from confirmed history for the exact normalized statement label. A single candidate identifies the Vendor; multiple candidates are ambiguous. Null when suppressed. Booking may use the identified Vendor without creating new confirmation evidence; allocations remain the confirmed relationship.",
               ),
             create: null,
             update: null,

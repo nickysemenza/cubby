@@ -975,18 +975,6 @@ export const importOperationStatusOut = z.object({
   completedAt: z.iso.datetime().nullable(),
 });
 
-export const confirmMerchantVendorRuleInput = z.object({
-  merchant: z.string().trim().min(1).max(500),
-  vendorId: vendorShortcode,
-});
-export type ConfirmMerchantVendorRuleInput = z.infer<
-  typeof confirmMerchantVendorRuleInput
->;
-export const confirmMerchantVendorRuleOut = z.object({
-  normalizedMerchant: z.string(),
-  vendorId: vendorShortcode,
-});
-
 export const importAuditFinding = z.object({
   kind: runFindingKind,
   targetPurchaseId: z.uuid(),

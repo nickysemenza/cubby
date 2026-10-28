@@ -18,7 +18,6 @@ import {
   financialTransactionAllocation,
   financialTransaction,
   inventoryEntry,
-  merchantVendorRule,
   purchase,
   expense,
   importSourceClaim,
@@ -942,15 +941,22 @@ describe("settlement from retained order evidence", () => {
   });
 
   it("never settles against a void or expected charge, or one mapped to another vendor", async () => {
-    const { party, card, run } = await world();
+    const { card, run } = await world();
     const otherVendor = await insertWithShortcode(ctx.db, "vendor", {
       name: `Other shop ${crypto.randomUUID()}`,
     });
-    await getDb(ctx.db).insert(merchantVendorRule).values({
-      ledgerPartyId: party.id,
-      normalizedMerchant: "other shop",
-      vendorId: otherVendor.id,
-      confirmedByUserId: ctx.actor.userId,
+    const otherPurchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: otherVendor.shortcode,
+      date: "2026-08-01",
+    });
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: card.shortcode,
+      amount: 10,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-08-01",
+      merchant: "Other Shop",
+      allocations: [{ purchaseId: otherPurchase.output.id, amount: 10 }],
     });
     await charge(card.id, {
       amount: 31,

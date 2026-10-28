@@ -80,11 +80,6 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Import findings retain the member scope.",
   },
-  "MerchantVendorRule.ledgerPartyId": {
-    code: "block-merchant-rules",
-    effect: "block",
-    description: "Merchant routing rules retain the member scope.",
-  },
   "MailboxCursor.ledgerPartyId": {
     code: "block-mailbox-cursor",
     effect: "block",
@@ -203,11 +198,6 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     code: "block-import-findings",
     effect: "block",
     description: "Import findings prevent member merges.",
-  },
-  "MerchantVendorRule.ledgerPartyId": {
-    code: "block-merchant-rules",
-    effect: "block",
-    description: "Merchant routes prevent member merges.",
   },
   "MailboxCursor.ledgerPartyId": {
     code: "block-mailbox-cursor",

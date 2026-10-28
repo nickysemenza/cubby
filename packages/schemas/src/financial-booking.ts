@@ -97,6 +97,12 @@ export const financialSpendingPlan = z.discriminatedUnion("status", [
 export type FinancialSpendingPlan = z.infer<typeof financialSpendingPlan>;
 
 export const financialBookingInput = z.object({
+  confirmsMerchant: z
+    .boolean()
+    .optional()
+    .describe(
+      "Set false when the Vendor was copied from statement-label inference rather than independently confirmed.",
+    ),
   transactionId: financialTransactionShortcode,
   purchaseId: purchaseShortcode.nullable().default(null),
   vendorId: vendorShortcode.nullable().default(null),

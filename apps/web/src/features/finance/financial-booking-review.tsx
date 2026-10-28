@@ -106,6 +106,9 @@ export function FinancialBookingReview({
   );
   if (!expectsBookingReview(transaction)) return null;
   const categoryId = category?.id ?? null;
+  const inference = fieldValueOf(transaction.fields.vendorInference);
+  const identifiedVendor =
+    inference?.status === "suggested" ? inference.candidates[0] : null;
   const busy = preview.isPending || commit.isPending;
   return (
     <Stack gap="sm">
@@ -147,7 +150,11 @@ export function FinancialBookingReview({
                 setVendor(item);
                 setReview(null);
               }}
-              placeholder="Choose vendor for a new purchase"
+              placeholder={
+                identifiedVendor
+                  ? `Identified: ${identifiedVendor.vendorName}`
+                  : "Choose vendor for a new purchase"
+              }
               disabled={busy}
             />
           )}
@@ -224,7 +231,9 @@ export function FinancialBookingReview({
         <Button
           variant="outline"
           disabled={
-            busy || (!categoryId && !purchase) || (!purchase && !vendor)
+            busy ||
+            (!categoryId && !purchase) ||
+            (!purchase && !vendor && !identifiedVendor)
           }
           onClick={() => {
             if (categoryId || purchase)

@@ -5,6 +5,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type PurchaseId,
+  parseEntityId,
   parseShortcodeFor,
   type VendorId,
   type VendorShortcode,
@@ -84,6 +85,7 @@ import {
 } from "~/server/domains/shipment/repo/carrier-references";
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
+import { vendorStatementLabels } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { vendorSearch } from "~/server/domains/vendor/repo/search-read-vendor";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import {
@@ -165,11 +167,6 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Vendor accounts retain their configured vendor.",
   },
-  "MerchantVendorRule.vendorId": {
-    code: "block-merchant-rules",
-    effect: "block",
-    description: "Confirmed merchant rules retain their vendor.",
-  },
   "OrderMail.vendorId": {
     code: "block-order-mail",
     effect: "block",
@@ -239,12 +236,6 @@ export const VENDOR_MERGE_EDGE_POLICY = {
     effect: "move-dedupe",
     description:
       "A merged vendor's member account moves to the survivor; when the survivor already has one for that member, its purchases, runs and source claims re-point there, the later sync cursor is kept, and the duplicate account is retired.",
-  },
-  "MerchantVendorRule.vendorId": {
-    code: "block-merchant-rules",
-    effect: "block",
-    description:
-      "Confirmed merchant rules must be reconciled before merging vendors.",
   },
   "OrderMail.vendorId": {
     code: "repoint-order-mail",
@@ -493,6 +484,19 @@ export const vendorScaffold = listScaffold("vendor", vendor, {
       },
     },
     bindings: (bind) => [
+      bind
+        .ids(({ db, ids }) =>
+          vendorStatementLabels(
+            db,
+            ids.map((id) => parseEntityId("vendor", id)),
+          ),
+        )
+        .fields(
+          rawVendorOut.pick({ statementLabels: true }),
+          (row, labels) => ({
+            statementLabels: labels.get(row.id) ?? [],
+          }),
+        ),
       bind(rawVendorOut.pick({ agentHintsLabel: true }), (row) => ({
         agentHintsLabel: agentHintsLabel(
           vendorAgentHints.parse(row.agentHints),

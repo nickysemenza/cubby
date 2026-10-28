@@ -11,66 +11,6 @@ export const modulesChildren = [
   ...emailObservationChildren,
   ...emailFinancialAssociationChildren,
   ...imageProcessingChildren,
-  /** Human-confirmed merchant routing; never inferred repeatedly at write time. */
-  defineChildTable({
-    name: "MerchantVendorRule",
-    exportName: "merchantVendorRule",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
-      },
-      {
-        key: "ledgerPartyId",
-        kind: "uuid",
-        notNull: true,
-        type: "LedgerPartyId",
-        reference: { table: "ledgerParty", column: "id" },
-      },
-      { key: "normalizedMerchant", kind: "text", notNull: true },
-      {
-        key: "vendorId",
-        kind: "uuid",
-        notNull: true,
-        type: "VendorId",
-        reference: { table: "vendor", column: "id" },
-      },
-      {
-        key: "confirmedByUserId",
-        kind: "text",
-        notNull: true,
-        reference: { table: "user", column: "id" },
-      },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-        onUpdateNow: true,
-      },
-    ],
-    types: [
-      {
-        module: "@cubby/schemas/identifiers",
-        exports: ["LedgerPartyId", "VendorId"],
-      },
-    ],
-    indexes: [
-      {
-        name: "MerchantVendorRule_party_merchant_key",
-        unique: true,
-        on: ["ledgerPartyId", "normalizedMerchant"],
-      },
-    ],
-  }),
   defineChildTable({
     name: "MailboxCursor",
     exportName: "mailboxCursor",

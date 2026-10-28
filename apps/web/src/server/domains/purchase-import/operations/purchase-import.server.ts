@@ -13,7 +13,6 @@ import {
 import { startEmailImport } from "~/server/domains/purchase-import/repo/email-actions";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { correctEmailRelevance } from "~/server/domains/purchase-import/repo/gmail/relevance-correction";
-import { confirmMerchantVendorRule } from "~/server/domains/purchase-import/repo/merchant-vendor-rules";
 import {
   prepareSourceOrderReconciliation,
   commitAcceptedSourceOrderReconciliation,
@@ -56,8 +55,6 @@ export const purchaseImportHandlers = implementOperationDomain(
       }),
     operationStatus: (context, input) =>
       purchaseImportOperationStatus(context.db, input, context.actorContext),
-    confirmMerchantVendor: (context, input) =>
-      confirmMerchantVendorRule(context.db, input, context.actorContext),
     mailImportOutcomes: (context, input) =>
       readMailImportOutcomes(context.db, input, context.actorContext),
     mailRead: (context, input) =>

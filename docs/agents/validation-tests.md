@@ -268,7 +268,7 @@ For conditional expected output, construct expected data and assert once; keep
 
 An isolated E2E login starts without a linked member LedgerParty; the synthetic
 HMR household already has one. Before visiting a member-scoped surface such as
-Settings merchant routing or Mail import, call `ensureMemberParty(page, name)`
+Mail import, call `ensureMemberParty(page, name)`
 from `tests/e2e/fixtures/core.ts` so its queries can resolve the acting member.
 
 Create searchable picker fixtures through `createEntityFixture` so the entity

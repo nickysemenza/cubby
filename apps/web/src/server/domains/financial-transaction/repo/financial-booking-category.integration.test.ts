@@ -16,6 +16,7 @@ import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { createLedgerTransfer } from "~/server/domains/ledger-transfer/repo";
 import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import {
@@ -107,6 +108,30 @@ describe("reviewed booking category and refund capacity", () => {
     };
     return { category, purchase, vendor, transaction, line, book, owner };
   }
+  it("books an identified statement Vendor without creating confirmation feedback", async () => {
+    const { vendor, transaction, book } = await fixture();
+    await book(12);
+    const source = await transaction(15);
+    const preview = await previewFinancialBooking(
+      ctx.db,
+      financialBookingInput.parse({ transactionId: source.output.id }),
+    );
+    expect(preview).toMatchObject({
+      vendorId: vendor.shortcode,
+      confirmsMerchant: false,
+    });
+    const result = await commitFinancialBooking(ctx.db, preview, ctx.actor);
+    expect(result.purchaseId).toBeTruthy();
+    expect(
+      await merchantVendorInferenceFor(ctx.db, "Booking fixture vendor"),
+    ).toMatchObject({
+      status: "suggested",
+      candidates: [
+        { vendorId: vendor.shortcode, supportingTransactionCount: 1 },
+      ],
+    });
+  });
+
   // A purchaser override must identify a live member; household card authority
   // may allow an unknown individual but never a household override.
   it("defaults a bare Purchase to its live account member and rejects a household purchaser override", async () => {

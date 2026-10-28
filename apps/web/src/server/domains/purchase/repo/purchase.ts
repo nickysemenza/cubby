@@ -1828,7 +1828,12 @@ const moveChargeAllocations = async (
         eq(financialTransactionAllocation.purchaseId, deadId),
         notDeleted(financialTransactionAllocation),
       ),
-      columns: { id: true, transactionId: true, amount: true },
+      columns: {
+        id: true,
+        transactionId: true,
+        amount: true,
+        confirmsMerchant: true,
+      },
     });
   const survivorAllocations =
     await tx.query.financialTransactionAllocation.findMany({
@@ -1836,7 +1841,12 @@ const moveChargeAllocations = async (
         eq(financialTransactionAllocation.purchaseId, survivorId),
         notDeleted(financialTransactionAllocation),
       ),
-      columns: { id: true, transactionId: true, amount: true },
+      columns: {
+        id: true,
+        transactionId: true,
+        amount: true,
+        confirmsMerchant: true,
+      },
     });
   const survivorByTransaction = new Map(
     survivorAllocations.map((row) => [row.transactionId, row]),
@@ -1852,6 +1862,8 @@ const moveChargeAllocations = async (
         .update(financialTransactionAllocation)
         .set({
           amount: Number(collision.amount) + Number(moving.amount),
+          confirmsMerchant:
+            collision.confirmsMerchant || moving.confirmsMerchant,
           updatedAt: new Date(),
         })
         .where(eq(financialTransactionAllocation.id, collision.id));

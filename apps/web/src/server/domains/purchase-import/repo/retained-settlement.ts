@@ -11,6 +11,7 @@ import {
   type FinancialAccountId,
   type LedgerPartyId,
   type PurchaseId,
+  type VendorId,
 } from "@cubby/schemas/identifiers";
 import {
   paymentTender,
@@ -22,6 +23,7 @@ import { and, asc, between, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import { outer } from "~/server/db/helpers/related";
 import { quotedTable } from "~/server/db/helpers/related";
 import {
   expense,
@@ -50,6 +52,7 @@ import {
   matchCompletePaymentSet,
   type SettlementCandidate,
 } from "~/server/domains/purchase-import/repo/writer-policy";
+import { merchantVendorAllowsSettlementSql } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 
 const log = createLogger("purchase-import.settlement");
 
@@ -279,7 +282,7 @@ async function settleableCharges(
   input: {
     purchaseId: PurchaseId;
     ledgerPartyId: LedgerPartyId;
-    vendorId: string;
+    vendorId: VendorId;
     payments: RetainedPayment[];
     additionalCharges?: readonly Charge[];
     allocatedPurchaseId?: PurchaseId;
@@ -325,12 +328,10 @@ async function settleableCharges(
           day(Math.min(...dated) - POSTING_WINDOW_DAYS * DAY_MS),
           day(Math.max(...dated) + POSTING_WINDOW_DAYS * DAY_MS),
         ),
-        sql`NOT EXISTS (
-          SELECT 1 FROM "MerchantVendorRule" mvr
-          WHERE mvr."ledgerPartyId" = ${input.ledgerPartyId}::uuid
-            AND mvr."normalizedMerchant" = lower(regexp_replace(trim(${financialTransaction.merchant}), '\\s+', ' ', 'g'))
-            AND mvr."vendorId" <> ${input.vendorId}::uuid
-        )`,
+        merchantVendorAllowsSettlementSql(
+          outer(financialTransaction.merchant),
+          input.vendorId,
+        ),
         sql`(NOT EXISTS (
           SELECT 1 FROM "FinancialTransactionAllocation" fta
           WHERE fta."transactionId" = "FinancialTransaction".id
@@ -500,7 +501,7 @@ async function evidencedChargeGroup(
     charge: Charge;
     members: PurchaseId[];
     ledgerPartyId: LedgerPartyId;
-    vendorId: string;
+    vendorId: VendorId;
   },
 ): Promise<PlannedAllocation["next"] | null> {
   const members = [...new Set(input.members)].sort();
@@ -543,10 +544,10 @@ async function namesOnlyThisCharge(
   input: {
     charge: Charge;
     ledgerPartyId: LedgerPartyId;
-    vendorId: string;
+    vendorId: VendorId;
     row: {
       id: PurchaseId;
-      vendorId: string | null;
+      vendorId: VendorId | null;
       statedTotal: number | null;
     };
   },
@@ -860,8 +861,9 @@ async function writePlan(
     await writeAllocationSet(
       tx,
       parseEntityId("financialTransaction", entry.charge.id),
-      entry.next,
+      entry.next.map((row) => ({ ...row, confirmsMerchant: false })),
       before,
+      input.actor,
     );
   }
   await applyAllocationChanges(tx, {

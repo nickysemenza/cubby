@@ -1,3 +1,4 @@
+import { buildActorContext } from "@cubby/schemas/context";
 import {
   financialTransactionCreateInput,
   financialTransactionUpdateData,
@@ -13,11 +14,13 @@ import {
   deletePurchases,
   mergePurchases,
 } from "~/server/domains/purchase/repo/purchase";
+import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import {
   findOrCreateVendor,
   readVendorById,
 } from "~/server/domains/vendor/repo/vendor";
 import { findFinancialTransactionAllocationDefects } from "~/server/generic/problems/repo/detectors-financial";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
   financialTransactionScaffold,
@@ -107,6 +110,132 @@ describe("settlement allocations — write path", () => {
     });
     return items.find((row) => row.id === id);
   };
+
+  it("derives global labels from confirmations without reinforcing inferred MCP allocations", async () => {
+    const accounts = await Promise.all([
+      mkAccount("Synthetic card A"),
+      mkAccount("Synthetic card B"),
+    ]);
+    const vendors = await Promise.all(
+      ["Synthetic market", "Synthetic processor"].map((name) =>
+        createRepoEntity(ctx, "vendor", { name }),
+      ),
+    );
+    const purchases = await Promise.all(
+      vendors.map((vendor) =>
+        createRepoEntity(ctx, "purchase", {
+          vendorId: vendor.output.id,
+          date: "2026-08-10",
+        }),
+      ),
+    );
+    const first = await mkTransaction(accounts[0]!.id, {
+      merchant: "  SYNTHETIC   MARKET  ",
+      allocations: [{ purchaseId: purchases[0]!.output.id, amount: -16.76 }],
+    });
+    const second = await mkTransaction(accounts[1]!.id, {
+      merchant: "synthetic market",
+    });
+    const mcpActor = buildActorContext(ctx.actor.userId, "mcp");
+    await updateFinancialTransaction(
+      ctx.db,
+      second.id,
+      financialTransactionUpdateData.parse({
+        allocations: [
+          {
+            purchaseId: purchases[1]!.output.id,
+            amount: -16.76,
+            confirmsMerchant: false,
+          },
+        ],
+      }),
+      mcpActor,
+    );
+    const unattended = await mkTransaction(accounts[1]!.id, {
+      merchant: "synthetic market",
+    });
+    await updateFinancialTransaction(
+      ctx.db,
+      first.id,
+      financialTransactionUpdateData.parse({
+        allocations: [
+          {
+            purchaseId: purchases[0]!.output.id,
+            amount: -16.76,
+            confirmsMerchant: false,
+          },
+        ],
+      }),
+      buildActorContext(ctx.actor.userId, "system"),
+    );
+    await updateFinancialTransaction(
+      ctx.db,
+      unattended.id,
+      financialTransactionUpdateData.parse({
+        allocations: [{ purchaseId: purchases[1]!.output.id, amount: -16.76 }],
+      }),
+      buildActorContext(ctx.actor.userId, "system"),
+    );
+    const identified = await merchantVendorInferenceFor(
+      ctx.db,
+      "Synthetic Market",
+    );
+    expect(identified).toMatchObject({
+      status: "suggested",
+      candidates: [
+        { vendorId: vendors[0]!.output.id, supportingTransactionCount: 1 },
+      ],
+    });
+    const ids = await Promise.all(
+      vendors.map((vendor) =>
+        resolveOrThrow(ctx.db, "vendor", vendor.output.id),
+      ),
+    );
+    expect((await readVendorById(ctx.db, ids[0]!)).statementLabels).toEqual([
+      "synthetic market",
+    ]);
+    expect((await readVendorById(ctx.db, ids[1]!)).statementLabels).toEqual([]);
+    expect(
+      (await merchantVendorInferenceFor(ctx.db, "synthetic market suffix"))
+        .status,
+    ).toBe("none");
+    // An unrelated amount edit must preserve the inferred allocation's authority.
+    await update(second.id, { amount: -17 });
+    expect(
+      (await merchantVendorInferenceFor(ctx.db, "synthetic market")).status,
+    ).toBe("suggested");
+    await updateFinancialTransaction(
+      ctx.db,
+      second.id,
+      financialTransactionUpdateData.parse({
+        allocations: [{ purchaseId: purchases[1]!.output.id, amount: -17 }],
+      }),
+      mcpActor,
+    );
+    expect(
+      (await merchantVendorInferenceFor(ctx.db, "synthetic market")).status,
+    ).toBe("ambiguous");
+    await update(first.id, { allocations: [] });
+    expect(
+      await merchantVendorInferenceFor(ctx.db, "synthetic market"),
+    ).toMatchObject({
+      status: "suggested",
+      candidates: [{ vendorId: vendors[1]!.output.id }],
+    });
+    await update(second.id, { status: "void" });
+    expect(
+      (await merchantVendorInferenceFor(ctx.db, "synthetic market")).status,
+    ).toBe("none");
+    await update(first.id, {
+      allocations: purchases.map((purchase) => ({
+        purchaseId: purchase.output.id,
+        amount: -8.38,
+      })),
+    });
+    expect(
+      (await merchantVendorInferenceFor(ctx.db, "synthetic market")).status,
+    ).toBe("ambiguous");
+  });
 
   it("splits one card credit across two purchases and nulls the mirror", async () => {
     const account = await mkAccount();
