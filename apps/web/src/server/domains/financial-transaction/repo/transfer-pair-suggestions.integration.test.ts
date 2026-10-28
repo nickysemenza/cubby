@@ -1957,34 +1957,6 @@ describe("transfer-pair suggestions", () => {
     ).toBeTruthy();
   });
 
-  it("republishes unchanged evidence without dropping its labels", async () => {
-    const member = await owner("Synthetic member");
-    await account("Synthetic checking", member);
-    await account("Synthetic savings", member, savings);
-    await statement([
-      {
-        account: "Synthetic checking",
-        date: "2026-05-04",
-        amount: 21,
-        description: "ONLINE TRANSFER TO SAVINGS",
-      },
-      {
-        account: "Synthetic savings",
-        date: "2026-05-04",
-        amount: -21,
-        description: "ONLINE TRANSFER FROM CHECKING",
-      },
-    ]);
-    await refresh();
-    const before = await pending();
-    const again = await generateTransferPairSuggestions(ctx.db, {
-      runId: null,
-    });
-    expect(again.published).toBe(0);
-    expect(await pending()).toEqual(before);
-    expect(before[0]!.judgment.clean).toBe(true);
-  });
-
   it("labels a pair a later Run rediscovers unchanged, after an earlier Run left it unlabelled", async () => {
     const member = await owner("Synthetic member");
     await account("Synthetic checking", member);

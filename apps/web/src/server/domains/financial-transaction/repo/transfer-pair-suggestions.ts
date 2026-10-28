@@ -64,11 +64,17 @@ import { statementTransactionKind } from "~/server/domains/transaction-import/re
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import {
   transitionAssessmentState,
   transitionAssessmentStates,
 } from "~/server/generic/assessment/repo/assessment-state";
+import {
+  countSuggestionLabelBacklog,
+  publishSuggestion,
+  type SuggestionFamily,
+  suggestionLabelBacklog,
+  type SuggestionLabelCursor,
+} from "~/server/generic/assessment/repo/suggestion-publication";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import { canonicalJson } from "~/server/lib/canonical-json";
@@ -1274,69 +1280,23 @@ export type TransferPairPublishOutcome =
   | "suppressed";
 
 /**
- * Publish one pair. Its suggestions are locked first, so a review serializes
- * with its replacement: a dismissal holds, unchanged evidence is left alone
- * (keeping labels a rule re-run would drop, and moving the state to the
- * current Run), and anything else is retired before the new one is listed.
+ * The `transfer_pair` Suggestion family: one slot per pair key. Unchanged
+ * evidence is reconfirmed under the current Run, keeping labels a rule
+ * re-run would drop.
  */
-export async function publishTransferPair(
-  db: Database,
-  pair: Pair,
-  producer: AssessmentProducer,
-): Promise<TransferPairPublishOutcome> {
-  const { judgment } = pair;
-  const fingerprint = await fingerprintTransferPair(judgment);
-  const evidenceFingerprint = await transferPairEvidenceFingerprint(judgment);
-  return withTransactionDatabase(db, async (tx) => {
-    await assertWorkflowEffect(tx);
-    const client = getDb(tx);
-    await client.execute(pairLock(judgment.key));
-    const { rows: prior } = await client.execute<{
-      id: string;
-      fingerprint: string | null;
-      evidenceFingerprint: string | null;
-      suppression: unknown;
-      active: boolean;
-    }>(sql`
-      SELECT id, fingerprint, data->>'evidenceFingerprint' AS "evidenceFingerprint",
-        suppression, active FROM "AssessmentState"
-      WHERE family = ${assessmentFamily.enum.transfer_pair} AND data->>'pairKey' = ${judgment.key}
-      FOR UPDATE
-    `);
-    if (prior.some((row) => row.suppression !== null)) return "suppressed";
-    const same = prior.filter(
-      (row) =>
-        row.active &&
-        (row.fingerprint === fingerprint ||
-          (isRule(producer) &&
-            row.evidenceFingerprint === evidenceFingerprint)),
-    );
-    if (same.length) {
-      // The state follows the Run that last confirmed it, so a later
-      // run-scoped label pass still finds a pair an earlier Run left unlabelled.
-      if (producer.runId)
-        await transitionAssessmentStates(
-          tx,
-          inArray(
-            assessmentState.id,
-            same.map((row) => row.id),
-          ),
-          { runId: producer.runId },
-          { kind: "transfer_pair_reconfirmed" },
-        );
-      return "unchanged";
-    }
-    const retire = prior.filter((row) => row.active).map((row) => row.id);
-    if (retire.length)
-      await transitionAssessmentStates(
-        tx,
-        inArray(assessmentState.id, retire),
-        (row) => ({
-          active: false,
-          ...(row.status === "pending" && { status: "superseded" }),
-        }),
-        { kind: "superseded_by_publication" },
-      );
+const transferPairSuggestions: SuggestionFamily<Pair> = {
+  family: assessmentFamily.enum.transfer_pair,
+  slot: ({ judgment }) => ({
+    lock: `transfer-pair:${judgment.key}`,
+    fields: { pairKey: judgment.key },
+  }),
+  fingerprint: ({ judgment }) => fingerprintTransferPair(judgment),
+  evidenceFingerprint: ({ judgment }) =>
+    transferPairEvidenceFingerprint(judgment),
+  onUnchanged: { reconfirm: "transfer_pair_reconfirmed" },
+  publication: (pair, prior, producer, fingerprints) => {
+    const { judgment } = pair;
+    const { fingerprint, evidenceFingerprint } = fingerprints;
     const data: TransferPairStateData = {
       pairKey: judgment.key,
       outflowAccountId: pair.outflowAccountId,
@@ -1360,9 +1320,8 @@ export async function publishTransferPair(
         !isRule(producer) &&
         [judgment.outflow, judgment.inflow].some((leg) => leg.charge !== null),
     };
-    await publishAssessment(
-      tx,
-      {
+    return {
+      input: {
         publicationKey: `transfer_pair:${judgment.key}:${fingerprint}:${prior.length}`,
         family: "transfer_pair",
         subject: {
@@ -1376,15 +1335,35 @@ export async function publishTransferPair(
         producer,
         evidence: { legs: data.legKeys },
       },
-      {
+      projection: {
         model: producer.model ?? "rule",
         confidence: judgment.clean ? 1 : 0,
         runId: producer.runId,
         data,
       },
-    );
-    return "published";
-  });
+    };
+  },
+  // Rule pairs awaiting movement labels, or committed model publications
+  // awaiting their statement refresh.
+  labelBacklog: sql`((s.active AND s.status = ${suggestionStatus.enum.pending} AND (s.data->>'needsLabel')::boolean)
+    OR coalesce((s.data->>'statementRefreshPending')::boolean, false))`,
+};
+
+/** Publish one pair through the shared Suggestion publication. */
+export async function publishTransferPair(
+  db: Database,
+  pair: Pair,
+  producer: AssessmentProducer,
+): Promise<TransferPairPublishOutcome> {
+  const published = await publishSuggestion(
+    db,
+    transferPairSuggestions,
+    pair,
+    producer,
+  );
+  if (published.outcome === "resolved" || published.outcome === "deferred")
+    throw new Error("Transfer pair publication has no family precheck");
+  return published.outcome;
 }
 
 /**
@@ -1943,10 +1922,10 @@ export async function generateTransferPairSuggestions(
 }
 
 const runScope = (runId: RunId | null | undefined) =>
-  runId ? sql`AND s."runId" = ${runId}::uuid` : sql``;
+  runId ? sql`s."runId" = ${runId}::uuid` : undefined;
 
 /** A label pass's position in `(createdAt, id)` order. */
-export type TransferPairLabelCursor = { createdAt: string; id: string };
+export type TransferPairLabelCursor = SuggestionLabelCursor;
 
 /** Rule pairs awaiting movement labels or committed model publications awaiting their statement refresh. */
 export async function transferPairsNeedingLabels(
@@ -1957,20 +1936,11 @@ export async function transferPairsNeedingLabels(
     runId?: RunId | null;
   },
 ) {
-  const { rows } = await unwrapDb(db).execute<{
-    id: string;
-    createdAt: string;
-    data: unknown;
-  }>(sql`
-    SELECT s.id::text AS id, to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt", s.data
-    FROM "AssessmentState" s
-    WHERE s.family = ${assessmentFamily.enum.transfer_pair}
-      AND ((s.active AND s.status = ${suggestionStatus.enum.pending} AND (s.data->>'needsLabel')::boolean)
-        OR coalesce((s.data->>'statementRefreshPending')::boolean, false)) ${runScope(input.runId)}
-      ${input.after ? sql`AND (s."createdAt", s.id) > (${input.after.createdAt}::timestamp, ${input.after.id}::uuid)` : sql``}
-    ORDER BY s."createdAt", s.id
-    LIMIT ${input.limit}
-  `);
+  const rows = await suggestionLabelBacklog(db, transferPairSuggestions, {
+    limit: input.limit,
+    after: input.after,
+    where: runScope(input.runId),
+  });
   return rows.map((row) => ({
     id: row.id,
     createdAt: row.createdAt,
@@ -1983,13 +1953,11 @@ export async function countTransferPairsNeedingLabels(
   db: Database,
   input: { runId?: RunId | null } = {},
 ) {
-  const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
-    SELECT count(*)::int AS count FROM "AssessmentState" s
-    WHERE s.family = ${assessmentFamily.enum.transfer_pair}
-      AND ((s.active AND s.status = ${suggestionStatus.enum.pending} AND (s.data->>'needsLabel')::boolean)
-        OR coalesce((s.data->>'statementRefreshPending')::boolean, false)) ${runScope(input.runId)}
-  `);
-  return rows[0]?.count ?? 0;
+  return countSuggestionLabelBacklog(
+    db,
+    transferPairSuggestions,
+    runScope(input.runId),
+  );
 }
 
 type StoredPair = {

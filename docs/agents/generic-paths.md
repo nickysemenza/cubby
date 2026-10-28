@@ -48,6 +48,12 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   records, actionability and automatic application. Web list badges and detail sections
   reuse `entity/suggestions/queue`; automatic history uses `suggestions.automaticDecisions`.
   Never a family-specific review list or a status-only pending count.
+- Suggestion publication: a family a Sweep step publishes per slot declares a
+  `SuggestionFamily` and publishes through
+  `server/generic/assessment/repo/suggestion-publication.ts` (slot locks,
+  suppression, unchanged match, retirement, batches of 32 with one-at-a-time
+  fallback, label backlog reads). Family checks plug in as `precheck`/`prepare`
+  hooks; never a second lock-and-retire writer.
 - Run detail: web renders `GenericEntityDetail` with the declared `run` slots; on Apple
   every Run route (`Route.entityDetail(.run, …)`) opens `RunConsoleView`, the
   declared hero and `run` slots through `DetailSlotRegistry`. Its status follows the batched

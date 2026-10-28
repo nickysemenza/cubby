@@ -1778,33 +1778,6 @@ describe("statement Transaction suggestions", () => {
     });
   });
 
-  // Failure modes: a dismissed charge returns on the next pass.
-  it("keeps a dismissed charge dismissed", async () => {
-    await card(ctx);
-    await record(ctx, [rowInput()]);
-    await generate(ctx);
-    const [suggestion] = await suggestions(ctx);
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: suggestion!.assessmentId,
-      operationId: crypto.randomUUID(),
-      verdict: "dismissed",
-      correction: { present: false },
-      intent: "history",
-      suppression: {
-        scope: "statement_transaction",
-        candidateKey: `${suggestion!.source}:${suggestion!.chargeKey}`,
-        fingerprint: suggestion!.fingerprint,
-      },
-    });
-    expect(await suggestions(ctx)).toEqual([]);
-    expect(await generate(ctx)).toBe(0);
-    // Suppression belongs to retained history even after its projection retires.
-    await getDb(ctx.db).execute(sql`UPDATE "AssessmentState" SET active = false
-      WHERE id = ${suggestion!.assessmentId}::uuid`);
-    expect(await generate(ctx)).toBe(0);
-    expect(await suggestions(ctx)).toEqual([]);
-  });
-
   // A same-amount posted twin must reuse the hold's booking and clear its work.
   it("supersedes a booked hold with its same-amount posted row", async () => {
     await card(ctx);

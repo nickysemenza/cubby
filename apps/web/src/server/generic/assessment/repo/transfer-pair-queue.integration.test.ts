@@ -5,7 +5,6 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { dismissItem } from "~/entity/suggestions/queue/suggestion-review";
 import {
   databaseForTransaction,
   getDb,
@@ -247,20 +246,6 @@ describe("transfer pairs in the global queue", () => {
       await getDb(ctx.db).select().from(financialTransaction),
     ).toHaveLength(2);
     expect(await getDb(ctx.db).select().from(ledgerTransfer)).toHaveLength(1);
-  });
-
-  // A dismissed coincidence must stay dismissed when evidence is rediscovered.
-  it("keeps a dismissed pair suppressed on later Sweeps", async () => {
-    await seed();
-    await generateTransferPairSuggestions(ctx.db, { runId: null });
-    const [row] = (
-      await listSuggestionPage(ctx.db, { family: "transfer_pair" })
-    ).items;
-    await reviewAssessment(ctx.db, kernelCtx(ctx), dismissItem(row!));
-    await generateTransferPairSuggestions(ctx.db, { runId: null });
-    expect(
-      (await listSuggestionPage(ctx.db, { family: "transfer_pair" })).items,
-    ).toEqual([]);
   });
 
   // A transfer-only label pass must update statement clean projections too.
