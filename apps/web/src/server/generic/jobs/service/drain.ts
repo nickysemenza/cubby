@@ -46,8 +46,10 @@ type DrainPublication = {
 export type DrainSpec<P> = {
   /** Items claimed per page. */
   limit: number;
-  /** Publication weight of an item (default 1); a chunk holds at most 25. */
+  /** Publication weight of an item (default 1); a chunk holds at most `chunk`. */
   weight?: (item: WorkItem, prepared: P) => number;
+  /** Weight one publication transaction holds (default 25). */
+  chunk?: number;
   isolationLevel?: "serializable";
   /** Consecutive failures before `exhaust` settles an item; omitted retries forever. */
   maxAttempts?: number;
@@ -108,13 +110,14 @@ const chunked = <P>(
   items: readonly WorkItem[],
   prepared: P,
   weight: DrainSpec<P>["weight"],
+  size: number,
 ) => {
   const chunks: WorkItem[][] = [];
   let current: WorkItem[] = [];
   let load = 0;
   for (const item of items) {
     const cost = Math.max(1, weight?.(item, prepared) ?? 1);
-    if (current.length && load + cost > DRAIN_PUBLISH_CHUNK) {
+    if (current.length && load + cost > size) {
       chunks.push(current);
       current = [];
       load = 0;
@@ -209,6 +212,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
         items.filter((item) => !preparationFailures.has(item)),
         prepared,
         spec.weight,
+        spec.chunk ?? DRAIN_PUBLISH_CHUNK,
       ))
         await publish(chunk);
       return {

@@ -45,11 +45,12 @@ const DRAIN_PAGE_MARKS = 20;
  */
 export const derivedDrainHandler = (
   computes: DerivedComputes,
-  /** Production pages stay at DRAIN_PAGE_MARKS; test drains settle larger fixtures faster. */
-  limit = DRAIN_PAGE_MARKS,
+  /** Production keeps the default page and chunk; test drains settle large fixtures in one transaction. */
+  { limit = DRAIN_PAGE_MARKS, chunk }: { limit?: number; chunk?: number } = {},
 ): JobHandler =>
   defineDrain<{ plan: DerivedPagePlan; chunk: DerivedChunk }>({
     limit,
+    chunk,
     repeats: true,
     async prepare(db, items) {
       const { plan, failed } = await withTrace(
