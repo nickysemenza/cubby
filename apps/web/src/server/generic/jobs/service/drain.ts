@@ -249,7 +249,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
             processed: items.length,
             published,
             failed,
-            ...(coalesced ? { covered: coalesced } : {}),
+            covered: coalesced,
           },
         },
       };

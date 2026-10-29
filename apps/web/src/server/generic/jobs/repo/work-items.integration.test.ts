@@ -224,10 +224,19 @@ describe("generic WorkItems", () => {
     });
     const handlers = { [drain.kind]: handler };
 
+    await getDb(ctx.db)
+      .update(job)
+      .set({ result: { covered: 180 } })
+      .where(eq(job.id, jobId));
     await expect(advanceJob(ctx.db, jobId, handlers)).resolves.toBe(
       "succeeded",
     );
     expect(publishedRefs).toEqual([published]);
+    const [settled] = await getDb(ctx.db)
+      .select({ result: job.result })
+      .from(job)
+      .where(eq(job.id, jobId));
+    expect(settled!.result).toMatchObject({ covered: 0 });
     const rows = await getDb(ctx.db)
       .select()
       .from(workItem)
