@@ -50,6 +50,22 @@ const publishedOutcome = {
   empty: storedFieldDecision.shape.outcome.options[1].shape.kind.value,
 } satisfies { value: "value"; empty: "empty" };
 
+/** Keep publication identity and the kind/key index predicate together. */
+export function storedPublicationMatch(
+  publication: {
+    entityId: AnyColumn | SQL;
+    kind: AnyColumn | SQL;
+    key: AnyColumn | SQL;
+  },
+  {
+    entity,
+    id,
+    key,
+  }: { entity: Entity; id: AnyColumn | SQL; key: string | SQL },
+): SQL {
+  return sql`(${publication.entityId} = ${id} AND ${publication.kind} = ${entity} AND ${publication.key} = ${key})`;
+}
+
 /** The typed sort projection of a stored value, for ORDER BY, WHERE and SUM. */
 export function storedDerivedSql(
   entity: Entity,
@@ -83,7 +99,10 @@ export function storedDerivedSql(
         : declaration.sort === "text"
           ? sql.raw(`"sortText"`)
           : sql.raw(`"sortNumber"`);
-  const cached = sql`(SELECT ${column} FROM "DerivedValue" WHERE "entityId" = ${id} AND key = ${storedKey}
+  const cached = sql`(SELECT ${column} FROM "DerivedValue" WHERE ${storedPublicationMatch(
+    { entityId: sql`"entityId"`, kind: sql`kind`, key: sql`key` },
+    { entity, id, key: storedKey },
+  )}
     AND "decidedBy"#>>'{outcome,kind}' = 'value'
     ${
       currentAssignment
@@ -109,7 +128,10 @@ export function storedFieldAvailableSql(
   const declaration = storedDerived(entity, field?.storedKey ?? key);
   return declaration?.publishes === "derivedValue"
     ? sql`EXISTS (
-    SELECT 1 FROM "DerivedValue" v WHERE v."entityId" = ${id} AND v.key = ${declaration.key}
+    SELECT 1 FROM "DerivedValue" v WHERE ${storedPublicationMatch(
+      { entityId: sql`v."entityId"`, kind: sql`v.kind`, key: sql`v.key` },
+      { entity, id, key: declaration.key },
+    )}
       AND v."computedAt" IS NOT NULL AND v."decidedBy"#>>'{outcome,kind}' IN (${publishedOutcome.value}, ${publishedOutcome.empty})
       ${currentValue ? sql`AND (${currentValue} IS NOT NULL OR v."decidedBy"#>>'{outcome,kind}' = ${publishedOutcome.empty})` : sql``}
   )`
@@ -229,7 +251,10 @@ export async function loadStoredDerived(
            d."lastError" AS error, d."readyAt" AS "retryAt"
       FROM unnest(${uuidArrayParam(ids)}) AS i(id)
      CROSS JOIN keys k
-      LEFT JOIN "DerivedValue" v ON v."entityId" = i.id AND v.key = k.key
+      LEFT JOIN "DerivedValue" v ON ${storedPublicationMatch(
+        { entityId: sql`v."entityId"`, kind: sql`v.kind`, key: sql`v.key` },
+        { entity, id: sql`i.id`, key: sql`k.key` },
+      )}
       LEFT JOIN LATERAL ${owedWorkItem(sql`k.target`, sql`i.id`)} d ON true`);
   for (const row of z.array(valueRow).parse(result.rows)) {
     const byKey = out.get(row.entityId) ?? new Map();

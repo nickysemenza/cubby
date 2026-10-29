@@ -2,13 +2,14 @@ import { dataCheck, type DataCheck } from "@cubby/schemas/data-quality";
 import { entityQualityCheckState } from "@cubby/schemas/data-quality-shape";
 import { emailFiltersSchema } from "@cubby/schemas/email";
 import { oneOrManyValues } from "@cubby/schemas/pagination";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { householdDaySql } from "~/server/db/helpers/query";
 import { derivedValue } from "~/server/db/retained-tables";
 import { email } from "~/server/db/schema";
 import { emailScaffold } from "~/server/domains/email/repo/email";
+import { storedPublicationMatch } from "~/server/generic/derived/repo/read";
 import {
   gapDeclaration,
   gapFilters,
@@ -45,11 +46,11 @@ export const emailWorkSources: WorkSource[] = [
           .from(email)
           .leftJoin(
             quality,
-            and(
-              eq(quality.entityId, email.id),
-              eq(quality.kind, declaration.entity),
-              eq(quality.key, "dataQuality"),
-            ),
+            storedPublicationMatch(quality, {
+              entity: declaration.entity,
+              id: email.id,
+              key: "dataQuality",
+            }),
           )
           .where(
             and(

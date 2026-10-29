@@ -3673,6 +3673,8 @@ The Email source joins its retained quality publication once by entity id, kind
 and key for admission and reason columns, so PostgreSQL can use the existing
 kind/key index. It preserves missing-publication and fresh record-read semantics
 without repeating one indexed publication lookup for every check and label.
+`storedPublicationMatch` owns the entity id/kind/key predicate for joined and
+scalar stored-publication reads; callers supply all three identity parts.
 
 `workQueueList` is the queue's [relation list](#declared-lists-over-a-relation):
 Type, Owner, Family, Executor and Reason filter it; Type, Owner, Family,
