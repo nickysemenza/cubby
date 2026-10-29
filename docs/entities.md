@@ -2938,6 +2938,8 @@ starting IDs and follow the declared tree depth with a cycle guard. These walks
 run only in background fanout expansion, preserving source-only save capture.
 Walks retain tombstoned nodes so deletion still reaches placement dependents;
 the canonical computation decides which placements remain live.
+Product placement uses the canonical ancestor reader's ten-edge bound, even
+when a stored tree is deeper than the display cap.
 The drain's pre-compute fanout observation exposes each page target's prefix
 bounds directly in an OR predicate so the same index serves that read; a JSON
 target-list subquery must not turn each page into a whole-drain scan.
