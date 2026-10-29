@@ -1,17 +1,21 @@
 import {
+  dataCheck,
   dataCheckMessage,
   dataChecksByEntity,
   type DataCheck,
 } from "@cubby/schemas/data-quality";
+import { entityQualityCheckState } from "@cubby/schemas/data-quality-shape";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { oneOrManyValues } from "@cubby/schemas/pagination";
 import {
   workQueueGapViews,
   type WorkAction,
   type WorkSourceActionId,
 } from "@cubby/schemas/work-queue";
 import { workQueueGapChecks } from "@cubby/schemas/work-queue-policy";
-import { sql, type SQL } from "drizzle-orm";
+import { or, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import {
   problemActionId,
@@ -21,10 +25,10 @@ import { compileProblemFilters } from "~/entity/problems/problem-filter-semantic
 import type { FilterAssembly } from "~/entity/problems/problem-query";
 import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import type { Database } from "~/server/db";
-import {
-  gapCondition,
-  relatedGapCondition,
-} from "~/server/generic/data-quality/repo/sql";
+import { derivedValue } from "~/server/db/retained-tables";
+import { storedEntryFor } from "~/server/generic/data-quality/repo/entry";
+import { relatedGapCondition } from "~/server/generic/data-quality/repo/sql";
+import { storedPublicationMatch } from "~/server/generic/derived/repo/read";
 
 import {
   admittedReasons,
@@ -56,7 +60,7 @@ export const gapDeclaration = (entity: GapEntity) => ({
 
 /** Narrow admission to requested checks, while retaining every row membership
  * for overlapping negative reason filters. Record reads use fresh verdicts. */
-export const gapFilters = (scope: WorkScope, entity: GapEntity) => {
+const gapFilters = (scope: WorkScope, entity: GapEntity) => {
   const view = gapView(entity);
   const saved = entitySummary[entity].list.savedViews.find(
     (saved) => saved.id === view.view,
@@ -81,11 +85,10 @@ export const gapFilters = (scope: WorkScope, entity: GapEntity) => {
   return { ...filters, dataGap: [...checks] };
 };
 
-export const gapColumns = (
+const gapColumns = (
   scope: WorkScope,
   entity: GapEntity,
-  /** A source may join its publication once instead of repeating scalar lookups. */
-  ownGap: (check: DataCheck) => SQL = (check) => gapCondition(entity, check),
+  ownGap: (check: DataCheck) => SQL,
 ) => {
   const checks = workQueueGapChecks(gapView(entity));
   const own = new Set<DataCheck>(dataChecksByEntity[entity].options);
@@ -117,6 +120,45 @@ export const gapColumns = (
       ),
       sql`, `,
     )}]::text[], NULL)`,
+  };
+};
+
+/** One publication supplies admission and complete reason membership. */
+export const gapPublicationRead = ({
+  scope,
+  entity,
+}: {
+  scope: WorkScope;
+  entity: GapEntity;
+}) => {
+  const filters = gapFilters(scope, entity);
+  if (!filters) return null;
+  const { dataGap, ...otherFilters } = filters;
+  const publication = alias(derivedValue, `work_${entity}_quality`);
+  const own = new Set<DataCheck>(dataChecksByEntity[entity].options);
+  const publishedGap = (check: DataCheck) =>
+    sql`coalesce(${publication.value}->'checks'->>${check} = ${entityQualityCheckState.enum.gap}, false)`;
+  const admittedChecks = (oneOrManyValues(dataGap) ?? []).map((check) =>
+    dataCheck.parse(check),
+  );
+  return {
+    filters: otherFilters,
+    publication,
+    match: storedPublicationMatch(publication, {
+      entity,
+      id: storedEntryFor(entity).table.id,
+      key: "dataQuality",
+    }),
+    columns: gapColumns(scope, entity, publishedGap),
+    admission: admittedChecks.length
+      ? or(
+          ...admittedChecks.map((check) =>
+            own.has(check)
+              ? publishedGap(check)
+              : relatedGapCondition(entity, check),
+          ),
+        )
+      : undefined,
   };
 };
 
