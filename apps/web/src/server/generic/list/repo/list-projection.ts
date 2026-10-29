@@ -149,6 +149,7 @@ export type ListReadOptions<Row> = {
 };
 
 const sourceRecord = z.record(z.string(), z.unknown());
+const nullableString = z.string().nullable();
 
 /** The read keys the plan resolves through the canonical display-media query. */
 const displayMediaFields = ["displayImages", "images", "labelImages"];
@@ -167,8 +168,8 @@ function projectDateRanges(
     if (!Object.hasOwn(source, start) || !Object.hasOwn(source, end))
       throw new Error(`Requested date columns were not loaded: ${key}`);
     output[key] = dateRangeFromDates(
-      z.string().nullable().parse(source[start]),
-      z.string().nullable().parse(source[end]),
+      nullableString.parse(source[start]),
+      nullableString.parse(source[end]),
     );
   }
   return output;
@@ -660,7 +661,7 @@ export function listReadPlan<Row>(
                 db,
                 target,
                 sources.flatMap(({ source }) =>
-                  keys.map((key) => z.string().nullable().parse(source[key])),
+                  keys.map((key) => nullableString.parse(source[key])),
                 ),
                 { includeDeleted: instruction.includeDeleted },
               );
@@ -718,7 +719,7 @@ export function listReadPlan<Row>(
               )
             )
               continue;
-            const raw = z.string().nullable().parse(source[key]);
+            const raw = nullableString.parse(source[key]);
             const linked = raw === null ? undefined : links[index]?.get(raw);
             if (!linked && raw !== null && instruction.missing === "error")
               throw new Error(
