@@ -532,7 +532,7 @@ describe("vendor repository — deletion guard", () => {
 describe("vendor repository — mergeVendors", () => {
   const ctx = withTestDb();
 
-  it("preserves Purchase research committed while a Vendor merge waits for its row locks", async () => {
+  it("preserves concurrent research and newly added sender identities while a Vendor merge waits", async () => {
     const keep = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic locked keeper",
     });
@@ -553,6 +553,12 @@ describe("vendor repository — mergeVendors", () => {
     const release = Promise.withResolvers<void>();
     const editing = getDb(ctx.db).transaction(async (tx) => {
       await tx
+        .select({ id: vendor.id })
+        .from(vendor)
+        .where(eq(vendor.id, lose.entityId))
+        .for("update");
+
+      await tx
         .select({ id: purchase.id })
         .from(purchase)
         .where(eq(purchase.id, keeper.entityId))
@@ -560,6 +566,11 @@ describe("vendor repository — mergeVendors", () => {
       const result = await tx.execute(sql`SELECT pg_backend_pid() AS pid`);
       locked.resolve(z.object({ pid: z.number() }).parse(result.rows[0]).pid);
       await release.promise;
+      await tx
+        .update(vendor)
+        .set({ orderEmailSenders: ["late@synthetic-seller.example"] })
+        .where(eq(vendor.id, lose.entityId));
+
       await tx
         .update(purchase)
         .set({ notes: sql`${purchase.notes} || E'\nConcurrent research'` })
@@ -586,6 +597,77 @@ describe("vendor repository — mergeVendors", () => {
       await editing;
     }
     await merging;
+    const [identity] = await getDb(ctx.db)
+      .select({ senders: vendor.orderEmailSenders })
+      .from(vendor)
+      .where(eq(vendor.id, keep.entityId));
+    expect(identity?.senders).toEqual(["late@synthetic-seller.example"]);
+
+    const editLocked = Promise.withResolvers<number>();
+    const editRelease = Promise.withResolvers<void>();
+    const learning = getDb(ctx.db).transaction(async (tx) => {
+      await tx
+        .select({ id: vendor.id })
+        .from(vendor)
+        .where(eq(vendor.id, keep.entityId))
+        .for("update");
+      const pid = (
+        await tx.execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`)
+      ).rows[0]?.pid;
+      if (!pid) throw new Error("Synthetic Vendor lock is missing");
+      editLocked.resolve(pid);
+      await editRelease.promise;
+      await tx
+        .update(vendor)
+        .set({
+          orderEmailSenders: [
+            "late@synthetic-seller.example",
+            "learned@synthetic-seller.example",
+          ],
+          orderEmailSenderPolicies: {
+            "late@synthetic-seller.example": "confirmed",
+            "learned@synthetic-seller.example": "learned",
+          },
+        })
+        .where(eq(vendor.id, keep.entityId));
+    });
+    const editPid = await editLocked.promise;
+    const clearing = updateVendor(
+      ctx.db,
+      keep.output.id,
+      { orderEmailSenders: [] },
+      ctx.actor,
+    );
+    try {
+      await expect
+        .poll(
+          async () =>
+            (
+              await getDb(ctx.db).execute<{ waiting: boolean }>(
+                sql`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE ${editPid}::int = ANY(pg_blocking_pids(pid))) AS waiting`,
+              )
+            ).rows[0]?.waiting,
+        )
+        .toBe(true);
+    } finally {
+      editRelease.resolve();
+      await learning;
+    }
+    await clearing;
+    const [cleared] = await getDb(ctx.db)
+      .select({
+        senders: vendor.orderEmailSenders,
+        policies: vendor.orderEmailSenderPolicies,
+      })
+      .from(vendor)
+      .where(eq(vendor.id, keep.entityId));
+    expect(cleared).toEqual({
+      senders: [],
+      policies: {
+        "late@synthetic-seller.example": "excluded",
+        "learned@synthetic-seller.example": "excluded",
+      },
+    });
     const [saved] = await getDb(ctx.db)
       .select({ notes: purchase.notes })
       .from(purchase)
@@ -746,6 +828,29 @@ describe("vendor repository — mergeVendors", () => {
     const keeper = await findOrCreateVendor(ctx.db, "B&H Photo");
     const loser = await findOrCreateVendor(ctx.db, "B&H");
 
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({
+        orderEmailSenders: [
+          "receipts@synthetic-keep.example",
+          "orders@synthetic-keep.example",
+        ],
+        orderEmailSenderPolicies: {
+          "receipts@synthetic-keep.example": "learned",
+          "orders@synthetic-keep.example": "learned",
+        },
+      })
+      .where(eq(vendor.id, keeper));
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({
+        orderEmailSenders: ["orders@synthetic-keep.example"],
+        orderEmailSenderPolicies: {
+          "receipts@synthetic-keep.example": "excluded",
+          "orders@synthetic-keep.example": "confirmed",
+        },
+      })
+      .where(eq(vendor.id, loser));
     const keeperCharge = await charge(keeper, "KEEP-1");
     const loserOrdered = await charge(loser, "LOSE-1");
     const loserCashRun = await charge(loser, null);
@@ -767,6 +872,21 @@ describe("vendor repository — mergeVendors", () => {
     );
 
     expect(merged.id).toBe(keeperCode);
+    const [senderIntent] = await getDb(ctx.db)
+      .select({
+        senders: vendor.orderEmailSenders,
+        policies: vendor.orderEmailSenderPolicies,
+      })
+      .from(vendor)
+      .where(eq(vendor.id, keeper));
+    expect(senderIntent).toEqual({
+      senders: ["orders@synthetic-keep.example"],
+      policies: {
+        "receipts@synthetic-keep.example": "excluded",
+        "orders@synthetic-keep.example": "confirmed",
+      },
+    });
+
     // The loser's name stays findable: imports resolve it to the keeper.
     expect(merged.aliases).toEqual(["B&H"]);
     expect(await findOrCreateVendor(ctx.db, "B&H")).toBe(keeper);

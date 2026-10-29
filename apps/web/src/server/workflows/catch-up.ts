@@ -114,9 +114,29 @@ export async function discoverPurchases(db: Database) {
   }
   // Project terminal execution before checking the mailbox admission slot.
   await reconcileWorkflowRuns(db);
+  const { learnAcceptedSenders } =
+    await import("~/server/domains/purchase-import/repo/sender-attribution");
+  const { systemActor } = await import("~/server/domains/run/repo/ensure-run");
+  const { withTransactionDatabase } = await import("~/server/db/helpers");
+  const learned = await withTransactionDatabase(db, (tx) =>
+    learnAcceptedSenders(tx, systemActor()),
+  );
   const pending = await (
     await import("~/server/domains/purchase-import/repo/mail-import-run")
   ).importPendingEmails(db);
+  if (learned === 50)
+    await (
+      await import("~/server/workflows/background-tasks/publish")
+    ).publishBackgroundTasks(
+      db,
+      [
+        {
+          kind: "maintenance.purchase-discovery",
+          requestedAt: new Date().toISOString(),
+        },
+      ],
+      { source: "sender-attribution-continuation" },
+    );
   const mail = await startMailDiscovery(db);
   log.info("purchase discovery", {
     mailPassesStarted: mail.started,

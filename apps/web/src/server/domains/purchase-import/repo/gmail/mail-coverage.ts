@@ -18,7 +18,12 @@ import { runPurpose } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { and, desc, eq, isNotNull, isNull, inArray, sql } from "drizzle-orm";
 
-import { distinctSenderDomain, senderAddress } from "~/lib/vendor/domains";
+import {
+  broadcastSender,
+  distinctSenderDomain,
+  senderAddress,
+  vendorWebsiteDomain,
+} from "~/lib/vendor/domains";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -35,6 +40,7 @@ import {
 import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
 import { completedControlledSearches } from "~/server/domains/purchase-import/repo/controlled-mail-import";
 import { readMailImportSettings } from "~/server/domains/purchase-import/repo/mail-import-settings";
+import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
 
 import { listMemberMailboxes, listGmailSyncTargets } from "./targets";
 import { vendorSearchTerms } from "./vendor-identity";
@@ -118,6 +124,10 @@ export async function readMailCoverage(
   db: Database,
   viewerUserId: string,
 ): Promise<MailCoverage> {
+  const senderAttributions = await readSenderAttributions(db);
+  const attributionBySender = new Map(
+    senderAttributions.map((row) => [row.sender, row]),
+  );
   const [
     members,
     vendors,
@@ -319,7 +329,7 @@ export async function readMailCoverage(
         ),
       )
       .orderBy(desc(run.startedAt), desc(run.id)),
-    listGmailSyncTargets(db),
+    listGmailSyncTargets(db, senderAttributions),
   ]);
   const unresolvedEmails = (
     await Promise.all(
@@ -353,7 +363,19 @@ export async function readMailCoverage(
       ),
     )
   ).flat();
-  const terms = new Map(vendors.map((row) => [row.id, vendorSearchTerms(row)]));
+  const terms = new Map(
+    vendors.map((row) => [
+      row.id,
+      vendorSearchTerms({
+        ...row,
+        orderEmailSenders: row.orderEmailSenders.filter(
+          (address) =>
+            attributionBySender.get(address.trim().toLowerCase())?.vendorId ===
+            row.shortcode,
+        ),
+      }),
+    ]),
+  );
   const vendorQueries = new Map(
     vendors.map((row) => [
       row.id,
@@ -638,6 +660,10 @@ export async function readMailCoverage(
         mailboxId: member.mailboxId,
         memberId: member.memberShortcode,
         searchTerms,
+        domains: [vendorWebsiteDomain(row.website)].filter(
+          (domain): domain is string => domain !== null,
+        ),
+        senderAddresses: row.orderEmailSenders,
         state,
         searchesCompleted: complete,
         searchesTotal: queries.length,
@@ -767,6 +793,15 @@ export async function readMailCoverage(
         return {
           mailboxId: member.mailboxId,
           sender,
+          attribution: attributionBySender.get(sender) ?? {
+            sender,
+            state: broadcastSender(sender) ? "shared" : "unmapped",
+            origin: null,
+            vendorId: null,
+            vendors: [],
+            evidenceCount: 0,
+            evidence: [],
+          },
           query: query.query,
           state: position?.completed
             ? "complete"
@@ -787,6 +822,7 @@ export async function readMailCoverage(
       });
   });
   return mailCoverage.parse({
+    senderAttributions,
     mailboxes,
     rows,
     discovery,

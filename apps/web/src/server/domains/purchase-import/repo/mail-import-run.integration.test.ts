@@ -8,6 +8,7 @@ import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -30,7 +31,10 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { paidRunPreflight } from "~/server/domains/run/service/execution-transport";
+import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
@@ -62,7 +66,10 @@ import {
   resumeControlledMailImport,
   setMailImport,
 } from "./mail-import-settings";
-import { transferMailRunSources } from "./mail-run-membership";
+import {
+  MAIL_SOURCE_TRANSFER_OPERATION,
+  transferMailRunSources,
+} from "./mail-run-membership";
 import * as sourceIdentity from "./mail-source-identity";
 import {
   canDispatchRunCoordinator,
@@ -70,6 +77,7 @@ import {
   loadRunDetail,
   markRunFailed,
 } from "./run-service";
+import { setSenderAttribution } from "./sender-attribution";
 
 // Admission must bind original sources without a known Vendor, order, or Mac;
 // replay cannot create a second Run, and stale/foreign sources cannot enter it.
@@ -436,6 +444,10 @@ describe("mail research admission", () => {
   // disabled mailboxes, excluded sources, and existing ownership stay respected.
   it("automatically admits retained related Email once its mailbox is enabled and replays without duplicate Runs", async () => {
     const { party, mail } = await source();
+    const confirmedVendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic confirmed receipt seller",
+      orderEmailSenders: ["receipts@shop.example"],
+    });
     await getDb(ctx.db).insert(account).values({
       id: crypto.randomUUID(),
       accountId: "synthetic-mailbox",
@@ -493,6 +505,161 @@ describe("mail research admission", () => {
       .from(emailTable)
       .where(eq(emailTable.orderMailId, excluded.id));
     expect(excludedEmail?.runId).toBeNull();
+    if (!owner) throw new Error("The automatic import must have an owner");
+    await settleMail(ctx.db, {
+      mail,
+      importRunId: owner.id,
+      status: "blocked",
+      detail: "Seller identity needs review",
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "needs_review", endedAt: new Date() })
+      .where(eq(run.id, owner.id));
+    const originalOutcomes = await getDb(ctx.db)
+      .select()
+      .from(runOperation)
+      .where(eq(runOperation.runId, owner.id))
+      .orderBy(runOperation.id);
+    await importPendingEmails(ctx.db);
+    const [rechecked] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, mail.id));
+    expect(rechecked?.runId).not.toBe(owner.id);
+    expect(rechecked?.status).toBe("researching");
+    expect(await frozenSources(owner.id)).toEqual([
+      { orderMailId: mail.id, checksum: mail.rawChecksum },
+    ]);
+    const preserved = await getDb(ctx.db)
+      .select()
+      .from(runOperation)
+      .where(eq(runOperation.runId, owner.id))
+      .orderBy(runOperation.id);
+    expect(preserved).toHaveLength(originalOutcomes.length + 1);
+    expect(preserved).toEqual(expect.arrayContaining(originalOutcomes));
+    expect(
+      preserved.find(
+        (operation) => operation.kind === MAIL_SOURCE_TRANSFER_OPERATION,
+      )?.result,
+    ).toMatchObject({
+      toRunId: rechecked?.runId,
+      sources: [{ orderMailId: mail.id, checksum: mail.rawChecksum }],
+    });
+    if (!rechecked?.runId)
+      throw new Error("The verified sender must admit a successor");
+    await settleMail(ctx.db, {
+      mail,
+      importRunId: rechecked.runId,
+      status: "blocked",
+      detail: "Other receipt evidence is still missing",
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "needs_review", endedAt: new Date() })
+      .where(eq(run.id, rechecked.runId));
+    await importPendingEmails(ctx.db);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.purpose, "mail_import")),
+    ).toHaveLength(2);
+    const alternate = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic alternate seller",
+    });
+    await withTransaction(ctx.db, (tx) =>
+      setSenderAttribution(
+        tx,
+        {
+          sender: "receipts@shop.example",
+          vendorId: alternate.output.id,
+          expectedVendorIds: [confirmedVendor.output.id],
+        },
+        ctx.actor,
+      ),
+    );
+    await importPendingEmails(ctx.db);
+    const [alternateEmail] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, mail.id));
+    if (!alternateEmail?.runId)
+      throw new Error("Expected alternate mapping owner");
+    expect(alternateEmail.runId).not.toBe(rechecked.runId);
+    await settleMail(ctx.db, {
+      mail,
+      importRunId: alternateEmail.runId,
+      status: "blocked",
+      detail: "Synthetic unresolved alternate",
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "needs_review", endedAt: new Date() })
+      .where(eq(run.id, alternateEmail.runId));
+    await withTransaction(ctx.db, (tx) =>
+      setSenderAttribution(
+        tx,
+        {
+          sender: "receipts@shop.example",
+          vendorId: confirmedVendor.output.id,
+          expectedVendorIds: [alternate.output.id],
+        },
+        ctx.actor,
+      ),
+    );
+    await importPendingEmails(ctx.db);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(emailTable)
+          .where(eq(emailTable.orderMailId, mail.id))
+      )[0]?.runId,
+    ).toBe(alternateEmail.runId);
+    // History-only reviews protect retained intent without changing Email.updatedAt.
+    const prediction = await publishAssessment(ctx.db, {
+      publicationKey: `synthetic-retained-review:${crypto.randomUUID()}`,
+      family: "email_relevance",
+      subject: {
+        kind: "email_relevance",
+        entity: "email",
+        recordId: alternateEmail.id,
+        checksum: mail.rawChecksum,
+        observationId: crypto.randomUUID(),
+      },
+      judgment: { classification: "uncertain", stage: "decision" },
+      producer: null,
+      fingerprint: mail.rawChecksum,
+      evidence: null,
+    });
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: prediction.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "history",
+    });
+    const replacement = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic replacement receipt seller",
+    });
+    await withTransaction(ctx.db, (tx) =>
+      setSenderAttribution(
+        tx,
+        {
+          sender: "receipts@shop.example",
+          vendorId: replacement.output.id,
+          expectedVendorIds: [confirmedVendor.output.id],
+        },
+        ctx.actor,
+      ),
+    );
+    await importPendingEmails(ctx.db);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.purpose, "mail_import")),
+    ).toHaveLength(3);
   });
 
   it("queues continuation when enabling import has more than one admission page", async () => {

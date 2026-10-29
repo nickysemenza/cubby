@@ -2,7 +2,7 @@ import {
   assessmentSubjects,
   mailImportOutcome,
 } from "@cubby/schemas/assessment";
-import type { ActorContext } from "@cubby/schemas/context";
+import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 /**
  * The public `mail` tool: read a member's retained Email and record what it
  * means for their Purchases. Pi's Mail import and a member's Claude/Codex
@@ -80,6 +80,7 @@ import {
   assertMailRunMembership,
   assertMailRunReadAuthority,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
+import { learnAcceptedSender } from "~/server/domains/purchase-import/repo/sender-attribution";
 import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { createAppError } from "~/server/errors/app-error";
 import { isSerializationFailure } from "~/server/errors/db-errors";
@@ -1283,7 +1284,7 @@ export async function linkImportedMail(
   input: {
     mail: RetainedMail;
     purchases: { event: MailEvent; purchaseId: string }[];
-    actorUserId: string;
+    actorUserId: UserId;
     runId: RunId;
     attachmentDecisions: PreparedMailAttachmentDecisions;
   },
@@ -1313,6 +1314,38 @@ export async function linkImportedMail(
       proposedBy: "import",
       attachmentDecisions: input.attachmentDecisions,
     });
+  const vendorIds = await getDb(db)
+    .select({ id: purchase.vendorId })
+    .from(purchase)
+    .where(
+      inArray(
+        purchase.id,
+        input.purchases
+          .filter((target) => target.event === "confirmation")
+          .map((target) => parseEntityId("purchase", target.purchaseId)),
+      ),
+    );
+  const uniqueVendors = [...new Set(vendorIds.map((row) => row.id))];
+  if (uniqueVendors.length === 1 && uniqueVendors[0]) {
+    await learnAcceptedSender(
+      db,
+      input.mail.sender,
+      uniqueVendors[0],
+      buildActorContext(input.actorUserId, "system", { runId: input.runId }),
+    );
+    await (
+      await import("~/server/workflows/background-tasks/publish")
+    ).publishBackgroundTasks(
+      db,
+      [
+        {
+          kind: "maintenance.purchase-discovery",
+          requestedAt: new Date().toISOString(),
+        },
+      ],
+      { source: "sender-attribution" },
+    );
+  }
   await settleMail(db, {
     mail: { ...input.mail, ...mail },
     importRunId: await mailImportRun(db, input.runId),

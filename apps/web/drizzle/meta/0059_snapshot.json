@@ -1,6 +1,6 @@
 {
-  "id": "70420180-b2da-4a96-884b-a23df3b70537",
-  "prevId": "cb9e2ba9-06c5-4835-a3ec-856b465ba536",
+  "id": "1c2ae2b6-079f-42fc-8a2c-d7486fd6050e",
+  "prevId": "70420180-b2da-4a96-884b-a23df3b70537",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -21867,6 +21867,13 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
+        },
+        "orderEmailSenderPolicies": {
+          "name": "orderEmailSenderPolicies",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         }
       },
       "indexes": {

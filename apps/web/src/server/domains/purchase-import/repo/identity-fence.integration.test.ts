@@ -1,12 +1,14 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { type ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
 import { and, eq, isNull, ne } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   auditLog,
+  email,
   entityExternalId,
   externalSource,
   expense,
@@ -38,6 +40,12 @@ import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
+import { senderProofVendor } from "./import-vendor";
+import {
+  learnAcceptedSenders,
+  setSenderAttribution,
+} from "./sender-attribution";
+import { readSenderAttributions } from "./sender-attribution-read";
 
 const checksum = (digit: string) => digit.repeat(64);
 
@@ -389,20 +397,29 @@ describe("member prepare and commit identity fences", () => {
       ]);
     });
 
-    it.each(["shopifyemail.com", "order.online"])(
+    it.each(["paypal.com", "order.online"])(
       "never matches the shared platform %s, even with an exact sender configured",
       async (domain) => {
         const { party } = await memberImportWorld(ctx.db, ctx.actor);
         const platform = await insertWithShortcode(ctx.db, "vendor", {
           name: "Alpha Pottery",
           website: `https://${domain}/stores/alpha`,
-          orderEmailSenders: [`store@${domain}`],
+          orderEmailSenders: [
+            domain === "order.online"
+              ? "noreply@order.online"
+              : "service@paypal.com",
+          ],
         });
         await insertWithShortcode(ctx.db, "vendor", {
           name: "Beta Candles",
           website: "https://beta-candles.myshopify.com",
         });
-        const mail = await orderMail(party.id, `store@${domain}`);
+        const mail = await orderMail(
+          party.id,
+          domain === "order.online"
+            ? "noreply@order.online"
+            : "service@paypal.com",
+        );
         await prepareNamed("shared-storefront", mail, { name: "Gamma Goods" });
         expect((await vendorRows()).map(({ name }) => name).sort()).toEqual([
           "Alpha Pottery",
@@ -424,6 +441,160 @@ describe("member prepare and commit identity fences", () => {
         ).rejects.toThrow("historical Vendor alias");
       },
     );
+
+    it("learns distinct exact addresses on a shared domain, quarantines conflicts and preserves exclusions and booked money", async () => {
+      const { party, vendor: alpha } = await memberImportWorld(
+        ctx.db,
+        ctx.actor,
+      );
+      const { output: beta, entityId: betaId } = await createRepoEntity(
+        ctx,
+        "vendor",
+        {
+          name: "Synthetic Second Seller",
+          website: "https://second-seller.example.test",
+        },
+      );
+      const first = "store+100001@t.shopifyemail.com";
+      const second = "store+200002@t.shopifyemail.com";
+      const importReceipt = async (
+        key: string,
+        sender: string,
+        vendorId: string,
+      ) => {
+        const mail = await retainedMailFixture(ctx.db, {
+          ledgerPartyId: party.id,
+          messageId: key,
+          checksum: checksum("d"),
+          sender,
+        });
+        await memberImport(ctx.db, ctx.actor, {
+          key,
+          orders: [
+            {
+              stableOrderId: key,
+              vendorId: parseShortcodeFor("vendor", vendorId),
+              source: mailSource(mail),
+              extraction: { status: "ready", candidate: candidate(key) },
+            },
+          ],
+        });
+      };
+      await importReceipt("first-store", first, alpha.shortcode);
+      await importReceipt("second-store", second, beta.id);
+      // Accepted originals may have no usable From address; discovery still reads all others.
+      await getDb(ctx.db)
+        .update(email)
+        .set({ sender: null })
+        .where(eq(email.sender, first));
+      expect(
+        (await readSenderAttributions(ctx.db)).every(
+          (row) => typeof row.sender === "string",
+        ),
+      ).toBe(true);
+      await getDb(ctx.db)
+        .update(email)
+        .set({ sender: "malformed sender" })
+        .where(isNull(email.sender));
+      expect(
+        (await readSenderAttributions(ctx.db)).some(
+          (row) => row.sender === "malformed sender",
+        ),
+      ).toBe(false);
+      await getDb(ctx.db)
+        .update(email)
+        .set({ sender: first })
+        .where(eq(email.sender, "malformed sender"));
+
+      expect((await senderProofVendor(ctx.db, first))?.vendor.id).toBe(
+        alpha.id,
+      );
+      expect((await senderProofVendor(ctx.db, second))?.vendor.id).toBe(betaId);
+      await importReceipt("contradictory-seller", first, beta.id);
+      expect(await senderProofVendor(ctx.db, first)).toBeNull();
+      expect((await readSenderAttributions(ctx.db, [first]))[0]).toMatchObject({
+        state: "disputed",
+        evidenceCount: 2,
+      });
+      const before = {
+        purchases: await getDb(ctx.db)
+          .select()
+          .from(purchase)
+          .orderBy(purchase.id),
+        expenses: await getDb(ctx.db)
+          .select()
+          .from(expense)
+          .orderBy(expense.id),
+      };
+      await withTransaction(ctx.db, (tx) =>
+        setSenderAttribution(
+          tx,
+          { sender: second, vendorId: null, expectedVendorIds: [beta.id] },
+          ctx.actor,
+        ),
+      );
+      await withTransaction(ctx.db, (tx) =>
+        learnAcceptedSenders(tx, ctx.actor),
+      );
+      expect((await readSenderAttributions(ctx.db, [second]))[0]?.state).toBe(
+        "excluded",
+      );
+      expect(await senderProofVendor(ctx.db, second)).toBeNull();
+      expect(
+        await getDb(ctx.db).select().from(purchase).orderBy(purchase.id),
+      ).toEqual(before.purchases);
+      expect(
+        await getDb(ctx.db).select().from(expense).orderBy(expense.id),
+      ).toEqual(before.expenses);
+      expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+      await withTransaction(ctx.db, (tx) =>
+        setSenderAttribution(
+          tx,
+          { sender: second, vendorId: beta.id, expectedVendorIds: [] },
+          ctx.actor,
+        ),
+      );
+      expect((await senderProofVendor(ctx.db, second))?.vendor.id).toBe(betaId);
+      const competing = await Promise.allSettled(
+        [alpha.shortcode, beta.id].map((vendorId) =>
+          withTransaction(ctx.db, (tx) =>
+            setSenderAttribution(
+              tx,
+              {
+                sender: "receipts@synthetic-race.example",
+                vendorId: parseShortcodeFor("vendor", vendorId),
+                expectedVendorIds: [],
+              },
+              ctx.actor,
+            ),
+          ),
+        ),
+      );
+      expect(competing.map((result) => result.status).sort()).toEqual([
+        "fulfilled",
+        "rejected",
+      ]);
+      expect(
+        (
+          await readSenderAttributions(ctx.db, [
+            "receipts@synthetic-race.example",
+          ])
+        )[0]?.vendors,
+      ).toHaveLength(1);
+      await expect(
+        withTransaction(ctx.db, (tx) =>
+          setSenderAttribution(
+            tx,
+            {
+              sender: second,
+              vendorId: alpha.shortcode,
+              expectedVendorIds: [],
+            },
+            ctx.actor,
+          ),
+        ),
+      ).rejects.toThrow("changed");
+    });
 
     it("refuses a new Vendor beside a similar name until it is marked distinct", async () => {
       const { party } = await memberImportWorld(ctx.db, ctx.actor);

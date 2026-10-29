@@ -27,7 +27,10 @@ import type {
   VendorMergeSummaryOut,
   VendorOptionsOut,
 } from "@cubby/schemas/vendor";
-import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
+import {
+  vendorEmailSenderPolicies,
+  vendorAgentHints,
+} from "@cubby/schemas/vendor-import-fields";
 import {
   and,
   asc,
@@ -53,6 +56,7 @@ import {
   shortcodeSetCondition,
   sqlEnumConstant,
   withTransaction,
+  withSnapshotWrite,
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
 import {
@@ -74,6 +78,8 @@ import { loadGmailCursor } from "~/server/domains/purchase-import/repo/gmail/per
 import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { vendorMailQueries } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
+import { lockSenderAttributionAddress } from "~/server/domains/purchase-import/repo/sender-attribution";
+import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
 import { foldChargeInto } from "~/server/domains/purchase/repo/purchase";
 import {
   effectivePurchaseItemizationExpectationSql,
@@ -356,6 +362,7 @@ async function loadVendorMailSearch(
     getDb(db)
       .select({
         id: vendor.id,
+        shortcode: vendor.shortcode,
         website: vendor.website,
         orderEmailSenders: vendor.orderEmailSenders,
       })
@@ -371,6 +378,14 @@ async function loadVendorMailSearch(
       ),
     listMemberMailboxes(db),
   ]);
+  const attributions = new Map(
+    (
+      await readSenderAttributions(
+        db,
+        rows.flatMap((row) => row.orderEmailSenders),
+      )
+    ).map((row) => [row.sender, row.vendorId]),
+  );
   const [cursors, controlledSearches] = await Promise.all([
     Promise.all(
       mailboxes.map(async (mailbox) => {
@@ -385,7 +400,16 @@ async function loadVendorMailSearch(
   ]);
   return Object.fromEntries(
     rows.flatMap((row) => {
-      const queries = vendorMailQueries(row.id, vendorSearchTerms(row));
+      const queries = vendorMailQueries(
+        row.id,
+        vendorSearchTerms({
+          ...row,
+          orderEmailSenders: row.orderEmailSenders.filter(
+            (address) =>
+              attributions.get(address.trim().toLowerCase()) === row.shortcode,
+          ),
+        }),
+      );
       if (queries.length === 0) return [];
       const states = cursors.flatMap((cursor, index) =>
         queries.map((query) => {
@@ -634,6 +658,46 @@ export const createVendor = vendorReader.createWriter(
   (output, entityId) => ({ output, entityId }),
 );
 
+/** A pre-lock roster is only a candidate lock set, never the authoritative edit state. */
+async function lockVendorSenderSet(
+  tx: DrizzleTransaction,
+  ids: VendorId[],
+  additions: readonly string[] = [],
+) {
+  const before = await tx
+    .select({ senders: vendor.orderEmailSenders })
+    .from(vendor)
+    .where(and(inArray(vendor.id, ids), notDeleted(vendor)));
+  const locked = new Set(
+    [...before.flatMap((row) => row.senders), ...additions].map((address) =>
+      address.trim().toLowerCase(),
+    ),
+  );
+  for (const address of [...locked].sort())
+    await lockSenderAttributionAddress(tx, address);
+  const current = await tx
+    .select({ id: vendor.id, senders: vendor.orderEmailSenders })
+    .from(vendor)
+    .where(and(inArray(vendor.id, ids), notDeleted(vendor)))
+    .orderBy(vendor.id)
+    .for("no key update");
+  if (
+    current.some((row) =>
+      row.senders.some((address) => !locked.has(address.trim().toLowerCase())),
+    )
+  ) {
+    // Acquiring a newly discovered key while holding Vendor locks would invert lock order.
+    // The snapshot owner must restart the whole transaction and rebuild its lock set.
+    throw Object.assign(
+      new Error(
+        "Vendor sender addresses changed while acquiring locks; retry the transaction.",
+      ),
+      { code: "40001" },
+    );
+  }
+  return current;
+}
+
 export const updateVendor = defineMutationWriter({
   entity: "vendor",
   read: async (
@@ -694,23 +758,84 @@ export const updateVendor = defineMutationWriter({
         }
       }
     }
-    await withTransaction(db, async (tx) => {
-      await patchEntityRows(
-        tx,
-        actor,
-        {
-          entity: "vendor",
-          table: vendor,
-          fields: entityFieldModels.vendor.audit,
-        },
-        [id],
-        { ...data, defaultSpendingCategoryId, name: data.name?.trim() },
-      );
-      // A new profile or default reclassifies this Vendor's lines, so it can
-      // put a linked Product in a category that forbids one.
-      if (reclassifies) await validateProductPolicy(tx, { vendorId: id });
-    });
+    await withSnapshotWrite(
+      db,
+      async (tx) => {
+        const senderBefore =
+          data.orderEmailSenders === undefined
+            ? undefined
+            : (await lockVendorSenderSet(tx, [id], data.orderEmailSenders))[0];
+        await patchEntityRows(
+          tx,
+          actor,
+          {
+            entity: "vendor",
+            table: vendor,
+            fields: entityFieldModels.vendor.audit,
+          },
+          [id],
+          { ...data, defaultSpendingCategoryId, name: data.name?.trim() },
+        );
+        if (data.orderEmailSenders !== undefined) {
+          const [current] = await tx
+            .select({
+              policies: vendor.orderEmailSenderPolicies,
+              senders: vendor.orderEmailSenders,
+            })
+            .from(vendor)
+            .where(eq(vendor.id, id));
+          if (current) {
+            const policies = vendorEmailSenderPolicies.parse(current.policies);
+            const previousPolicies = JSON.stringify(policies);
+            for (const address of senderBefore?.senders ?? [])
+              if (
+                !data.orderEmailSenders.includes(address.trim().toLowerCase())
+              )
+                policies[address.trim().toLowerCase()] = "excluded";
+            for (const address of data.orderEmailSenders)
+              policies[address] = "confirmed";
+            await tx
+              .update(vendor)
+              .set({ orderEmailSenderPolicies: policies })
+              .where(eq(vendor.id, id));
+            if (
+              previousPolicies !== JSON.stringify(policies) &&
+              JSON.stringify(senderBefore?.senders) ===
+                JSON.stringify(data.orderEmailSenders)
+            )
+              await logAuditEntry(tx, actor, {
+                entityKind: "vendor",
+                entityId: id,
+                action: "update",
+                changes: {
+                  orderEmailSenders: {
+                    from: data.orderEmailSenders,
+                    to: data.orderEmailSenders,
+                  },
+                },
+              });
+          }
+        }
+        // A new profile or default reclassifies this Vendor's lines, so it can
+        // put a linked Product in a category that forbids one.
+        if (reclassifies) await validateProductPolicy(tx, { vendorId: id });
+      },
+      { isolationLevel: "repeatable read" },
+    );
 
+    if (data.orderEmailSenders !== undefined)
+      await (
+        await import("~/server/workflows/background-tasks/publish")
+      ).publishBackgroundTasks(
+        db,
+        [
+          {
+            kind: "maintenance.purchase-discovery",
+            requestedAt: new Date().toISOString(),
+          },
+        ],
+        { source: "vendor-sender-edit" },
+      );
     return readOutput({ entityId: id });
   },
 });
@@ -918,206 +1043,245 @@ export const mergeVendors = async (
   });
   let planSummary: Omit<VendorMergeSummaryOut, "keepId"> | undefined;
 
-  const detachedImageKeys = await withTransaction(db, async (tx) => {
-    await lockAndValidateForDelete(tx, vendor, [keepId, ...losers], "Vendor");
-    const designated = await tx
-      .select({ id: vendor.id })
-      .from(vendor)
-      .where(
-        and(
-          inArray(vendor.id, [keepId, ...losers]),
-          isNotNull(vendor.systemKey),
-        ),
-      );
-    if (designated.length)
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "System Generic / Unbranded Brand cannot be merged.",
-      );
-
-    // The fold plan replaces notes; lock their rows before taking that snapshot.
-    await tx
-      .select({ id: purchase.id })
-      .from(purchase)
-      .where(
-        and(
-          inArray(purchase.vendorId, [keepId, ...losers]),
-          notDeleted(purchase),
-        ),
-      )
-      .orderBy(purchase.id)
-      .for("update");
-    const plan = await planVendorMerge(tx, keepId, losers);
-    planSummary = {
-      deletedIds: plan.deletedIds,
-      merged: 0,
-      purchasesRepointed: plan.repointed.length,
-      purchasesFolded: plan.folded.length,
-      vendorAccountsMoved: 0,
-      vendorAccountsFolded: 0,
-      carriedFields: Object.keys(plan.carried),
-    };
-
-    const { logoImageId: carriedLogo, ...carriedColumns } = plan.carried;
-    if (Object.keys(carriedColumns).length > 0) {
-      await tx.update(vendor).set(carriedColumns).where(eq(vendor.id, keepId));
-    }
-    // The losers' names stay Vendor aliases so imports keep finding the keeper.
-    let aliasChange: { from: string[]; to: string[] } | undefined;
-    const named = await tx
-      .select({
-        id: vendor.id,
-        name: vendor.name,
-        aliases: vendor.aliases,
-        orderEmailSenders: vendor.orderEmailSenders,
-        browserDomains: vendor.browserDomains,
-      })
-      .from(vendor)
-      .where(inArray(vendor.id, [keepId, ...losers]));
-    const keeperNamed = named.find(({ id }) => id === keepId);
-    // Mail discovery and browser imports find the keeper by the losers'
-    // senders and domains too.
-    const unionChanges: Partial<
-      Record<
-        "orderEmailSenders" | "browserDomains",
-        { from: string[]; to: string[] }
-      >
-    > = {};
-    if (keeperNamed) {
-      for (const key of ["orderEmailSenders", "browserDomains"] as const) {
-        const union = uniqBy(
-          [
-            ...keeperNamed[key],
-            ...named
-              .filter(({ id }) => id !== keepId)
-              .flatMap((row) => row[key]),
-          ],
-          (value) => value.toLowerCase(),
+  const detachedImageKeys = await withSnapshotWrite(
+    db,
+    async (tx) => {
+      await lockVendorSenderSet(tx, [keepId, ...losers]);
+      await lockAndValidateForDelete(tx, vendor, [keepId, ...losers], "Vendor");
+      const designated = await tx
+        .select({ id: vendor.id })
+        .from(vendor)
+        .where(
+          and(
+            inArray(vendor.id, [keepId, ...losers]),
+            isNotNull(vendor.systemKey),
+          ),
         );
-        if (union.length !== keeperNamed[key].length)
-          unionChanges[key] = { from: keeperNamed[key], to: union };
-      }
-      if (unionChanges.orderEmailSenders || unionChanges.browserDomains)
+      if (designated.length)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "System Generic / Unbranded Brand cannot be merged.",
+        );
+
+      // The fold plan replaces notes; lock their rows before taking that snapshot.
+      await tx
+        .select({ id: purchase.id })
+        .from(purchase)
+        .where(
+          and(
+            inArray(purchase.vendorId, [keepId, ...losers]),
+            notDeleted(purchase),
+          ),
+        )
+        .orderBy(purchase.id)
+        .for("update");
+      const plan = await planVendorMerge(tx, keepId, losers);
+      planSummary = {
+        deletedIds: plan.deletedIds,
+        merged: 0,
+        purchasesRepointed: plan.repointed.length,
+        purchasesFolded: plan.folded.length,
+        vendorAccountsMoved: 0,
+        vendorAccountsFolded: 0,
+        carriedFields: Object.keys(plan.carried),
+      };
+
+      const { logoImageId: carriedLogo, ...carriedColumns } = plan.carried;
+      if (Object.keys(carriedColumns).length > 0) {
         await tx
           .update(vendor)
-          .set({
-            orderEmailSenders: unionChanges.orderEmailSenders?.to,
-            browserDomains: unionChanges.browserDomains?.to,
-          })
+          .set(carriedColumns)
           .where(eq(vendor.id, keepId));
-    }
-    if (keeperNamed) {
-      const seen = new Set([keeperNamed.name.toLowerCase()]);
-      const aliases = [
-        ...keeperNamed.aliases,
-        ...named
-          .filter(({ id }) => id !== keepId)
-          .flatMap((row) => [row.name, ...row.aliases]),
-      ].filter((alias) => {
-        const key = alias.toLowerCase();
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      if (aliases.length !== keeperNamed.aliases.length) {
-        await tx.update(vendor).set({ aliases }).where(eq(vendor.id, keepId));
-        aliasChange = { from: keeperNamed.aliases, to: aliases };
       }
-    }
+      // The losers' names stay Vendor aliases so imports keep finding the keeper.
+      let aliasChange: { from: string[]; to: string[] } | undefined;
+      const named = await tx
+        .select({
+          id: vendor.id,
+          name: vendor.name,
+          aliases: vendor.aliases,
+          orderEmailSenders: vendor.orderEmailSenders,
+          senderPolicies: vendor.orderEmailSenderPolicies,
+          browserDomains: vendor.browserDomains,
+        })
+        .from(vendor)
+        .where(inArray(vendor.id, [keepId, ...losers]));
+      const keeperNamed = named.find(({ id }) => id === keepId);
+      // Mail discovery and browser imports find the keeper by the losers'
+      // senders and domains too.
+      const unionChanges: Partial<
+        Record<
+          "orderEmailSenders" | "browserDomains",
+          { from: string[]; to: string[] }
+        >
+      > = {};
+      if (keeperNamed) {
+        const policies = vendorEmailSenderPolicies.parse(
+          keeperNamed.senderPolicies,
+        );
+        for (const address of keeperNamed.orderEmailSenders)
+          policies[address] ??= "confirmed";
+        for (const other of named.filter((row) => row.id !== keepId)) {
+          const otherPolicies = vendorEmailSenderPolicies.parse(
+            other.senderPolicies,
+          );
+          for (const [address, policy] of Object.entries(otherPolicies))
+            if (
+              policies[address] === undefined ||
+              (policies[address] === "learned" && policy !== "learned")
+            )
+              policies[address] = policy;
+          for (const address of other.orderEmailSenders)
+            if (
+              policies[address] === undefined ||
+              (policies[address] === "learned" &&
+                otherPolicies[address] === undefined)
+            )
+              policies[address] = "confirmed";
+        }
+        await tx
+          .update(vendor)
+          .set({ orderEmailSenderPolicies: policies })
+          .where(eq(vendor.id, keepId));
+        for (const key of ["orderEmailSenders", "browserDomains"] as const) {
+          const union = uniqBy(
+            [
+              ...keeperNamed[key],
+              ...named
+                .filter(({ id }) => id !== keepId)
+                .flatMap((row) => row[key]),
+            ],
+            (value) => value.toLowerCase(),
+          ).filter(
+            (value) =>
+              key !== "orderEmailSenders" || policies[value] !== "excluded",
+          );
+          if (JSON.stringify(union) !== JSON.stringify(keeperNamed[key]))
+            unionChanges[key] = { from: keeperNamed[key], to: union };
+        }
+        if (unionChanges.orderEmailSenders || unionChanges.browserDomains)
+          await tx
+            .update(vendor)
+            .set({
+              orderEmailSenders: unionChanges.orderEmailSenders?.to,
+              browserDomains: unionChanges.browserDomains?.to,
+            })
+            .where(eq(vendor.id, keepId));
+      }
+      if (keeperNamed) {
+        const seen = new Set([keeperNamed.name.toLowerCase()]);
+        const aliases = [
+          ...keeperNamed.aliases,
+          ...named
+            .filter(({ id }) => id !== keepId)
+            .flatMap((row) => [row.name, ...row.aliases]),
+        ].filter((alias) => {
+          const key = alias.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        if (aliases.length !== keeperNamed.aliases.length) {
+          await tx.update(vendor).set({ aliases }).where(eq(vendor.id, keepId));
+          aliasChange = { from: keeperNamed.aliases, to: aliases };
+        }
+      }
 
-    const loserLogos: ImageId[] = [];
-    let accountFold = { moved: 0, folded: 0 };
-    await applyMergePolicy(tx, {
-      entity: "vendor",
-      policy: VENDOR_MERGE_EDGE_POLICY,
-      keepId,
-      loserIds: losers,
-      liveOnly: true,
-      overrides: {
-        "Purchase.vendorId": async () => {
-          for (const fold of plan.folded)
-            await foldChargeInto(tx, fold.deadId, fold.survivorId, actor, {
-              notes: fold.notes,
+      const loserLogos: ImageId[] = [];
+      let accountFold = { moved: 0, folded: 0 };
+      await applyMergePolicy(tx, {
+        entity: "vendor",
+        policy: VENDOR_MERGE_EDGE_POLICY,
+        keepId,
+        loserIds: losers,
+        liveOnly: true,
+        overrides: {
+          "Purchase.vendorId": async () => {
+            for (const fold of plan.folded)
+              await foldChargeInto(tx, fold.deadId, fold.survivorId, actor, {
+                notes: fold.notes,
+              });
+            // Everything still live moves to the keeper. The doomed charges are
+            // already soft-deleted, so `liveOnly` keeps this from re-introducing
+            // the collision the fold just resolved.
+            await repointEdge(tx, "vendor", "Purchase.vendorId", {
+              from: losers,
+              to: keepId,
+              liveOnly: true,
             });
-          // Everything still live moves to the keeper. The doomed charges are
-          // already soft-deleted, so `liveOnly` keeps this from re-introducing
-          // the collision the fold just resolved.
-          await repointEdge(tx, "vendor", "Purchase.vendorId", {
-            from: losers,
-            to: keepId,
-            liveOnly: true,
-          });
-          // The keeper's food context and default now classify these lines.
-          await validateProductPolicy(tx, { vendorId: keepId });
+            // The keeper's food context and default now classify these lines.
+            await validateProductPolicy(tx, { vendorId: keepId });
+          },
+          "ExternalSource.vendorId": () =>
+            repointVendorIdentifierSources(tx, { keepId, loserIds: losers }),
+          "VendorAccount.vendorId": async () => {
+            accountFold = await foldVendorAccountsInto(tx, {
+              keepVendorId: keepId,
+              loserVendorIds: losers,
+              actor,
+            });
+          },
+          // Detach every loser logo before tombstoning, then give the survivor
+          // the carried one, so a logo that was not carried is eligible for the
+          // same shared-reference reap as an ordinary vendor delete.
+          "EntityAttachment.entityId": async () => {
+            for (const loserId of losers) {
+              const { previousImageId } = await replaceSingularAttachment(
+                tx,
+                loserId,
+                "logo",
+                null,
+              );
+              if (previousImageId) loserLogos.push(previousImageId);
+            }
+            if (carriedLogo)
+              await replaceSingularAttachment(tx, keepId, "logo", carriedLogo);
+          },
         },
-        "ExternalSource.vendorId": () =>
-          repointVendorIdentifierSources(tx, { keepId, loserIds: losers }),
-        "VendorAccount.vendorId": async () => {
-          accountFold = await foldVendorAccountsInto(tx, {
-            keepVendorId: keepId,
-            loserVendorIds: losers,
-            actor,
-          });
-        },
-        // Detach every loser logo before tombstoning, then give the survivor
-        // the carried one, so a logo that was not carried is eligible for the
-        // same shared-reference reap as an ordinary vendor delete.
-        "EntityAttachment.entityId": async () => {
-          for (const loserId of losers) {
-            const { previousImageId } = await replaceSingularAttachment(
-              tx,
-              loserId,
-              "logo",
-              null,
-            );
-            if (previousImageId) loserLogos.push(previousImageId);
-          }
-          if (carriedLogo)
-            await replaceSingularAttachment(tx, keepId, "logo", carriedLogo);
-        },
-      },
-    });
+      });
 
-    await repointShipmentCarrierReferences(tx, keepId, losers, actor);
+      await repointShipmentCarrierReferences(tx, keepId, losers, actor);
 
-    type VendorMergeSurvivorChanges = {
-      mergedFrom: { from: null; to: VendorId[] };
-      carriedOver?: { from: null; to: VendorMergePlan["carried"] };
-      foldedCharges?: { from: null; to: PurchaseId[] };
-      aliases?: { from: string[]; to: string[] };
-      orderEmailSenders?: { from: string[]; to: string[] };
-      browserDomains?: { from: string[]; to: string[] };
-    };
-    const survivorChanges: VendorMergeSurvivorChanges = {
-      mergedFrom: { from: null, to: losers },
-    };
-    if (aliasChange) survivorChanges.aliases = aliasChange;
-    Object.assign(survivorChanges, unionChanges);
-    planSummary.vendorAccountsMoved = accountFold.moved;
-    planSummary.vendorAccountsFolded = accountFold.folded;
-    if (Object.keys(plan.carried).length > 0) {
-      survivorChanges.carriedOver = { from: null, to: plan.carried };
-    }
-    if (plan.folded.length > 0) {
-      survivorChanges.foldedCharges = {
-        from: null,
-        to: plan.folded.map((entry) => entry.deadId),
+      type VendorMergeSurvivorChanges = {
+        mergedFrom: { from: null; to: VendorId[] };
+        carriedOver?: { from: null; to: VendorMergePlan["carried"] };
+        foldedCharges?: { from: null; to: PurchaseId[] };
+        aliases?: { from: string[]; to: string[] };
+        orderEmailSenders?: { from: string[]; to: string[] };
+        browserDomains?: { from: string[]; to: string[] };
       };
-    }
+      const survivorChanges: VendorMergeSurvivorChanges = {
+        mergedFrom: { from: null, to: losers },
+      };
+      if (aliasChange) survivorChanges.aliases = aliasChange;
+      Object.assign(survivorChanges, unionChanges);
+      planSummary.vendorAccountsMoved = accountFold.moved;
+      planSummary.vendorAccountsFolded = accountFold.folded;
+      if (Object.keys(plan.carried).length > 0) {
+        survivorChanges.carriedOver = { from: null, to: plan.carried };
+      }
+      if (plan.folded.length > 0) {
+        survivorChanges.foldedCharges = {
+          from: null,
+          to: plan.folded.map((entry) => entry.deadId),
+        };
+      }
 
-    const { removed } = await finalizeMerge(tx, {
-      entity: "vendor",
-      table: vendor,
-      keepId,
-      loserIds: losers,
-      removal: "soft",
-      actor,
-      survivorChanges,
-    });
-    planSummary.merged = removed;
+      const { removed } = await finalizeMerge(tx, {
+        entity: "vendor",
+        table: vendor,
+        keepId,
+        loserIds: losers,
+        removal: "soft",
+        actor,
+        survivorChanges,
+      });
+      planSummary.merged = removed;
 
-    return (await reapUnreferencedImages(tx, loserLogos)).deletedKeys;
-  });
+      return (await reapUnreferencedImages(tx, loserLogos)).deletedKeys;
+    },
+    { isolationLevel: "repeatable read" },
+  );
 
   const output = await readVendorById(db, keepId);
   return {

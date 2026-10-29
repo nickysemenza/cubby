@@ -49,15 +49,43 @@ authorize an identifier issuer namespace.
 Related mail observed on a shared sender domain also seeds an exact-address
 history search in that same member mailbox. These searches use the existing
 targeted discovery cursor and do not establish the seller. A shared commerce
-platform address never supplies seller proof, even when a Vendor accidentally
-records it as an exact receipt sender. Receipt content identifies the actual
-seller; automatic alias learning cannot attach its name to the platform.
-An existing platform alias from an older policy cannot silently win seller
-resolution: an actual canonical seller is reused, otherwise the import stays
-blocked for a reviewed alias correction and explicit seller identity. Historical
-Purchases and aliases are not rewritten by discovery.
-Platform identity for this fence includes configured platform receipt senders,
-even when the Vendor has no website.
+platform domain never supplies seller proof by itself. Exact addresses are
+independent identities: assigning one to a Vendor means both seller attribution
+and that Vendor's mailbox search scope. Known generic addresses, such as
+`noreply@order.online`, remain mailbox-discovery targets and cannot be assigned
+to one seller. They are an exact-address vocabulary, not a domain ban.
+An exact address on a shared domain can be learned from current accepted
+receipt evidence for one seller. Its local address pattern alone proves nothing.
+Accepted receipts for another seller make a saved mapping disputed and suspend
+its seller proof and Vendor search scope. The stored member decision and earlier
+Purchases remain intact. Unmapped addresses with accepted receipts from multiple
+sellers remain shared. Learned mappings whose supporting evidence is no longer
+current also lose proof.
+Shared senders and the Vendor coverage inspector show the saved decision,
+learning origin and a bounded preview of the original Email/Purchase links.
+Confirm Vendor saves the exact address; removing attribution records an
+exclusion that automatic learning cannot reverse. Vendor field edits and merges
+preserve that intent. During a merge, confirmed or excluded member intent takes
+precedence over learned intent; conflicting explicit decisions keep the keeper
+Vendor's decision. Edits and merges validate their address lock set under
+Vendor locks and restart a contended snapshot before changing identity or
+recording exclusions. Conflicting historical evidence stays visible until it is
+reviewed on the original records; confirmation never rewrites it.
+Verified mappings apply to new mail and make eligible unresolved originals
+available to the existing automatic import admission when their mailbox is on.
+An untouched automatic unresolved outcome can be re-admitted once per verified
+source checksum and sender/Vendor mapping, including when a mapping is changed
+away and later restored. Its old Run inputs and outcome receipts remain immutable.
+The admission rechecks live ownership, original checksum, mailbox switches,
+current sender proof and later member edits or reviews. Active or paused work,
+member-selected imports and explicit exclusions keep their existing controls.
+Sources with accepted or linked Purchases never enter this recheck. Import is
+not implied by saving a mapping.
+Receipt content still names the actual seller. A conflicting printed seller
+cannot become an alias of a platform merely because its sender was mapped.
+An older platform alias cannot silently win seller resolution; the canonical
+seller is reused, otherwise reviewed correction is required. No existing
+Purchase, money, inventory or source original is rewritten by attribution.
 Search completion describes the scope actually scanned, not proof that every
 purchase from that Vendor has been found.
 

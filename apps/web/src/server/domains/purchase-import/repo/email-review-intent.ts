@@ -11,7 +11,7 @@ import {
 import { connectionCandidate } from "@cubby/schemas/entity-connections";
 import { emailId } from "@cubby/schemas/identifiers";
 import { correctionAuthorityReceiptKinds } from "@cubby/schemas/suggestion-correction";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db/database";
@@ -44,6 +44,44 @@ const relevantReview = (input: ReviewSubject) => {
     subject.data.scope === "connection.email-purchase"
   );
 };
+
+function emailIntentSubjectSql(id: SQL, originalId: SQL) {
+  return or(
+    and(
+      inArray(assessment.family, [
+        assessmentFamily.enum.email_relevance,
+        assessmentFamily.enum.email_link,
+      ]),
+      or(
+        sql`${assessment.subject}->>'recordId' = ${id}::text`,
+        and(
+          eq(assessment.family, assessmentFamily.enum.email_link),
+          sql`${assessment.subject}->>'recordId' IS NULL`,
+          sql`${assessment.subject}->>'originalId' = ${originalId}::text`,
+        ),
+      ),
+    ),
+    and(
+      eq(assessment.family, assessmentFamily.enum.recommendation),
+      sql`${assessment.subject}->>'scope' = ${"connection.email-purchase"}`,
+      sql`${assessment.subject}->>'entity' = ${"email"}`,
+      sql`${assessment.subject}->>'recordId' = ${id}::text`,
+    ),
+  );
+}
+
+/** Same retained-subject boundary used by admission before bounded pagination. */
+export function emailHasProtectingIntentSql(id: SQL, originalId: SQL) {
+  const subject = emailIntentSubjectSql(id, originalId);
+  const kind = sql`${feedback.metadata}->>${assessmentProducer.keyof().enum.kind}`;
+  return sql`EXISTS (SELECT 1 FROM ${feedback} JOIN ${assessment} ON ${assessment.id} = ${feedback.assessmentId}
+    WHERE ${subject} AND ((${feedback.authority} = ${"member"}
+      AND (${kind} IS NULL OR ${kind} NOT IN (${sql.join(
+        correctionAuthorityReceiptKinds.options.map((value) => sql`${value}`),
+        sql`, `,
+      )})))
+      OR ${kind} IN (${"email_resolution"}, ${"email_link"})))`;
+}
 
 /** Retained subjects and all checksums matter; active projections are not an intent history. */
 export async function readEmailProtectingIntent(
@@ -79,32 +117,7 @@ export async function readEmailProtectingIntent(
     })
     .from(feedback)
     .innerJoin(assessment, eq(assessment.id, feedback.assessmentId))
-    .where(
-      or(
-        and(
-          inArray(assessment.family, [
-            assessmentFamily.enum.email_relevance,
-            assessmentFamily.enum.email_link,
-          ]),
-          or(
-            sql`${assessment.subject}->>'recordId' = ${id}`,
-            mail.originalId
-              ? and(
-                  eq(assessment.family, assessmentFamily.enum.email_link),
-                  sql`${assessment.subject}->>'recordId' IS NULL`,
-                  sql`${assessment.subject}->>'originalId' = ${mail.originalId}`,
-                )
-              : undefined,
-          ),
-        ),
-        and(
-          eq(assessment.family, assessmentFamily.enum.recommendation),
-          sql`${assessment.subject}->>'scope' = ${"connection.email-purchase"}`,
-          sql`${assessment.subject}->>'entity' = ${"email"}`,
-          sql`${assessment.subject}->>'recordId' = ${id}`,
-        ),
-      ),
-    )
+    .where(emailIntentSubjectSql(sql`${id}`, sql`${mail.originalId}`))
     .orderBy(asc(feedback.id));
   const feedbackIds: string[] = [];
   for (const row of rows) {

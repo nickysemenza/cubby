@@ -4,11 +4,12 @@ import type {
   DistinctFromVendor,
   PreparedVendorCandidate,
 } from "@cubby/schemas/purchase-import";
-import { arrayContains, and, eq, ilike, sql } from "drizzle-orm";
+import { and, eq, ilike, sql } from "drizzle-orm";
 
 import {
   distinctSenderDomain,
   senderAddress,
+  broadcastSender,
   SHARED_SENDER_DOMAINS,
   SHARED_PLATFORM_DOMAINS,
   vendorWebsiteDomain,
@@ -16,6 +17,7 @@ import {
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { vendor } from "~/server/db/schema";
+import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
@@ -100,11 +102,7 @@ export async function importVendorCandidates(
         sharedPlatform:
           SHARED_PLATFORM_DOMAINS.has(site ?? "") ||
           row.orderEmailSenders.some((sender) =>
-            SHARED_PLATFORM_DOMAINS.has(
-              vendorWebsiteDomain(
-                `https://${senderAddress(sender)?.split("@").at(-1)}`,
-              ) ?? "",
-            ),
+            broadcastSender(senderAddress(sender) ?? ""),
           ),
         similar: known.some((value) => similarName(value, name)),
       };
@@ -191,29 +189,28 @@ async function learnSenderAlias(
 export async function senderProofVendor(db: Db, sender: string | null) {
   const address = senderAddress(sender);
   if (!address) return null;
-  // Platform addresses can represent unrelated sellers even when only one
-  // Vendor currently records the address. Never learn merchant aliases from it.
-  const senderDomain = vendorWebsiteDomain(
-    `https://${address.split("@").at(-1)}`,
-  );
-  if (senderDomain && SHARED_PLATFORM_DOMAINS.has(senderDomain)) return null;
+  const [attribution] = await readSenderAttributions(db, [address]);
+  if (
+    attribution &&
+    ["shared", "disputed", "excluded"].includes(attribution.state)
+  )
+    return null;
   const columns = {
     id: vendor.id,
     shortcode: vendor.shortcode,
     name: vendor.name,
     aliases: vendor.aliases,
   };
-  const proven = await unwrapDb(db)
-    .select(columns)
-    .from(vendor)
-    .where(
-      and(
-        notDeleted(vendor),
-        arrayContains(vendor.orderEmailSenders, [address]),
-      ),
-    );
-  if (proven.length > 1) return null;
-  if (proven[0]) return { vendor: proven[0], address };
+  const [proven] = attribution?.vendorId
+    ? await unwrapDb(db)
+        .select(columns)
+        .from(vendor)
+        .where(
+          and(notDeleted(vendor), eq(vendor.shortcode, attribution.vendorId)),
+        )
+        .limit(1)
+    : [];
+  if (proven) return { vendor: proven, address };
   const domain = distinctSenderDomain(address);
   if (!domain) return null;
   // SQL narrows to websites naming the domain; the registrable-domain match
@@ -259,7 +256,13 @@ export async function resolveImportVendor(
 ): Promise<VendorId> {
   const name = input.name.trim();
   const proof = await senderProofVendor(db, input.sender);
-  if (proof)
+  if (
+    proof &&
+    (!SHARED_PLATFORM_DOMAINS.has(
+      vendorWebsiteDomain(`https://${proof.address.split("@").at(-1)}`) ?? "",
+    ) ||
+      matchesNameOrAlias({ ...proof.vendor, query: name }))
+  )
     return learnSenderAlias(
       db,
       proof.vendor,

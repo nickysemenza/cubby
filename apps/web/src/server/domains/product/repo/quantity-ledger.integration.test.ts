@@ -18,6 +18,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture as createProduct,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -71,11 +72,12 @@ describe("loadProductQuantityLedgers", () => {
   // A catalog filter must not restart the same kit graph scan for each Product.
   // The grouped path must still agree with signed, weighted ledger quantities.
   it("filters catalog quantity ranges with one shared kit walk", async () => {
+    // These rows only supply identity and cardinality; preserve creation effects without detail hydration.
     const unrelatedIds: ProductId[] = [];
     for (let index = 0; index < 64; index++)
       unrelatedIds.push(
         (
-          await createProduct(
+          await createProductIdentityFixture(
             ctx.db,
             makeProductInput({ name: `Synthetic unrelated ${index}` }),
             ctx.actor,

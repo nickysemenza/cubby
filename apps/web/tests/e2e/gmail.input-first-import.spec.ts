@@ -19,7 +19,10 @@ import {
   createEntityFixture,
   ensureMemberParty,
 } from "./fixtures/core";
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  selectComboboxItem,
+} from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 // This journey owns real OAuth persistence and credential-backed MIME retention.
@@ -48,7 +51,7 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     actor,
   );
   const vendorName = `Synthetic Gmail retailer ${token}`;
-  await createEntityFixture(page, "vendor", {
+  const seededVendor = await createEntityFixture(page, "vendor", {
     name: vendorName,
     website: "https://synthetic-retailer.example.test",
     orderEmailSenders: [sender],
@@ -195,7 +198,7 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     ]),
   );
   const sharedSender =
-    "receipts+synthetic-cafe-receipt-confirmation-mailbox@order.online";
+    "store+1000010000100001000010000100001@t.shopifyemail.com";
   await retainedMailFixture(db, {
     ledgerPartyId: member.id,
     mailboxId: connected.accountId,
@@ -263,6 +266,33 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
       .filter({ visible: true })
       .first(),
   ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Sender attribution", exact: true }),
+  ).toBeVisible();
+  await selectComboboxItem(
+    page,
+    page.getByRole("combobox", { name: "Seller Vendor", exact: true }),
+    vendorName,
+  );
+  await page
+    .getByRole("button", { name: "Confirm Vendor", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Close inspector", exact: true }),
+  ).toHaveCount(0);
+  const [mappedVendor] = await database
+    .select({ senders: schema.vendor.orderEmailSenders })
+    .from(schema.vendor)
+    .where(eq(schema.vendor.shortcode, seededVendor.id));
+  expect(mappedVendor?.senders).toEqual(expect.arrayContaining([sharedSender]));
+  await senderRegion
+    .getByRole("button", { name: "Sender details", exact: true })
+    .filter({ visible: true })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("region", { name: "Sender attribution", exact: true }),
+  ).toContainText("Member address decision");
   await test.info().attach("Shared sender phone inspector", {
     body: await page.screenshot(),
     contentType: "image/png",
@@ -284,6 +314,15 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     body: await senderRegion.screenshot(),
     contentType: "image/png",
   });
+  await expect(
+    coverage.getByRole("button", { name: "Sort by Domains", exact: true }),
+  ).toBeVisible();
+  await expect(
+    coverage.getByRole("button", {
+      name: "Sort by Sender addresses",
+      exact: true,
+    }),
+  ).toBeVisible();
   const senderCell = senderRegion.getByRole("cell", {
     name: sharedSender,
     exact: true,

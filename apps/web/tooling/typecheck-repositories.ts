@@ -14,6 +14,7 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/domains/purchase-import/repo/sender-attribution-read.ts",
   "src/server/domains/purchase-import/repo/mail-import-settings.ts",
   "src/server/domains/purchase-import/repo/controlled-mail-import.ts",
   "src/server/domains/purchase-import/repo/gmail/mail-coverage.ts",

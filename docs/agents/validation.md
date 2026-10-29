@@ -182,7 +182,9 @@ that main has since changed, so they are not evidence for the merge.
 
 Construct synthetic domain fixtures through the supported `createRepoEntity`
 writer roster. For other entities, use the owning `create…Fixture` and
-`make…Input` helpers so required defaults survive.
+`make…Input` helpers so required defaults survive. When setup consumes only
+Product IDs, use `createProductIdentityFixture`: it retains creation effects
+without hydrating unused detail responses for every seed row.
 Do not substitute `insertWithShortcode` for those fixture writers: it omits
 required schema/writer defaults and reference resolution, such as Purchase Vendor.
 Create a valid record first, then update storage only when the tested historical

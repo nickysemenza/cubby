@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -127,5 +133,34 @@ it.each([
     expect(
       (await client.query('SELECT * FROM "SyntheticPreserved"')).rows,
     ).toEqual([{ value: "Synthetic retained content" }]);
+  });
+});
+
+// The additive policy metadata must not reinterpret or erase a legacy sender list.
+it("adds sender decision metadata while preserving populated Vendor identities", async () => {
+  await withMigrationDatabase(async (client) => {
+    await client.query(`CREATE TABLE "Vendor" (name text NOT NULL, "orderEmailSenders" text[] NOT NULL, notes text);
+      INSERT INTO "Vendor" VALUES ('Synthetic seller', ARRAY['store+100001@t.shopifyemail.com', 'orders@seller.example.test'], 'Synthetic retained research');`);
+    const before = (await client.query('SELECT * FROM "Vendor"')).rows;
+    await client.query(
+      readFileSync(
+        new URL(
+          "../drizzle/0059_sender_attribution_policies.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    expect(
+      (
+        await client.query(
+          'SELECT name, "orderEmailSenders", notes FROM "Vendor"',
+        )
+      ).rows,
+    ).toEqual(before);
+    expect(
+      (await client.query('SELECT "orderEmailSenderPolicies" FROM "Vendor"'))
+        .rows,
+    ).toEqual([{ orderEmailSenderPolicies: {} }]);
   });
 });
