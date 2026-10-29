@@ -40,7 +40,7 @@ const request = {
 // transport shim was asked for and the event the real usage writer emitted,
 // so the writer's accounting rules apply and the test reads them back typed.
 function fakePort(
-  respond: () => Response,
+  respond: (opts: GatewayCallOptions) => Response,
   selected:
     | "gateway"
     | "chatgpt"
@@ -60,7 +60,7 @@ function fakePort(
         typeof selected === "function" ? selected(opts) : selected,
       );
       sent.push({ provider, opts, url: String(input), init: init ?? {} });
-      return Promise.resolve(respond());
+      return Promise.resolve(respond(opts));
     },
     callUsage: (_model, body) =>
       body.includes('"usage"')
@@ -145,7 +145,7 @@ describe("forwardGatewayRequest", () => {
             }),
             { headers: { "content-type": "text/event-stream" } },
           ),
-        "chatgpt",
+        "gateway",
       );
       const out = await forwardGatewayRequest(
         { ...request, path: "/openai/responses" },
@@ -154,11 +154,11 @@ describe("forwardGatewayRequest", () => {
       );
       expect(JSON.parse(out.body)).toEqual(completed);
       expect(out.headers).toContainEqual(["content-type", "application/json"]);
-      expect(sent.map((call) => call.opts.funding)).toEqual(["subscription"]);
+      expect(sent.map((call) => call.opts.funding)).toEqual(["openai_credit"]);
       expect(recorded[0]).toMatchObject({
         inputTokens: 10,
         outputTokens: 5,
-        transport: "chatgpt",
+        transport: "gateway",
       });
     },
   );
@@ -172,17 +172,22 @@ describe("forwardGatewayRequest", () => {
     async (code) => {
       let attempt = 0;
       const { port, sent, recorded } = fakePort(
-        () =>
-          ++attempt === 1
-            ? new Response(
-                `data: ${JSON.stringify({ type: "response.failed", response: { error: { code, message: "Synthetic diagnostic" } } })}\n\n`,
-                { headers: { "content-type": "text/event-stream" } },
+        (opts) =>
+          opts.funding === "openai_credit"
+            ? Response.json(
+                { error: { code: "credit_balance_exhausted" } },
+                { status: 429 },
               )
-            : Response.json({
-                output: [],
-                usage: { input_tokens: 10, output_tokens: 5 },
-              }),
-        (opts) => (opts.funding === "paid" ? "gateway" : "chatgpt"),
+            : ++attempt === 1
+              ? new Response(
+                  `data: ${JSON.stringify({ type: "response.failed", response: { error: { code, message: "Synthetic diagnostic" } } })}\n\n`,
+                  { headers: { "content-type": "text/event-stream" } },
+                )
+              : Response.json({
+                  output: [],
+                  usage: { input_tokens: 10, output_tokens: 5 },
+                }),
+        (opts) => (opts.funding === "subscription" ? "chatgpt" : "gateway"),
       );
       const out = await forwardGatewayRequest(
         { ...request, path: "/openai/responses" },
@@ -191,15 +196,21 @@ describe("forwardGatewayRequest", () => {
       );
       const retry = code !== "unknown_failure";
       expect(sent.map((call) => call.opts.funding)).toEqual(
-        retry ? ["subscription", "paid"] : ["subscription"],
+        retry
+          ? ["openai_credit", "subscription", "paid"]
+          : ["openai_credit", "subscription"],
       );
       expect(recorded[0]).toMatchObject({
         status: "failed",
+        transport: "gateway",
+      });
+      expect(recorded[1]).toMatchObject({
+        status: "failed",
         transport: "chatgpt",
       });
-      expect(recorded).toHaveLength(retry ? 2 : 1);
+      expect(recorded).toHaveLength(retry ? 3 : 2);
       expect(out.status).toBe(retry ? 200 : 502);
-      expect(recorded[1]?.transport).toBe(retry ? "gateway" : undefined);
+      expect(recorded[2]?.transport).toBe(retry ? "gateway" : undefined);
       const diagnostic = retry ? null : JSON.parse(out.body);
       expect(diagnostic).toEqual(
         retry ? null : { error: { code, message: "Synthetic diagnostic" } },

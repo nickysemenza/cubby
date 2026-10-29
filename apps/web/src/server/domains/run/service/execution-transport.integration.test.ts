@@ -387,7 +387,12 @@ describe("household AI funding at the paid transport boundary", () => {
           },
           gateway: async (request) => {
             sent.push(`gateway:${funding}:${request.endpoint}`);
-            return new Response("synthetic gateway failure", { status: 500 });
+            return funding === "openai_credit"
+              ? Response.json(
+                  { error: { code: "credit_balance_exhausted" } },
+                  { status: 429 },
+                )
+              : new Response("synthetic gateway failure", { status: 500 });
           },
         }),
       undefined,
@@ -401,7 +406,8 @@ describe("household AI funding at the paid transport boundary", () => {
       { messages: [] },
       { maxTokens: 512 },
     );
-    expect(sent).toEqual(["chatgpt"]);
+    expect(sent).toEqual(["gateway:openai_credit:responses", "chatgpt"]);
+    expect(response.stopReason).not.toBe("error");
     expect(response.model).toBe("gpt-6-sol");
   });
 

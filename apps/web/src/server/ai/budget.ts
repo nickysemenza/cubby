@@ -16,8 +16,8 @@ import { aiBudgetWindow } from "./budget-window";
 
 /**
  * Household caps on frontier chat-model spend per fixed six-hour UTC window
- * (ADR 0017): the paid budget sums charged cost, and the Claude credit budget
- * sums the standard API cost of subscriber-credit calls, which charge $0.
+ * (ADR 0017): the paid budget sums charged cost, and the provider credit budgets
+ * sum their own standard API cost of subscriber-credit calls, which charge $0.
  * Embeddings, closed-set decision models and other model roles are not
  * budgeted. Admission (`paidRunPreflight`, `withAiBudget`,
  * `withFreeBudget`) and accounting (`readAiBudget`) share `aiBudgetCovers`.
@@ -83,7 +83,8 @@ export async function readAiBudget(
           SELECT jsonb_build_array(${appSettings.metadata})
           FROM ${appSettings} WHERE ${appSettings.id} = ${SETTINGS_ID}
         )`,
-      credit: sql<number>`COALESCE(sum(${aiUsage.standardCost}) FILTER (WHERE ${creditUsageRow}), 0)::double precision`,
+      credit: sql<number>`COALESCE(sum(${aiUsage.standardCost}) FILTER (WHERE ${creditUsageRow} AND ${aiUsage.provider} = 'anthropic'), 0)::double precision`,
+      openaiCredit: sql<number>`COALESCE(sum(${aiUsage.standardCost}) FILTER (WHERE ${creditUsageRow} AND ${aiUsage.provider} = 'openai'), 0)::double precision`,
       plan: sql<number>`COALESCE(sum(${aiUsage.standardCost}) FILTER (WHERE ${planUsageRow}), 0)::double precision`,
       paid: sql<number>`COALESCE(sum(COALESCE(${aiUsage.chargedCost}, ${aiUsage.standardCost}, 0)) FILTER (WHERE (${creditUsageRow}) IS NOT TRUE), 0)::double precision`,
     })
@@ -108,6 +109,10 @@ export async function readAiBudget(
     credit: {
       limitUsd: settings.creditLimitUsd,
       spentUsd: Math.max(0, row?.credit ?? 0),
+    },
+    openaiCredit: {
+      limitUsd: settings.openaiCreditLimitUsd,
+      spentUsd: Math.max(0, row?.openaiCredit ?? 0),
     },
     plan: {
       limitUsd: settings.planLimitUsd,
@@ -166,13 +171,13 @@ export function withFreeBudget<R>(
   preflight:
     | ((
         request: R,
-        funding: "subscriber_credit" | "subscription",
+        funding: "subscriber_credit" | "openai_credit" | "subscription",
       ) => Promise<string | null>)
     | undefined,
 ):
   | ((
       request: R,
-      funding: "subscriber_credit" | "subscription",
+      funding: "subscriber_credit" | "openai_credit" | "subscription",
     ) => Promise<string | null>)
   | undefined {
   if (preflight || !db || !call.runId || !aiBudgetCovers(call.model))

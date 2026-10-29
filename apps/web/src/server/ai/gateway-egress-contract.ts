@@ -66,9 +66,15 @@ export interface AiGatewayEgressRpc {
   currentDeploymentVersion(): Promise<string>;
   fetch(request: Request): Promise<Response>;
   admit(bucket: string, now?: number): Promise<GatewayAdmission>;
-  creditRefusal(now?: number): Promise<CreditRefusal | null>;
+  creditRefusal(now?: number, provider?: string): Promise<CreditRefusal | null>;
   resetCreditRefusal(): Promise<void>;
-  noteCreditResponse(status: number, body: string, now?: number): Promise<void>;
+  noteCreditResponse(
+    status: number,
+    body: string,
+    now?: number,
+    epoch?: number,
+    provider?: string,
+  ): Promise<void>;
   finish(
     token: string,
     status: number,

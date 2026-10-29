@@ -92,23 +92,38 @@ describe("Claude credit refusal", () => {
     });
   });
 
-  it("holds a refusal without a named date until the window ends", async () => {
-    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
-    const now = Date.parse("2099-10-01T02:00:00Z");
-    await stub.noteCreditResponse(400, LOW_BALANCE, now);
-    const end = aiBudgetWindow(new Date(now)).end.getTime();
-    expect(await stub.creditRefusal(now)).toEqual({
-      until: end,
-      reason: LOW_BALANCE,
-    });
-    await evictDurableObject(stub);
-    expect(await stub.admit(CREDIT, end - 1)).toMatchObject({
-      kind: "refused",
-      until: end,
-    });
-    expect((await stub.admit(CREDIT, end)).kind).toBe("admitted");
-    expect(await stub.creditRefusal(end)).toBeNull();
-  });
+  it.each(["anthropic", "openai"])(
+    "holds a %s refusal independently until the window ends",
+    async (provider) => {
+      const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+      const now = Date.parse("2099-10-01T02:00:00Z");
+      const body =
+        provider === "openai"
+          ? JSON.stringify({ error: { code: "credit_balance_exhausted" } })
+          : LOW_BALANCE;
+      const bucket = `subscriber-credit:${provider}`;
+      await stub.noteCreditResponse(400, body, now, undefined, provider);
+      expect(
+        await stub.creditRefusal(
+          now,
+          provider === "openai" ? "anthropic" : "openai",
+        ),
+      ).toBeNull();
+      expect((await stub.admit("unified", now)).kind).toBe("admitted");
+      const end = aiBudgetWindow(new Date(now)).end.getTime();
+      expect(await stub.creditRefusal(now, provider)).toEqual({
+        until: end,
+        reason: body,
+      });
+      await evictDurableObject(stub);
+      expect(await stub.admit(bucket, end - 1)).toMatchObject({
+        kind: "refused",
+        until: end,
+      });
+      expect((await stub.admit(bucket, end)).kind).toBe("admitted");
+      expect(await stub.creditRefusal(end, provider)).toBeNull();
+    },
+  );
 
   it("never records Cubby's own credit-budget stop or a non-funding failure", async () => {
     const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());

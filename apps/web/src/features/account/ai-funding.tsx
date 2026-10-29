@@ -49,7 +49,7 @@ const PLAN_LABEL = {
   needs_reauthorization: "needs reauthorization",
 } satisfies Record<AiFundingStatus["plan"]["state"], string>;
 
-const creditLabel = ({ credit }: AiFundingStatus) =>
+const creditLabel = ({ credit }: Pick<AiFundingStatus, "credit">) =>
   credit.state === "refused" && credit.until
     ? `refused until ${when(credit.until)}`
     : credit.spentUsd >= credit.limitUsd
@@ -67,7 +67,9 @@ export function AiFundingLine({ budget }: { budget: AiFundingStatus }) {
   return (
     <p className="text-xs text-muted-foreground tabular-nums">
       Claude credit {usd(budget.credit.spentUsd)} of{" "}
-      {usd(budget.credit.limitUsd)}, {creditLabel(budget)} · ChatGPT plan{" "}
+      {usd(budget.credit.limitUsd)}, {creditLabel(budget)} · OpenAI credit{" "}
+      {usd(budget.openaiCredit.spentUsd)} of {usd(budget.openaiCredit.limitUsd)}
+      , {creditLabel({ credit: budget.openaiCredit })} · ChatGPT plan{" "}
       {usd(budget.plan.spentUsd)} of {usd(budget.plan.limitUsd)},{" "}
       {planLabel(budget)} ·{" "}
       <Link to="/settings" hash="ai-funding" className="underline">
@@ -96,7 +98,7 @@ type FundingRow = {
 };
 
 /**
- * Household-wide frontier AI funding (ADR 0017): the three six-hour budgets,
+ * Household-wide frontier AI funding (ADR 0017): the four six-hour budgets,
  * the Claude credit's refusal state with Anthropic's raw reason, and the plan.
  */
 export function AiFundingSettings() {
@@ -113,18 +115,18 @@ export function AiFundingSettings() {
   });
   const retry = useActionMutation({
     mutationFn: () => aiFunding.resetCreditRefusal.mutationOptions(),
-    success: "Claude credit will be tried on the next call",
-    error: "Couldn't clear the Claude credit refusal",
+    success: "API credits will be tried on the next call",
+    error: "Couldn't clear the credit refusals",
     onSuccess: replace,
   });
   const budget = status.data;
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Every feature’s frontier AI calls use Claude credit first, then the
-        ChatGPT plan, then paid models. Background work stops drawing each free
-        source at its window budget (the plan’s quota is shared with your own
-        use), then pays within the paid budget.
+        Every feature’s frontier AI calls use Claude credit first, then OpenAI
+        credit, then the ChatGPT plan, then paid models. Background work stops
+        drawing each free source at its window budget (the plan’s quota is
+        shared with your own use), then pays within the paid budget.
       </p>
       <Stack gap="md">
         {status.isLoading ? <StatusText>Loading AI funding…</StatusText> : null}
@@ -133,7 +135,7 @@ export function AiFundingSettings() {
           <>
             <Stack gap="sm">
               <FundingBudgetEditor
-                key={`${budget.credit.limitUsd}:${budget.plan.limitUsd}:${budget.paid.limitUsd}`}
+                key={`${budget.credit.limitUsd}:${budget.openaiCredit.limitUsd}:${budget.plan.limitUsd}:${budget.paid.limitUsd}`}
                 budget={budget}
                 pending={setCredit.isPending}
                 onSave={(settings) => setCredit.mutate(settings)}
@@ -161,6 +163,31 @@ export function AiFundingSettings() {
                 {budget.credit.reason ? (
                   <code className="rounded-md bg-muted p-3 text-xs break-all">
                     {budget.credit.reason}
+                  </code>
+                ) : null}
+              </Stack>
+            ) : null}
+            {budget.openaiCredit.state === "refused" ? (
+              <Stack gap="sm">
+                <Row align="center" justify="between" gap="sm" wrap>
+                  <p className="min-w-0 text-sm">
+                    OpenAI refused API credit. Cubby skips it until{" "}
+                    {budget.openaiCredit.until
+                      ? when(budget.openaiCredit.until)
+                      : "reset"}
+                    , trying one call each six-hour window.
+                  </p>
+                  <Button
+                    variant="outline"
+                    disabled={retry.isPending}
+                    onClick={() => retry.mutate({})}
+                  >
+                    Retry API credits now
+                  </Button>
+                </Row>
+                {budget.openaiCredit.reason ? (
+                  <code className="rounded-md bg-muted p-3 text-xs break-all">
+                    {budget.openaiCredit.reason}
                   </code>
                 ) : null}
               </Stack>
@@ -210,6 +237,7 @@ export function FundingBudgetEditor({
 }) {
   const [draft, setDraft] = useState({
     credit: String(budget.credit.limitUsd),
+    openaiCredit: String(budget.openaiCredit.limitUsd),
     plan: String(budget.plan.limitUsd),
     paid: String(budget.paid.limitUsd),
   });
@@ -222,11 +250,17 @@ export function FundingBudgetEditor({
   );
   const changed =
     draft.credit !== String(budget.credit.limitUsd) ||
+    draft.openaiCredit !== String(budget.openaiCredit.limitUsd) ||
     draft.plan !== String(budget.plan.limitUsd) ||
     draft.paid !== String(budget.paid.limitUsd);
   const rows: FundingRow[] = (
     [
       { id: "credit", source: "Claude credit", state: creditLabel(budget) },
+      {
+        id: "openaiCredit",
+        source: "OpenAI credit",
+        state: creditLabel({ credit: budget.openaiCredit }),
+      },
       { id: "plan", source: "ChatGPT plan", state: planLabel(budget) },
       {
         id: "paid",
@@ -267,6 +301,7 @@ export function FundingBudgetEditor({
         if (valid && changed && !pending)
           onSave({
             creditLimitUsd: Number(draft.credit),
+            openaiCreditLimitUsd: Number(draft.openaiCredit),
             planLimitUsd: Number(draft.plan),
             paidLimitUsd: Number(draft.paid),
           });

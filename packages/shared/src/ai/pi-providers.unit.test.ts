@@ -21,6 +21,11 @@ it("restarts a credit-refused generation on the subscription with its actual mod
   for (const provider of fundedCubbyPiProviders(
     (route, _unbilled, funding) => async () => {
       attempts.push(`${route}:${funding}`);
+      if (funding === "openai_credit")
+        return Response.json(
+          { error: { code: "credit_balance_exhausted" } },
+          { status: 429 },
+        );
       if (funding === "subscriber_credit")
         return Response.json(
           {
@@ -50,6 +55,7 @@ it("restarts a credit-refused generation on the subscription with its actual mod
   expect(response.model).toBe("gpt-6-sol");
   expect(attempts).toEqual([
     "anthropic:subscriber_credit",
+    "openai:openai_credit",
     "openai:subscription",
   ]);
 });
@@ -63,6 +69,11 @@ it("advances past a credit attempt the egress object refuses from its recorded r
   for (const provider of fundedCubbyPiProviders(
     (route, _unbilled, funding) => async () => {
       attempts.push(`${route}:${funding}`);
+      if (funding === "openai_credit")
+        return Response.json(
+          { error: { code: "credit_balance_exhausted" } },
+          { status: 429 },
+        );
       if (funding === "subscriber_credit")
         return creditRefusedResponse({
           until: Date.parse("2099-11-01T00:00:00Z"),
@@ -87,6 +98,7 @@ it("advances past a credit attempt the egress object refuses from its recorded r
   expect(response.model).toBe("gpt-6-sol");
   expect(attempts).toEqual([
     "anthropic:subscriber_credit",
+    "openai:openai_credit",
     "openai:subscription",
   ]);
 });
@@ -115,6 +127,11 @@ describe("a ladder that leads with the requested model", () => {
             .object({ model: z.string() })
             .parse(JSON.parse(String(init?.body)));
           attempts.push(`${route}:${funding}:${body.model}`);
+          if (funding === "openai_credit")
+            return Response.json(
+              { error: { code: "credit_balance_exhausted" } },
+              { status: 429 },
+            );
           if (funding === "subscriber_credit")
             return Response.json(credit, { status: 400 });
           return openAiCompleted();
@@ -130,12 +147,13 @@ describe("a ladder that leads with the requested model", () => {
       expect(attempts).toEqual([
         first,
         "anthropic:subscriber_credit:claude-opus-5-5",
+        "openai:openai_credit:gpt-6-sol",
         "openai:subscription:gpt-6-sol",
       ]);
     },
   );
 
-  it("funds an OpenAI primary from the ChatGPT plan first", async () => {
+  it("funds an OpenAI primary from API credits first", async () => {
     const attempts: string[] = [];
     const models = createModels();
     for (const provider of fundedCubbyPiProviders(
@@ -154,7 +172,11 @@ describe("a ladder that leads with the requested model", () => {
     if (!model) throw new Error("Missing Luna");
     const response = await models.completeSimple(model, { messages: [] });
     expect(response.model).toBe("gpt-6-luna");
-    expect(attempts).toEqual(["openai:subscription:gpt-6-luna"]);
+    expect(attempts).toEqual(["openai:openai_credit:gpt-6-luna"]);
+    expect(piTokenUsage(response)).toMatchObject({
+      chargedCost: 0,
+      costEvidence: { billingReason: "subscriber_credit" },
+    });
   });
 });
 
@@ -228,6 +250,11 @@ it("discards a partial tool call before falling through both included funding ro
   for (const provider of fundedCubbyPiProviders(
     (_route, _unbilled, funding) => async () => {
       attempts.push(String(funding));
+      if (funding === "openai_credit")
+        return Response.json(
+          { error: { code: "credit_balance_exhausted" } },
+          { status: 429 },
+        );
       if (funding === "subscriber_credit")
         return anthropicStream([
           anthropicStart,
@@ -276,8 +303,13 @@ it("discards a partial tool call before falling through both included funding ro
   for await (const event of stream) emitted.push(event.type);
   const result = await stream.result();
   expect(result.errorMessage).toBeUndefined();
-  expect(attempts).toEqual(["subscriber_credit", "subscription", "paid"]);
-  expect(refused).toEqual(["claude-opus-5-5", "gpt-6-sol"]);
+  expect(attempts).toEqual([
+    "subscriber_credit",
+    "openai_credit",
+    "subscription",
+    "paid",
+  ]);
+  expect(refused).toEqual(["claude-opus-5-5", "gpt-6-sol", "gpt-6-sol"]);
   expect(emitted).not.toContain("toolcall_start");
   expect(piTokenUsage(result).costEvidence?.billingReason).toBe("standard");
 });
@@ -290,6 +322,11 @@ it.each(["error", "response.failed"])(
     for (const provider of fundedCubbyPiProviders(
       (_route, _unbilled, funding) => async () => {
         attempts.push(String(funding));
+        if (funding === "openai_credit")
+          return Response.json(
+            { error: { code: "credit_balance_exhausted" } },
+            { status: 429 },
+          );
         if (funding === "subscriber_credit")
           return Response.json(
             { error: { message: "Your credit balance is too low" } },
@@ -316,14 +353,19 @@ it.each(["error", "response.failed"])(
     if (!model) throw new Error("Missing Opus");
     const response = await models.completeSimple(model, { messages: [] });
     expect(response.errorMessage).toBeUndefined();
-    expect(attempts).toEqual(["subscriber_credit", "subscription", "paid"]);
+    expect(attempts).toEqual([
+      "subscriber_credit",
+      "openai_credit",
+      "subscription",
+      "paid",
+    ]);
   },
 );
 
 // A request the plan cannot carry is a funding refusal, not a model error.
 it.each([
-  [true, ["subscriber_credit", "subscription", "paid"]],
-  [false, ["subscriber_credit", "subscription"]],
+  [true, ["subscriber_credit", "openai_credit", "subscription", "paid"]],
+  [false, ["subscriber_credit", "openai_credit", "subscription"]],
 ] as const)(
   "advances past an unsupported plan request only when paid is allowed (paid=%s)",
   async (paid, expected) => {
@@ -332,6 +374,11 @@ it.each([
     for (const provider of fundedCubbyPiProviders(
       (_route, _unbilled, funding) => async () => {
         attempts.push(String(funding));
+        if (funding === "openai_credit")
+          return Response.json(
+            { error: { code: "credit_balance_exhausted" } },
+            { status: 429 },
+          );
         if (funding === "subscriber_credit")
           return Response.json(
             { error: { message: "Your credit balance is too low" } },

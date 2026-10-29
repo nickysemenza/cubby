@@ -20,6 +20,7 @@ export const creditBudgetLimitUsd = z.number().nonnegative().max(100);
 /** Stored household AI budget settings; an absent row keeps the defaults. */
 export const aiBudgetSettings = z.strictObject({
   creditLimitUsd: creditBudgetLimitUsd,
+  openaiCreditLimitUsd: creditBudgetLimitUsd.default(1.5),
   planLimitUsd: creditBudgetLimitUsd.default(2),
   paidLimitUsd: creditBudgetLimitUsd.default(1),
 });
@@ -31,14 +32,15 @@ const budgetUse = z.strictObject({
 });
 
 /**
- * Frontier chat-model spend in the current fixed UTC window. `credit` and
- * `plan` sum the standard API cost of Claude subscriber-credit and ChatGPT
- * plan calls, which charge $0; `paid` sums the charged cost of everything.
+ * Frontier chat-model spend in the current fixed UTC window. `credit`,
+ * `openaiCredit` and `plan` sum standard API cost separately for the two
+ * provider credit pools and ChatGPT plan; `paid` sums charged cost.
  */
 export const aiBudgetStatus = z.strictObject({
   windowStart: z.iso.datetime(),
   windowEnd: z.iso.datetime(),
   credit: budgetUse,
+  openaiCredit: budgetUse,
   plan: budgetUse,
   paid: budgetUse,
 });
@@ -74,12 +76,12 @@ export const claudeCreditAvailability = z.strictObject({
 });
 
 /**
- * Household-wide frontier AI funding (ADR 0017): both budgets, the credit's
- * refusal state and the plan, which together decide whether background work
- * waits.
+ * Household-wide frontier AI funding (ADR 0017): separate provider credit
+ * budgets and refusals, the plan and paid budget decide when background work waits.
  */
 export const aiFundingStatus = aiBudgetStatus.extend({
   credit: budgetUse.extend(claudeCreditAvailability.shape),
+  openaiCredit: budgetUse.extend(claudeCreditAvailability.shape),
   plan: budgetUse.extend(chatGptPlanAvailability.shape),
 });
 export type AiFundingStatus = z.infer<typeof aiFundingStatus>;

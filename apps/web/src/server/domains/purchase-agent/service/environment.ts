@@ -75,7 +75,7 @@ export interface RunServices {
   /** A refusal when background work has spent this window's credit or plan budget. */
   admitFreeInference(
     request: GatewayFetchRequest,
-    funding: "subscriber_credit" | "subscription",
+    funding: "subscriber_credit" | "openai_credit" | "subscription",
   ): Promise<string | null>;
   /**
    * Why `model` cannot be funded for this Run now (a refused Claude credit, a

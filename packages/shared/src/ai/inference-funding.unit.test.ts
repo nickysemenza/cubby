@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  type GatewayQuery,
   inferenceFundingHeaders,
   isInferenceFundingRefusal,
   runNativeGateway,
@@ -41,43 +42,72 @@ describe("inference funding", () => {
     ).toBe(429);
     expect(calls).toEqual(["subscription"]);
   });
-  it("sends named BYOK controls on the native provider request, not a Universal payload", async () => {
-    let sent: Request | undefined;
-    await runNativeGateway({
-      accountId: "example-account",
-      gatewayId: "cubby",
-      token: "example-token",
-      provider: "anthropic",
-      request: {
-        endpoint: "v1/messages",
-        headers: new Headers(inferenceFundingHeaders("subscriber_credit")),
-        input: new URL("https://ai-gateway.invalid/anthropic/v1/messages"),
-        init: { method: "POST" },
-        signal: undefined,
-        query: async () => ({ model: "claude-opus-5-5", messages: [] }),
-      },
-      controls: {
-        metadata: {
-          environment: "development",
-          feature: "synthetic",
-          operation: "probe",
+  it.each(["anthropic", "openai"])(
+    "sends named BYOK controls on the native %s request, not a Universal payload",
+    async (provider) => {
+      let sent: Request | undefined;
+      const endpoint = provider === "openai" ? "responses" : "v1/messages";
+      const query: GatewayQuery =
+        provider === "openai"
+          ? { model: "gpt-6-sol", input: [] }
+          : { model: "claude-opus-5-5", messages: [] };
+      await runNativeGateway({
+        accountId: "example-account",
+        gatewayId: "cubby",
+        token: "example-token",
+        provider,
+        request: {
+          endpoint,
+          headers: new Headers(
+            inferenceFundingHeaders(
+              provider === "openai" ? "openai_credit" : "subscriber_credit",
+            ),
+          ),
+          input: new URL(`https://ai-gateway.invalid/${provider}/${endpoint}`),
+          init: { method: "POST" },
+          signal: undefined,
+          query: async () => query,
         },
-      },
-      fetcher: async (input, init) => {
-        sent = new Request(input, init);
-        return Response.json({});
-      },
-    });
-    expect(sent?.url).toBe(
-      "https://gateway.ai.cloudflare.com/v1/example-account/cubby/anthropic/v1/messages",
-    );
-    expect(sent?.headers.get("cf-aig-byok-alias")).toBe("subscriber-credit");
-    expect(sent?.headers.get("cf-aig-no-wholesale")).toBe("true");
-    expect(await sent?.json()).toEqual({
-      model: "claude-opus-5-5",
-      messages: [],
-    });
-  });
+        controls: {
+          metadata: {
+            environment: "development",
+            feature: "synthetic",
+            operation: "probe",
+          },
+        },
+        fetcher: async (input, init) => {
+          sent = new Request(input, init);
+          return Response.json({});
+        },
+      });
+      expect(sent?.url).toBe(
+        `https://gateway.ai.cloudflare.com/v1/example-account/cubby/${provider}/${endpoint}`,
+      );
+      expect(sent?.headers.get("cf-aig-byok-alias")).toBe("subscriber-credit");
+      expect(sent?.headers.get("cf-aig-no-wholesale")).toBe("true");
+      expect(await sent?.json()).toEqual(query);
+    },
+  );
+
+  it.each(["credit_balance_exhausted", "insufficient_quota"])(
+    "recognizes OpenAI credit exhaustion %s without treating rate limits as exhausted credit",
+    (code) => {
+      expect(
+        isInferenceFundingRefusal(
+          429,
+          JSON.stringify({ error: { code } }),
+          "openai_credit",
+        ),
+      ).toBe(true);
+      expect(
+        isInferenceFundingRefusal(
+          429,
+          JSON.stringify({ error: { code: "rate_limit_exceeded" } }),
+          "openai_credit",
+        ),
+      ).toBe(false);
+    },
+  );
 
   it("leaves subscription quota refusal to the model owner without internal paid fallback", async () => {
     const calls: string[] = [];
@@ -110,34 +140,41 @@ describe("inference funding", () => {
   });
   // A spent Claude credit budget must advance the ladder like a Console
   // refusal, before anything is transmitted on the credit key.
-  it("refuses a credit attempt Cubby's credit budget stops as a funding refusal", async () => {
-    const sent: string[] = [];
-    const send = (refusal: string | null) =>
-      gatewayFetchThrough({
-        provider: "anthropic",
-        funding: "subscriber_credit",
-        beforeFreeRequest: async () => refusal,
-        gateway: async () => {
-          sent.push("credit");
-          return Response.json({});
-        },
-      })("https://ai-gateway.invalid/anthropic/v1/messages", {
-        method: "POST",
-        body: '{"model":"claude-opus-5-5"}',
-      });
-    const refused = await send(
-      "Claude credit budget reached: $5 of $5 standard cost",
-    );
-    const body = await refused.text();
-    expect(refused.status).toBe(429);
-    expect(body).toContain("Claude credit budget reached");
-    expect(isInferenceFundingRefusal(429, body, "subscriber_credit")).toBe(
-      true,
-    );
-    expect(sent).toEqual([]);
-    expect((await send(null)).status).toBe(200);
-    expect(sent).toEqual(["credit"]);
-  });
+  it.each(["subscriber_credit", "openai_credit"] as const)(
+    "refuses a %s attempt Cubby's credit budget stops as a funding refusal",
+    async (funding) => {
+      const sent: string[] = [];
+      const send = (refusal: string | null) =>
+        gatewayFetchThrough({
+          provider: funding === "openai_credit" ? "openai" : "anthropic",
+          funding,
+          chatGpt: async () => {
+            throw new Error("Credit attempt must bypass OAuth");
+          },
+          beforeFreeRequest: async () => refusal,
+          gateway: async () => {
+            sent.push("credit");
+            return Response.json({});
+          },
+        })(
+          `https://ai-gateway.invalid/${funding === "openai_credit" ? "openai/responses" : "anthropic/v1/messages"}`,
+          {
+            method: "POST",
+            body: '{"model":"claude-opus-5-5"}',
+          },
+        );
+      const refused = await send(
+        "Claude credit budget reached: $5 of $5 standard cost",
+      );
+      const body = await refused.text();
+      expect(refused.status).toBe(429);
+      expect(body).toContain("Claude credit budget reached");
+      expect(isInferenceFundingRefusal(429, body, funding)).toBe(true);
+      expect(sent).toEqual([]);
+      expect((await send(null)).status).toBe(200);
+      expect(sent).toEqual(["credit"]);
+    },
+  );
 
   // The ChatGPT plan's quota is shared with the members' own use: a spent
   // plan budget must leave the plan untouched and advance the ladder, and an

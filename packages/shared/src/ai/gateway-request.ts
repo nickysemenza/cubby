@@ -458,13 +458,17 @@ async function observeGatewayResponse(
 /** What carried a model request: the household ChatGPT plan or the gateway. */
 export type GatewayTransport = "gateway" | "chatgpt";
 
-export type InferenceFunding = "subscriber_credit" | "subscription" | "paid";
+export type InferenceFunding =
+  | "subscriber_credit"
+  | "openai_credit"
+  | "subscription"
+  | "paid";
 
 /** Named BYOK is opt-in; the default key must remain unset for paid fallback. */
 export function inferenceFundingHeaders(
   funding: InferenceFunding,
 ): Record<string, string> {
-  return funding === "subscriber_credit"
+  return funding === "subscriber_credit" || funding === "openai_credit"
     ? {
         "cf-aig-byok-alias": "subscriber-credit",
         "cf-aig-no-wholesale": "true",
@@ -486,27 +490,34 @@ export function isInferenceFundingRefusal(
         body,
       )
     );
+  if (funding === "openai_credit")
+    return /"(?:code|type)"\s*:\s*"(?:credit_balance_exhausted|insufficient_quota|cubby_credit_budget_reached|cubby_credit_refused)"/u.test(
+      body,
+    );
   return /credit balance is too low|reached your specified[^\n]*API usage limits|enforced_spend_limit_reached|cubby_credit_budget_reached|cubby_credit_refused/iu.test(
     body,
   );
 }
 
 /**
- * The egress Durable Object's answer while a recorded Claude credit refusal
- * holds: Anthropic's status and error envelope, so every credit caller
+ * The egress Durable Object's answer while a recorded provider credit refusal
+ * holds: a provider error envelope, so every credit caller
  * advances exactly as it does on the provider's own refusal, carrying the
  * provider's raw reason.
  */
-export function creditRefusedResponse(refusal: {
-  until: number;
-  reason: string;
-}): Response {
+export function creditRefusedResponse(
+  refusal: {
+    until: number;
+    reason: string;
+  },
+  provider = "anthropic",
+): Response {
   return Response.json(
     {
       type: "error",
       error: {
         type: "cubby_credit_refused",
-        message: `Claude credit refused until ${new Date(refusal.until).toISOString()}; Cubby skips it until then, probing once per six-hour window. "Retry Claude credit now" (Settings → AI funding, or MCP ai_funding.reset_credit_refusal) clears it. Anthropic: ${refusal.reason}`,
+        message: `${provider === "openai" ? "OpenAI" : "Claude"} credit refused until ${new Date(refusal.until).toISOString()}; Cubby skips it until then, probing once per six-hour window. Reset credit refusals in Settings → AI funding or MCP ai_funding.reset_credit_refusal. Provider: ${refusal.reason}`,
       },
     },
     { status: 400 },
@@ -520,6 +531,10 @@ export function isInferenceStreamFundingRefusal(
 ): boolean {
   if (funding === "subscription")
     return /^(?:Error Code )?(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded):/u.test(
+      message,
+    );
+  if (funding === "openai_credit")
+    return /^(?:Error Code )?(?:credit_balance_exhausted|insufficient_quota):/u.test(
       message,
     );
   return (
@@ -942,7 +957,7 @@ export interface GatewayFetchRoutes extends GatewayResponseObservers {
   /** Admission completes before each actual paid or synthetic-peer transmission. */
   beforePaidRequest?: (request: GatewayFetchRequest) => Promise<void>;
   /**
-   * Free-rung admission, before a Claude credit or ChatGPT plan attempt: a
+   * Free-rung admission, before a provider credit or ChatGPT plan attempt: a
    * returned reason refuses it as a funding refusal
    * (`cubby_credit_budget_reached`, `cubby_plan_budget_reached`), so the
    * ladder moves on; an unladdered call skips the plan for its paid or
@@ -950,7 +965,7 @@ export interface GatewayFetchRoutes extends GatewayResponseObservers {
    */
   beforeFreeRequest?: (
     request: GatewayFetchRequest,
-    funding: "subscriber_credit" | "subscription",
+    funding: "subscriber_credit" | "openai_credit" | "subscription",
   ) => Promise<string | null>;
   requestTimeoutMs?: number;
   /** Rewrites the provider body on every route that decodes it. */
@@ -1065,11 +1080,12 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
     const observe = async (response: Response) =>
       observeGatewayResponse(response, routes, await streamRequested());
 
-    if (routes.funding === "subscriber_credit" && routes.beforeFreeRequest) {
-      const refusal = await routes.beforeFreeRequest(
-        request,
-        "subscriber_credit",
-      );
+    if (
+      (routes.funding === "subscriber_credit" ||
+        routes.funding === "openai_credit") &&
+      routes.beforeFreeRequest
+    ) {
+      const refusal = await routes.beforeFreeRequest(request, routes.funding);
       if (refusal) {
         routes.onTransport?.("gateway");
         return observe(
@@ -1091,6 +1107,7 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
         request.headers.set("x-cubby-inference-funding", routes.funding);
       if (
         routes.funding !== "subscriber_credit" &&
+        routes.funding !== "openai_credit" &&
         routes.funding !== "subscription"
       )
         await routes.beforePaidRequest?.(request);
@@ -1100,6 +1117,7 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
     const planRefusal =
       routes.chatGpt &&
       routes.funding !== "paid" &&
+      routes.funding !== "openai_credit" &&
       routes.provider === "openai" &&
       endpoint === "responses"
         ? ((await routes.beforeFreeRequest?.(request, "subscription")) ?? null)
@@ -1149,7 +1167,10 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
     }
     if (requireSubscription) throw new SubscriptionRequiredError();
     request.signal?.throwIfAborted();
-    if (routes.funding !== "subscriber_credit")
+    if (
+      routes.funding !== "subscriber_credit" &&
+      routes.funding !== "openai_credit"
+    )
       await routes.beforePaidRequest?.(request);
     request.signal?.throwIfAborted();
     routes.onTransport?.("gateway");

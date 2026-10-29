@@ -137,7 +137,7 @@ describe("createCubbyGatewayFetch", () => {
     expect(result.stopReason).not.toBe("error");
     expect(requests).toEqual([
       { path: "/anthropic/v1/messages", credit: "subscriber-credit" },
-      { path: "/openai/responses", credit: null },
+      { path: "/openai/responses", credit: "subscriber-credit" },
     ]);
   });
 
