@@ -634,6 +634,10 @@ Automatic financial application still admits only the original ready prefix,
 sequentially. Charges already skipped by the current label page do not split its
 ready receipt prefix; they admit no effect and retain their skipped outcome.
 Failed, unfinished and applicable-rule charges still stop it.
+Statement application and financial booking request only identity output from
+their mutation writers when they consume only IDs. The same writers retain
+validation, locks, audits, allocations and receipts without hydrating unused
+display records. Output selection does not replace fresh financial admission.
 Unscoped label passes may complete consecutive no-action receipts
 in bounded transactions: lock the exact receipts, verify their charge/evidence,
 active pending state and absent rule descriptors, then clear only the proven
