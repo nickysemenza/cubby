@@ -706,7 +706,9 @@ stock evidence through the shared read context. One grouped inventory/location
 relation preserves the canonical absent, mixed-unit and installed-stock rules;
 record-scoped queue and ordinary Product reads retain indexed scalar lookups.
 Unsupported evidence fields fall back to their canonical reads, and unused
-relations are omitted. Catalog quality filters read published quality rows.
+relations are omitted. `prepareWhere` passes its caller's read context explicitly
+to `where`; nested scope filters still clear that context before compiling their
+own derived SQL. Catalog quality filters read published quality rows.
 Positive-stock applicability guards resolve unavailable stock to false before
 kit or ledger-quantity reads; the underlying quantity stays null.
 
@@ -3699,9 +3701,9 @@ projection, not a new entity or assignment ledger. An MCP read fences to
 shared work and work owned only by the connected member before counts and
 paging; the household UI's Owner filter grants no private access.
 
-The Email source joins its retained quality publication once by entity id, kind
-and key for admission and reason columns, so PostgreSQL can use the existing
-kind/key index. It preserves missing-publication and fresh record-read semantics
+The Email and Product research sources join their retained quality publication
+once by entity id, kind and key for admission and reason columns, so PostgreSQL can use the existing
+kind/key index. They preserve missing-publication and fresh record-read semantics
 without repeating one indexed publication lookup for every check and label.
 `storedPublicationMatch` owns the entity id/kind/key predicate for joined and
 scalar stored-publication reads; callers supply all three identity parts.
