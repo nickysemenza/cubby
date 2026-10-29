@@ -56,7 +56,7 @@ const productionRelatednessDependencies: RelatednessDependencies = {
     const { data } = await productScaffold.get(
       db,
       shortcodes.map((code) => code.toUpperCase()),
-      ["tags"],
+      Object.keys(productTagEvidence.shape),
     );
     return data.map((row) => productTagEvidence.parse(row));
   },

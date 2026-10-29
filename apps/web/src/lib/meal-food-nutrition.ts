@@ -11,12 +11,6 @@ import {
   type StoredNutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
-import type { RawProductWithMappingsAndFood } from "@cubby/schemas/product-raw-read";
-
-type NutritionProduct = Pick<
-  RawProductWithMappingsAndFood,
-  "id" | "price" | "unitMappings" | "food" | "labelNutrition"
->;
 import type { RecipeYield } from "@cubby/schemas/recipe-shared";
 import {
   isNutrientKey,
@@ -37,6 +31,8 @@ import {
 } from "./recipe-costing";
 import { getAllUnitMappingsFromProduct } from "./unit-mapping-utils";
 import { wasm } from "./wasm";
+
+type NutritionProduct = Parameters<typeof toWProductInput>[0];
 
 export type FoodAmountSource =
   | { kind: "product"; product: NutritionProduct }

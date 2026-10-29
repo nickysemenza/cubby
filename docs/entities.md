@@ -216,7 +216,7 @@ Photo-review Product evidence uses canonical tag and brand fields beside retaine
 photos, identifiers and purchase-line evidence. Those observations cannot authorize
 edits or establish automatic ownership. Nutrition reports reuse one selected Meal
 classification envelope throughout their root, person and food references.
-Product nutrition inputs select only identity, price, unit mappings, label nutrition
+Product nutrition inputs select only identity, manual and effective pricing, unit mappings, label nutrition
 and food-lookup identifiers through the canonical Product reader. Nutrition reads
 skip unrelated Product detail bindings. Duplicate stock results carry the selected
 Product brand envelope. Discard-preview amounts

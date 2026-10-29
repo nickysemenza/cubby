@@ -480,6 +480,9 @@ Any requested output admits its entire binding. Split outputs whose inputs have
 different inputs: an identity must not share a binding that requires an
 otherwise unused relation. Selected-field regressions should omit that relation
 and verify both the public projection and the work it avoids.
+Selected schemas include downstream helpers' transitive inputs, including optional
+fields that alter precedence. Validate calculated outcomes as well as selected
+values when narrowing those reads.
 
 A list page costs one network round trip per sequential statement in
 production (about 50-75 ms through Hyperdrive), so `listScaffold.list` keeps

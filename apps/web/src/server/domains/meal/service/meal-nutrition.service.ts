@@ -29,6 +29,8 @@ import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-re
 const nutritionProduct = rawProductDetail.pick({
   id: true,
   price: true,
+  // Costing prefers the retained effective price over the manual assignment.
+  pricing: true,
   unitMappings: true,
   labelNutrition: true,
   primaryGtin: true,
@@ -67,7 +69,7 @@ export async function getMealNutrition(
   const selected = await productScaffold.get(
     db,
     codes.map((code) => code.toUpperCase()),
-    ["price", "unitMappings", "labelNutrition", "primaryGtin", "fdc_id"],
+    Object.keys(nutritionProduct.shape),
   );
   const products = await batchEnrichWithFood(
     selected.data.map((row) => nutritionProduct.parse(row)),
