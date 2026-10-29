@@ -3,6 +3,8 @@ import type { fetchVendorLogoInput } from "@cubby/schemas/vendor";
 import { mergeVendorsOut, vendorCoverageOut } from "@cubby/schemas/vendor";
 
 import { vendorContract } from "~/contracts/vendor.contract";
+import { withTransactionDatabase } from "~/server/db/helpers";
+import { setSenderAttribution } from "~/server/domains/purchase-import/repo/sender-attribution";
 import { getVendorCoverage } from "~/server/domains/vendor/repo/vendor";
 import { fetchAndAttachVendorLogo } from "~/server/domains/vendor/service/vendor-logo.service";
 import { executeEntityAs } from "~/server/entity-kernel";
@@ -12,6 +14,7 @@ import {
   selectedFieldEnvelopeSchema,
 } from "~/server/generic/derived/repo/public-read";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
+import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 
 /** The logo writer registers its change inside the attachment transaction. */
@@ -41,6 +44,22 @@ const fetchVendorLogoWorkflow = bindWorkflow(
 );
 
 export const vendorHandlers = implementOperationDomain(vendorContract, {
+  setSender: async (context, input) => {
+    await withTransactionDatabase(context.db, async (db) => {
+      await setSenderAttribution(db, input, context.actorContext);
+      await publishBackgroundTasks(
+        db,
+        [
+          {
+            kind: "maintenance.purchase-discovery",
+            requestedAt: new Date().toISOString(),
+          },
+        ],
+        { source: "sender-attribution" },
+      );
+    });
+    return { sender: input.sender, vendorId: input.vendorId };
+  },
   merge: async (context, input) => {
     const merge = await executeEntityAs(context, "merge", {
       entity: "vendor",

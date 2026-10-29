@@ -5,6 +5,8 @@ import {
   mergeVendorsOut,
   vendorCoverageInput,
   vendorCoverageOut,
+  setVendorSenderInput,
+  setVendorSenderOut,
 } from "@cubby/schemas/vendor";
 
 import { defineContract, mutation, query } from "~/contracts/define";
@@ -12,6 +14,13 @@ import { defineContract, mutation, query } from "~/contracts/define";
 export const vendorContract = defineContract(
   "vendor",
   {
+    setSender: mutation({
+      exposure: "view",
+      note: "Member confirmation or removal of an exact seller identity; never a domain rule",
+      input: setVendorSenderInput,
+      output: setVendorSenderOut,
+      invalidates: ["vendor"],
+    }),
     merge: mutation({
       exposure: "view",
       note: "entity.merge with entity vendor",

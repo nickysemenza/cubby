@@ -52,5 +52,18 @@ describe("vendor mail queries", () => {
         vendorSearchTerms({ website: null, orderEmailSenders: [] }),
       ),
     ).toEqual([]);
+    expect(
+      vendorSearchTerms({
+        website: "https://shopifyemail.com",
+        orderEmailSenders: [
+          "store+100001@t.shopifyemail.com",
+          "store+200002@t.shopifyemail.com",
+          "NOREPLY@ORDER.ONLINE",
+        ],
+      }),
+    ).toEqual([
+      "store+100001@t.shopifyemail.com",
+      "store+200002@t.shopifyemail.com",
+    ]);
   });
 });

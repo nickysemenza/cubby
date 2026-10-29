@@ -1,0 +1,1 @@
+ALTER TABLE "Vendor" ADD COLUMN "orderEmailSenderPolicies" jsonb DEFAULT '{}'::jsonb NOT NULL;

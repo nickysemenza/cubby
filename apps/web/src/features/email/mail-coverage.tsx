@@ -1,3 +1,4 @@
+import { senderAttribution as senderAttributionSchema } from "@cubby/schemas/mail-coverage";
 import type {
   MailCoverage,
   MailCoverageRow,
@@ -13,6 +14,7 @@ import { useCallback, useId, useMemo, useState, type ReactNode } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import RTable from "~/entity/table/table";
+import { SenderAttributionDetails } from "~/features/email/sender-attribution";
 import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { householdLocalDate } from "~/lib/household-date";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -55,6 +57,15 @@ const senderRowId = (row: MailCoverage["sharedSenders"][number]) =>
 const unresolvedRowId = (row: MailCoverage["unresolvedEmails"][number]) =>
   row.id;
 
+const coverageVendors = (coverage: MailCoverage) => [
+  ...new Map(
+    coverage.rows.map((row) => [
+      row.vendorId,
+      { id: row.vendorId, name: row.vendorName },
+    ]),
+  ).values(),
+];
+
 function CoverageDetails({
   label,
   facts,
@@ -82,45 +93,56 @@ function CoverageDetails({
 function SharedSenderDetails({
   sender,
   mailboxName,
+  onSaved,
+  vendors,
 }: {
   sender: MailCoverage["sharedSenders"][number];
   mailboxName: (id: string) => string;
+  onSaved: () => void;
+  vendors: MailCoverage["senderAttributions"][number]["vendors"];
 }) {
   return (
-    <CoverageDetails
-      label="Sender details"
-      open
-      facts={[
-        ["Sender", sender.sender],
-        ["Mailbox", mailboxName(sender.mailboxId)],
-        ["Historical search", sender.query],
-        ["Search status", humanize(sender.state)],
-        [
-          "Completed",
-          sender.completedAt ? (
-            <DateDisplay key="completed" timestamp={sender.completedAt} />
-          ) : (
-            "Not recorded"
-          ),
-        ],
-        ["Local Emails", sender.scanned],
-        ["Classified", sender.classified],
-        ["Content saved", sender.retained],
-        ["Related", sender.related],
-        ["Imported Emails", sender.imported],
-        ["Linked Emails", sender.linkedEmails],
-        ["Purchases", sender.linkedPurchases],
-        ["Seller unresolved", sender.sellerUnresolved],
-        [
-          "Search Run",
-          sender.runId ? (
-            <EntityRefLink key="run" entity="run" id={sender.runId} />
-          ) : (
-            "—"
-          ),
-        ],
-      ]}
-    />
+    <div className="space-y-4">
+      <SenderAttributionDetails
+        attribution={sender.attribution}
+        vendors={vendors}
+        onSaved={onSaved}
+      />
+      <CoverageDetails
+        label="Sender details"
+        open
+        facts={[
+          ["Sender", sender.sender],
+          ["Mailbox", mailboxName(sender.mailboxId)],
+          ["Historical search", sender.query],
+          ["Search status", humanize(sender.state)],
+          [
+            "Completed",
+            sender.completedAt ? (
+              <DateDisplay key="completed" timestamp={sender.completedAt} />
+            ) : (
+              "Not recorded"
+            ),
+          ],
+          ["Local Emails", sender.scanned],
+          ["Classified", sender.classified],
+          ["Content saved", sender.retained],
+          ["Related", sender.related],
+          ["Imported Emails", sender.imported],
+          ["Linked Emails", sender.linkedEmails],
+          ["Purchases", sender.linkedPurchases],
+          ["Seller unresolved", sender.sellerUnresolved],
+          [
+            "Search Run",
+            sender.runId ? (
+              <EntityRefLink key="run" entity="run" id={sender.runId} />
+            ) : (
+              "—"
+            ),
+          ],
+        ]}
+      />
+    </div>
   );
 }
 
@@ -331,6 +353,15 @@ function DiscoveryCoverage({
               meta: attachCubbyColumnMeta<
                 MailCoverage["sharedSenders"][number]
               >({ mobile: { slot: "title", priority: 0, renderTitle: true } }),
+            }),
+          );
+          add(
+            senderHelper.accessor((row) => row.attribution.state, {
+              id: "attribution",
+              header: "Attribution",
+              cell: ({ getValue }) => (
+                <Badge variant="outline">{humanize(getValue())}</Badge>
+              ),
             }),
           );
           add(
@@ -576,8 +607,11 @@ function DiscoveryCoverage({
               >
                 <div className="p-4">
                   <SharedSenderDetails
+                    vendors={coverageVendors(coverage)}
+                    key={inspectedSender.sender}
                     sender={inspectedSender}
                     mailboxName={mailboxName}
+                    onSaved={() => setSelectedSender(null)}
                   />
                 </div>
               </SidePanel>
@@ -1239,6 +1273,7 @@ function CoverageTable({
   onViewChange?: (view: MailCoverageView) => void;
 }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   // Responsive inspectors move between containers; the selection owner retains its draft.
   const [draft, setDraft] = useState(initialControlledMailDraft);
   const contextRows = useMemo(
@@ -1269,6 +1304,8 @@ function CoverageTable({
           row.vendorName,
           mailboxes.get(row.mailboxId)?.label,
           ...row.searchTerms,
+          ...row.domains,
+          ...row.senderAddresses,
           states[row.state],
         ].join(" "),
       placeholder: "Search Vendors, members, senders or domains",
@@ -1291,6 +1328,38 @@ function CoverageTable({
                 id={row.original.vendorId}
                 name={row.original.vendorName}
               />
+            ),
+          }),
+        );
+        add(
+          helper.accessor((row) => row.domains.join(", "), {
+            id: "domains",
+            header: "Domains",
+            size: 220,
+          }),
+        );
+        add(
+          helper.accessor((row) => row.senderAddresses.join(", "), {
+            id: "senderAddresses",
+            header: "Sender addresses",
+            size: 280,
+            cell: ({ row }) => (
+              <span data-cell-value>
+                {row.original.senderAddresses.map((address) => (
+                  <Button
+                    key={address}
+                    variant="ghost"
+                    size="sm"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedKey(row.original.key);
+                      setSelectedAddress(address);
+                    }}
+                  >
+                    {address}
+                  </Button>
+                ))}
+              </span>
             ),
           }),
         );
@@ -1578,20 +1647,78 @@ function CoverageTable({
             if (row.original.key !== selectedKey)
               setDraft(initialControlledMailDraft());
             setSelectedKey(row.original.key);
+            setSelectedAddress(null);
           }}
           disableMobileDetailsHref
           inspector={{
-            title: "Controlled mail import",
-            onClose: () => setSelectedKey(null),
+            title: selectedAddress ?? "Controlled mail import",
+            onClose: () => {
+              setSelectedKey(null);
+              setSelectedAddress(null);
+            },
             content:
               selected && mailbox ? (
-                <ControlledMailImport
-                  key={selected.key}
-                  row={selected}
-                  mailbox={mailbox}
-                  draft={draft}
-                  onDraftChange={setDraft}
-                />
+                <SidePanel
+                  label="Vendor mail inspector"
+                  title={selectedAddress ?? selected.vendorName}
+                  onClose={() => {
+                    setSelectedKey(null);
+                    setSelectedAddress(null);
+                  }}
+                  closeLabel="Close inspector"
+                >
+                  <div className="space-y-4 p-4">
+                    {selectedAddress ? (
+                      <SenderAttributionDetails
+                        vendors={coverageVendors(coverage)}
+                        key={selectedAddress}
+                        attribution={
+                          coverage.senderAttributions.find(
+                            (row) => row.sender === selectedAddress,
+                          ) ??
+                          senderAttributionSchema.parse({
+                            sender: selectedAddress,
+                            state: "unmapped",
+                            origin: null,
+                            vendorId: null,
+                            vendors: [],
+                            evidenceCount: 0,
+                            evidence: [],
+                          })
+                        }
+                        onSaved={() => {
+                          setSelectedKey(null);
+                          setSelectedAddress(null);
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <p className="text-xs break-words">
+                          Domains: {selected.domains.join(", ") || "None"}
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {selected.senderAddresses.map((address) => (
+                            <Button
+                              key={address}
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setSelectedAddress(address)}
+                            >
+                              {address}
+                            </Button>
+                          ))}
+                        </div>
+                        <ControlledMailImport
+                          key={selected.key}
+                          row={selected}
+                          mailbox={mailbox}
+                          draft={draft}
+                          onDraftChange={setDraft}
+                        />
+                      </>
+                    )}
+                  </div>
+                </SidePanel>
               ) : null,
           }}
           emptyState={

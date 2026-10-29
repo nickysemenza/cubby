@@ -1,4 +1,5 @@
 import { parseBankDescriptor } from "@cubby/schemas/financial-transaction-fields";
+import type { SenderAttribution } from "@cubby/schemas/mail-coverage";
 import type { MailboxScopedQuery } from "@cubby/schemas/mailbox-research";
 import { and, eq, isNotNull, isNull, or } from "drizzle-orm";
 
@@ -15,6 +16,7 @@ import {
   financialTransaction,
   financialTransactionAllocation,
 } from "~/server/db/retained-tables";
+import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
 
 import { vendorSearchTerms } from "./vendor-identity";
 import { vendorMailQueries } from "./vendor-mail-scope";
@@ -54,12 +56,18 @@ export const listMemberMailboxes = (db: Database) =>
 /** Each member mailbox with the targeted searches discovery runs in it. */
 export async function listGmailSyncTargets(
   db: Database,
+  knownAttributions?: readonly SenderAttribution[],
 ): Promise<GmailSyncTarget[]> {
+  const attributions = knownAttributions ?? (await readSenderAttributions(db));
+  const trustedSenders = new Map(
+    attributions.map((row) => [row.sender, row.vendorId]),
+  );
   const [members, vendors, charges, receiptSenders] = await Promise.all([
     listMemberMailboxes(db),
     getDb(db)
       .select({
         id: vendor.id,
+        shortcode: vendor.shortcode,
         website: vendor.website,
         orderEmailSenders: vendor.orderEmailSenders,
       })
@@ -138,7 +146,16 @@ export async function listGmailSyncTargets(
     }));
   // A Vendor without a verified sender or website domain waits for research.
   const vendorQueries = vendors.flatMap((row) =>
-    vendorMailQueries(row.id, vendorSearchTerms(row)),
+    vendorMailQueries(
+      row.id,
+      vendorSearchTerms({
+        ...row,
+        orderEmailSenders: row.orderEmailSenders.filter(
+          (address) =>
+            trustedSenders.get(address.trim().toLowerCase()) === row.shortcode,
+        ),
+      }),
+    ),
   );
   return members.flatMap((row) =>
     row.userId && row.mailboxId

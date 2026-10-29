@@ -32,6 +32,15 @@ export const brandNameKey = (text: string): string =>
  */
 
 export const fetchVendorLogoInput = z.object({ id: vendorShortcode });
+export const setVendorSenderInput = z.strictObject({
+  sender: z.email().trim().toLowerCase(),
+  vendorId: vendorShortcode.nullable(),
+  expectedVendorIds: z.array(vendorShortcode),
+});
+export const setVendorSenderOut = z.object({
+  sender: z.string(),
+  vendorId: vendorShortcode.nullable(),
+});
 export type FetchVendorLogoInput = z.infer<typeof fetchVendorLogoInput>;
 
 export const vendorFilterFields = {

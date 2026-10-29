@@ -910,7 +910,7 @@ A member's purchasing relationship with one Vendor, including guest checkout and
 _Avoid_: vendor login, payment account
 
 **Sender proof**:
-An order Email arriving from a sender address already recorded on a Vendor, which proves that Vendor regardless of the merchant name the Email shows. A sender at the registrable website domain of exactly one Vendor also proves it; a shared mail, storefront, payment or relay domain never does.
+An undisputed exact address assigned to one Vendor identifies that seller and defines its mailbox search scope. Accepted receipt evidence can establish a mapping; member confirmations and exclusions retain precedence. Conflicting seller evidence suspends sender proof without changing the saved decision or historical Purchases. Known generic addresses never identify one seller. A sender at the distinct registrable website domain of exactly one Vendor can also identify it; a shared domain alone never does.
 _Avoid_: domain match
 
 **Research queue**:

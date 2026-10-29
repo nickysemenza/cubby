@@ -30,6 +30,24 @@ export const vendorEmailSenderList = z
   .array(z.email().trim().toLowerCase())
   .max(50);
 
+/** Exact broadcast endpoints, not domain exclusions. */
+export const GENERIC_SENDER_ADDRESSES: ReadonlySet<string> = new Set([
+  "noreply@order.online",
+  "service@paypal.com",
+]);
+
+export const vendorEmailSenderAssignments = vendorEmailSenderList.refine(
+  (addresses) =>
+    addresses.every((address) => !GENERIC_SENDER_ADDRESSES.has(address)),
+  "Known generic addresses serve multiple sellers and cannot identify one Vendor.",
+);
+
+/** Intent only; supporting source evidence stays on the original Email/Purchase links. */
+export const vendorEmailSenderPolicies = z.record(
+  z.email(),
+  z.enum(["learned", "confirmed", "excluded"]),
+);
+
 /** Learning is a review proposal; retained pages cannot grant browser hosts. */
 export const vendorCaptureProfile = z.strictObject({
   evidenceIds: z.array(z.uuid()).min(1).max(20),

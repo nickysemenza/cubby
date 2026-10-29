@@ -27,7 +27,10 @@ import type {
   VendorMergeSummaryOut,
   VendorOptionsOut,
 } from "@cubby/schemas/vendor";
-import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
+import {
+  vendorEmailSenderPolicies,
+  vendorAgentHints,
+} from "@cubby/schemas/vendor-import-fields";
 import {
   and,
   asc,
@@ -74,6 +77,8 @@ import { loadGmailCursor } from "~/server/domains/purchase-import/repo/gmail/per
 import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { vendorMailQueries } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
+import { lockSenderAttributionAddress } from "~/server/domains/purchase-import/repo/sender-attribution";
+import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
 import { foldChargeInto } from "~/server/domains/purchase/repo/purchase";
 import {
   effectivePurchaseItemizationExpectationSql,
@@ -356,6 +361,7 @@ async function loadVendorMailSearch(
     getDb(db)
       .select({
         id: vendor.id,
+        shortcode: vendor.shortcode,
         website: vendor.website,
         orderEmailSenders: vendor.orderEmailSenders,
       })
@@ -371,6 +377,14 @@ async function loadVendorMailSearch(
       ),
     listMemberMailboxes(db),
   ]);
+  const attributions = new Map(
+    (
+      await readSenderAttributions(
+        db,
+        rows.flatMap((row) => row.orderEmailSenders),
+      )
+    ).map((row) => [row.sender, row.vendorId]),
+  );
   const [cursors, controlledSearches] = await Promise.all([
     Promise.all(
       mailboxes.map(async (mailbox) => {
@@ -385,7 +399,16 @@ async function loadVendorMailSearch(
   ]);
   return Object.fromEntries(
     rows.flatMap((row) => {
-      const queries = vendorMailQueries(row.id, vendorSearchTerms(row));
+      const queries = vendorMailQueries(
+        row.id,
+        vendorSearchTerms({
+          ...row,
+          orderEmailSenders: row.orderEmailSenders.filter(
+            (address) =>
+              attributions.get(address.trim().toLowerCase()) === row.shortcode,
+          ),
+        }),
+      );
       if (queries.length === 0) return [];
       const states = cursors.flatMap((cursor, index) =>
         queries.map((query) => {
@@ -695,6 +718,23 @@ export const updateVendor = defineMutationWriter({
       }
     }
     await withTransaction(db, async (tx) => {
+      const [senderBefore] =
+        data.orderEmailSenders === undefined
+          ? []
+          : await tx
+              .select({ senders: vendor.orderEmailSenders })
+              .from(vendor)
+              .where(eq(vendor.id, id));
+      if (data.orderEmailSenders !== undefined) {
+        for (const address of [
+          ...new Set(
+            [...(senderBefore?.senders ?? []), ...data.orderEmailSenders].map(
+              (value) => value.trim().toLowerCase(),
+            ),
+          ),
+        ].sort())
+          await lockSenderAttributionAddress(tx, address);
+      }
       await patchEntityRows(
         tx,
         actor,
@@ -706,11 +746,62 @@ export const updateVendor = defineMutationWriter({
         [id],
         { ...data, defaultSpendingCategoryId, name: data.name?.trim() },
       );
+      if (data.orderEmailSenders !== undefined) {
+        const [current] = await tx
+          .select({
+            policies: vendor.orderEmailSenderPolicies,
+            senders: vendor.orderEmailSenders,
+          })
+          .from(vendor)
+          .where(eq(vendor.id, id));
+        if (current) {
+          const policies = vendorEmailSenderPolicies.parse(current.policies);
+          const previousPolicies = JSON.stringify(policies);
+          for (const address of senderBefore?.senders ?? [])
+            if (!data.orderEmailSenders.includes(address.trim().toLowerCase()))
+              policies[address.trim().toLowerCase()] = "excluded";
+          for (const address of data.orderEmailSenders)
+            policies[address] = "confirmed";
+          await tx
+            .update(vendor)
+            .set({ orderEmailSenderPolicies: policies })
+            .where(eq(vendor.id, id));
+          if (
+            previousPolicies !== JSON.stringify(policies) &&
+            JSON.stringify(senderBefore?.senders) ===
+              JSON.stringify(data.orderEmailSenders)
+          )
+            await logAuditEntry(tx, actor, {
+              entityKind: "vendor",
+              entityId: id,
+              action: "update",
+              changes: {
+                orderEmailSenders: {
+                  from: data.orderEmailSenders,
+                  to: data.orderEmailSenders,
+                },
+              },
+            });
+        }
+      }
       // A new profile or default reclassifies this Vendor's lines, so it can
       // put a linked Product in a category that forbids one.
       if (reclassifies) await validateProductPolicy(tx, { vendorId: id });
     });
 
+    if (data.orderEmailSenders !== undefined)
+      await (
+        await import("~/server/workflows/background-tasks/publish")
+      ).publishBackgroundTasks(
+        db,
+        [
+          {
+            kind: "maintenance.purchase-discovery",
+            requestedAt: new Date().toISOString(),
+          },
+        ],
+        { source: "vendor-sender-edit" },
+      );
     return readOutput({ entityId: id });
   },
 });
@@ -919,6 +1010,18 @@ export const mergeVendors = async (
   let planSummary: Omit<VendorMergeSummaryOut, "keepId"> | undefined;
 
   const detachedImageKeys = await withTransaction(db, async (tx) => {
+    const senderRows = await tx
+      .select({ senders: vendor.orderEmailSenders })
+      .from(vendor)
+      .where(inArray(vendor.id, [keepId, ...losers]));
+    for (const address of [
+      ...new Set(
+        senderRows
+          .flatMap((row) => row.senders)
+          .map((value) => value.trim().toLowerCase()),
+      ),
+    ].sort())
+      await lockSenderAttributionAddress(tx, address);
     await lockAndValidateForDelete(tx, vendor, [keepId, ...losers], "Vendor");
     const designated = await tx
       .select({ id: vendor.id })
@@ -970,6 +1073,7 @@ export const mergeVendors = async (
         name: vendor.name,
         aliases: vendor.aliases,
         orderEmailSenders: vendor.orderEmailSenders,
+        senderPolicies: vendor.orderEmailSenderPolicies,
         browserDomains: vendor.browserDomains,
       })
       .from(vendor)
@@ -984,6 +1088,33 @@ export const mergeVendors = async (
       >
     > = {};
     if (keeperNamed) {
+      const policies = vendorEmailSenderPolicies.parse(
+        keeperNamed.senderPolicies,
+      );
+      for (const address of keeperNamed.orderEmailSenders)
+        policies[address] ??= "confirmed";
+      for (const other of named.filter((row) => row.id !== keepId)) {
+        const otherPolicies = vendorEmailSenderPolicies.parse(
+          other.senderPolicies,
+        );
+        for (const [address, policy] of Object.entries(otherPolicies))
+          if (
+            policies[address] === undefined ||
+            (policies[address] === "learned" && policy !== "learned")
+          )
+            policies[address] = policy;
+        for (const address of other.orderEmailSenders)
+          if (
+            policies[address] === undefined ||
+            (policies[address] === "learned" &&
+              otherPolicies[address] === undefined)
+          )
+            policies[address] = "confirmed";
+      }
+      await tx
+        .update(vendor)
+        .set({ orderEmailSenderPolicies: policies })
+        .where(eq(vendor.id, keepId));
       for (const key of ["orderEmailSenders", "browserDomains"] as const) {
         const union = uniqBy(
           [
@@ -993,8 +1124,11 @@ export const mergeVendors = async (
               .flatMap((row) => row[key]),
           ],
           (value) => value.toLowerCase(),
+        ).filter(
+          (value) =>
+            key !== "orderEmailSenders" || policies[value] !== "excluded",
         );
-        if (union.length !== keeperNamed[key].length)
+        if (JSON.stringify(union) !== JSON.stringify(keeperNamed[key]))
           unionChanges[key] = { from: keeperNamed[key], to: union };
       }
       if (unionChanges.orderEmailSenders || unionChanges.browserDomains)

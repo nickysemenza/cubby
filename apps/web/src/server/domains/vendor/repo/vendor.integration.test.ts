@@ -746,6 +746,29 @@ describe("vendor repository — mergeVendors", () => {
     const keeper = await findOrCreateVendor(ctx.db, "B&H Photo");
     const loser = await findOrCreateVendor(ctx.db, "B&H");
 
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({
+        orderEmailSenders: [
+          "receipts@synthetic-keep.example",
+          "orders@synthetic-keep.example",
+        ],
+        orderEmailSenderPolicies: {
+          "receipts@synthetic-keep.example": "learned",
+          "orders@synthetic-keep.example": "learned",
+        },
+      })
+      .where(eq(vendor.id, keeper));
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({
+        orderEmailSenders: ["orders@synthetic-keep.example"],
+        orderEmailSenderPolicies: {
+          "receipts@synthetic-keep.example": "excluded",
+          "orders@synthetic-keep.example": "confirmed",
+        },
+      })
+      .where(eq(vendor.id, loser));
     const keeperCharge = await charge(keeper, "KEEP-1");
     const loserOrdered = await charge(loser, "LOSE-1");
     const loserCashRun = await charge(loser, null);
@@ -767,6 +790,21 @@ describe("vendor repository — mergeVendors", () => {
     );
 
     expect(merged.id).toBe(keeperCode);
+    const [senderIntent] = await getDb(ctx.db)
+      .select({
+        senders: vendor.orderEmailSenders,
+        policies: vendor.orderEmailSenderPolicies,
+      })
+      .from(vendor)
+      .where(eq(vendor.id, keeper));
+    expect(senderIntent).toEqual({
+      senders: ["orders@synthetic-keep.example"],
+      policies: {
+        "receipts@synthetic-keep.example": "excluded",
+        "orders@synthetic-keep.example": "confirmed",
+      },
+    });
+
     // The loser's name stays findable: imports resolve it to the keeper.
     expect(merged.aliases).toEqual(["B&H"]);
     expect(await findOrCreateVendor(ctx.db, "B&H")).toBe(keeper);

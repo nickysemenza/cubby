@@ -20,6 +20,7 @@ import {
   vendorAgentHints,
   vendorDomainList,
   vendorEmailSenderList,
+  vendorEmailSenderAssignments,
   vendorOrderEvidence,
 } from "../vendor-import-fields.js";
 export const { definition, readSchemas } = defineEntityModel({
@@ -609,6 +610,8 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "orderEmailSenders",
         kind: "text-array",
+        description:
+          "Verified exact addresses that identify this seller and define its mailbox searches. Shared domains do not establish identity; known generic addresses belong to mailbox discovery. Conflicting accepted receipt evidence suspends the mapping.",
         collection: { key: "value" },
         control: {
           kind: "specialized",
@@ -617,8 +620,8 @@ export const { definition, readSchemas } = defineEntityModel({
         display: { list: false },
         validation: {
           read: vendorEmailSenderList,
-          create: vendorEmailSenderList.default([]),
-          update: vendorEmailSenderList.optional(),
+          create: vendorEmailSenderAssignments.default([]),
+          update: vendorEmailSenderAssignments.optional(),
         },
       },
       {
@@ -1060,6 +1063,7 @@ export const { definition, readSchemas } = defineEntityModel({
       timestampField("updatedAt"),
       { output: false, key: "shortcode", kind: "text" },
       { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
+      { output: false, key: "orderEmailSenderPolicies", kind: "json" },
       // Server-composed text for the structured detail field above (`display.detailLabelPath`).
       labelField("agentHintsLabel", "Vendor agent hints"),
     ],
@@ -1094,6 +1098,7 @@ export const { definition, readSchemas } = defineEntityModel({
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
+      { key: "orderEmailSenderPolicies", defaultValue: "'{}'::jsonb" },
       {
         key: "browserDomains",
         defaultValue: "'{}'::text[]",

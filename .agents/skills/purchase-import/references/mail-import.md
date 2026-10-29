@@ -32,6 +32,11 @@ Claude or Codex session researches it later through the Research queue.
    Cubby did not recognize.
 3. Decide what the Email is:
    - **An order with priced lines** (confirmation, receipt, invoice): import it.
+     Check the receipt's printed seller against `known.senderVendor` before
+     using that mapping. If clear seller evidence names someone else, resolve
+     the actual seller by `vendorId` or `vendor.name`; never reuse the sender's
+     Vendor merely to make the mapping fit. Accepted conflicting evidence
+     suspends sender proof without rewriting earlier Purchases.
      Name the Vendor by `vendorId`: `known.senderVendor.id`, or else the
      Vendor `search` / `entity_read` finds; or by `vendor.name` exactly as
      the Email names the seller.

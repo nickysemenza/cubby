@@ -1,3 +1,4 @@
+import { GENERIC_SENDER_ADDRESSES } from "@cubby/schemas/vendor-import-fields";
 import { getDomain } from "tldts";
 
 /** The bare address from a From header, without its display name. */
@@ -70,6 +71,10 @@ export const distinctSenderDomain = (address: string): string | null => {
   });
   return domain && !SHARED_SENDER_DOMAINS.has(domain) ? domain : null;
 };
+
+/** These provider-wide endpoints cannot become exclusive seller identities. */
+export const broadcastSender = (address: string): boolean =>
+  GENERIC_SENDER_ADDRESSES.has(address.trim().toLowerCase());
 
 export const vendorWebsiteDomain = (website: string | null): string | null => {
   if (!website) return null;

@@ -22,6 +22,24 @@ export type MailCoverageView = z.infer<typeof mailCoverageView>;
 
 const count = z.number().int().nonnegative();
 
+export const senderAttribution = z.strictObject({
+  sender: z.string(),
+  state: z.enum(["unmapped", "verified", "shared", "disputed", "excluded"]),
+  origin: z.enum(["learned", "member"]).nullable(),
+  vendorId: vendorShortcode.nullable(),
+  vendors: z.array(z.object({ id: vendorShortcode, name: z.string() })),
+  evidenceCount: count,
+  evidence: z.array(
+    z.object({
+      emailId: emailShortcode,
+      purchaseId: purchaseShortcode,
+      vendorId: vendorShortcode,
+      vendorName: z.string(),
+    }),
+  ),
+});
+export type SenderAttribution = z.infer<typeof senderAttribution>;
+
 const mailCoverageState = z.enum([
   "no_search_identity",
   "not_started",
@@ -50,6 +68,8 @@ export const mailCoverageRow = z.strictObject({
   mailboxId: z.string(),
   memberId: ledgerPartyShortcode,
   searchTerms: z.array(z.string()),
+  domains: z.array(z.string()),
+  senderAddresses: z.array(z.string()),
   state: mailCoverageState,
   searchesCompleted: count,
   searchesTotal: count,
@@ -99,6 +119,7 @@ export const mailCoverageRow = z.strictObject({
 });
 
 export const mailCoverage = z.strictObject({
+  senderAttributions: z.array(senderAttribution),
   mailboxes: z.array(mailCoverageMailbox),
   rows: z.array(mailCoverageRow),
   discovery: z.array(
@@ -123,6 +144,7 @@ export const mailCoverage = z.strictObject({
     z.strictObject({
       mailboxId: z.string(),
       sender: z.string(),
+      attribution: senderAttribution,
       query: z.string(),
       state: z.enum(["not_started", "in_progress", "complete"]),
       completedAt: z.iso.datetime().nullable(),
