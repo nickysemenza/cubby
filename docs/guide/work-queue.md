@@ -139,6 +139,10 @@ interprets available import evidence and coordinates supported unattended
 work. Jev/Clef make bounded semantic decisions and rank uncertain candidates;
 the domain writer independently checks whether a proposed change can apply.
 
+Expenses missing their effective spending category enter Research alongside
+unresolved Product identity. Supported financial spending can be booked as an
+Uncategorized aggregate while categorization remains in Work.
+
 Claude/Codex handles adaptive web research, vendor websites and logos, Product
 enrichment, and logged-in retailer investigation in the member's browser.
 These gaps enter the shared Work queue for the member's session to pick up;

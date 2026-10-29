@@ -100,6 +100,29 @@ describe("stored Expense quality", () => {
     });
     expect(queue.meta.totalCount).toBe(1);
     expect(queue.items[0]?.id).toBe(principal.output.id);
+    const service = excluded[0];
+    if (!service) throw new Error("Synthetic service line missing");
+    const categoryWork = () =>
+      readWorkQueue(ctx.db, {
+        input: workQueueInput.parse({
+          reason: "expense_spending_category",
+          query: service.output.name,
+        }),
+        memberPartyId: null,
+        memberOnly: false,
+      });
+    // Category research must stand alone when a service needs no Product.
+    expect((await categoryWork()).items.map((item) => item.id)).toEqual([
+      service.output.id,
+    ]);
+    await updateExpense(
+      ctx.db,
+      service.output.id,
+      { spendingCategoryId: exempt.shortcode },
+      ctx.actor,
+    );
+    await refresh();
+    expect((await categoryWork()).items).toEqual([]);
   });
 
   it("loads scoped facts and preserves incurred, zero, quantity and role rules", async () => {
