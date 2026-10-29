@@ -9,7 +9,7 @@ import {
   type OperationTraceContext,
 } from "./operation-observability";
 
-describe("Start operation trace context", () => {
+describe("operation trace context", () => {
   it("round-trips every generated operation definition", () => {
     for (const operation of Object.keys(OPERATIONS)) {
       const registered = operationDefinitionFor(operation);

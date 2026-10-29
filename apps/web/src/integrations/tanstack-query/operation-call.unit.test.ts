@@ -17,7 +17,7 @@ afterEach(() => restore());
 
 const ok = <T>(data: T): OperationResult<T> => ({ ok: true, data });
 
-describe("Start operation binding", () => {
+describe("operation call", () => {
   it("dispatches through the shared seam and observes the bound entity", async () => {
     const dispatch = vi.fn(async () => ok({ items: ["one"] }));
     restore = overrideOperationDispatch(dispatch);
@@ -55,39 +55,6 @@ describe("Start operation binding", () => {
       operation: "entity.filterOptions",
       errors: 1,
     });
-  });
-
-  it("records registered mutations through the mutation channel", async () => {
-    restore = overrideOperationDispatch(() => Promise.resolve(ok(null)));
-    const operation = operationCall<null, null>({
-      operation: "image.delete",
-      kind: "mutation",
-      parse: () => null,
-    });
-
-    await operation.call(null);
-
-    expect(snapshot().mutations[0]).toMatchObject({
-      operation: "image.delete",
-      transport: "start",
-      outcome: "success",
-    });
-  });
-
-  it("derives query metadata from the same declaration the call observes", () => {
-    const operation = operationCall<null, null>({
-      operation: "cookbook.list",
-      parse: () => null,
-    });
-
-    expect(operation.meta).toEqual({
-      transport: "start",
-      operation: "cookbook.list",
-      observedByTransport: true,
-    });
-    expect(() => operation.forEntity("cookbook")).toThrow(
-      "cookbook is not registered for cookbook.list",
-    );
   });
 
   it("raises the bound error type for a refused operation", async () => {

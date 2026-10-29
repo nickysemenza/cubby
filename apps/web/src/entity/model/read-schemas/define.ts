@@ -2,16 +2,15 @@ import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import {
   listChildCountSchema,
   listNestingSchema,
-  listResultMembership,
-  listGroupByDimensionsSchema,
-  MAX_PAGE_SIZE,
-  MAX_SORTS,
   paginatedMetaSchema,
 } from "@cubby/schemas/pagination";
 import type { ShortcodeType as ShortcodeEntity } from "@cubby/shared";
 import { z } from "zod";
 
-import type { SelectedListItem } from "~/entity/model/list-contracts";
+import {
+  listReadPlan,
+  type SelectedListItem,
+} from "~/entity/model/list-contracts";
 import { compileListReadSchema } from "~/entity/model/list-read-fields";
 
 type Definition = {
@@ -58,25 +57,7 @@ function buildEntityReadContracts<const D extends Definition>(definition: D) {
   const listInputBase = z.object({
     entity: z.literal(entity),
     filters,
-    sort: z
-      .array(
-        z.object({
-          orderBy: z.string().min(1),
-          direction: z.enum(["asc", "desc"]),
-        }),
-      )
-      .min(1)
-      .max(MAX_SORTS)
-      .optional(),
-    pagination: z
-      .object({
-        pageIndex: z.number().int().min(0),
-        pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE),
-      })
-      .optional(),
-    groupBy: listGroupByDimensionsSchema.optional(),
-    resultMembership: listResultMembership.optional(),
-    includeCount: z.boolean().optional(),
+    ...listReadPlan,
   });
   const listInput = tree
     ? listInputBase.extend({ nesting: listNestingSchema.optional() })

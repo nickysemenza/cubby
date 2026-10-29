@@ -327,7 +327,7 @@ const collectDeclaredOperations = (): Promise<
         const existing = byOperation.get(operation);
         if (existing)
           throw new Error(
-            `${operation} is declared more than once: ${existing.exportName} and ${exportName}. Each Start operation id may have exactly one contract member.`,
+            `${operation} is declared more than once: ${existing.exportName} and ${exportName}. Each operation id may have exactly one contract member.`,
           );
         byOperation.set(operation, {
           kind: definition.kind,

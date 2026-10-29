@@ -32,8 +32,8 @@ export type ListEntity = (typeof listEntities)[number];
 const filterValue = z
   .union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()])
   .optional();
-const entityListPlan = z.object({
-  filters: z.record(z.string(), filterValue),
+/** Plan fields shared by the roster input and each entity's strict read input. */
+export const listReadPlan = {
   sort: z
     .array(
       z.object({
@@ -51,9 +51,13 @@ const entityListPlan = z.object({
     })
     .optional(),
   groupBy: listGroupByDimensionsSchema.optional(),
-  nesting: listNestingSchema.optional(),
   resultMembership: listResultMembership.optional(),
   includeCount: z.boolean().optional(),
+};
+const entityListPlan = z.object({
+  filters: z.record(z.string(), filterValue),
+  ...listReadPlan,
+  nesting: listNestingSchema.optional(),
   fields: z
     .array(z.string().min(1))
     .min(1)

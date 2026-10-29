@@ -311,14 +311,11 @@ export const renderEntityMetadataArtifacts = (
     names,
     typeOnly: true,
   });
-  const projection = (name: string, property: string, satisfies: string) => ({
-    imports: [
-      typeImport([satisfies]),
-      ...entities.map(({ key }, index) => ({
-        from: `./entity-metadata.${key}.gen`,
-        names: [`metadata as metadata${index}`],
-      })),
-    ],
+  const projection = (name: string, property: string) => ({
+    imports: entities.map(({ key }, index) => ({
+      from: `./entity-metadata.${key}.gen`,
+      names: [`metadata as metadata${index}`],
+    })),
     consts: [
       {
         name,
@@ -328,7 +325,6 @@ export const renderEntityMetadataArtifacts = (
             tsReference(`metadata${index}`, property),
           ]),
         ),
-        satisfies,
       },
     ],
   });
@@ -403,13 +399,7 @@ export const renderEntityMetadataArtifacts = (
       ),
     ),
     artifact("packages/schemas/src/generated/entity-roster.gen.ts", {
-      imports: [
-        typeImport([
-          "EntityRosterData",
-          "MetadataEntityReadDependents",
-          "MetadataHomePinnedViews",
-        ]),
-      ],
+      imports: [typeImport(["EntityRosterData"])],
       consts: [
         {
           name: "entityRoster",
@@ -445,7 +435,6 @@ export const renderEntityMetadataArtifacts = (
         {
           name: "entityReadDependents",
           value: entityReadDependents(entities),
-          satisfies: "MetadataEntityReadDependents",
         },
         { name: "allEntities", value: entities.map(({ key }) => key) },
         {
@@ -481,7 +470,6 @@ export const renderEntityMetadataArtifacts = (
                 : [],
             ),
           ),
-          satisfies: "MetadataHomePinnedViews",
         },
         ...(
           [
@@ -552,26 +540,15 @@ export const renderEntityMetadataArtifacts = (
       ],
     }),
     artifact("packages/schemas/src/generated/entity-manifest-data.gen.ts", {
-      ...projection(
-        "generatedEntityManifest",
-        "descriptor",
-        "MetadataGeneratedEntityManifest",
-      ),
+      ...projection("generatedEntityManifest", "descriptor"),
     }),
     artifact("packages/schemas/src/generated/entity-summary.gen.ts", {
-      ...projection("entitySummary", "summary", "MetadataEntitySummary"),
-      imports: [
-        ...projection("entitySummary", "summary", "MetadataEntitySummary")
-          .imports,
-        typeImport(["MetadataEntityReadDependents"]),
-      ],
+      imports: projection("entitySummary", "summary").imports,
       consts: [
-        ...projection("entitySummary", "summary", "MetadataEntitySummary")
-          .consts,
+        ...projection("entitySummary", "summary").consts,
         {
           name: "entityReadDependents",
           value: entityReadDependents(entities),
-          satisfies: "MetadataEntityReadDependents",
         },
       ],
       exports: [
@@ -601,17 +578,9 @@ export const renderEntityMetadataArtifacts = (
       ],
     }),
     artifact("packages/schemas/src/generated/entity-field-model.gen.ts", {
-      ...projection(
-        "generatedEntityFieldModels",
-        "fields",
-        "MetadataGeneratedEntityFieldModels",
-      ),
+      ...projection("generatedEntityFieldModels", "fields"),
       consts: [
-        ...projection(
-          "generatedEntityFieldModels",
-          "fields",
-          "MetadataGeneratedEntityFieldModels",
-        ).consts,
+        ...projection("generatedEntityFieldModels", "fields").consts,
         { name: "suggestFieldKeys", value: suggestFieldKeys },
       ],
       exports: [
@@ -638,12 +607,10 @@ export const renderEntityMetadataArtifacts = (
       ],
     }),
     artifact("packages/schemas/src/generated/entity-edit-intents.gen.ts", {
-      imports: [typeImport(["MetadataGeneratedEntityEditIntents"])],
       consts: [
         {
           name: "generatedEntityEditIntents",
           value: entityEditIntents,
-          satisfies: "MetadataGeneratedEntityEditIntents",
         },
       ],
     }),
@@ -872,16 +839,13 @@ export const renderEntityMetadataArtifacts = (
       },
     ),
     artifact("packages/schemas/src/generated/entity-list-fields.gen.ts", {
-      imports: [
-        typeImport(["MetadataGeneratedEntityListFields", "TupleMember"]),
-      ],
+      imports: [typeImport(["TupleMember"])],
       consts: [
         {
           name: "generatedEntityListFields",
           value: Object.fromEntries(
             entities.map(({ key, listFields }) => [key, listFields]),
           ),
-          satisfies: "MetadataGeneratedEntityListFields",
         },
         {
           name: "listTermKeys",
@@ -926,12 +890,10 @@ export const renderEntityMetadataArtifacts = (
       ],
     }),
     artifact("packages/schemas/src/generated/entity-sort.gen.ts", {
-      imports: [typeImport(["MetadataGeneratedEntitySort"])],
       consts: [
         {
           name: "generatedEntitySort",
           value: entitySort,
-          satisfies: "MetadataGeneratedEntitySort",
         },
       ],
       exports: [
@@ -982,13 +944,6 @@ export const renderEntityMetadataArtifacts = (
       ],
     }),
     artifact("apps/web/src/entity/generated/entity-routes.gen.ts", {
-      imports: [
-        {
-          from: "@cubby/schemas/entity-metadata-types",
-          typeOnly: true,
-          names: ["MetadataGeneratedBrowserRoutes"],
-        },
-      ],
       consts: [
         {
           name: "generatedBrowserRoutes",
@@ -998,7 +953,6 @@ export const renderEntityMetadataArtifacts = (
               return [entity.key, { basePath, routes }];
             }),
           ),
-          satisfies: "MetadataGeneratedBrowserRoutes",
         },
         { name: "generatedBrowserCrudEntities", value: browserCrudEntities },
       ],

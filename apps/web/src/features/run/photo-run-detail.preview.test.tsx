@@ -40,7 +40,7 @@ const initialUrl = window.location.href;
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let restoreDispatch: (() => void) | undefined;
 
-/** Answer every Start operation with `data`, as candidate reads expect. */
+/** Answer every operation with `data`, as candidate reads expect. */
 const answerOperations = (data: OperationWireValue) => {
   restoreDispatch = overrideOperationDispatch(async () => ({ ok: true, data }));
 };

@@ -18,7 +18,7 @@ import {
 } from "./operation.server";
 
 const database = createDatabase(() => {
-  throw new Error("The Start operation unit test must not resolve a database");
+  throw new Error("The operation unit test must not resolve a database");
 });
 const context = {
   ...requireActor(
