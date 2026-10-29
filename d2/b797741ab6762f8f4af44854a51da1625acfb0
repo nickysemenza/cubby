@@ -1,0 +1,23 @@
+apps/web/src/entity/entity-list-ssr.unit.test.ts
+  s_f9b38eae28f662::t_33dcfd477e5698 15
+apps/web/src/features/run/photo-run-detail.preview.test.tsx
+  s_f9b38eae28f662::t_fe5d025d0a30c9 1245-1246
+apps/web/src/server/operation-runtime/operation-handlers.server.ts
+  s_f9b38eae28f662::t_4ef59ff3703a1c 34-35,37,39-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d2b797741ab6762f8f4af44854a51da1625acfb0",
+  "prompts": {},
+  "sessions": {
+    "s_f9b38eae28f662": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15d31a0c-0fdb-4745-b359-8664bbd5360e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
