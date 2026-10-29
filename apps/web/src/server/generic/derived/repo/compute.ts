@@ -57,10 +57,14 @@ export function validateComputedResult({
   return { ...selected, decision: computedDecision(selected) };
 }
 
-export type DerivedCompute = (
-  db: Database | DrizzleTransaction,
-  ids: readonly string[],
-) => Promise<ReadonlyMap<string, DerivedComputed>>;
+export type DerivedCompute = {
+  (
+    db: Database | DrizzleTransaction,
+    ids: readonly string[],
+  ): Promise<ReadonlyMap<string, DerivedComputed>>;
+  /** Maximum same-adapter records sharing a preparation page; omitted keeps the conservative default. */
+  readonly preparationBatchSize?: number;
+};
 
 /**
  * An adapter whose output lives in its own table (search documents, recipe
@@ -70,6 +74,7 @@ export type DerivedCompute = (
  */
 export interface DerivedSink<Prepared = unknown> {
   readonly kind: "sink";
+  readonly preparationBatchSize?: number;
   prepare(db: Database, ids: readonly string[]): Promise<Prepared>;
   /** `tx` is the publication transaction's repository handle. */
   publish(

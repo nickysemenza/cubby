@@ -11,9 +11,8 @@ import type {
 
 import { prepareQualityPublications } from "./stored";
 
-const qualityCompute =
-  (kind: ScoredEntity): DerivedCompute =>
-  async (db, ids) => {
+const qualityCompute = (kind: ScoredEntity): DerivedCompute => {
+  const compute: DerivedCompute = async (db, ids) => {
     const out = new Map<string, DerivedComputed>();
     for (const row of await prepareQualityPublications(db, kind, ids))
       out.set(row.entityId, {
@@ -26,6 +25,8 @@ const qualityCompute =
       });
     return out;
   };
+  return Object.assign(compute, { preparationBatchSize: 200 });
+};
 
 export const qualityDerivedComputes: Record<string, DerivedCompute> =
   Object.fromEntries(

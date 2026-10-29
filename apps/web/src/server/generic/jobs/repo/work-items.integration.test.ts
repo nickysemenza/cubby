@@ -59,11 +59,20 @@ describe("generic WorkItems", () => {
     const { drain, jobId } = await createDrain("synthetic.work-ticket");
     const ref = crypto.randomUUID();
     await markWork(ctx.db, drain, [{ target: "synthetic", ref }]);
+    const deferred = crypto.randomUUID();
+    await markWork(ctx.db, drain, [
+      { target: "synthetic", ref: deferred, priority: 1 },
+    ]);
     const [before] = await claimWork(ctx.db, drain.key, 1);
     if (!before) throw new Error("Expected WorkItem");
+    const [notAdmitted] = await getDb(ctx.db)
+      .select()
+      .from(workItem)
+      .where(eq(workItem.ref, deferred));
     let remarked = false;
     const handler = defineDrain({
-      limit: 1,
+      limit: 2,
+      admit: (items) => items.slice(0, 1),
       prepare: async (db) => {
         if (!remarked) {
           remarked = true;
@@ -84,12 +93,27 @@ describe("generic WorkItems", () => {
       .where(eq(workItem.ref, ref));
     expect(current?.ticket).toBeGreaterThan(before.ticket);
     expect(current?.attempts).toBe(0);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(workItem)
+        .where(eq(workItem.ref, deferred)),
+    ).toEqual([notAdmitted]);
 
     await expect(advanceJob(ctx.db, jobId, handlers)).resolves.toBe(
       "succeeded",
     );
     expect(
       await getDb(ctx.db).select().from(workItem).where(eq(workItem.ref, ref)),
+    ).toEqual([]);
+    await expect(advanceJob(ctx.db, jobId, handlers)).resolves.toBe(
+      "succeeded",
+    );
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(workItem)
+        .where(eq(workItem.ref, deferred)),
     ).toEqual([]);
   });
 
