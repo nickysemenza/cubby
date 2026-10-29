@@ -526,7 +526,13 @@ describe("scheduled Gmail discovery", () => {
     const relevance = vi.fn(async () => ({
       classification: "related" as const,
     }));
-    const research = vi.fn(async () => []);
+    // Existing source ownership is admission even when that child has failed.
+    const research = vi.fn(async () => [
+      {
+        runId: runEntityId.parse(state.params.runId),
+        status: "dispatch_failed" as const,
+      },
+    ]);
     const seam = {
       ...ports(gmail()),
       triage: async () => "uncertain" as const,
@@ -598,6 +604,7 @@ describe("scheduled Gmail discovery", () => {
     expect(await reconcileWorkflowRuns(ctx.db)).toBe(1);
     expect(await readRun(state.params.runId)).toMatchObject({
       status: "failed",
+      endedAt: expect.any(Date),
       failureCode: "job_failed",
       dispatchError: "HTTP 503: Synthetic ended execution",
     });
@@ -926,7 +933,7 @@ describe("scheduled Gmail discovery", () => {
   });
   it("dispatches expanded history records in bounded import batches and checkpoints after acquisition", async () => {
     const state = await seed({ targeted: false });
-    const messages = Array.from({ length: 61 }, (_, index) => ({
+    const messages = Array.from({ length: 11 }, (_, index) => ({
       message: { id: `synthetic-history-${index}` },
     }));
     const provider = gmail({
@@ -949,16 +956,34 @@ describe("scheduled Gmail discovery", () => {
       return [];
     };
     await listMailDiscovery(ctx.db, state.params, seam);
-    await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
-    expect(sizes).toEqual([50, 11]);
-    expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(61);
+    expect(await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam)).toEqual(
+      { kind: "more" },
+    );
+    expect((await readRun(state.params.runId)).progress).toMatchObject({
+      pagesDone: 0,
+      page: { messageOffset: 5 },
+    });
+    expect(
+      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.history
+        .historyId,
+    ).toBe("100");
+    expect(await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam)).toEqual(
+      { kind: "more" },
+    );
+    expect(await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam)).toEqual(
+      { kind: "done" },
+    );
+    expect(sizes).toEqual([5, 5, 1]);
+    expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(11);
     expect(
       (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.history
         .historyId,
     ).toBe("120");
-    // Sixty-one full PostgreSQL evidence publications exceed the ordinary test
-    // deadline; the assertions above guard batching and cursor correctness.
-  }, 30_000);
+    expect((await readRun(state.params.runId)).progress).toMatchObject({
+      pagesDone: 1,
+      saved: 11,
+    });
+  });
   it("pauses revoked authentication without moving the page or negatively classifying it, then reconnects", async () => {
     const state = await seed();
     const provider = gmail({

@@ -454,19 +454,24 @@ export async function listMailDiscovery(
   }
 }
 
-/** Process before cursor movement; an interrupted page reuses its message ledger and Runs. */
+/** Bound acquisition per Job claim; coverage moves only after the entire frozen page. */
 export async function saveMailDiscoveryBatch(
   db: Database,
   params: WorkflowRunParams,
   index: number,
   ports: DiscoveryPorts = {},
-): Promise<{ kind: "stopped" } | { kind: "done" }> {
+): Promise<{ kind: "stopped" } | { kind: "more" } | { kind: "done" }> {
   const claimed = await claimDiscovery(db, params);
   if (!claimed) return { kind: "stopped" };
   if (claimed.progress.pagesDone > index) return { kind: "done" };
   const { page } = claimed.progress;
   if (!page || claimed.progress.pagesDone !== index)
     throw new Error(`Discovery page ${index} is not current`);
+  // Long provider pages exhausted Worker memory before reaching their checkpoint.
+  const offset = page.messageOffset ?? 0;
+  const messageIds = page.messageIds.slice(offset, offset + 5);
+  const messageOffset = offset + messageIds.length;
+  const more = messageOffset < page.messageIds.length;
   try {
     const provider = await (
       ports.providerForUser ??
@@ -477,7 +482,7 @@ export async function saveMailDiscoveryBatch(
         .filter((event) => event.kind === "message_deleted")
         .map((event) => [event.messageId, "deleted" as const]),
     );
-    for (const messageId of removed.keys())
+    for (const messageId of more ? [] : removed.keys())
       await recordDeletedHistoryEvent(db, {
         runId: claimed.row.id,
         ledgerPartyId: claimed.ledgerPartyId,
@@ -487,7 +492,7 @@ export async function saveMailDiscoveryBatch(
     const ingested = await ingestGmailMessages(db, provider, {
       ledgerPartyId: claimed.ledgerPartyId,
       mailboxId: claimed.input.mailboxId,
-      messageIds: page.messageIds.filter((id) => !removed.has(id)),
+      messageIds: messageIds.filter((id) => !removed.has(id)),
       runId: claimed.row.id,
       triage: ports.triage,
       relevance: ports.relevance,
@@ -497,7 +502,7 @@ export async function saveMailDiscoveryBatch(
     // Reused classifications still need import admission when automatic
     // import was previously off. Limit the replay to this selected Gmail page.
     const pageImportMailIds =
-      claimed.input.controlled && page.messageIds.length
+      claimed.input.controlled && messageIds.length
         ? (
             await getDb(db)
               .select({ id: emailTable.orderMailId })
@@ -506,7 +511,7 @@ export async function saveMailDiscoveryBatch(
                 and(
                   eq(emailTable.ledgerPartyId, claimed.ledgerPartyId),
                   eq(emailTable.mailboxId, claimed.input.mailboxId),
-                  inArray(emailTable.messageId, page.messageIds),
+                  inArray(emailTable.messageId, messageIds),
                   eq(emailTable.classification, "related"),
                   inArray(emailTable.status, CONTROLLED_MAIL_SOURCE_STATUSES),
                   isNotNull(emailTable.orderMailId),
@@ -552,7 +557,9 @@ export async function saveMailDiscoveryBatch(
       offset += 50
     ) {
       if (!(await claimDiscovery(db, params))) return { kind: "stopped" };
-      const results = await (
+      // Admission commits durable child dispatch intent. An existing child's
+      // terminal failure belongs to that child, not to discovery's checkpoint.
+      await (
         ports.research ??
         (await import("../../repo/mail-import-run")).startMailImport
       )(db, {
@@ -563,10 +570,6 @@ export async function saveMailDiscoveryBatch(
         mailboxId: claimed.input.mailboxId,
         messageIds: importMailIds.slice(offset, offset + 50),
       });
-      if (results.some((result) => result.status === "dispatch_failed"))
-        throw new Error(
-          "Mail research dispatch failed; replay the retained page.",
-        );
     }
     return withTransactionDatabase(db, async (tx) => {
       const [locked] = await getDb(tx)
@@ -579,6 +582,25 @@ export async function saveMailDiscoveryBatch(
       const current = await claimDiscovery(tx, params);
       if (!current || current.progress.pagesDone !== index)
         return { kind: "stopped" as const };
+      const batchProgress = {
+        ...current.progress,
+        saved: current.progress.saved + ingested.orderMailIds.length,
+        deleted: current.progress.deleted + ingested.deleted.length,
+        excluded: current.progress.excluded + ingested.excluded.length,
+        unrelated: current.progress.unrelated + ingested.unrelated.length,
+      };
+      if (more) {
+        await getDb(tx)
+          .update(runTable)
+          .set({
+            progress: {
+              ...batchProgress,
+              page: { ...page, messageOffset, retainedOrderMailIds: retained },
+            },
+          })
+          .where(eq(runTable.id, current.row.id));
+        return { kind: "more" as const };
+      }
       const events = await persistGmailEvents(tx, {
         ledgerPartyId: claimed.ledgerPartyId,
         mailboxId: claimed.input.mailboxId,
@@ -599,14 +621,10 @@ export async function saveMailDiscoveryBatch(
       )
         throw new Error("Mailbox page coverage changed before checkpoint");
       const progress = {
-        ...current.progress,
+        ...batchProgress,
         phase: "listing" as const,
         pagesDone: index + 1,
-        saved: current.progress.saved + ingested.orderMailIds.length,
-        deleted:
-          current.progress.deleted + ingested.deleted.length + removed.size,
-        excluded: current.progress.excluded + ingested.excluded.length,
-        unrelated: current.progress.unrelated + ingested.unrelated.length,
+        deleted: batchProgress.deleted + removed.size,
         events: current.progress.events + events.saved,
         droppedEvents: current.progress.droppedEvents + events.dropped,
       };
