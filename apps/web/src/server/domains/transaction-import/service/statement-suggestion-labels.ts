@@ -674,6 +674,8 @@ async function runStatementLabelBatch(
     after?: LabelCursor | null;
     /** Intersect retained charge identity, date and live resolved account scope. */
     scope?: StatementSuggestionScope;
+    /** Closed retry population; an empty set selects nothing. */
+    retryCharges?: readonly ChargeRef[];
     /**
      * `charge:<source>:<chargeKey>` refs this step generation already counted
      * as failed. An inclusive cursor can reread them; skip so each charge
@@ -722,7 +724,13 @@ async function runStatementLabelBatch(
   );
   const prepareDeadline = Date.now() + 20_000;
   const rows = await time("statement_selection", () =>
-    suggestionsNeedingLabels(db, limit + 1, input.after, input.scope),
+    suggestionsNeedingLabels(
+      db,
+      limit + 1,
+      input.after,
+      input.scope,
+      input.retryCharges,
+    ),
   );
   if (!rows.length) return { ...empty, active: true };
   const runId =

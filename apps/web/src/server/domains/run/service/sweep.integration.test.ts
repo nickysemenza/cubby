@@ -1,5 +1,8 @@
 import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
-import { assessmentFamily } from "@cubby/schemas/assessment";
+import {
+  assessmentFamily,
+  assessmentSubjects,
+} from "@cubby/schemas/assessment";
 import { sweepRunInput } from "@cubby/schemas/run-fields";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import type { SourceTransactionRecordInput } from "@cubby/schemas/source-transaction-record";
@@ -17,7 +20,10 @@ import { getDb } from "~/server/db/helpers";
 import { ledgerParty, run, transactionImport } from "~/server/db/schema";
 import { runHandlers } from "~/server/domains/run/operations/run.server";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
-import { buildHoldVoidProposals } from "~/server/domains/transaction-import/repo/statement-suggestions";
+import {
+  buildHoldVoidProposals,
+  generateStatementSuggestionPage,
+} from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -509,6 +515,63 @@ describe("Sweeps", () => {
       SELECT count(*)::int AS count FROM "AssessmentState" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
     `);
     expect(counts[0]?.count).toBe(3);
+    await recordRunStepPage(ctx.db, runId, "statement_label", {
+      state: "failed",
+      delta: { failed: 1 },
+      errors: [
+        {
+          at: new Date().toISOString(),
+          ref: `charge:${charge.source}:${charge.chargeKey}`,
+          message: "Synthetic label publication failure",
+        },
+      ],
+    });
+    await retryRunStep(ctx.db, runId, "statement_label");
+    // Disabled automatic work must retain the exact retry, not clear or rescan it.
+    expect(await drive(runId)).toBe("paused");
+    expect(
+      (await readRunSteps(ctx.db, runId)).find(
+        (step) => step.key === "statement_label",
+      ),
+    ).toMatchObject({
+      state: "paused",
+      meta: { retryRefs: [`charge:${charge.source}:${charge.chargeKey}`] },
+    });
+    await labelStatementSuggestions(ctx.db, {
+      runId,
+      port: firstChoice,
+      retryCharges: [charge],
+      spendingAdvice: async () => ({
+        spendingCategoryId: null,
+        categoryConfidence: "low",
+        vendorName: null,
+        vendorConfidence: "low",
+        counterparty: "unknown",
+        historyConflict: false,
+      }),
+    });
+    await activateAiRefresh(ctx.db, "synthetic-retained-label-resume", {
+      enabled: true,
+    });
+    const savedRun = await getDb(ctx.db).query.run.findFirst({
+      where: eq(run.id, runId),
+    });
+    if (!savedRun) throw new Error("Missing retained retry Run");
+    await runHandlers.operations.lifecycle({
+      request: await memberRequest(),
+      data: { runId: savedRun.shortcode, controlAction: "resume" },
+    });
+    expect(await drive(runId)).toBe("finished");
+    expect(
+      (await readRunSteps(ctx.db, runId)).find(
+        (step) => step.key === "statement_label",
+      ),
+    ).toMatchObject({
+      state: "done",
+      failed: 0,
+      done: 1,
+      meta: { retryRefs: [] },
+    });
   });
 
   // Failure mode (prod label lag): a page of only stale suggestions ended the
@@ -565,14 +628,45 @@ describe("Sweeps", () => {
     expect(broken.failed).toHaveLength(1);
     expect(broken.failed[0]?.message).toContain("57014");
     expect(broken.failed[0]?.message).toContain("statement timeout");
+    const { rows: retained } = await getDb(ctx.db).execute<{
+      subject: unknown;
+    }>(sql`SELECT a.subject
+      FROM "Assessment" a WHERE a.id=${waiting[1]!.id}::uuid`);
+    const later = await recordRows(
+      [row({ providerAmount: 40, sourceCategory: null })],
+      "synthetic-later-label-arrival",
+    );
+    await generateStatementSuggestionPage(ctx.db, {
+      after: null,
+      runId: labelRun,
+      scope: { importId: later.batchId! },
+    });
+    expect(
+      await labelStatementSuggestions(ctx.db, {
+        port: firstChoice,
+        runId: labelRun,
+        retryCharges: [],
+      }),
+    ).toMatchObject({
+      labelled: 0,
+      completed: 0,
+      stale: 0,
+      next: null,
+      failed: [],
+    });
     const second = await labelStatementSuggestions(ctx.db, {
       port: firstChoice,
       runId: labelRun,
-      limit: 1,
-      after: first.next,
+      retryCharges: retained.map((row) =>
+        assessmentSubjects.statement_transaction.parse(row.subject),
+      ),
     });
     expect(second.failed).toEqual([]);
     expect(second).toMatchObject({ labelled: 1, stale: 0, next: null });
+    const { rows: remaining } = await getDb(ctx.db).execute<{ count: number }>(
+      sql`SELECT count(*)::int AS count FROM "AssessmentState" WHERE active AND (data->>'needsLabel')::boolean`,
+    );
+    expect(remaining[0]?.count).toBe(2);
   });
 
   const evaluationsOf = async (runId: string) => {

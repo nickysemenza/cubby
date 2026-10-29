@@ -166,6 +166,13 @@ export type ChargeRef = { source: string; chargeKey: string };
 export const chargeId = (charge: ChargeRef) =>
   `${charge.source}:${charge.chargeKey}`;
 
+export function statementChargeFromWorkRef(ref: string): ChargeRef | null {
+  const match = /^charge:([^:]+):(.+)$/.exec(ref);
+  return match?.[1] && match[2]
+    ? { source: match[1], chargeKey: match[2] }
+    : null;
+}
+
 type Observation = {
   id: string;
   source: string;
@@ -2683,13 +2690,12 @@ export async function retryStatementGenerationRefs(
   ) {
     const refs = input.refs.slice(offset, offset + STATEMENT_SUGGESTION_PAGE);
     const charges = refs.flatMap((ref) => {
-      const match = /^charge:([^:]+):(.+)$/.exec(ref);
-      if (match?.[1] && match[2])
-        return [{ source: match[1], chargeKey: match[2] }];
+      const charge = statementChargeFromWorkRef(ref);
+      if (charge) return [charge];
       failed.push(
         statementGenerationFailure(
           ref,
-          new Error("Unsupported statement generation failure reference"),
+          new Error("Unsupported statement charge failure reference"),
         ),
       );
       return [];
@@ -3232,8 +3238,20 @@ async function statementLabelCandidates(
   limit: number,
   after: LabelCursor | null = null,
   scope: StatementSuggestionScope = {},
+  retryCharges?: readonly ChargeRef[],
 ) {
   const scoped = labelIdentityScope(scope);
+  const retained =
+    retryCharges === undefined
+      ? sql`true`
+      : retryCharges.length
+        ? sql`(${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (${sql.join(
+            retryCharges.map(
+              (charge) => sql`(${charge.source}, ${charge.chargeKey})`,
+            ),
+            sql`, `,
+          )})`
+        : sql`false`;
   const positionAt = sql`coalesce((s.data->'applicationOrder'->>'createdAt')::timestamp, s."createdAt")`;
   const positionId = sql`coalesce((s.data->'applicationOrder'->>'id')::uuid, s.id)`;
   const nativePosition = sql`(s.data->'applicationOrder'->>'createdAt' IS NULL AND s.data->'applicationOrder'->>'id' IS NULL)`;
@@ -3245,6 +3263,7 @@ async function statementLabelCandidates(
       WHERE ${statementSuggestions.labelBacklog}
         AND ${position === "native" ? nativePosition : sql`NOT ${nativePosition}`}
         AND ${scoped}
+        AND ${retained}
         ${after ? sql`AND (${at}, ${id}) ${after.inclusive ? sql`>=` : sql`>`} (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
       ORDER BY ${at},${id} LIMIT ${limit}`;
   };
@@ -3271,6 +3290,7 @@ export async function suggestionsNeedingLabels(
   limit: number,
   after: LabelCursor | null = null,
   scope: StatementSuggestionScope = {},
+  retryCharges?: readonly ChargeRef[],
 ) {
   const selected: Awaited<ReturnType<typeof statementLabelCandidates>> = [];
   let cursor = after;
@@ -3283,6 +3303,7 @@ export async function suggestionsNeedingLabels(
       scanLimit,
       cursor,
       scope,
+      retryCharges,
     );
     const admitted = scope.accountIds?.length
       ? await statementLabelTargetsInScope(
