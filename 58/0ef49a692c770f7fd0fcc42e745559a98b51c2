@@ -1,0 +1,19 @@
+apps/web/src/entity/metadata-loader.ts
+  s_f9b38eae28f662::t_d380e76b0f9e20 8-9,15-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "580ef49a692c770f7fd0fcc42e745559a98b51c2",
+  "prompts": {},
+  "sessions": {
+    "s_f9b38eae28f662": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15d31a0c-0fdb-4745-b359-8664bbd5360e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
