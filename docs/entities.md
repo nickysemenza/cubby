@@ -2434,6 +2434,17 @@ add punctuation, token, prefix or literal-substring rules, but never establishes
 identity from similarity alone. Search eligibility, ranking and match captions
 share the same array-element predicate owner.
 
+Command search admits alias and identifier candidates through an indexed,
+case-insensitive prefix projection before the shared array matcher. The matcher
+still decides membership and ranking. Array membership has its own UNION arm
+so it does not disable indexed admission for title and full-text matches.
+Prefixes cover the public query limit,
+including lowercase expansion; retained names and long identifiers stay complete.
+A bounded projection returns NULL on overflow, with a partial index keeping
+those documents on the exhaustive path. LIKE wildcard/escape queries and longer
+internal queries retain exhaustive matching. These indexes are maintained by
+PostgreSQL with the existing SearchDocument publication, without extra Jobs.
+
 Wish ranges are owned by `apps/web/src/server/domains/wish/price-range.ts`.
 Hydration, sorting and totals use its SQL aggregate over the effective Product
 price; null prices are omitted, zero is priced, and no priced candidates means

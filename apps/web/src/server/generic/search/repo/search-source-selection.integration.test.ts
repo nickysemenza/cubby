@@ -16,6 +16,10 @@ import {
   deleteWorkItems,
   insertWorkItems,
 } from "~/server/generic/jobs/jobs.fixtures";
+import {
+  buildPrefixTsQuery,
+  findLexicalSearchCandidates,
+} from "~/server/generic/search/service/search.service";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
@@ -70,7 +74,17 @@ describe("search source selection", () => {
     ).join(" ");
     const item = await createProductIdentityFixture(
       ctx.db,
-      makeProductInput({ name: "Synthetic oversized notes", notes }),
+      makeProductInput({
+        name: "Synthetic oversized notes",
+        notes,
+        aliases: [
+          `Synthetic long identifier ${"x".repeat(120_000)}`,
+          "O'Reilly grinder",
+          "CAFÉ spare part",
+          "Synthetic under_score",
+          "Synthetic slash\\part",
+        ],
+      }),
       ctx.actor,
     );
     const result = await refreshSearchDocument(
@@ -83,6 +97,52 @@ describe("search source selection", () => {
       SELECT length(body) AS length FROM "SearchDocument"
        WHERE "entityId" = ${item.entityId}::uuid`);
     expect(Number(stored.rows[0]?.length)).toBeGreaterThan(1_000_000);
+    for (const query of [
+      `Synthetic long identifier ${"x".repeat(70)}`,
+      "O'Reilly",
+      "café spare",
+      "Synthetic under_",
+      "Synthetic slash\\",
+    ]) {
+      const hits = await findLexicalSearchCandidates(ctx.db, {
+        query,
+        entityKinds: ["product"],
+        limit: 5,
+      });
+      expect(hits.map((hit) => hit.entityId)).toContain(item.entityId);
+    }
+    const overflow = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic many aliases",
+        aliases: [
+          "Overflow.example.needle",
+          ...Array.from(
+            { length: 1025 },
+            (_, index) => `Distinct alias ${index}`,
+          ),
+        ],
+      }),
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "product", overflow.entityId);
+    const overflowQuery = "overflow.example";
+    const overflowState = await unwrapDb(ctx.db).execute(sql`
+      SELECT search_name_prefixes(aliases || keywords) IS NULL AS overflow,
+        "searchVector" @@ to_tsquery('simple', ${buildPrefixTsQuery(overflowQuery)}) AS "fullTextMatch"
+      FROM "SearchDocument" WHERE "entityId" = ${overflow.entityId}::uuid`);
+    expect(overflowState.rows[0]).toMatchObject({
+      overflow: true,
+      fullTextMatch: false,
+    });
+    const overflowHits = await findLexicalSearchCandidates(ctx.db, {
+      query: overflowQuery,
+      entityKinds: ["product"],
+      limit: 5,
+    });
+    expect(overflowHits.map((hit) => hit.entityId)).toContain(
+      overflow.entityId,
+    );
   });
 
   it("normalizes document text and query input with the same recipe", async () => {

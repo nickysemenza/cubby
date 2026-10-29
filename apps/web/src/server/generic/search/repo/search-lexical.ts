@@ -36,6 +36,20 @@ export const buildAnyPrefixTsQuery = (query: string): string =>
     .map((term) => `${term.replace(/[':&|!()]/g, "")}:*`)
     .join(" | ");
 
+/** Indexed admission is a superset; the shared matcher still decides eligibility. */
+export function indexedSearchArrayMatch(values: SQL, normalized: string): SQL {
+  const match = textArrayMatchSql({
+    values,
+    query: normalized,
+    match: "exact-or-prefix",
+  });
+  // Preserve LIKE's existing wildcard/escape behavior and uncapped internal calls.
+  if (normalized.length > 200 || /[%_\\]/u.test(normalized)) return match;
+  const prefix = sql`search_name_prefixes(${values})`;
+  const query = `'${normalized.replaceAll("'", "''")}':*`;
+  return sql`((${prefix} @@ ${query}::tsquery OR ${prefix} IS NULL) AND ${match})`;
+}
+
 /**
  * The deliberately uncapped lexical eligibility used by an entity list.
  *

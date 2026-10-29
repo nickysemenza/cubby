@@ -6,6 +6,7 @@ import { entityLinkDropLivenessTriggerSql } from "~/server/db/entity-link-schema
 
 import { assessmentHistoryDdl, statementSuggestionDdl } from "./assessment-ddl";
 import { productBrandDdl } from "./product-brand-ddl";
+import { searchPrefixDdl } from "./search-prefix-ddl";
 
 /**
  * One CHECK per field of an enforced same-record classification policy:
@@ -62,5 +63,5 @@ const classificationConstraintSql = (): string =>
  * this whole script.
  */
 export function renderDerivedDdl(): string {
-  return `${productBrandDdl()}\n\n${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${statementSuggestionDdl()}\n\n${derivedTriggerDdl()}\n`;
+  return `${productBrandDdl()}\n\n${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${statementSuggestionDdl()}\n\n${searchPrefixDdl()}\n\n${derivedTriggerDdl()}\n`;
 }
