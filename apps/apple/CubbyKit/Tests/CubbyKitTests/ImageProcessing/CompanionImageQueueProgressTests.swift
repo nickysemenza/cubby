@@ -10,15 +10,18 @@ struct CompanionImageQueueProgressTests {
         #expect(session.progress == nil)
         session.refresh(backlog: .init(waiting: 80, runsWaiting: 1, workingDevices: 2, etaSeconds: 240))
         session.completedCount = 20
-        #expect(session.progress == 0.2)
+        #expect(session.progress == 0.25)
         session.refresh(backlog: .init(waiting: 180, runsWaiting: 2, workingDevices: 2, etaSeconds: 600))
         #expect(session.waitingAtStart == 80)
-        #expect(session.totalCount == 100)
-        #expect(session.progress == 0.2)
+        #expect(session.totalCount == 80)
+        #expect(session.progress == 0.25)
         #expect(session.etaSeconds == 600)
         #expect(
             session.detail(running: 4, locale: Locale(identifier: "en_US"))
                 == "4 running · 20 done · about 10 minutes at this pace")
+        session.completedCount = 80
+        #expect(session.totalCount == 80)
+        #expect(session.progress == 1)
     }
 
     @Test func restartStartsWithNewCountsAndBaseline() {

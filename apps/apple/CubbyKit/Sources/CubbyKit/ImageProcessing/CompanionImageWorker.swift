@@ -35,8 +35,8 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
     public let remotePaused: Bool
     /// Commands executing now.
     public let processingCount: Int
-    /// Recorded results whose delivery failed and that are set aside for a backoff retry. They
-    /// stay on disk and never block pulling.
+    /// All recorded results waiting for delivery, including a send in progress. They stay on disk
+    /// until the server responds.
     public let undeliveredResults: Int
     /// The latest delivery failure among `undeliveredResults`, verbatim.
     public let deliveryError: String?
@@ -205,9 +205,9 @@ public actor CompanionImageWorker {
     private var deferredCommands: [ImageProcessingCommand] = []
     private var running: [String: RunningCommand] = [:]
     private var queueProgress: CompanionImageQueueProgress?
+    private var sessionCompletedBaseline = 0
     private var backlogRefresh: Task<Void, Never>?
     private var backgroundProcessingCount = 0
-    private var backgroundCompletedCount = 0
     private var isPulling = false
     private var lastError: String?
     /// Subscription diagnostics for Activity; see `CompanionImageWorkerActivity`.
@@ -220,6 +220,12 @@ public actor CompanionImageWorker {
     private let delivery: CompanionResultDelivery
     private var deliverySnapshot = CompanionResultDelivery.Snapshot()
     private var deliveryRetry: Task<Void, Never>?
+    /// One serial sender, independent of the compute slots and pull loop.
+    private var deliveryTask: Task<Void, Never>?
+    private var deliveryRequested = false
+    /// Recorded results retain their attempt while the serial sender waits or backs off.
+    private var deliveryHeartbeats: [String: Task<Void, Never>] = [:]
+    private var refusedDeliveryLeases: Set<String> = []
     private var lastReportedActivity: CompanionImageWorkerActivity?
     private var isDraining = false
     private var drainRequested = false
@@ -308,6 +314,8 @@ public actor CompanionImageWorker {
         backlogRefresh?.cancel()
         connectionTask?.cancel()
         deliveryRetry?.cancel()
+        deliveryTask?.cancel()
+        for heartbeat in deliveryHeartbeats.values { heartbeat.cancel() }
         socket?.cancel(with: .goingAway, reason: nil)
     }
 
@@ -333,6 +341,9 @@ public actor CompanionImageWorker {
         drainRetry = nil
         deliveryRetry?.cancel()
         deliveryRetry = nil
+        deliveryRequested = false
+        deliveryTask?.cancel()
+        cancelDeliveryHeartbeats()
         cancelCommands()
         releaseDeferredCommands()
         closeSocket(.goingAway)
@@ -378,12 +389,16 @@ public actor CompanionImageWorker {
         let connection = connectionTask
         let drain = drainTask
         let commands = Array(commandTasks.values)
+        let sender = deliveryTask
+        let renewals = Array(deliveryHeartbeats.values)
         stop()
         _ = await background?.value
         await connection?.value
         // A pull in flight at stop() releases its claim rather than starting it (see drainOnce).
         await drain?.value
         for command in commands { await command.value }
+        await sender?.value
+        for renewal in renewals { await renewal.value }
         // Releases use the outgoing credential; finish them before it is removed.
         await releasesIdle()
         try await outbox.removeAll()
@@ -437,10 +452,14 @@ public actor CompanionImageWorker {
         backgroundWindowActive = true
         let residentDrain = drainTask
         let residentCommands = Array(commandTasks.values)
+        let residentDelivery = deliveryTask
+        let residentRenewals = Array(deliveryHeartbeats.values)
         reconcileConnection()
         let task = Task {
             await residentDrain?.waitUnlessCancelled()
             for command in residentCommands { await command.waitUnlessCancelled() }
+            await residentDelivery?.waitUnlessCancelled()
+            for renewal in residentRenewals { await renewal.waitUnlessCancelled() }
             await releasesIdle()
             guard shouldRun, isParticipating, !Task.isCancelled else {
                 return CompanionBackgroundOutcome.resumable
@@ -461,7 +480,6 @@ public actor CompanionImageWorker {
         backgroundTask = nil
         backgroundWindowActive = false
         backgroundProcessingCount = 0
-        backgroundCompletedCount = 0
         reconcileConnection()
         deliverySnapshot = await delivery.snapshot
         switch outcome {
@@ -504,6 +522,10 @@ public actor CompanionImageWorker {
             connectionGeneration += 1
             connectionTask?.cancel()
             connectionTask = nil
+            deliveryTask?.cancel()
+            cancelDeliveryHeartbeats()
+            deliveryRetry?.cancel()
+            deliveryRetry = nil
             cancelCommands()
             closeSocket(.goingAway)
             return
@@ -620,6 +642,7 @@ public actor CompanionImageWorker {
     /// While a failed drain's backoff is pending a ring only marks the drain requested.
     func requestDrain() {
         guard shouldRun, platformAllowsConnection, connectionTask != nil else { return }
+        requestDelivery()
         drainRequested = true
         guard !isDraining, drainRetry == nil else { return }
         isDraining = true
@@ -663,13 +686,12 @@ public actor CompanionImageWorker {
         requestDrain()
     }
 
-    /// Delivers recorded results that are due, then pulls until no work is claimable or every
-    /// slot is busy. A finished command requests another drain to refill its slot.
+    /// Pulls until no work is claimable or every compute slot is busy. Durable delivery runs
+    /// separately, so a slow HTTP response cannot hold the next command behind it.
     private func drainOnce(generation: Int) async throws {
         func isCurrent() -> Bool {
             shouldRun && platformAllowsConnection && generation == connectionGeneration
         }
-        try await deliverOutbox()
         while isCurrent(), acceptance == .open,
             commandTasks.count < maximumConcurrentCommands
         {
@@ -719,19 +741,68 @@ public actor CompanionImageWorker {
 
     // MARK: Outbox delivery
 
-    /// Sends every recorded result that is due under the shared `CompanionResultDelivery` policy:
-    /// a failed send sets that result aside with its own backoff, so it never blocks pulling.
+    private func requestDelivery() {
+        guard shouldRun, platformAllowsConnection, !updateRequired else { return }
+        deliveryRequested = true
+        guard deliveryTask == nil else { return }
+        deliveryTask = Task {
+            defer {
+                deliveryTask = nil
+                if deliveryRequested { requestDelivery() }
+            }
+            while deliveryRequested, shouldRun, platformAllowsConnection, !Task.isCancelled {
+                deliveryRequested = false
+                do {
+                    try await deliverOutbox()
+                } catch {
+                    handle(error)
+                    // An unreadable outbox must remain visible and retry without a hot loop.
+                    scheduleDeliveryRetry(after: .now + .seconds(2))
+                    return
+                }
+            }
+        }
+    }
+
+    /// Sends a bounded batch through the one resident sender; failures retain their per-result
+    /// backoff, and remaining due entries schedule another pass without gating pulls.
     private func deliverOutbox() async throws {
         guard shouldRun, !updateRequired else { return }
+        try await refreshDeliveryHeartbeats()
         applyDelivery(
             try await delivery.deliverDue(transport: transport, deviceID: wireDeviceID),
             snapshot: await delivery.snapshot)
+        try await refreshDeliveryHeartbeats()
+    }
+
+    private func refreshDeliveryHeartbeats() async throws {
+        let pending = try await outbox.pending()
+        let keys = Set(pending.map(\.key))
+        for key in Array(deliveryHeartbeats.keys) where !keys.contains(key) {
+            deliveryHeartbeats.removeValue(forKey: key)?.cancel()
+        }
+        refusedDeliveryLeases.formIntersection(keys)
+        guard shouldRun, platformAllowsConnection, !Task.isCancelled else { return }
+        for entry in pending
+        where deliveryHeartbeats[entry.key] == nil && !refusedDeliveryLeases.contains(entry.key) {
+            let claim = CompanionImageCommandClaim(
+                jobID: entry.result.jobId, attemptID: entry.result.attemptId)
+            deliveryHeartbeats[entry.key] = startHeartbeat(
+                key: entry.key, claim: claim, lease: CompanionCommandLease(deadline: .distantFuture))
+        }
+    }
+
+    private func cancelDeliveryHeartbeats() {
+        for heartbeat in deliveryHeartbeats.values { heartbeat.cancel() }
+        deliveryHeartbeats.removeAll()
+        refusedDeliveryLeases.removeAll()
     }
 
     private func applyDelivery(
         _ outcome: CompanionResultDelivery.Outcome, snapshot: CompanionResultDelivery.Snapshot
     ) {
         deliverySnapshot = snapshot
+        queueProgress?.completedCount = max(0, snapshot.completedCount - sessionCompletedBaseline)
         // Kept on disk: the updated build delivers it.
         if case .updateRequired(let error) = outcome { enterUpdateRequired(error) }
         scheduleDeliveryRetry()
@@ -739,12 +810,16 @@ public actor CompanionImageWorker {
     }
 
     private func scheduleDeliveryRetry() {
+        scheduleDeliveryRetry(after: deliverySnapshot.nextAttemptAt)
+    }
+
+    private func scheduleDeliveryRetry(after next: ContinuousClock.Instant?) {
         deliveryRetry?.cancel()
         deliveryRetry = nil
-        guard shouldRun, !updateRequired, let next = deliverySnapshot.nextAttemptAt else { return }
+        guard shouldRun, platformAllowsConnection, !updateRequired, let next else { return }
         deliveryRetry = Task { [weak self] in
             do { try await Task.sleep(until: next) } catch { return }
-            await self?.requestDrain()
+            await self?.requestDelivery()
         }
     }
 
@@ -837,6 +912,7 @@ public actor CompanionImageWorker {
         while !Task.isCancelled, let command = commandTasks.values.first {
             await command.waitUnlessCancelled()
         }
+        await deliveryTask?.waitUnlessCancelled()
     }
 
     /// Returns once every best-effort release has answered or timed out.
@@ -883,35 +959,36 @@ public actor CompanionImageWorker {
         reportActivity()
         let lease = CompanionCommandLease(deadline: metadata.deadline)
         let heartbeat = startHeartbeat(key: key, claim: claim, lease: lease)
-        defer { heartbeat.cancel() }
+        defer { if deliveryHeartbeats[key] == nil { heartbeat.cancel() } }
         do {
             let started = ContinuousClock.now
             let execute = self.execute
             let result = try await CompanionCommandLease.$current.withValue(lease) {
                 try await execute(command)
             }
-            heartbeat.cancel()
             running[key] = nil
             reportActivity()
             // Stopped (its claim was released) or its lease was refused: the result is moot.
             guard !Task.isCancelled, inFlight.removeValue(forKey: key) != nil else { return }
+            deliveryHeartbeats[key] = heartbeat
             jobObserver?(.init(result, kind: metadata.kind, duration: started.duration(to: .now)))
             try await recordResult(result, key)
-            queueProgress?.completedCount += 1
+            deliverySnapshot = await delivery.refreshSnapshot()
             reportActivity()
-            applyDelivery(
-                await delivery.deliver(
-                    result, key: key, transport: transport, deviceID: wireDeviceID),
-                snapshot: await delivery.snapshot)
+            requestDelivery()
         } catch {
             // Execution threw before a result existed; hand the claim back unless it is gone.
-            if inFlight.removeValue(forKey: key) != nil { releaseBestEffort(claim) }
+            let wasRecording = deliveryHeartbeats.removeValue(forKey: key)
+            wasRecording?.cancel()
+            if inFlight.removeValue(forKey: key) != nil || wasRecording != nil {
+                releaseBestEffort(claim)
+            }
             handle(error)
         }
     }
 
-    /// Renews this command's lease every `heartbeatInterval` until it finishes. A refusal stops
-    /// the command; a failed request keeps working until the lease deadline it already has.
+    /// Renews through execution and recorded delivery. A refusal stops execution; a recorded
+    /// result stays durable and the server still decides whether its late completion is adoptable.
     private func startHeartbeat(
         key: String, claim: CompanionImageCommandClaim, lease: CompanionCommandLease
     ) -> Task<Void, Never> {
@@ -930,7 +1007,9 @@ public actor CompanionImageWorker {
     private func renew(
         key: String, claim: CompanionImageCommandClaim, lease: CompanionCommandLease
     ) async -> Bool {
-        guard inFlight[key] != nil, !Task.isCancelled else { return false }
+        guard (inFlight[key] != nil || deliveryHeartbeats[key] != nil), !Task.isCancelled else {
+            return false
+        }
         do {
             switch try await transport.renew(deviceID: wireDeviceID, claim: claim) {
             case .renewed(let leaseExpiresAt):
@@ -939,8 +1018,13 @@ public actor CompanionImageWorker {
             case .refused(let reason):
                 // The server retired or reassigned this attempt; a result would be discarded and
                 // the work may already be running elsewhere. Stop without releasing.
-                guard inFlight.removeValue(forKey: key) != nil else { return false }
-                commandTasks[key]?.cancel()
+                if inFlight.removeValue(forKey: key) != nil {
+                    commandTasks[key]?.cancel()
+                } else if deliveryHeartbeats.removeValue(forKey: key) != nil {
+                    refusedDeliveryLeases.insert(key)
+                } else {
+                    return false
+                }
                 let refusal = CompanionLeaseRefused(jobID: claim.jobID, reason: reason)
                 lastError = Self.describe(refusal)
                 failureObserver?(refusal)
@@ -1025,6 +1109,8 @@ public actor CompanionImageWorker {
         drainRetry = nil
         deliveryRetry?.cancel()
         deliveryRetry = nil
+        deliveryRequested = false
+        deliveryTask?.cancel()
         reconcileConnection()
         reportActivity()
     }
@@ -1066,6 +1152,7 @@ public actor CompanionImageWorker {
 
     private func beginQueueSession() {
         guard queueProgress == nil else { return }
+        sessionCompletedBaseline = deliverySnapshot.completedCount
         queueProgress = .init(startedAt: .now)
         let sessionID = queueProgress?.id
         backlogRefresh = Task { [weak self, transport] in
@@ -1081,14 +1168,16 @@ public actor CompanionImageWorker {
 
     private func refreshBacklog(_ backlog: DeviceBacklogBanner, sessionID: String?) {
         guard queueProgress?.id == sessionID else { return }
-        queueProgress?.refresh(backlog: backlog)
+        queueProgress?.refresh(
+            backlog: backlog,
+            outstanding: commandTasks.count + backgroundProcessingCount + deliverySnapshot.undelivered)
         reportActivity()
     }
 
     private func reportBackgroundProgress(processed: Int, running: Int) {
         if running > 0 { beginQueueSession() }
-        queueProgress?.completedCount += max(0, processed - backgroundCompletedCount)
-        backgroundCompletedCount = processed
+        deliverySnapshot.completedCount = processed
+        queueProgress?.completedCount = max(0, processed - sessionCompletedBaseline)
         backgroundProcessingCount = running
         reportActivity()
     }
@@ -1099,7 +1188,8 @@ public actor CompanionImageWorker {
         // drain or a lifecycle stop ends it; a transient zero-running count does not reset it.
         if !shouldRun || updateRequired || !isParticipating || systemAsleep
             || (!platformAllowsConnection && !backgroundWindowActive)
-            || (commandTasks.isEmpty && !isDraining && !backgroundWindowActive)
+            || (commandTasks.isEmpty && !isDraining && deliveryTask == nil
+                && deliverySnapshot.undelivered == 0 && !backgroundWindowActive)
         {
             queueProgress = nil
             backlogRefresh?.cancel()

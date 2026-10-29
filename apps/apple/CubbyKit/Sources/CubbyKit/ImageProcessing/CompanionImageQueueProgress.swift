@@ -8,15 +8,19 @@ public struct CompanionImageQueueProgress: Sendable, Equatable {
     public internal(set) var completedCount = 0
     public private(set) var waitingAtStart: Int?
     public private(set) var etaSeconds: Int?
+    private var initialTotal: Int?
 
     init(startedAt: Date) { self.startedAt = startedAt }
 
-    mutating func refresh(backlog: DeviceBacklogBanner) {
-        if waitingAtStart == nil { waitingAtStart = max(0, backlog.waiting) }
+    mutating func refresh(backlog: DeviceBacklogBanner, outstanding: Int = 0) {
+        if waitingAtStart == nil {
+            waitingAtStart = max(0, backlog.waiting)
+            initialTotal = completedCount + max(0, backlog.waiting) + max(0, outstanding)
+        }
         etaSeconds = backlog.etaSeconds
     }
 
-    public var totalCount: Int? { waitingAtStart.map { completedCount + $0 } }
+    public var totalCount: Int? { initialTotal.map { max($0, completedCount) } }
 
     public var progress: Double? {
         guard let totalCount else { return nil }

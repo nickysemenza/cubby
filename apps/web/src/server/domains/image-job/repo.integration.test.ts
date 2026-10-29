@@ -29,10 +29,14 @@ import {
 describe("image job cost", () => {
   const ctx = withTestDb();
 
-  const job = async (state: "ready" | "pending" = "ready") => {
+  const job = async (
+    state: "ready" | "pending" = "ready",
+    imageHash = "b".repeat(64),
+  ) => {
     const image = await createImageFixture(
       ctx.db,
       `synthetic-job-cost-${crypto.randomUUID()}`,
+      { sha256: imageHash },
     );
     const [row] = await insertEntityFixtures(
       ctx.db,
@@ -201,7 +205,7 @@ describe("image job cost", () => {
       waiting: 1,
       workingDevices: 1,
       claimsPerMinute: 0.2,
-      etaSeconds: 300,
+      etaSeconds: null,
     });
     const source = {
       entityKind: "imageJob" as const,
@@ -231,5 +235,74 @@ describe("image job cost", () => {
       { state: "queued", leaseToken: null, leaseExpiresAt: null },
     );
     expect((await devices()).totalCount).toBe(0);
+  });
+
+  it("estimates from accepted device completions on current sources, not claims or intermediate results", async () => {
+    const waiting = await job("pending");
+    await enqueueJob(ctx.db, {
+      key: `image-processing:${waiting.id}`,
+      kind: "image.device",
+      input: {},
+    });
+    const completed = await job();
+    const stale = await job("ready", "c".repeat(64));
+    const pending = await job("pending");
+    const now = new Date();
+    const device = {
+      kind: "device" as const,
+      deviceId: crypto.randomUUID(),
+      name: "Synthetic Mac",
+      platform: "macos" as const,
+      appVersion: "1",
+      osVersion: "26",
+    };
+    const attempt = (jobId: typeof completed.id, number: number) => ({
+      id: crypto.randomUUID(),
+      jobId,
+      number,
+      executor: device,
+      completedAt: now,
+    });
+    await getDb(ctx.db)
+      .insert(imageProcessingAttempt)
+      .values([
+        {
+          ...attempt(completed.id, 1),
+          state: "ready",
+          result: { status: "completed" },
+        },
+        // Multiple accepted attempts of one job do not inflate its completion rate.
+        {
+          ...attempt(completed.id, 2),
+          state: "ready",
+          result: { status: "completed" },
+        },
+        {
+          ...attempt(stale.id, 1),
+          state: "ready",
+          result: { status: "completed" },
+        },
+        {
+          ...attempt(pending.id, 1),
+          state: "waiting",
+          result: { status: "normalized" },
+        },
+        {
+          ...attempt(pending.id, 2),
+          state: "failed",
+          result: { status: "failed" },
+        },
+        { ...attempt(pending.id, 3), state: "expired" },
+        {
+          ...attempt(completed.id, 3),
+          state: "ready",
+          result: { status: "completed" },
+          completedAt: new Date(now.getTime() - 11 * 60_000),
+        },
+      ]);
+    expect(await readDeviceBacklog(ctx.db, now)).toMatchObject({
+      waiting: 1,
+      etaSeconds: 600,
+    });
   });
 });
