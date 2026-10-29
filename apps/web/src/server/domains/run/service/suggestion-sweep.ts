@@ -47,6 +47,7 @@ import { settleArrivedFindingsForProduct } from "~/server/domains/purchase-impor
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import {
   fieldCorrectionIdentity,
   fieldCorrectionRecipe,
@@ -453,18 +454,6 @@ export async function executeSuggestionSweepTarget(
     queuedTarget.entityId,
     queuedTarget.field,
   );
-  const current = await executeEntity(
-    ports.context,
-    entityCommandSchema.parse({
-      action: "get",
-      entity: input.entity,
-      id: queuedTarget.id,
-      missing: "null",
-    }),
-  );
-  if (current.action !== "get" || !current.item)
-    throw new Error("Suggestion target no longer exists");
-  const record = z.record(z.string(), z.unknown()).parse(current.item);
   const policy = decisionCatalogRows().find(
     (row) => row.entity === input.entity && row.field === queuedTarget.field,
   );
@@ -474,6 +463,13 @@ export async function executeSuggestionSweepTarget(
     queuedTarget.field,
   ];
   const basisKeys = fieldSuggestionContextKeys(input.entity, policyKeys);
+  const [record] = await readSelectedEntityRecords({
+    context: ports.context,
+    entity: input.entity,
+    ids: [queuedTarget.id],
+    fields: basisKeys,
+  });
+  if (!record) throw new Error("Suggestion target no longer exists");
   const valueOf = (key: string) => {
     if (!Object.hasOwn(entityFieldEnvelopeFields[input.entity], key))
       return record[key];

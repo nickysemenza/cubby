@@ -1391,6 +1391,13 @@ top-level key. Hidden editable references declare their public `display.readPath
 when their identity is nested in the read projection. A declared suggestion
 consumer permits that path even when the field has no visible display surface.
 Unavailable governed inputs fail preparation instead of becoming empty additions.
+The kernel-owned `readSelectedEntityRecords` assembles canonical selected detail
+rows for connection preparation, generic field refresh, queued suggestion checks
+and publication validation. Each caller declares its basis, target and resolution
+context keys; input-only keys stay absent just as in a complete public read.
+Declared `fieldResolutions` evidence remains an internal dependency of the read,
+so narrowing outward fields does not change effective outcomes or provenance.
+These partial rows never authorize a write or replace live publication fences.
 Enum targets may declare `allowNone: true` to offer an evaluated decline when
 their basis does not support a value. A decline proposes no replacement or
 clearing of the current field; exhaustive enums keep `allowNone: false`.

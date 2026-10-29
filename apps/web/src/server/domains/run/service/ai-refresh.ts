@@ -80,9 +80,8 @@ import {
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import type { PreparedProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
 import { publishProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
-import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import {
   fieldCorrectionIdentity,
@@ -196,22 +195,18 @@ async function prepareField(
   const publicId = codes.get(entityRefKey(entity, target.recordId));
   if (!publicId) return null;
   const context = kernel(db, ports);
-  const found = await executeEntity(
-    context,
-    entityCommandSchema.parse({
-      action: "get",
-      entity,
-      id: publicId,
-      missing: "null",
-    }),
-  );
-  if (found.action !== "get" || !found.item) return null;
-  const record = z.record(z.string(), z.unknown()).parse(found.item);
   const policy = decisionCatalogRows().find(
     (row) => row.entity === entity && row.field === target.field,
   );
   if (!policy) return null;
   const policyKeys = [...policy.basis.map((row) => row.key), target.field];
+  const [record] = await readSelectedEntityRecords({
+    context,
+    entity,
+    ids: [publicId],
+    fields: fieldSuggestionContextKeys(entity, policyKeys),
+  });
+  if (!record) return null;
   const governedFields = entityFieldEnvelopeFields[entity];
   const valueOf = (key: string) => {
     if (!Object.hasOwn(governedFields, key)) return record[key];
