@@ -1383,14 +1383,14 @@ function CoverageTable({
                     key={address}
                     variant="ghost"
                     size="sm"
-                    className="max-w-full min-w-0 justify-start"
+                    className="max-w-full min-w-0 justify-start select-text"
                     onClick={(event) => {
                       event.stopPropagation();
                       setSelectedKey(row.original.key);
                       setSelectedAddress(address);
                     }}
                   >
-                    <span className="truncate">{address}</span>
+                    <span className="truncate select-text">{address}</span>
                   </Button>
                 ))}
               </span>
