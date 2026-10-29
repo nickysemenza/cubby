@@ -513,22 +513,27 @@ export async function commitFinancialBooking(
         );
       const target =
         review.purchaseId ??
-        (
-          await createPurchase(
-            txDb,
-            purchaseCreateInput.parse({
-              vendorId: review.vendorId,
-              defaultTrade: review.trade,
-              date: fresh.date,
-              displayLabel: fresh.name,
-              purchaserOverrideId: review.purchaserId,
-            }),
-            actor,
-          )
-        ).output.id;
+        parseShortcodeFor(
+          "purchase",
+          (
+            await createPurchase.read(
+              ["id"],
+              txDb,
+              purchaseCreateInput.parse({
+                vendorId: review.vendorId,
+                defaultTrade: review.trade,
+                date: fresh.date,
+                displayLabel: fresh.name,
+                purchaserOverrideId: review.purchaserId,
+              }),
+              actor,
+            )
+          ).output.id,
+        );
       let expenseId = null;
       if (fresh.action === "create_aggregate") {
-        const created = await createExpense(
+        const created = await createExpense.read(
+          ["id"],
           txDb,
           expenseCreateInput.parse({
             name: fresh.name,
@@ -548,9 +553,10 @@ export async function commitFinancialBooking(
           .update(expense)
           .set({ bookingTransactionCode: review.transactionId })
           .where(eq(expense.id, created.entityId));
-        expenseId = created.output.id;
+        expenseId = parseShortcodeFor("expense", created.output.id);
       }
-      await updateFinancialTransaction(
+      await updateFinancialTransaction.read(
+        ["id"],
         txDb,
         review.transactionId,
         {

@@ -177,7 +177,8 @@ export async function applyStatementTransactionSuggestion(
       appliedTransactionId = codeOf(targetId!);
       break;
     case "void":
-      await updateFinancialTransaction(
+      await updateFinancialTransaction.read(
+        ["id"],
         db,
         codeOf(targetId!),
         { status: "void" },
@@ -239,7 +240,8 @@ async function applyCreate(
 ) {
   const create = judgment.create!;
   await effects.claimRows();
-  const created = await createFinancialTransaction(
+  const created = await createFinancialTransaction.read(
+    ["id"],
     db,
     financialTransactionCreateInput.parse({
       accountId: accountCode,
@@ -257,7 +259,7 @@ async function applyCreate(
     }),
     effects.actor,
   );
-  return created.output.id;
+  return parseShortcodeFor("financialTransaction", created.output.id);
 }
 
 async function applyAttach(
@@ -274,7 +276,13 @@ async function applyAttach(
     ...statementTransactionPatch(judgment, application),
   };
   await effects.claimRows();
-  await updateFinancialTransaction(db, codeOf(targetId), data, effects.actor);
+  await updateFinancialTransaction.read(
+    ["id"],
+    db,
+    codeOf(targetId),
+    data,
+    effects.actor,
+  );
   return codeOf(targetId);
 }
 
@@ -313,7 +321,8 @@ async function applySupersede(
       effects.actor,
     );
   const transactionId = supersede.pendingTransactionId;
-  await updateFinancialTransaction(
+  await updateFinancialTransaction.read(
+    ["id"],
     db,
     codeOf(transactionId),
     {
