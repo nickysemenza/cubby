@@ -14,6 +14,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { inventoryScaffold } from "~/server/domains/inventory/repo/crud";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { executeSearchDocumentSql } from "~/server/generic/search/repo/search-document";
@@ -169,11 +170,19 @@ async function loadProductPlacements(db: Database, productIds: string[]) {
       ORDER BY "locationPath", lp.placement, lp.shortcode
     `,
   );
+  // Search can be the isolate's first operation. Load canonical field facts
+  // explicitly rather than depending on another route's scaffold registration.
+  const { fieldReads } = await inventoryScaffold.get(
+    db,
+    rows.map((row) => row.id),
+    [],
+  );
   const canonical = await publicFieldEnvelopeRows({
     db,
     entity: "inventory",
     schema: searchInventoryPlacementSchema,
     rows,
+    contexts: fieldReads,
   });
   const byProduct = new Map<string, SearchInventoryPlacement[]>();
   for (const [index, row] of rows.entries()) {
