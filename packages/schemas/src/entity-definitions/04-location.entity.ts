@@ -1,7 +1,10 @@
 import { timestampField, aliasList } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
-import { locationReadSchemas } from "../location-fields";
+import {
+  locationReadSchemas,
+  MAX_LOCATION_TREE_DEPTH,
+} from "../location-fields";
 import { labelField } from "./label-field.js";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
@@ -258,7 +261,7 @@ export const { definition, readSchemas } = defineEntityModel(
       },
     },
     model: {
-      hierarchy: { parentField: "parentId", maxDepth: 10 },
+      hierarchy: { parentField: "parentId", maxDepth: MAX_LOCATION_TREE_DEPTH },
       fields: [
         {
           key: "name",

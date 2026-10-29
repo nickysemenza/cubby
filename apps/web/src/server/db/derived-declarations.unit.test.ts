@@ -1,8 +1,11 @@
 import { getTableColumns, getTableName, is } from "drizzle-orm";
-import { PgTable } from "drizzle-orm/pg-core";
+import { PgTable, PgUUID } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
+import {
+  storedDerivedDeclarations,
+  type DerivedPathStep,
+} from "~/server/db/derived-declarations";
 import { derivedTriggerDdl } from "~/server/db/derived-trigger-ddl";
 import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 
@@ -16,7 +19,12 @@ for (const value of Object.values<unknown>(schema))
 const columnsByTable = new Map(
   tables.map((table) => [
     getTableName(table),
-    new Set(Object.values(getTableColumns(table)).map((column) => column.name)),
+    new Map(
+      Object.values(getTableColumns(table)).map((column) => [
+        column.name,
+        column,
+      ]),
+    ),
   ]),
 );
 
@@ -27,6 +35,23 @@ const missing = (table: string, columns: readonly string[]) => {
     .filter((column) => !known.has(column))
     .map((c) => `${table}.${c}`);
 };
+
+const missingPath = (path: readonly DerivedPathStep[]) =>
+  path.flatMap((step) => [
+    ...missing(step.table, [
+      step.from,
+      step.to,
+      ...Object.keys(step.where ?? {}),
+    ]),
+    ...(step.recursive
+      ? [step.from, step.to].flatMap((name) => {
+          const column = columnsByTable.get(step.table)?.get(name);
+          return column && is(column, PgUUID)
+            ? []
+            : [`${step.table}.${name} (recursive UUID)`];
+        })
+      : []),
+  ]);
 
 describe("stored derived declarations", () => {
   it("keeps current automatic ownership out of the derived cache and trigger targets", () => {
@@ -41,13 +66,10 @@ describe("stored derived declarations", () => {
     const problems = storedDerivedDeclarations().flatMap((declaration) => [
       ...missing(declaration.table, ["id"]),
       ...declaration.inputs.flatMap((input) => [
-        ...(input.path ?? []).flatMap((step) =>
-          missing(step.table, [
-            step.from,
-            step.to,
-            ...Object.keys(step.where ?? {}),
-          ]),
-        ),
+        ...[
+          ...(input.path ? [input.path] : []),
+          ...(input.paths ?? []),
+        ].flatMap(missingPath),
         ...missing(input.table, [
           input.tableColumn,
           ...(input.columns ?? []),
@@ -63,9 +85,7 @@ describe("stored derived declarations", () => {
         "targetWhere" in dependency
           ? missing(declaration.table, Object.keys(dependency.targetWhere))
           : "path" in dependency
-            ? dependency.path.flatMap((step) =>
-                missing(step.table, [step.from, step.to]),
-              )
+            ? missingPath(dependency.path)
             : "through" in dependency
               ? missing(dependency.through.table, [
                   dependency.through.source,

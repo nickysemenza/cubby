@@ -421,6 +421,13 @@
       "when": 1793235401600,
       "tag": "0059_sender_attribution_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1793278864315,
+      "tag": "0060_precise_location_fanout",
+      "breakpoints": true
     }
   ]
 }

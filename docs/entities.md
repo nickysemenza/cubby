@@ -2931,6 +2931,13 @@ even when linked IDs do not change. Recipe totals prepare a bounded batch of
 recipes through one shared costing context; the drain preserves tickets written
 during that preparation. WorkItem fanout lookup uses an indexed `COLLATE "C"`
 prefix range, including correlated target lookups.
+Location placement changes refresh Products reached through descendant Locations,
+recorded inventory and Location-as-Product instances, rather than the whole catalog.
+Declared parallel paths union their dependent IDs; recursive steps include their
+starting IDs and follow the declared tree depth with a cycle guard. For Product
+placement, the ten-edge bound matches the canonical ancestor reader, even when
+the stored tree is deeper; deleted ancestors remain in both walks because their
+names remain in saved placement paths. These walks run only in background fanout expansion, preserving source-only save capture.
 The drain's pre-compute fanout observation exposes each page target's prefix
 bounds directly in an OR predicate so the same index serves that read; a JSON
 target-list subquery must not turn each page into a whole-drain scan.
