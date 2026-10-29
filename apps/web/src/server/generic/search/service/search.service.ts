@@ -36,6 +36,7 @@ import { executeSearchDocumentSql } from "~/server/generic/search/repo/search-do
 import {
   buildPrefixTsQuery,
   exactCodeMatch,
+  indexedSearchArrayMatch,
   searchTerms,
 } from "~/server/generic/search/repo/search-lexical";
 import { liveAliasSql } from "~/server/lib/live-row";
@@ -208,6 +209,8 @@ export async function findLexicalSearchCandidates(
   const limit = Math.min(Math.max(input.limit ?? 5, 1), maxLimit);
   const entityKinds = scopes(input.entityKinds);
   const matchTerms = textArray(searchTerms(input.query));
+  // A mixed OR with array-element membership made PostgreSQL scan the corpus.
+  // Its own UNION arm lets both the lexical and array indexes admit candidates.
   const rows = await withTrace(
     TraceNames.service("search", "lexicalCandidates"),
     async (span) => {
@@ -241,9 +244,16 @@ export async function findLexicalSearchCandidates(
           ${exactCodeMatch(normalized)}
           OR lower(sd.title) = ${normalized}
           OR lower(sd.title) LIKE ${`${normalized}%`}
-          OR ${textArrayMatchSql({ values: sql`sd.aliases || sd.keywords`, query: normalized, match: "exact-or-prefix" })}
           OR sd."searchVector" @@ q.query
         )
+      UNION
+      SELECT sd.id FROM "SearchDocument" sd
+      WHERE ${liveAliasSql("sd")}
+        AND sd."entityKind" IN (${sql.join(
+          entityKinds.map((type) => sql`${type}`),
+          sql`, `,
+        )})
+        AND ${indexedSearchArrayMatch(sql`sd.aliases || sd.keywords`, normalized)}
       UNION
       SELECT id FROM fuzzy
     )
