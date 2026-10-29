@@ -2768,7 +2768,10 @@ export async function generateStatementSuggestionPage(
     1,
     Math.min(
       input.limit ?? STATEMENT_SUGGESTION_PAGE,
-      JOB_PAGE_LIMITS.suggestionsPerPage,
+      // Import generation also admits serial money writes before its checkpoint.
+      input.scope?.importId
+        ? JOB_PAGE_LIMITS.statementApplicationsPerPage
+        : JOB_PAGE_LIMITS.suggestionsPerPage,
     ),
   );
   const startedAt = performance.now();

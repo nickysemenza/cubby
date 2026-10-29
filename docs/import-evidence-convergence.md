@@ -641,6 +641,11 @@ prefix through the projection writer. A missing, replaced or rule-bearing receip
 stops the batch even when its rule is paused. Release the locks before ordinary
 application and reread the suffix after it. Import-scoped passes retain regeneration
 before each admission, since regeneration can introduce actionable rules.
+Import-scoped generation and retained generation retries admit at most 32 charges
+per page before recording their cursor. These pages regenerate and apply money
+sequentially; the smaller bound limits repeated work after interruption. Advice-only
+generation retains the 512-charge ceiling. This changes neither financial admission
+nor the retained retry population, and provides no wall-time guarantee.
 Interruption preserves reusable labels and completed publications.
 Retrying failed statement labels consumes only the retained charge references,
 one charge at a time, without moving the original population cursor. Each charge
