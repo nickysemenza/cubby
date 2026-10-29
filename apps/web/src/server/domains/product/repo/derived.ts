@@ -14,9 +14,10 @@ import { outer, quotedTable } from "~/server/db/helpers/related";
 import { product, expense } from "~/server/db/schema";
 import { productOwnershipCompute } from "~/server/domains/inventory/repo/derived";
 import { serviceProductSqlText } from "~/server/domains/product/repo/service-category";
-import type {
-  DerivedCompute,
-  DerivedComputed,
+import {
+  sharedDerivedPreparation,
+  type DerivedCompute,
+  type DerivedComputed,
 } from "~/server/generic/derived/repo/compute";
 
 import { loadProductPriceFacts } from "./pricing";
@@ -66,37 +67,43 @@ const computeProductPrice: DerivedCompute = async (db, ids) => {
   );
 };
 
-const computeProductQuantity =
-  (key: "ledgerExpectedQuantity" | "quantityVariance"): DerivedCompute =>
-  async (db, ids) => {
-    const summaries = await loadProductQuantitySummaries(
-      db,
-      ids.map((id) => parseEntityId("product", id)),
-    );
+const quantityPreparation = sharedDerivedPreparation((db, ids) =>
+  loadProductQuantitySummaries(
+    db,
+    ids.map((id) => parseEntityId("product", id)),
+  ),
+);
+const computeProductQuantity = (
+  key: "ledgerExpectedQuantity" | "quantityVariance",
+): DerivedCompute =>
+  quantityPreparation((summaries, ids) => {
+    const wanted = new Set(ids);
     return new Map(
-      [...summaries].map(([id, summary]) => {
-        const value =
-          key === "ledgerExpectedQuantity"
-            ? summary.quantityLedger.expectedQuantity
-            : summary.quantityVariance;
-        return [
-          id,
-          {
-            value,
-            sort: value,
-            decision: {
-              outcome:
-                value === null
-                  ? { kind: "empty" as const, reason: "unset" as const }
-                  : { kind: "value" as const },
-              provenance: fieldProvenance.parse({ kind: "computed" }),
-              evidence: summary,
+      [...summaries]
+        .filter(([id]) => wanted.has(id))
+        .map(([id, summary]) => {
+          const value =
+            key === "ledgerExpectedQuantity"
+              ? summary.quantityLedger.expectedQuantity
+              : summary.quantityVariance;
+          return [
+            id,
+            {
+              value,
+              sort: value,
+              decision: {
+                outcome:
+                  value === null
+                    ? { kind: "empty" as const, reason: "unset" as const }
+                    : { kind: "value" as const },
+                provenance: fieldProvenance.parse({ kind: "computed" }),
+                evidence: summary,
+              },
             },
-          },
-        ];
-      }),
+          ];
+        }),
     );
-  };
+  });
 
 /** Only services publish Cost; physical Cost projects the selected price read. */
 const computeServiceCost: DerivedCompute = async (db, ids) => {

@@ -64,7 +64,48 @@ export type DerivedCompute = {
   ): Promise<ReadonlyMap<string, DerivedComputed>>;
   /** Maximum same-adapter records sharing a preparation page; omitted keeps the conservative default. */
   readonly preparationBatchSize?: number;
+  readonly sharedPreparation?: DerivedSharedPreparation;
 };
+
+export interface DerivedSharedPreparation<Prepared = unknown> {
+  readonly source: object;
+  prepare(
+    db: Database | DrizzleTransaction,
+    ids: readonly string[],
+  ): Promise<Prepared>;
+  project(
+    prepared: Prepared,
+    ids: readonly string[],
+  ): ReadonlyMap<string, DerivedComputed>;
+}
+
+/** One immutable authoritative input set, shared only by a preparation page. */
+export const sharedDerivedPreparation =
+  <Prepared>(
+    prepare: (
+      db: Database | DrizzleTransaction,
+      ids: readonly string[],
+    ) => Promise<Prepared>,
+  ) =>
+  (
+    project: (
+      prepared: Prepared,
+      ids: readonly string[],
+    ) => ReadonlyMap<string, DerivedComputed>,
+  ): DerivedCompute =>
+    Object.assign(
+      async (db: Database | DrizzleTransaction, ids: readonly string[]) =>
+        project(await prepare(db, ids), ids),
+      {
+        sharedPreparation: {
+          source: prepare,
+          prepare,
+          // SAFETY: the source token identifies this exact preparation function.
+          project: (prepared: unknown, ids: readonly string[]) =>
+            project(prepared as Prepared, ids),
+        },
+      },
+    );
 
 /**
  * An adapter whose output lives in its own table (search documents, recipe
