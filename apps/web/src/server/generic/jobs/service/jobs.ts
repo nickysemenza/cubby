@@ -8,6 +8,7 @@ import {
 } from "~/server/generic/jobs/context";
 import { JobSupersededError } from "~/server/generic/jobs/errors";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
+import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
 import {
   assertJobClaim,
@@ -216,11 +217,13 @@ export async function drainDueJobs(
   const deadline = Date.now() + timeBudgetMs;
   let scheduled = 0;
   let settled = 0;
+  let progressed = 0;
   const reserved = new Set<string>();
-  // A lock or kind cap can outlast this invocation: do not spend every turn
-  // reselecting the same Job instead of healthy work.
-  const skipped = new Set<string>();
-  const selected: { id: string }[] = [];
+  // Kind caps can outlast this invocation. A row lock may clear while a
+  // sibling publishes, so reconsider uncapped refusals after real progress.
+  const cappedSkips = new Set<string>();
+  const busy = new Set<string>();
+  const selected: Awaited<ReturnType<typeof dueJobs>> = [];
   let selecting: Promise<boolean> | undefined;
   let failure: { reason: unknown } | undefined;
   const spent = () =>
@@ -233,7 +236,7 @@ export async function drainDueJobs(
     );
     if (remaining <= 0) return false;
     const candidates = await dueJobs(db, remaining, {
-      excludeIds: [...reserved, ...skipped],
+      excludeIds: [...reserved, ...cappedSkips, ...busy],
     });
     for (const candidate of candidates) {
       reserved.add(candidate.id);
@@ -261,10 +264,19 @@ export async function drainDueJobs(
     for (;;) {
       const candidate = await next();
       if (!candidate) return;
+      const progressBefore = progressed;
       try {
         const outcome = await advanceJob(db, candidate.id, handlers);
         outcomes.push(outcome);
-        if (outcome === "skipped") skipped.add(candidate.id);
+        if (outcome === "skipped") {
+          if (jobKindPolicy(candidate.kind).maxInFlight !== undefined)
+            cappedSkips.add(candidate.id);
+          // A sibling may have progressed while this refusal was in flight.
+          else if (progressBefore === progressed) busy.add(candidate.id);
+        } else {
+          progressed++;
+          busy.clear();
+        }
       } finally {
         reserved.delete(candidate.id);
         settled++;
