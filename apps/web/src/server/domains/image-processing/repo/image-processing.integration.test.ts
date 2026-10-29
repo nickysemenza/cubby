@@ -4,6 +4,7 @@ import {
   IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
   IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+  imageProcessingJobState,
 } from "@cubby/schemas/image-processing";
 import { JOB_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/job";
 import { providerFor } from "@cubby/shared/ai/models";
@@ -61,7 +62,10 @@ import {
   createImageProcessingJob,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
   retireObsoleteImageProcessingJobs,
+  repairImageProcessingExecution,
+  retryImageProcessingNow,
 } from "./image-processing";
 import { loadImageProcessingIssues } from "./image-processing-issues";
 import { persistImageProcessingSubmission } from "./image-processing-submission";
@@ -872,116 +876,363 @@ describe("durable image representations", () => {
     expect(analyses[0]?.result).toEqual(result.outcome.description);
   });
 
-  // Review finding: every executor `skipped` result terminalized the job,
-  // though no_subject, not_suitable and unsupported_format are executor
-  // verdicts, not moot endings (deletion, replacement, supersession, policy
-  // exclusion), which only the server decides. They now record a retryable
-  // failure that backs off and asks for attention after repeated failures.
-  it("retries an executor's no-subject skip as a recorded failure with no transparent URL and makes persisted failures queryable", async () => {
-    const row = await source();
-    const lease = await claimImageProcessingJob(ctx.db, {
-      jobId: row.jobId,
+  it("settles retained negative cutouts in bounded repair without changing attempts or live and failed work", async () => {
+    const legacy = async (reason: string) => {
+      const row = await source();
+      const lease = await claimImageProcessingJob(ctx.db, {
+        jobId: row.jobId,
+        kinds: ["subject_lift"],
+        leaseMs: 60_000,
+      });
+      if (!lease) throw new Error("Expected synthetic legacy lease");
+      // The previous server stored these executor skips as failures.
+      await completeImageProcessingJob(ctx.db, {
+        result: {
+          jobId: row.jobId,
+          attemptId: lease.attemptId,
+          completedAt: new Date().toISOString(),
+          outcome: {
+            kind: "subject_lift",
+            status: "failed",
+            retryable: true,
+            reason,
+          },
+        },
+      });
+      return row;
+    };
+    const first = await legacy("no_subject");
+    const second = await legacy("not_suitable");
+    // Older persisted skips can also have been reopened as pending work.
+    await getDb(ctx.db)
+      .update(imageProcessingAttempt)
+      .set({
+        state: "skipped",
+        result: {
+          kind: "subject_lift",
+          status: "skipped",
+          reason: "not_suitable",
+        },
+      })
+      .where(eq(imageProcessingAttempt.jobId, second.jobId));
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({
+        result: {
+          kind: "subject_lift",
+          status: "skipped",
+          reason: "not_suitable",
+        },
+      })
+      .where(eq(imageProcessingJob.id, second.jobId));
+    const failure = await legacy("context_size_exceeded");
+    const unsupported = await legacy("unsupported_format");
+    const active = await legacy("no_subject");
+    await updateJobs(
+      ctx.db,
+      { key: `image-processing:${active.jobId}` },
+      { availableAt: new Date(0) },
+    );
+    const activeLease = await claimImageProcessingJob(ctx.db, {
+      jobId: active.jobId,
       kinds: ["subject_lift"],
-      leaseMs: 60000,
+      leaseMs: 60_000,
     });
-    if (!lease) throw new Error("Expected lease");
+    expect(activeLease).not.toBeNull();
+    const descriptionId = await createImageProcessingJob(ctx.db, {
+      imageId: parseEntityId("image", first.id),
+      kind: "describe_image",
+      sourceContentHash: hash,
+      processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+    });
+    if (!descriptionId) throw new Error("Expected Apple description job");
+    const descriptionLease = await claimImageProcessingJob(ctx.db, {
+      jobId: descriptionId,
+      kinds: ["describe_image"],
+      leaseMs: 60_000,
+    });
+    if (!descriptionLease) throw new Error("Expected Apple description lease");
     await completeImageProcessingJob(ctx.db, {
       result: {
-        jobId: row.jobId,
-        attemptId: lease.attemptId,
+        jobId: descriptionId,
+        attemptId: descriptionLease.attemptId,
         completedAt: new Date().toISOString(),
         outcome: {
-          kind: "subject_lift",
+          kind: "describe_image",
           status: "skipped",
           reason: "no_subject",
         },
       },
     });
+    const ids = [
+      first.jobId,
+      second.jobId,
+      failure.jobId,
+      unsupported.jobId,
+      active.jobId,
+      descriptionId,
+    ];
+    const attempts = () =>
+      getDb(ctx.db)
+        .select()
+        .from(imageProcessingAttempt)
+        .where(inArray(imageProcessingAttempt.jobId, ids))
+        .orderBy(imageProcessingAttempt.id);
+    const evidence = () =>
+      getDb(ctx.db)
+        .select({
+          id: imageProcessingJob.id,
+          result: imageProcessingJob.result,
+          runtime: imageProcessingJob.runtime,
+          sourceContentHash: imageProcessingJob.sourceContentHash,
+          processorRevision: imageProcessingJob.processorRevision,
+        })
+        .from(imageProcessingJob)
+        .where(inArray(imageProcessingJob.id, ids))
+        .orderBy(imageProcessingJob.id);
+    const beforeAttempts = await attempts();
+    const beforeEvidence = await evidence();
+    expect(await repairImageProcessingExecution(ctx.db, 1)).toMatchObject({
+      negativesSettled: 1,
+      more: true,
+    });
     expect(
-      (await loadImageRepresentations(ctx.db, [row.shortcode])).get(
-        row.shortcode,
-      )?.transparent,
-    ).toBeNull();
-    const [skipped] = await getDb(ctx.db)
-      .select()
-      .from(imageProcessingJob)
-      .where(eq(imageProcessingJob.id, row.jobId));
-    expect(skipped).toMatchObject({
-      state: "pending",
-      lastError: "no_subject",
-    });
-    const [execution] = await readJobs(ctx.db, {
-      key: `image-processing:${row.jobId}`,
-    });
-    expect(execution).toMatchObject({ state: "retry_wait", attempts: 1 });
-    expect(execution!.availableAt.getTime()).toBeGreaterThan(Date.now());
-    const [attempt] = await getDb(ctx.db)
-      .select()
-      .from(imageProcessingAttempt)
-      .where(eq(imageProcessingAttempt.id, lease.attemptId));
-    expect(attempt).toMatchObject({ state: "failed", error: "no_subject" });
-    const failed = await source();
-    const failedLease = await claimImageProcessingJob(ctx.db, {
-      jobId: failed.jobId,
-      kinds: ["subject_lift"],
-      leaseMs: 60000,
-    });
-    if (!failedLease?.derivativeKey) throw new Error("Expected output lease");
-    await completeImageProcessingJob(ctx.db, {
-      orphanOutputKey: failedLease.derivativeKey,
-      result: {
-        jobId: failed.jobId,
-        attemptId: failedLease.attemptId,
-        completedAt: new Date().toISOString(),
-        outcome: {
-          kind: "subject_lift",
-          status: "failed",
-          reason: "Invalid output",
-          retryable: false,
-        },
-      },
-    });
-    const retired = await getDb(ctx.db)
-      .select()
-      .from(imageProcessingOrphan)
-      .where(eq(imageProcessingOrphan.key, failedLease.derivativeKey));
-    expect(retired).toHaveLength(1);
-    // One failure only backs off; repeated failures ask for attention.
+      (await repairImageProcessingExecution(ctx.db, 10)).negativesSettled,
+    ).toBe(1);
+    expect(
+      (await repairImageProcessingExecution(ctx.db, 10)).negativesSettled,
+    ).toBe(0);
+    expect(await attempts()).toEqual(beforeAttempts);
+    expect(await evidence()).toEqual(beforeEvidence);
     expect(
       (
-        await imageScaffold.read(ctx.db, {
-          filters: { processingIssue: "failed" },
-          sorts: [],
-          pagination: {
-            pageIndex: 0,
-            pageSize: 100,
-          },
-        })
-      ).data,
-    ).toEqual([]);
-    await updateJobs(
-      ctx.db,
-      { key: `image-processing:${failed.jobId}` },
-      { attempts: JOB_NEEDS_ATTENTION_ATTEMPTS },
-    );
-    const problems = await imageScaffold.read(ctx.db, {
-      filters: { processingIssue: "failed" },
-      sorts: [],
-      pagination: { pageIndex: 0, pageSize: 100 },
-    });
-    expect(problems.data.map((item) => item.id)).toEqual([failed.shortcode]);
-    expect(problems.data[0]?.processingIssue).toBe("failed");
-    await expect(
-      getDb(ctx.db)
-        .update(imageDerivative)
-        .set({
-          status: "ready",
-          contentType: null,
-          width: 1,
-          height: 1,
-          sha256: hash,
-        })
-        .where(eq(imageDerivative.id, failed.derivativeId)),
-    ).rejects.toThrow(/check constraint|Failed query/);
+        await getDb(ctx.db)
+          .select({ state: imageProcessingJob.state })
+          .from(imageProcessingJob)
+          .where(inArray(imageProcessingJob.id, [first.jobId, second.jobId]))
+      ).map((row) => row.state),
+    ).toEqual([
+      imageProcessingJobState.enum.skipped,
+      imageProcessingJobState.enum.skipped,
+    ]);
+    for (const row of [first, second]) {
+      expect(
+        (await readJobs(ctx.db, { key: `image-processing:${row.jobId}` }))[0]
+          ?.state,
+      ).toBe("completed");
+      expect(
+        (
+          await getDb(ctx.db)
+            .select({ status: imageDerivative.status })
+            .from(imageDerivative)
+            .where(eq(imageDerivative.id, row.derivativeId))
+        )[0]?.status,
+      ).toBe("skipped");
+    }
+    for (const row of [failure, unsupported]) {
+      expect(
+        (await readJobs(ctx.db, { key: `image-processing:${row.jobId}` }))[0]
+          ?.state,
+      ).toBe("retry_wait");
+    }
+    expect(
+      (await readJobs(ctx.db, { key: `image-processing:${descriptionId}` }))[0]
+        ?.state,
+    ).toBe("retry_wait");
+    expect(
+      (await readJobs(ctx.db, { key: `image-processing:${active.jobId}` }))[0]
+        ?.state,
+    ).toBe("running");
+    expect(
+      await retryImageProcessingNow(ctx.db, {
+        imageId: parseEntityId("image", first.id),
+        kinds: ["subject_lift"],
+      }),
+    ).toEqual([first.jobId]);
+    expect(
+      (await repairImageProcessingExecution(ctx.db, 10)).negativesSettled,
+    ).toBe(0);
+    expect(
+      await claimImageProcessingJob(ctx.db, {
+        jobId: first.jobId,
+        kinds: ["subject_lift"],
+        leaseMs: 60_000,
+      }),
+    ).not.toBeNull();
   });
+
+  // Negative cutout evidence is final for these inputs; explicit retry and changed inputs
+  // create new work without weakening real processing failures or discarding prior attempts.
+  it.each(["no_subject", "not_suitable"] as const)(
+    "settles %s cutouts without automatic retries while retaining explicit retry and real failures",
+    async (reason) => {
+      const row = await source();
+      const lease = await claimImageProcessingJob(ctx.db, {
+        jobId: row.jobId,
+        kinds: ["subject_lift"],
+        leaseMs: 60000,
+      });
+      if (!lease) throw new Error("Expected lease");
+      await completeImageProcessingJob(ctx.db, {
+        result: {
+          jobId: row.jobId,
+          attemptId: lease.attemptId,
+          completedAt: new Date().toISOString(),
+          outcome: {
+            kind: "subject_lift",
+            status: "skipped",
+            reason,
+          },
+        },
+      });
+      expect(
+        (await loadImageRepresentations(ctx.db, [row.shortcode])).get(
+          row.shortcode,
+        )?.transparent,
+      ).toBeNull();
+      const [skipped] = await getDb(ctx.db)
+        .select()
+        .from(imageProcessingJob)
+        .where(eq(imageProcessingJob.id, row.jobId));
+      expect(skipped).toMatchObject({
+        state: "skipped",
+        lastError: null,
+        result: { kind: "subject_lift", status: "skipped", reason },
+      });
+      const [execution] = await readJobs(ctx.db, {
+        key: `image-processing:${row.jobId}`,
+      });
+      expect(execution).toMatchObject({ state: "completed", leaseToken: null });
+      const [attempt] = await getDb(ctx.db)
+        .select()
+        .from(imageProcessingAttempt)
+        .where(eq(imageProcessingAttempt.id, lease.attemptId));
+      expect(attempt).toMatchObject({ state: "skipped", error: reason });
+      expect(
+        (await repairImageProcessingExecution(ctx.db, 10)).negativesSettled,
+      ).toBe(0);
+      expect(
+        (
+          await createTransparentDerivativeAndJob(ctx.db, {
+            imageId: parseEntityId("image", row.id),
+            sourceContentHash: hash,
+            key: "tests/unchanged-source.png",
+          })
+        )?.jobId,
+      ).toBe(row.jobId);
+      expect(
+        await claimImageProcessingJob(ctx.db, {
+          jobId: row.jobId,
+          kinds: ["subject_lift"],
+          leaseMs: 60_000,
+        }),
+      ).toBeNull();
+      expect(
+        await retryImageProcessingNow(ctx.db, {
+          imageId: parseEntityId("image", row.id),
+        }),
+      ).toEqual([row.jobId]);
+      expect(
+        (await repairImageProcessingExecution(ctx.db, 10)).negativesSettled,
+      ).toBe(0);
+      const retried = await claimImageProcessingJob(ctx.db, {
+        jobId: row.jobId,
+        kinds: ["subject_lift"],
+        leaseMs: 60_000,
+      });
+      expect(retried?.attemptId).not.toBe(lease.attemptId);
+      expect(retried).not.toBeNull();
+      expect(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(imageProcessingAttempt)
+            .where(eq(imageProcessingAttempt.id, lease.attemptId))
+        )[0],
+      ).toEqual(attempt);
+      const replacementHash = "b".repeat(64);
+      await getDb(ctx.db)
+        .update(image)
+        .set({ sha256: replacementHash })
+        .where(eq(image.id, row.id));
+      const changed = await createTransparentDerivativeAndJob(ctx.db, {
+        imageId: parseEntityId("image", row.id),
+        sourceContentHash: replacementHash,
+        key: "tests/replaced-source.png",
+      });
+      expect(changed?.jobId).not.toBe(row.jobId);
+      expect(changed).not.toBeNull();
+      const revised = await createImageProcessingJob(ctx.db, {
+        imageId: parseEntityId("image", row.id),
+        kind: "subject_lift",
+        sourceContentHash: replacementHash,
+        processorRevision: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION + 1,
+      });
+      expect(revised).not.toBeNull();
+      expect(revised).not.toBe(changed?.jobId);
+      const failed = await source();
+      const failedLease = await claimImageProcessingJob(ctx.db, {
+        jobId: failed.jobId,
+        kinds: ["subject_lift"],
+        leaseMs: 60000,
+      });
+      if (!failedLease?.derivativeKey) throw new Error("Expected output lease");
+      await completeImageProcessingJob(ctx.db, {
+        orphanOutputKey: failedLease.derivativeKey,
+        result: {
+          jobId: failed.jobId,
+          attemptId: failedLease.attemptId,
+          completedAt: new Date().toISOString(),
+          outcome: {
+            kind: "subject_lift",
+            status: "failed",
+            reason: "Invalid output",
+            retryable: false,
+          },
+        },
+      });
+      const retired = await getDb(ctx.db)
+        .select()
+        .from(imageProcessingOrphan)
+        .where(eq(imageProcessingOrphan.key, failedLease.derivativeKey));
+      expect(retired).toHaveLength(1);
+      // One failure only backs off; repeated failures ask for attention.
+      expect(
+        (
+          await imageScaffold.read(ctx.db, {
+            filters: { processingIssue: "failed" },
+            sorts: [],
+            pagination: {
+              pageIndex: 0,
+              pageSize: 100,
+            },
+          })
+        ).data,
+      ).toEqual([]);
+      await updateJobs(
+        ctx.db,
+        { key: `image-processing:${failed.jobId}` },
+        { attempts: JOB_NEEDS_ATTENTION_ATTEMPTS },
+      );
+      const problems = await imageScaffold.read(ctx.db, {
+        filters: { processingIssue: "failed" },
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 100 },
+      });
+      expect(problems.data.map((item) => item.id)).toEqual([failed.shortcode]);
+      expect(problems.data[0]?.processingIssue).toBe("failed");
+      await expect(
+        getDb(ctx.db)
+          .update(imageDerivative)
+          .set({
+            status: "ready",
+            contentType: null,
+            width: 1,
+            height: 1,
+            sha256: hash,
+          })
+          .where(eq(imageDerivative.id, failed.derivativeId)),
+      ).rejects.toThrow(/check constraint|Failed query/);
+    },
+  );
 });

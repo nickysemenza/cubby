@@ -224,7 +224,8 @@ optional generated claims are trimmed and removed from the outgoing copy, includ
 replayed results; the original stays on disk until a successful server response.
 Superseded attempts remain subject to the server's existing adoption checks.
 Charging windows also separate compute from one serial sender and renew recorded
-attempts while the window remains active. Their task group joins computation,
+attempts while the window remains active. Once a result is acknowledged, its stale renewal
+refusals are ignored; refusals for executing or still-pending attempts remain visible. Their task group joins computation,
 delivery and renewal before returning. Window expiry releases unrecorded work and
 retains recorded attempts for replay.
 

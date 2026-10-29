@@ -198,6 +198,21 @@ export const compatibleSubjectLiftOutputs = [
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 ];
 
+const negativeSubjectLiftReasons = ["no_subject", "not_suitable"] as const;
+
+const retainedNegativeSubjectLift = () =>
+  and(
+    eq(imageProcessingJob.kind, "subject_lift"),
+    inArray(sql`${imageProcessingJob.result}->>'status'`, [
+      "skipped",
+      "failed",
+    ]),
+    inArray(
+      sql`${imageProcessingJob.result}->>'reason'`,
+      negativeSubjectLiftReasons,
+    ),
+  );
+
 /**
  * Jobs are unique by an integer revision. Derive that revision from every
  * cloud-analysis input that changes the result so a model, provider, prompt,
@@ -1125,6 +1140,7 @@ export async function retryImageProcessingNow(
       .select({
         id: imageProcessingJob.id,
         attempts: imageProcessingJob.attempts,
+        state: imageProcessingJob.state,
       })
       .from(imageProcessingJob)
       .innerJoin(
@@ -1139,7 +1155,13 @@ export async function retryImageProcessingNow(
         and(
           // `failed` is a legacy terminal state the migration reopened for
           // current processors; any left over is reopened here too.
-          inArray(imageProcessingJob.state, ["pending", "failed"]),
+          or(
+            inArray(imageProcessingJob.state, ["pending", "failed"]),
+            and(
+              eq(imageProcessingJob.state, "skipped"),
+              retainedNegativeSubjectLift(),
+            ),
+          ),
           eq(imageProcessingJob.imageId, options.imageId),
           options.kinds
             ? inArray(imageProcessingJob.kind, [...options.kinds])
@@ -1156,6 +1178,11 @@ export async function retryImageProcessingNow(
       .set({
         state: "pending",
         completedAt: null,
+        // Keep the negative evidence, but detach its settled attempt so maintenance cannot
+        // mistake this explicit retry for legacy work still waiting for policy settlement.
+        attemptId: sql`CASE WHEN ${retainedNegativeSubjectLift()}
+          AND NOT ${externalLeaseHeld(sql`'image-processing:' || ${imageProcessingJob.id}::text`, sql`${imageProcessingJob.attemptId}`)}
+          THEN NULL ELSE ${imageProcessingJob.attemptId} END`,
         ...(options.submissionId ? { submissionId: options.submissionId } : {}),
       })
       .where(inArray(imageProcessingJob.id, ids));
@@ -1172,6 +1199,12 @@ export async function retryImageProcessingNow(
         )
         .onConflictDoNothing();
     const transactionDb = databaseForTransaction(tx);
+    await restartExternalJobs(
+      transactionDb,
+      rows
+        .filter((row) => row.state === "skipped")
+        .map((row) => imageProcessingJobKey(row.id)),
+    );
     const reopened = await tx
       .select({
         id: imageProcessingJob.id,
@@ -1207,9 +1240,111 @@ const strandedImageWork =
   AND NOT EXISTS (SELECT 1 FROM "Job" dj WHERE dj.key = 'image-processing:' || "ImageProcessingJob".id::text
     AND dj.state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}))`;
 
+/** Settle retained negative cutout evidence without executing it again or rewriting history. */
+async function settleRetainedNegativeSubjectLifts(
+  db: Database,
+  limit: number,
+): Promise<number> {
+  return withTransaction(db, async (tx) => {
+    const [execution, join] = externalExecution.join(
+      sql`'image-processing:' || ${imageProcessingJob.id}::text`,
+    );
+    const rows = await tx
+      .select({
+        id: imageProcessingJob.id,
+        imageId: imageProcessingJob.imageId,
+      })
+      .from(imageProcessingJob)
+      .innerJoin(execution, join)
+      .innerJoin(
+        image,
+        and(eq(image.id, imageProcessingJob.imageId), notDeleted(image)),
+      )
+      .innerJoin(
+        imageProcessingAttempt,
+        and(
+          eq(imageProcessingAttempt.id, imageProcessingJob.attemptId),
+          eq(imageProcessingAttempt.jobId, imageProcessingJob.id),
+          inArray(imageProcessingAttempt.state, ["failed", "skipped"]),
+          eq(
+            sql`${imageProcessingAttempt.result}->>'reason'`,
+            sql`${imageProcessingJob.result}->>'reason'`,
+          ),
+        ),
+      )
+      .where(
+        and(
+          eq(imageProcessingJob.state, "pending"),
+          notDeleted(imageProcessingJob),
+          retainedNegativeSubjectLift(),
+          eq(
+            imageProcessingJob.processorRevision,
+            IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+          ),
+          eq(image.sha256, imageProcessingJob.sourceContentHash),
+          eq(image.status, ImageStatus.enum.UPLOADED),
+          externalExecution.unclaimed(),
+        ),
+      )
+      .orderBy(asc(imageProcessingJob.id))
+      .limit(limit)
+      .for("update", {
+        of: [execution, imageProcessingJob, image],
+        skipLocked: true,
+      });
+    if (!rows.length) return 0;
+    const ids = rows.map((row) => row.id);
+    await tx
+      .update(imageDerivative)
+      .set({
+        status: "skipped",
+        failureReason: sql`${imageProcessingJob.result}->>'reason'`,
+      })
+      .from(imageProcessingJob)
+      .where(
+        and(
+          inArray(imageProcessingJob.id, ids),
+          eq(imageDerivative.id, imageProcessingJob.derivativeId),
+          eq(
+            imageDerivative.sourceContentHash,
+            imageProcessingJob.sourceContentHash,
+          ),
+          notDeleted(imageDerivative),
+          ne(imageDerivative.status, "ready"),
+        ),
+      );
+    await tx
+      .update(imageProcessingJob)
+      .set({
+        state: "skipped",
+        attemptId: null,
+        completedAt: sql`now()`,
+        lastError: null,
+      })
+      .where(inArray(imageProcessingJob.id, ids));
+    await retireExternalJobs(
+      databaseForTransaction(tx),
+      ids.map(imageProcessingJobKey),
+      {
+        outcome: "skipped",
+      },
+    );
+    await recordChange(tx, {
+      kind: "projection",
+      categories: ["image", "imageJob", "relatedData"],
+      changes: await imageProcessingRecordChanges(
+        tx,
+        ids,
+        rows.map((row) => row.imageId),
+      ),
+    });
+    return rows.length;
+  });
+}
+
 /**
  * Self-healing for image execution, run by recurring maintenance in bounded
- * batches: retire moot work, reopen legacy terminal or leased rows, and give
+ * batches: settle retained negative cutouts, retire moot work, reopen legacy leased rows, and give
  * every open row a live Job in its lane. Image work is never abandoned, so a
  * stopped execution of open work is always a bug to repair, not a decision.
  */
@@ -1218,6 +1353,7 @@ export async function repairImageProcessingExecution(
   limit: number,
 ) {
   const retired = await retireObsoleteImageProcessingJobs(db, { limit });
+  const negativesSettled = await settleRetainedNegativeSubjectLifts(db, limit);
   // Device work an older build backed off never armed the wake, and the
   // drain never claims it; arming the existing wake while parked work exists
   // keeps it from idling until an unrelated ring or reconnect.
@@ -1263,10 +1399,14 @@ export async function repairImageProcessingExecution(
   }
   return {
     retired,
+    negativesSettled,
     reopened: reopened.length,
     restarted: stranded.length,
     more:
-      retired >= limit || reopened.length >= limit || stranded.length >= limit,
+      retired >= limit ||
+      negativesSettled >= limit ||
+      reopened.length >= limit ||
+      stranded.length >= limit,
   };
 }
 
@@ -1445,16 +1585,17 @@ async function adoptFailedCompletion(
 }
 
 /**
- * An executor's `skipped` (no_subject, not_suitable, unsupported_format) is
- * its verdict on one attempt, not a moot ending: only the server ends work
- * as moot (deletion, replacement, supersession, policy exclusion, in
- * `retireObsoleteImageProcessingJobs`). It is recorded as a retryable
- * failure that keeps its reason code, so the work backs off, runs again, and
- * asks for attention after repeated failures like any other failure.
+ * A negative subject-lift result settles these exact source/processor inputs.
+ * Other executor skips still retry with their cause recorded.
  */
 function reportedSkipAsFailure(input: CompletionInput): CompletionInput {
   const outcome = input.result.outcome;
   if (outcome.status !== "skipped") return input;
+  if (
+    outcome.kind === "subject_lift" &&
+    negativeSubjectLiftReasons.some((reason) => outcome.reason === reason)
+  )
+    return input;
   const failed = {
     status: "failed" as const,
     retryable: true,
@@ -1464,6 +1605,47 @@ function reportedSkipAsFailure(input: CompletionInput): CompletionInput {
     ...input,
     result: { ...input.result, outcome: { ...failed, kind: outcome.kind } },
   };
+}
+
+async function adoptNegativeSubjectLiftCompletion(
+  tx: DrizzleTransaction,
+  job: CompletionJob,
+  input: CompletionInput,
+): Promise<boolean> {
+  const outcome = input.result.outcome;
+  if (
+    outcome.kind !== "subject_lift" ||
+    outcome.status !== "skipped" ||
+    !negativeSubjectLiftReasons.some((reason) => outcome.reason === reason)
+  )
+    return false;
+  if (job.derivativeId)
+    await tx
+      .update(imageDerivative)
+      .set({
+        status: "skipped",
+        failureReason: outcome.reason,
+      })
+      .where(
+        and(
+          eq(imageDerivative.id, job.derivativeId),
+          eq(imageDerivative.sourceContentHash, job.sourceContentHash),
+          notDeleted(imageDerivative),
+          ne(imageDerivative.status, "ready"),
+        ),
+      );
+  await tx
+    .update(imageProcessingJob)
+    .set({
+      attemptId: null,
+      runtime: input.runtime ?? null,
+      result: outcome,
+      state: "skipped",
+      completedAt: sql`now()`,
+      lastError: null,
+    })
+    .where(eq(imageProcessingJob.id, job.id));
+  return true;
 }
 
 async function adoptSuccessfulCompletion(
@@ -1633,6 +1815,7 @@ export async function completeImageProcessingJob(
     }
     const adopted =
       (await adoptFailedCompletion(tx, job, input, execution)) ||
+      (await adoptNegativeSubjectLiftCompletion(tx, job, input)) ||
       (await adoptSuccessfulCompletion(tx, job, input));
     if (!adopted) return { adopted: false, orphanKey: null };
     const outcome = input.result.outcome;
@@ -1647,13 +1830,15 @@ export async function completeImageProcessingJob(
       })
       .where(eq(imageProcessingAttempt.id, input.result.attemptId))
       .returning({ id: imageProcessingAttempt.id });
-    // A failure before any executor took the lease has no attempt row yet; it
-    // still counts toward the retry limit and stays visible in history.
-    if (!recorded.length && outcome.status === "failed")
+    // A verdict before an executor record exists still retains its fenced attempt evidence.
+    if (
+      !recorded.length &&
+      (outcome.status === "failed" || outcome.status === "skipped")
+    )
       await insertImageProcessingAttempt(tx, {
         jobId: job.id,
         attemptId: input.result.attemptId,
-        state: "failed",
+        state: outcome.status,
         error: outcome.reason,
         result: outcome,
       });

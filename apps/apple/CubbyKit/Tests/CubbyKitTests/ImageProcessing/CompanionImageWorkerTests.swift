@@ -104,6 +104,99 @@ struct CompanionImageWorkerTests {
         await worker.stop()
     }
 
+    @Test func acknowledgedResultDoesNotReportLostLeaseWhileAnotherIsPending() async throws {
+        let store = try outbox()
+        for command in [
+            try describeCommand(),
+            try describeCommand(
+                job: "00000000-0000-4000-8000-000000000003",
+                attempt: "00000000-0000-4000-8000-000000000004"),
+        ] {
+            let result = try Self.failedResult(command)
+            try await store.record(result, for: result.jobId)
+        }
+        let completion = Gate()
+        let heartbeat = Gate()
+        let warning = Gate()
+        let failures = Mutex<[String]>([])
+        let transport = QueuedCompanionTransport(
+            commands: [], completionGate: completion, refuseDeliveredRenewals: true,
+            renewal: .refused(reason: "lease_lost"))
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Synthetic Mac", foreground: true,
+            maximumConcurrentCommands: 1, outbox: store, transport: transport,
+            failureObserver: { error in
+                guard error is CompanionLeaseRefused else { return }
+                failures.withLock { $0.append(String(describing: error)) }
+                warning.signal()
+            },
+            execute: { try Self.failedResult($0) },
+            heartbeatPause: { try await heartbeat.pass() })
+        await worker.start()
+        await worker.requestDrain()
+        await completion.arrivals()
+        completion.release()
+        await completion.arrivals(2)
+        #expect(await transport.delivered.count == 1)
+        #expect(try await store.pending().count == 1)
+        await heartbeat.arrivals(2)
+        let acknowledgedHeartbeat = try #require(
+            await worker.deliveryHeartbeat(for: "00000000-0000-4000-8000-000000000001"))
+        let pendingHeartbeat = try #require(
+            await worker.deliveryHeartbeat(for: "00000000-0000-4000-8000-000000000003"))
+        heartbeat.release(2)
+        await warning.arrivals()
+        await acknowledgedHeartbeat.value
+        await pendingHeartbeat.value
+        #expect(failures.withLock { $0.count } == 1)
+        #expect(failures.withLock { $0[0] }.contains("00000000-0000-4000-8000-000000000003"))
+        #expect(await transport.delivered.count == 1)
+        completion.open()
+        await worker.commandsIdle()
+        #expect(try await store.pending().isEmpty)
+        await worker.stop()
+    }
+
+    /// A renewal already sent can answer after the result was acknowledged. Its refusal is stale.
+    @Test func acknowledgedResultIgnoresAnInFlightRenewalRefusal() async throws {
+        let store = try outbox()
+        let result = try Self.failedResult(try describeCommand())
+        try await store.record(result, for: result.jobId)
+        let completion = Gate()
+        let heartbeat = Gate()
+        let renewal = Gate()
+        let failures = Mutex<[String]>([])
+        let transport = QueuedCompanionTransport(
+            commands: [], completionGate: completion, renewalGate: renewal,
+            renewal: .refused(reason: "lease_lost"))
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Synthetic Mac", foreground: true,
+            outbox: store, transport: transport,
+            failureObserver: { error in
+                if let refusal = error as? CompanionLeaseRefused {
+                    failures.withLock { $0.append(refusal.jobID) }
+                }
+            },
+            execute: { try Self.failedResult($0) },
+            heartbeatPause: { try await heartbeat.pass() })
+        await worker.start()
+        await worker.requestDrain()
+        await completion.arrivals()
+        await heartbeat.arrivals()
+        heartbeat.release()
+        await renewal.arrivals()
+        let heartbeatTask = try #require(await worker.deliveryHeartbeat(for: result.jobId))
+        completion.open()
+        await worker.commandsIdle()
+        #expect(try await store.pending().isEmpty)
+        renewal.open()
+        await heartbeatTask.value
+        await worker.stopAndReleaseClaims()
+        #expect(failures.withLock { $0.isEmpty })
+    }
+
     /// A slow completion response cannot occupy a compute slot or hold a pull behind replay.
     @Test func slowDeliveryDoesNotHoldComputeSlots() async throws {
         let store = try outbox()
@@ -360,11 +453,13 @@ struct CompanionImageWorkerTests {
         let execution = Gate()
         let recording = Gate()
         let store = try outbox()
+        let transport = QueuedCompanionTransport(
+            commands: [], undeliverableJobs: ["00000000-0000-4000-8000-000000000001"])
         let worker = CompanionImageWorker(
             baseURL: URL(string: "http://localhost:3000")!,
             credentials: try credentials(bearer: "tok"),
             deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
-            outbox: store, transport: QueuedCompanionTransport(commands: [], delivers: false),
+            outbox: store, transport: transport,
             execute: { command in
                 try? await execution.pass()
                 return try Self.failedResult(command)
@@ -373,6 +468,7 @@ struct CompanionImageWorkerTests {
                 await recording.hold()
                 try await store.record(result, for: key)
             })
+        await worker.start()
         await worker.startCommand(try describeCommand())
         await execution.arrivals(1)
         #expect(
@@ -386,11 +482,24 @@ struct CompanionImageWorkerTests {
             try await worker.drainState()
                 == .init(connected: false, outstandingCommands: 1, pendingResults: 0))
 
+        // A concurrent replay must not prune the heartbeat transferred to the unfinished write.
+        let replay = try Self.failedResult(
+            try describeCommand(
+                job: "00000000-0000-4000-8000-000000000003",
+                attempt: "00000000-0000-4000-8000-000000000004"))
+        try await store.record(replay, for: "synthetic-replay")
+        await worker.setParticipating(true)
+        await worker.requestDrain()
+        await transport.completions.arrivals()
+        #expect(
+            await worker.deliveryHeartbeat(
+                for: "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002") != nil)
         recording.open()
         await worker.commandsIdle()
         #expect(
             try await worker.drainState()
                 == .init(connected: false, outstandingCommands: 0, pendingResults: 1))
+        await worker.stop()
     }
 
     /// Regression: `drainState()` read the command count before awaiting the outbox, so a command
@@ -684,6 +793,8 @@ private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
     private let undeliverableJobs: Set<String>
     private let pullGate: Gate?
     private let completionGate: Gate?
+    private let renewalGate: Gate?
+    private let refuseDeliveredRenewals: Bool
     private let pullError: (any Error)?
     private let renewal: CompanionLeaseRenewal
     private(set) var pulls = 0
@@ -697,7 +808,8 @@ private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
     init(
         commands: [ImageProcessingCommand], delivers: Bool = true, failingCompletions: Int = 0,
         undeliverableJobs: Set<String> = [], pullGate: Gate? = nil, pullError: (any Error)? = nil,
-        completionGate: Gate? = nil,
+        completionGate: Gate? = nil, renewalGate: Gate? = nil,
+        refuseDeliveredRenewals: Bool = false,
         renewal: CompanionLeaseRenewal = .renewed(leaseExpiresAt: .distantFuture)
     ) {
         self.commands = commands
@@ -706,6 +818,8 @@ private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
         self.undeliverableJobs = undeliverableJobs
         self.pullGate = pullGate
         self.completionGate = completionGate
+        self.renewalGate = renewalGate
+        self.refuseDeliveredRenewals = refuseDeliveredRenewals
         self.pullError = pullError
         self.renewal = renewal
     }
@@ -745,6 +859,10 @@ private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
         -> CompanionLeaseRenewal
     {
         renewals.signal()
+        await renewalGate?.hold()
+        if refuseDeliveredRenewals, delivered.contains(claim.jobID) {
+            return .refused(reason: "lease_lost")
+        }
         return renewal
     }
 }
