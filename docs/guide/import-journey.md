@@ -61,7 +61,7 @@ its seller proof and Vendor search scope. The stored member decision and earlier
 Purchases remain intact. Unmapped addresses with accepted receipts from multiple
 sellers remain shared. Learned mappings whose supporting evidence is no longer
 current also lose proof.
-Shared senders and the Vendor coverage inspector show the saved decision,
+Sender resolution and the Vendor coverage inspector show the saved decision,
 learning origin and a bounded preview of the original Email/Purchase links.
 Confirm Vendor saves the exact address; removing attribution records an
 exclusion that automatic learning cannot reverse. Vendor field edits and merges
@@ -94,7 +94,11 @@ paginated new-mail catch-up remains, automatic import status, active discovery
 Run, current targeted searches completed/total, and separate local scanned,
 classified, retained, pending, blocked and imported counts. Imported Emails
 have accepted Purchase evidence; lifecycle links alone do not count. A poll is not proof of
-completed classification, import or exhaustive history. Shared senders show
+completed classification, import or exhaustive history. Sender resolution separates
+unassigned, disputed and excluded addresses from genuinely multi-seller shared
+addresses; a shared domain never decides that grouping. Verified addresses
+appear with their Vendor, including addresses on free-mail and platform domains.
+Sender and Vendor tables expose standard row-selection checkboxes. Sender rows show
 their exact history query, recorded completion and Run, local classification
 and retention counts, linked Emails and distinct Purchases. These counts overlap
 Vendor coverage and must not be added together. Completed queries cover only

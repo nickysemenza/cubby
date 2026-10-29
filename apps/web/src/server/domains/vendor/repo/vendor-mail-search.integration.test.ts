@@ -259,7 +259,7 @@ describe("vendor Mail search status", () => {
       receivedAt: new Date("2026-09-01T12:00:00Z"),
     });
     const report = await readMailCoverage(ctx.db, ctx.actor.userId);
-    expect(report.sharedSenders).toEqual([
+    expect(report.senderCoverage).toEqual([
       expect.objectContaining({
         mailboxId: a.mailboxId,
         sender: "noreply@order.online",

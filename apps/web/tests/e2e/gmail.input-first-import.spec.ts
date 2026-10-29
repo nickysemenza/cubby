@@ -207,6 +207,14 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     sender: `Synthetic Cafe <${sharedSender}>`,
     subject: "Synthetic Cafe receipt",
   });
+  await retainedMailFixture(db, {
+    ledgerPartyId: member.id,
+    mailboxId: connected.accountId,
+    messageId: `synthetic-generic-${token}`,
+    checksum: "d".repeat(64),
+    sender: "Synthetic Relay <noreply@order.online>",
+    subject: "Synthetic seller receipt",
+  });
   await gotoAuthenticatedPage(page, "/settings");
   const coverageLink = page.getByRole("link", {
     name: "View Mail coverage and import a Vendor",
@@ -226,7 +234,7 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     page.getByRole("table", { name: "Mailbox discovery status" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Shared senders", exact: true }),
+    page.getByRole("heading", { name: "Sender resolution", exact: true }),
   ).toBeVisible();
   await page
     .getByRole("region", { name: "Seller unresolved", exact: true })
@@ -235,6 +243,22 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
   await expect(
     page.getByRole("region", { name: "Seller unresolved", exact: true }),
   ).toContainText(/Showing \d+ of \d+/);
+  const senderResolution = page.getByRole("region", {
+    name: "Sender resolution",
+    exact: true,
+  });
+  await expect(
+    senderResolution.getByRole("checkbox", { name: "Select all", exact: true }),
+  ).toBeVisible();
+  await senderResolution
+    .getByRole("checkbox", { name: "Select all", exact: true })
+    .click();
+  await expect(
+    senderResolution.getByRole("checkbox", { name: "Select all", exact: true }),
+  ).toBeChecked();
+  await senderResolution
+    .getByRole("checkbox", { name: "Select all", exact: true })
+    .click();
   await page.setViewportSize({ width: 390, height: 844 });
   const discoveryRegion = page.getByRole("region", {
     name: "Mailbox discovery",
@@ -252,7 +276,7 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
       .first(),
   ).toBeVisible();
   const senderRegion = page.getByRole("region", {
-    name: "Shared senders",
+    name: "Sender resolution",
     exact: true,
   });
   await senderRegion
@@ -285,15 +309,18 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     .from(schema.vendor)
     .where(eq(schema.vendor.shortcode, seededVendor.id));
   expect(mappedVendor?.senders).toEqual(expect.arrayContaining([sharedSender]));
-  await senderRegion
-    .getByRole("button", { name: "Sender details", exact: true })
-    .filter({ visible: true })
-    .first()
+  await expect(
+    senderRegion.getByText(sharedSender, { exact: true }),
+  ).toHaveCount(0);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await coverage
+    .getByRole("button", { name: sharedSender, exact: true })
     .click();
   await expect(
     page.getByRole("region", { name: "Sender attribution", exact: true }),
   ).toContainText("Member address decision");
-  await test.info().attach("Shared sender phone inspector", {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await test.info().attach("Vendor sender phone inspector", {
     body: await page.screenshot(),
     contentType: "image/png",
   });
@@ -301,6 +328,9 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     .getByRole("button", { name: "Close inspector", exact: true })
     .click();
   await page.setViewportSize({ width: 1280, height: 900 });
+  await senderRegion
+    .getByRole("tab", { name: "Shared senders", exact: true })
+    .click();
   await expect(
     senderRegion.getByPlaceholder("Search senders, mailboxes, or queries"),
   ).toBeVisible();
@@ -310,7 +340,7 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
       exact: true,
     }),
   ).toHaveCount(0);
-  await test.info().attach("Shared sender desktop coverage", {
+  await test.info().attach("Sender resolution desktop coverage", {
     body: await senderRegion.screenshot(),
     contentType: "image/png",
   });
@@ -323,12 +353,33 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
       exact: true,
     }),
   ).toBeVisible();
-  const senderCell = senderRegion.getByRole("cell", {
+  await coverage
+    .getByRole("checkbox", { name: "Select all", exact: true })
+    .click();
+  await expect(
+    coverage.getByRole("checkbox", { name: "Select all", exact: true }),
+  ).toBeChecked();
+  await coverage
+    .getByRole("checkbox", { name: "Select all", exact: true })
+    .click();
+  await senderRegion
+    .getByRole("tab", { name: "Shared senders", exact: true })
+    .click();
+  await expect(
+    senderRegion.getByText(sharedSender, { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    senderRegion.getByRole("cell", {
+      name: "noreply@order.online",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const senderCell = coverage.getByRole("cell", {
     name: sharedSender,
     exact: true,
   });
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-  await senderCell.click();
+  await senderCell.click({ position: { x: 2, y: 2 } });
   await page.keyboard.press("ControlOrMeta+c");
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))

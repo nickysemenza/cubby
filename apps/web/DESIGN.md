@@ -72,18 +72,18 @@ Selection, focus and validation remain visible. Blue Updating dots and failure
 indicators retain their independent meaning; work finishing with the same value
 clears its dot without a value highlight. There is no new motion setting.
 
-Mail coverage begins with flat mailbox-discovery and shared-sender RTables,
+Mail coverage begins with flat mailbox-discovery and sender-resolution RTables,
 followed by a disclosed unresolved-seller Email table and the Vendor × mailbox
 RTable. Poll freshness, targeted historical search scope, classification and
 import are distinct; local counts never imply Gmail-wide coverage. Source
-senders are not Vendors. The Vendor table retains canonical
+addresses belong to Vendors through verified mappings. The Vendor table retains canonical
 Vendor and Vendor Account links, explicit coverage states and separate local
 Email and Purchase counts. Selecting a row opens the shared table inspector
 for controlled import and date bounds; Settings retains mailbox switches.
 Discovery completion and downstream import outcomes remain distinct.
 
 Mobile discovery rows retain poll/catch-up and historical search summaries;
-shared-sender rows retain search state. Shared senders use the same search,
+sender-resolution rows retain search state. The Needs attribution and Shared senders views use exact-address attribution state, never a shared domain as proof of sharing. Verified addresses appear on Vendors. Both sender and Vendor tables have standard row-selection checkboxes. Sender resolution uses the same search,
 status views, column controls and row inspector as Vendor coverage, with compact
 default columns. Vendor coverage separates Domains from Sender addresses.
 Address controls expose the saved Vendor, learned/member origin, disputed/shared
