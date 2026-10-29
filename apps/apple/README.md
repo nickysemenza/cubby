@@ -203,14 +203,30 @@ next pull without a restart; `cubby companion --jobs N` sets it for the CLI.
 
 A queue session starts with the first accepted command after idle and lasts through
 slot refills and result recording until the drain settles or processing stops.
-Completed commands count once their results are durable, including recorded failure
-results; released or cancelled claims do not count. At session start the worker
+Completed commands count only after the server adopts a successful completed result;
+failed, skipped, normalized, superseded, released and cancelled attempts do not count.
+Recorded results waiting to deliver have their own count and diagnostic. At session start the worker
 requests `job.deviceBacklog`, then refreshes it every 45 seconds while processing.
-The first successful response freezes the waiting baseline; later responses refresh
-only the ETA, so newly queued images do not move the baseline. Until the first
-response arrives, progress is indeterminate. Progress is completed this session ÷
-(completed this session + initial waiting), with zero for an empty denominator.
+The first successful response freezes a total estimate from completed results, waiting
+jobs and outstanding local work; later responses refresh only the ETA, so newly queued
+images do not move the baseline. Until the first response arrives, progress is
+indeterminate. Progress is completed this session ÷ that fixed total, with zero for
+an empty denominator and a ceiling of 100% if the session processes additional work.
 A restart clears both the completion count and waiting baseline.
+
+The resident worker frees compute slots after durable recording. One separate sender
+delivers at most eight results per pass, serially, and schedules remaining due results
+without blocking pulls. Recorded resident results keep renewing their attempt while
+delivery waits or backs off; renewal refusal retains the result for the server's
+adoption decision. Sign-out and iOS background handoff settle that sender before
+discarding account-owned results or handing delivery to the charging window. Empty
+optional generated claims are trimmed and removed from the outgoing copy, including
+replayed results; the original stays on disk until a successful server response.
+Superseded attempts remain subject to the server's existing adoption checks.
+Charging windows also separate compute from one serial sender and renew recorded
+attempts while the window remains active. Their task group joins computation,
+delivery and renewal before returning. Window expiry releases unrecorded work and
+retains recorded attempts for replay.
 
 The resident worker and iOS background windows both claim with a 60 s lease and renew each
 running command every 15 s through `imageProcessing.renew`; the executor's deadline moves with each renewal, and a refusal

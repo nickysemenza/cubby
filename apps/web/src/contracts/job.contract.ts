@@ -138,7 +138,8 @@ export type JobGroup = z.infer<typeof jobGroup>;
 /**
  * Parked Apple-device work at a glance, for the "waiting for a device"
  * banner. `workingDevices` counts devices that claimed work in the last
- * ten minutes; `etaSeconds` is null when nothing waits or nothing claims.
+ * ten minutes; `etaSeconds` uses successful device completions and is null
+ * when nothing waits or no successful completion was observed.
  */
 const deviceBacklog = z.object({
   waiting: z.number().int().nonnegative(),

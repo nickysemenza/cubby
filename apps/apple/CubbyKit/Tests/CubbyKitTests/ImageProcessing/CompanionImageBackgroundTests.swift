@@ -93,21 +93,32 @@ struct CompanionImageBackgroundTests {
 
     @Test func replayAcknowledgesWithoutRepeatingExecution() async throws {
         let command = try command()
-        let transport = BackgroundTransportFixture(commands: [command], failFirstCompletion: true)
+        let transport = BackgroundTransportFixture(
+            commands: [command], failFirstCompletion: true, validateDescriptionClaims: true)
+        let original = try JSONDecoder.companionImageProcessing.decode(
+            ImageProcessingResult.self,
+            from: Data(
+                """
+                {"jobId":"00000000-0000-4000-8000-000000000001","attemptId":"00000000-0000-4000-8000-000000000002","completedAt":"2026-01-01T00:00:00Z","outcome":{"kind":"describe_image","status":"completed","description":{"description":"A blue panel","cutoutEligibility":"review","claims":[{"text":"  ","evidenceKind":"visual"},{"text":"  Blue panel  ","evidenceKind":"visual"}]},"runtime":{"platform":"ios"}}}
+                """.utf8))
         let fileURL = try outboxFile()
         let outbox = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
         defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
         let executions = BackgroundExecutionFixture()
+        let delivery = CompanionResultDelivery(outbox: outbox, failureObserver: nil)
         let runner = CompanionImageBackgroundRunner(
-            outbox: outbox,
-            execute: { command in
-                try await executions.complete(command)
+            outbox: outbox, delivery: delivery,
+            execute: { _ in
+                await executions.record()
+                return original
             })
         await runner.run(transport: transport, hello: hello(), maximumJobs: 1)
-        #expect(try await outbox.pending().count == 1)
+        #expect(try await outbox.pending().map(\.result) == [original])
+        #expect(await delivery.snapshot.completedCount == 0)
         let restored = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
+        let replayDelivery = CompanionResultDelivery(outbox: restored, failureObserver: nil)
         let replayRunner = CompanionImageBackgroundRunner(
-            outbox: restored,
+            outbox: restored, delivery: replayDelivery,
             execute: { command in
                 try await executions.complete(command)
             })
@@ -115,6 +126,16 @@ struct CompanionImageBackgroundTests {
         #expect(try await restored.pending().isEmpty)
         #expect(await executions.count == 1)
         #expect(await transport.completionCount == 2)
+        #expect(await transport.claimTexts == [["Blue panel"], ["Blue panel"]])
+        #expect(await replayDelivery.snapshot.completedCount == 1)
+
+        // A successful response for a superseded attempt acknowledges it without counting it.
+        try await restored.record(original, for: "superseded")
+        let superseded = BackgroundTransportFixture(commands: [], adopted: false)
+        _ = await replayDelivery.deliver(
+            original, key: "superseded", transport: superseded, deviceID: "device")
+        #expect(try await restored.pending().isEmpty)
+        #expect(await replayDelivery.snapshot.completedCount == 1)
     }
     /// Regression: a charging-window claim asked for up to 90 s and was never renewed, so a slow
     /// command outlived its lease. It now claims the resident 60 s lease and heartbeats, and the
@@ -245,8 +266,9 @@ struct CompanionImageBackgroundTests {
         #expect(await transport.releaseCount == 0)
         #expect(await transport.completionCount == 0)
         // No later window pulls.
+        let pullsAtRefusal = await transport.pullCount
         #expect(await worker.runInBackground(transport: transport, hello: hello) == false)
-        #expect(await transport.pullCount == 1)
+        #expect(await transport.pullCount == pullsAtRefusal)
         await worker.stop()
     }
 
@@ -302,8 +324,9 @@ struct CompanionImageBackgroundTests {
         #expect(await worker.runInBackground(transport: transport, hello: hello) == false)
         #expect(await worker.isUpdateRequired)
         #expect(phases.latest == .updateRequired)
+        let pullsAtRefusal = await transport.pullCount
         #expect(await worker.runInBackground(transport: transport, hello: hello) == false)
-        #expect(await transport.pullCount == 1)
+        #expect(await transport.pullCount == pullsAtRefusal)
         await worker.stop()
     }
 
@@ -400,7 +423,7 @@ struct CompanionImageBackgroundTests {
         #expect(try await outbox.pending().isEmpty)
     }
 
-    @Test func cancellationDuringCompletionReleasesAndRetainsDurableResult() async throws {
+    @Test func cancellationDuringCompletionRetainsTheRecordedAttempt() async throws {
         let command = try command()
         let transport = BackgroundTransportFixture(commands: [command], waitDuringCompletion: true)
         let fileURL = try outboxFile()
@@ -413,8 +436,36 @@ struct CompanionImageBackgroundTests {
         #expect(await transport.completionCount == 1)
         task.cancel()
         _ = await task.value
-        #expect(await transport.releaseCount == 1)
+        #expect(await transport.releaseCount == 0)
         #expect(try await outbox.pending().count == 1)
+    }
+
+    /// A blocked completion must not occupy the only execution slot.
+    @Test func aBlockedDeliveryDoesNotBlockTheNextBackgroundCommand() async throws {
+        let commands = [
+            try command(),
+            try command(
+                job: "00000000-0000-4000-8000-000000000003", attempt: "00000000-0000-4000-8000-000000000004"),
+        ]
+        let transport = BackgroundTransportFixture(commands: commands, waitDuringCompletion: true)
+        let fileURL = try outboxFile()
+        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
+        let outbox = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
+        let executions = Gate()
+        let fixture = BackgroundExecutionFixture()
+        let runner = CompanionImageBackgroundRunner(
+            outbox: outbox,
+            execute: { command in
+                executions.signal()
+                return try await fixture.complete(command)
+            })
+        let task = Task { await runner.run(transport: transport, hello: hello(), maximumJobs: 2) }
+        await transport.completion.arrivals(1)
+        await executions.arrivals(2)
+        #expect(await transport.completionCount == 1)
+        task.cancel()
+        _ = await task.value
+        #expect(!(try await outbox.pending()).isEmpty)
     }
 }
 
@@ -432,12 +483,13 @@ private actor SignOutCleanupFixture: CompanionImageBackgroundTransport {
     {
         .init(command: nil, commands: [], remotePaused: false)
     }
-    func complete(deviceID: String, result: ImageProcessingResult) async throws {
+    func complete(deviceID: String, result: ImageProcessingResult) async throws -> Bool {
         do { try await started.pass() } catch {
             cancelled.signal()
             await withCheckedContinuation { cleanup = $0 }
             throw CancellationError()
         }
+        return true
     }
     func release(deviceID: String, claim: CompanionImageCommandClaim) async throws {}
     func renew(deviceID: String, claim: CompanionImageCommandClaim) async throws -> CompanionLeaseRenewal {
@@ -447,10 +499,12 @@ private actor SignOutCleanupFixture: CompanionImageBackgroundTransport {
 }
 
 private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
-    enum Failure: Error { case network }
+    enum Failure: Error { case network, invalidClaim }
     var commands: [ImageProcessingCommand]
     var failFirstCompletion: Bool
     var waitDuringCompletion: Bool
+    let validateDescriptionClaims: Bool
+    let adopted: Bool
     let renewal: CompanionLeaseRenewal
     /// Fails every renewal with this error instead of answering `renewal`.
     let renewError: (any Error)?
@@ -463,6 +517,7 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
     let pullGate: Gate?
     nonisolated let completionHold = Gate()
     private(set) var completionCount = 0
+    private(set) var claimTexts: [[String]] = []
     private(set) var rejectedCount = 0
     private(set) var deliveredAttempts: [String] = []
     private(set) var pullCount = 0
@@ -473,7 +528,7 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
     let completion = Gate()
     init(
         commands: [ImageProcessingCommand], failFirstCompletion: Bool = false,
-        waitDuringCompletion: Bool = false,
+        waitDuringCompletion: Bool = false, validateDescriptionClaims: Bool = false, adopted: Bool = true,
         renewal: CompanionLeaseRenewal = .renewed(leaseExpiresAt: .distantFuture),
         renewError: (any Error)? = nil, rejectedJobs: Set<String> = [],
         releaseError: (any Error)? = nil, completionError: (any Error)? = nil, pullGate: Gate? = nil
@@ -484,6 +539,8 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
         self.commands = commands
         self.failFirstCompletion = failFirstCompletion
         self.waitDuringCompletion = waitDuringCompletion
+        self.validateDescriptionClaims = validateDescriptionClaims
+        self.adopted = adopted
         self.renewal = renewal
         self.renewError = renewError
         self.rejectedJobs = rejectedJobs
@@ -498,7 +555,16 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
         await pullGate?.hold()
         return .init(command: batch.first, commands: batch, remotePaused: false)
     }
-    func complete(deviceID: String, result: ImageProcessingResult) async throws {
+    func complete(deviceID: String, result: ImageProcessingResult) async throws -> Bool {
+        if validateDescriptionClaims,
+            case .completed(.describeImage(let description)) = result.outcome
+        {
+            let texts = description.description.claims.map(\.text)
+            guard texts.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+                throw Failure.invalidClaim
+            }
+            claimTexts.append(texts)
+        }
         if let completionError {
             await completionHold.hold()
             throw completionError
@@ -511,6 +577,7 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
         if waitDuringCompletion { try await completion.pass() }
         if failFirstCompletion { failFirstCompletion = false; throw Failure.network }
         deliveredAttempts.append(result.attemptId)
+        return adopted
     }
     func release(deviceID: String, claim: CompanionImageCommandClaim) async throws {
         releaseCount += 1
@@ -537,6 +604,7 @@ private actor LeaseDeadlineFixture {
 
 private actor BackgroundExecutionFixture {
     private(set) var count = 0
+    func record() { count += 1 }
     func complete(_ command: ImageProcessingCommand) throws -> ImageProcessingResult {
         count += 1
         return .init(

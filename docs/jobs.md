@@ -411,8 +411,10 @@ records it as the Job's `leaseHolder` in the same transaction. Its saved views a
   or a Job id, on MCP (`maintenance`) and `cubby call`.
 - `job.deviceBacklog`: due Apple-device work, the Runs it holds up, devices
   that started an attempt in the last ten minutes (`Device.lastSeenAt` moves
-  only on hello), device attempt starts per minute (reclaims included) and the
-  ETA at that pace.
+  only on hello), device attempt starts per minute (reclaims included), and an
+  ETA based on distinct accepted successful device completions over the last ten
+  minutes. The completion sample excludes normalization, failed attempts and stale
+  image sources. Without a successful completion sample the ETA is unknown.
 
 Web Activity’s Now view presents the device backlog banner, compact lane/reason
 counts, Runs needing attention, then Jobs. Needs you also exposes Run and Job

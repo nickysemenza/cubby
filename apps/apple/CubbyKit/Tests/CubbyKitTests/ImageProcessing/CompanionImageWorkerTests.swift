@@ -104,6 +104,46 @@ struct CompanionImageWorkerTests {
         await worker.stop()
     }
 
+    /// A slow completion response cannot occupy a compute slot or hold a pull behind replay.
+    @Test func slowDeliveryDoesNotHoldComputeSlots() async throws {
+        let store = try outbox()
+        let completion = Gate()
+        let heartbeat = Gate()
+        let execution = Gate(open: true)
+        let transport = QueuedCompanionTransport(
+            commands: [
+                try describeCommand(),
+                try describeCommand(
+                    job: "00000000-0000-4000-8000-000000000003",
+                    attempt: "00000000-0000-4000-8000-000000000004"),
+            ], completionGate: completion)
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Synthetic Mac", foreground: true,
+            maximumConcurrentCommands: 1, outbox: store, transport: transport,
+            execute: { command in
+                execution.signal()
+                return try Self.failedResult(command)
+            }, heartbeatPause: { try await heartbeat.pass() })
+        await worker.start()
+        await worker.requestDrain()
+        await completion.arrivals()
+        await execution.arrivals(2)
+        await worker.drainIdle()
+        // The second execution ran while the first result's HTTP response was still held.
+        #expect(await transport.delivered.isEmpty)
+        #expect(execution.arrived == 2)
+        await heartbeat.arrivals(2)
+        heartbeat.release(2)
+        await transport.renewals.arrivals(2)
+        #expect(await transport.released.isEmpty)
+        completion.open()
+        await worker.commandsIdle()
+        #expect(await transport.delivered.count == 2)
+        #expect(try await store.pending().isEmpty)
+        await worker.stop()
+    }
+
     /// A single round trip fills the configured pool, even while all executions are blocked.
     @Test func aBatchRequestsFreeSlotsAndStartsEveryReturnedCommand() async throws {
         let activity = ActivityRecorder()
@@ -643,6 +683,7 @@ private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
     private var failingCompletions: Int
     private let undeliverableJobs: Set<String>
     private let pullGate: Gate?
+    private let completionGate: Gate?
     private let pullError: (any Error)?
     private let renewal: CompanionLeaseRenewal
     private(set) var pulls = 0
@@ -656,6 +697,7 @@ private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
     init(
         commands: [ImageProcessingCommand], delivers: Bool = true, failingCompletions: Int = 0,
         undeliverableJobs: Set<String> = [], pullGate: Gate? = nil, pullError: (any Error)? = nil,
+        completionGate: Gate? = nil,
         renewal: CompanionLeaseRenewal = .renewed(leaseExpiresAt: .distantFuture)
     ) {
         self.commands = commands
@@ -663,6 +705,7 @@ private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
         self.failingCompletions = failingCompletions
         self.undeliverableJobs = undeliverableJobs
         self.pullGate = pullGate
+        self.completionGate = completionGate
         self.pullError = pullError
         self.renewal = renewal
     }
@@ -679,7 +722,8 @@ private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
         return .init(command: batch.first, commands: batch, remotePaused: false)
     }
 
-    func complete(deviceID: String, result: ImageProcessingResult) async throws {
+    func complete(deviceID: String, result: ImageProcessingResult) async throws -> Bool {
+        try await completionGate?.pass()
         guard delivers, !undeliverableJobs.contains(result.jobId) else {
             throw URLError(.networkConnectionLost)
         }
@@ -689,6 +733,7 @@ private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
         }
         delivered.append(result.jobId)
         completions.signal()
+        return true
     }
 
     func release(deviceID: String, claim: CompanionImageCommandClaim) async throws {
