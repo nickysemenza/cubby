@@ -2896,6 +2896,12 @@ prefix range, including correlated target lookups.
 The drain's pre-compute fanout observation exposes each page target's prefix
 bounds directly in an OR predicate so the same index serves that read; a JSON
 target-list subquery must not turn each page into a whole-drain scan.
+For a fixed `targetWhere` input, one expansion also covers up to 200 ready
+source marks for that exact input: they all select the same dependent population.
+The expansion retains ordinary direct-target reticketing and the most urgent
+observed source priority. The generic drain settles covered source tickets only
+after the expansion, without waiting on writers; newer tickets, claims elsewhere
+in the page and path-dependent fanouts retain their existing handling.
 
 Service Cost captures the positive actual charge total beside its average, count
 and latest dated charge. The explanation reads those operands from the same

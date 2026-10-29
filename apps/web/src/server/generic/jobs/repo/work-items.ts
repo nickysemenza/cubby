@@ -6,7 +6,7 @@
  * `defineDrain` (`work-claims.ts`).
  */
 import { jobState } from "@cubby/schemas/job";
-import { and, eq, inArray, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, sql, type SQL } from "drizzle-orm";
 
 import {
   repositoryQueries,
@@ -34,6 +34,37 @@ const itemColumns = {
   priority: workItem.priority,
   attempts: workItem.attempts,
 };
+
+/** Bounded ready-work observations; no locks or scheduling changes. */
+export async function observeReadyWork(
+  db: RepositoryQueryInput,
+  {
+    drain,
+    limit,
+    eligible,
+  }: {
+    drain: string;
+    limit: number;
+    eligible?: (target: SQL) => SQL;
+  },
+): Promise<WorkItem[]> {
+  return repositoryQueries(db)
+    .select(itemColumns)
+    .from(workItem)
+    .where(
+      and(
+        eq(workItem.drain, drain),
+        lte(workItem.readyAt, sql`now()`),
+        eligible?.(sql`${workItem.target}`),
+      ),
+    )
+    .orderBy(
+      asc(workItem.priority),
+      asc(workItem.readyAt),
+      asc(workItem.ticket),
+    )
+    .limit(limit);
+}
 
 /** Exactly these tickets: a re-marked item no longer matches. */
 // Drizzle has no tuple IN; a jsonb record set keeps one parameter per call.
@@ -173,12 +204,18 @@ export async function markWorkFrom(
 export async function lockWork(
   tx: RepositoryQueryInput,
   items: readonly WorkItem[],
+  { drain }: { drain?: string } = {},
 ): Promise<WorkItem[]> {
   if (!items.length) return [];
   const rows = await repositoryQueries(tx)
     .select({ target: workItem.target, ref: workItem.ref })
     .from(workItem)
-    .where(workTickets(items))
+    .where(
+      and(
+        workTickets(items),
+        drain === undefined ? undefined : eq(workItem.drain, drain),
+      ),
+    )
     .orderBy(workItem.target, workItem.ref)
     .for("update", { skipLocked: true });
   const held = new Set(rows.map(({ target, ref }) => `${target}\0${ref}`));

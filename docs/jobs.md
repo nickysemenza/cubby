@@ -73,7 +73,16 @@ narrow the chunk: items it declines (a source row another writer holds) stay
 owed, untouched, for a later page. A chunk that fails on a target error or
 SQLSTATE class 22, 23 or 54 splits in halves until the failing item settles
 alone; its siblings publish. `publish` may `retain` items it could not apply
-(a derived target behind a newer fanout). An item's `lastError` keeps each
+(a derived target behind a newer fanout). `publish` may also report a bounded
+set of extra ready marks whose identical
+effect it already applied. `defineDrain` excludes the entire page's original
+claims, then locks only unchanged covered tickets in the same drain with
+`SKIP LOCKED` and clears them in the same fenced transaction. These covered
+scheduling marks add no domain computation; the adapter bounds their observation
+separately from weighted publication work. Newer or writer-held marks stay owed.
+The page reports those settlements as `covered`; `processed` and `published`
+keep counting the original page's claims.
+An item's `lastError` keeps each
 cause, capped so the database's own message survives. A drain with nothing
 ready runs its `idle` publication (derived clock expiry) and completes, or
 waits until its next item's `readyAt`; a `repeats` drain (derived, re-armed

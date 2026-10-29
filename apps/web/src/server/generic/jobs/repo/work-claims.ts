@@ -2,7 +2,7 @@
  * Claiming and settling work items, private to `defineDrain`: only the drain
  * that holds the Job lease claims, clears, backs off or schedules its items.
  */
-import { and, asc, eq, lte, min, sql, type SQL } from "drizzle-orm";
+import { eq, min, sql, type SQL } from "drizzle-orm";
 
 import {
   repositoryQueries,
@@ -11,7 +11,7 @@ import {
 import { workItem } from "~/server/db/retained-tables";
 
 import type { JobBackoff } from "../kind-policy";
-import { workTickets, type WorkItem } from "./work-items";
+import { observeReadyWork, workTickets, type WorkItem } from "./work-items";
 
 /** The ready items, most urgent first. Reads only; publication rechecks tickets. */
 export async function claimWork(
@@ -20,28 +20,7 @@ export async function claimWork(
   limit: number,
   eligible?: (target: SQL) => SQL,
 ): Promise<WorkItem[]> {
-  return repositoryQueries(db)
-    .select({
-      target: workItem.target,
-      ref: workItem.ref,
-      ticket: workItem.ticket,
-      priority: workItem.priority,
-      attempts: workItem.attempts,
-    })
-    .from(workItem)
-    .where(
-      and(
-        eq(workItem.drain, drain),
-        lte(workItem.readyAt, sql`now()`),
-        eligible?.(sql`${workItem.target}`),
-      ),
-    )
-    .orderBy(
-      asc(workItem.priority),
-      asc(workItem.readyAt),
-      asc(workItem.ticket),
-    )
-    .limit(limit);
+  return observeReadyWork(db, { drain, limit, eligible });
 }
 
 /** Clear exactly these tickets; a newer ticket keeps its item. */

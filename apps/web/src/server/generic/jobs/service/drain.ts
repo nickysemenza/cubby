@@ -44,6 +44,8 @@ type DrainPreparation<P> = {
 type DrainPublication = {
   /** Items whose `readyAt` was moved forward with `postponeWork`. */
   retain?: readonly WorkItem[];
+  /** Bounded extra ready marks whose identical effect this publication already applied. */
+  covered?: readonly WorkItem[];
 };
 
 export type DrainSpec<P> = {
@@ -150,6 +152,10 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
       }
       let published = 0;
       let failed = 0;
+      let coalesced = 0;
+      const claimedRefs = new Set(
+        items.map(({ target, ref }) => `${target}\0${ref}`),
+      );
       const settleFailed = async (
         tx: Database,
         entries: readonly (readonly [WorkItem, unknown])[],
@@ -199,8 +205,18 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
                   ({ target, ref, ticket }) =>
                     !retained.has(`${target}\0${ref}\0${ticket}`),
                 );
-                await clearWork(tx, completed);
+                // Coverage cannot consume retained work or claims belonging to
+                // a later chunk. Producers may have re-marked any extra item.
+                const covered = await lockWork(
+                  tx,
+                  (publication?.covered ?? []).filter(
+                    ({ target, ref }) => !claimedRefs.has(`${target}\0${ref}`),
+                  ),
+                  { drain: claim.key },
+                );
+                await clearWork(tx, [...completed, ...covered]);
                 published += completed.length;
+                coalesced += covered.length;
               },
               { isolationLevel: spec.isolationLevel },
             ),
@@ -229,7 +245,12 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
       return {
         page: {
           done: false,
-          result: { processed: items.length, published, failed },
+          result: {
+            processed: items.length,
+            published,
+            failed,
+            ...(coalesced ? { covered: coalesced } : {}),
+          },
         },
       };
     },
