@@ -69,6 +69,7 @@ import {
   creditScopedPage,
   initializeMailboxCoverage,
   listGmailPage,
+  rebaseMailboxPage,
 } from "../../repo/gmail/sync";
 import { GmailAuthorizationError } from "../../repo/gmail/tokens";
 import type { startMailImport } from "../../repo/mail-import-run";
@@ -606,13 +607,25 @@ export async function saveMailDiscoveryBatch(
         mailboxId: claimed.input.mailboxId,
         events: page.events,
       });
+      const { coverage } = await loadGmailCursor(tx, {
+        ledgerPartyId: claimed.ledgerPartyId,
+        mailboxId: claimed.input.mailboxId,
+      });
+      const rebased =
+        coverage &&
+        rebaseMailboxPage({
+          page,
+          coverage,
+          restoreScopedQuery: Boolean(claimed.input.controlled),
+        });
       if (
+        !rebased ||
         !(await checkpointMailboxCoverage(tx, {
           ledgerPartyId: claimed.ledgerPartyId,
           mailboxId: claimed.input.mailboxId,
-          from: page.startCoverage,
+          from: rebased.startCoverage,
           to: creditScopedPage(
-            page,
+            rebased,
             retained.length,
             new Date(),
             runShortcode.parse(claimed.row.shortcode),
