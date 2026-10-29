@@ -215,8 +215,11 @@ retain their scale and evidence beside canonical Recipe servings and totals.
 Photo-review Product evidence uses canonical tag and brand fields beside retained
 photos, identifiers and purchase-line evidence. Those observations cannot authorize
 edits or establish automatic ownership. Nutrition reports reuse one selected Meal
-classification envelope throughout their root, person and food references. Duplicate
-stock results carry the selected Product brand envelope. Discard-preview amounts
+classification envelope throughout their root, person and food references.
+Product nutrition inputs select only identity, manual and effective pricing, unit mappings, label nutrition
+and food-lookup identifiers through the canonical Product reader. Nutrition reads
+skip unrelated Product detail bindings. Duplicate stock results carry the selected
+Product brand envelope. Discard-preview amounts
 remain evidence for their one command calculation, alongside its selected shelf,
 warning and proposed quantity; ordinary shelf reads use Inventory envelopes. Location inventory-count trees expose only
 identity, topology and counts; they do not carry an unused plain Location type.
@@ -4084,7 +4087,10 @@ similarity index are unavailable.
 - **Inventory placement:** stock in Unknown earns a suggestion only when the
   exact product has one unambiguous other live stock destination.
 - **Product relatedness:** semantic candidates and shared-tag evidence remain
-  discovery, with their similarity readiness state.
+  discovery, with their similarity readiness state. Tag propagation reads only
+  IDs and tags through the selected canonical Product projection; it does not
+  hydrate Product details for each semantic neighbour. Donor votes, dismissal
+  keys and publication-basis revalidation remain unchanged.
 
 Graph proximity alone never enables a write. A Sweep publishes expense project
 and inventory placement proposals into the shared Suggestion queue. Passive reads

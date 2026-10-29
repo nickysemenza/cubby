@@ -7,6 +7,7 @@ import {
   type MealNutritionInput,
   type MealNutritionPerson,
 } from "@cubby/schemas/meal";
+import { rawProductDetail } from "@cubby/schemas/product-raw-read";
 
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
@@ -17,13 +18,24 @@ import {
   batchTotalsFor,
   yieldBasisFor,
 } from "~/server/domains/meal/repo/portions";
-import { readProducts } from "~/server/domains/product/repo/crud";
+import { productScaffold } from "~/server/domains/product/repo/crud";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import {
   batchEnrichWithFood,
   type UsdaFoodBatchPort,
 } from "~/server/domains/usda-food/repo/usda-helpers";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
+
+const nutritionProduct = rawProductDetail.pick({
+  id: true,
+  price: true,
+  // Costing prefers the retained effective price over the manual assignment.
+  pricing: true,
+  unitMappings: true,
+  labelNutrition: true,
+  primaryGtin: true,
+  fdc_id: true,
+});
 
 export async function getMealNutrition(
   db: Database,
@@ -54,8 +66,13 @@ export async function getMealNutrition(
       ),
     ),
   ];
+  const selected = await productScaffold.get(
+    db,
+    codes.map((code) => code.toUpperCase()),
+    Object.keys(nutritionProduct.shape),
+  );
   const products = await batchEnrichWithFood(
-    await readProducts(db, codes),
+    selected.data.map((row) => nutritionProduct.parse(row)),
     foodLookupParamFromProduct,
     usdaClient,
   );

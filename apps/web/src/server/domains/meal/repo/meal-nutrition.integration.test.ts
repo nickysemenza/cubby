@@ -11,11 +11,16 @@ import {
   withMacros,
 } from "@cubby/schemas/nutrition";
 import { and, eq, isNull } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import {
+  captureBackgroundQueue,
+  drainStoredDerived,
+} from "~/server/testing/background-queue";
+import { makeExpenseInput } from "~/server/testing/repo.fixtures";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
   backgroundQueue = captureBackgroundQueue();
@@ -395,6 +400,24 @@ describe("meal nutrition service", () => {
       seedParty("Correction eater"),
       seedProduct("Corrected label product", { kcal: 100, protein: 10 }),
     ]);
+    await insertAndReturn(ctx.db, productUnitMappings, {
+      productId: labelledProduct.id,
+      aValue: 1,
+      aUnit: "each",
+      bValue: 100,
+      bUnit: "g",
+    });
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Synthetic acquired nutrition product",
+        productId: productCode(labelledProduct.shortcode),
+        cost: 8,
+        productQuantity: 4,
+      }),
+    );
+    await drainStoredDerived(ctx.db);
     const saved = await saveMealFood(
       ctx.db,
       {
@@ -413,7 +436,7 @@ describe("meal nutrition service", () => {
     );
     expect(before.people[0]?.foods[0]).toMatchObject({
       grams: 25,
-      totals: { nutrition: { kcal: { lower: 50 } } },
+      totals: { cost: { lower: 0.5 }, nutrition: { kcal: { lower: 50 } } },
     });
 
     await getDb(ctx.db)
@@ -433,7 +456,7 @@ describe("meal nutrition service", () => {
     );
     expect(after.people[0]?.foods[0]).toMatchObject({
       grams: 25,
-      totals: { nutrition: { kcal: { lower: 100 } } },
+      totals: { cost: { lower: 0.5 }, nutrition: { kcal: { lower: 100 } } },
     });
     const stored = await getDb(ctx.db).query.mealFoodEntry.findFirst({
       where: eq(mealFoodEntry.id, saved.id),
