@@ -18,8 +18,7 @@ import {
 import {
   entityProblemSources,
   gapDeclaration,
-  gapFilters,
-  gapColumns,
+  gapPublicationRead,
   recordScope,
 } from "~/server/generic/work-queue/repo/work-declarations";
 import {
@@ -31,8 +30,8 @@ const gaps = gapDeclaration("purchase");
 const gapSource: WorkSource = {
   ...gaps,
   candidates: async (db, scope) => {
-    const filters = gapFilters(scope, "purchase");
-    if (!filters) return null;
+    const readGap = gapPublicationRead({ scope, entity: "purchase" });
+    if (!readGap) return null;
     return {
       query: selectWorkCandidates(db, gaps, {
         entity: "purchase",
@@ -40,16 +39,18 @@ const gapSource: WorkSource = {
         name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
         owners: workPurchaseSourceOwners(outer(table.id)),
         shared: false,
-        ...gapColumns(scope, "purchase"),
+        ...readGap.columns,
         ...purchaseWorkFacts(),
       })
         .from(table)
+        .leftJoin(readGap.publication, readGap.match)
         .where(
           and(
             await purchaseScaffold.prepareWhere(
               db,
-              purchaseFiltersSchema.parse(filters),
+              purchaseFiltersSchema.parse(readGap.filters),
             ),
+            readGap.admission,
             recordScope(scope, sql`${table.shortcode}`),
           ),
         ),

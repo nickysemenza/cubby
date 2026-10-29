@@ -8,8 +8,7 @@ import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import {
   entityProblemSources,
   gapDeclaration,
-  gapFilters,
-  gapColumns,
+  gapPublicationRead,
   recordScope,
 } from "~/server/generic/work-queue/repo/work-declarations";
 import {
@@ -21,8 +20,8 @@ const gaps = gapDeclaration("vendor");
 const gapSource: WorkSource = {
   ...gaps,
   candidates: async (db, scope) => {
-    const filters = gapFilters(scope, "vendor");
-    if (!filters) return null;
+    const readGap = gapPublicationRead({ scope, entity: "vendor" });
+    if (!readGap) return null;
     return {
       query: selectWorkCandidates(db, gaps, {
         entity: "vendor",
@@ -30,15 +29,17 @@ const gapSource: WorkSource = {
         name: sql`"Vendor".name`,
         owners: sql`ARRAY[]::uuid[]`,
         shared: true,
-        ...gapColumns(scope, "vendor"),
+        ...readGap.columns,
       })
         .from(table)
+        .leftJoin(readGap.publication, readGap.match)
         .where(
           and(
             await vendorScaffold.prepareWhere(
               db,
-              vendorFiltersSchema.parse(filters),
+              vendorFiltersSchema.parse(readGap.filters),
             ),
+            readGap.admission,
             recordScope(scope, sql`${table.shortcode}`),
           ),
         ),
