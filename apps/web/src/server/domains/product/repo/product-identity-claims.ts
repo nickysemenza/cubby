@@ -43,6 +43,10 @@ export const retainedProductIdentifierClaim = z.object({
     .nullable()
     .default(null),
 });
+const receiptBindings = retainedProductIdentifierClaim
+  .pick({ bindingId: true, productId: true, lineIndex: true })
+  .array();
+
 export type DroppedProductIdentifierClaim = {
   productId: string;
   bindingId: string;
@@ -63,9 +67,11 @@ export async function loadProductIdentifierClaims(
   if (targetId && typeof targetId !== "string" && !targetId.length) return [];
   const rows = await getDb(db)
     .select({
-      bindingId: importSourceProduct.id,
-      productId: product.id,
-      lineIndex: importSourceProduct.lineIndex,
+      bindings: sql<unknown>`jsonb_agg(jsonb_build_object(
+        'bindingId', ${importSourceProduct.id},
+        'productId', ${product.id},
+        'lineIndex', ${importSourceProduct.lineIndex}
+      ))`,
       sourceOrderId: importSourceOrder.id,
       sourceClaimId: importSourceClaim.id,
       original: importSourceOrder.originalOrder,
@@ -122,15 +128,26 @@ export async function loadProductIdentifierClaims(
           : undefined,
       ),
     )
-    .orderBy(importSourceProduct.id);
+    .groupBy(importSourceOrder.id, importSourceClaim.id, purchase.id);
   const candidates = [];
-  const orders = new Map<string, z.infer<typeof acceptedSourceOrder> | null>();
-  for (const row of rows) {
-    if (!orders.has(row.sourceOrderId)) {
-      const parsed = acceptedSourceOrder.safeParse(row.original);
-      orders.set(row.sourceOrderId, parsed.success ? parsed.data : null);
-    }
-    const original = orders.get(row.sourceOrderId);
+  // Keep the receipt and its live bindings in one statement, without sending
+  // the entire receipt once per line. Validate the whole accepted order first.
+  const bindings = rows.flatMap(({ bindings, original: raw, ...receipt }) => {
+    const parsed = acceptedSourceOrder.safeParse(raw);
+    const original = parsed.success ? parsed.data : null;
+    return receiptBindings.parse(bindings).map((binding) => ({
+      row: { ...receipt, ...binding },
+      original,
+    }));
+  });
+  bindings.sort((a, b) =>
+    a.row.bindingId < b.row.bindingId
+      ? -1
+      : a.row.bindingId > b.row.bindingId
+        ? 1
+        : 0,
+  );
+  for (const { row, original } of bindings) {
     if (!original || original.extraction.status !== "ready") continue;
     const line = original.extraction.candidate.lines[row.lineIndex];
     if (!line) continue;
