@@ -476,6 +476,15 @@ remain accepted links, with one explicit charge owning a legacy alias; the
 alias alone never spreads an ignore or settlement to coexisting charges.
 Cross-provider equality proposes reconciliation rather than establishing identity.
 
+Same-source sibling review folds Unicode compatibility differences in account
+descriptors. Shared collection membership alone does not establish independent
+occurrences: historical membership may contain unpositioned surplus rows. The
+sibling exception requires attested provider identities (with the separate
+provider-scope guard still enforced), or distinct physical positions belonging
+to both observations' original shared collection. Genuine positioned purchases
+remain independent; unresolved overlaps remain review work without changing
+observations, member dispositions or financial records.
+
 Replaying a retained collection with newly supplied provider IDs cannot silently
 replace its ID-less charge identities. Intake refuses a provider identity that
 overlaps an ID-less member at the same physical position, or an unpositioned

@@ -2187,20 +2187,51 @@ describe("statement Transaction suggestions", () => {
     });
   });
 
-  // Failure modes: a firmed-up descriptor from another export is two clean
-  // creates, and bulk acceptance records the money twice.
-  it("marks same-amount charges from another export as siblings, never clean", async () => {
+  // Physical positions prove genuine purchases; historical membership and
+  // Unicode descriptor differences must not hide an unresolved extra occurrence.
+  it("requires occurrence proof before clearing same-amount sibling review", async () => {
     await card(ctx);
-    await record(ctx, [rowInput({ rawDescription: "EXAMPLE MKTPLACE PMTS" })]);
+    await record(ctx, [
+      rowInput({ rawDescription: "EXAMPLE MKTPLACE PMTS" }),
+      rowInput({ rawDescription: "EXAMPLE MKTPL*AB12CD34" }),
+    ]);
+    await generate(ctx);
+    expect((await suggestions(ctx)).map((row) => row.siblings)).toEqual([0, 0]);
     await record(
       ctx,
-      [rowInput({ rawDescription: "EXAMPLE MKTPL*AB12CD34" })],
+      [
+        rowInput({
+          accountDescriptor: "Ｓynthetic Card (...4242)",
+          rawDescription: "EXAMPLE MKTPL*EF56GH78",
+        }),
+      ],
       { fingerprint: "fp-firmed" },
     );
     await generate(ctx);
     const rows = await suggestions(ctx);
-    expect(rows).toHaveLength(2);
-    expect(rows.every((row) => !row.clean && row.siblings === 1)).toBe(true);
+    expect(rows).toHaveLength(3);
+    expect(rows.every((row) => !row.clean && row.siblings > 0)).toBe(true);
+
+    const retained = await getDb(ctx.db).select().from(sourceTransactionRecord);
+    const positioned = retained.find(
+      (row) => row.rawDescription === "EXAMPLE MKTPLACE PMTS",
+    )!;
+    const historical = retained.find(
+      (row) => row.rawDescription === "EXAMPLE MKTPL*EF56GH78",
+    )!;
+    // Intake refuses new unpositioned rows; emulate retained historical surplus.
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ rowPosition: null })
+      .where(eq(sourceTransactionRecord.id, historical.id));
+    await getDb(ctx.db).insert(transactionImportRecord).values({
+      importId: positioned.batchId,
+      statementRowId: historical.id,
+    });
+    await generate(ctx);
+    const after = await suggestions(ctx);
+    expect(after).toHaveLength(3);
+    expect(after.every((row) => !row.clean && row.siblings > 0)).toBe(true);
   });
 
   // Matching statement labels must not replace the attach target's actual kind.

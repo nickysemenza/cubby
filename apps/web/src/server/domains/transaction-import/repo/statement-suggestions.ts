@@ -147,7 +147,7 @@ export const STATEMENT_SUGGESTION_REVISION = "2026-10-21.1";
  * renaming the revision, which the automatic attach rule's measured windows
  * are keyed by.
  */
-const STATEMENT_CLEAN_POLICY = "2026-10-20.2";
+const STATEMENT_CLEAN_POLICY = "2026-10-29.1";
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;
@@ -430,9 +430,9 @@ async function siblingsFor(
       SELECT * FROM (VALUES ${values}) AS v(key, source, "chargeKey", descriptor, amount, day, "rowIds")
     ),
     o AS MATERIALIZED (
-      SELECT p.key, p."rowIds", o.id, o.source, ${chargeKeyOf("o")} AS "chargeKey"
+      SELECT p.key, p."rowIds", o.id, o.source, o."batchId", o."rowPosition", o."providerTransactionId", ${chargeKeyOf("o")} AS "chargeKey"
       FROM p JOIN "SourceTransactionRecord" o ON o.source = p.source
-        AND o."accountDescriptor" = p.descriptor
+        AND normalize(o."accountDescriptor", NFKC) = normalize(p.descriptor, NFKC)
         AND o."providerAmount" = p.amount
         AND o."statementDate" BETWEEN p.day - ${SIBLING_WINDOW_DAYS}::int AND p.day + ${SIBLING_WINDOW_DAYS}::int
         AND ${notDeleted("o")}
@@ -449,12 +449,19 @@ async function siblingsFor(
     FROM o
     JOIN cs ON cs.source = o.source AND cs."chargeKey" = o."chargeKey"
       AND NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL
-    -- One export speaks one descriptor vocabulary: two of its own rows are two
-    -- real charges, so only another export's row can be this money again.
+    -- Historical membership can include unpositioned surplus rows. Independence
+    -- needs attested provider identities or distinct positions in their original
+    -- shared collection; membership alone cannot clear a possible overlap.
     WHERE NOT EXISTS (
       SELECT 1 FROM members mo
       JOIN members mp ON mp."importId" = mo."importId"
+      JOIN "SourceTransactionRecord" own ON own.id = mp."statementRowId"
       WHERE mo."statementRowId" = o.id AND mp."statementRowId" = ANY(o."rowIds")
+        AND ${notDeleted("own")}
+        AND ((o."providerTransactionId" IS NOT NULL AND own."providerTransactionId" IS NOT NULL)
+          OR (o."batchId" = mo."importId" AND own."batchId" = mp."importId"
+            AND o."rowPosition" IS NOT NULL AND own."rowPosition" IS NOT NULL
+            AND o."rowPosition" <> own."rowPosition"))
     )
     GROUP BY o.key
   `);
