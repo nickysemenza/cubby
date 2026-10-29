@@ -5,7 +5,8 @@ import {
   type SearchableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { and, eq, inArray, isNotNull, isNull, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or, type SQL } from "drizzle-orm";
+import { chunk } from "es-toolkit";
 import { z } from "zod";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
@@ -39,6 +40,7 @@ export interface SemanticCandidateScan {
 }
 export class SemanticCoverageIncomplete extends Error {}
 const CANDIDATE_BUDGET = 100;
+const artifactIdSchema = z.uuid();
 
 async function selectedArtifacts(
   db: Database,
@@ -53,7 +55,6 @@ async function selectedArtifacts(
       entityId: entityEmbedding.entityId,
       hash: entityEmbedding.artifactHash,
       vectorHash: entityEmbedding.vectorHash,
-      text: searchDocument.semanticText,
     })
     .from(entityEmbedding)
     .innerJoin(
@@ -134,13 +135,36 @@ async function validatedScan(
   seed?: SearchableEntityRef,
 ): Promise<SemanticCandidateScan> {
   const ids = raw.flatMap(({ id }) => {
-    const parsed = z.uuid().safeParse(id);
+    const parsed = artifactIdSchema.safeParse(id);
     return parsed.success ? [parsed.data] : [];
   });
   const current = ids.length
     ? await currentArtifacts(db, config, inArray(entityEmbedding.id, ids))
     : [];
   const byId = new Map(current.map((row) => [row.id, row]));
+  // Per candidate kind: unrelated queued search work cannot withhold completeness.
+  const incomplete = await searchCoverageIncomplete(db, config, kinds);
+  return scanValidatedMatches({ raw, byId, kinds, limit, seed, incomplete });
+}
+
+function scanValidatedMatches({
+  raw,
+  byId,
+  kinds,
+  limit,
+  seed,
+  incomplete,
+}: {
+  raw: readonly PhysicalVectorMatch[];
+  byId: ReadonlyMap<
+    string,
+    Awaited<ReturnType<typeof selectedArtifacts>>[number] | null
+  >;
+  kinds: readonly SearchableEntity[];
+  limit: number;
+  seed?: SearchableEntityRef;
+  incomplete: boolean;
+}): SemanticCandidateScan {
   const seen = new Set<string>();
   const candidates: EntityEmbeddingCandidate[] = [];
   for (const match of raw) {
@@ -162,11 +186,6 @@ async function validatedScan(
       similarity: match.similarity,
     });
   }
-  // Per candidate kind (ADR 0021): coverage is unconfirmed only while one of
-  // these kinds has a pending search-document mark or unembedded document,
-  // not while any search work anywhere is queued (that held ~17k connection
-  // evaluations back).
-  const incomplete = await searchCoverageIncomplete(db, config, kinds);
   return {
     candidates: candidates.slice(0, limit),
     complete:
@@ -227,32 +246,149 @@ export async function findSimilarEntities(
     config: SemanticEmbeddingConfig;
   },
 ): Promise<SemanticCandidateScan> {
-  const [selected] = await currentArtifacts(
+  const results = await findSimilarEntitiesPage(
     db,
-    options.config,
-    and(
-      eq(entityEmbedding.entityKind, seed.entityKind),
-      eq(entityEmbedding.entityId, seed.entityId),
-    ),
+    vectorStore,
+    [seed],
+    options,
   );
-  if (!selected) return { candidates: [], complete: false };
-  const [observed] = await vectorStore.getByIds([selected.id]);
+  const result = results.get(entityRefKey(seed.entityKind, seed.entityId));
+  if (result?.status === "rejected") throw result.reason;
+  return result?.value ?? { candidates: [], complete: false };
+}
+
+/** Share seed and hit validation within one page without reconstructing the corpus. */
+export async function findSimilarEntitiesPage(
+  db: Database,
+  vectorStore: VectorStorePort,
+  seeds: readonly SearchableEntityRef[],
+  options: {
+    targetType: SearchableEntity;
+    limit: number;
+    config: SemanticEmbeddingConfig;
+  },
+): Promise<Map<string, PromiseSettledResult<SemanticCandidateScan>>> {
+  const results = new Map<
+    string,
+    PromiseSettledResult<SemanticCandidateScan>
+  >();
+  if (!seeds.length) return results;
+  const unique = [
+    ...new Map(
+      seeds.map((seed) => [entityRefKey(seed.entityKind, seed.entityId), seed]),
+    ).values(),
+  ];
+  const selected: Awaited<ReturnType<typeof currentArtifacts>> = [];
+  for (const batch of chunk(unique, CANDIDATE_BUDGET))
+    selected.push(
+      ...(await currentArtifacts(
+        db,
+        options.config,
+        or(
+          ...batch.map((seed) =>
+            and(
+              eq(entityEmbedding.entityKind, seed.entityKind),
+              eq(entityEmbedding.entityId, seed.entityId),
+            ),
+          ),
+        ),
+      )),
+    );
+  const byRef = new Map(
+    selected.map((row) => [entityRefKey(row.entityKind, row.entityId), row]),
+  );
+  const byId = new Map<string, (typeof selected)[number] | null>(
+    selected.map((row) => [row.id, row]),
+  );
+  const observed = new Map(
+    (selected.length
+      ? await vectorStore.getByIds(selected.map((row) => row.id))
+      : []
+    ).map((row) => [row.id, row]),
+  );
+  const queried = new Set<string>();
+  for (const wave of chunk(unique, 4)) {
+    const scans = await Promise.allSettled(
+      wave.map(async (seed) => {
+        const artifact = byRef.get(
+          entityRefKey(seed.entityKind, seed.entityId),
+        );
+        const vector = artifact ? observed.get(artifact.id) : undefined;
+        if (
+          !artifact ||
+          !vector ||
+          vector.values.length !== options.config.dimensions ||
+          (await vectorPayloadHash(vector.values)) !== artifact.vectorHash
+        )
+          return null;
+        return {
+          seed,
+          raw: await vectorStore.queryById(artifact.id, {
+            entityKinds: [options.targetType],
+            topK: CANDIDATE_BUDGET,
+          }),
+        };
+      }),
+    );
+    const pending: { seed: SearchableEntityRef; raw: PhysicalVectorMatch[] }[] =
+      [];
+    for (const [index, scan] of scans.entries()) {
+      const seed = wave[index]!;
+      const key = entityRefKey(seed.entityKind, seed.entityId);
+      if (scan.status === "rejected") results.set(key, scan);
+      else if (scan.value) pending.push(scan.value);
+      else
+        results.set(key, {
+          status: "fulfilled",
+          value: { candidates: [], complete: false },
+        });
+    }
+    const ids = [
+      ...new Set(
+        pending.flatMap(({ raw }) =>
+          raw.flatMap(({ id }) => {
+            const parsed = artifactIdSchema.safeParse(id);
+            return parsed.success && !byId.has(parsed.data)
+              ? [parsed.data]
+              : [];
+          }),
+        ),
+      ),
+    ];
+    // Raw matches are compact; canonical bodies stay within the existing hit bound.
+    for (const batch of chunk(ids, CANDIDATE_BUDGET)) {
+      const current = await currentArtifacts(
+        db,
+        options.config,
+        inArray(entityEmbedding.id, batch),
+      );
+      for (const id of batch) byId.set(id, null);
+      for (const row of current) byId.set(row.id, row);
+    }
+    for (const { seed, raw } of pending) {
+      const key = entityRefKey(seed.entityKind, seed.entityId);
+      queried.add(key);
+      results.set(key, {
+        status: "fulfilled",
+        value: scanValidatedMatches({
+          raw,
+          byId,
+          kinds: [options.targetType],
+          limit: options.limit,
+          seed,
+          incomplete: false,
+        }),
+      });
+    }
+  }
+  // Check after live validation, so newly owed work cannot gain completeness.
   if (
-    !observed ||
-    observed.values.length !== options.config.dimensions ||
-    (await vectorPayloadHash(observed.values)) !== selected.vectorHash
+    queried.size &&
+    (await searchCoverageIncomplete(db, options.config, [options.targetType]))
   )
-    return { candidates: [], complete: false };
-  const raw = await vectorStore.queryById(selected.id, {
-    entityKinds: [options.targetType],
-    topK: CANDIDATE_BUDGET,
-  });
-  return validatedScan(
-    db,
-    raw,
-    [options.targetType],
-    options.limit,
-    options.config,
-    seed,
-  );
+    for (const key of queried) {
+      const result = results.get(key);
+      if (result?.status === "fulfilled") result.value.complete = false;
+    }
+  return results;
 }

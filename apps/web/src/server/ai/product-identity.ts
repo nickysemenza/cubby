@@ -1,16 +1,15 @@
 import type { AiProvenance } from "@cubby/schemas/ai-evaluation";
+import { entityRefKey } from "@cubby/schemas/entity";
 import { entitySchema } from "@cubby/schemas/entity-core";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import { isMiscProduct } from "@cubby/shared";
 import { getErrorMessage } from "@cubby/shared";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
-import { and, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { chunk } from "es-toolkit";
 import { z } from "zod";
 
-import { normalizeSearchText } from "~/lib/search-normalization";
 import {
   decisionModelFor,
   runDecisionChoice,
@@ -23,13 +22,7 @@ import {
 } from "~/server/ai/policy/feature-identity";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted, isTransaction } from "~/server/db/helpers";
-import {
-  product,
-  entityExternalId,
-  entityEmbedding,
-  entityIdentity,
-  searchDocument,
-} from "~/server/db/schema";
+import { product, entityExternalId } from "~/server/db/schema";
 import {
   productIdentityEvidenceFences,
   type ProductIdentityFenceTarget,
@@ -52,15 +45,10 @@ import {
   loadProductIdentifierClaims,
   type DroppedProductIdentifierClaim,
 } from "~/server/domains/product/repo/product-identity-claims";
-import { vectorPayloadHash } from "~/server/generic/embedding/repo/embedding-artifact";
-import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
+import { findSimilarEntitiesPage } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
 import { productionVectorStore } from "~/server/generic/embedding/service/semantic/vector-store";
-import {
-  prepareSearchDocuments,
-  searchCoverageIncomplete,
-} from "~/server/generic/search/repo/search-document";
 import { nameAliasKeysSql } from "~/server/lib/name-alias-match";
 
 export const productIdentityPrompt = (subject: string) => ({
@@ -236,10 +224,7 @@ async function retrieveProductIdentityCandidatePage(
   }
   return { sources: results, claims };
 }
-/** Local semantic artifacts and live text are validated once for the corpus.
- * Only vector transport fans out, in waves of four; a failed seed retains its
- * own coverage error and cannot hide exact or lexical candidates.
- */
+/** Semantic sources and returned hits share the canonical page validator. */
 async function retrieveProductIdentitySemanticPage(
   db: Database,
   ids: readonly ProductId[],
@@ -253,131 +238,45 @@ async function retrieveProductIdentitySemanticPage(
   >();
   if (!ids.length) return result;
   try {
-    const config = getSemanticEmbeddingConfig(),
-      client = getDb(db);
-    const rows = await client
-      .select({
-        id: entityEmbedding.id,
-        entityKind: entityEmbedding.entityKind,
-        entityId: entityEmbedding.entityId,
-        hash: entityEmbedding.artifactHash,
-        vectorHash: entityEmbedding.vectorHash,
-      })
-      .from(entityEmbedding)
-      .innerJoin(
-        searchDocument,
-        and(
-          eq(searchDocument.entityKind, entityEmbedding.entityKind),
-          eq(searchDocument.entityId, entityEmbedding.entityId),
-        ),
-      )
-      .innerJoin(
-        entityIdentity,
-        and(
-          eq(entityIdentity.id, entityEmbedding.entityId),
-          eq(entityIdentity.kind, entityEmbedding.entityKind),
-        ),
-      )
-      .where(
-        and(
-          eq(entityEmbedding.entityKind, "product"),
-          eq(entityEmbedding.artifactState, "selected"),
-          isNull(entityEmbedding.deletedAt),
-          isNotNull(entityEmbedding.observedAt),
-          isNotNull(entityEmbedding.indexedAt),
-          isNotNull(entityEmbedding.artifactHash),
-          isNotNull(entityEmbedding.vectorHash),
-          eq(entityEmbedding.provider, config.provider),
-          eq(entityEmbedding.model, config.model),
-          eq(entityEmbedding.dimensions, config.dimensions),
-          isNull(searchDocument.deletedAt),
-          isNull(entityIdentity.deletedAt),
-        ),
-      );
-    const documents = await prepareSearchDocuments(db, rows);
-    const textById = new Map(
-      documents.entries.map(({ source, body }) => [source.entityId, body]),
+    const scans = await findSimilarEntitiesPage(
+      db,
+      productionVectorStore,
+      ids.map((entityId) => ({ entityKind: "product", entityId })),
+      {
+        targetType: "product",
+        limit: 20,
+        config: getSemanticEmbeddingConfig(),
+      },
     );
-    const current = [];
-    for (const row of rows) {
-      const text = textById.get(row.entityId);
-      if (
-        text !== undefined &&
-        row.hash ===
-          (await embeddingTextHash({
-            entityKind: row.entityKind,
-            ...config,
-            text: normalizeSearchText(text),
-          }))
-      )
-        current.push(row);
-    }
-    const byEntity = new Map(current.map((row) => [row.entityId, row])),
-      byArtifact = new Map(current.map((row) => [row.id, row]));
-    const observations = await productionVectorStore.getByIds(
-      ids.flatMap((id) => {
-        const row = byEntity.get(id);
-        return row ? [row.id] : [];
-      }),
-    );
-    const observed = new Map(observations.map((row) => [row.id, row]));
-    // The shared coverage probe includes direct and fanout dirty marks.
-    const missing = await searchCoverageIncomplete(db, config, ["product"]);
-    for (const wave of chunk(ids, 4))
-      await Promise.all(
-        wave.map(async (id) => {
-          try {
-            const selected = byEntity.get(id),
-              vector = selected ? observed.get(selected.id) : undefined;
-            if (
-              !selected ||
-              !vector ||
-              vector.values.length !== config.dimensions ||
-              (await vectorPayloadHash(vector.values)) !== selected.vectorHash
-            ) {
-              result.set(id, {
-                candidates: [],
-                coverage: {
-                  status: "failed",
-                  error: "Semantic candidate coverage is pending or incomplete",
-                },
-              });
-              return;
-            }
-            const raw = await productionVectorStore.queryById(selected.id, {
-              entityKinds: ["product"],
-              topK: 100,
-            });
-            const candidates = [
-              ...new Set(
-                raw.flatMap((match) => {
-                  const row = byArtifact.get(match.id);
-                  return row && row.entityId !== id
-                    ? [parseEntityId("product", row.entityId)]
-                    : [];
-                }),
+    for (const id of ids) {
+      const scan = scans.get(entityRefKey("product", id));
+      result.set(
+        id,
+        scan?.status === "fulfilled"
+          ? {
+              candidates: scan.value.candidates.map((candidate) =>
+                parseEntityId("product", candidate.entityId),
               ),
-            ];
-            const complete =
-              !missing && !(raw.length === 100 && candidates.length < 20);
-            result.set(id, {
-              candidates: candidates.slice(0, 20),
-              coverage: complete
-                ? { status: "queried", count: Math.min(20, candidates.length) }
+              coverage: scan.value.complete
+                ? { status: "queried", count: scan.value.candidates.length }
                 : {
                     status: "failed",
                     error:
                       "Semantic candidate coverage is pending or incomplete",
                   },
-            });
-          } catch (error) {
-            result.set(id, {
+            }
+          : {
               candidates: [],
-              coverage: { status: "failed", error: getErrorMessage(error) },
-            });
-          }
-        }),
+              coverage: {
+                status: "failed",
+                error:
+                  scan?.status === "rejected"
+                    ? getErrorMessage(scan.reason)
+                    : "Semantic candidate coverage is pending or incomplete",
+              },
+            },
       );
+    }
   } catch (error) {
     for (const id of ids)
       result.set(id, {
