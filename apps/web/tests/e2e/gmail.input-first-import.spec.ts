@@ -315,11 +315,11 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     contentType: "image/png",
   });
   await expect(
-    coverage.getByRole("columnheader", { name: "Domains", exact: true }),
+    coverage.getByRole("button", { name: "Sort by Domains", exact: true }),
   ).toBeVisible();
   await expect(
-    coverage.getByRole("columnheader", {
-      name: "Sender addresses",
+    coverage.getByRole("button", {
+      name: "Sort by Sender addresses",
       exact: true,
     }),
   ).toBeVisible();
