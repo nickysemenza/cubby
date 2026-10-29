@@ -642,6 +642,12 @@ stops the batch even when its rule is paused. Release the locks before ordinary
 application and reread the suffix after it. Import-scoped passes retain regeneration
 before each admission, since regeneration can introduce actionable rules.
 Interruption preserves reusable labels and completed publications.
+Retrying failed statement labels consumes only the retained charge references,
+one charge at a time, without moving the original population cursor. Each charge
+is regenerated under the Run's retained account/date/import scope before its
+current label work is selected. Model waits and funding pauses retain that charge;
+disabled automatic AI work pauses the retry rather than discarding it. Healthy
+charges and later arrivals are not added to the retry population.
 Label-page selection partitions positions by whether either original-order component
 is retained. Ordinary rows use native timestamp/ID ordering; retained rows keep the
 same component-wise overrides. A statement Sweep carries its full account/date/import

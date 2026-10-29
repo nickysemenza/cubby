@@ -38,6 +38,7 @@ import {
   generateStatementHoldVoidPage,
   generateStatementSuggestionPage,
   retryStatementGenerationRefs,
+  statementChargeFromWorkRef,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { buildCrudServices } from "~/server/http/request-context";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
@@ -465,14 +466,54 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
   page: async ({ db, run, step, retrying, work }) => {
     const { labelStatementSuggestions } =
       await import("~/server/domains/transaction-import/service/statement-suggestion-labels");
+    const retryRefs = step.meta?.retryRefs ?? [];
+    const retainedRetry = retrying || retryRefs.length > 0;
+    const ref = retryRefs[0];
+    const scope = scopeOf(run, "statement_transaction");
+    if (retainedRetry && !ref)
+      return {
+        kind: "progress",
+        delta: { failed: 1 },
+        errors: [
+          {
+            at: new Date().toISOString(),
+            message:
+              "Statement label retry has no retained charge references. Inspect the failed step before restarting its scope.",
+          },
+        ],
+        done: true,
+      };
+    const charge = ref ? statementChargeFromWorkRef(ref) : null;
     let outcome: Awaited<ReturnType<typeof labelStatementSuggestions>>;
     try {
+      if (ref) {
+        // One charge stays retained across model waits; never reset the population cursor.
+        const refreshed = await retryStatementGenerationRefs(db, {
+          runId: run.id,
+          scope,
+          refs: [ref],
+          work,
+        });
+        if (!refreshed.done) {
+          const remaining = retryRefs.filter((candidate) => candidate !== ref);
+          return {
+            kind: "progress",
+            delta: {
+              skipped: refreshed.skipped,
+              failed: refreshed.failed.length,
+            },
+            errors: refreshed.failed,
+            meta: { retryRefs: remaining },
+            done: remaining.length === 0,
+          };
+        }
+      }
       outcome = await labelStatementSuggestions(db, {
         runId: run.id,
         cooperative: true,
         work,
         countedFailures: new Set(step.meta?.failedRefs ?? []),
-        after: retrying
+        after: retainedRetry
           ? null
           : z
               .object({
@@ -482,12 +523,53 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
               })
               .nullable()
               .parse(step.cursor ?? null),
-        scope: scopeOf(run, "statement_transaction"),
+        scope,
+        ...(retainedRetry && { retryCharges: charge ? [charge] : [] }),
       });
     } catch (error) {
       const paused = budgetPause(error);
       if (paused) return paused;
       throw error;
+    }
+    if (retainedRetry) {
+      const tallies = {
+        labelsReused: outcome.labels.reused,
+        labelsGenerated: outcome.labels.generated,
+      };
+      if (outcome.paused)
+        return {
+          kind: "paused",
+          tallies,
+          reason: outcome.paused.reason,
+          until: new Date(outcome.paused.until),
+          waitReason: "ai_funding_window",
+        };
+      if (!outcome.active)
+        return {
+          kind: "paused",
+          tallies,
+          reason:
+            "Automatic AI work is disabled; retained statement labels are waiting.",
+          until: null,
+        };
+      const failed = outcome.failed.length > 0;
+      const pending = !failed && (outcome.next !== null || outcome.stale > 0);
+      const remaining = pending
+        ? retryRefs
+        : retryRefs.filter((candidate) => candidate !== ref);
+      return {
+        kind: "progress",
+        delta: {
+          done: pending || failed ? 0 : 1,
+          failed: outcome.failed.length,
+        },
+        errors: outcome.failed,
+        tallies,
+        meta: { retryRefs: remaining },
+        done: remaining.length === 0,
+        ...(pending ? { waitSeconds: 1 } : {}),
+        ...waitFor(outcome.waitingUntil),
+      };
     }
     const checkpoint = {
       delta: {
