@@ -3136,8 +3136,14 @@ is discarded or guessed to be background work.
 The `derived.drain` Job claims ready marks, member edits first, then
 propagation, then reconciliation. It computes each directly marked target's
 batch outside the publication transaction through its adapter
-(`workflows/derived-computes.ts`). Each Worker page holds at most one 20-record compute
-batch, including sink results; it publishes before preparing another page.
+(`workflows/derived-computes.ts`). Each Worker page observes at most 200 marks
+and admits an ordered prefix within one preparation budget. An adapter defaults
+to a 20-record preparation batch, including sink results; compact quality
+adapters declare 200. Mixed pages charge each item its share of that adapter's
+batch, so large recipe preparations keep their previous bound. Items outside
+the admitted prefix retain their tickets and retry state unless existing
+covered-mark settlement applies their identical effect. Publication still
+uses the existing 25-item fenced chunks before preparing another page.
 The existing invocation time budget is checked between pages. Fanout expansion
 stays set-based in Postgres, returning only its count and a bounded reader-notification
 sample per target. Large affected categories use the existing whole-category

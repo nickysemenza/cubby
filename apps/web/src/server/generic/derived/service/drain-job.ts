@@ -14,6 +14,8 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import type { DerivedComputes } from "~/server/generic/derived/repo/compute";
 import {
   DERIVED_DRAIN_JOB_KEY,
+  DERIVED_COMPUTE_BATCH,
+  admitDerivedPage,
   derivedChunk,
   derivedWorkEligible,
   type DerivedChunk,
@@ -36,9 +38,6 @@ export const DERIVED_RECONCILE_JOB_KEY = "derived:reconcile";
 const DRAIN_REPEAT_MS = 60_000;
 const RECONCILE_INTERVAL_MS = 60 * 60_000;
 const RECONCILE_BUCKETS = 24;
-// A sink retains its prepared results until publication. Finish one bounded
-// batch before preparing more, so the invocation budget can yield between pages.
-const DRAIN_PAGE_MARKS = 20;
 
 /**
  * Each page claims ready marks, computes outside the transaction and
@@ -47,10 +46,14 @@ const DRAIN_PAGE_MARKS = 20;
 export const derivedDrainHandler = (
   computes: DerivedComputes,
   /** Production keeps the default page and chunk; test drains settle large fixtures in one transaction. */
-  { limit = DRAIN_PAGE_MARKS, chunk }: { limit?: number; chunk?: number } = {},
+  { limit, chunk }: { limit?: number; chunk?: number } = {},
 ): JobHandler =>
   defineDrain<{ plan: DerivedPagePlan; chunk: DerivedChunk }>({
-    limit,
+    limit: limit ?? DERIVED_COMPUTE_BATCH,
+    admit:
+      limit === undefined
+        ? (items) => admitDerivedPage({ items, computes })
+        : undefined,
     eligible: derivedWorkEligible,
     chunk,
     repeats: true,

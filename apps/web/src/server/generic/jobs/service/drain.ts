@@ -53,6 +53,8 @@ export type DrainSpec<P> = {
   limit: number;
   /** Admission against the current work frontier, before limiting the page. */
   eligible?: (target: SQL) => SQL;
+  /** Keep an ordered preparation prefix; omitted items stay owed unless covered by an identical applied effect. */
+  admit?: (items: readonly WorkItem[]) => readonly WorkItem[];
   /** Publication weight of an item (default 1); a chunk holds at most `chunk`. */
   weight?: (item: WorkItem, prepared: P) => number;
   /** Weight one publication transaction holds (default 25). */
@@ -140,9 +142,10 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
   return {
     async prepare(db, claim, context) {
       const { backoff } = jobKindPolicy(claim.kind);
-      const items = await withJobPhase("drain.claim", () =>
+      const observed = await withJobPhase("drain.claim", () =>
         claimWork(db, claim.key, spec.limit, spec.eligible),
       );
+      const items = spec.admit?.(observed) ?? observed;
       if (!items.length) {
         const next = spec.repeats ? null : await nextWorkReadyAt(db, claim.key);
         return {

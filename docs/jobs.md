@@ -64,8 +64,11 @@ ticket predicates, backlog); claiming, clearing and backoff
 (`repo/work-claims.ts`) belong to `defineDrain` alone.
 
 `defineDrain` (`generic/jobs/service/drain.ts`) is the one claim → prepare →
-publish helper. It claims items by priority, readiness and ticket; prepares
-them outside a transaction; settles per-item preparation failures (backoff
+publish helper. It observes items by priority, readiness and ticket, keeps
+only the ordered prefix admitted by the adapter's preparation budget (the
+remaining observed tickets stay owed without consuming attempts unless the
+existing coverage mechanism settles their identical applied effect), and prepares
+it outside a transaction. It settles per-item preparation failures (backoff
 from the kind policy, or the drain's `exhaust` at `maxAttempts`); then
 publishes at most 25 weighted items per fenced transaction (SERIALIZABLE where
 the drain declares it). A drain's `lock` takes its domain locks first and may

@@ -118,7 +118,13 @@ export async function drainDerivedPage(
       key,
       isDerivedSink(adapter)
         ? { ...adapter, prepare: (tx, ids) => after(adapter.prepare(tx, ids)) }
-        : (tx, ids) => after(adapter(tx, ids)),
+        : Object.assign(
+            (tx: Parameters<typeof adapter>[0], ids: readonly string[]) =>
+              after(adapter(tx, ids)),
+            {
+              preparationBatchSize: adapter.preparationBatchSize,
+            },
+          ),
     ]),
   );
   const held = only

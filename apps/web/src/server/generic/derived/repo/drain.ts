@@ -85,6 +85,39 @@ const fixedTargetRows = (
 
 /** Ids per compute call. */
 export const DERIVED_COMPUTE_BATCH = 200;
+// Heavy adapters retain the original recipe-safe cap. Compact adapters can
+// declare a larger batch; mixed pages spend one shared preparation budget.
+const DEFAULT_PREPARATION_BATCH = 20;
+export function admitDerivedPage({
+  items,
+  computes,
+}: {
+  items: readonly WorkItem[];
+  computes: DerivedComputes;
+}): readonly WorkItem[] {
+  let weight = 0;
+  let count = 0;
+  for (const item of items) {
+    const parsed = parseTarget(item.target);
+    const adapter =
+      parsed && !parsed.fanoutInput
+        ? computes[parsed.declaration.compute]
+        : undefined;
+    const batchSize = Math.max(
+      1,
+      Math.min(
+        DERIVED_COMPUTE_BATCH,
+        adapter?.preparationBatchSize ?? DEFAULT_PREPARATION_BATCH,
+      ),
+    );
+    const cost = Math.ceil(DERIVED_COMPUTE_BATCH / batchSize);
+    if (weight + cost > DERIVED_COMPUTE_BATCH) break;
+    weight += cost;
+    count++;
+  }
+  return items.slice(0, count);
+}
+
 /** The doorbell's per-category bound; a larger set refreshes the whole kind. */
 const RING_RECORD_LIMIT = 200;
 /** Extra scheduling marks covered by one fixed-target expansion, not extra computes. */
