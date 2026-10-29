@@ -5,7 +5,7 @@
  * changed values. A mark clears only while its ticket is unchanged since the
  * claim, so a save that lands during compute keeps the record dirty.
  */
-import { isNull, type SQL, sql } from "drizzle-orm";
+import { isNull, or, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { DatabaseChanges } from "~/lib/doorbell";
@@ -118,8 +118,13 @@ const groupByTarget = (items: readonly WorkItem[]) => {
 };
 
 const declaredTargetsMatch = (targets: readonly string[]) => (column: SQL) =>
-  sql`EXISTS (SELECT 1 FROM jsonb_array_elements_text(${JSON.stringify(targets)}::jsonb) declared(target)
-    WHERE ${fanoutTargetMatches(column, sql`declared.target`)})`;
+  // The page's finite prefix bounds must be visible to the index planner.
+  // A correlated EXISTS over JSON targets scans the entire drain instead.
+  or(
+    ...targets.map((target) =>
+      fanoutTargetMatches(column, sql`${target}::text`),
+    ),
+  ) ?? sql`false`;
 
 /**
  * Compute every direct mark's value outside the publication transaction. A

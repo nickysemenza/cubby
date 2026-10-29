@@ -2893,6 +2893,9 @@ even when linked IDs do not change. Recipe totals prepare a bounded batch of
 recipes through one shared costing context; the drain preserves tickets written
 during that preparation. WorkItem fanout lookup uses an indexed `COLLATE "C"`
 prefix range, including correlated target lookups.
+The drain's pre-compute fanout observation exposes each page target's prefix
+bounds directly in an OR predicate so the same index serves that read; a JSON
+target-list subquery must not turn each page into a whole-drain scan.
 
 Service Cost captures the positive actual charge total beside its average, count
 and latest dated charge. The explanation reads those operands from the same
