@@ -45,7 +45,11 @@ export const emailWorkSources: WorkSource[] = [
           .from(email)
           .leftJoin(
             quality,
-            and(eq(quality.entityId, email.id), eq(quality.key, "dataQuality")),
+            and(
+              eq(quality.entityId, email.id),
+              eq(quality.kind, declaration.entity),
+              eq(quality.key, "dataQuality"),
+            ),
           )
           .where(
             and(
