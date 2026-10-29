@@ -158,7 +158,7 @@ export const { definition, readSchemas } = defineEntityModel(
         { output: false, key: "report", kind: "json", nullable: true },
         {
           output: false,
-          display: { detail: false, list: false },
+          display: { detail: false, list: false, readPath: "product.id" },
           key: "productId",
           kind: "identifier",
           nullable: true,
