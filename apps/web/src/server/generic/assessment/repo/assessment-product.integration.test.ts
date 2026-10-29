@@ -16,6 +16,7 @@ import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import {
   evaluateProductIdentity,
+  prepareProductIdentityPage,
   retrieveProductIdentityCandidates,
 } from "~/server/ai/product-identity";
 import {
@@ -959,7 +960,12 @@ describe("stored Product identity pairs", () => {
       productId: bId,
       expenseId: receiptItem.id,
     });
+    const [preparedCatalog] = await prepareProductIdentityPage(ctx.db, [
+      { key: "synthetic-shared-catalog", kind: "product", recordId: aId },
+    ]);
+    if (!preparedCatalog) throw new Error("Synthetic catalog is missing");
     const result = await evaluateProductIdentity(ctx.db, aId, runId, {
+      preparedCatalog,
       decisionPort: async () => {
         throw new Error("Synthetic unavailable model");
       },
@@ -1026,6 +1032,17 @@ describe("stored Product identity pairs", () => {
       .update(product)
       .set({ model: "New source identity" })
       .where(eq(product.id, bId));
+    expect(
+      (
+        await evaluateProductIdentity(ctx.db, aId, runId, {
+          ...unavailable,
+          preparedCatalog,
+        })
+      ).pairs,
+    ).toEqual([]);
+    await expect(publishProductIdentity(ctx.db, result)).rejects.toThrow(
+      /changed|stale/,
+    );
     await publishProductIdentity(
       ctx.db,
       await evaluateProductIdentity(ctx.db, bId, secondRunId, unavailable),

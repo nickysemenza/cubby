@@ -1522,7 +1522,11 @@ catalog completes afterward. Catalog and connection evaluation share Product
 snapshots, retained identifier claims and variant history within each preparation
 batch. Retained-claim reads return each accepted receipt once with its current
 live bindings in the same SQL statement, validate the complete receipt, and
-preserve binding order when deriving claims. Publication preparation loads dependency row versions for the whole batch
+preserve binding order when deriving claims. Connection pages use the same
+Product identity page preparation as catalog evaluations, sharing whole-catalog
+claims and semantic-document validation across their Product sources. Each
+source still rechecks its prepared pair snapshots before inference, and current
+locked evidence remains authoritative at publication. Publication preparation loads dependency row versions for the whole batch
 and retains a separate hash for each pair; each write transaction checks that
 pair's current hash. Prepared evidence never replaces the transaction's current
 Run authorization or activation checks. Connection refresh commits at most two prepared
