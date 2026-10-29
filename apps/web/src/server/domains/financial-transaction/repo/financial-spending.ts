@@ -85,13 +85,10 @@ const spendingRequestBoundary = z.union([
 function spendingBlocker(input: {
   facts: Awaited<ReturnType<typeof spendingFacts>>;
   advice: Request["advice"];
-  category: typeof spendingCategory.$inferSelect | undefined;
-  history: { category: string | null }[];
   vendorResolved: boolean;
   ambiguous: boolean;
-  categoryHistoryReviewed?: boolean;
 }) {
-  const { facts, advice, category, history } = input;
+  const { facts, advice } = input;
   if (!facts.purchaser && !liveHouseholdCard(facts.account))
     return "A confirmed member-owned account or household credit card is required before booking spending.";
   if (
@@ -101,19 +98,6 @@ function spendingBlocker(input: {
     return "A dated, stable source identity is required before booking spending.";
   if (input.ambiguous)
     return "The merchant matches competing Vendors; review its identity.";
-  if (
-    !category ||
-    advice?.categoryConfidence !== "high" ||
-    (advice.historyConflict && !input.categoryHistoryReviewed)
-  )
-    return "Choose one well-supported live spending category before booking.";
-  if (
-    !input.categoryHistoryReviewed &&
-    history.some(
-      (entry) => entry.category !== null && entry.category !== category.id,
-    )
-  )
-    return "Merchant spending history conflicts with the proposed category.";
   if (
     !input.vendorResolved &&
     (!advice?.vendorName ||
@@ -749,7 +733,7 @@ async function spendingCandidates(
   return [...candidates.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
 
-function needsBookingCategoryEvidence(
+function canReadBookingCandidates(
   input: Parameters<typeof spendingBlocker>[0],
 ) {
   return (
@@ -761,7 +745,7 @@ function candidateGraphInputs(
   candidates: readonly SpendingCandidate[],
   input: Parameters<typeof spendingBlocker>[0],
 ) {
-  return needsBookingCategoryEvidence(input) ? candidates : [];
+  return canReadBookingCandidates(input) ? candidates : [];
 }
 
 async function categoryHistoryForDiscovery(
@@ -770,9 +754,9 @@ async function categoryHistoryForDiscovery(
   input: Parameters<typeof spendingBlocker>[0],
   page?: FinancialSpendingPage,
 ) {
-  // History cannot unblock missing classification. Refunds may inherit their
-  // category later, so retain their history before evaluating the final plan.
-  if (!vendorId || !needsBookingCategoryEvidence(input)) return [];
+  // Uncertain classification leaves spending uncategorized; history still
+  // determines whether category advice can be applied without guessing.
+  if (!vendorId || !canReadBookingCandidates(input)) return [];
   const lookup =
     page?.categoryHistory.get(vendorId) ??
     financialSpendingCategoryHistory(db, vendorId);
@@ -931,25 +915,19 @@ async function discoverSpendingEvidence(
     {
       facts,
       advice,
-      category,
-      history: [],
       vendorResolved: Boolean(vendor),
       ambiguous: ambiguous && !request.vendorId,
-      categoryHistoryReviewed: request.categoryHistoryReviewed,
     },
     page,
   );
   const candidateEvidence = [];
   // Review-only plans cannot be committed. Load receipt graphs only once
-  // classification can admit booking, or a refund needs its original category.
+  // identity can admit booking, or a refund needs its original category.
   const graphCandidates = candidateGraphInputs(liveCandidates, {
     facts,
     advice,
-    category,
-    history,
     vendorResolved: Boolean(vendor),
     ambiguous: ambiguous && !request.vendorId,
-    categoryHistoryReviewed: request.categoryHistoryReviewed,
   });
   for (const candidate of graphCandidates)
     candidateEvidence.push({
@@ -1200,7 +1178,6 @@ export async function previewFinancialSpending(
     facts: currentFacts,
     advice,
     category,
-    categoryFromPurchase,
     history,
     vendor,
     ambiguous,
@@ -1224,15 +1201,25 @@ export async function previewFinancialSpending(
     return review(violation?.message ?? "Spending must have a nonzero amount.");
   if (request.vendorId && vendor?.shortcode !== request.vendorId)
     return review("The reviewed Vendor is no longer live.");
+  if (request.spendingCategoryId) {
+    if (!category)
+      return review("The reviewed spending category is no longer live.");
+    if (
+      !request.categoryHistoryReviewed &&
+      (advice?.historyConflict ||
+        history.some(
+          (entry) => entry.category !== null && entry.category !== category.id,
+        ))
+    )
+      return review(
+        "Merchant spending history conflicts with the reviewed category.",
+      );
+  }
   const blocker = spendingBlocker({
     facts: currentFacts,
     advice,
-    category,
-    history,
     vendorResolved: Boolean(vendor),
     ambiguous: ambiguous && !request.vendorId,
-    categoryHistoryReviewed:
-      request.categoryHistoryReviewed || categoryFromPurchase,
   });
   if (blocker) return review(blocker);
   const chosen = request.purchaseId
@@ -1295,6 +1282,19 @@ async function prepareReadySpending(
   const { facts, category, vendor, advice, candidateEvidence, strong, basis } =
     evidence;
   const { row, source } = facts;
+  // Category uncertainty must not invent a classification or prevent otherwise
+  // supported spending. Missing effective categories enter the existing Work queue.
+  const bookingCategory =
+    category &&
+    advice?.categoryConfidence === "high" &&
+    (evidence.categoryFromPurchase ||
+      basis.request.categoryHistoryReviewed ||
+      (!advice.historyConflict &&
+        evidence.history.every(
+          (entry) => entry.category === null || entry.category === category.id,
+        )))
+      ? category
+      : undefined;
   const review = (reason: string): FinancialSpendingPlan => ({
     ...basis,
     status: "review_required",
@@ -1360,7 +1360,7 @@ async function prepareReadySpending(
             financialBookingInput.parse({
               transactionId: row.shortcode,
               purchaseId: target.shortcode,
-              spendingCategoryId: category?.shortcode,
+              spendingCategoryId: bookingCategory?.shortcode,
             }),
             {
               amount: source.amount,
@@ -1392,7 +1392,7 @@ async function prepareReadySpending(
     }),
     vendorId: vendor?.shortcode ?? null,
     vendorName: vendor?.name ?? advice!.vendorName,
-    spendingCategoryId: category!.shortcode,
+    spendingCategoryId: bookingCategory?.shortcode ?? null,
     purchaseId: target?.shortcode ?? null,
   });
 }

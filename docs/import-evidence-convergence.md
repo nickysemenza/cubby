@@ -82,9 +82,14 @@ Expense edits use generic field Suggestions, and allocation reconciliation uses
 explicit finance commands. Transactions without statement observations can
 invoke the shared commands directly; statement discovery uses retained rows.
 
-Clean new spending requires one high-confidence live Cubby spending category
-without conflicting merchant history, plus the existing transaction-kind
-agreement checks. Category history is optional and there is no amount cap.
+Clean new spending retains the existing transaction-kind agreement, identity,
+ownership and money checks. Missing, uncertain or conflicting category advice
+does not block otherwise-supported booking: the aggregate Expense stays
+Uncategorized and its missing effective category enters the shared Work queue.
+Apply a proposed category only when it is live, high confidence and consistent
+with merchant history, or the member reviewed that history. Explicit reviewed
+category choices still refuse deleted categories or unacknowledged conflicts.
+Category history is optional and there is no amount cap.
 The provider category stays verbatim evidence. Vendor name/alias resolution
 runs first; an unresolved merchant may propose a supported cleaned business
 name and retain the literal merchant alias. Person, processor-only, unsupported

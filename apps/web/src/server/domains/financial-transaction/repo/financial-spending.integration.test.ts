@@ -9,7 +9,7 @@ import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   getDb,
@@ -98,6 +98,44 @@ describe("shared spending booking", () => {
     });
     return { owner, account, vendor, category, transaction, advice };
   }
+  it.each(["missing", "uncertain", "conflicting"] as const)(
+    "books supported spending once with an unknown %s category instead of guessing",
+    async (categoryEvidence) => {
+      const { transaction, advice } = await fixture();
+      const request = {
+        transactionId: transaction.output.id,
+        advice: financialSpendingAdvice.parse({
+          ...advice,
+          spendingCategoryId:
+            categoryEvidence === "missing" ? null : advice.spendingCategoryId,
+          categoryConfidence:
+            categoryEvidence === "uncertain" ? "medium" : "high",
+          historyConflict: categoryEvidence === "conflicting",
+        }),
+      };
+      const plan = await previewFinancialSpending(ctx.db, request);
+      expect(plan).toMatchObject({
+        status: "ready",
+        spendingCategoryId: null,
+      });
+      await commitFinancialSpending(ctx.db, plan, ctx.actor);
+      expect(
+        await commitFinancialSpending(ctx.db, plan, ctx.actor),
+      ).toMatchObject({
+        replayed: true,
+      });
+      expect(
+        await getDb(ctx.db)
+          .select({ cost: expense.cost, category: expense.spendingCategoryId })
+          .from(expense),
+      ).toEqual([{ cost: 42.5, category: null }]);
+      expect(
+        await getDb(ctx.db)
+          .select({ amount: financialTransactionAllocation.amount })
+          .from(financialTransactionAllocation),
+      ).toEqual([{ amount: 42.5 }]);
+    },
+  );
   it.each(["spending", "direct"] as const)(
     "books a household card's sole live member once through %s booking",
     async (writer) => {
@@ -778,7 +816,7 @@ describe("shared spending booking", () => {
         await previewFinancialSpending(ctx.db, request, undefined, page),
       ).toEqual(await previewFinancialSpending(ctx.db, request));
   });
-  it("shares category reads within an advisory page and rebuilds them before commit", async () => {
+  it("rechecks category evidence at commit and leaves deleted model categories unknown", async () => {
     const { account, transaction, advice, category } = await fixture();
     const accountId = await resolveOrThrow(
       ctx.db,
@@ -813,17 +851,11 @@ describe("shared spending booking", () => {
       advice,
     };
     const page = await prepare();
-    const categoryReads = vi.spyOn(
-      getDb(ctx.db).query.spendingCategory,
-      "findFirst",
-    );
     const shared = await Promise.all(
       Array.from({ length: 4 }, () =>
         previewFinancialSpending(ctx.db, request, undefined, page),
       ),
     );
-    expect(categoryReads).toHaveBeenCalledTimes(1);
-    categoryReads.mockRestore();
     const fresh = await previewFinancialSpending(ctx.db, request);
     expect(shared).toEqual(Array.from({ length: 4 }, () => fresh));
     expect(fresh.status).toBe("ready");
@@ -856,20 +888,26 @@ describe("shared spending booking", () => {
       .set({ deletedAt: new Date() })
       .where(eq(spendingCategory.shortcode, category.id));
     const missingPage = await prepare();
-    const missingReads = vi.spyOn(
-      getDb(ctx.db).query.spendingCategory,
-      "findFirst",
-    );
     const missing = await Promise.all(
       Array.from({ length: 4 }, () =>
         previewFinancialSpending(ctx.db, request, undefined, missingPage),
       ),
     );
-    expect(missingReads).toHaveBeenCalledTimes(1);
-    missingReads.mockRestore();
     expect(missing).toEqual(Array.from({ length: 4 }, () => missing[0]));
     expect(missing[0]).toEqual(await previewFinancialSpending(ctx.db, request));
-    expect(missing[0]?.status).toBe("review_required");
+    expect(missing[0]).toMatchObject({
+      status: "ready",
+      spendingCategoryId: null,
+    });
+    expect(
+      await previewFinancialSpending(ctx.db, {
+        ...request,
+        spendingCategoryId: category.id,
+      }),
+    ).toMatchObject({
+      status: "review_required",
+      reason: "The reviewed spending category is no longer live.",
+    });
   });
   it("counts effective Vendor history without future or deleted spending", async () => {
     const { vendor, category } = await fixture();
@@ -933,9 +971,9 @@ describe("shared spending booking", () => {
       },
     ]);
   });
-  // Held identity and category conflicts need an explicit reviewed resolution;
-  // ordinary high-confidence advice must never silently override either.
-  it("requires review to choose an ambiguous Vendor and override conflicting category history", async () => {
+  // Category uncertainty may leave a booking uncategorized, but cannot resolve
+  // Vendor ambiguity or override an explicitly reviewed category's history.
+  it("keeps category conflicts uncategorized and requires review for Vendor identity and category overrides", async () => {
     const { vendor, transaction, advice } = await fixture();
     await createRepoIdentity(ctx, "vendor", {
       name: "Synthetic competing orchard",
@@ -964,10 +1002,17 @@ describe("shared spending booking", () => {
       "review_required",
     );
     expect(
+      await previewFinancialSpending(ctx.db, {
+        ...request,
+        vendorId: vendor.output.id,
+      }),
+    ).toMatchObject({ status: "ready", spendingCategoryId: null });
+    expect(
       (
         await previewFinancialSpending(ctx.db, {
           ...request,
           vendorId: vendor.output.id,
+          spendingCategoryId: advice.spendingCategoryId ?? undefined,
         })
       ).status,
     ).toBe("review_required");

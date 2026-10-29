@@ -20,7 +20,7 @@ import {
 } from "./financial-transaction-fields";
 import { plainDate } from "./project";
 
-export const FINANCIAL_SPENDING_POLICY = "2026-10-24.2";
+export const FINANCIAL_SPENDING_POLICY = "2026-10-29.1";
 
 /** Advice never bypasses planning; explicit commands and queue policy authorize execution. */
 export const financialSpendingAdvice = z.object({
@@ -90,7 +90,7 @@ export const financialSpendingPlan = z.discriminatedUnion("status", [
     purchaserSnapshot: z.string().optional(),
     vendorId: vendorShortcode.nullable(),
     vendorName: z.string(),
-    spendingCategoryId: spendingCategoryShortcode,
+    spendingCategoryId: spendingCategoryShortcode.nullable(),
     purchaseId: purchaseShortcode.nullable(),
   }),
 ]);

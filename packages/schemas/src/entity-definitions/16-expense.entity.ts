@@ -187,8 +187,16 @@ export const { definition, readSchemas } = defineEntityModel({
         {
           id: "research-queue",
           label: "Research queue",
-          description: "Spending lines still missing their Product",
-          filters: [{ id: "dataGaps", value: ["expense_product_resolution"] }],
+          description: "Spending lines missing Products or spending categories",
+          filters: [
+            {
+              id: "dataGaps",
+              value: [
+                "expense_product_resolution",
+                "expense_spending_category",
+              ],
+            },
+          ],
           sort: [{ id: "dataQuality", desc: false }],
         },
         {
