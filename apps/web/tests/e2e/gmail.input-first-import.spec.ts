@@ -374,11 +374,10 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
       exact: true,
     }),
   ).toBeVisible();
-  const senderCell = coverage
-    .getByRole("cell")
-    .filter({
-      has: page.getByRole("button", { name: sharedSender, exact: true }),
-    });
+  // The scalar cell contains both the original address and the newly verified address.
+  const senderCell = coverage.getByRole("cell").filter({
+    has: page.getByRole("button", { name: sharedSender, exact: true }),
+  });
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await senderCell.click({ position: { x: 2, y: 2 } });
   await page.keyboard.press("ControlOrMeta+c");
