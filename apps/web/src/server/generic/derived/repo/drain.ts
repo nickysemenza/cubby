@@ -5,7 +5,7 @@
  * changed values. A mark clears only while its ticket is unchanged since the
  * claim, so a save that lands during compute keeps the record dirty.
  */
-import { isNull, or, type SQL, sql } from "drizzle-orm";
+import { inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { DatabaseChanges } from "~/lib/doorbell";
@@ -35,6 +35,7 @@ import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
 import {
   type Drain,
   markWorkFrom,
+  observeReadyWork,
   unobservedWork,
   type WorkItem,
   workTicketsWhere,
@@ -86,6 +87,8 @@ const fixedTargetRows = (
 export const DERIVED_COMPUTE_BATCH = 200;
 /** The doorbell's per-category bound; a larger set refreshes the whole kind. */
 const RING_RECORD_LIMIT = 200;
+/** Extra scheduling marks covered by one fixed-target expansion, not extra computes. */
+const FIXED_FANOUT_COVERAGE_LIMIT = 200;
 /** Reconcile priority: a changed value here is drift, an undeclared input. */
 const RECONCILE_PRIORITY = 2;
 
@@ -266,25 +269,43 @@ async function expandFanouts(
   tx: Database,
   items: readonly WorkItem[],
   touched: Touched,
-): Promise<number> {
-  const selections = [...groupByTarget(items)].flatMap(([target, group]) => {
-    const parsed = parseTarget(target);
-    const input = parsed?.fanoutInput;
-    if (!parsed || !input) return [];
-    const { declaration } = parsed;
-    const refs = sql`SELECT unnest(${uuidArrayParam(group.map((item) => item.ref))})`;
-    const dependents = input.targetWhere
-      ? fixedTargetRows(declaration.table, input.targetWhere)
-      : input.path
-        ? pathSql(input.path, refs)
-        : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
-    return [
-      sql`SELECT ${declaration.target}::text, r.id,
+): Promise<Pick<DerivedChunk, "expanded" | "covered">> {
+  const fixedTargets = [
+    ...new Set(
+      items.flatMap(({ target }) =>
+        parseTarget(target)?.fanoutInput?.targetWhere ? [target] : [],
+      ),
+    ),
+  ];
+  const covered = fixedTargets.length
+    ? await observeReadyWork(tx, {
+        drain: DERIVED_DRAIN_JOB_KEY,
+        limit: FIXED_FANOUT_COVERAGE_LIMIT,
+        eligible: (column) => inArray(column, fixedTargets),
+      })
+    : [];
+  // Fixed targetWhere ignores source refs. One expansion covers every
+  // observed mark for that exact input, at the most urgent source priority.
+  const selections = [...groupByTarget([...items, ...covered])].flatMap(
+    ([target, group]) => {
+      const parsed = parseTarget(target);
+      const input = parsed?.fanoutInput;
+      if (!parsed || !input) return [];
+      const { declaration } = parsed;
+      const refs = sql`SELECT unnest(${uuidArrayParam(group.map((item) => item.ref))})`;
+      const dependents = input.targetWhere
+        ? fixedTargetRows(declaration.table, input.targetWhere)
+        : input.path
+          ? pathSql(input.path, refs)
+          : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+      return [
+        sql`SELECT ${declaration.target}::text, r.id,
         ${Math.min(...group.map((item) => item.priority))}::int
         FROM (${dependents}) r(id)`,
-    ];
-  });
-  if (!selections.length) return 0;
+      ];
+    },
+  );
+  if (!selections.length) return { expanded: 0, covered: [] };
   let expanded = 0;
   for (const { target, count, refs } of await markWorkFrom(
     tx,
@@ -296,7 +317,7 @@ async function expandFanouts(
     const parsed = parseTarget(target);
     if (parsed) touched.add(parsed.declaration.entity, refs);
   }
-  return expanded;
+  return { expanded, covered };
 }
 
 /**
@@ -324,10 +345,15 @@ async function lockSinkSources(
 }
 
 /** A page's per-chunk publication state, reset when a chunk's lock starts. */
-export type DerivedChunk = { expanded: number; touched: Touched };
+export type DerivedChunk = {
+  expanded: number;
+  touched: Touched;
+  covered: readonly WorkItem[];
+};
 export const derivedChunk = (): DerivedChunk => ({
   expanded: 0,
   touched: new Touched(),
+  covered: [],
 });
 
 /**
@@ -341,7 +367,10 @@ export async function lockDerivedChunk(
   chunk: DerivedChunk,
 ): Promise<WorkItem[]> {
   chunk.touched = new Touched();
-  chunk.expanded = await expandFanouts(db, items, chunk.touched);
+  chunk.covered = [];
+  const expansion = await expandFanouts(db, items, chunk.touched);
+  chunk.expanded = expansion.expanded;
+  chunk.covered = expansion.covered;
   const tx = unwrapDb(db);
   const narrowed: WorkItem[] = [];
   for (const [target, group] of groupByTarget(items)) {
@@ -532,7 +561,9 @@ export async function publishDerivedChunk(
   items: readonly WorkItem[],
   plan: DerivedPagePlan,
   chunk: DerivedChunk,
-): Promise<DerivedPublication & { retain: WorkItem[] }> {
+): Promise<
+  DerivedPublication & { retain: WorkItem[]; covered: readonly WorkItem[] }
+> {
   const tx = unwrapDb(db);
   const { touched } = chunk;
   const groups = groupByTarget(items);
@@ -602,6 +633,7 @@ export async function publishDerivedChunk(
     expanded: chunk.expanded,
     drift,
     retain,
+    covered: chunk.covered,
     ...(await touched.publication(tx)),
   };
 }

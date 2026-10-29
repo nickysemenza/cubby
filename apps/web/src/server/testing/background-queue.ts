@@ -97,10 +97,12 @@ export async function drainDerivedPage(
     only,
     during,
     computes = derivedComputes,
+    limit,
   }: {
     only?: (item: WorkItem) => boolean;
     during?: () => Promise<void>;
     computes?: DerivedComputes;
+    limit?: number;
   } = {},
 ): Promise<void> {
   let pending = during;
@@ -135,7 +137,7 @@ export async function drainDerivedPage(
       new Date(Date.now() + 60 * 60_000),
     );
   try {
-    await advanceDerivedPage(db, derivedDrainHandler(observed));
+    await advanceDerivedPage(db, derivedDrainHandler(observed, { limit }));
     if (pending) throw new Error("The derived page computed nothing");
   } finally {
     for (const [target, items] of byTarget)

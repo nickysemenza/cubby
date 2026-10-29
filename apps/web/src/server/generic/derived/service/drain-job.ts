@@ -90,7 +90,7 @@ export const derivedDrainHandler = (
           categories: publication.categories,
           changes: publication.changes,
         });
-      return { retain: publication.retain };
+      return { retain: publication.retain, covered: publication.covered };
     },
     async idle(tx) {
       await markExpiredClockDerived(tx);

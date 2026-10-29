@@ -175,6 +175,11 @@ describe("generic WorkItems", () => {
 
   it("keeps items the lock declines, backs off a long failure without overflow, then idles", async () => {
     const { drain, jobId } = await createDrain("synthetic.work-lock");
+    const foreign = await createDrain("synthetic.work-other-drain");
+    const foreignRef = crypto.randomUUID();
+    await markWork(ctx.db, foreign.drain, [
+      { target: "synthetic", ref: foreignRef },
+    ]);
     const [published, declined, failing] = [
       crypto.randomUUID(),
       crypto.randomUUID(),
@@ -196,8 +201,9 @@ describe("generic WorkItems", () => {
     let idled = 0;
     const handler = defineDrain({
       limit: 10,
-      prepare: async (_db, items) => ({
-        prepared: null,
+      chunk: 1,
+      prepare: async (db, items) => ({
+        prepared: [...items, ...(await claimWork(db, foreign.drain.key, 1))],
         failed: new Map(
           items
             .filter((item) => item.ref === failing)
@@ -206,8 +212,11 @@ describe("generic WorkItems", () => {
       }),
       // A busy source (another writer's lock) leaves its item for a later page.
       lock: async (_tx, items) => items.filter((item) => item.ref !== declined),
-      publish: async (_tx, items) => {
+      publish: async (_tx, items, observed) => {
         publishedRefs.push(...items.map((item) => item.ref));
+        // Coverage cannot steal another drain or a declined, failed or later
+        // claim from this page, even when its ticket is still unchanged.
+        return { covered: observed };
       },
       idle: async () => {
         idled++;
@@ -215,10 +224,19 @@ describe("generic WorkItems", () => {
     });
     const handlers = { [drain.kind]: handler };
 
+    await getDb(ctx.db)
+      .update(job)
+      .set({ result: { covered: 180 } })
+      .where(eq(job.id, jobId));
     await expect(advanceJob(ctx.db, jobId, handlers)).resolves.toBe(
       "succeeded",
     );
     expect(publishedRefs).toEqual([published]);
+    const [settled] = await getDb(ctx.db)
+      .select({ result: job.result })
+      .from(job)
+      .where(eq(job.id, jobId));
+    expect(settled!.result).toMatchObject({ covered: 0 });
     const rows = await getDb(ctx.db)
       .select()
       .from(workItem)
@@ -238,6 +256,9 @@ describe("generic WorkItems", () => {
     );
     expect(rows.map((row) => row.ref)).not.toContain(published);
     expect(idled).toBe(0);
+    expect(
+      (await claimWork(ctx.db, foreign.drain.key, 1)).map((item) => item.ref),
+    ).toEqual([foreignRef]);
 
     await getDb(ctx.db).delete(workItem).where(eq(workItem.drain, drain.key));
     await getDb(ctx.db)

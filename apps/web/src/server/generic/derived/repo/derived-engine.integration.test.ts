@@ -46,6 +46,7 @@ import * as changes from "~/server/generic/changes/repo/change";
 import { derivedSink } from "~/server/generic/derived/repo/compute";
 import {
   DERIVED_DRAIN_JOB_KEY,
+  DERIVED_DRAIN,
   markAllStoredDerived,
 } from "~/server/generic/derived/repo/drain";
 import { explainLiveDerived } from "~/server/generic/derived/repo/explain";
@@ -58,6 +59,7 @@ import {
   drainItems,
   dropWork,
   lockWork,
+  markWorkFrom,
   workItemStates,
 } from "~/server/generic/jobs/repo/work-items";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -742,6 +744,62 @@ describe("stored derived values", () => {
     }
     await drain();
     expect(await fanoutMarks("inventory.valuation")).toEqual([]);
+
+    // One fixed-target expansion also covers unclaimed source marks, but a
+    // producer holding and re-marking another source must keep its ticket.
+    const expenseRow = await createRepoEntity(ctx, "expense", {
+      trade: "other",
+      cost: 10,
+    });
+    await drain();
+    const parties = await Promise.all(
+      Array.from({ length: 3 }, () => createRepoEntity(ctx, "ledgerParty")),
+    );
+    const refs = new Set<string>(parties.map((party) => party.entityId));
+    const fixed = (await pending()).filter(
+      (mark) =>
+        mark.target.startsWith("expense.beneficiaryResult@") &&
+        refs.has(mark.ref),
+    );
+    expect(fixed).toHaveLength(3);
+    const busy = fixed.at(-1);
+    if (!busy) throw new Error("Synthetic fixed-target mark missing");
+    const fixedHeld = Promise.withResolvers<void>();
+    const fixedRelease = Promise.withResolvers<void>();
+    const fixedWriter = withTransaction(ctx.db, async (tx) => {
+      await markWorkFrom(
+        databaseForTransaction(tx),
+        DERIVED_DRAIN,
+        sql`SELECT ${busy.target}::text, ${busy.ref}::uuid, ${busy.priority}::int`,
+        { wake: false },
+      );
+      fixedHeld.resolve();
+      await fixedRelease.promise;
+    });
+    await fixedHeld.promise;
+    try {
+      await drainDerivedPage(ctx.db, {
+        only: (mark) => mark.target === busy.target,
+        limit: 1,
+      });
+      expect(
+        (await pending())
+          .filter((mark) => mark.target === busy.target)
+          .map((mark) => mark.ref),
+      ).toEqual([busy.ref]);
+      expect(await marks("expense.beneficiaryResult")).toContain(
+        expenseRow.entityId,
+      );
+    } finally {
+      fixedRelease.resolve();
+      await fixedWriter;
+    }
+    const remaining = (await pending()).find(
+      (mark) => mark.target === busy.target && mark.ref === busy.ref,
+    );
+    expect(remaining?.ticket).not.toBe(busy.ticket);
+    await drain();
+    expect(await fanoutMarks("expense.beneficiaryResult")).toEqual([]);
   });
 
   it("marks inheriting subtasks when their parent's subject changes", async () => {
