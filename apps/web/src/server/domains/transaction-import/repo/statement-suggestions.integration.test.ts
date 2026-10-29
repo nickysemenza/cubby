@@ -98,6 +98,7 @@ import {
   updateSourceTransactionRecords,
 } from "./source-transaction-record";
 import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
+import { previewStatementSuggestion } from "./statement-suggestion-preview";
 import {
   buildChargeProposals,
   generateStatementSuggestionPage,
@@ -2093,6 +2094,16 @@ describe("statement Transaction suggestions", () => {
     expect(await suggestions(ctx)).toMatchObject([
       { clean: false, reviewReason: expect.any(String) },
     ]);
+    const [held] = await suggestions(ctx);
+    if (!held?.reviewReason) throw new Error("Missing source lifecycle hold");
+    await expect(
+      previewStatementSuggestion(ctx.db, {
+        assessmentId: held.assessmentId,
+        expectedFingerprint: held.fingerprint,
+        application: { kind: "statement_transaction", action: "book" },
+      }),
+    ).rejects.toThrow(held.reviewReason);
+    await expect(accept(ctx, held)).rejects.toThrow(held.reviewReason);
     expect(
       await getDb(ctx.db)
         .select({ cost: expense.cost })

@@ -931,8 +931,10 @@ Statement review shows Source, Proposed result and Evidence. The read-only
 `sourceTransactionRecord.previewSuggestion` (MCP `finance_read.preview_suggestion`)
 revalidates the Assessment fingerprint and live
 charge before projecting a draft through the same action gates and spending
-planner as acceptance. It writes no aliases or records. The preview identifies
-transaction changes, vendor reuse/creation and alias effects, Purchase/Expense
+planner as acceptance. Published review holds, including source lifecycle conflicts,
+refuse both preview and acceptance before projecting financial effects.
+It writes no aliases or records. The preview identifies transaction changes,
+vendor reuse/creation and alias effects, Purchase/Expense
 and settlement effects, purchaser basis and the explicit vendor-account state.
 Changing a draft refreshes the result; acceptance still replans inside its write
 boundary. Kind controls apply only to a Create draft; an attachment first uses
