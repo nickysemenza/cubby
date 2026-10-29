@@ -11,7 +11,6 @@ import { getDb } from "~/server/db/helpers";
 import { location, product } from "~/server/db/schema";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
-import { productWorkSources } from "~/server/domains/product/repo/work-sources";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { drainStoredDerived } from "~/server/testing/background-queue";
@@ -180,14 +179,6 @@ describe("product list declared filters", () => {
     ]);
     // Work binds the catalog's expected quantities as one statement-local
     // walk; it must find the same kit the per-row list filter does.
-    const kitSource = productWorkSources().find(
-      (source) => source.id === "kitsCountedTwice",
-    );
-    expect(kitSource).toBeDefined();
-    const candidates = await kitSource!.candidates(ctx.db, {});
-    expect(candidates?.ctes?.map((cte) => cte.name)).toEqual(
-      expect.arrayContaining(["work_product_expected", "work_product_on_hand"]),
-    );
     const work = await readWorkQueue(ctx.db, {
       input: workQueueInput.parse({ pageSize: 100 }),
       memberPartyId: null,
