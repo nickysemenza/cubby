@@ -706,7 +706,9 @@ stock evidence through the shared read context. One grouped inventory/location
 relation preserves the canonical absent, mixed-unit and installed-stock rules;
 record-scoped queue and ordinary Product reads retain indexed scalar lookups.
 Unsupported evidence fields fall back to their canonical reads, and unused
-relations are omitted. Catalog quality filters read published quality rows.
+relations are omitted. `prepareWhere` passes its caller's read context explicitly
+to `where`; nested scope filters still clear that context before compiling their
+own derived SQL. Catalog quality filters read published quality rows.
 Positive-stock applicability guards resolve unavailable stock to false before
 kit or ledger-quantity reads; the underlying quantity stays null.
 

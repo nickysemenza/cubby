@@ -1780,7 +1780,8 @@ export function listScaffold<
         seeded,
       );
       return scaffold.where(filters, {
-        context: context.withRead(readContext),
+        context,
+        readContext,
       });
     },
 
