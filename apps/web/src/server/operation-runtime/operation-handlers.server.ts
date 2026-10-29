@@ -31,10 +31,14 @@ type HandlerModule = Record<
     streams?: Record<string, WorkflowStreamHandler>;
   }
 >;
+// Handler modules only: a wider pattern pulls Durable Objects and
+// `cloudflare:workers` into every importer's crawl, including browser tests.
 const modules = import.meta.glob<HandlerModule>([
-  "../domains/*/operations/*.ts",
+  "../domains/*/operations/*.server.ts",
   "../domains/*/operations.server.ts",
-  "../generic/*/operations/*.ts",
+  "../domains/dashboard/operations/dashboard.ts",
+  "../generic/*/operations/*.server.ts",
+  "../generic/audit-log/operations/audit-log.ts",
   "../ai/chatgpt/chatgpt.server.ts",
   "../http/maintenance.server.ts",
   "../http/oauth/oauth.server.ts",

@@ -1242,7 +1242,8 @@ it("retains per-image retry errors and refreshes successful siblings", async () 
       "1 photos need a description retry. Successful photos are retained.",
     ),
   ).toBeVisible();
-  expect(retried).toEqual(failedIds);
+  // Retries run concurrently; each failed image is retried exactly once.
+  expect([...retried].sort()).toEqual([...failedIds].sort());
 });
 
 it("reviews evidence-matched brands in the workbench without replacing explicit or rejected choices", async () => {
