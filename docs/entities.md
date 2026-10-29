@@ -2905,6 +2905,12 @@ edge and gets the toggle like any other.
 
 ### Background derived data
 
+Compute adapters may share an authoritative preparation source within one admitted
+page. The union of its admitted IDs stays inside the existing page budget;
+each target projects only its own IDs. A failed shared preparation falls back
+to independent target preparation. The scope ends before publication, preserving
+the existing ordered admission, source fences and retained-ticket behavior.
+
 [ADR 0021](adr/0021-derived-values.md) owns the decision. A stored derived
 value is any value Cubby computes from other rows and keeps for reads:
 valuations, product price and ledger quantities, project dates, quality,

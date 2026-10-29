@@ -29,6 +29,7 @@ import {
   validateComputedResult,
   type DerivedComputes,
   type DerivedSink,
+  type DerivedSharedPreparation,
   isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
 import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
@@ -190,7 +191,37 @@ export async function prepareDerivedPage(
   const computed = new Map<string, ReadonlyMap<string, DerivedComputed>>();
   const sinks = new Map<string, { sink: DerivedSink; prepared: unknown }>();
   const failed = new Map<WorkItem, unknown>();
-  for (const [target, group] of groupByTarget(items)) {
+  const groups = groupByTarget(items);
+  const sources = new Map<
+    object,
+    { adapter: DerivedSharedPreparation; ids: Set<string>; targets: number }
+  >();
+  for (const [target, group] of groups) {
+    const parsed = parseTarget(target);
+    if (!parsed || parsed.fanoutInput) continue;
+    const compute = computes[parsed.declaration.compute];
+    if (!compute || isDerivedSink(compute) || !compute.sharedPreparation)
+      continue;
+    const adapter = compute.sharedPreparation;
+    const source = sources.get(adapter.source) ?? {
+      adapter,
+      ids: new Set<string>(),
+      targets: 0,
+    };
+    source.targets++;
+    for (const item of group) source.ids.add(item.ref);
+    sources.set(adapter.source, source);
+  }
+  const shared = new Map<object, unknown>();
+  for (const [key, { adapter, ids, targets }] of sources) {
+    if (targets < 2 || ids.size > DERIVED_COMPUTE_BATCH) continue;
+    try {
+      shared.set(key, await adapter.prepare(db, [...ids]));
+    } catch {
+      // SILENT: retry each target independently below so a bad sibling cannot poison it.
+    }
+  }
+  for (const [target, group] of groups) {
     const parsed = parseTarget(target);
     if (!parsed || parsed.fanoutInput) continue;
     const compute = computes[parsed.declaration.compute];
@@ -207,10 +238,13 @@ export async function prepareDerivedPage(
       }
       const values = new Map<string, DerivedComputed>();
       for (let start = 0; start < ids.length; start += DERIVED_COMPUTE_BATCH)
-        for (const [id, value] of await compute(
-          db,
-          ids.slice(start, start + DERIVED_COMPUTE_BATCH),
-        ))
+        for (const [id, value] of compute.sharedPreparation &&
+        shared.has(compute.sharedPreparation.source)
+          ? compute.sharedPreparation.project(
+              shared.get(compute.sharedPreparation.source),
+              ids.slice(start, start + DERIVED_COMPUTE_BATCH),
+            )
+          : await compute(db, ids.slice(start, start + DERIVED_COMPUTE_BATCH)))
           // Decision validation belongs to target preparation so a malformed
           // outcome cannot abort publication of the page's valid targets.
           values.set(id, validateComputedResult({ target, computed: value }));
