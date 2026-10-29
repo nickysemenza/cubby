@@ -67,7 +67,9 @@ Confirm Vendor saves the exact address; removing attribution records an
 exclusion that automatic learning cannot reverse. Vendor field edits and merges
 preserve that intent. During a merge, confirmed or excluded member intent takes
 precedence over learned intent; conflicting explicit decisions keep the keeper
-Vendor's decision. Conflicting historical evidence stays visible until it is
+Vendor's decision. Edits and merges validate their address lock set under
+Vendor locks and restart a contended snapshot before changing identity or
+recording exclusions. Conflicting historical evidence stays visible until it is
 reviewed on the original records; confirmation never rewrites it.
 Verified mappings apply to new mail and make eligible unresolved originals
 available to the existing automatic import admission when their mailbox is on.
