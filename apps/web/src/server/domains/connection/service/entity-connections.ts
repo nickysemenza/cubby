@@ -8,6 +8,7 @@ import { basisValueOf } from "@cubby/schemas/field-suggestion";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
+import { fieldEnvelopeAtPath, readPathValue } from "~/entity/read-path";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import {
@@ -41,12 +42,16 @@ import {
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { jsonValue } from "~/server/domains/run/repo/suggestion-sweep-state";
 import { makeSweepSuggestion } from "~/server/domains/run/service/suggestion-sweep";
-import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
+import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { prepareTagSuggestions } from "~/server/generic/assessment/service/tag-suggestions";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import {
+  publicFieldEnvelopeRows,
+  selectedFieldEnvelopeSchema,
+} from "~/server/generic/derived/repo/public-read";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import {
   lookupShortcodes,
@@ -232,6 +237,34 @@ async function prepareFieldConnections(
       `Connection inference is not generated for ${source.entityKind}`,
     );
   const entity = entityResult.data;
+  const models = entityFieldModels[entity].fields;
+  const policies = fields.map((field) => {
+    const policy = models.find((item) => item.key === field)?.control?.suggest;
+    if (!policy)
+      throw new Error(
+        `Missing declared connection inference ${entity}.${field}`,
+      );
+    return { field, policy };
+  });
+  const readPaths = new Map<string, string>();
+  for (const { field, policy } of policies)
+    for (const key of [...policy.basis, field]) {
+      const model = models.find((item) => item.key === key);
+      const path = model?.display.readPath ?? model?.readKey;
+      if (!path)
+        throw new Error(`Missing declared connection read ${entity}.${key}`);
+      readPaths.set(key, path);
+    }
+  const projection = [
+    ...new Set(
+      [...readPaths.values()].map((path) => {
+        const [root] = path.split(/[.[]/u, 1);
+        if (!root)
+          throw new Error(`Invalid declared connection read ${entity}.${path}`);
+        return root;
+      }),
+    ),
+  ];
   const recordId =
     resolvedRecordId ?? (await resolveOrThrow(db, entity, source.entityId));
   const guards = new Map<
@@ -240,32 +273,44 @@ async function prepareFieldConnections(
   >();
   for (const field of fields)
     guards.set(field, await prepareConnectionFieldGuard(db, source, field));
-  const found = await executeEntity(
-    { ...context, db },
-    entityCommandSchema.parse({ action: "get", entity, id: source.entityId }),
-  );
-  if (found.action !== "get" || !found.item)
-    throw new Error("Connection source no longer exists");
-  const row = z.record(z.string(), z.unknown()).parse(found.item);
+  const scaffold = kernelScaffold(entity);
+  if (!scaffold)
+    throw new Error(`Missing connection read scaffold for ${entity}`);
+  const found = await scaffold.get(db, [source.entityId], projection, {
+    actor: context.actorContext,
+  });
+  const [selected] = await publicFieldEnvelopeRows({
+    db,
+    entity,
+    schema: selectedFieldEnvelopeSchema(
+      ENTITY_SCHEMA_BINDINGS[entity].detail,
+      projection,
+    ),
+    rows: found.data,
+    contexts: found.fieldReads,
+  });
+  if (!selected) throw new Error("Connection source no longer exists");
+  const row = z.record(z.string(), z.unknown()).parse(selected);
+  const valueOf = (key: string) => {
+    const path = readPaths.get(key);
+    if (!path)
+      throw new Error(`Missing prepared connection read ${entity}.${key}`);
+    // Unavailable evidence cannot establish an empty field for an addition.
+    if (fieldEnvelopeAtPath(row, path)?.result.kind === "missing")
+      throw new Error(`Connection input ${entity}.${key} is unavailable`);
+    return readPathValue(row, path);
+  };
   const runId = await ensureRun(db, context.actorContext, {
     purpose: "ai_suggest",
   });
-  for (const field of fields) {
-    const declaration = entityFieldModels[entity].fields.find(
-      (item) => item.key === field,
-    );
-    const policy = declaration?.control?.suggest;
-    if (!policy)
-      throw new Error(
-        `Missing declared connection inference ${entity}.${field}`,
-      );
+  for (const { field, policy } of policies) {
     const basis = Object.fromEntries(
       [...new Set([...policy.basis, field])].map((key) => [
         key,
-        basisValueOf(row[key]),
+        basisValueOf(valueOf(key)),
       ]),
     );
-    const currentValue = jsonValue(row[field] ?? null);
+    const currentValue = jsonValue(valueOf(field) ?? null);
     const fieldDecisionId =
       (await latestFieldWrite(db, entity, recordId, field))?.id ?? null;
     const before = guards.get(field);

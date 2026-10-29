@@ -1383,6 +1383,14 @@ read. `mode: "fill"` (the default) targets a select-controlled enum, a singular
 resolve to a model field, a basis key naming the field itself, and any cycle in
 the basis → target edges across an entity's suggest fields, so one request can
 always resolve every target in dependency order.
+Background connection inference selects only the union of its declared basis
+and target read paths through the canonical detail reader. It retains field
+envelopes and reads effective values through those paths, including nested
+reference identities; a governed value is never recovered from an absent legacy
+top-level key. Hidden editable references declare their public `display.readPath`
+when their identity is nested in the read projection. A declared suggestion
+consumer permits that path even when the field has no visible display surface.
+Unavailable governed inputs fail preparation instead of becoming empty additions.
 Enum targets may declare `allowNone: true` to offer an evaluated decline when
 their basis does not support a value. A decline proposes no replacement or
 clearing of the current field; exhaustive enums keep `allowNone: false`.

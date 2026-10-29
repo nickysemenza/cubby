@@ -783,9 +783,13 @@ const compileFieldModel = (
         throw new EntityDeclarationError(
           `${context}.${field.key}.display.readPath "${readPath}" must be dotted keys with optional [n] or [] segments.`,
         );
-      if (!field.display.list && !field.display.detail)
+      if (
+        !field.display.list &&
+        !field.display.detail &&
+        !field.control?.suggest
+      )
         throw new EntityDeclarationError(
-          `${context}.${field.key}.display.readPath requires display.list or display.detail.`,
+          `${context}.${field.key}.display.readPath requires a display surface or suggestion consumer.`,
         );
     }
     const labelPath = field.display.labelPath;

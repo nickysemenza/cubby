@@ -45,7 +45,8 @@ export async function drainAiEvaluations(
       db,
       AI_EVALUATION_TARGET,
       ids,
-      new Date(),
+      // Force due independently of the test host and PostgreSQL clocks.
+      new Date(0),
     );
     if (!drains.length) return outcomes;
     for (const key of drains) {
