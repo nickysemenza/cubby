@@ -140,7 +140,7 @@ export const mailCoverage = z.strictObject({
       sellerUnresolved: count,
     }),
   ),
-  sharedSenders: z.array(
+  senderCoverage: z.array(
     z.strictObject({
       mailboxId: z.string(),
       sender: z.string(),

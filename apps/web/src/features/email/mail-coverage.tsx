@@ -9,6 +9,7 @@ import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import type { RowSelectionState } from "@tanstack/react-table";
 import { useCallback, useId, useMemo, useState, type ReactNode } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -18,6 +19,7 @@ import { SenderAttributionDetails } from "~/features/email/sender-attribution";
 import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { householdLocalDate } from "~/lib/household-date";
 import { DateDisplay } from "~/ui/common/date-display";
+import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -46,13 +48,13 @@ const rowId = (row: MailCoverageRow) => row.key;
 const discoveryHelper =
   createCubbyColumnHelper<MailCoverage["discovery"][number]>();
 const senderHelper =
-  createCubbyColumnHelper<MailCoverage["sharedSenders"][number]>();
+  createCubbyColumnHelper<MailCoverage["senderCoverage"][number]>();
 const unresolvedHelper =
   createCubbyColumnHelper<MailCoverage["unresolvedEmails"][number]>();
 
 const discoveryRowId = (row: MailCoverage["discovery"][number]) =>
   row.mailboxId;
-const senderRowId = (row: MailCoverage["sharedSenders"][number]) =>
+const senderRowId = (row: MailCoverage["senderCoverage"][number]) =>
   `${row.mailboxId}/${row.sender}`;
 const unresolvedRowId = (row: MailCoverage["unresolvedEmails"][number]) =>
   row.id;
@@ -90,13 +92,13 @@ function CoverageDetails({
   );
 }
 
-function SharedSenderDetails({
+function SenderCoverageDetails({
   sender,
   mailboxName,
   onSaved,
   vendors,
 }: {
-  sender: MailCoverage["sharedSenders"][number];
+  sender: MailCoverage["senderCoverage"][number];
   mailboxName: (id: string) => string;
   onSaved: () => void;
   vendors: MailCoverage["senderAttributions"][number]["vendors"];
@@ -156,6 +158,8 @@ function DiscoveryCoverage({
   const [unresolvedOpen, setUnresolvedOpen] = useState(false);
   const [selectedSender, setSelectedSender] = useState<string | null>(null);
   const [senderView, setSenderView] = useState("all");
+  const [senderGroup, setSenderGroup] = useState("unresolved");
+  const [senderSelection, setSenderSelection] = useState<RowSelectionState>({});
   const mailboxName = useCallback(
     (id: string) =>
       coverage.mailboxes.find((mailbox) => mailbox.mailboxId === id)?.label ??
@@ -171,10 +175,15 @@ function DiscoveryCoverage({
   );
   const senderRows = useMemo(
     () =>
-      coverage.sharedSenders.filter(
-        (row) => !mailboxId || row.mailboxId === mailboxId,
+      coverage.senderCoverage.filter(
+        (row) =>
+          (!mailboxId || row.mailboxId === mailboxId) &&
+          (senderGroup === "shared"
+            ? row.attribution.state === "shared"
+            : row.attribution.state !== "shared" &&
+              row.attribution.state !== "verified"),
       ),
-    [coverage.sharedSenders, mailboxId],
+    [coverage.senderCoverage, mailboxId, senderGroup],
   );
   const unresolvedRows = useMemo(
     () =>
@@ -344,14 +353,15 @@ function DiscoveryCoverage({
   );
   const senderColumns = useMemo(
     () =>
-      createCubbyColumnCollection<MailCoverage["sharedSenders"][number]>(
+      createCubbyColumnCollection<MailCoverage["senderCoverage"][number]>(
         (add) => {
+          add(buildSelectColumn<MailCoverage["senderCoverage"][number]>());
           add(
             senderHelper.accessor("sender", {
-              header: "Shared sender",
+              header: "Sender address",
               size: 300,
               meta: attachCubbyColumnMeta<
-                MailCoverage["sharedSenders"][number]
+                MailCoverage["senderCoverage"][number]
               >({ mobile: { slot: "title", priority: 0, renderTitle: true } }),
             }),
           );
@@ -375,7 +385,7 @@ function DiscoveryCoverage({
             senderHelper.accessor("state", {
               header: "Search status",
               meta: attachCubbyColumnMeta<
-                MailCoverage["sharedSenders"][number]
+                MailCoverage["senderCoverage"][number]
               >({ mobile: { slot: "subtitle", priority: 0 } }),
               cell: ({ getValue }) => (
                 <Badge variant="outline">{humanize(getValue())}</Badge>
@@ -421,7 +431,7 @@ function DiscoveryCoverage({
               id: "details",
               header: "Details",
               meta: attachCubbyColumnMeta<
-                MailCoverage["sharedSenders"][number]
+                MailCoverage["senderCoverage"][number]
               >({
                 mobile: { slot: "actions", priority: 0, interactive: true },
               }),
@@ -486,7 +496,7 @@ function DiscoveryCoverage({
   });
   const senderSearch = useMemo(
     () => ({
-      text: (row: MailCoverage["sharedSenders"][number]) =>
+      text: (row: MailCoverage["senderCoverage"][number]) =>
         `${row.sender} ${mailboxName(row.mailboxId)} ${row.query}`,
       placeholder: "Search senders, mailboxes, or queries",
     }),
@@ -510,6 +520,10 @@ function DiscoveryCoverage({
     rows: visibleSenders,
     columns: senderColumns,
     getRowId: senderRowId,
+    selection: {
+      rowSelection: senderSelection,
+      onRowSelectionChange: setSenderSelection,
+    },
     search: senderSearch,
     initialVisibility: {
       query: false,
@@ -545,18 +559,32 @@ function DiscoveryCoverage({
           withoutImages="Mailbox discovery has no record images."
         />
       </section>
-      <section className="space-y-2" aria-label="Shared senders">
-        <h2 className="text-sm font-semibold">Shared senders</h2>
+      <section className="space-y-2" aria-label="Sender resolution">
+        <h2 className="text-sm font-semibold">Sender resolution</h2>
+        <Tabs
+          value={senderGroup}
+          onValueChange={(value) => {
+            setSenderGroup(value);
+            setSelectedSender(null);
+            setSenderSelection({});
+          }}
+        >
+          <TabsList aria-label="Sender ownership">
+            <TabsTrigger value="unresolved">Needs attribution</TabsTrigger>
+            <TabsTrigger value="shared">Shared senders</TabsTrigger>
+          </TabsList>
+        </Tabs>
         <p className="max-w-prose text-xs text-muted-foreground">
-          Exact sender addresses observed in related mail on shared domains.
-          Search completion covers that query, not every receipt or seller on
-          the platform. Local counts overlap Vendor coverage; linked Emails may
-          include lifecycle evidence.
+          Verified sender addresses appear on their Vendor below. Needs
+          attribution contains unassigned, disputed or excluded addresses; their
+          domain does not make them shared. Shared senders serve multiple
+          sellers. Search completion covers only the recorded query. Counts
+          overlap Vendor coverage.
         </p>
         <Tabs value={senderView} onValueChange={setSenderView}>
           <TabsList
             className="h-auto flex-wrap"
-            aria-label="Shared sender views"
+            aria-label="Sender search views"
           >
             {[
               ["all", "All senders", senderRows.length],
@@ -595,18 +623,18 @@ function DiscoveryCoverage({
           onRowClick={(row) => setSelectedSender(senderRowId(row.original))}
           disableMobileDetailsHref
           inspector={{
-            title: inspectedSender?.sender ?? "Shared sender",
+            title: inspectedSender?.sender ?? "Sender address",
             onClose: () => setSelectedSender(null),
             content: inspectedSender ? (
               <SidePanel
-                label="Shared sender inspector"
+                label="Sender address inspector"
                 title={inspectedSender.sender}
-                eyebrow="Shared sender"
+                eyebrow="Sender address"
                 onClose={() => setSelectedSender(null)}
                 closeLabel="Close inspector"
               >
                 <div className="p-4">
-                  <SharedSenderDetails
+                  <SenderCoverageDetails
                     vendors={coverageVendors(coverage)}
                     key={inspectedSender.sender}
                     sender={inspectedSender}
@@ -617,7 +645,7 @@ function DiscoveryCoverage({
               </SidePanel>
             ) : null,
           }}
-          ariaLabel="Shared sender search coverage"
+          ariaLabel="Sender search coverage"
           emptyState={
             <p className="text-xs text-muted-foreground">
               {senderRows.length
@@ -1273,6 +1301,7 @@ function CoverageTable({
   onViewChange?: (view: MailCoverageView) => void;
 }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [vendorSelection, setVendorSelection] = useState<RowSelectionState>({});
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   // Responsive inspectors move between containers; the selection owner retains its draft.
   const [draft, setDraft] = useState(initialControlledMailDraft);
@@ -1315,6 +1344,7 @@ function CoverageTable({
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<MailCoverageRow>((add) => {
+        add(buildSelectColumn<MailCoverageRow>());
         add(
           helper.accessor("vendorName", {
             header: "Vendor",
@@ -1344,19 +1374,23 @@ function CoverageTable({
             header: "Sender addresses",
             size: 280,
             cell: ({ row }) => (
-              <span data-cell-value>
+              <span
+                data-cell-value
+                className="flex min-w-0 flex-col items-start"
+              >
                 {row.original.senderAddresses.map((address) => (
                   <Button
                     key={address}
                     variant="ghost"
                     size="sm"
+                    className="max-w-full min-w-0 justify-start select-text"
                     onClick={(event) => {
                       event.stopPropagation();
                       setSelectedKey(row.original.key);
                       setSelectedAddress(address);
                     }}
                   >
-                    {address}
+                    <span className="truncate select-text">{address}</span>
                   </Button>
                 ))}
               </span>
@@ -1601,6 +1635,10 @@ function CoverageTable({
     rows,
     columns,
     getRowId: rowId,
+    selection: {
+      rowSelection: vendorSelection,
+      onRowSelectionChange: setVendorSelection,
+    },
     search,
     initialVisibility: compactVisibility,
     rowContentVersion: rows,

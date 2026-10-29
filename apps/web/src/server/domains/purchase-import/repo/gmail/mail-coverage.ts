@@ -751,7 +751,7 @@ export async function readMailCoverage(
       sellerUnresolved: sum("sellerUnresolved"),
     };
   });
-  const sharedSenders = members.flatMap((member) => {
+  const senderCoverage = members.flatMap((member) => {
     const coverage =
       cursors.get(`${member.ledgerPartyId}/${member.mailboxId}`) ?? null;
     const target = targets.find(
@@ -826,7 +826,7 @@ export async function readMailCoverage(
     mailboxes,
     rows,
     discovery,
-    sharedSenders,
+    senderCoverage,
     unresolvedEmails: unresolvedEmails
       .filter((row) =>
         members.some((member) => member.mailboxId === row.mailboxId),

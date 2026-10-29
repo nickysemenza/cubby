@@ -2,6 +2,7 @@ import { mailCoverageView } from "@cubby/schemas/mail-coverage";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { ensureEntityMetadata } from "~/entity/metadata";
 import { Page } from "~/entity/page/page";
 import { MailCoveragePage } from "~/features/email/mail-coverage";
 import { pageTitle } from "~/lib/page-title";
@@ -15,6 +16,14 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/_authenticated/emails/coverage")({
   validateSearch: searchSchema,
+  beforeLoad: async ({ context }) => {
+    // Disclosed Email rows and receipt evidence must work without a prior entity-page visit.
+    await Promise.all(
+      (["email", "vendor", "vendorAccount", "purchase", "run"] as const).map(
+        (entity) => ensureEntityMetadata(context.queryClient, entity),
+      ),
+    );
+  },
   head: () => ({ meta: [{ title: pageTitle("Mail coverage") }] }),
   component: CoverageRoute,
 });
