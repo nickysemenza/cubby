@@ -802,6 +802,10 @@ photo padded onto a transparent canvas is still lifted. The cloud
 classification remains descriptive evidence, not a dispatch gate. A processor
 revision change lets previously policy-skipped images be queued again without
 rewriting their retained history.
+Expected `no_subject` and `not_suitable` cutout outcomes settle the current
+source/processor fingerprint instead of repeatedly invoking Vision. Explicit retry
+reopens them; real processing failures and unsupported formats retain their retry
+policy. This does not suppress an image's independent Apple description.
 
 Field decision prompts are measured from a Claude/Codex session over Cubby
 MCP, following `.agents/skills/decision-grading`: reviewed Suggestions

@@ -327,20 +327,31 @@ rather than stopping for review. Run control refusals are
 ## Image processing
 
 Image processing is never abandoned. `ImageProcessingJob.state` stores only
-the outcome: `pending` while open, `ready`, or `skipped` for a moot ending
-(image deleted, upload replaced, processor superseded, type excluded: device
-work on a source type no device command carries, such as a GIF). Only
-the server decides a moot ending: an executor's `skipped` (`no_subject`,
-`not_suitable`, `unsupported_format`) is recorded as a retryable failure that
-keeps its reason code, backs off and asks for attention like any failure. A
+the outcome: `pending` while open, `ready`, or `skipped` for a completed negative
+subject lift or a moot ending (image deleted, upload replaced, processor superseded,
+or type excluded: device work on a source type no device command carries, such as a GIF).
+A subject lift's `no_subject` or `not_suitable` result is final for that source hash
+and processor revision. Its negative evidence and attempt history stay recorded;
+the derivative is skipped and the original remains usable. Apple descriptions
+still run independently for every image. Other executor skips, including
+`unsupported_format`, become retryable failures with their reason preserved. A
 stored `failed` is a legacy state of a superseded processor. The displayed
 state derives from the Job (`image-job-state.ts`): `leased` for a live lease,
 `waiting_for_device` for parked device work, `pending`, and `failed` ("Needs
 attention (retrying)") once a job failed `JOB_NEEDS_ATTENTION_ATTEMPTS` times in a row
 or its execution stopped; it keeps retrying. An executor's `retryable: false`
 (say `deadline_exceeded`) retries later with its cause recorded; a missing
-subject-lift derivative is rebuilt. A new processor revision is new work, and
+subject-lift derivative is rebuilt. Explicit image retry reopens a negative cutout
+without discarding its evidence or allowing maintenance to immediately settle it again.
+A changed source or new processor revision is new work, and
 a newer Apple build's first pull makes backing-off device work due.
+
+Recurring image-execution repair also settles retained negative cutout failures in
+bounded batches. This negative-outcome pass requires the current source/revision and the matching settled
+attempt, locks the image, image job and unclaimed execution, and leaves running,
+paused and cancelled executions alone. Attempt records, result evidence and runtime
+provenance are retained. The repair does not execute the image again or reclassify
+model, network or other processing errors as negative cutouts.
 
 `imageProcessingLane` fixes each job's lane: subject lifts, Apple descriptions
 and AVIF cloud descriptions (which need device JPEG preparation) run on

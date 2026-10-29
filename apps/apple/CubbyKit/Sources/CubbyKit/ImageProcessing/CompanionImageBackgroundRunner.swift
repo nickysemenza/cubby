@@ -208,7 +208,7 @@ actor CompanionImageBackgroundRunner {
                                 stopped = true
                                 group.cancelAll()
                             }
-                            if let next = await delivery.snapshot.nextAttemptAt, next <= .now {
+                            if await delivery.hasDueResults {
                                 senderRequested = true
                             }
                         case .renewal(let error):
@@ -313,12 +313,15 @@ actor CompanionImageBackgroundRunner {
             for entry in try await outbox.pending() {
                 try Task.checkCancellation()
                 if let updateRefusal { return updateRefusal }
+                guard try await outbox.result(for: entry.key) != nil else { continue }
                 let claim = CompanionImageCommandClaim(
                     jobID: entry.result.jobId, attemptID: entry.result.attemptId)
                 do {
                     if case .refused(let reason) = try await transport.renew(deviceID: deviceID, claim: claim)
                     {
-                        failureObserver?(CompanionLeaseRefused(jobID: claim.jobID, reason: reason))
+                        if try await outbox.result(for: entry.key) != nil {
+                            failureObserver?(CompanionLeaseRefused(jobID: claim.jobID, reason: reason))
+                        }
                     }
                 } catch  where CompanionResultDelivery.isClientUpdateRequired(error) {
                     updateRefusal = error

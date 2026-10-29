@@ -90,6 +90,8 @@ export const externalExecution = {
   join: (key: SQL) => [job, eq(job.key, key)] as const,
   id: job.id,
   availableAt: job.availableAt,
+  /** Open work without an executor, including future backoff. */
+  unclaimed: () => inArray(job.state, ["queued", "retry_wait"]),
   /** Claimable at `now`: due, or running under a lapsed lease. `kind` narrows to one lane. */
   claimable: (now: Date, kind?: string) =>
     and(

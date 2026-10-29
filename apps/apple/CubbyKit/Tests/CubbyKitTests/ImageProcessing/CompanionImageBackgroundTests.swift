@@ -212,8 +212,9 @@ struct CompanionImageBackgroundTests {
         let second = "00000000-0000-4000-8000-000000000003"
         let transport = BackgroundTransportFixture(
             commands: [try command(), try command(attempt: second)], rejectedJobs: [stuckJob])
-        // Both windows occur before retry is due, regardless of CI scheduling delays.
-        let now = ContinuousClock.now
+        // Both windows occur before retry is due on the delivery clock. Keep that clock behind
+        // wall time to expose callers that incorrectly compare its backoff with the real clock.
+        let now = ContinuousClock.now - .seconds(10)
         let runner = CompanionImageBackgroundRunner(
             outbox: outbox,
             delivery: CompanionResultDelivery(outbox: outbox, failureObserver: nil, now: { now }),

@@ -225,6 +225,8 @@ public actor CompanionImageWorker {
     private var deliveryRequested = false
     /// Recorded results retain their attempt while the serial sender waits or backs off.
     private var deliveryHeartbeats: [String: Task<Void, Never>] = [:]
+    /// A heartbeat transfers before recording begins; absence from the outbox is not yet an ack.
+    private var recordingResults: Set<String> = []
     private var refusedDeliveryLeases: Set<String> = []
     private var lastReportedActivity: CompanionImageWorkerActivity?
     private var isDraining = false
@@ -778,7 +780,8 @@ public actor CompanionImageWorker {
     private func refreshDeliveryHeartbeats() async throws {
         let pending = try await outbox.pending()
         let keys = Set(pending.map(\.key))
-        for key in Array(deliveryHeartbeats.keys) where !keys.contains(key) {
+        for key in Array(deliveryHeartbeats.keys)
+        where !keys.contains(key) && !recordingResults.contains(key) {
             deliveryHeartbeats.removeValue(forKey: key)?.cancel()
         }
         refusedDeliveryLeases.formIntersection(keys)
@@ -915,6 +918,11 @@ public actor CompanionImageWorker {
         await deliveryTask?.waitUnlessCancelled()
     }
 
+    /// Captures a recorded result heartbeat for deterministic lifecycle checks.
+    func deliveryHeartbeat(for key: String) -> Task<Void, Never>? {
+        deliveryHeartbeats[key]
+    }
+
     /// Returns once every best-effort release has answered or timed out.
     func releasesIdle() async {
         while !Task.isCancelled, let release = releaseTasks.values.first {
@@ -971,8 +979,11 @@ public actor CompanionImageWorker {
             // Stopped (its claim was released) or its lease was refused: the result is moot.
             guard !Task.isCancelled, inFlight.removeValue(forKey: key) != nil else { return }
             deliveryHeartbeats[key] = heartbeat
+            recordingResults.insert(key)
+            defer { recordingResults.remove(key) }
             jobObserver?(.init(result, kind: metadata.kind, duration: started.duration(to: .now)))
             try await recordResult(result, key)
+            recordingResults.remove(key)
             deliverySnapshot = await delivery.refreshSnapshot()
             reportActivity()
             requestDelivery()
@@ -1011,11 +1022,24 @@ public actor CompanionImageWorker {
             return false
         }
         do {
+            if inFlight[key] == nil, !recordingResults.contains(key),
+                try await outbox.result(for: key) == nil
+            {
+                deliveryHeartbeats.removeValue(forKey: key)?.cancel()
+                return false
+            }
             switch try await transport.renew(deviceID: wireDeviceID, claim: claim) {
             case .renewed(let leaseExpiresAt):
                 lease.extend(to: leaseExpiresAt)
                 return true
             case .refused(let reason):
+                // A completion may have acknowledged this result while renewal was in flight.
+                if inFlight[key] == nil, !recordingResults.contains(key),
+                    try await outbox.result(for: key) == nil
+                {
+                    deliveryHeartbeats.removeValue(forKey: key)?.cancel()
+                    return false
+                }
                 // The server retired or reassigned this attempt; a result would be discarded and
                 // the work may already be running elsewhere. Stop without releasing.
                 if inFlight.removeValue(forKey: key) != nil {

@@ -64,7 +64,7 @@ export async function insertImageProcessingAttempt(
   input: {
     jobId: ImageJobId;
     attemptId: string;
-    state: "running" | "failed";
+    state: "running" | "failed" | "skipped";
     executor?: ActivityExecutor;
     userId?: string;
     diagnostics?: unknown;
