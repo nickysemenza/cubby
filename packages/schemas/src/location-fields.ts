@@ -7,6 +7,9 @@ import { z } from "zod";
 import { productShortcode, locationShortcode } from "./identifier-fields";
 import { money, moneyNullable } from "./money";
 
+/** The declaration and background descendant walks share the same tree bound. */
+export const MAX_LOCATION_TREE_DEPTH = 10;
+
 export const locationType = z
   .enum(locationTypeValues)
   .describe("type of location (room, container, etc)");

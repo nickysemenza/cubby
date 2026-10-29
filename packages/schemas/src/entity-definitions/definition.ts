@@ -26,20 +26,25 @@ import { entityRelationMetadataSchema } from "./relationship-shape";
 
 /** The scalar shapes the entity compiler can persist and project. */
 /** One `model.derived.<key>.stored.inputs` row (ADR 0021), for shared input lists. */
+type DerivedStoredPathStep = {
+  table: string;
+  from: string;
+  to: string;
+  jsonKey?: string;
+  fromJsonKey?: string;
+  where?: Record<string, string>;
+  /** Include the start IDs and walk this hierarchy edge up to its declared depth. */
+  recursive?: { maxDepth: number };
+};
 export type DerivedStoredInput = {
   table: string;
   match: Record<string, string>;
   columns?: string[];
   where?: Record<string, string>;
   except?: string[];
-  path?: {
-    table: string;
-    from: string;
-    to: string;
-    jsonKey?: string;
-    fromJsonKey?: string;
-    where?: Record<string, string>;
-  }[];
+  path?: DerivedStoredPathStep[];
+  /** Parallel paths contribute one union of dependent IDs. */
+  paths?: DerivedStoredPathStep[][];
   json?: { array?: string[]; key: string };
   /** Fixed target rows selected during deferred fanout, never inside the source save. */
   targetWhere?: Record<string, string | null>;
@@ -1077,8 +1082,16 @@ const buildMetadataSchemas = () => {
           fromJsonKey: nonEmptyString().optional(),
           /** Only rows holding these column values continue the path. */
           where: z.record(nonEmptyString(), nonEmptyString()).optional(),
+          recursive: z
+            .object({ maxDepth: z.number().int().positive() })
+            .strict()
+            .optional(),
         })
-        .strict(),
+        .strict()
+        .refine(
+          (step) => !step.recursive || (!step.jsonKey && !step.fromJsonKey),
+          "recursive paths require ordinary UUID columns",
+        ),
     )
     .min(1);
   const derivedInputSchema = z
@@ -1095,6 +1108,7 @@ const buildMetadataSchemas = () => {
       except: z.array(nonEmptyString()).min(1).optional(),
       /** From the matched column's value to this entity's ids; `match` then names `{ column: "id" }`. */
       path: derivedPathSchema.optional(),
+      paths: z.array(derivedPathSchema).min(1).optional(),
       targetWhere: derivedTargetWhereSchema.optional(),
       /**
        * The matched column is JSON: read `key` from the object, or from each
@@ -1108,7 +1122,11 @@ const buildMetadataSchemas = () => {
         .strict()
         .optional(),
     })
-    .strict();
+    .strict()
+    .refine(
+      (input) => !input.paths || (!input.path && !input.targetWhere),
+      "paths cannot be combined with path or targetWhere",
+    );
   const derivedStoreSchema = z
     .object({
       compute: nonEmptyString(),

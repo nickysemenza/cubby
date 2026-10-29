@@ -4,6 +4,7 @@ import type {
   ProductId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { productReadFacts } from "@cubby/schemas/product-read-fields";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -707,6 +708,89 @@ describe("stored derived values", () => {
       resultExists: true,
       stale: false,
     });
+
+    const stocked = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic descendant stock", price: 3 }),
+      TEST_ACTOR,
+    );
+    const installed = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic installed descendant", price: 4 }),
+      TEST_ACTOR,
+    );
+    const root = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic hierarchy root" }),
+      TEST_ACTOR,
+    );
+    const branch = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Synthetic hierarchy branch",
+        parentId: root.id,
+      }),
+      TEST_ACTOR,
+    );
+    const leaf = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Synthetic hierarchy leaf",
+        parentId: branch.id,
+        productId: installed.id,
+      }),
+      TEST_ACTOR,
+    );
+    await makeEntry(
+      stocked.entityId,
+      parseEntityId("location", await resolved(leaf.id, "location")),
+      1,
+    );
+    await drain();
+    const placementPaths = async () => {
+      const reads = await loadStoredDerived(
+        ctx.db,
+        "product",
+        [stocked.entityId, installed.entityId],
+        ["readFacts"],
+      );
+      return [stocked.entityId, installed.entityId].map(
+        (id) =>
+          productReadFacts.parse(reads.get(id)?.get("readFacts")?.value)
+            .primaryPlacement?.path,
+      );
+    };
+    expect(await placementPaths()).toEqual([
+      "Home › Synthetic hierarchy root › Synthetic hierarchy branch › Synthetic hierarchy leaf",
+      "Home › Synthetic hierarchy root › Synthetic hierarchy branch › Synthetic hierarchy leaf",
+    ]);
+    await executeEntity(buildKernelContext(ctx.db), {
+      action: "update",
+      entity: "location",
+      id: root.id,
+      data: { name: "Synthetic renamed hierarchy" },
+    });
+    await drain();
+    expect(await placementPaths()).toEqual([
+      "Home › Synthetic renamed hierarchy › Synthetic hierarchy branch › Synthetic hierarchy leaf",
+      "Home › Synthetic renamed hierarchy › Synthetic hierarchy branch › Synthetic hierarchy leaf",
+    ]);
+    const destination = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic hierarchy destination" }),
+      TEST_ACTOR,
+    );
+    await executeEntity(buildKernelContext(ctx.db), {
+      action: "update",
+      entity: "location",
+      id: root.id,
+      data: { parentId: destination.id },
+    });
+    await drain();
+    expect(await placementPaths()).toEqual([
+      "Home › Synthetic hierarchy destination › Synthetic renamed hierarchy › Synthetic hierarchy branch › Synthetic hierarchy leaf",
+      "Home › Synthetic hierarchy destination › Synthetic renamed hierarchy › Synthetic hierarchy branch › Synthetic hierarchy leaf",
+    ]);
   });
 
   it("leaves a writer's busy fanout mark pending without blocking publication", async () => {

@@ -302,6 +302,9 @@ describe("stored derived read sets", () => {
         ...declaration.inputs.flatMap((input) => [
           input.table,
           ...(input.path ?? []).map((step) => step.table),
+          ...(input.paths ?? []).flatMap((path) =>
+            path.map((step) => step.table),
+          ),
         ]),
         ...declaration.dependsOn.flatMap((dependency) =>
           "through" in dependency ? [dependency.through.table] : [],
