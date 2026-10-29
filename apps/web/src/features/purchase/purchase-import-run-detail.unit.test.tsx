@@ -168,6 +168,13 @@ beforeEach(() => {
             until: null,
             reason: null,
           },
+          openaiCredit: {
+            limitUsd: 1.5,
+            spentUsd: 1.5,
+            state: "available",
+            until: null,
+            reason: null,
+          },
           paid: { limitUsd: 1, spentUsd: 0.25 },
           plan: {
             limitUsd: 2,
