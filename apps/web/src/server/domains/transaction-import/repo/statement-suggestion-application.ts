@@ -42,11 +42,15 @@ export async function loadStatementApplication(
     .from(assessment)
     .where(eq(assessment.id, state.id))
     .limit(1);
+  const published = statementTransactionJudgment.parse(prediction?.judgment);
+  // A published review hold blocks preview and apply even if its draft can be planned.
+  if (published.reviewReason)
+    throw refuseStatementApplication(published.reviewReason);
   return {
     subject: assessmentSubjects.statement_transaction.parse(
       prediction?.subject,
     ),
-    published: statementTransactionJudgment.parse(prediction?.judgment),
+    published,
     stored: projection.parse(state.data),
   };
 }
