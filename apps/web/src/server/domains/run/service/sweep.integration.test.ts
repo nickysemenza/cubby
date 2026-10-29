@@ -126,6 +126,17 @@ describe("Sweeps", () => {
     });
     expect(retained).toBeDefined();
     expect(retained?.completedAt).toBeNull();
+    // A misplaced public filter must fail before it can become a global pass.
+    expect(
+      sweepStartInput.safeParse({
+        families: [
+          {
+            family: "statement_transaction",
+            scope: { importId: retained!.shortcode },
+          },
+        ],
+      }).success,
+    ).toBe(false);
     const data = sweepStartInput.parse({
       families: [
         {
