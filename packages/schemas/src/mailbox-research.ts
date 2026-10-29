@@ -161,6 +161,8 @@ export const mailboxHistoryEvent = z.object({
 });
 export const mailboxPage = z.object({
   messageIds: z.array(z.string()),
+  /** Completed acquisition prefix; older frozen pages resume at their first message. */
+  messageOffset: z.number().int().nonnegative().optional(),
   events: z.array(mailboxHistoryEvent),
   startCoverage: mailboxCoverage,
   nextCoverage: mailboxCoverage,

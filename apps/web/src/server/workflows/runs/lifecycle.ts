@@ -267,6 +267,7 @@ export async function reconcileWorkflowRuns(db: Database) {
         .update(runTable)
         .set({
           status: row.state === "paused" ? "paused" : "failed",
+          endedAt: row.state === "paused" ? null : new Date(),
           dispatchError: row.error,
           failureCode:
             row.state === "cancelled"

@@ -122,6 +122,7 @@ export const runJobHandler = defineJobHandler(
             await assertNotPaused(db, input.runId);
             return { page: { done: true } };
           }
+          if (saved.kind === "more") return { page: { done: false, cursor } };
           if (!cursor.more) {
             await mail.finishMailDiscovery(db, params);
             await mail.continueMailDiscovery(db, params);

@@ -150,6 +150,16 @@ one line through `describeJobWaitingOn` (and `describeJobRollup` for counts),
 so a lapsed lease reads "Lease on … expired; waiting to be reclaimed", never
 "In progress".
 
+Reconciliation copies a stopped execution's failure to its Run and records an
+end time for failed or cancelled execution; a member pause stays open-ended.
+Mailbox discovery acquires at most five messages from its frozen provider page
+per Job claim. Its durable message offset resumes the remaining messages without
+replaying the completed prefix; absent offsets on retained pages mean zero.
+Mailbox coverage advances only after every batch and history event is handled.
+Import admission commits child dispatch intent atomically. An already-failed
+child remains visible for its own retry and does not fail discovery or rewind
+the mailbox page.
+
 Declared entity fields carry the same facts to web, Apple and MCP:
 
 - Run: `waitingOn` (the rollup line), `stalled`, `successorRunId` ("Retried
