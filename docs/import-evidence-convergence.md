@@ -892,6 +892,11 @@ production outcomes.
 
 ## Reviewing statement outcomes
 
+Public `run.sweep` family entries take `importId`, `accountIds` and `since`
+directly, for example `{ family: "statement_transaction", importId: "TIM-4K7MN" }`.
+Unknown fields, including a nested `scope`, are rejected before any Run starts;
+an invalid scope must never silently broaden a financial pass.
+
 Matched booking discovery can use the accepted transaction's live account when
 retained source bindings, provider scope, aliases and card evidence resolve no
 account. This server-owned fallback neither writes an alias nor changes source

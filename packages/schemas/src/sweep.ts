@@ -8,26 +8,26 @@ import {
 import { sweepFieldTargets } from "./run-fields";
 
 /** A Sweep as a member or agent asks for it: entity scopes by shortcode. */
-export const sweepStartInput = z.object({
+export const sweepStartInput = z.strictObject({
   families: z
     .array(
       z.discriminatedUnion("family", [
-        z.object({
+        z.strictObject({
           family: z.literal("transfer_pair"),
           accountIds: z.array(financialAccountShortcode).max(100).optional(),
           since: plainDate.optional(),
         }),
-        z.object({
+        z.strictObject({
           family: z.literal("statement_transaction"),
           importId: transactionImportShortcode.optional(),
           accountIds: z.array(financialAccountShortcode).max(100).optional(),
           since: plainDate.optional(),
         }),
-        z.object({
+        z.strictObject({
           family: z.literal("recommendation"),
           entityKinds: z.array(z.string().min(1)).max(20).optional(),
         }),
-        z.object({
+        z.strictObject({
           family: z.literal("field"),
           targets: sweepFieldTargets.optional(),
         }),
