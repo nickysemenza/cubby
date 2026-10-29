@@ -374,28 +374,31 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
       exact: true,
     }),
   ).toBeVisible();
-  const senderCell = coverage.getByRole("cell", {
-    name: sharedSender,
-    exact: true,
-  });
+  const senderCell = coverage
+    .getByRole("cell")
+    .filter({
+      has: page.getByRole("button", { name: sharedSender, exact: true }),
+    });
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await senderCell.click({ position: { x: 2, y: 2 } });
   await page.keyboard.press("ControlOrMeta+c");
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toBe(sharedSender);
-  await senderCell.evaluate((cell) => {
-    const range = document.createRange();
-    const text = document
-      .createTreeWalker(cell, NodeFilter.SHOW_TEXT)
-      .nextNode();
-    if (!text) throw new Error("Sender cell must contain source text");
-    range.setStart(text, 0);
-    range.setEnd(text, 8);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  });
+    .toBe(mappedVendor?.senders.join(", "));
+  await coverage
+    .getByRole("button", { name: sharedSender, exact: true })
+    .evaluate((cell) => {
+      const range = document.createRange();
+      const text = document
+        .createTreeWalker(cell, NodeFilter.SHOW_TEXT)
+        .nextNode();
+      if (!text) throw new Error("Sender cell must contain source text");
+      range.setStart(text, 0);
+      range.setEnd(text, 8);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    });
   await page.keyboard.press("ControlOrMeta+c");
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
