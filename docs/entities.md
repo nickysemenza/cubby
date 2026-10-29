@@ -1391,6 +1391,11 @@ top-level key. Hidden editable references declare their public `display.readPath
 when their identity is nested in the read projection. A declared suggestion
 consumer permits that path even when the field has no visible display surface.
 Unavailable governed inputs fail preparation instead of becoming empty additions.
+
+Shared read owners construct context-free validators once and validate each
+record at the same boundary. Stored decisions and raw nullable references reuse
+their canonical schema instances across rows.
+
 The kernel-owned `readSelectedEntityRecords` assembles canonical selected detail
 rows for connection preparation, generic field refresh, queued suggestion checks
 and publication validation. Each caller declares its basis, target and resolution

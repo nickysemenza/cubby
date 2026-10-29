@@ -191,6 +191,7 @@ export function projectStoredValue(
   };
 }
 
+const decisionSchema = fieldDecision(z.unknown());
 const valueRow = z.object({
   entityId: z.string(),
   key: z.string(),
@@ -270,7 +271,7 @@ export async function loadStoredDerived(
   for (const row of z.array(valueRow).parse(result.rows)) {
     const byKey = out.get(row.entityId) ?? new Map();
     const metadata = storedFieldDecision.safeParse(row.decidedBy);
-    const decision = fieldDecision(z.unknown()).safeParse(
+    const decision = decisionSchema.safeParse(
       metadata.success
         ? {
             provenance: metadata.data.provenance,
