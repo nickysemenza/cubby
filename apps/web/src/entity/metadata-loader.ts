@@ -5,20 +5,16 @@ import { freezeMetadata } from "~/entity/immutable-metadata";
 import type { EntityMetadataSlice } from "~/entity/model/metadata-types";
 
 type MetadataModule = { metadata: EntityMetadataSlice };
-const modules = import.meta.glob<MetadataModule>(
-  "../../../../packages/schemas/src/generated/entity-metadata.*.gen.ts",
-);
+// A relative template import, not `import.meta.glob`: Playwright fixtures load
+// this module under Node, and Vite still splits one chunk per entity.
 // SAFETY: the generated metadata modules use exactly the declaration key roster.
 export const publicEntityMetadataLoaders = Object.fromEntries(
   ENTITY_KEYS.map((entity) => [
     entity,
     async () => {
-      const loader =
-        modules[
-          `../../../../packages/schemas/src/generated/entity-metadata.${entity}.gen.ts`
-        ];
-      if (!loader) throw new Error(`No metadata module for ${entity}`);
-      const { metadata } = await loader();
+      const { metadata }: MetadataModule = await import(
+        `../../../../packages/schemas/src/generated/entity-metadata.${entity}.gen.ts`
+      );
       return freezeMetadata(metadata);
     },
   ]),
