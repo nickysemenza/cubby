@@ -232,16 +232,29 @@ const pathReference = (column: string, jsonKey: string | undefined): SQL => {
 
 /** Values reached from `start` along a join path, as one nested subquery. */
 const pathSql = (path: readonly DerivedPathStep[], start: SQL): SQL =>
-  path.reduce<SQL>(
-    (previous, step) => sql`SELECT ${pathReference(step.to, step.jsonKey)}
-      FROM ${ident(step.table)}
-      WHERE ${pathReference(step.from, step.fromJsonKey)} IN (${previous})${sql.join(
-        Object.entries(step.where ?? {}).map(
-          ([column, value]) => sql` AND ${ident(column)} = ${value}`,
-        ),
-      )}`,
-    start,
-  );
+  path.reduce<SQL>((previous, step) => {
+    if (step.recursive) {
+      // Include source IDs even after deletion; canonical compute owns liveness.
+      const edge = (column: string) => sql`edge.${ident(column)}`;
+      return sql`WITH RECURSIVE derived_path_walk(id, depth, visited) AS (
+          SELECT DISTINCT seed.id, 0, ARRAY[seed.id] FROM (${previous}) seed(id)
+          WHERE seed.id IS NOT NULL
+          UNION ALL
+          SELECT ${edge(step.to)}, walk.depth + 1, array_append(walk.visited, ${edge(step.to)})
+          FROM ${ident(step.table)} edge JOIN derived_path_walk walk ON ${edge(step.from)} = walk.id
+          WHERE walk.depth < ${step.recursive.maxDepth}
+            AND ${edge(step.to)} IS NOT NULL AND NOT (${edge(step.to)} = ANY(walk.visited))
+            ${sql.join(Object.entries(step.where ?? {}).map(([column, value]) => sql` AND ${edge(column)} = ${value}`))}
+        ) SELECT DISTINCT id FROM derived_path_walk`;
+    }
+    return sql`SELECT ${pathReference(step.to, step.jsonKey)}
+        FROM ${ident(step.table)}
+        WHERE ${pathReference(step.from, step.fromJsonKey)} IN (${previous})${sql.join(
+          Object.entries(step.where ?? {}).map(
+            ([column, value]) => sql` AND ${ident(column)} = ${value}`,
+          ),
+        )}`;
+  }, start);
 
 /** Records whose stored inputs reach a changed record, per kind, bounded for the doorbell ring. */
 class Touched {
@@ -328,9 +341,14 @@ async function expandFanouts(
       const refs = sql`SELECT unnest(${uuidArrayParam(group.map((item) => item.ref))})`;
       const dependents = input.targetWhere
         ? fixedTargetRows(declaration.table, input.targetWhere)
-        : input.path
-          ? pathSql(input.path, refs)
-          : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+        : input.paths
+          ? sql.join(
+              input.paths.map((path) => sql`(${pathSql(path, refs)})`),
+              sql` UNION `,
+            )
+          : input.path
+            ? pathSql(input.path, refs)
+            : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
       return [
         sql`SELECT ${declaration.target}::text, r.id,
         ${Math.min(...group.map((item) => item.priority))}::int

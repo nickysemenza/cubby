@@ -1,4 +1,5 @@
 import { historicalDateRangePresets } from "../date-range";
+import { MAX_LOCATION_TREE_DEPTH } from "../location-fields";
 import { timestampField, aliasList } from "./field-policy";
 import { PRODUCT_OWNERSHIP_INPUTS } from "./ownership-inputs";
 import { storedProductOwnership } from "@cubby/schemas/inventory-ownership";
@@ -2363,13 +2364,36 @@ Rules:
               match: { id: "id" },
               columns: ["stockTracked", "categoryId"],
             },
-            // Location ancestry and labels are part of the saved placement.
-            // A tree edit can affect descendants without a direct stock edge.
+            // Keep this input position: its pending tickets still name Location IDs.
+            // Placements include both recorded stock and Locations that are Products.
             {
               table: "Location",
               match: { id: "id" },
               columns: ["name", "parentId", "deletedAt"],
-              targetWhere: { deletedAt: null },
+              paths: [
+                [
+                  {
+                    table: "Location",
+                    from: "parentId",
+                    to: "id",
+                    recursive: { maxDepth: MAX_LOCATION_TREE_DEPTH },
+                  },
+                  {
+                    table: "InventoryEntry",
+                    from: "locationId",
+                    to: "productId",
+                  },
+                ],
+                [
+                  {
+                    table: "Location",
+                    from: "parentId",
+                    to: "id",
+                    recursive: { maxDepth: MAX_LOCATION_TREE_DEPTH },
+                  },
+                  { table: "Location", from: "id", to: "productId" },
+                ],
+              ],
             },
             // Tracking and service behavior inherit through category ancestors.
             // Rare taxonomy edits conservatively refresh the complete Product set.

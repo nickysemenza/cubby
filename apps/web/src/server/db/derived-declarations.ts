@@ -21,6 +21,7 @@ export interface DerivedInput {
   readonly except: readonly string[];
   /** A join path from the matched value to this entity's ids. */
   readonly path: readonly DerivedPathStep[] | null;
+  readonly paths?: readonly (readonly DerivedPathStep[])[];
   readonly targetWhere: Readonly<Record<string, string | null>> | null;
   /** The matched column is JSON; values are `key` of the array at `array`. */
   readonly json: {
@@ -37,6 +38,7 @@ export interface DerivedPathStep {
   readonly jsonKey?: string;
   readonly fromJsonKey?: string;
   readonly where?: Readonly<Record<string, string>>;
+  readonly recursive?: { readonly maxDepth: number };
 }
 
 /**
@@ -94,6 +96,7 @@ const pathStep = z.object({
   jsonKey: z.string().optional(),
   fromJsonKey: z.string().optional(),
   where: z.record(z.string(), z.string()).optional(),
+  recursive: z.object({ maxDepth: z.number().int().positive() }).optional(),
 });
 
 /** The generated registry's entry, parsed at this boundary. */
@@ -121,6 +124,7 @@ const storedEntry = z.object({
         where: z.record(z.string(), z.string()).optional(),
         except: z.array(z.string()).optional(),
         path: z.array(pathStep).optional(),
+        paths: z.array(z.array(pathStep).min(1)).min(1).optional(),
         targetWhere: z.record(z.string(), z.string().nullable()).optional(),
         json: z
           .object({ array: z.array(z.string()).optional(), key: z.string() })
@@ -207,6 +211,7 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
               where: input.where ?? null,
               except: input.except ?? [],
               path: input.path ?? null,
+              ...(input.paths ? { paths: input.paths } : {}),
               targetWhere: input.targetWhere ?? null,
               json: input.json ?? null,
             };
@@ -277,6 +282,7 @@ function storedDerivedByTarget(
 export const isFanoutInput = (input: DerivedInput) =>
   input.entityColumn !== "id" ||
   input.path !== null ||
+  input.paths !== undefined ||
   input.json !== null ||
   input.targetWhere !== null;
 
