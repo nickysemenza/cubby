@@ -355,34 +355,33 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
   page: async (context) => {
     const { db, run, step, work } = context;
     const scope = scopeOf(run, "statement_transaction");
-    const retried = await pageRetryRefs(
-      context,
-      JOB_PAGE_LIMITS.suggestionsPerPage,
-      async (refs) => {
-        const outcome = await retryStatementGenerationRefs(db, {
-          runId: run.id,
-          scope,
-          refs,
-          work,
-        });
-        return {
-          delta: {
-            done: outcome.done,
-            skipped: outcome.skipped,
-            failed: outcome.failed.length,
-          },
-          errors: outcome.failed,
-          tallies: {
-            published: outcome.published,
-            labelsReused: outcome.labelsReused,
-          },
-          reasons: {
-            unchanged: outcome.unchanged,
-            out_of_scope: outcome.skipped,
-          },
-        };
-      },
-    );
+    const limit = scope.importId
+      ? JOB_PAGE_LIMITS.statementApplicationsPerPage
+      : JOB_PAGE_LIMITS.suggestionsPerPage;
+    const retried = await pageRetryRefs(context, limit, async (refs) => {
+      const outcome = await retryStatementGenerationRefs(db, {
+        runId: run.id,
+        scope,
+        refs,
+        work,
+      });
+      return {
+        delta: {
+          done: outcome.done,
+          skipped: outcome.skipped,
+          failed: outcome.failed.length,
+        },
+        errors: outcome.failed,
+        tallies: {
+          published: outcome.published,
+          labelsReused: outcome.labelsReused,
+        },
+        reasons: {
+          unchanged: outcome.unchanged,
+          out_of_scope: outcome.skipped,
+        },
+      };
+    });
     if (retried) return retried;
     const cursor = statementCursor.parse(step.cursor ?? null) ?? {
       after: null,
@@ -390,7 +389,7 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
     // Optional model preparation belongs to statement_label; it must never hold
     // an already published generation page behind an unrelated provider/SQL wait.
     const page = await generateStatementSuggestionPage(db, {
-      limit: JOB_PAGE_LIMITS.suggestionsPerPage,
+      limit,
       after: cursor.after,
       runId: run.id,
       scope,
