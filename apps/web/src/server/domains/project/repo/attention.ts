@@ -10,8 +10,9 @@
  * The Problems page computes this globally. The dashboard passes its matched
  * project ids so project-owned results match the visible portfolio while
  * unassigned task/expense results remain visible like the dashboard Data
- * view. Rollups still load the whole tree: filtering the output must not make
- * a matched parent's unmatched child disappear from its subtree spend.
+ * view. Keep the identity tree for ancestor estimates and parent labels; a
+ * scoped read loads only its selected rollup publications. Each publication
+ * already includes the complete subtree, including unmatched children.
  *
  * Expensive Project inputs come from published rollups. Missing roots are
  * reported separately from findings; live Task and Expense checks still run.
@@ -193,7 +194,7 @@ export async function computeAttentionItems(
           ),
         ),
       ),
-    loadStoredProjectRollups(db),
+    loadStoredProjectRollups(db, undefined, scopedProjectIds),
     overdueExpenseRead
       .select({
         id: expense.id,
