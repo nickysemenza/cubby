@@ -208,7 +208,7 @@ actor CompanionImageBackgroundRunner {
                                 stopped = true
                                 group.cancelAll()
                             }
-                            if let next = await delivery.snapshot.nextAttemptAt, next <= .now {
+                            if await delivery.hasDueResults {
                                 senderRequested = true
                             }
                         case .renewal(let error):

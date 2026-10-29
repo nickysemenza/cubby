@@ -52,6 +52,13 @@ actor CompanionResultDelivery {
         cachedSnapshot
     }
 
+    /// Use the delivery clock for both backoff and eligibility; a caller's clock can disagree
+    /// with an injected clock and repeatedly schedule batches that cannot send anything.
+    var hasDueResults: Bool {
+        guard let next = cachedSnapshot.nextAttemptAt else { return false }
+        return next <= now()
+    }
+
     /// Includes recorded results that have not yet had a delivery attempt.
     @discardableResult
     func refreshSnapshot() async -> Snapshot {
