@@ -3699,9 +3699,9 @@ projection, not a new entity or assignment ledger. An MCP read fences to
 shared work and work owned only by the connected member before counts and
 paging; the household UI's Owner filter grants no private access.
 
-The Email source joins its retained quality publication once by entity id, kind
-and key for admission and reason columns, so PostgreSQL can use the existing
-kind/key index. It preserves missing-publication and fresh record-read semantics
+The Email and Product research sources join their retained quality publication
+once by entity id, kind and key for admission and reason columns, so PostgreSQL can use the existing
+kind/key index. They preserve missing-publication and fresh record-read semantics
 without repeating one indexed publication lookup for every check and label.
 `storedPublicationMatch` owns the entity id/kind/key predicate for joined and
 scalar stored-publication reads; callers supply all three identity parts.
