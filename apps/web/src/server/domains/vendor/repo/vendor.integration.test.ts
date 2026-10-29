@@ -603,6 +603,71 @@ describe("vendor repository — mergeVendors", () => {
       .where(eq(vendor.id, keep.entityId));
     expect(identity?.senders).toEqual(["late@synthetic-seller.example"]);
 
+    const editLocked = Promise.withResolvers<number>();
+    const editRelease = Promise.withResolvers<void>();
+    const learning = getDb(ctx.db).transaction(async (tx) => {
+      await tx
+        .select({ id: vendor.id })
+        .from(vendor)
+        .where(eq(vendor.id, keep.entityId))
+        .for("update");
+      const pid = (
+        await tx.execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`)
+      ).rows[0]?.pid;
+      if (!pid) throw new Error("Synthetic Vendor lock is missing");
+      editLocked.resolve(pid);
+      await editRelease.promise;
+      await tx
+        .update(vendor)
+        .set({
+          orderEmailSenders: [
+            "late@synthetic-seller.example",
+            "learned@synthetic-seller.example",
+          ],
+          orderEmailSenderPolicies: {
+            "late@synthetic-seller.example": "confirmed",
+            "learned@synthetic-seller.example": "learned",
+          },
+        })
+        .where(eq(vendor.id, keep.entityId));
+    });
+    const editPid = await editLocked.promise;
+    const clearing = updateVendor(
+      ctx.db,
+      keep.output.id,
+      { orderEmailSenders: [] },
+      ctx.actor,
+    );
+    try {
+      await expect
+        .poll(
+          async () =>
+            (
+              await getDb(ctx.db).execute<{ waiting: boolean }>(
+                sql`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE ${editPid}::int = ANY(pg_blocking_pids(pid))) AS waiting`,
+              )
+            ).rows[0]?.waiting,
+        )
+        .toBe(true);
+    } finally {
+      editRelease.resolve();
+      await learning;
+    }
+    await clearing;
+    const [cleared] = await getDb(ctx.db)
+      .select({
+        senders: vendor.orderEmailSenders,
+        policies: vendor.orderEmailSenderPolicies,
+      })
+      .from(vendor)
+      .where(eq(vendor.id, keep.entityId));
+    expect(cleared).toEqual({
+      senders: [],
+      policies: {
+        "late@synthetic-seller.example": "excluded",
+        "learned@synthetic-seller.example": "excluded",
+      },
+    });
     const [saved] = await getDb(ctx.db)
       .select({ notes: purchase.notes })
       .from(purchase)
