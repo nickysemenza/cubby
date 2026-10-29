@@ -28,6 +28,7 @@ import {
 import {
   prepareConnectionFieldGuard,
   saveConnectionFieldGuard,
+  type ConnectionFieldGuardTargets,
 } from "~/server/domains/connection/repo/field-connections";
 import {
   prepareProductPairPublications,
@@ -68,6 +69,7 @@ export type ConnectionPreparationPorts = {
   suggestPorts?: Parameters<typeof suggestFields>[3];
   productIdentityPorts?: Parameters<typeof evaluateProductIdentity>[3];
   initialConnections?: readonly PreparedEntityConnection[];
+  fieldGuardTargets?: ConnectionFieldGuardTargets;
 };
 
 /** Model work precedes the authority fence; candidate evidence publishes in bounded chunks. */
@@ -266,7 +268,15 @@ async function prepareFieldConnections(
     Awaited<ReturnType<typeof prepareConnectionFieldGuard>>
   >();
   for (const field of fields)
-    guards.set(field, await prepareConnectionFieldGuard(db, source, field));
+    guards.set(
+      field,
+      await prepareConnectionFieldGuard(
+        db,
+        source,
+        field,
+        ports.fieldGuardTargets,
+      ),
+    );
   const [selected] = await readSelectedEntityRecords({
     context: { db, actorContext: context.actorContext },
     entity,

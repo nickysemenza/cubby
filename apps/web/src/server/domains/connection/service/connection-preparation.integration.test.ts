@@ -25,6 +25,10 @@ import {
   product,
 } from "~/server/db/schema";
 import { publishPreparedEntityConnections } from "~/server/domains/connection/repo/entity-connections";
+import {
+  prepareConnectionFieldGuard,
+  type ConnectionFieldGuardTargets,
+} from "~/server/domains/connection/repo/field-connections";
 import { publishProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
@@ -304,6 +308,14 @@ describe("connection preparation and publication authority", () => {
 
   it("refuses a field target changed while inference is pending even without a refreshed search projection", async () => {
     const { source, item, task } = await fixture();
+    const fieldGuardTargets: ConnectionFieldGuardTargets = new Map();
+    // Reused page evidence must retain the same live target fence.
+    await prepareConnectionFieldGuard(
+      ctx.db,
+      source,
+      "subjectProductId",
+      fieldGuardTargets,
+    );
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const preparation = prepareCombinedConnections(
@@ -311,6 +323,7 @@ describe("connection preparation and publication authority", () => {
       kernelCtx(ctx),
       source,
       {
+        fieldGuardTargets,
         suggestPorts: {
           decisionModel: PRIMARY_MODEL,
           decisionPort: async (input) => {
