@@ -86,9 +86,8 @@ export async function prepareEntityConnectionEvidence(
     db,
     candidates.map((candidate) => ({ candidate })),
     async ({ candidate }, basis) => {
-      prepared.push(
-        connectionAssessmentEvidence.parse({ version: 1, candidate, basis }),
-      );
+      // Both children are validated already; retain the capture's frozen shared JSON.
+      prepared.push({ version: 1, candidate, basis });
     },
   );
   await assertAcquisitionConnectionsEligible(db, candidates);

@@ -160,6 +160,15 @@ const snapshotSchema = z
   .pipe(jsonEvidence);
 export const snapshotJson = (value: unknown) => snapshotSchema.parse(value);
 
+/** Shared capture children are immutable; no caller can change a sibling's evidence. */
+function freezeSnapshot(value: ConnectionJson): ConnectionJson {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) freezeSnapshot(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
 export const connectionReadEvidence = connectionAssessmentEvidence.omit({
   basis: true,
 });
@@ -208,7 +217,9 @@ export async function forEachConnectionBasis<
   const expenseProjects = expenseIds.length
     ? await prepareExpenseProjectRecommendationContexts(db, expenseIds)
     : undefined;
-  // Each basis may contain a full recommendation context; do not retain 250 of them.
+  // Every candidate for one source carries the same frozen recommendation evidence.
+  // Keep one snapshot across construction batches, never across capture passes.
+  const expenseProjectEvidence = new Map<string, ConnectionJson>();
   const batchSize = 16;
   for (let offset = 0; offset < entries.length; offset += batchSize) {
     const batch = entries.slice(offset, offset + batchSize);
@@ -217,6 +228,7 @@ export async function forEachConnectionBasis<
       batch.map((entry) => entry.candidate),
       expenseProjects,
     );
+    prepared.expenseProjectEvidence = expenseProjectEvidence;
     for (const entry of batch)
       await visit(
         entry,
@@ -262,6 +274,7 @@ export type PreparedConnectionBases = {
   locked: boolean;
   records: Map<string, Awaited<ReturnType<typeof connectionRecord>>>;
   expenseProject: Map<string, unknown>;
+  expenseProjectEvidence: Map<string, ConnectionJson>;
   settlementCandidates: Map<string, unknown>;
   /** By transaction id. */
   allocations: Map<string, unknown[]>;
@@ -453,6 +466,7 @@ export async function prepareConnectionBases(
     expenseProject: expenseProjects
       ? expenseProjects(expenses)
       : await expenseProjectRecommendationContexts(db, expenses),
+    expenseProjectEvidence: new Map(),
     settlementCandidates: await listPurchasesSettlementCandidates(
       db,
       purchases,
@@ -508,14 +522,23 @@ export async function captureConnectionEvidence(
   const source = targetFirst ? second : first;
   const target = targetFirst ? first : second;
   let dependencies: ConnectionJson = null;
+  let dependencyEvidence: ConnectionJson | undefined;
   switch (candidate.relation) {
     case "expense-project": {
       const expenseId = parseShortcodeFor("expense", candidate.source.entityId);
-      dependencies = snapshotJson(
-        prepared?.expenseProject.has(expenseId)
-          ? prepared.expenseProject.get(expenseId)
-          : await expenseProjectRecommendationContext(db, expenseId),
-      );
+      dependencyEvidence = prepared?.expenseProjectEvidence.get(expenseId);
+      if (dependencyEvidence === undefined) {
+        dependencyEvidence = freezeSnapshot(
+          relevantDependencyEvidence(
+            snapshotJson(
+              prepared?.expenseProject.has(expenseId)
+                ? prepared.expenseProject.get(expenseId)
+                : await expenseProjectRecommendationContext(db, expenseId),
+            ),
+          ),
+        );
+        prepared?.expenseProjectEvidence.set(expenseId, dependencyEvidence);
+      }
       break;
     }
     case "inventory-location": {
@@ -616,10 +639,13 @@ export async function captureConnectionEvidence(
       break;
   }
   return {
-    basis: snapshotJson({
+    basis: freezeSnapshot({
       source: source.row,
       target: target.row,
-      dependencies: relevantDependencyEvidence(dependencies),
+      dependencies:
+        dependencyEvidence === undefined
+          ? relevantDependencyEvidence(dependencies)
+          : dependencyEvidence,
     }),
     sourceId: source.id,
   };

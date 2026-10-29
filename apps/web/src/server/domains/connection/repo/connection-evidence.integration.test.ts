@@ -12,6 +12,7 @@ import {
   entityLink,
   financialTransactionAllocation,
   product as productTable,
+  project as projectTable,
 } from "~/server/db/schema";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -28,6 +29,7 @@ import {
   prepareConnectionBases,
 } from "./connection-evidence";
 import { connectionDiscoveryFingerprint } from "./discovery-fingerprint";
+import { prepareEntityConnectionEvidence } from "./entity-connections";
 
 // Freshness checks capture many bases from prepared, batched reads. Each must
 // equal the basis the same candidate captures alone, and an endpoint that no
@@ -175,7 +177,32 @@ describe("prepared connection bases", () => {
       expect(
         canonicalJson(await captureConnectionBasis(ctx.db, raw, false, ready)),
       ).toBe(canonicalJson(await captureConnectionBasis(ctx.db, raw)));
+    const [captured] = await prepareEntityConnectionEvidence(
+      ctx.db,
+      candidates.filter((entry) => entry.relation === "expense-project"),
+    );
+    const basis = captured?.basis;
+    if (!basis || typeof basis !== "object" || Array.isArray(basis))
+      throw new Error("Synthetic captured basis missing");
+    const source = basis.source;
+    if (!source || typeof source !== "object" || Array.isArray(source))
+      throw new Error("Synthetic source snapshot missing");
+    const before = canonicalJson(basis);
+    expect(Reflect.set(source, "name", "Synthetic snapshot tamper")).toBe(
+      false,
+    );
+    expect(canonicalJson(basis)).toBe(before);
+    await getDb(ctx.db)
+      .update(projectTable)
+      .set({ name: "Synthetic current Project evidence" })
+      .where(eq(projectTable.id, project.entityId));
     await withTransactionDatabase(ctx.db, async (tx) => {
+      // An unlocked shared snapshot cannot satisfy the later locked capture.
+      expect(
+        canonicalJson(
+          await captureConnectionBasis(tx, candidates[0]!, true, ready),
+        ),
+      ).not.toBe(before);
       const locked = await prepareConnectionBases(
         tx,
         candidates,

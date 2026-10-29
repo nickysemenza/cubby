@@ -629,8 +629,13 @@ unadmitted suffix stays due rather than completing its enumeration receipt.
 Connection pages evaluate 8 sources at once (a Worker invocation holds five
 strong connections). Expense Project recommendation inputs and
 FinancialTransaction settlement/transfer retrieval load for the page before
-provider work. Evidence capture normally shares the page's reads; if one
-candidate becomes unreadable, capture retries per source and returns that
+provider work. Evidence capture shares the page's reads and the validated frozen
+JSON of repeated recommendation contexts within that capture pass, instead of
+copying the same context into every candidate tree.
+All evidence fields and serialized fingerprints remain unchanged. Locked
+publication capture always obtains a fresh snapshot; unlocked caches cannot
+satisfy its authority checks. If one candidate becomes unreadable, capture retries
+per source and returns that
 source's failure without rejecting healthy sources. Nearby purchases retain their per-transaction top ten and each
 Purchase retains its original ranked settlement limit before allocation and
 conflict filtering. Acquisition search still captures each newly retrieved
