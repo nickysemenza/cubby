@@ -76,6 +76,54 @@ export function creditScopedPage(
   return mailboxCoverage.parse(next);
 }
 
+/** Preserve intervening lanes while refusing to rewind this page's own position. */
+export function rebaseMailboxPage({
+  page,
+  coverage,
+  restoreScopedQuery,
+}: {
+  page: MailboxPage;
+  coverage: MailboxCoverage;
+  restoreScopedQuery: boolean;
+}): MailboxPage | null {
+  if (coverage.baselineHistoryId !== page.startCoverage.baselineHistoryId)
+    return null;
+  const next = mailboxCoverage.parse(coverage);
+  if (page.scopedKey) {
+    const before = page.startCoverage.scoped.find(
+      (query) => query.key === page.scopedKey,
+    );
+    const after = page.nextCoverage.scoped.find(
+      (query) => query.key === page.scopedKey,
+    );
+    const current = next.scoped.find((query) => query.key === page.scopedKey);
+    if (
+      !before ||
+      !after ||
+      (current
+        ? JSON.stringify(current) !== JSON.stringify(before)
+        : !restoreScopedQuery)
+    )
+      return null;
+    // A later unattended pass may prune a stopped control's query. Only its
+    // explicit frozen scope may restore it; other query progress stays current.
+    next.scoped = current
+      ? next.scoped.map((query) =>
+          query.key === page.scopedKey ? after : query,
+        )
+      : [...next.scoped, after];
+  } else {
+    if (
+      JSON.stringify(next.history) !==
+      JSON.stringify(page.startCoverage.history)
+    )
+      return null;
+    next.history = page.nextCoverage.history;
+  }
+  next.nextLane = page.nextCoverage.nextLane;
+  return { ...page, startCoverage: coverage, nextCoverage: next };
+}
+
 /** One provider page. The caller durably commits nextCoverage after processing it. */
 export async function listGmailPage(
   provider: GmailProvider,

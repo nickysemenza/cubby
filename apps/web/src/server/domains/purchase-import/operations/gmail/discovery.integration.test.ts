@@ -5,6 +5,7 @@
  * targeted search falls through to whole-mailbox history or searches a Vendor
  * name; completed coverage keeps chaining passes; one mailbox starves another. */
 import { runEntityId, vendorShortcode } from "@cubby/schemas/identifiers";
+import { mailboxDiscoveryProgress } from "@cubby/schemas/mailbox-research";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -434,6 +435,44 @@ describe("scheduled Gmail discovery", () => {
       kind: "listed",
       more: false,
     });
+    const frozen = mailboxDiscoveryProgress.parse(
+      (await readRun(selected.runId)).progress,
+    ).page;
+    if (!frozen?.scopedKey)
+      throw new Error("Synthetic controlled page missing");
+    const selectedAdvanced = {
+      ...frozen.startCoverage,
+      scoped: frozen.startCoverage.scoped.map((query) =>
+        query.key === frozen.scopedKey
+          ? { ...query, pageToken: "newer-selected-page" }
+          : query,
+      ),
+    };
+    await getDb(ctx.db)
+      .update(mailboxCursor)
+      .set({ coverage: selectedAdvanced })
+      .where(eq(mailboxCursor.id, before.id));
+    await expect(
+      saveMailDiscoveryBatch(ctx.db, selected, 0, seam),
+    ).rejects.toThrow("Mailbox page coverage changed before checkpoint");
+    expect(
+      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage,
+    ).toEqual(selectedAdvanced);
+    // Another pass can prune this failed control's unfinished query and move
+    // unrelated coverage before its frozen page is retried.
+    const advanced = {
+      ...baseline,
+      history: { historyId: "160", pageToken: null, targetHistoryId: null },
+      scoped: baseline.scoped.map((query) =>
+        query.key === unrelated.key
+          ? { ...query, pageToken: "newer-unrelated-page", messageCount: 7 }
+          : query,
+      ),
+    };
+    await getDb(ctx.db)
+      .update(mailboxCursor)
+      .set({ coverage: advanced })
+      .where(eq(mailboxCursor.id, before.id));
     await saveMailDiscoveryBatch(ctx.db, selected, 0, seam);
     await saveMailDiscoveryBatch(ctx.db, selected, 0, seam);
     await finishMailDiscovery(ctx.db, selected);
@@ -445,13 +484,13 @@ describe("scheduled Gmail discovery", () => {
     expect(listHistory).not.toHaveBeenCalled();
     const [after] = await getDb(ctx.db).select().from(mailboxCursor);
     expect(after?.coverage?.broad).toEqual(baseline.broad);
-    expect(after?.coverage?.history).toEqual(baseline.history);
+    expect(after?.coverage?.history).toEqual(advanced.history);
     expect(
       after?.coverage?.scoped.find((query) => query.key === canonical.key),
     ).toEqual(canonical);
     expect(
       after?.coverage?.scoped.find((query) => query.key === unrelated.key),
-    ).toEqual(unrelated);
+    ).toEqual(advanced.scoped.find((query) => query.key === unrelated.key));
     const refreshed = after?.coverage?.scoped.find((query) =>
       query.key.startsWith(`${canonical.key}:controlled:`),
     );

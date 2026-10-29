@@ -159,6 +159,11 @@ Mailbox coverage advances only after every batch and history event is handled.
 Import admission commits child dispatch intent atomically. An already-failed
 child remains visible for its own retry and does not fail discovery or rewind
 the mailbox page.
+When a frozen page is retried after another pass, its checkpoint preserves the
+latest unrelated searches and history. A stopped member-controlled query pruned
+by a later pass can be restored from that Run's frozen scope. A changed position
+for the page's own query or history still refuses the checkpoint rather than
+rewinding it.
 
 Declared entity fields carry the same facts to web, Apple and MCP:
 
