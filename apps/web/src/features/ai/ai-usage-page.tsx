@@ -21,7 +21,7 @@ import {
   type UsageChartSelection,
   usageChartDimensions,
 } from "~/features/ai/ai-usage-chart";
-import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
+import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";

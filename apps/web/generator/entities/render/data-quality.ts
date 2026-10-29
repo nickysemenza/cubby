@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 
@@ -174,11 +175,11 @@ export const renderDataQualityArtifacts = (
   return [
     {
       relativePath: "packages/schemas/src/generated/data-quality-checks.gen.ts",
-      source,
+      source: rawSource(source),
     },
     {
       relativePath: "apps/web/src/server/generated/data-quality-entries.gen.ts",
-      source: entries,
+      source: rawSource(entries),
     },
   ];
 };

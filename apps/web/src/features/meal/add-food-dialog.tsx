@@ -24,8 +24,8 @@ import { toast } from "sonner";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
-import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/domains/entityFilterOptions.gen";
+import { meal } from "~/integrations/tanstack-query/generated/domains/meal.gen";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 import {
   getAllUnitMappingsFromProduct,

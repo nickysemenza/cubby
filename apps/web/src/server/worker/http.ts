@@ -12,12 +12,12 @@ import {
   withResponseDiagnostics,
 } from "~/lib/http-cache";
 import { httpRouteTemplate } from "~/lib/http-route-template";
-import { observeResponseBody } from "~/lib/response-body-observer";
 import {
-  readStartOperationTraceContext,
-  startOperationTraceAttributes,
-  startOperationTraceName,
-} from "~/lib/start-operation-observability";
+  readOperationTraceContext,
+  operationTraceAttributes,
+  operationTraceName,
+} from "~/lib/operation-observability";
+import { observeResponseBody } from "~/lib/response-body-observer";
 import { deferWasmMetrics } from "~/lib/wasm-metrics";
 import { runWithExecutionCtx, withCfEnv } from "~/server/cf-env";
 import { withRequestDb } from "~/server/db";
@@ -278,7 +278,7 @@ export async function handleHttpRequest(
   const url = new URL(request.url);
   const ray = request.headers.get("cf-ray") ?? undefined;
   const startTraceContext = url.pathname.startsWith("/_serverFn/")
-    ? readStartOperationTraceContext(request.headers)
+    ? readOperationTraceContext(request.headers)
     : undefined;
   const routeTemplate = httpRouteTemplate(url.pathname, {
     serverFunction: startTraceContext !== undefined,
@@ -305,7 +305,7 @@ export async function handleHttpRequest(
                   return await interceptedErrorStore.run({ error: null }, () =>
                     withManualTrace(
                       startTraceContext
-                        ? `cf.fetch.${startOperationTraceName(startTraceContext)}`
+                        ? `cf.fetch.${operationTraceName(startTraceContext)}`
                         : "cf.fetch",
                       async (span, endSpan) => {
                         const handlerStartedAt = performance.now();
@@ -338,7 +338,7 @@ export async function handleHttpRequest(
                           request.headers,
                         ),
                         "cloudflare.ray_id": ray,
-                        ...startOperationTraceAttributes(startTraceContext),
+                        ...operationTraceAttributes(startTraceContext),
                       },
                     ),
                   );

@@ -37,7 +37,7 @@ import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
-import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog/inventory.gen";
+import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/domains/inventory.gen";
 import { DecisionSteps } from "~/ui/common/decision-steps";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { showErrorToast } from "~/ui/feedback/error-details";

@@ -5,7 +5,7 @@ import { FormProvider, useForm, type FieldValues } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
-import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
+import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 
 import { AutoSuggestSlot } from "./auto-suggest-slot";
 import type { EntitySuggestionsOperations } from "./field-suggestion";

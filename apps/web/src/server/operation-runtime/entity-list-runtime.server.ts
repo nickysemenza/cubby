@@ -1,9 +1,9 @@
 import { entityListContract } from "~/contracts/entity-list.contract";
 import { entityListInputSchema } from "~/entity/generated/entity-lists.gen";
+import { loadEntityListSchemas } from "~/entity/model/read-schemas/loaders";
 import { executeEntitySelectionIds } from "~/server/entity-kernel";
 import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
 import { listOperations } from "~/server/entity-kernel/list-operations";
-import { loadEntityListSchemas } from "~/server/generated/entity-read-loaders.gen";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 /**

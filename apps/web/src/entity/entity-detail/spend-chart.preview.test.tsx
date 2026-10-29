@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { MonthlySpendChart } from "./spend-chart";
@@ -19,7 +19,7 @@ afterEach(() => {
 // SQL owns monthly sums; native layout must keep edge readouts and roving focus usable.
 it("keeps spend readouts outside clipping and one keyboard stop at both edges", async () => {
   await page.viewport(1280, 900);
-  const restore = overrideStartDispatch(async (operation) => {
+  const restore = overrideOperationDispatch(async (operation) => {
     if (operation !== "entity.monthlyExpenseSpend")
       throw new Error(`Unexpected chart operation ${operation}`);
     return {

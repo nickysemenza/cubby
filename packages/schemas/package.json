@@ -74,7 +74,6 @@
     "./sidebar-manifest": "./src/sidebar-manifest.ts",
     "./entity-manifest": "./src/entity-manifest.ts",
     "./entity-roster": "./src/generated/entity-roster.gen.ts",
-    "./entity-metadata/*": "./src/generated/entity-metadata.*.gen.ts",
     "./compiler/generated/entity-metadata/*": "./src/generated/entity-metadata.*.gen.ts",
     "./compiler/generated/entity-field-envelopes/*": "./src/generated/entity-field-envelopes.*.gen.ts",
     "./entity-section-actions": "./src/entity-section-actions.ts",
@@ -301,7 +300,8 @@
     "./work-queue-policy": "./src/work-queue-policy.ts",
     "./problem-identities": "./src/problem-identities.ts",
     "./connected-view-definitions": "./src/connected-view-definitions.ts",
-    "./compiler/generated/entity-edit-validation/*": "./src/generated/entity-edit-validation.*.gen.ts"
+    "./compiler/generated/entity-edit-validation/*": "./src/generated/entity-edit-validation.*.gen.ts",
+    "./entity-metadata-types": "./src/entity-metadata-types.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/ensure.ts generate && node ../../scripts/tsc.ts --noEmit",

@@ -18,7 +18,7 @@ import type { QueryCachePolicy, RippleKey } from "~/contracts/cache-policy";
  * `integrations/tanstack-query/operation-overrides.ts`. The one server-facing
  * hint is a query's `readPolicy: "strong"` (see `QueryContract`), a
  * data-freshness requirement. That is what lets ONE declaration feed the browser
- * catalog (generated per-domain catalog modules, which resolves the cache data and
+ * catalog (typed per-domain modules, which resolve the cache data and
  * defaults every query's tags to `[domain, member]`), the server implementers
  * (`implementOperationDomain` / `implementSubscriptionDomain`), the operation
  * registry generator, and the shared HTTP operation route. Modules under

@@ -21,7 +21,7 @@ import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 import { Picker } from "~/entity/picker/picker";
 import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { readPathValue } from "~/entity/read-path";
-import { workflowCommandMetadata } from "~/integrations/tanstack-query/generated/commands.gen";
+import { workflowCommandMetadata } from "~/integrations/tanstack-query/workflow-commands";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
@@ -36,21 +36,21 @@ export function useReportCommands() {
   const reprocess = useDeferredActionMutation({
     loadMutation: async () =>
       (
-        await import("~/integrations/tanstack-query/generated/catalog/recipe.gen")
+        await import("~/integrations/tanstack-query/generated/domains/recipe.gen")
       ).recipe.reprocessCookbookOnce.mutationOptions(),
     error: "Could not reprocess the cookbook",
   });
   const importRecipes = useDeferredActionMutation({
     loadMutation: async () =>
       (
-        await import("~/integrations/tanstack-query/generated/catalog/recipe.gen")
+        await import("~/integrations/tanstack-query/generated/domains/recipe.gen")
       ).recipe.importCookbookRecipesOnce.mutationOptions(),
     error: "Could not add the recipes",
   });
   const commit = useDeferredActionMutation({
     loadMutation: async () =>
       (
-        await import("~/integrations/tanstack-query/generated/catalog/run.gen")
+        await import("~/integrations/tanstack-query/generated/domains/run.gen")
       ).run.commitPrepared.mutationOptions(),
     error: "Could not import the prepared orders",
   });

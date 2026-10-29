@@ -17,7 +17,7 @@ import type { EntityMutationPort } from "~/entity/editing/types";
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
-import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
+import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
 import type { EntitySuggestionsOperations } from "./field-suggestion";

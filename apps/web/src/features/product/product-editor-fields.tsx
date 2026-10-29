@@ -32,7 +32,7 @@ import { basisValueOf } from "~/entity/suggestions/field-suggestion";
 import { ExternalIdKindSuggestion } from "~/features/product/external-id-kind-suggestion";
 import { IdentifyProductButton } from "~/features/product/identify-product-with-ai";
 import { UnitMappingPairField } from "~/features/units/unit-mapping-pair-field";
-import { upc as upcLookup } from "~/integrations/tanstack-query/generated/catalog/upc.gen";
+import { upc as upcLookup } from "~/integrations/tanstack-query/generated/domains/upc.gen";
 import { barcodeForLookup } from "~/lib/barcode";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ArrayFieldManager } from "~/ui/forms/array-field-manager";

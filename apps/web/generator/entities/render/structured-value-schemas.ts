@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { drawsFromValueSchema } from "@cubby/schemas/compiler/native-coverage";
 import { collectionArraySchema } from "@cubby/schemas/entity-collection";
 import { generatedHeader } from "../../artifacts.ts";
@@ -68,16 +69,17 @@ export const renderStructuredValueSchemas = (
     {
       relativePath:
         "packages/schemas/src/generated/structured-value-schemas.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import type { StructuredValueSchema } from "../structured-value-schema";\n\n' +
-        renderRecord({
-          name: "structuredValueSchemas",
-          entries: schemas,
-          satisfies: "Readonly<Record<string, StructuredValueSchema>>",
-          comment:
-            "// The generic structured-value editor's schema per `entity.field`.",
-        }),
+          'import type { StructuredValueSchema } from "../structured-value-schema";\n\n' +
+          renderRecord({
+            name: "structuredValueSchemas",
+            entries: schemas,
+            satisfies: "Readonly<Record<string, StructuredValueSchema>>",
+            comment:
+              "// The generic structured-value editor's schema per `entity.field`.",
+          }),
+      ),
     },
   ];
 };

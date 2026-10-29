@@ -6,7 +6,6 @@ import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
-import superjson from "superjson";
 import { settledSuggestionQuestionsInput } from "@cubby/schemas/ai";
 import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import {
@@ -46,7 +45,7 @@ import {
   waitForAppHydration,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { startOperation } from "./support/start-operation";
+import { operationCall } from "./support/operation";
 import {
   createEntityFixture,
   createFixtureGraph,
@@ -78,7 +77,7 @@ const recordRows =
     fingerprint: string,
     rows: Partial<SourceTransactionRecordInput>[],
   ) => {
-    const response = await startOperation(
+    const response = await operationCall(
       page.request,
       "sourceTransactionRecord.record",
       {
@@ -124,23 +123,21 @@ test("empty suggestion cells expose an abstention and keyboard-accessible detail
       return route.continue();
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify(
-        superjson.serialize({
-          ok: true,
-          data: fieldSuggestionsReply(route.request(), {
-            suggestions: {},
-            outcomes: {
-              categoryId: {
-                kind: "evaluated",
-                answer: "none",
-                confidence: "high",
-                probability: 0.98,
-                alternatives: [],
-              },
+      body: JSON.stringify({
+        ok: true,
+        data: fieldSuggestionsReply(route.request(), {
+          suggestions: {},
+          outcomes: {
+            categoryId: {
+              kind: "evaluated",
+              answer: "none",
+              confidence: "high",
+              probability: 0.98,
+              alternatives: [],
             },
-          }),
+          },
         }),
-      ),
+      }),
     });
   });
   await gotoAuthenticatedPage(
@@ -198,33 +195,31 @@ test("saved suggestion previews stay visible while current evidence is checked",
       if (input.read !== "preview") await live.promise;
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify(
-          superjson.serialize({
-            ok: true,
-            data: {
-              results: input.questions.map(({ field }) => ({
-                ok: true,
-                value: {
-                  outcome: null,
-                  revision: null,
-                  preview:
-                    input.read === "preview" && field === "categoryId"
-                      ? {
-                          suggestion: proposal,
-                          outcome: {
-                            kind: "evaluated",
-                            answer: "pick",
-                            confidence: "high",
-                            probability: 0.97,
-                            alternatives: [],
-                          },
-                        }
-                      : null,
-                },
-              })),
-            },
-          }),
-        ),
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            results: input.questions.map(({ field }) => ({
+              ok: true,
+              value: {
+                outcome: null,
+                revision: null,
+                preview:
+                  input.read === "preview" && field === "categoryId"
+                    ? {
+                        suggestion: proposal,
+                        outcome: {
+                          kind: "evaluated",
+                          answer: "pick",
+                          confidence: "high",
+                          probability: 0.97,
+                          alternatives: [],
+                        },
+                      }
+                    : null,
+              },
+            })),
+          },
+        }),
       });
       return;
     }
@@ -236,23 +231,21 @@ test("saved suggestion previews stay visible while current evidence is checked",
     await live.promise;
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify(
-        superjson.serialize({
-          ok: true,
-          data: fieldSuggestionsReply(route.request(), {
-            suggestions: {},
-            outcomes: {
-              categoryId: {
-                kind: "evaluated",
-                answer: "none",
-                confidence: "high",
-                probability: 0.98,
-                alternatives: [],
-              },
+      body: JSON.stringify({
+        ok: true,
+        data: fieldSuggestionsReply(route.request(), {
+          suggestions: {},
+          outcomes: {
+            categoryId: {
+              kind: "evaluated",
+              answer: "none",
+              confidence: "high",
+              probability: 0.98,
+              alternatives: [],
             },
-          }),
+          },
         }),
-      ),
+      }),
     });
   });
   try {
@@ -987,27 +980,25 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
       return route.continue();
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify(
-        superjson.serialize({
-          ok: true,
-          data: fieldSuggestionsReply(route.request(), {
-            suggestions: {
-              tags: {
-                assessmentId: prediction.id,
-                value: "synthetic-brand",
-                label: "Remove synthetic-brand",
-                confidence: "high",
-                probability: 0.99,
-                detail: "Restates brandName",
-                reasoning: "Synthetic retained pruning",
-                alternatives: [],
-                operation: "remove",
-                removals,
-              },
+      body: JSON.stringify({
+        ok: true,
+        data: fieldSuggestionsReply(route.request(), {
+          suggestions: {
+            tags: {
+              assessmentId: prediction.id,
+              value: "synthetic-brand",
+              label: "Remove synthetic-brand",
+              confidence: "high",
+              probability: 0.99,
+              detail: "Restates brandName",
+              reasoning: "Synthetic retained pruning",
+              alternatives: [],
+              operation: "remove",
+              removals,
             },
-          }),
+          },
         }),
-      ),
+      }),
     });
   });
   await gotoAuthenticatedPage(

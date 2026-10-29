@@ -4,17 +4,20 @@ import type {
   OperationContract,
   SubscriptionMemberName,
 } from "~/contracts/define";
-import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
-import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
-import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
-import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
+import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
+import type { OperationWireValue } from "~/server/operation-runtime/operation.contract";
+import {
+  type AuthenticatedOperationContext,
+  resolveOperation,
+  type OperationRequest,
+} from "~/server/operation-runtime/operation.server";
 import {
   workflowStream,
   type WorkflowStream,
 } from "~/server/operation-runtime/workflow-stream.server";
 
 type SubscriptionDomainDescriptor = {
-  readonly id: StartOperationIdOfKind<"subscription">;
+  readonly id: OperationIdOfKind<"subscription">;
   readonly definition: {
     readonly kind: "subscription";
     readonly input: z.ZodType;
@@ -27,7 +30,7 @@ type DeclaredSubscriptionInput<
 > = z.output<Descriptor["definition"]["input"]>;
 
 type SubscriptionRun<Descriptor extends SubscriptionDomainDescriptor> = (
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   input: DeclaredSubscriptionInput<Descriptor>,
   /** Aborts when the browser drops the stream; pass it into workflows. */
   signal: AbortSignal,
@@ -35,16 +38,17 @@ type SubscriptionRun<Descriptor extends SubscriptionDomainDescriptor> = (
   | AsyncIterable<z.input<Descriptor["definition"]["event"]>>
   | Promise<AsyncIterable<z.input<Descriptor["definition"]["event"]>>>;
 
+/** Same call shape as a unary handler; the endpoint already authenticated. */
 export type WorkflowStreamHandler = (options: {
-  request: Request;
-  input: UnparsedStartOperationData;
+  data: OperationWireValue;
+  request: OperationRequest;
 }) => Promise<WorkflowStream>;
 
 type SubscriptionDescriptorOf<
   Contract extends OperationContract,
   Member extends keyof Contract["ops"],
 > = {
-  readonly id: StartOperationIdOfKind<"subscription">;
+  readonly id: OperationIdOfKind<"subscription">;
   readonly definition: Extract<
     Contract["ops"][Member],
     { kind: "subscription" }
@@ -79,21 +83,15 @@ function streamHandlerFor<Descriptor extends SubscriptionDomainDescriptor>(
 ): WorkflowStreamHandler {
   const inputSchema = declaredInputSchema(descriptor);
   const eventSchema = declaredEventSchema(descriptor);
-  return (options) =>
+  return async (options) =>
     workflowStream({
       request: options.request,
-      input: options.input,
+      input: options.data,
       operation: descriptor.id,
       inputSchema,
       eventSchema,
       run,
     });
-}
-
-function isSubscriptionOperationId(
-  id: string,
-): id is StartOperationIdOfKind<"subscription"> {
-  return startOperationDefinitionFor(id)?.kind === "subscription";
 }
 
 /**
@@ -115,9 +113,12 @@ export function implementSubscriptionDomain(
   const streams: Record<string, WorkflowStreamHandler> = {};
   for (const [member, definition] of Object.entries(contract.ops)) {
     if (definition.kind !== "subscription") continue;
-    const id = `${contract.domain}.${member}`;
-    if (!isSubscriptionOperationId(id))
-      throw new Error(`${id} is not registered as a subscription`);
+    const resolved = resolveOperation(`${contract.domain}.${member}`, {
+      kinds: ["subscription"],
+      exposure: "internal",
+    });
+    if (!resolved.ok) throw new Error(resolved.error.message);
+    const { id } = resolved.definition;
     const run = handlers[member];
     if (!run) throw new Error(`Missing handler for ${id}`);
     streams[member] = streamHandlerFor({ id, definition }, run);

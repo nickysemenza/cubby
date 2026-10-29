@@ -18,7 +18,7 @@ import {
   needViaOut,
   subRecipeBlockReason,
 } from "./availability";
-import { amount } from "./codec";
+import { amount, dateTime } from "./codec";
 import { money } from "./money";
 import {
   ledgerPartyShortcode,
@@ -198,7 +198,7 @@ export const mealRecipePreparationPortionOut = z.object({
   grams: z.number().positive().nullable(),
   weight: measureEstimate,
   batchShare: measureEstimate,
-  confirmedAt: z.date().nullable(),
+  confirmedAt: dateTime.nullable(),
   servedHere: z.boolean(),
   totals: nutritionTotals,
 });

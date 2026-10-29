@@ -14,8 +14,8 @@ import {
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ingredient } from "~/integrations/tanstack-query/generated/catalog/ingredient.gen";
-import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
+import { ingredient } from "~/integrations/tanstack-query/generated/domains/ingredient.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
 import { addWithDependencies } from "~/lib/cookbook-graph";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 

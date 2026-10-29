@@ -4,24 +4,22 @@ import type {
   OperationContract,
   OperationMemberName,
 } from "~/contracts/define";
-import {
-  type StartOperationId,
-  startOperationDefinitionFor,
-} from "~/lib/start-operation-observability";
+import type { OperationId } from "~/lib/operation-observability";
 import { readPolicyFor } from "~/server/db/read-policy";
 import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
-import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
+import type { OperationHandler } from "~/server/operation-runtime/operation-handlers.server";
 import {
-  type AuthenticatedStartOperationContext,
-  runStartOperation,
-} from "~/server/operation-runtime/start-operation.server";
+  type AuthenticatedOperationContext,
+  resolveOperation,
+  executeOperation,
+} from "~/server/operation-runtime/operation.server";
 
-type OperationKind = "query" | "mutation";
+type UnaryOperationKind = "query" | "mutation";
 
 type OperationDomainDescriptor = {
-  readonly id: StartOperationId;
+  readonly id: OperationId;
   readonly definition: {
-    readonly kind: OperationKind;
+    readonly kind: UnaryOperationKind;
     readonly input: z.ZodType;
     readonly output: z.ZodType;
   };
@@ -35,7 +33,7 @@ type DeclaredOutput<Descriptor extends OperationDomainDescriptor> = z.output<
   Descriptor["definition"]["output"]
 >;
 
-type OperationHandlerContext = AuthenticatedStartOperationContext & {
+type OperationHandlerContext = AuthenticatedOperationContext & {
   /** Aborts when the browser cancels the request; pass it into workflows. */
   signal: AbortSignal;
 };
@@ -86,19 +84,17 @@ type OperationDescriptorOf<
   Contract extends OperationContract,
   Member extends keyof Contract["ops"],
 > = {
-  readonly id: StartOperationId;
+  readonly id: OperationId;
   readonly definition: Extract<
     Contract["ops"][Member],
-    { kind: OperationKind }
+    { kind: UnaryOperationKind }
   >;
 };
 
 type OperationImplementationMap<Contract extends OperationContract> = {
   contract: Contract;
   operations: {
-    readonly [
-      Member in OperationMemberName<Contract["ops"]>
-    ]: StartOperationHandler<
+    readonly [Member in OperationMemberName<Contract["ops"]>]: OperationHandler<
       DeclaredOutput<OperationDescriptorOf<Contract, Member>>
     >;
   };
@@ -136,7 +132,7 @@ function resolvingCurrentMember<Descriptor extends OperationDomainDescriptor>(
 function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(
   descriptor: Descriptor,
   entry: OperationHandlerEntry<Descriptor>,
-): StartOperationHandler<DeclaredOutput<Descriptor>> {
+): OperationHandler<DeclaredOutput<Descriptor>> {
   const configured = configuredOperationHandler(entry);
   const inputSchema = configured.input ?? declaredInputSchema(descriptor);
   const outputSchema = configured.output ?? declaredOutputSchema(descriptor);
@@ -147,7 +143,7 @@ function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(
   );
 
   return (options) =>
-    runStartOperation({
+    executeOperation({
       operation: descriptor.id,
       type: descriptor.definition.kind,
       input: options.data,
@@ -179,17 +175,16 @@ export function implementOperationDomain(
 ) {
   const operations: Record<
     string,
-    StartOperationHandler<z.output<z.ZodUnknown>>
+    OperationHandler<z.output<z.ZodUnknown>>
   > = {};
   for (const [member, definition] of Object.entries(contract.ops)) {
     if (definition.kind === "subscription") continue;
-    const operation = startOperationDefinitionFor(
-      `${contract.domain}.${member}`,
-    );
-    if (!operation)
-      throw new Error(
-        `${contract.domain}.${member} is missing from the generated registry`,
-      );
+    const resolved = resolveOperation(`${contract.domain}.${member}`, {
+      kinds: [definition.kind],
+      exposure: "internal",
+    });
+    if (!resolved.ok) throw new Error(resolved.error.message);
+    const operation = resolved.definition;
     const entry = handlers[member];
     if (!entry) throw new Error(`Missing handler for ${operation.id}`);
     operations[member] = operationHandlerFor(

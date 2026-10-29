@@ -2,8 +2,8 @@ import { type JSONType, z } from "zod";
 
 import type {
   ProductDetailPhase,
-  StartOperationDefinition,
-} from "~/lib/start-operation-observability";
+  OperationDefinition,
+} from "~/lib/operation-observability";
 import {
   databaseMetricAttributes,
   withDatabaseOperationMetrics,
@@ -105,7 +105,7 @@ async function observeRequest<T>(options: {
 }
 
 export function observeOperation<T>(
-  definition: Pick<StartOperationDefinition, "kind"> & { readonly id: string },
+  definition: Pick<OperationDefinition, "kind"> & { readonly id: string },
   context: OperationObservation<T>,
   run: (span: AppSpan) => Promise<T>,
 ): Promise<T> {
@@ -119,7 +119,7 @@ export function observeOperation<T>(
 }
 
 export async function observeOperationPhase<T>(
-  definition: StartOperationDefinition,
+  definition: OperationDefinition,
   phase: ProductDetailPhase,
   run: () => Promise<T>,
 ): Promise<T> {

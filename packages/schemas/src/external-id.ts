@@ -4,6 +4,7 @@ import {
   isGtin,
 } from "@cubby/shared/upc";
 import { z } from "zod";
+import { dateTime } from "./codec";
 
 import { keyedCollectionPatch } from "./entity-collection";
 
@@ -417,8 +418,8 @@ export const externalIdOut = z.object({
     .nullish()
     .describe("Optional direct link to the product page"),
   isPrimary: z.boolean(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: dateTime,
+  updatedAt: dateTime,
 });
 
 export type ExternalIdOut = z.infer<typeof externalIdOut>;

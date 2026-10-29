@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import { EntityDeclarationError } from "../declarations.ts";
 import type {
@@ -288,17 +289,18 @@ export const renderKernelBindingsArtifacts = (
     );
     return {
       relativePath: `apps/web/src/${server ? "server" : "entity"}/generated/entity-port-checks.gen.ts`,
-      source:
+      source: rawSource(
         generatedHeader +
-        "// Rooted independently in the owning client/server program; nothing imports this file.\n" +
-        [...aliases]
-          .map(
-            ([module, alias]) =>
-              `import type * as ${alias} from ${JSON.stringify(module)};`,
-          )
-          .join("\n") +
-        "\n\n/** Every declared module/export reference must exist. */\n" +
-        `export type EntityPortExportChecks = readonly [${refs.map((ref) => `typeof ${aliases.get(ref.module)}[${JSON.stringify(ref.export)}]`).join(", ")}];\n`,
+          "// Rooted independently in the owning client/server program; nothing imports this file.\n" +
+          [...aliases]
+            .map(
+              ([module, alias]) =>
+                `import type * as ${alias} from ${JSON.stringify(module)};`,
+            )
+            .join("\n") +
+          "\n\n/** Every declared module/export reference must exist. */\n" +
+          `export type EntityPortExportChecks = readonly [${refs.map((ref) => `typeof ${aliases.get(ref.module)}[${JSON.stringify(ref.export)}]`).join(", ")}];\n`,
+      ),
     };
   };
   return [
@@ -307,25 +309,26 @@ export const renderKernelBindingsArtifacts = (
     {
       relativePath:
         "apps/web/src/server/generated/entity-kernel-bindings.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import type { EntityKernelCoreBinding } from "~/server/entity-kernel/adapter";\n' +
-        'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n' +
-        'import type { TimelineEntity } from "~/entity/generated/entity-timelines.gen";\n' +
-        'import type { EntityTimelineImplementation } from "~/server/generic/entity-timeline/service/contracts";\n\n' +
-        'import { defineEntityOperations } from "~/server/entity-kernel/entity-operations";\n' +
-        `${runtimeAdapterImportSource}\n` +
-        `${timelineImportSource}\n\n` +
-        `${defaultImports}\n${defaultDefinitions}\n` +
-        "type CorrelatedEntityKernelBindings = {\n" +
-        "  [E in EntityKernelEntity]: EntityKernelCoreBinding<E>;\n" +
-        "};\n\n" +
-        "// Generated runtime assembly stays one entity per line.\n// oxfmt-ignore\n" +
-        `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies CorrelatedEntityKernelBindings;\n` +
-        "// Generated operation closures retain each binding's schema correlation.\n// oxfmt-ignore\n" +
-        `export const ENTITY_KERNEL_OPERATIONS = {\n${runtimeOperations}\n} as const;\n` +
-        "// Custom timeline implementations, keyed by entity; default-timeline entities are absent.\n// oxfmt-ignore\n" +
-        `export const ENTITY_TIMELINE_BINDINGS = {\n${timelineBindings}\n} as const satisfies { [E in TimelineEntity]?: EntityTimelineImplementation<E> };\n`,
+          'import type { EntityKernelCoreBinding } from "~/server/entity-kernel/adapter";\n' +
+          'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n' +
+          'import type { TimelineEntity } from "~/entity/generated/entity-timelines.gen";\n' +
+          'import type { EntityTimelineImplementation } from "~/server/generic/entity-timeline/service/contracts";\n\n' +
+          'import { defineEntityOperations } from "~/server/entity-kernel/entity-operations";\n' +
+          `${runtimeAdapterImportSource}\n` +
+          `${timelineImportSource}\n\n` +
+          `${defaultImports}\n${defaultDefinitions}\n` +
+          "type CorrelatedEntityKernelBindings = {\n" +
+          "  [E in EntityKernelEntity]: EntityKernelCoreBinding<E>;\n" +
+          "};\n\n" +
+          "// Generated runtime assembly stays one entity per line.\n// oxfmt-ignore\n" +
+          `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies CorrelatedEntityKernelBindings;\n` +
+          "// Generated operation closures retain each binding's schema correlation.\n// oxfmt-ignore\n" +
+          `export const ENTITY_KERNEL_OPERATIONS = {\n${runtimeOperations}\n} as const;\n` +
+          "// Custom timeline implementations, keyed by entity; default-timeline entities are absent.\n// oxfmt-ignore\n" +
+          `export const ENTITY_TIMELINE_BINDINGS = {\n${timelineBindings}\n} as const satisfies { [E in TimelineEntity]?: EntityTimelineImplementation<E> };\n`,
+      ),
     },
   ];
 };

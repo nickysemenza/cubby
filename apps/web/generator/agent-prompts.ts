@@ -1,3 +1,4 @@
+import { rawSource } from "./artifacts.ts";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -27,6 +28,8 @@ export async function renderAgentPromptArtifact(
   return {
     relativePath:
       "apps/web/src/server/ai/policy/prompts/purchase-import-prompt-text.gen.ts",
-    source: `${generatedHeader}export const purchaseImportPromptText = ${JSON.stringify(Object.fromEntries(entries))} as const;\n`,
+    source: rawSource(
+      `${generatedHeader}export const purchaseImportPromptText = ${JSON.stringify(Object.fromEntries(entries))} as const;\n`,
+    ),
   };
 }

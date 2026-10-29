@@ -12,8 +12,8 @@ import type { z } from "zod";
 
 import { useBulkStream } from "~/entity/hooks/use-bulk-stream";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
-import { recipeStreams } from "~/integrations/tanstack-query/generated/catalog/recipeStreams.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
+import { recipeStreams } from "~/integrations/tanstack-query/generated/domains/recipeStreams.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";

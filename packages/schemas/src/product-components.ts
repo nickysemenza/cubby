@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateTime } from "./codec";
 import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
 import { productShortcode, purchaseShortcode } from "./identifiers";
 import { moneyNullable } from "./money";
@@ -69,7 +70,7 @@ export const productComponentOut = z.object({
    * column exists to show.
    */
   onHandUnits: z.number().nullable(),
-  attachedAt: z.date(),
+  attachedAt: dateTime,
 });
 export type ProductComponentOut = z.infer<typeof productComponentOut>;
 export const productComponentsOut = z.array(productComponentOut);
@@ -111,7 +112,7 @@ export const kitMembershipOut = z.object({
   brandName: z.string().nullable(),
   quantity: componentQuantity,
   coverImageUrl: z.url().nullable(),
-  attachedAt: z.date(),
+  attachedAt: dateTime,
   price: moneyNullable.describe(
     "The kit's own effective valuation/costing price — display only, not spend.",
   ),

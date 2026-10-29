@@ -7,7 +7,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import type { ReactNode } from "react";
-import superjson from "superjson";
 import { afterEach, expect, it, vi } from "vitest";
 
 import type { ReviewItem } from "./suggestion-review";
@@ -23,11 +22,7 @@ it("does not publish an old review failure into a new scope", async () => {
   const gate = Promise.withResolvers<AssessmentReviewBatchOut>();
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () =>
-      Response.json(
-        superjson.serialize({ ok: true, data: await gate.promise }),
-      ),
-    ),
+    vi.fn(async () => Response.json({ ok: true, data: await gate.promise })),
   );
   const client = new QueryClient();
   const id = crypto.randomUUID();

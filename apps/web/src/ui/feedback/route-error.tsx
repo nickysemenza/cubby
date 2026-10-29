@@ -11,7 +11,6 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
-import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { sentryEventUrl } from "~/lib/error-diagnostics";
 import {
   getAppErrorDetails,
@@ -19,6 +18,7 @@ import {
   isSupersededViewTransitionError,
   type UnparsedError,
 } from "~/lib/error-utils";
+import { OperationError } from "~/lib/operation-error";
 import { ErrorDetails } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
@@ -108,13 +108,10 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
   const category = categorizeError(code, reason, rawMessage, error);
   const friendlyMessage = FRIENDLY_MESSAGES[category];
   const requestId =
-    error instanceof StartOperationError ? error.requestId : undefined;
+    error instanceof OperationError ? error.requestId : undefined;
 
   useEffect(() => {
-    if (
-      error instanceof StartOperationError ||
-      diagnostics?.origin === "server"
-    )
+    if (error instanceof OperationError || diagnostics?.origin === "server")
       return;
     if (
       category === "generic" ||

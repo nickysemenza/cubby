@@ -63,7 +63,7 @@ describe("operation recorder", () => {
     uninstall();
   });
 
-  it("keeps a Start operation id in browser history without exporting it", () => {
+  it("keeps an operation id in browser history without exporting it", () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const operation = beginObservedOperation({
       kind: "mutation",

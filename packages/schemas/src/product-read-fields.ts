@@ -12,7 +12,7 @@ import {
 } from "./identifier-fields";
 import { locationListRefOut } from "./location-fields";
 import { imageUrlSummary } from "./image-summary";
-import { amount } from "./codec";
+import { amount, dateTime } from "./codec";
 import { money, moneyNullable } from "./money";
 import { ingredientApplicabilityKey } from "./codec";
 import { recipeUsageOut } from "./recipe-fields";
@@ -80,7 +80,7 @@ const productInventoryFields = {
   // Last deliberate recount (null = never). `updatedAt` moves on any write —
   // including a price-driven valuation recompute — so it can't stand in for
   // "when was this count last confirmed".
-  verifiedAt: z.date().nullable(),
+  verifiedAt: dateTime.nullable(),
   // Included on purpose: "where does this product live" is an ownership
   // question, so the dimmer wired into the kitchen wall belongs in this list.
   // Carrying placement is what lets the row say "installed" instead of

@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 
@@ -42,13 +43,14 @@ ${defaults.join("\n")}
   });
   return {
     relativePath: "apps/web/src/server/db/generated/entity-edges.gen.ts",
-    source:
+    source: rawSource(
       generatedHeader +
-      'import type { Entity } from "@cubby/schemas/entity";\n' +
-      'import { ENTITY_EDGE_OVERRIDES, type EntityEdge } from "../entity-edge-overrides";\n' +
-      (imports.size
-        ? `import { ${[...imports].sort().join(", ")} } from "~/server/db/generated/entity-table-definitions.gen";\n`
-        : "") +
-      `export const ENTITY_EDGES = {\n${groups.join("\n")}\n} as const satisfies Record<Entity, Record<string, EntityEdge>>;\n`,
+        'import type { Entity } from "@cubby/schemas/entity";\n' +
+        'import { ENTITY_EDGE_OVERRIDES, type EntityEdge } from "../entity-edge-overrides";\n' +
+        (imports.size
+          ? `import { ${[...imports].sort().join(", ")} } from "~/server/db/generated/entity-table-definitions.gen";\n`
+          : "") +
+        `export const ENTITY_EDGES = {\n${groups.join("\n")}\n} as const satisfies Record<Entity, Record<string, EntityEdge>>;\n`,
+    ),
   };
 };

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { ConnectionPaths } from "~/entity/relationships/connection-paths";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { ConnectedRecordsSection } from "./connected-records-table";

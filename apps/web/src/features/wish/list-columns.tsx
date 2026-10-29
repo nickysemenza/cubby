@@ -22,7 +22,7 @@ import {
   type WishRow,
   wishSubRows,
 } from "~/features/wish/wish-rows";
-import { relatedData } from "~/integrations/tanstack-query/generated/catalog/relatedData.gen";
+import { relatedData } from "~/integrations/tanstack-query/generated/domains/relatedData.gen";
 import { rangeMidpoint } from "~/lib/format-range";
 import { formatCurrencyRange } from "~/lib/number-format";
 import { formatCurrency } from "~/lib/number-format";

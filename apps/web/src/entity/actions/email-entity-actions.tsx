@@ -10,7 +10,7 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { useState } from "react";
 import { z } from "zod";
 
-import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog/purchaseImport.gen";
+import { purchaseImport } from "~/integrations/tanstack-query/generated/domains/purchaseImport.gen";
 import {
   AlertDialog,
   AlertDialogAction,

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { readPathValue } from "~/entity/read-path";
 import { runHref } from "~/entity/routing/purchase-import-links";
-import { loadWorkflowCommandOptions } from "~/integrations/tanstack-query/generated/commands.gen";
+import { loadWorkflowCommandOptions } from "~/integrations/tanstack-query/workflow-commands";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 /** One catalog-backed executor; mutation scope serializes actual operation effects. */

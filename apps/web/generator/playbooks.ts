@@ -1,3 +1,4 @@
+import { rawSource } from "./artifacts.ts";
 import { existsSync } from "node:fs";
 import { glob, readFile } from "node:fs/promises";
 import { posix, resolve } from "node:path";
@@ -128,8 +129,9 @@ export async function renderPlaybookArtifact(
   const bundle = await collectPlaybooks(root);
   return {
     relativePath: "apps/web/src/server/generated/playbooks.gen.ts",
-    source:
+    source: rawSource(
       `${generatedHeader}export const PLAYBOOK_SKILLS = ${compactLiteral(bundle.skills)} as const;\n\n` +
-      `export const PLAYBOOK_FILES: Readonly<Record<string, string>> = ${JSON.stringify(bundle.files)};\n`,
+        `export const PLAYBOOK_FILES: Readonly<Record<string, string>> = ${JSON.stringify(bundle.files)};\n`,
+    ),
   };
 }

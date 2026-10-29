@@ -4,7 +4,7 @@ import {
   assertMcpExposure,
   splitByKind,
   toolKind,
-} from "../generator/start-operations/mcp-tools";
+} from "../generator/operations/mcp-tools";
 
 describe("MCP tool generation", () => {
   it("splits a contract group that mixes kinds so every read tool stays auto-approvable", () => {

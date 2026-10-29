@@ -13,7 +13,7 @@ import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { entityListFor } from "~/entity/entity-list";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { expense } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
+import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";

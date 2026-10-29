@@ -25,7 +25,7 @@ export const getAiSmokeCatalog: OptionalFetcher<
 > = createServerFn({ method: "GET" })
   .middleware([authenticatedStartServerFunction])
   .handler(async ({ context }) => {
-    await smokeContext(context.startOperation.headers);
+    await smokeContext(context.operationContext.headers);
     const { smokeCatalog } = await import("~/server/ai/smoke-catalog");
     return smokeCatalog();
   });
@@ -38,7 +38,7 @@ export const runAiSmokeCase: RequiredFetcher<
   .middleware([authenticatedStartServerFunction])
   .validator(aiSmokeRunInput)
   .handler(async ({ data, context }) => {
-    const actor = await smokeContext(context.startOperation.headers);
+    const actor = await smokeContext(context.operationContext.headers);
     const { runAiSmoke } = await import("~/server/workflows/ai-smoke-run");
     return runAiSmoke(actor, data.scenario, data.input);
   });

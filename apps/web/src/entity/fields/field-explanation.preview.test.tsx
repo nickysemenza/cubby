@@ -8,7 +8,7 @@ import { afterEach, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { mock } from "~/lib/test/mock-schema";
 import { WhyValue } from "~/ui/derived/why-value";
 
@@ -90,7 +90,7 @@ it("loads on demand, retries a failed read and expands bounded evidence without 
     releaseFailure = resolve;
   });
   const calls: unknown[] = [];
-  restoreTransport = overrideStartDispatch(async (operation, input) => {
+  restoreTransport = overrideOperationDispatch(async (operation, input) => {
     if (operation !== "fieldExplanation.explain")
       throw new Error(`Unexpected operation ${operation}`);
     calls.push(input);
@@ -189,7 +189,7 @@ it("compares the displayed publication with current inputs only after an explici
     work: { kind: "pending" },
   });
   const calls: unknown[] = [];
-  restoreTransport = overrideStartDispatch(async (_operation, input) => {
+  restoreTransport = overrideOperationDispatch(async (_operation, input) => {
     const request = fieldExplanationInput.parse(input);
     calls.push(request);
     return {

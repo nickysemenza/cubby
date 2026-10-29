@@ -23,7 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import { project } from "~/integrations/tanstack-query/generated/catalog/project.gen";
+import { project } from "~/integrations/tanstack-query/generated/domains/project.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
 import {

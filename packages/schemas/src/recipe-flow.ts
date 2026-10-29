@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateTime } from "./codec";
 import { recipeShortcode } from "./identifiers";
 
 export const recipeFlowNodeId = z
@@ -219,7 +220,7 @@ export const recipeFlowArtifactSchema = z.object({
   contentFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   model: z.string().min(1),
   promptVersion: z.string().min(1),
-  generatedAt: z.coerce.date(),
+  generatedAt: dateTime,
 });
 export type RecipeFlowArtifact = z.infer<typeof recipeFlowArtifactSchema>;
 

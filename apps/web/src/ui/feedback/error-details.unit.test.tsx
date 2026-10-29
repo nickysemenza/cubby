@@ -9,11 +9,11 @@ import {
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import {
   CLOUDFLARE_OBSERVABILITY_URL,
   sentryEventUrl,
 } from "~/lib/error-diagnostics";
+import { OperationError } from "~/lib/operation-error";
 
 import { errorToastId, showErrorToast } from "./error-details";
 import { ErrorDetailsDialogHost } from "./error-details-dialog";
@@ -25,7 +25,7 @@ import {
 import { ErrorDisplay } from "./error-display";
 
 const makeError = (overrides?: { code?: string }) =>
-  new StartOperationError({
+  new OperationError({
     code: overrides?.code ?? "INTERNAL_SERVER_ERROR",
     message: "Connection limit exceeded",
     requestId: "sample-ray",

@@ -1,5 +1,6 @@
 import { RELATIVE_DATE_PATTERN } from "@cubby/shared";
 import { z } from "zod";
+import { dateTime } from "./codec";
 
 /**
  * Shared building blocks for entity schemas, so the fields every entity carries
@@ -14,8 +15,8 @@ import { z } from "zod";
  */
 
 export const timestampedFields = {
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: dateTime,
+  updatedAt: dateTime,
 } as const;
 
 /**

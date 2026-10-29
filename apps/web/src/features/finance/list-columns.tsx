@@ -11,8 +11,8 @@ import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
-import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/domains/entityFilterOptions.gen";
+import { financialTransaction } from "~/integrations/tanstack-query/generated/domains/financialTransaction.gen";
 
 import { defineListOverride } from "../../entity/list-columns/types";
 

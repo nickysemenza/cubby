@@ -1,6 +1,14 @@
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import { z } from "zod";
 
+/**
+ * The one date schema for values that cross a JSON boundary. Operation
+ * envelopes are plain JSON for every client, so a Date arrives as its ISO
+ * string; parsing restores the Date on either side. The native wire projection
+ * (`toWire`) maps it to `z.iso.datetime()`.
+ */
+export const dateTime = z.coerce.date();
+
 export const amount = z
   .object({
     value: z.number(),

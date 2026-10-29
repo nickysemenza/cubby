@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
-import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
-import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
+import { entityMutation } from "~/integrations/tanstack-query/generated/domains/entityMutation.gen";
+import { OperationError } from "~/lib/operation-error";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 
@@ -17,7 +17,7 @@ import {
   useEntityCommands,
 } from "./use-entity-commands";
 
-function refusalPort(error: StartOperationError) {
+function refusalPort(error: OperationError) {
   const mutation = entityMutation.mutate.withTransport(async () => {
     throw error;
   });
@@ -28,7 +28,7 @@ function refusalPort(error: StartOperationError) {
   return createEntityMutationPort(transport);
 }
 
-async function removeAndReadIssues(error: StartOperationError) {
+async function removeAndReadIssues(error: OperationError) {
   const harness = createBrowserTestHarness();
   const BrowserWrapper = harness.wrapper;
   const wrapper = ({ children }: { children: ReactNode }) => (
@@ -85,7 +85,7 @@ describe("useEntityCommands structured refusals", () => {
 
   it("attaches each validation issue to the field the server named", async () => {
     const issues = await removeAndReadIssues(
-      new StartOperationError({
+      new OperationError({
         code: "BAD_REQUEST",
         reason: "INVALID_INPUT",
         message: "data.name: Required",
@@ -116,7 +116,7 @@ describe("useEntityCommands structured refusals", () => {
       byTargetId: { "TSK-4K7M": 3 },
     });
     const issues = await removeAndReadIssues(
-      new StartOperationError({
+      new OperationError({
         code: "PRECONDITION_FAILED",
         reason: "DELETE_BLOCKED",
         message: "Task cannot be deleted",
@@ -134,7 +134,7 @@ describe("useEntityCommands structured refusals", () => {
   it("surfaces an authorization refusal as its own message", async () => {
     expect(
       await removeAndReadIssues(
-        new StartOperationError({
+        new OperationError({
           code: "UNAUTHORIZED",
           reason: "NOT_AUTHENTICATED",
           message: "Please sign in to continue",
@@ -146,7 +146,7 @@ describe("useEntityCommands structured refusals", () => {
   it("keeps a redacted unknown failure redacted", async () => {
     expect(
       await removeAndReadIssues(
-        new StartOperationError({
+        new OperationError({
           code: "INTERNAL_SERVER_ERROR",
           reason: "UNKNOWN_ERROR",
           message: "The operation could not be completed",

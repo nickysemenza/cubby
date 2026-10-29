@@ -1,5 +1,6 @@
 import { aiCallCostFields } from "./ai-cost";
 import { z } from "zod";
+import { dateTime } from "./codec";
 import { entitySchema } from "./entity-core";
 import { queueMessageEnvelope } from "./queue-messages";
 
@@ -237,8 +238,8 @@ const mcpToolUsageRowSchema = z.strictObject({
   periodCalls: z.number().int().nonnegative(),
   periodSuccesses: z.number().int().nonnegative(),
   periodErrors: z.number().int().nonnegative(),
-  firstUsedAt: z.coerce.date().nullable(),
-  lastUsedAt: z.coerce.date().nullable(),
+  firstUsedAt: dateTime.nullable(),
+  lastUsedAt: dateTime.nullable(),
   lastRelease: z.string().nullable(),
   daily: z.array(dailyUsageSchema),
   users: z.array(usageUserSchema),
@@ -258,7 +259,7 @@ const usageBreakdownSchema = z.strictObject({
 
 export const mcpUsageDashboardOut = z.strictObject({
   window: mcpUsageWindowSchema,
-  observationStartedAt: z.coerce.date().nullable(),
+  observationStartedAt: dateTime.nullable(),
   observationComplete: z.boolean(),
   totals: z.strictObject({
     registered: z.number().int().nonnegative(),
@@ -311,8 +312,8 @@ export const mcpUsageActivityOut = z.strictObject({
       surface: mcpToolCallSurfaceSchema,
       entity: entitySchema.nullable(),
       release: z.string(),
-      occurredAt: z.coerce.date(),
-      ingestedAt: z.coerce.date(),
+      occurredAt: dateTime,
+      ingestedAt: dateTime,
       user: usageUserSchema,
       client: usageClientSchema,
     }),

@@ -21,12 +21,12 @@ export type OperationObservability = {
   entities: readonly string[];
   productPhases: readonly string[];
 };
-export type HandlerDefinition = {
+type HandlerDefinition = {
   module: string;
   exportName: string;
   /**
    * The handler is `<exportName>.<table>[<member>]`, already
-   * `StartOperationHandler` / `WorkflowStreamHandler`-shaped, so the emitted
+   * `OperationHandler` / `WorkflowStreamHandler`-shaped, so the emitted
    * loader needs no cast.
    */
   member: string;
@@ -198,13 +198,13 @@ export const assertContractPurity = (path: string): void => {
  * The hand-written browser policy that cannot be contract data because it is a
  * function of the call's input (see `operation-overrides.ts`).
  */
-export const OPERATION_OVERRIDES_MODULE = join(
+const OPERATION_OVERRIDES_MODULE = join(
   SOURCE_ROOT,
   "integrations/tanstack-query/operation-overrides.ts",
 );
 
 /**
- * `defineOperationDomain` modules (the generated client catalog) and the
+ * `defineOperationDomain` modules (the typed browser catalog) and the
  * operation overrides they import are loaded by the browser bundle, so a
  * runtime dependency on server-only code (or node builtins) would either crash
  * the client build or silently pull server modules into it. Type-only imports
@@ -327,7 +327,7 @@ const collectDeclaredOperations = (): Promise<
         const existing = byOperation.get(operation);
         if (existing)
           throw new Error(
-            `${operation} is declared more than once: ${existing.exportName} and ${exportName}. Each Start operation id may have exactly one contract member.`,
+            `${operation} is declared more than once: ${existing.exportName} and ${exportName}. Each operation id may have exactly one contract member.`,
           );
         byOperation.set(operation, {
           kind: definition.kind,
@@ -399,7 +399,7 @@ const isImplementer = (name: string | undefined): name is ImplementerName =>
   name !== undefined && Object.hasOwn(IMPLEMENTERS, name);
 
 export type CollectedHandlers = {
-  /** `query` | `mutation` members, dispatched by `dispatchStartOperation`. */
+  /** `query` | `mutation` members, dispatched by `dispatchOperation`. */
   operations: Map<string, HandlerDefinition>;
   /** `subscription` members, dispatched by `dispatchWorkflowStream`. */
   subscriptions: Map<string, HandlerDefinition>;
@@ -414,7 +414,7 @@ let cachedHandlers: Promise<CollectedHandlers> | undefined;
  * the tables into lazy adapters rather than maintaining a second handwritten
  * dispatcher registry.
  */
-export const collectStartOperationHandlers = (): Promise<CollectedHandlers> => {
+export const collectOperationHandlers = (): Promise<CollectedHandlers> => {
   cachedHandlers ??= (async () => {
     const collected: CollectedHandlers = {
       operations: new Map(),
@@ -517,7 +517,7 @@ async function collectHandlerVariable(
  * puzzle, so it fails here, earlier and more clearly than the generated
  * loader's `satisfies` exhaustiveness failure (which stays as belt-and-braces).
  */
-export const collectStartOperations = async (): Promise<
+export const collectOperations = async (): Promise<
   Map<
     string,
     {
@@ -528,7 +528,7 @@ export const collectStartOperations = async (): Promise<
   >
 > => {
   const declarations = await collectDeclaredOperations();
-  const handlers = await collectStartOperationHandlers();
+  const handlers = await collectOperationHandlers();
   for (const [operation, declared] of declarations) {
     const implementer = implementerForKind(declared.kind);
     const table =

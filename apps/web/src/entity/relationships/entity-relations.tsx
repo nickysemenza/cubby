@@ -27,7 +27,7 @@ import {
 } from "~/entity/entities";
 import { useEntityMetadata } from "~/entity/metadata";
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";

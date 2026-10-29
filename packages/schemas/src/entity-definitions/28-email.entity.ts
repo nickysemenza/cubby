@@ -3,6 +3,7 @@ import { emailRelationshipResult } from "../email-relationship-facts";
 import { EMAIL_RELATIONSHIP_INPUTS } from "./email-relationship-inputs";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { z } from "zod";
+import { dateTime } from "../codec";
 import {
   EMAIL_LINK_STATE_LABEL,
   emailImportOutcome,
@@ -290,7 +291,7 @@ export const { definition, readSchemas } = defineEntityModel({
         nullable: true,
         labelOverride: "Received",
         display: { columnGroup: "Message", format: "timestamp" },
-        validation: readOnly(z.date().nullable()),
+        validation: readOnly(dateTime.nullable()),
       },
       {
         key: "classification",

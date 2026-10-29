@@ -6,7 +6,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { CommandButton, useReportCommands } from "./report-commands";
@@ -42,7 +42,7 @@ it("imports a shipment without an order ID and links every server-created Run", 
       displayName: `Synthetic import ${index + 1}`,
     });
   }
-  const restore = overrideStartDispatch(async (operation, input) => {
+  const restore = overrideOperationDispatch(async (operation, input) => {
     if (operation !== "purchaseImport.emailImport")
       throw new Error(`Unexpected operation: ${operation}`);
     calls.push(input);

@@ -6,7 +6,7 @@ import {
   WorkActionDialogTrigger,
   type WorkActionProps,
 } from "~/entity/work-queue/work-actions";
-import { problems } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
+import { problems } from "~/integrations/tanstack-query/generated/domains/problems.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";

@@ -27,7 +27,7 @@ import {
 } from "~/entity/entities";
 import { ImageThumbnail } from "~/entity/table/image-thumbnail";
 import RTable from "~/entity/table/table";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { renderScalarValue } from "~/ui/common/scalar-value";
 import {
   numberCellData,

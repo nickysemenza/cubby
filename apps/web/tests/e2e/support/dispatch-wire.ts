@@ -1,9 +1,7 @@
 import type { Page, Request, Response, Route } from "@playwright/test";
-import superjson from "superjson";
 import { z } from "zod";
 
 import { isBrowserOperationPath } from "~/lib/browser-operation-path";
-import { superJsonResultSchema } from "~/lib/superjson-wire";
 
 /**
  * Reads the browser dispatch wire in either shape. Concurrent queries share
@@ -26,9 +24,7 @@ export function dispatchOperations(request: Request): DispatchedOperation[] {
     !isBrowserOperationPath(new URL(request.url()).pathname)
   )
     return [];
-  const parsed = bodySchema.safeParse(
-    superjson.deserialize(superJsonResultSchema.parse(request.postDataJSON())),
-  );
+  const parsed = bodySchema.safeParse(request.postDataJSON());
   if (!parsed.success) return [];
   return "batch" in parsed.data ? parsed.data.batch : [parsed.data];
 }
@@ -58,7 +54,10 @@ export async function performOperation(
   await operationResult(response, operation, z.unknown());
 }
 
-const lineSchema = z.object({ i: z.number(), r: superJsonResultSchema });
+const lineSchema = z.object({
+  i: z.number(),
+  r: z.object({ ok: z.literal(true), value: z.unknown() }),
+});
 
 /** `operation`'s successful result in this response, parsed by `schema`. */
 export async function operationResult<Schema extends z.ZodType>(
@@ -71,22 +70,11 @@ export async function operationResult<Schema extends z.ZodType>(
   const index = operations.findIndex((item) => item.operation === operation);
   if (index === -1) throw new Error(`${operation} was not dispatched here`);
   if (!(response.headers()["content-type"] ?? "").includes("x-ndjson"))
-    return schema.parse(
-      envelope.parse(
-        superjson.deserialize(
-          superJsonResultSchema.parse(await response.json()),
-        ),
-      ).data,
-    );
+    return schema.parse(envelope.parse(await response.json()).data);
   for (const line of (await response.text()).split("\n")) {
     if (!line) continue;
     const { i, r } = lineSchema.parse(JSON.parse(line));
-    if (i === index)
-      return schema.parse(
-        z
-          .object({ ok: z.literal(true), value: envelope })
-          .parse(superjson.deserialize(r)).value.data,
-      );
+    if (i === index) return schema.parse(envelope.parse(r.value).data);
   }
   throw new Error(`${operation} had no result line`);
 }

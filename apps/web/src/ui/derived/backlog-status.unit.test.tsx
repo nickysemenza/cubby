@@ -1,7 +1,7 @@
 import { act, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
-import { derived } from "~/integrations/tanstack-query/generated/catalog/derived.gen";
+import { derived } from "~/integrations/tanstack-query/generated/domains/derived.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { BackgroundRefreshStatus } from "~/ui/feedback/background-refresh-status";
 

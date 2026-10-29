@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { installFeatures } from "~/features/registry";
-import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
-import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
+import { entityMutation } from "~/integrations/tanstack-query/generated/domains/entityMutation.gen";
+import { OperationError } from "~/lib/operation-error";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 
@@ -155,7 +155,7 @@ describe("generic editor save lifecycle", () => {
   });
   it("focuses the first field refused asynchronously and keeps the entered value", async () => {
     const { mutationPort } = editorPort(async () => {
-      throw new StartOperationError({
+      throw new OperationError({
         code: "BAD_REQUEST",
         reason: "INVALID_INPUT",
         message: "Review these fields",

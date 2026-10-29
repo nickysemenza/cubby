@@ -1,3 +1,4 @@
+import { rawSource } from "../artifacts.ts";
 import { generatedHeader } from "../artifacts.ts";
 import { compileLoadedEntityDeclarations } from "./declarations.ts";
 import type {
@@ -188,14 +189,15 @@ export const renderOverrideComparisonArtifact = (
   return {
     relativePath:
       "apps/web/src/entity/generated/entity-override-comparisons.gen.ts",
-    source:
+    source: rawSource(
       generatedHeader +
-      'import type { Entity } from "@cubby/schemas/entity";\n\n' +
-      renderRecord({
-        name: "entityOverrideComparisons",
-        entries: values,
-        satisfies:
-          "Record<Entity, readonly { path: string; declared: string; without: string | null; status: 'changed' | 'unchanged' | 'invalid'; reason: string | null }[]>",
-      }),
+        'import type { Entity } from "@cubby/schemas/entity";\n\n' +
+        renderRecord({
+          name: "entityOverrideComparisons",
+          entries: values,
+          satisfies:
+            "Record<Entity, readonly { path: string; declared: string; without: string | null; status: 'changed' | 'unchanged' | 'invalid'; reason: string | null }[]>",
+        }),
+    ),
   };
 };

@@ -4,7 +4,7 @@ import { getDb } from "~/server/db/helpers";
 import * as schema from "~/server/db/schema";
 import { createEvidenceHarnessContext } from "./fixtures/core";
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
-import { startOperation } from "./support/start-operation";
+import { operationCall } from "./support/operation";
 
 import { expect, test } from "./support/e2e-test";
 
@@ -15,7 +15,7 @@ test("source evidence uses generic records while provider facts remain immutable
 }, testInfo) => {
   const description = uniqueName(testInfo, "Synthetic source evidence");
   const { db } = await createEvidenceHarnessContext(page);
-  const recorded = await startOperation(
+  const recorded = await operationCall(
     page.request,
     "sourceTransactionRecord.record",
     {

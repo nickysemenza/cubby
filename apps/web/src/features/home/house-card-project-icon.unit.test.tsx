@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { entityReport } from "~/integrations/tanstack-query/generated/domains/entityReport.gen";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { TodayAttention } from "./house-card";
@@ -59,7 +59,7 @@ describe("home task project identity", () => {
       },
     );
     const requests: string[] = [];
-    restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    restoreDispatch = overrideOperationDispatch(async (operation, input) => {
       if (operation === "entity.filterOptions") {
         requests.push(
           `${operation}:${z.object({ entity: z.string() }).parse(input).entity}`,

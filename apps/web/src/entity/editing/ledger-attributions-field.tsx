@@ -13,7 +13,7 @@ import { z } from "zod";
 
 import { Picker } from "~/entity/picker/picker";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
-import { expense } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
+import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 

@@ -1,3 +1,4 @@
+import { rawSource } from "../artifacts.ts";
 import { capitalize } from "@cubby/shared/text-case";
 import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -132,35 +133,39 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
     {
       relativePath:
         "packages/schemas/src/entity-definitions/definition-catalog.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        files
-          .map(
-            (file, index) =>
-              `import type { definition as Definition${index} } from ${JSON.stringify(`./${file.slice(0, -3)}`)};`,
-          )
-          .join("\n") +
-        `\nexport type EntityDefinitions = ${files.map((_, index) => `typeof Definition${index}`).join(" | ")};\n`,
+          files
+            .map(
+              (file, index) =>
+                `import type { definition as Definition${index} } from ${JSON.stringify(`./${file.slice(0, -3)}`)};`,
+            )
+            .join("\n") +
+          `\nexport type EntityDefinitions = ${files.map((_, index) => `typeof Definition${index}`).join(" | ")};\n`,
+      ),
     },
     {
       relativePath: "packages/shared/src/generated/shortcode-registry.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        renderRecord({ name: "ENTITY_KEYS", entries: entityKeys }) +
-        renderRecord({
-          name: "SHORTCODE_PREFIX",
-          entries: prefixes,
-          comment: "// Generated shortcode registry stays one entity per line.",
-        }) +
-        "export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;\n" +
-        `export const SHORTCODE_LENGTH: Partial<Record<ShortcodeType, number>> = ${JSON.stringify(lengths)};\n`,
+          renderRecord({ name: "ENTITY_KEYS", entries: entityKeys }) +
+          renderRecord({
+            name: "SHORTCODE_PREFIX",
+            entries: prefixes,
+            comment:
+              "// Generated shortcode registry stays one entity per line.",
+          }) +
+          "export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;\n" +
+          `export const SHORTCODE_LENGTH: Partial<Record<ShortcodeType, number>> = ${JSON.stringify(lengths)};\n`,
+      ),
     },
     {
       relativePath: "packages/shared/src/generated/shortcode-named.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import { SHORTCODE_SCHEMA, type ShortcodeFor } from "../shortcode-schema";\n\n' +
-        named,
+          'import { SHORTCODE_SCHEMA, type ShortcodeFor } from "../shortcode-schema";\n\n' +
+          named,
+      ),
     },
   ];
 };

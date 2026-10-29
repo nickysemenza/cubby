@@ -10,10 +10,10 @@ import {
 
 import { httpRouteTemplate } from "~/lib/http-route-template";
 import {
-  readStartOperationTraceContext,
+  readOperationTraceContext,
   serverFunctionTraceName,
-  startOperationTraceAttributes,
-} from "~/lib/start-operation-observability";
+  operationTraceAttributes,
+} from "~/lib/operation-observability";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 export const tracingMiddleware: RequestMiddlewareAfterServer<
@@ -24,7 +24,7 @@ export const tracingMiddleware: RequestMiddlewareAfterServer<
   const url = new URL(request.url);
   const startContext =
     handlerType === "serverFn"
-      ? readStartOperationTraceContext(request.headers)
+      ? readOperationTraceContext(request.headers)
       : undefined;
   const routeTemplate = httpRouteTemplate(url.pathname, {
     serverFunction: handlerType === "serverFn",
@@ -41,7 +41,7 @@ export const tracingMiddleware: RequestMiddlewareAfterServer<
     span.setAttributes({
       "http.request.method": request.method,
       "http.route": routeTemplate,
-      ...startOperationTraceAttributes(startContext),
+      ...operationTraceAttributes(startContext),
     });
 
     const result = await next();

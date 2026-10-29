@@ -1,7 +1,7 @@
 import { timestampedFields } from "./base-entity";
 import { fdcId } from "@cubby/usda";
 import { z } from "zod";
-import { positiveAmount } from "./codec";
+import { positiveAmount, dateTime } from "./codec";
 import { optionalFieldResolutionsSchema } from "./field-resolution";
 import { cookbookShortcode, recipeShortcode } from "./identifier-fields";
 import {
@@ -131,7 +131,7 @@ export type RowDiagnosticOut = z.infer<typeof rowDiagnostic>;
 export const recipeCostingExplain = z.object({
   persisted: z.object({
     totals: recipeTotals.nullable(),
-    totalsComputedAt: z.date().nullable(),
+    totalsComputedAt: dateTime.nullable(),
     stale: z.boolean(),
   }),
   computed: z.object({

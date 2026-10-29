@@ -25,12 +25,12 @@ import { photoImportContract } from "~/contracts/photo-import.contract";
 import type { RunDetail } from "~/contracts/run.contract";
 import { installFeatures } from "~/features/registry";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { photoImport } from "~/integrations/tanstack-query/generated/catalog/photoImport.gen";
-import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
+import { photoImport } from "~/integrations/tanstack-query/generated/domains/photoImport.gen";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { mock } from "~/lib/test/mock-schema";
-import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
+import type { OperationWireValue } from "~/server/operation-runtime/operation.contract";
 
 import { PhotoImportRunView } from "./photo-run-detail";
 
@@ -40,9 +40,9 @@ const initialUrl = window.location.href;
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let restoreDispatch: (() => void) | undefined;
 
-/** Answer every Start operation with `data`, as candidate reads expect. */
-const answerOperations = (data: UnparsedStartOperationData) => {
-  restoreDispatch = overrideStartDispatch(async () => ({ ok: true, data }));
+/** Answer every operation with `data`, as candidate reads expect. */
+const answerOperations = (data: OperationWireValue) => {
+  restoreDispatch = overrideOperationDispatch(async () => ({ ok: true, data }));
 };
 
 // "RUN-4K7M" is the one synthetic shortcode body AGENTS.md sanctions for
@@ -416,7 +416,7 @@ describe("PhotoImportRunView", () => {
   it("starts grouping when the completed iPhone upload opens its review link", async () => {
     window.history.replaceState(null, "", "/runs/RUN-4K7M?startGrouping=1");
     const operations: string[] = [];
-    restoreDispatch = overrideStartDispatch(async (operation) => {
+    restoreDispatch = overrideOperationDispatch(async (operation) => {
       operations.push(operation);
       return { ok: true, data: { runId: RUN_ID, started: true } };
     });
@@ -451,7 +451,7 @@ describe("PhotoImportRunView", () => {
       describing,
     );
     const operations: string[] = [];
-    restoreDispatch = overrideStartDispatch(async (operation) => {
+    restoreDispatch = overrideOperationDispatch(async (operation) => {
       operations.push(operation);
       return {
         ok: true,
@@ -748,7 +748,7 @@ it("retains unchanged candidate checks across Run progress and refreshes only re
   harness.queryClient.setQueryData(key, snapshot);
   const requests: string[][] = [];
   let rejected = false;
-  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+  restoreDispatch = overrideOperationDispatch(async (operation, input) => {
     if (operation === "photoImport.review") return { ok: true, data: snapshot };
     if (operation === "photoImport.rejectCandidate") {
       rejected = true;
@@ -844,7 +844,7 @@ it("retries a failed candidate read without disabling approval", async () => {
   await page.viewport(402, 874);
   presentProposal();
   let calls = 0;
-  restoreDispatch = overrideStartDispatch(async (operation) => {
+  restoreDispatch = overrideOperationDispatch(async (operation) => {
     if (operation !== "photoImport.candidatesBatch")
       throw new Error(`Unexpected operation ${operation}`);
     calls++;
@@ -1042,7 +1042,7 @@ it("keeps a dirty field through refresh and saves it before approval", async () 
   let rejectName = true;
   let submittedRevision: string | undefined;
   const savedRevision = "2026-09-20T16:06:00.000Z";
-  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+  restoreDispatch = overrideOperationDispatch(async (operation, input) => {
     if (operation === "photoImport.candidatesBatch")
       return { ok: true, data: { groups: [] } };
     if (operation === "photoImport.saveGroups") {
@@ -1140,7 +1140,7 @@ it("recovers an applied receipt on a completed Run with an unsettled proposal", 
   );
   let recovered = false;
   let submittedRevisions: unknown;
-  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+  restoreDispatch = overrideOperationDispatch(async (operation, input) => {
     if (operation === "photoImport.candidatesBatch")
       return { ok: true, data: { groups: [] } };
     if (operation === "photoImport.review")
@@ -1205,7 +1205,7 @@ it("retains per-image retry errors and refreshes successful siblings", async () 
     failedReview,
   );
   const retried: string[] = [];
-  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+  restoreDispatch = overrideOperationDispatch(async (operation, input) => {
     if (operation === "imageProcessing.retry") {
       const { id } = retryImageProcessingInput.parse(input);
       retried.push(id);
@@ -1242,7 +1242,8 @@ it("retains per-image retry errors and refreshes successful siblings", async () 
       "1 photos need a description retry. Successful photos are retained.",
     ),
   ).toBeVisible();
-  expect(retried).toEqual(failedIds);
+  // Retries run concurrently; each failed image is retried exactly once.
+  expect([...retried].sort()).toEqual([...failedIds].sort());
 });
 
 it("reviews evidence-matched brands in the workbench without replacing explicit or rejected choices", async () => {
@@ -1320,7 +1321,7 @@ it("reviews evidence-matched brands in the workbench without replacing explicit 
     );
   publish();
   let savedKeys: string[] = [];
-  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+  restoreDispatch = overrideOperationDispatch(async (operation, input) => {
     if (operation === "photoImport.candidatesBatch")
       return { ok: true, data: { groups: [] } };
     if (operation !== "photoImport.saveGroups")
@@ -1491,7 +1492,7 @@ it.each(["create", "existing"] as const)(
         photoImport.productEvidence.queryKey({ runId: RUN_ID, productId }),
         current,
       );
-    restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    restoreDispatch = overrideOperationDispatch(async (operation, input) => {
       if (operation === "photoImport.candidatesBatch")
         return { ok: true, data: { groups: [] } };
       if (operation === "photoImport.productEvidence")
@@ -1582,7 +1583,7 @@ it("retains failed batch selection and its diagnostic while successful items bec
       })),
     } satisfies PhotoRunReview,
   );
-  restoreDispatch = overrideStartDispatch(async (operation) => {
+  restoreDispatch = overrideOperationDispatch(async (operation) => {
     if (operation === "photoImport.candidatesBatch")
       return { ok: true, data: { groups: [] } };
     if (operation !== "photoImport.approveGroups")

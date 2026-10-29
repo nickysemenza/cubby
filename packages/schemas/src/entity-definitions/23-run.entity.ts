@@ -2,6 +2,7 @@ import { timestampField, readOnly } from "./field-policy";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { runChildren } from "../child-tables/run.js";
 import { z } from "zod";
+import { dateTime } from "../codec";
 import {
   ledgerPartyShortcode,
   runShortcode,
@@ -696,21 +697,21 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "startedAt",
         kind: "timestamp",
         display: { columnGroup: "Execution", format: "timestamp" },
-        validation: readOnly(z.date()),
+        validation: readOnly(dateTime),
       },
       {
         key: "endedAt",
         kind: "timestamp",
         nullable: true,
         display: { columnGroup: "Execution", format: "timestamp" },
-        validation: readOnly(z.date().nullable()),
+        validation: readOnly(dateTime.nullable()),
       },
       {
         key: "retiredAt",
         kind: "timestamp",
         nullable: true,
         display: { list: false, format: "timestamp" },
-        validation: readOnly(z.date().nullable()),
+        validation: readOnly(dateTime.nullable()),
       },
       {
         key: "retirementReason",
@@ -852,14 +853,14 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "timestamp",
         nullable: true,
         display: { list: false, format: "timestamp" },
-        validation: readOnly(z.date().nullable()),
+        validation: readOnly(dateTime.nullable()),
       },
       {
         key: "auditedAt",
         kind: "timestamp",
         nullable: true,
         display: { list: false, format: "timestamp" },
-        validation: readOnly(z.date().nullable()),
+        validation: readOnly(dateTime.nullable()),
       },
       {
         key: "predecessorRunId",

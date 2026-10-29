@@ -2,7 +2,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { auditLog } from "~/integrations/tanstack-query/generated/catalog/auditLog.gen";
+import { auditLog } from "~/integrations/tanstack-query/generated/domains/auditLog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {

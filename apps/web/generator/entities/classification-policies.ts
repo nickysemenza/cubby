@@ -1,3 +1,4 @@
+import { rawSource } from "../artifacts.ts";
 import { generatedHeader } from "../artifacts.ts";
 import {
   EntityDeclarationError,
@@ -204,7 +205,7 @@ export const renderClassificationPolicyArtifacts = (
     {
       relativePath:
         "packages/schemas/src/generated/classification-field-policies.gen.ts",
-      source,
+      source: rawSource(source),
     },
   ];
 };

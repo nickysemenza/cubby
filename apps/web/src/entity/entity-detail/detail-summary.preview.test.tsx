@@ -21,7 +21,7 @@ import { page } from "vitest/browser";
 
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import type { DetailRecordOf } from "./detail-record";
@@ -126,7 +126,7 @@ it.each(["product", "vendor", "purchase", "expense"] as const)(
   "keeps %s summaries compact with readable pills and bounded phone width",
   async (entity) => {
     const harness = createBrowserTestHarness();
-    const restore = overrideStartDispatch(async (operation, input) => {
+    const restore = overrideOperationDispatch(async (operation, input) => {
       if (operation === "entityMedia.displayImages")
         return { ok: true, data: {} };
       if (operation === "entity.monthlyExpenseSpend")
@@ -249,7 +249,7 @@ it.each(["product", "vendor", "purchase", "expense"] as const)(
 
 it("keeps failed contextual reports visible without expanding context", async () => {
   const harness = createBrowserTestHarness();
-  const restore = overrideStartDispatch(async (operation) => {
+  const restore = overrideOperationDispatch(async (operation) => {
     if (operation === "entityReport.getMany")
       throw new Error("Synthetic report unavailable");
     if (operation === "entity.connectedRecords")

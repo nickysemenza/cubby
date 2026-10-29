@@ -23,7 +23,7 @@ import { z } from "zod";
 
 import { resolutionActionClassName } from "~/entity/fields/field-resolution";
 import { useEntityMetadata } from "~/entity/metadata";
-import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { DecisionValue } from "~/ui/derived/decision-chain";
 import { ResolutionEvidence } from "~/ui/derived/resolution-evidence";
 import { SourceStack } from "~/ui/derived/source-stack";

@@ -95,7 +95,7 @@ import {
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
+import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
 import {
   bindBulkWorkflow,
@@ -112,7 +112,7 @@ const suggestionLog = createLogger("suggestFields");
 /** The actor's AI run for the hour: every AI operation opens it once with
  * `ensureRun` before calling out. */
 const actorAiRun = (
-  context: Pick<AuthenticatedStartOperationContext, "db" | "actorContext">,
+  context: Pick<AuthenticatedOperationContext, "db" | "actorContext">,
   options?: { runKey?: string },
 ) =>
   ensureRun(
@@ -135,10 +135,9 @@ const skippedUsda: EnrichmentProposal["usda"] = {
 };
 const precomputeEnrichmentDefinition = defineBulkWorkflow({
   name: "ai.precomputeEnrichmentProposals",
-  items: workflow<
-    AuthenticatedStartOperationContext,
-    EnrichmentPrecomputeInput
-  >("ai.precomputeEnrichmentProposals.items")
+  items: workflow<AuthenticatedOperationContext, EnrichmentPrecomputeInput>(
+    "ai.precomputeEnrichmentProposals.items",
+  )
     .call("resolved", async ({ context }, { input }) => {
       // One run for the whole precompute request, not one per item:
       // `resolved` runs once before the item stage fans out, so every
@@ -167,7 +166,7 @@ const precomputeEnrichmentDefinition = defineBulkWorkflow({
       });
     })
     .output(({ resolved }) => resolved),
-  item: workflow<AuthenticatedStartOperationContext, EnrichmentPrecomputeItem>(
+  item: workflow<AuthenticatedOperationContext, EnrichmentPrecomputeItem>(
     "ai.precomputeEnrichmentProposals.item",
   )
     .parallel("lookups", 2, {
@@ -196,7 +195,7 @@ const precomputeEnrichmentDefinition = defineBulkWorkflow({
       merge: lookups.merge,
     })),
   finalize: workflow<
-    AuthenticatedStartOperationContext,
+    AuthenticatedOperationContext,
     BulkWorkflowSummary<EnrichmentPrecomputeItem, EnrichmentProposal>
   >("ai.precomputeEnrichmentProposals.finalize").output(({ input }) => ({
     processed: input.succeeded.length + input.failed.length,
@@ -220,7 +219,7 @@ const precomputeEnrichmentDefinition = defineBulkWorkflow({
 export const precomputeEnrichmentProposalsWorkflow = bindBulkWorkflow(
   precomputeEnrichmentDefinition,
   (
-    context: AuthenticatedStartOperationContext,
+    context: AuthenticatedOperationContext,
     input: EnrichmentPrecomputeInput,
     signal: AbortSignal = new AbortController().signal,
   ) => ({ context, input, signal }),
@@ -258,7 +257,7 @@ export const backfillLocationDescriptionsWorkflow = bindCoordinatorStream(
 );
 /** AI reads are authoritative: suggestions must see the row just written. */
 export const inferFieldAssessments = async (
-  context: Pick<AuthenticatedStartOperationContext, "db" | "actorContext">,
+  context: Pick<AuthenticatedOperationContext, "db" | "actorContext">,
   input: FieldSuggestionsInput,
   ports?: Parameters<typeof suggestFields>[3],
   prepared?: {

@@ -4,10 +4,10 @@ import {
 } from "@tanstack/react-query";
 
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
-import { expense } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
-import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
-import { workQueue } from "~/integrations/tanstack-query/generated/catalog/workQueue.gen";
+import { entityReport } from "~/integrations/tanstack-query/generated/domains/entityReport.gen";
+import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
+import { location } from "~/integrations/tanstack-query/generated/domains/location.gen";
+import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { KeyNumbers, type KeyNumber } from "~/ui/common/key-numbers";

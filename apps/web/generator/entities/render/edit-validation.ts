@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import {
   EntityDeclarationError,
@@ -70,20 +71,21 @@ export const renderEntityEditValidationArtifacts = (
           ];
     return {
       relativePath: `packages/schemas/src/generated/entity-edit-validation.${entity.key}.gen.ts`,
-      source:
+      source: rawSource(
         generatedHeader +
-        (bulkImports.length
-          ? `import { ${bulkImports.join(", ")} } from "@cubby/schemas/entity-collection";\n`
-          : "") +
-        [...imports]
-          .map(
-            ([module, names]) =>
-              `import { ${[...names].join(", ")} } from ${JSON.stringify(module)};\n`,
-          )
-          .join("") +
-        `export const create = ${contract.create?.export ?? "null"};\n` +
-        `export const update = ${contract.update?.export ?? "null"};\n` +
-        `export const bulkUpdate = ${bulkSchemaFor(entity)};\n`,
+          (bulkImports.length
+            ? `import { ${bulkImports.join(", ")} } from "@cubby/schemas/entity-collection";\n`
+            : "") +
+          [...imports]
+            .map(
+              ([module, names]) =>
+                `import { ${[...names].join(", ")} } from ${JSON.stringify(module)};\n`,
+            )
+            .join("") +
+          `export const create = ${contract.create?.export ?? "null"};\n` +
+          `export const update = ${contract.update?.export ?? "null"};\n` +
+          `export const bulkUpdate = ${bulkSchemaFor(entity)};\n`,
+      ),
     };
   });
   return [
@@ -91,41 +93,43 @@ export const renderEntityEditValidationArtifacts = (
     {
       relativePath:
         "apps/web/src/server/generated/entity-edit-validation.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        "export const entityEditValidationLoaders = {\n" +
-        editable
-          .map(
-            ({ key }) =>
-              `${JSON.stringify(key)}: () => import(${JSON.stringify(`@cubby/schemas/compiler/generated/entity-edit-validation/${key}`)}),\n`,
-          )
-          .join("") +
-        "} as const;\n",
+          "export const entityEditValidationLoaders = {\n" +
+          editable
+            .map(
+              ({ key }) =>
+                `${JSON.stringify(key)}: () => import(${JSON.stringify(`@cubby/schemas/compiler/generated/entity-edit-validation/${key}`)}),\n`,
+            )
+            .join("") +
+          "} as const;\n",
+      ),
     },
     {
       relativePath:
         "apps/web/src/entity/generated/entity-edit-validation-types.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import type { z } from "zod";\n' +
-        "type Output<S> = S extends z.ZodType ? z.output<S> : never;\n" +
-        "export type EntityEditValidationInputs = {\n" +
-        editable
-          .map(
-            ({ key }) =>
-              `${JSON.stringify(key)}: {\n` +
-              ["create", "update", "bulkUpdate"]
-                .map(
-                  (operation) =>
-                    `${operation}: Output<typeof import(${JSON.stringify(`@cubby/schemas/compiler/generated/entity-edit-validation/${key}`)}).${operation}>;\n`,
-                )
-                .join("") +
-              "} ;\n",
-          )
-          .join("") +
-        "};\n" +
-        `export const generatedEditableEntities = ${JSON.stringify(editable.map(({ key }) => key))} as const;\n` +
-        `export const generatedBulkEditEntities = ${JSON.stringify(entities.filter((entity) => entity.shortcode !== null && entity.bulkUpdateFields !== null).map(({ key }) => key))} as const;\n`,
+          'import type { z } from "zod";\n' +
+          "type Output<S> = S extends z.ZodType ? z.output<S> : never;\n" +
+          "export type EntityEditValidationInputs = {\n" +
+          editable
+            .map(
+              ({ key }) =>
+                `${JSON.stringify(key)}: {\n` +
+                ["create", "update", "bulkUpdate"]
+                  .map(
+                    (operation) =>
+                      `${operation}: Output<typeof import(${JSON.stringify(`@cubby/schemas/compiler/generated/entity-edit-validation/${key}`)}).${operation}>;\n`,
+                  )
+                  .join("") +
+                "} ;\n",
+            )
+            .join("") +
+          "};\n" +
+          `export const generatedEditableEntities = ${JSON.stringify(editable.map(({ key }) => key))} as const;\n` +
+          `export const generatedBulkEditEntities = ${JSON.stringify(entities.filter((entity) => entity.shortcode !== null && entity.bulkUpdateFields !== null).map(({ key }) => key))} as const;\n`,
+      ),
     },
   ];
 };

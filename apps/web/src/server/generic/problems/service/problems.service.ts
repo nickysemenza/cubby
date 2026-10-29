@@ -1,4 +1,4 @@
-import { amount } from "@cubby/schemas/codec";
+import { amount, dateTime } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import { displayGtin } from "@cubby/schemas/external-id";
 /** Problems service composes detector repos and cross-entity services without direct database access. */
@@ -709,7 +709,7 @@ const exactProblemPresentationRowSchema = z.object({
   quantityLedger: z
     .object({ expectedQuantity: z.number().optional() })
     .nullish(),
-  createdAt: z.date().nullish(),
+  createdAt: dateTime.nullish(),
   recipes: z
     .array(
       z.object({

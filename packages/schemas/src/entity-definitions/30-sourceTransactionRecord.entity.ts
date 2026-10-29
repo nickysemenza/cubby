@@ -1,6 +1,7 @@
 import { timestampField } from "./field-policy";
 import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
+import { dateTime } from "../codec";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { plainDate } from "../base-entity";
 import { shortcodeSchema } from "../identifier-fields";
@@ -274,7 +275,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "timestamp",
         nullable: true,
         display: { columnGroup: "Disposition", format: "timestamp" },
-        validation: { read: z.date().nullable(), create: null, update: null },
+        validation: { read: dateTime.nullable(), create: null, update: null },
       },
       {
         audit: true,
@@ -296,7 +297,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "timestamp",
         labelOverride: "Last observed",
         display: { list: false, format: "timestamp" },
-        validation: { read: z.date(), create: null, update: null },
+        validation: { read: dateTime, create: null, update: null },
       },
       {
         audit: true,
@@ -535,7 +536,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        validation: { read: z.date().nullable(), create: null, update: null },
+        validation: { read: dateTime.nullable(), create: null, update: null },
       },
       {
         output: false,

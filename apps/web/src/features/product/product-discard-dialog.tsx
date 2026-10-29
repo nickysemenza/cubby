@@ -34,7 +34,7 @@ import { z } from "zod";
 import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { DiscardLineFields } from "~/features/inventory/discard-line-fields";
-import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog/product.gen";
+import { product as productOperations } from "~/integrations/tanstack-query/generated/domains/product.gen";
 import { DecisionSteps } from "~/ui/common/decision-steps";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";

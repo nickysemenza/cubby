@@ -18,7 +18,7 @@ import {
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";

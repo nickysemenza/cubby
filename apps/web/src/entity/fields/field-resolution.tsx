@@ -20,7 +20,7 @@ import type { StandardEntity } from "~/entity/entity-contracts";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { entityMetadata } from "~/entity/metadata";
 import { fieldEnvelopeAtPath } from "~/entity/read-path";
-import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import { Button } from "~/ui/primitives/button";
 

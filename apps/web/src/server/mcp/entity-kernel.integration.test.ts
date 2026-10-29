@@ -28,8 +28,7 @@ import { refreshSearchDocument } from "~/server/generic/search/repo/search-docum
 import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer, listMcpToolCatalog } from "~/server/mcp/server";
-import { createBrowserOperationHandler } from "~/server/operation-runtime/browser-operation-dispatch";
-import { dispatchStartOperation } from "~/server/operation-runtime/start-operation-dispatch.server";
+import { createOperationDispatch } from "~/server/operation-runtime/operation-dispatch.server";
 import {
   createProductFixture,
   ingredientRef,
@@ -406,11 +405,10 @@ describe("MCP entity kernel boundary", () => {
         auth: { userId: testUserId("test-user-id") },
       }),
     );
-    const http = createBrowserOperationHandler({
+    const http = createOperationDispatch({
       authenticate: async () =>
         systemPrincipal(apiContext, { channel: "cli", credential: "api-key" }),
-      dispatch: dispatchStartOperation,
-    });
+    }).handleOperationRequest;
     const viaHttp = await http(
       new Request("https://cubby.example/api/operations/entity.list", {
         method: "POST",

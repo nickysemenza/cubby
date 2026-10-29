@@ -17,6 +17,7 @@ import {
   locationValuation,
 } from "@cubby/schemas/location-fields";
 import { z } from "zod";
+import { dateTime } from "../codec";
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "location",
@@ -506,7 +507,7 @@ Rules:
             mobile: { slot: "meta", priority: 90 },
           },
           validation: {
-            read: z.date().nullable(),
+            read: dateTime.nullable(),
             create: null,
             update: null,
           },

@@ -47,11 +47,7 @@ export function createServerFunctionIdGenerator() {
     const semanticFunctionName = functionName
       .replace(/_createServerFn_handler(?=_\d+$|$)/u, "")
       .replace(/Transport(?=_\d+$|$)/u, "");
-    const functionId =
-      sourcePath === "server-functions/start-operation-dispatch" &&
-      semanticFunctionName === "dispatchStartOperationServerFunction"
-        ? "dispatch"
-        : readableSlug(`${sourcePath}-${semanticFunctionName}`);
+    const functionId = readableSlug(`${sourcePath}-${semanticFunctionName}`);
     const identity = `${sourcePath}--${functionName}`;
     const existingIdentity = identityById.get(functionId);
 

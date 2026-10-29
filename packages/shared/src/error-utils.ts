@@ -52,6 +52,12 @@ export const AppErrors = {
   // A cookie-authenticated request that can act arrived from another origin.
   FOREIGN_ORIGIN: "FORBIDDEN",
 
+  // Operation dispatch: the id is unregistered or not exposed to the caller's
+  // surface, its kind is not callable here, or the request was not a POST.
+  OPERATION_NOT_FOUND: "NOT_FOUND",
+  OPERATION_KIND_UNSUPPORTED: "BAD_REQUEST",
+  OPERATION_METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
+
   // Entity not found — one `<ENTITY>_NOT_FOUND` per shortcode entity, derived
   // from the registry so a new entity gets its reason without a line here.
   ...ENTITY_NOT_FOUND_ERRORS,

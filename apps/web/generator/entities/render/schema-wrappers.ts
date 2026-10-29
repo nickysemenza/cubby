@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { entityContractName } from "../contracts.ts";
 import { pascalCase } from "@cubby/shared/text-case";
 import { generatedHeader } from "../../artifacts.ts";
@@ -59,15 +60,16 @@ export const renderSchemaWrapperArtifacts = (
       ];
       return {
         relativePath: `packages/schemas/src/generated/entities/${entity.key}.gen.ts`,
-        source:
+        source: rawSource(
           generatedHeader +
-          'import { z } from "zod";\n' +
-          (update
-            ? 'import { shortcodeSchema } from "../../identifier-fields";\n'
-            : "") +
-          `import { ${publicInputs.join(", ")} } from "../entity-contracts.${entity.key}.gen";\n` +
-          `import { ${entity.key}FieldEnvelopeSchemas } from "../entity-field-envelopes.${entity.key}.gen";\n` +
-          declarations.join("\n") +
-          "\n",
+            'import { z } from "zod";\n' +
+            (update
+              ? 'import { shortcodeSchema } from "../../identifier-fields";\n'
+              : "") +
+            `import { ${publicInputs.join(", ")} } from "../entity-contracts.${entity.key}.gen";\n` +
+            `import { ${entity.key}FieldEnvelopeSchemas } from "../entity-field-envelopes.${entity.key}.gen";\n` +
+            declarations.join("\n") +
+            "\n",
+        ),
       };
     });

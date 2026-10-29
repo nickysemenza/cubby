@@ -1,3 +1,4 @@
+import { dateTime } from "@cubby/schemas/codec";
 /**
  * `entity_read` get/list field selection and the compact preset. Both are
  * generic over the generated MCP output schemas and list-read declarations,
@@ -340,7 +341,7 @@ const selectedValue: z.ZodType<SelectedValue> = z.lazy(() =>
     z.string(),
     z.number(),
     z.boolean(),
-    z.date(),
+    dateTime,
     z.array(selectedValue),
     z.record(z.string(), selectedValue),
   ]),

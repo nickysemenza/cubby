@@ -15,7 +15,7 @@ import { formatYield } from "~/entity/presentation/recipe-yield";
 import { EditableCell } from "~/entity/table/editable-cell";
 import { EditableTagsCell } from "~/features/recipe/editable-tags-cell";
 import { RecipeTag } from "~/features/recipe/recipe-tag";
-import { relatedData } from "~/integrations/tanstack-query/generated/catalog/relatedData.gen";
+import { relatedData } from "~/integrations/tanstack-query/generated/domains/relatedData.gen";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
   numberCellData,

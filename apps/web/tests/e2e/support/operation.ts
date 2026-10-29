@@ -1,18 +1,14 @@
 import type { APIRequestContext } from "@playwright/test";
-import superjson from "superjson";
-import { z } from "zod";
-
 import { browserOperationPath } from "#web/src/lib/browser-operation-path.ts";
-import { superJsonResultSchema } from "#web/src/lib/superjson-wire.ts";
 
 const requestOrigins = new WeakMap<APIRequestContext, Promise<string>>();
 
 /**
- * Runs browser-only operations through the same Start dispatch as the app,
- * from a signed-in request context (the dispatch requires a same-origin
- * `Origin`).
+ * Runs browser-only operations through the same dispatch as the app, from a
+ * signed-in request context (the dispatch requires a same-origin `Origin`).
+ * A refusal is the bare error under its status; `body` is the data or error.
  */
-export async function startOperation(
+export async function operationCall(
   request: APIRequestContext,
   operation: string,
   input: unknown,
@@ -28,25 +24,16 @@ export async function startOperation(
     headers: {
       Origin: await origin,
       "Content-Type": "application/json",
-      "x-cubby-value-codec": "superjson",
+      "x-cubby-surface": "browser",
     },
-    data: JSON.stringify(superjson.serialize({ operation, input })),
+    data: JSON.stringify({ operation, input }),
   });
-  const value = superjson.deserialize(
-    superJsonResultSchema.parse(JSON.parse(await response.text())),
-  );
-  const envelope = z
-    .object({
-      ok: z.boolean(),
-      data: z.unknown().optional(),
-      error: z.unknown().optional(),
-    })
-    .parse(value);
-  const body = envelope.ok ? envelope.data : envelope.error;
+  const value: { data?: unknown } = await response.json();
+  const body = response.ok() ? value.data : value;
   return {
     body,
     status: () => response.status(),
-    ok: () => response.ok() && envelope.ok,
+    ok: () => response.ok(),
     json: async () => body,
     text: async () => JSON.stringify(body),
   };

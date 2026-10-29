@@ -10,7 +10,7 @@ import { eq } from "drizzle-orm";
 import { type JSONType, z } from "zod";
 
 import type { McpActionSpec } from "~/contracts/mcp-define";
-import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
+import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
 import { roundTo } from "~/lib/round-to";
 import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
@@ -38,23 +38,20 @@ import {
   purchaseAgentSelfGoverned,
 } from "~/server/mcp/purchase-agent-protocol";
 import { getRequestId } from "~/server/observability/tracing";
+import { dispatchOperation } from "~/server/operation-runtime/operation-dispatch.server";
 import {
-  dispatchStartOperation,
-  type StartOperationHandlerLoaders,
-} from "~/server/operation-runtime/start-operation-dispatch.server";
+  type PublicOperationError,
+  publicOperationErrorSchema,
+  type OperationResult,
+  operationWireValueSchema,
+} from "~/server/operation-runtime/operation.contract";
 import {
-  type PublicStartOperationError,
-  publicStartOperationErrorSchema,
-  type StartOperationResult,
-  unparsedStartOperationDataSchema,
-} from "~/server/operation-runtime/start-operation.contract";
-import {
-  normalizeStartOperationError,
+  normalizeOperationError,
   type OperationFailureContext,
   type OperationStage,
-  runStartOperation,
+  executeOperation,
   withinCompositeBudget,
-} from "~/server/operation-runtime/start-operation.server";
+} from "~/server/operation-runtime/operation.server";
 
 import {
   type ActionInputSchema,
@@ -76,8 +73,8 @@ import { safeToJsonSchema, sdkOutputSchema } from "./tool-json-schema";
  * (`server/generated/mcp-tools.gen.ts`). Capability groups publish compact
  * `{ action, input }` schemas with a `describe` action; the entity-kernel tools
  * keep detailed schemas. Every action runs through the shared runner
- * (`runStartOperation`): an operation action by id through
- * `dispatchStartOperation`, a kernel verb as an ad hoc runner operation named
+ * (`executeOperation`): an operation action by id through
+ * `dispatchOperation`, a kernel verb as an ad hoc runner operation named
  * by its tool action. The runner owns read policy, the per-principal deadline,
  * calendar and freshness bookkeeping; this adapter owns tool grouping,
  * published schemas, output projections, the error shape, and the
@@ -95,7 +92,7 @@ export type ToolEntityExtractor = (params: ToolArguments) => string | undefined;
 export type ToolExtra = Parameters<ToolCallback<typeof emptyInputSchema>>[1];
 type JsonObject = Extract<JSONType, { [key: string]: JSONType }>;
 
-type McpOperationId = StartOperationIdOfKind<"query" | "mutation">;
+type McpOperationId = OperationIdOfKind<"query" | "mutation">;
 
 type McpToolBindingAction =
   | {
@@ -122,10 +119,10 @@ export type McpToolBindings = Readonly<
 >;
 
 export interface McpToolRegistrationRuntime {
-  /** Operation handlers by id; tests bind their own. */
-  loaders?: StartOperationHandlerLoaders;
+  /** Operation actions' dispatch; tests bind their own handlers. */
+  dispatchOperation?: typeof dispatchOperation;
   /** The kernel verbs' runner; tests observe its side effects. */
-  runStartOperation?: typeof runStartOperation;
+  executeOperation?: typeof executeOperation;
   /** A composite unit's overrun write; tests observe it. */
   recordDatabaseWrite?: (operation: string) => Promise<void>;
 }
@@ -161,7 +158,7 @@ const isPrincipal = (value: unknown): value is Principal =>
  * rendered as is: normalizing it again would replace its raw cause.
  */
 class SettledToolFailure extends Error {
-  constructor(readonly detail: PublicStartOperationError) {
+  constructor(readonly detail: PublicOperationError) {
     super(detail.message);
     this.name = "SettledToolFailure";
   }
@@ -246,7 +243,7 @@ function renderToolError(
   };
 }
 
-export const toolErrorDetailSchema = publicStartOperationErrorSchema.partial({
+export const toolErrorDetailSchema = publicOperationErrorSchema.partial({
   code: true,
 });
 export type ToolErrorDetail = z.infer<typeof toolErrorDetailSchema>;
@@ -264,7 +261,7 @@ export function describeToolError<T>(
   }
   if (context) {
     const headers = context.headers ?? errorReportingHeaders();
-    const detail = normalizeStartOperationError(
+    const detail = normalizeOperationError(
       error,
       stage,
       getRequestId(headers),
@@ -405,7 +402,7 @@ type CompiledAction = {
   ) => Promise<ActionValue>;
 };
 
-const settled = <T>(result: StartOperationResult<T>): T => {
+const settled = <T>(result: OperationResult<T>): T => {
   if (!result.ok) throw new SettledToolFailure(result.error);
   return result.data;
 };
@@ -477,7 +474,7 @@ function compileAction(
       // its input was already parsed, so the runner parses only its output.
       invoke: async (input, call, name, execution) =>
         settled(
-          await (call.runtime.runStartOperation ?? runStartOperation)({
+          await (call.runtime.executeOperation ?? executeOperation)({
             operation: { id: name, kind },
             type: kind,
             input,
@@ -518,21 +515,22 @@ function compileAction(
   // keys, and feeds telemetry and the purchase-agent fingerprint.
   const runMember = async (raw: ActionValue, call: ActionCall) => {
     const member = toMember(z.looseObject({}).parse(raw ?? {}));
-    const result = settled<ActionValue>(
-      await dispatchStartOperation(
-        {
-          operation: operationId,
-          input: unparsedStartOperationDataSchema.parse(member),
-          request: {
-            principal: call.principal,
-            headers: call.headers ?? new Headers(),
-            signal: call.signal,
-            modelBacked: spec.modelBacked,
-          },
-        },
-        call.runtime.loaders,
-      ),
+    const dispatched = await (
+      call.runtime.dispatchOperation ?? dispatchOperation
+    )(
+      call.principal,
+      {
+        operation: operationId,
+        input: operationWireValueSchema.parse(member),
+        headers: call.headers ?? new Headers(),
+        signal: call.signal,
+        modelBacked: spec.modelBacked,
+      },
+      [kind],
     );
+    if (!("result" in dispatched))
+      throw new Error(`${operationId} is not a ${kind}`);
+    const result = settled<ActionValue>(dispatched.result);
     return spec.project ? spec.project(result, member) : result;
   };
 

@@ -96,7 +96,7 @@ import {
 import { appErrorFromUnknown, createAppError } from "~/server/errors/app-error";
 import { readPublicEntityRow } from "~/server/generic/derived/service/public-read";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
+import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import {
   bindBulkWorkflow,
   bindWorkflow,
@@ -129,7 +129,7 @@ const productionRecipeImportWorkflowPorts: RecipeImportWorkflowPorts = {
 
 type ImportRecipeInput = z.output<typeof importRecipeSchema>;
 type ImportRecipeContext = {
-  operation: AuthenticatedStartOperationContext;
+  operation: AuthenticatedOperationContext;
   ports: RecipeImportWorkflowPorts;
 };
 const insertImport = bindWorkflow(
@@ -168,7 +168,7 @@ const insertImport = bindWorkflow(
 );
 export const insertImportWorkflow = Object.assign(
   (
-    operation: AuthenticatedStartOperationContext,
+    operation: AuthenticatedOperationContext,
     input: ImportRecipeInput,
     ports: RecipeImportWorkflowPorts = productionRecipeImportWorkflowPorts,
   ) => insertImport({ operation, ports }, input),
@@ -177,7 +177,7 @@ export const insertImportWorkflow = Object.assign(
 
 type UpsertCookbookInput = z.output<typeof upsertCookbookInput>;
 export const upsertCookbookWorkflow = bindWorkflow(
-  workflow<AuthenticatedStartOperationContext, UpsertCookbookInput>(
+  workflow<AuthenticatedOperationContext, UpsertCookbookInput>(
     "recipe.upsertCookbook",
   )
     // Before the commit: the run must not roll back with a failed upsert.
@@ -247,7 +247,7 @@ export const upsertCookbookWorkflow = bindWorkflow(
 
 type CookbookIdInput = z.output<typeof cookbookIdInput>;
 export async function getCookbookSourceWorkflow(
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   input: CookbookIdInput,
 ) {
   const source = await getCookbookSource(
@@ -268,7 +268,7 @@ const productionCookbookRecipePhotoPorts: CookbookRecipePhotoPorts = {
 };
 
 type PhotoWorkflowContext = {
-  db: AuthenticatedStartOperationContext["db"];
+  db: AuthenticatedOperationContext["db"];
   ports: CookbookRecipePhotoPorts;
 };
 const attachCookbookRecipePhoto = bindWorkflow(
@@ -348,8 +348,8 @@ const attachCookbookRecipePhoto = bindWorkflow(
     .output(({ attachment }) => attachment),
 );
 export const attachCookbookRecipePhotoWorkflow = (
-  context: Pick<AuthenticatedStartOperationContext, "db"> &
-    Partial<Pick<AuthenticatedStartOperationContext, "actorContext">>,
+  context: Pick<AuthenticatedOperationContext, "db"> &
+    Partial<Pick<AuthenticatedOperationContext, "actorContext">>,
   input: CookbookRecipePhotoInput,
   ports: CookbookRecipePhotoPorts = productionCookbookRecipePhotoPorts,
 ) => attachCookbookRecipePhoto({ db: context.db, ports }, input);
@@ -367,7 +367,7 @@ type CookbookImportResult = CookbookImportProjection;
 const cookbookImportDefinition = defineBulkWorkflow({
   name: "recipe.importCookbookStream",
   items: workflow<
-    AuthenticatedStartOperationContext,
+    AuthenticatedOperationContext,
     z.output<typeof importCookbookStreamInput>
   >("recipe.importCookbookStream.select")
     .call("cookbookId", ({ context }, { input }) =>
@@ -394,7 +394,7 @@ const cookbookImportDefinition = defineBulkWorkflow({
         }),
       );
     }),
-  item: workflow<AuthenticatedStartOperationContext, CookbookImportItem>(
+  item: workflow<AuthenticatedOperationContext, CookbookImportItem>(
     "recipe.importCookbookStream.item",
   )
     .call("recipe", async (_, { input }) => {
@@ -431,7 +431,7 @@ const cookbookImportDefinition = defineBulkWorkflow({
     )
     .output(({ event }) => event),
   finalize: workflow<
-    AuthenticatedStartOperationContext,
+    AuthenticatedOperationContext,
     BulkWorkflowSummary<CookbookImportItem, CookbookImportResult>
   >("recipe.importCookbookStream.finalize")
     .commit("costing", async ({ context }, { input }) => {
@@ -459,7 +459,7 @@ const cookbookImportDefinition = defineBulkWorkflow({
 export const importCookbookWorkflow = bindBulkWorkflow(
   cookbookImportDefinition,
   (
-    context: AuthenticatedStartOperationContext,
+    context: AuthenticatedOperationContext,
     input: z.output<typeof importCookbookStreamInput>,
     signal?: AbortSignal,
   ) => ({ context, input, signal }),
@@ -467,7 +467,7 @@ export const importCookbookWorkflow = bindBulkWorkflow(
 
 type CookbookDiffInput = z.output<typeof cookbookDiffInput>;
 export async function getCookbookDiffWorkflow(
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   input: CookbookDiffInput,
 ) {
   const cookbook = await getCookbookByName(context.db, input.book);
@@ -476,7 +476,7 @@ export async function getCookbookDiffWorkflow(
 
 const normalizeNotionId = (id: string) => id.replace(/-/g, "");
 const previewNotionSyncDefinition = workflow<
-  AuthenticatedStartOperationContext,
+  AuthenticatedOperationContext,
   undefined
 >("recipe.previewNotionSync")
   .branch("client", {
@@ -538,7 +538,7 @@ const previewNotionSyncDefinition = workflow<
 
 const previewNotionSync = bindWorkflow(previewNotionSyncDefinition);
 export const previewNotionSyncWorkflow = (
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
 ) => previewNotionSync(context, undefined);
 
 type NotionSummary = { succeeded: number; failed: number };
@@ -548,7 +548,7 @@ type NotionImportItem = {
     | Awaited<
         ReturnType<
           NonNullable<
-            AuthenticatedStartOperationContext["notionClient"]
+            AuthenticatedOperationContext["notionClient"]
           >["queryRecipes"]
         >
       >[number]
@@ -559,7 +559,7 @@ type NotionImportResult = NotionImportProjection;
 const notionImportDefinition = defineBulkWorkflow({
   name: "recipe.importNotionSyncStream",
   items: workflow<
-    AuthenticatedStartOperationContext,
+    AuthenticatedOperationContext,
     z.output<typeof importNotionSyncInput>
   >("recipe.importNotionSyncStream.select")
     .call("client", async ({ context }) => {
@@ -584,7 +584,7 @@ const notionImportDefinition = defineBulkWorkflow({
         existing: existing.has(normalizeNotionId(pageId)),
       }));
     }),
-  item: workflow<AuthenticatedStartOperationContext, NotionImportItem>(
+  item: workflow<AuthenticatedOperationContext, NotionImportItem>(
     "recipe.importNotionSyncStream.item",
   )
     .call("row", async (_, { input }) => {
@@ -623,7 +623,7 @@ const notionImportDefinition = defineBulkWorkflow({
     )
     .output(({ event }) => event),
   finalize: workflow<
-    AuthenticatedStartOperationContext,
+    AuthenticatedOperationContext,
     BulkWorkflowSummary<NotionImportItem, NotionImportResult>
   >("recipe.importNotionSyncStream.finalize")
     .commit("costing", ({ context }, { input }) => {
@@ -651,7 +651,7 @@ const notionImportDefinition = defineBulkWorkflow({
 export const importNotionSyncWorkflow = bindBulkWorkflow(
   notionImportDefinition,
   (
-    context: AuthenticatedStartOperationContext,
+    context: AuthenticatedOperationContext,
     input: z.output<typeof importNotionSyncInput>,
     signal?: AbortSignal,
   ) => ({ context, input, signal }),
@@ -659,7 +659,7 @@ export const importNotionSyncWorkflow = bindBulkWorkflow(
 
 type SetCookbookProductInput = z.output<typeof setCookbookProductInput>;
 export async function setCookbookProductWorkflow(
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   input: SetCookbookProductInput,
 ) {
   const cookbookId = await cookbookShortcodes.one(context.db, input.cookbookId);
@@ -681,7 +681,7 @@ export async function setCookbookProductWorkflow(
 
 type DeleteCookbookInput = z.output<typeof cookbookIdInput>;
 export const deleteCookbookWorkflow = bindWorkflow(
-  workflow<AuthenticatedStartOperationContext, DeleteCookbookInput>(
+  workflow<AuthenticatedOperationContext, DeleteCookbookInput>(
     "recipe.deleteCookbook",
   )
     .call("cookbookId", ({ context }, { input }) =>
@@ -699,7 +699,7 @@ export const deleteCookbookWorkflow = bindWorkflow(
 );
 
 type ReprocessPreparedContext = {
-  readonly operation: AuthenticatedStartOperationContext;
+  readonly operation: AuthenticatedOperationContext;
   readonly selection: Awaited<ReturnType<typeof prepareCookbookReprocessing>>;
 };
 type ReprocessPreparedInput = {
@@ -711,7 +711,7 @@ type ReprocessPreparedInput = {
 type ReprocessWindow = { readonly offset: number; readonly limit: number };
 
 const reprocessCookbookPreparation = workflow<
-  AuthenticatedStartOperationContext,
+  AuthenticatedOperationContext,
   z.output<typeof cookbookIdInput> & { readonly window?: ReprocessWindow }
 >("recipe.reprocessCookbook.prepare")
   .call("cookbookId", ({ context }, { input }) =>
@@ -772,7 +772,7 @@ const reprocessCookbookDefinition = defineBulkWorkflow({
 
 export const reprocessCookbookWorkflow = Object.assign(
   (
-    context: AuthenticatedStartOperationContext,
+    context: AuthenticatedOperationContext,
     input: z.output<typeof cookbookIdInput>,
     signal?: AbortSignal,
     window?: ReprocessWindow,
@@ -800,7 +800,7 @@ export const reprocessCookbookWorkflow = Object.assign(
  * finished import runs. The workflow's own finalize covers the recipes that landed this call.
  */
 async function refinalizeStrandedRecipes(
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   cookbookId: Awaited<ReturnType<typeof cookbookShortcodes.one>>,
   source: string,
 ) {
@@ -811,7 +811,7 @@ async function refinalizeStrandedRecipes(
 
 /** `importCookbookWorkflow` for one bounded call: counts, raw errors and what is still missing. */
 export async function importCookbookChunkWorkflow(
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   input: z.output<typeof cookbookImportChunkInput>,
 ) {
   const failures: { sourceRecipeId: string; error: string }[] = [];
@@ -845,7 +845,7 @@ export async function importCookbookChunkWorkflow(
  * by an empty one).
  */
 export async function reprocessCookbookChunkWorkflow(
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   input: z.output<typeof cookbookReprocessChunkInput>,
   limit: number = COOKBOOK_COMMAND_CHUNK,
 ) {
@@ -867,7 +867,7 @@ export async function reprocessCookbookChunkWorkflow(
 
 type GatewayForwardInput = z.output<typeof gatewayForwardInput>;
 export async function forwardGatewayRequestWorkflow(
-  context: AuthenticatedStartOperationContext,
+  context: AuthenticatedOperationContext,
   input: GatewayForwardInput,
 ) {
   const runId = await ensureRun(

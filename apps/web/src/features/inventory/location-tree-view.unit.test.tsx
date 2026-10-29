@@ -18,8 +18,8 @@ import {
 } from "~/entity/fields/field-envelope.fixtures";
 import { sampleLocations } from "~/features/design/data/samples";
 import { locationReadFixture } from "~/features/location/location-read.fixtures";
-import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { location } from "~/integrations/tanstack-query/generated/domains/location.gen";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import LocationTreeView, { LocationTree } from "./location-tree-view";
@@ -296,7 +296,7 @@ describe("LocationTree", () => {
 describe("location tree query lifecycle", () => {
   it("shows initial diagnostics and retries into the empty state", async () => {
     let fail = true;
-    const restore = overrideStartDispatch(async () => {
+    const restore = overrideOperationDispatch(async () => {
       if (fail) throw new Error("SQLSTATE 08006 synthetic location tree");
       return { ok: true, data: [] };
     });
@@ -319,7 +319,7 @@ describe("location tree query lifecycle", () => {
       treeData(),
     );
     let fail = true;
-    const restore = overrideStartDispatch(async () => {
+    const restore = overrideOperationDispatch(async () => {
       if (fail) throw new Error("synthetic tree refresh");
       return { ok: true, data: treeData() };
     });

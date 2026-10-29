@@ -8,7 +8,7 @@ import { WorkActionTrigger } from "~/entity/work-queue/work-actions";
 import { useBackfill } from "~/features/maintenance/backfill-button";
 import { BACKFILL } from "~/features/maintenance/backfill-registry";
 import { ProblemItemsAction } from "~/features/work-queue/problem-items-action";
-import { recommendations } from "~/integrations/tanstack-query/generated/catalog/recommendations.gen";
+import { recommendations } from "~/integrations/tanstack-query/generated/domains/recommendations.gen";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

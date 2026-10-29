@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { installFeatures } from "~/features/registry";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 
 import { DetailActionProvider } from "./detail-action-bar";
 import type { DetailRecordOf } from "./detail-record";
@@ -36,7 +36,7 @@ const calls: Array<{ operation: string; input: unknown }> = [];
 beforeEach(() => {
   harness = createBrowserTestHarness();
   calls.length = 0;
-  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+  restoreDispatch = overrideOperationDispatch(async (operation, input) => {
     calls.push({ operation, input });
     if (operation === "entityReport.get")
       return { ok: true, data: answer(input as { cursor?: string }) };
@@ -109,7 +109,7 @@ describe("EntityReportSlot records", () => {
     const cover =
       "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
     restoreDispatch();
-    restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    restoreDispatch = overrideOperationDispatch(async (operation, input) => {
       calls.push({ operation, input });
       if (operation !== "entityMedia.displayImages")
         throw new Error(`Unexpected summary operation ${operation}`);

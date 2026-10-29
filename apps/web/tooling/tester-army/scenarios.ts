@@ -35,7 +35,7 @@ import {
   type ScriptStep,
 } from "../purchase-agent-script";
 import type { E2EWorkerRuntime } from "../../tests/e2e/support/e2e-worker-runtime";
-import { startOperation } from "../../tests/e2e/support/start-operation";
+import { operationCall } from "../../tests/e2e/support/operation";
 
 /** Seeds sources only. Production Jobs, processors and writers produce the imported records. */
 export async function seedImportJourneys({
@@ -164,7 +164,7 @@ export async function seedImportJourneys({
     input: z.core.util.JSONType,
     output: S,
   ) {
-    const response = await startOperation(
+    const response = await operationCall(
       client,
       `photoImport.${operation}`,
       input,

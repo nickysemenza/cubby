@@ -1,4 +1,4 @@
-import { startOperation } from "./support/start-operation";
+import { operationCall } from "./support/operation";
 import type { Route } from "@playwright/test";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
@@ -79,7 +79,7 @@ test("meal product nutrition preserves entered amounts through edits and removal
   const name = `Nutrition edit ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
   const fixture = await seedMealNutritionPrerequisite(page, name);
   // Creation through this dialog is covered by the preceding Product food test.
-  const seeded = await startOperation(page.request, "meal.saveFood", {
+  const seeded = await operationCall(page.request, "meal.saveFood", {
     mealId: fixture.meal.id,
     ledgerPartyId: fixture.member.id,
     sourceKind: "product",

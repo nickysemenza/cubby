@@ -1,9 +1,9 @@
 import type { ProblemsCount } from "@cubby/schemas/problems";
 
-import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
+import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 
 type ProblemCountsContext = Pick<
-  AuthenticatedStartOperationContext,
+  AuthenticatedOperationContext,
   "db" | "upcLookupClient"
 >;
 

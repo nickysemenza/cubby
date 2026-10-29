@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { useEntityMetadata } from "~/entity/metadata";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section, Disclosure } from "~/ui/layout";
 

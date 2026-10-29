@@ -3,8 +3,8 @@ import {
   type FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
 
+import type { OperationCallOptions } from "~/integrations/tanstack-query/operation-call";
 import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
-import type { StartCallOptions } from "~/integrations/tanstack-query/start-transport";
 import type { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 
 import type {
@@ -22,7 +22,7 @@ export function createRecordSuggestionBatch(
   const batcher = createRequestBatcher<
     {
       source: FieldSuggestionSource;
-      consistency?: StartCallOptions["consistency"];
+      consistency?: OperationCallOptions["consistency"];
     },
     FieldSuggestionsOut
   >(
@@ -55,7 +55,7 @@ export function createRecordSuggestionBatch(
     load(
       source: FieldSuggestionSource,
       signal: AbortSignal,
-      consistency?: StartCallOptions["consistency"],
+      consistency?: OperationCallOptions["consistency"],
     ) {
       return batcher.load({ source, consistency }, signal);
     },

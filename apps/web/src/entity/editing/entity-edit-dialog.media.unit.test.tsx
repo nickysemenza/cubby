@@ -12,7 +12,7 @@ import {
   fieldValueFixture,
 } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
-import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/domains/entityMutation.gen";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 

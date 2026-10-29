@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import {
   EntityDeclarationError,
@@ -87,17 +88,19 @@ export const renderRelatedViewArtifacts = (
   return [
     {
       relativePath: "packages/schemas/src/generated/related-views.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        `export const relatedViewRegistry = ${JSON.stringify(registry, null, 2)} as const;\n`,
+          `export const relatedViewRegistry = ${JSON.stringify(registry, null, 2)} as const;\n`,
+      ),
     },
     {
       relativePath:
         "packages/schemas/src/generated/related-view-filters.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import { z } from "zod";\nimport { shortcodeSchema } from "../identifier-fields";\nimport { partyFilter } from "../pagination";\n\n' +
-        `export const relatedFilterFieldsByEntity = {${filterEntries.join(",\n")}} as const;\n`,
+          'import { z } from "zod";\nimport { shortcodeSchema } from "../identifier-fields";\nimport { partyFilter } from "../pagination";\n\n' +
+          `export const relatedFilterFieldsByEntity = {${filterEntries.join(",\n")}} as const;\n`,
+      ),
     },
   ];
 };

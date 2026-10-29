@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { createIsomorphicFn, createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/domains/entityMutation.gen";
 import type {
   EntityBrowserMutationInput,
   EntityBrowserMutationResult,

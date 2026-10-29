@@ -11,7 +11,7 @@ import { z } from "zod";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { mock } from "~/lib/test/mock-schema";
 import { getEntityDetailOutputSchema } from "~/server/generated/entity-details.server.gen";
 
@@ -89,7 +89,7 @@ beforeEach(async () => {
   harness = createBrowserTestHarness({
     initialPath: "/?kind=foreign&sort=-date",
   });
-  restore = overrideStartDispatch(async (operation, input) => {
+  restore = overrideOperationDispatch(async (operation, input) => {
     if (operation === "entity.list") {
       reads.push(input);
       const { entity } = inputSchema.parse(input);

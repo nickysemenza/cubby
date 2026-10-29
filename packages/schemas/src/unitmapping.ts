@@ -1,6 +1,6 @@
 import { fdcId } from "@cubby/usda";
 import { z } from "zod";
-import { amount, positiveAmount } from "./codec";
+import { amount, positiveAmount, dateTime } from "./codec";
 import { productShortcode } from "./identifier-fields";
 
 const sourceMetadata = z.discriminatedUnion("type", [
@@ -95,8 +95,8 @@ export const unitMappingOut = z.object({
     .nullable()
     .describe('provenance note (null if unknown), e.g. "manual"'),
   sourceMetadata,
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: dateTime,
+  updatedAt: dateTime,
 });
 
 export type UnitMapping = z.infer<typeof unitMappingWithMetadata>;

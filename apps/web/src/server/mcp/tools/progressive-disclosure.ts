@@ -7,7 +7,7 @@ import type {
   ToolArguments,
   ToolExtra,
 } from "~/server/mcp/tools/tool-registration";
-import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";
+import { publicOperationErrorSchema } from "~/server/operation-runtime/operation.contract";
 
 const describeInputSchema = z.object({ actions: z.array(z.string()).min(1) });
 
@@ -125,7 +125,7 @@ export function withProgressiveDisclosure(
     // Compact tools hide action fields until describe. An input refusal must
     // give the caller that contract rather than forcing schema guesses.
     if (!result.isError || !action || !tool.actions.has(action)) return result;
-    const error = publicStartOperationErrorSchema.safeParse(
+    const error = publicOperationErrorSchema.safeParse(
       result._meta?.["cubby/error"],
     );
     if (

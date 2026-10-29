@@ -25,8 +25,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
-import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 
 import {
   FIELD_SUGGEST_DEBOUNCE_MS,
@@ -55,7 +55,7 @@ beforeEach(() => {
   harness = createBrowserTestHarness();
   calls = [];
   reviewCalls = [];
-  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+  restoreDispatch = overrideOperationDispatch(async (operation, input) => {
     if (operation !== "assessment.review")
       throw new Error(`Unexpected operation: ${operation}`);
     const { assessmentId, intent, application } =

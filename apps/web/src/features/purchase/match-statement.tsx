@@ -17,8 +17,8 @@ import { useMemo, useState } from "react";
 import { z } from "zod";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import { financialTransaction as financeOperations } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
-import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog/purchase.gen";
+import { financialTransaction as financeOperations } from "~/integrations/tanstack-query/generated/domains/financialTransaction.gen";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/domains/purchase.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";

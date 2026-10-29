@@ -26,7 +26,7 @@ import { eq, and } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
-import { startOperationDefinition } from "~/lib/start-operation-observability";
+import { operationDefinition } from "~/lib/operation-observability";
 import { deleteStoredObjects } from "~/server/clients/s3";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
@@ -145,7 +145,7 @@ export const getProductWithFood = async (
   // client, so food and the values derived from it are overlaid here.
   const lookupParam = foodLookupParamFromProduct(product);
   const food = await observeOperationPhase(
-    startOperationDefinition("entity.detail"),
+    operationDefinition("entity.detail"),
     "food",
     () =>
       lookupParam ? usdaClient.findFood(lookupParam) : Promise.resolve(null),

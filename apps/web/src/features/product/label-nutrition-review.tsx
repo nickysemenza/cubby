@@ -11,7 +11,7 @@ import { useMemo, useState } from "react";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
-import { imageProcessing } from "~/integrations/tanstack-query/generated/catalog/imageProcessing.gen";
+import { imageProcessing } from "~/integrations/tanstack-query/generated/domains/imageProcessing.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";

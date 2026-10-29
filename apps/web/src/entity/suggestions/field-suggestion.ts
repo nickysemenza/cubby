@@ -16,7 +16,7 @@ import { z } from "zod";
 import { readReferenceField } from "~/entity/entity-references";
 import { entityMetadata } from "~/entity/metadata";
 import { readPathValue } from "~/entity/read-path";
-import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
+import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 
 import { type SuggestTargets } from "./suggestion-targets";
 

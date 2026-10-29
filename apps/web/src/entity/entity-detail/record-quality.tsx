@@ -15,8 +15,8 @@ import { Link } from "@tanstack/react-router";
 import { createContext, useContext, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
-import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
+import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { cn } from "~/lib/utils";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { WhyValue } from "~/ui/derived/why-value";

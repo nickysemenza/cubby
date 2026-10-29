@@ -37,8 +37,8 @@ import {
 } from "~/features/run/photo-run-detail";
 import { RunLink, useRun } from "~/features/run/run-lineage";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { aiFunding } from "~/integrations/tanstack-query/generated/catalog/aiFunding.gen";
-import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
+import { aiFunding } from "~/integrations/tanstack-query/generated/domains/aiFunding.gen";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { AiCost } from "~/ui/common/ai-cost";
 import { Facts, FactsDensityProvider } from "~/ui/common/facts";

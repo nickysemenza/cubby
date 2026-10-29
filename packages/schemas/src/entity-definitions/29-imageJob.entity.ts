@@ -1,6 +1,7 @@
 import { timestampField, readOnly } from "./field-policy";
 import type { EnumIcon } from "@cubby/shared/enum-palette";
 import { z } from "zod";
+import { dateTime } from "../codec";
 import {
   ACTIVITY_KIND_LABEL,
   imageProcessingJobKind,
@@ -336,7 +337,7 @@ export const { definition, readSchemas } = defineEntityModel({
           description:
             "When the running attempt's lease lapses unless its device renews it (every 15 s). Past it, any device may reclaim the job.",
         },
-        validation: readOnly(z.date().nullable().default(null)),
+        validation: readOnly(dateTime.nullable().default(null)),
       },
       {
         key: "durationMs",
@@ -398,14 +399,14 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "timestamp",
         nullable: true,
         display: { list: false, format: "timestamp" },
-        validation: readOnly(z.date().nullable()),
+        validation: readOnly(dateTime.nullable()),
       },
       {
         key: "completedAt",
         kind: "timestamp",
         nullable: true,
         display: { columnGroup: "Execution", format: "timestamp" },
-        validation: readOnly(z.date().nullable()),
+        validation: readOnly(dateTime.nullable()),
       },
       timestampField("createdAt", { format: "timestamp" }),
       timestampField("updatedAt"),

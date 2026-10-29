@@ -29,6 +29,143 @@ export const compactLiteral = <T>(value: T) =>
     (_, key: string) => `${key}:`,
   );
 
+/** Explicit escape hatch for emitters that still own executable source. */
+export const rawSource = (source: string): string => source;
+
+type ModuleImport = {
+  from: string;
+  names: readonly string[];
+  typeOnly?: boolean;
+};
+type ModuleConst = { name: string; value: unknown; satisfies?: string };
+type ModuleType = { name: string; target: string };
+// A side-effect-free factory applied to imported references: the one call
+// shape data modules allow (operation domains). Arguments are never literals.
+type ModuleBinding = {
+  name: string;
+  factory: string;
+  args: readonly ModuleReference[];
+};
+type ModuleAlias = {
+  from: string;
+  names: readonly string[];
+  typeOnly?: boolean;
+};
+
+class ModuleReference {
+  readonly binding: string;
+  readonly path: readonly string[];
+  constructor(binding: string, path: readonly string[]) {
+    this.binding = binding;
+    this.path = path;
+  }
+}
+/** A data-table leaf can reference an imported value, never call it. */
+export const tsReference = (binding: string, ...path: string[]) => {
+  if (!/^[A-Za-z_$][\w$]*$/u.test(binding))
+    throw new Error(`Invalid binding ${binding}`);
+  return new ModuleReference(binding, path);
+};
+
+function moduleLiteral(value: unknown): string {
+  if (value instanceof ModuleReference)
+    return (
+      value.binding +
+      value.path.map((key) => `[${JSON.stringify(key)}]`).join("")
+    );
+  if (Array.isArray(value)) return `[${value.map(moduleLiteral).join(",")}]`;
+  if (value !== null && typeof value === "object")
+    return `{${Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
+      .map(([key, entry]) => `${JSON.stringify(key)}:${moduleLiteral(entry)}`)
+      .join(",")}}`;
+  const literal = JSON.stringify(value);
+  if (literal === undefined)
+    throw new Error("Module constants must be literal data");
+  return literal;
+}
+
+/** Data-only TypeScript. Executable expressions belong in typed source modules. */
+export function tsModule({
+  imports = [],
+  consts = [],
+  types = [],
+  exports = [],
+  bindings = [],
+}: {
+  imports?: readonly ModuleImport[];
+  consts?: readonly ModuleConst[];
+  bindings?: readonly ModuleBinding[];
+  types?: readonly ModuleType[];
+  exports?: readonly ModuleAlias[];
+}): string {
+  for (const { name, satisfies } of consts) {
+    if (!/^[A-Za-z_$][\w$]*$/u.test(name))
+      throw new Error(`Invalid constant name ${name}`);
+    if (satisfies && !/^[A-Za-z_$][\w$]*(?:<[\s\S]*>)?$/u.test(satisfies))
+      throw new Error("satisfies requires a named type");
+  }
+  const valueImports = new Set(
+    imports.flatMap(({ names, typeOnly }) => (typeOnly ? [] : names)),
+  );
+  for (const { name, factory, args } of bindings) {
+    if (!/^[A-Za-z_$][\w$]*$/u.test(name))
+      throw new Error(`Invalid binding name ${name}`);
+    if (!valueImports.has(factory))
+      throw new Error(`Binding factory ${factory} must be an imported value`);
+    if (!args.every((arg) => arg instanceof ModuleReference))
+      throw new Error("Binding arguments must be imported references");
+  }
+  for (const { target } of types)
+    if (!/^[A-Za-z_$][\w$]*(?:<[\s\S]*>)?$/u.test(target))
+      throw new Error("Type aliases require a named type");
+  const grouped = new Map<
+    string,
+    { from: string; typeOnly: boolean; names: Set<string> }
+  >();
+  for (const entry of imports) {
+    const typeOnly = entry.typeOnly ?? false;
+    const key = `${entry.from}:${typeOnly}`;
+    const group = grouped.get(key) ?? {
+      from: entry.from,
+      typeOnly,
+      names: new Set<string>(),
+    };
+    for (const name of entry.names) group.names.add(name);
+    grouped.set(key, group);
+  }
+  return (
+    generatedHeader +
+    [
+      ...[...grouped.values()]
+        .sort(
+          (a, b) =>
+            a.from.localeCompare(b.from) ||
+            Number(a.typeOnly) - Number(b.typeOnly),
+        )
+        .map(
+          ({ from, typeOnly, names }) =>
+            `import ${typeOnly ? "type " : ""}{ ${[...names].sort().join(", ")} } from ${JSON.stringify(from)};`,
+        ),
+      ...consts.map(
+        ({ name, value, satisfies }) =>
+          `export const ${name} = ${moduleLiteral(value)} as const${satisfies ? ` satisfies ${satisfies}` : ""};`,
+      ),
+      // `@__PURE__` lets the bundler drop an unused binding and its imports.
+      ...bindings.map(
+        ({ name, factory, args }) =>
+          `export const ${name} = /* @__PURE__ */ ${factory}(${args.map(moduleLiteral).join(", ")});`,
+      ),
+      ...types.map(({ name, target }) => `export type ${name} = ${target};`),
+      ...exports.map(
+        ({ from, names, typeOnly }) =>
+          `export ${typeOnly ? "type " : ""}{ ${[...names].sort().join(", ")} } from ${JSON.stringify(from)};`,
+      ),
+    ].join("\n") +
+    "\n"
+  );
+}
+
 // The generator ownership header's first line, shared by every `//`-commented
 // artifact. Matching on this instead of a hand-maintained filename allowlist
 // means a retired artifact name is still caught as extraneous: the stale file

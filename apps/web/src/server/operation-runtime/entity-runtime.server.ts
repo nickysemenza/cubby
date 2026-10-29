@@ -15,6 +15,7 @@ import {
   entityTimelineInputSchema,
   getEntityTimelineOutputSchema,
 } from "~/entity/generated/entity-timelines.gen";
+import { loadEntityDetailSchemas } from "~/entity/model/read-schemas/loaders";
 import { getEntityCounts } from "~/server/domains/dashboard/repo/dashboard";
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import {
@@ -23,7 +24,6 @@ import {
 } from "~/server/entity-kernel/contracts";
 import { listEntityRecords } from "~/server/entity-kernel/repo/entity-records";
 import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
-import { loadEntityDetailSchemas } from "~/server/generated/entity-read-loaders.gen";
 import {
   getDetailActivity,
   getMonthlyExpenseSpend,
@@ -43,7 +43,7 @@ import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
 import { executeSearchDocumentSql } from "~/server/generic/search/repo/search-document";
 import { liveAliasSql } from "~/server/lib/live-row";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { throwIfStartOperationAborted } from "~/server/operation-runtime/start-operation.server";
+import { throwIfOperationAborted } from "~/server/operation-runtime/operation.server";
 
 const searchDocumentCountRowSchema = z.object({
   entityKind: searchableEntitySchema,
@@ -177,7 +177,7 @@ export const entityInspectorHealthHandlers = implementOperationDomain(
             `,
           ),
         ]);
-        throwIfStartOperationAborted(context.signal);
+        throwIfOperationAborted(context.signal);
         return {
           counts,
           search: Object.fromEntries(

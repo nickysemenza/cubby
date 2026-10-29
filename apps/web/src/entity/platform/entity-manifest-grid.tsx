@@ -6,7 +6,7 @@ import { type ReactNode, useMemo } from "react";
 import { EntityIcon } from "~/entity/entities";
 import type { EntityInspectorHealth } from "~/entity/entity-inspector-health";
 import RTable from "~/entity/table/table";
-import { entityInspectorHealth } from "~/integrations/tanstack-query/generated/catalog/entityInspectorHealth.gen";
+import { entityInspectorHealth } from "~/integrations/tanstack-query/generated/domains/entityInspectorHealth.gen";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 import {

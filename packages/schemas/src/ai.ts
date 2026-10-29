@@ -10,6 +10,7 @@ import {
 import { vendorSpendingProfile } from "./spending-classification";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
+import { dateTime } from "./codec";
 import { batchOutSchema } from "./batch";
 import {
   productFieldEnvelopeFields,
@@ -384,7 +385,7 @@ export const aiUsageEntrySchema = z.object({
   durationMs: z.number().int(),
   entityKind: z.string().nullable(),
   entityId: z.string().nullable(),
-  createdAt: z.coerce.date(),
+  createdAt: dateTime,
 });
 
 export const aiUsageFilterOptionsOut = z.object({

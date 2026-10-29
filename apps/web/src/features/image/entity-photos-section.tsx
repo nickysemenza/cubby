@@ -9,7 +9,7 @@ import {
   type EntityMutationVariables,
 } from "~/entity/entity-contracts";
 import { type EntityMutationTransport } from "~/entity/entity-mutation-command";
-import type { imageUpload } from "~/integrations/tanstack-query/generated/catalog/imageUpload.gen";
+import type { imageUpload } from "~/integrations/tanstack-query/generated/domains/imageUpload.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

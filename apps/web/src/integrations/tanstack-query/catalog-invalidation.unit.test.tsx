@@ -8,19 +8,19 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import { EMPTY_INVALIDATION_TAG_SET } from "./cache-tags";
-import { entityMutation } from "./generated/catalog/entityMutation.gen";
-import { inventory } from "./generated/catalog/inventory.gen";
-import { location } from "./generated/catalog/location.gen";
-import { mcp } from "./generated/catalog/mcp.gen";
-import { recipe } from "./generated/catalog/recipe.gen";
-import { run } from "./generated/catalog/run.gen";
+import { entityMutation } from "./generated/domains/entityMutation.gen";
+import { inventory } from "./generated/domains/inventory.gen";
+import { location } from "./generated/domains/location.gen";
+import { mcp } from "./generated/domains/mcp.gen";
+import { recipe } from "./generated/domains/recipe.gen";
+import { run } from "./generated/domains/run.gen";
 import { invalidateOperationTags } from "./operation-cache";
 import { operationInvalidationTags } from "./operation-catalog";
 import type { CubbyOperationMeta } from "./operation-meta";
 import { getContext } from "./root-provider";
 
 /**
- * The generated catalog is the only source of a query's tags and a mutation's
+ * The runtime catalog is the only source of a query's tags and a mutation's
  * fan-out, so this drives the real root `MutationCache` from a rendered
  * `useMutation` over catalog descriptors and asks which cached queries went
  * stale. It pins the three contract-data behaviors a refactor could lose: a

@@ -160,6 +160,11 @@ gh issue view <number> --repo nickysemenza/cubby \
 Use `gh project item-list 2 --owner nickysemenza --limit 500 --format json` with Project number `2` to read its fields. Project metadata belongs to the Project and
 is not guaranteed to appear in an issue-only API response.
 
+Create an issue only for work that will not start now. Work that begins
+immediately in the current session needs no issue; its PR body carries the
+outcome. Record any deferred remainder in an issue (or an existing one) when the
+PR lands.
+
 Before creating work, search open issues for the same outcome. Use a concise
 title, outcome/context links, constraints, acceptance criteria, blockers or
 waiting trigger, and the validation needed. Read live code before copying an

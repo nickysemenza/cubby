@@ -85,7 +85,7 @@ export const repositoryOwners = [
   "src/server/generic/jobs/repo/work-claims.ts",
   "src/server/domains/image-processing/repo/device-admission.ts",
   "src/server/errors/db-errors.ts",
-  "src/server/operation-runtime/start-operation.contract.ts",
+  "src/server/operation-runtime/operation.contract.ts",
 
   "src/server/generic/entity-links/repo/entity-external-ids.ts",
   "src/server/domains/product/repo/gtin.ts",

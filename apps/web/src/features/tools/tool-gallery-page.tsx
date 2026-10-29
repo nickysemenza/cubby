@@ -33,7 +33,7 @@ import {
   groupedFlowSectionId,
   shelfGridClass,
 } from "~/entity/table/shelf";
-import { project } from "~/integrations/tanstack-query/generated/catalog/project.gen";
+import { project } from "~/integrations/tanstack-query/generated/domains/project.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";

@@ -28,11 +28,8 @@
       "~/features/ai/server-functions/ai-smoke": [
         "./artifacts/server-contracts/features/ai/server-functions/ai-smoke"
       ],
-      "~/server/operation-runtime/start-operation-dispatch.boundary": [
-        "./artifacts/server-contracts/server/operation-runtime/start-operation-dispatch.boundary"
-      ],
-      "~/server/operation-runtime/workflow-stream-dispatch.boundary": [
-        "./artifacts/server-contracts/server/operation-runtime/workflow-stream-dispatch.boundary"
+      "~/server/operation-runtime/browser-operation-dispatch": [
+        "./artifacts/server-contracts/server/operation-runtime/browser-operation-dispatch"
       ],
       "~/server/operation-runtime/middleware/native-workspace": [
         "./artifacts/server-contracts/server/operation-runtime/middleware/native-workspace"

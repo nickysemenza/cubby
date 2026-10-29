@@ -16,10 +16,10 @@ import type {
 } from "~/contracts/run-detail.contract";
 import { runDetailContract } from "~/contracts/run-detail.contract";
 import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
-import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { runDetail } from "~/integrations/tanstack-query/generated/domains/runDetail.gen";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
+import type { OperationWireValue } from "~/server/operation-runtime/operation.contract";
 
 import { RunDecisions, RunDiagnostics, RunStepsDetail } from "./run-detail";
 import { RunEvaluations } from "./run-evaluations";
@@ -222,7 +222,7 @@ const logs: JobLogsOut = {
   dashboardUrl: "https://dash.cloudflare.com/",
 };
 
-const answers = new Map<string, UnparsedStartOperationData>([
+const answers = new Map<string, OperationWireValue>([
   [
     "runDetail.evaluations",
     {
@@ -259,7 +259,7 @@ let restore: (() => void) | undefined;
 beforeEach(async () => {
   await page.viewport(1440, 1200);
   harness = createBrowserTestHarness();
-  restore = overrideStartDispatch(async (operation) => {
+  restore = overrideOperationDispatch(async (operation) => {
     const data = answers.get(operation);
     if (data === undefined) throw new Error(`${operation} is not stubbed`);
     return { ok: true, data };

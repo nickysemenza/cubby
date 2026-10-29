@@ -631,27 +631,32 @@ cause from a status alone or switch credential types to work around it.
 ## Operation transport
 
 Browser, Apple, CLI and API-key clients call operations through
-`POST /api/operations/{operationId}`. The browser (superjson codec) reaches
-every query and mutation; other clients reach only capability and view
+`POST /api/operations/{operationId}`. The browser reaches every query,
+mutation and workflow stream; other clients reach only capability and view
 operations, and MCP only capability operations. Use `view` for operations
 Apple or the CLI call that should stay off MCP; `internal` operations are the
 web UI's own and are absent from the generated Swift and CLI catalog. The
 request envelope is `{operation, input?}`; a success
 is `{ok: true, data}`, including `data: null` for a nullable output. Errors
 return the public `ApiError` body with an HTTP status derived from its code.
-Plain JSON is the default codec. The browser opts into superjson with
-`x-cubby-value-codec: superjson`; the server replies in the declared codec.
-The browser transport settles refusals as results, so superjson refusals are
-`{ok: false, error}` with HTTP 200, except 403 (cross-origin cookie write), 405
-and 426, which carry the same body under their status. Query batches use `batch~` operation paths and stream one result per item as
-NDJSON with HTTP 200.
+Every client speaks plain JSON; the browser transport turns a non-2xx bare error
+into `{ok: false, error}`. Query batches use `batch~` operation paths and stream
+one `{i, r}` result per item as NDJSON with HTTP 200. A workflow stream answers
+its own operation path with NDJSON result envelopes and ends with a data-less
+success envelope carrying the final read marker, or a failure envelope.
+`dispatchOperation` in
+`apps/web/src/server/operation-runtime/operation-dispatch.server.ts` is the one
+entry for the HTTP route, SSR (which calls the route in process) and MCP. It
+resolves the id under the principal's channel: browser principals reach
+internal operations and streams, MCP and system principals internal queries and
+mutations, native and CLI principals only external ones.
 
 `authenticate(request, policy)` in
 `apps/web/src/server/http/authenticate.ts` is the single authentication step.
 The operation route accepts API keys, bearer tokens and session cookies. A
 cookie request with a `Cookie` header must be same-origin for POST; bearer and
-API-key requests are exempt. A superjson request (the browser) authenticates
-under the browser policy, so it audits as `web` and accepts no API key; other
+API-key requests are exempt. A request with `x-cubby-surface: browser`
+authenticates under the browser policy, so it audits as `web` and accepts no API key; other
 requests audit as `api`. The runner owns input/output validation and the
 Apple compatibility gate. An outdated `cubby-apple` build can read, but its
 writes receive HTTP 426 with `UPGRADE_REQUIRED` before operation input parsing;

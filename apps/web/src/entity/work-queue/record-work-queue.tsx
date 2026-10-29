@@ -5,7 +5,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
-import { workQueue } from "~/integrations/tanstack-query/generated/catalog/workQueue.gen";
+import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";

@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import type {
-  ContractMember,
-  LoadedContract,
-} from "../start-operations/collect.ts";
+import type { ContractMember, LoadedContract } from "../operations/collect.ts";
 import { collectNativeContract } from "./native-contract.ts";
 
 const contract = (

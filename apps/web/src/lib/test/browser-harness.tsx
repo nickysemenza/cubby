@@ -20,7 +20,7 @@ import {
 import { vi } from "vitest";
 import type { z } from "zod";
 
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 
 type BrowserTestSearch = Record<
   string,
@@ -70,7 +70,7 @@ export function createBrowserTestHarness(options?: BrowserTestHarnessOptions) {
   const restoreEnvironment = prepareEnvironment();
   // No server runs under jsdom: an operation without an injected transport
   // rejects now, inside the test, rather than seconds later after teardown.
-  const restoreStartDispatch = overrideStartDispatch((operation) =>
+  const restoreStartDispatch = overrideOperationDispatch((operation) =>
     Promise.reject(
       new Error(
         `${operation} reached the Start transport in a browser test; inject one with withTransport.`,

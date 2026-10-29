@@ -14,7 +14,7 @@ import {
   AiProvenance,
 } from "~/entity/suggestions/ai-proposal-card";
 import { QueuePassPosition } from "~/features/work-queue/queue-pass-progress";
-import { usdaFood } from "~/integrations/tanstack-query/generated/catalog/usdaFood.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/domains/usdaFood.gen";
 import type { EnrichmentProposal } from "~/server/ai/enrichment/proposals";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

@@ -1,5 +1,6 @@
 import { timestampField } from "./field-policy";
 import { z } from "zod";
+import { dateTime } from "../codec";
 import { devicePlatform } from "../device-fields.js";
 import {
   deviceShortcode,
@@ -188,9 +189,9 @@ export const { definition, readSchemas } = defineEntityModel({
         nullable: true,
         display: { columnGroup: "Background work", format: "timestamp" },
         validation: {
-          read: z.date().nullable(),
+          read: dateTime.nullable(),
           create: null,
-          update: z.coerce.date().nullable().optional(),
+          update: dateTime.nullable().optional(),
         },
       },
       {

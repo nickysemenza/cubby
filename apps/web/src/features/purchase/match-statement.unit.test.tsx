@@ -9,7 +9,7 @@ import { Profiler } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
@@ -73,7 +73,7 @@ const review = {
 describe("MatchStatementDialog", () => {
   it("starts from the server's proposal and saves only the allocations the server validated", async () => {
     const updates = vi.fn();
-    restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    restoreDispatch = overrideOperationDispatch(async (operation, input) => {
       if (operation === "purchase.settlementCandidates")
         return { ok: true, data: review };
       if (operation === "purchase.checkSettlementAllocation") {
@@ -163,7 +163,7 @@ describe("MatchStatementDialog", () => {
   it("keeps the selected graph and draft after a stale allocation refusal without retrying", async () => {
     const saves = vi.fn();
     const close = vi.fn();
-    restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    restoreDispatch = overrideOperationDispatch(async (operation, input) => {
       if (operation === "purchase.settlementCandidates")
         return {
           ok: true,
@@ -229,7 +229,7 @@ describe("MatchStatementDialog", () => {
   // Regression: the dialog is mounted (closed) on every Purchase detail; a debounce input that
   // is a fresh array each render re-rendered it every 250 ms forever.
   it("does not re-render while idle", async () => {
-    restoreDispatch = overrideStartDispatch(async () => {
+    restoreDispatch = overrideOperationDispatch(async () => {
       throw new Error("a closed dialog must not read anything");
     });
     const commits = vi.fn();

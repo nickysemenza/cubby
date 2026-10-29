@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 
-import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { RecordImageChain } from "./image-chain";

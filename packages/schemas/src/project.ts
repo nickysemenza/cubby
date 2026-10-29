@@ -37,6 +37,7 @@ import { withFieldEnvelopes } from "./field-envelope";
 import { dateRangeSchema, storedDateRangeSchema } from "./date-range";
 import { countLabel } from "@cubby/shared/pluralize";
 import { z } from "zod";
+import { dateTime } from "./codec";
 import { projectDateSourceSchema } from "./project-output-fields";
 export {
   projectDateSourceSchema,
@@ -1080,7 +1081,7 @@ const toolProjectFields = withFieldEnvelopes(
 export const projectResourceOut = projectResourceIdentity.extend({
   category: reusableResourceCategory,
   coverImageUrl: z.url().nullable(),
-  attachedAt: z.date(),
+  attachedAt: dateTime,
   projectPurchaseCost: positiveMoneyNullable,
   sharedWindow: projectSharedWindowOut.nullable(),
   ...projectResourceEconomicsFields,
@@ -1147,7 +1148,7 @@ export const productProjectUsesOut = projectResourceIdentity.extend({
       fields: toolProjectFields.pick({ kind: true }),
       projectPurchaseCost: positiveMoneyNullable,
       sharedWindow: projectSharedWindowOut.nullable(),
-      attachedAt: z.date(),
+      attachedAt: dateTime,
     }),
   ),
 });

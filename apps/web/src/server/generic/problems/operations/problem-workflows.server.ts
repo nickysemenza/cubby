@@ -11,7 +11,7 @@ import {
   reparseStaleIngredientParsesBatch,
 } from "~/server/generic/problems/service/problems.service";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
+import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import {
   bindCoordinatorStream,
   defineCoordinatorStream,
@@ -25,7 +25,7 @@ import {
  * operations below.
  */
 export type ProblemsWorkflowContext = Pick<
-  AuthenticatedStartOperationContext,
+  AuthenticatedOperationContext,
   "db" | "upcLookupClient" | "usdaClient" | "actorContext" | "services"
 >;
 

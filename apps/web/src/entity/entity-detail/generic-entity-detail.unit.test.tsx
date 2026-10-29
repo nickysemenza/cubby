@@ -16,13 +16,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
-import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
-import { entityMedia } from "~/integrations/tanstack-query/generated/catalog/entityMedia.gen";
-import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog/entityTimeline.gen";
-import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
+import { entityList } from "~/integrations/tanstack-query/generated/domains/entityList.gen";
+import { entityMedia } from "~/integrations/tanstack-query/generated/domains/entityMedia.gen";
+import { entityTimeline } from "~/integrations/tanstack-query/generated/domains/entityTimeline.gen";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { mock } from "~/lib/test/mock-schema";
+import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
 import { getEntityDetailOutputSchema } from "~/server/generated/entity-details.server.gen";
-import { inventoryListItem } from "~/server/generated/entity-lists.server.gen";
+const inventoryListItem = getEntityListItemSchema("inventory");
+
 import { buildQualityBreakdown } from "~/server/generic/data-quality/repo/hydrate";
 
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";

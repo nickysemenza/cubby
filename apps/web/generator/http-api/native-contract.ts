@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { LoadedContract } from "../start-operations/collect.ts";
+import type { LoadedContract } from "../operations/collect.ts";
 import {
   discriminatorOf,
   toWire,

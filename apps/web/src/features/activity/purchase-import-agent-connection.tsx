@@ -3,7 +3,7 @@ import { getErrorMessage } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { run } from "~/integrations/tanstack-query/generated/catalog/run.gen";
+import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { formatTimestamp } from "~/lib/date-format";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

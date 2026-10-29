@@ -9,8 +9,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-import { derived } from "~/integrations/tanstack-query/generated/catalog/derived.gen";
-import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
+import { derived } from "~/integrations/tanstack-query/generated/domains/derived.gen";
+import { job } from "~/integrations/tanstack-query/generated/domains/job.gen";
 import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";

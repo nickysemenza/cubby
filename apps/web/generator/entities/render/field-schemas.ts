@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { entityContractName } from "../contracts.ts";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared/filter";
 import { generatedHeader } from "../../artifacts.ts";
@@ -325,48 +326,50 @@ export const renderFieldSchemaArtifacts = (
     return [
       {
         relativePath: `packages/schemas/src/generated/entity-contracts.${entity.key}.gen.ts`,
-        source:
+        source: rawSource(
           generatedHeader +
-          `import definition from ${JSON.stringify(declaration.path)};\n` +
-          (writes.length
-            ? 'import { z } from "zod";\n'
-            : 'import type { z } from "zod";\n') +
-          `import { ${prefix}FilterFields${writes.length ? `, ${prefix}FieldSchemas` : ""} } from "./entity-field-schemas.${entity.key}.gen";\n` +
-          (entity.filterAudit
-            ? 'import { auditDateFilterFields } from "../base-entity";\n'
-            : "") +
-          'import { relatedFilterFieldsByEntity } from "./related-view-filters.gen";\n' +
-          writes.join("\n") +
-          "\n" +
-          [
-            ["RawOut", "output"],
-            ["RawListItemOut", "list"],
-            ["RawDetailOut", "detail"],
-          ]
-            .map(
-              ([suffix, surface]) =>
-                `export const ${name}${suffix} = definition.readSchemas.${surface};\n` +
-                `export type ${name[0]?.toUpperCase()}${name.slice(1)}${suffix} = z.output<typeof ${name}${suffix}>;`,
-            )
-            .join("\n") +
-          `\nexport const ${name}FilterFields = {${entity.filterAudit ? "...auditDateFilterFields," : ""}...relatedFilterFieldsByEntity[${JSON.stringify(entity.key)}],...${prefix}FilterFields};\n`,
+            `import definition from ${JSON.stringify(declaration.path)};\n` +
+            (writes.length
+              ? 'import { z } from "zod";\n'
+              : 'import type { z } from "zod";\n') +
+            `import { ${prefix}FilterFields${writes.length ? `, ${prefix}FieldSchemas` : ""} } from "./entity-field-schemas.${entity.key}.gen";\n` +
+            (entity.filterAudit
+              ? 'import { auditDateFilterFields } from "../base-entity";\n'
+              : "") +
+            'import { relatedFilterFieldsByEntity } from "./related-view-filters.gen";\n' +
+            writes.join("\n") +
+            "\n" +
+            [
+              ["RawOut", "output"],
+              ["RawListItemOut", "list"],
+              ["RawDetailOut", "detail"],
+            ]
+              .map(
+                ([suffix, surface]) =>
+                  `export const ${name}${suffix} = definition.readSchemas.${surface};\n` +
+                  `export type ${name[0]?.toUpperCase()}${name.slice(1)}${suffix} = z.output<typeof ${name}${suffix}>;`,
+              )
+              .join("\n") +
+            `\nexport const ${name}FilterFields = {${entity.filterAudit ? "...auditDateFilterFields," : ""}...relatedFilterFieldsByEntity[${JSON.stringify(entity.key)}],...${prefix}FilterFields};\n`,
+        ),
       },
       {
         relativePath: `packages/schemas/src/generated/entity-field-schemas.${entity.key}.gen.ts`,
-        source:
+        source: rawSource(
           generatedHeader +
-          `import definition from ${JSON.stringify(declaration.path)};\n` +
-          'import { fieldSchemasOf } from "../entity-definitions/definition";\n' +
-          filterFields.imports +
-          (declaration.enumExports.length
-            ? `export {${declaration.enumExports.join(",")}} from ${JSON.stringify(declaration.path)};\n`
-            : "") +
-          // Keyed by roster, not field index: `fieldSchemasOf` reads each
-          // schema by key at load time, so inserting a field mid-declaration
-          // cannot shift another field's schema. The rosters were validated
-          // complete above; the runtime lookup throws on a missing schema.
-          `export const ${prefix}FieldSchemas = fieldSchemasOf(definition);\n` +
-          `export const ${prefix}FilterFields = {${filterFields.entries.join(",")}} as const;\n`,
+            `import definition from ${JSON.stringify(declaration.path)};\n` +
+            'import { fieldSchemasOf } from "../entity-definitions/definition";\n' +
+            filterFields.imports +
+            (declaration.enumExports.length
+              ? `export {${declaration.enumExports.join(",")}} from ${JSON.stringify(declaration.path)};\n`
+              : "") +
+            // Keyed by roster, not field index: `fieldSchemasOf` reads each
+            // schema by key at load time, so inserting a field mid-declaration
+            // cannot shift another field's schema. The rosters were validated
+            // complete above; the runtime lookup throws on a missing schema.
+            `export const ${prefix}FieldSchemas = fieldSchemasOf(definition);\n` +
+            `export const ${prefix}FilterFields = {${filterFields.entries.join(",")}} as const;\n`,
+        ),
       },
     ];
   });

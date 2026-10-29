@@ -10,7 +10,7 @@ import {
   entityReadFixture,
   fieldValueFixture,
 } from "~/entity/fields/field-envelope.fixtures";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 
 import { EntityMergeDialog } from "./entity-merge-dialog";
 

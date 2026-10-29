@@ -4,6 +4,7 @@ import {
   assessmentProducer,
   type AssessmentProducer,
 } from "@cubby/schemas/assessment";
+import { dateTime } from "@cubby/schemas/codec";
 import {
   parseEntityId,
   productId,
@@ -69,8 +70,8 @@ const pairRow = z.object({
   state: z.enum(["open", "dismissed"]),
   evidence: z.string().nullable(),
   sourceUrls: z.array(z.string()),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: dateTime,
+  updatedAt: dateTime,
   fingerprint: z.string().nullable(),
   actionable: z.boolean(),
   conflict: z.boolean(),

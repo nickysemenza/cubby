@@ -14,7 +14,7 @@ import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { ensureEntityMetadata } from "~/entity/metadata";
 import RTable from "~/entity/table/table";
-import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
+import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { Facts } from "~/ui/common/facts";

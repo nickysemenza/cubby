@@ -5,7 +5,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AttachExistingImageDialog } from "~/features/image/attach-existing-image-dialog";
-import { search } from "~/integrations/tanstack-query/generated/catalog/search.gen";
+import { search } from "~/integrations/tanstack-query/generated/domains/search.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { ImageEditDialog } from "./image-edit-dialog";

@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { compactLiteral, generatedHeader } from "../../artifacts.ts";
 import { EntityDeclarationError } from "../declarations.ts";
 import type {
@@ -189,78 +190,81 @@ export const renderRelationArtifacts = (
       // Client-safe: the `entity.relation` operation contract imports it.
       relativePath:
         "apps/web/src/entity/generated/entity-relation-lists.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import { entityRelationPageInputSchema as relationPageInput } from "@cubby/schemas/common";\n' +
-        'import { anyShortcodeSchema, shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
-        `${relationRowSchemaImports}\n` +
-        'import { z } from "zod";\n\n' +
-        `export const generatedEntityRelationListCommandSchema = ${relationListCommandSchema};\n\n` +
-        `export const generatedEntityRelationListResultSchema = ${relationListResultSchema};\n\n` +
-        `export const generatedEntityRelationListInputSchema = ${relationListInputSchema};\n\n` +
-        `export const generatedEntityRelationListOutputSchema = ${relationListOutputSchema};\n\n` +
-        "export type GeneratedEntityRelationListCommand = z.infer<typeof generatedEntityRelationListCommandSchema>;\n",
+          'import { entityRelationPageInputSchema as relationPageInput } from "@cubby/schemas/common";\n' +
+          'import { anyShortcodeSchema, shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
+          `${relationRowSchemaImports}\n` +
+          'import { z } from "zod";\n\n' +
+          `export const generatedEntityRelationListCommandSchema = ${relationListCommandSchema};\n\n` +
+          `export const generatedEntityRelationListResultSchema = ${relationListResultSchema};\n\n` +
+          `export const generatedEntityRelationListInputSchema = ${relationListInputSchema};\n\n` +
+          `export const generatedEntityRelationListOutputSchema = ${relationListOutputSchema};\n\n` +
+          "export type GeneratedEntityRelationListCommand = z.infer<typeof generatedEntityRelationListCommandSchema>;\n",
+      ),
     },
     {
       relativePath:
         "apps/web/src/server/generated/entity-relation-contracts.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import { relationMutationOut } from "@cubby/schemas/common";\n' +
-        'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
-        'import { shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
-        `${relationSchemaImports}\n` +
-        'import { z } from "zod";\n\n' +
-        "// Generated relation command schemas stay correlated by entity and relation.\n" +
-        `const generatedEntityRelationCommandSchema = ${relationCommandSchema(null)};\n` +
-        `export const generatedBrowserEntityRelationCommandSchema = ${relationCommandSchema("browser")};\n` +
-        `export const generatedMcpEntityRelationCommandSchema = ${relationCommandSchema("mcp")};\n\n` +
-        `export const generatedMcpEntityRelationPreviewInputSchema = ${mcpPreviewInputSchema};\n\n` +
-        `export const generatedEntityRelationMutationResultSchema = ${relationResultSchema};\n\n` +
-        "export type GeneratedEntityRelationCommand = z.infer<typeof generatedEntityRelationCommandSchema>;\n\n" +
-        "/** Resolve generated relation metadata without a parallel hand-written roster. */\n" +
-        "export function generatedEntityRelationTarget(command: GeneratedEntityRelationCommand): ShortcodeEntity {\n" +
-        "  switch (`${command.entity}:${command.relation}`) {\n" +
-        `${relationTargetCases}\n` +
-        "  }\n" +
-        "  throw new Error(`Unsupported relation ${command.entity}:${command.relation}`);\n" +
-        "}\n\n" +
-        "export const generatedEntityRelationItemIds = (command: GeneratedEntityRelationCommand): string[] => command.items.map((item) => item.id);\n",
+          'import { relationMutationOut } from "@cubby/schemas/common";\n' +
+          'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
+          'import { shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
+          `${relationSchemaImports}\n` +
+          'import { z } from "zod";\n\n' +
+          "// Generated relation command schemas stay correlated by entity and relation.\n" +
+          `const generatedEntityRelationCommandSchema = ${relationCommandSchema(null)};\n` +
+          `export const generatedBrowserEntityRelationCommandSchema = ${relationCommandSchema("browser")};\n` +
+          `export const generatedMcpEntityRelationCommandSchema = ${relationCommandSchema("mcp")};\n\n` +
+          `export const generatedMcpEntityRelationPreviewInputSchema = ${mcpPreviewInputSchema};\n\n` +
+          `export const generatedEntityRelationMutationResultSchema = ${relationResultSchema};\n\n` +
+          "export type GeneratedEntityRelationCommand = z.infer<typeof generatedEntityRelationCommandSchema>;\n\n" +
+          "/** Resolve generated relation metadata without a parallel hand-written roster. */\n" +
+          "export function generatedEntityRelationTarget(command: GeneratedEntityRelationCommand): ShortcodeEntity {\n" +
+          "  switch (`${command.entity}:${command.relation}`) {\n" +
+          `${relationTargetCases}\n` +
+          "  }\n" +
+          "  throw new Error(`Unsupported relation ${command.entity}:${command.relation}`);\n" +
+          "}\n\n" +
+          "export const generatedEntityRelationItemIds = (command: GeneratedEntityRelationCommand): string[] => command.items.map((item) => item.id);\n",
+      ),
     },
     {
       relativePath:
         "apps/web/src/server/generated/entity-relation-bindings.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import type { EntityKernelContext } from "~/server/entity-kernel/adapter";\n' +
-        'import type { Database } from "~/server/db";\n' +
-        'import type { GeneratedEntityRelationListCommand, generatedEntityRelationListResultSchema } from "~/entity/generated/entity-relation-lists.gen";\n' +
-        'import type { GeneratedEntityRelationCommand } from "~/server/generated/entity-relation-contracts.gen";\n' +
-        'import type { RelationPlan } from "~/server/entity-kernel/repo/relation-preflight";\n' +
-        'import type { z } from "zod";\n' +
-        'import { generatedEntityRelationMutationResultSchema } from "~/server/generated/entity-relation-contracts.gen";\n\n' +
-        `${relationAdapterImports}\n\n` +
-        "/** Dispatch is generated from each literal relationship mutation declaration. */\n" +
-        "export async function executeGeneratedRelationMutation(ctx: EntityKernelContext, command: GeneratedEntityRelationCommand): Promise<z.infer<typeof generatedEntityRelationMutationResultSchema>> {\n" +
-        "  switch (`${command.entity}:${command.relation}`) {\n" +
-        `${relationRuntimeCases}\n` +
-        "  }\n" +
-        "  throw new Error(`Unsupported relation mutation ${command.entity}:${command.relation}`);\n" +
-        "}\n\n" +
-        "/** Advisory planning uses the same generated relation-to-adapter dispatch. */\n" +
-        "export async function previewGeneratedRelationMutation(db: Database, command: GeneratedEntityRelationCommand, ownerId: string, targetIds: readonly string[]): Promise<RelationPlan> {\n" +
-        "  switch (`${command.entity}:${command.relation}`) {\n" +
-        `${relationPreviewCases}\n` +
-        "  }\n" +
-        "  throw new Error(`Unsupported relation preview ${command.entity}:${command.relation}`);\n" +
-        "}\n\n" +
-        "/** Relation reads dispatch through the same generated adapter roster. */\n" +
-        "export async function listGeneratedRelation(ctx: EntityKernelContext, command: GeneratedEntityRelationListCommand): Promise<z.input<typeof generatedEntityRelationListResultSchema>> {\n" +
-        "  switch (`${command.entity}:${command.relation}`) {\n" +
-        `${relationListCases}\n` +
-        "  }\n" +
-        "  throw new Error(`Unsupported relation list ${command.entity}:${command.relation}`);\n" +
-        "}\n",
+          'import type { EntityKernelContext } from "~/server/entity-kernel/adapter";\n' +
+          'import type { Database } from "~/server/db";\n' +
+          'import type { GeneratedEntityRelationListCommand, generatedEntityRelationListResultSchema } from "~/entity/generated/entity-relation-lists.gen";\n' +
+          'import type { GeneratedEntityRelationCommand } from "~/server/generated/entity-relation-contracts.gen";\n' +
+          'import type { RelationPlan } from "~/server/entity-kernel/repo/relation-preflight";\n' +
+          'import type { z } from "zod";\n' +
+          'import { generatedEntityRelationMutationResultSchema } from "~/server/generated/entity-relation-contracts.gen";\n\n' +
+          `${relationAdapterImports}\n\n` +
+          "/** Dispatch is generated from each literal relationship mutation declaration. */\n" +
+          "export async function executeGeneratedRelationMutation(ctx: EntityKernelContext, command: GeneratedEntityRelationCommand): Promise<z.infer<typeof generatedEntityRelationMutationResultSchema>> {\n" +
+          "  switch (`${command.entity}:${command.relation}`) {\n" +
+          `${relationRuntimeCases}\n` +
+          "  }\n" +
+          "  throw new Error(`Unsupported relation mutation ${command.entity}:${command.relation}`);\n" +
+          "}\n\n" +
+          "/** Advisory planning uses the same generated relation-to-adapter dispatch. */\n" +
+          "export async function previewGeneratedRelationMutation(db: Database, command: GeneratedEntityRelationCommand, ownerId: string, targetIds: readonly string[]): Promise<RelationPlan> {\n" +
+          "  switch (`${command.entity}:${command.relation}`) {\n" +
+          `${relationPreviewCases}\n` +
+          "  }\n" +
+          "  throw new Error(`Unsupported relation preview ${command.entity}:${command.relation}`);\n" +
+          "}\n\n" +
+          "/** Relation reads dispatch through the same generated adapter roster. */\n" +
+          "export async function listGeneratedRelation(ctx: EntityKernelContext, command: GeneratedEntityRelationListCommand): Promise<z.input<typeof generatedEntityRelationListResultSchema>> {\n" +
+          "  switch (`${command.entity}:${command.relation}`) {\n" +
+          `${relationListCases}\n` +
+          "  }\n" +
+          "  throw new Error(`Unsupported relation list ${command.entity}:${command.relation}`);\n" +
+          "}\n",
+      ),
     },
   ];
 };

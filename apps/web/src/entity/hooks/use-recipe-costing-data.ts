@@ -7,8 +7,8 @@ import { chunk, keyBy } from "es-toolkit";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import { ingredient } from "~/integrations/tanstack-query/generated/catalog/ingredient.gen";
-import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
+import { ingredient } from "~/integrations/tanstack-query/generated/domains/ingredient.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
 import type { RecipeCostingIngredient } from "~/lib/recipe-costing";
 import {
   collectIngredientIds,

@@ -3,7 +3,7 @@ import { allEntities } from "@cubby/schemas/entity-roster";
 /**
  * Cache policy vocabulary that contract members may name. Contracts carry
  * cache policy as DATA only (tag lists, a profile name, ripple keys); the
- * browser catalog generator resolves it to descriptors. No React, no query
+ * browser catalog runtime resolves it to descriptors. No React, no query
  * client, no functions of the input.
  */
 

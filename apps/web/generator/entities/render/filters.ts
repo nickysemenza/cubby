@@ -1,3 +1,4 @@
+import { rawSource } from "../../artifacts.ts";
 import { compactLiteral, generatedHeader } from "../../artifacts.ts";
 import {
   type CompiledEntity,
@@ -169,24 +170,25 @@ export const renderFilterArtifacts = (
   return [
     {
       relativePath: "apps/web/src/entity/generated/entity-filter-codecs.gen.ts",
-      source:
+      source: rawSource(
         generatedHeader +
-        'import type { Entity } from "@cubby/schemas/entity";\n' +
-        'import { parseShortcodeFor } from "@cubby/schemas/identifiers";\n' +
-        (usesPresets
-          ? 'import { presetExpand } from "~/entity/filter-presets";\n'
-          : "") +
-        `${coreRefs.imports}\n` +
-        'import type { FilterSpecCore } from "../filters";\n\n' +
-        "// Server-safe codecs exclude picker presentation and option renderers.\n// oxfmt-ignore\n" +
-        `export const generatedEntityFilterCodecs = {\n${filterEntities
-          .map(
-            ({ key, filterDescriptors }) =>
-              `${JSON.stringify(key)}:[${filterDescriptors.map((descriptor) => runtimeDescriptor(descriptor)).join(",")}],`,
-          )
-          .join(
-            "\n",
-          )}\n} satisfies Record<Entity, readonly FilterSpecCore[]>;\n`,
+          'import type { Entity } from "@cubby/schemas/entity";\n' +
+          'import { parseShortcodeFor } from "@cubby/schemas/identifiers";\n' +
+          (usesPresets
+            ? 'import { presetExpand } from "~/entity/filter-presets";\n'
+            : "") +
+          `${coreRefs.imports}\n` +
+          'import type { FilterSpecCore } from "../filters";\n\n' +
+          "// Server-safe codecs exclude picker presentation and option renderers.\n// oxfmt-ignore\n" +
+          `export const generatedEntityFilterCodecs = {\n${filterEntities
+            .map(
+              ({ key, filterDescriptors }) =>
+                `${JSON.stringify(key)}:[${filterDescriptors.map((descriptor) => runtimeDescriptor(descriptor)).join(",")}],`,
+            )
+            .join(
+              "\n",
+            )}\n} satisfies Record<Entity, readonly FilterSpecCore[]>;\n`,
+      ),
     },
   ];
 };

@@ -11,7 +11,7 @@ import {
   type WorkActionProps,
 } from "~/entity/work-queue/work-actions";
 import { ProblemItemsAction } from "~/features/work-queue/problem-items-action";
-import { vendor } from "~/integrations/tanstack-query/generated/catalog/vendor.gen";
+import { vendor } from "~/integrations/tanstack-query/generated/domains/vendor.gen";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

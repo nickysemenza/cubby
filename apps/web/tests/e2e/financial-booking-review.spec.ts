@@ -94,11 +94,11 @@ test("reviews spending in the browser with stale and replay guards", async ({
   await page
     .getByRole("button", { name: "Record Expense", exact: true })
     .click();
+  const rejected = await rejectedResponse;
+  expect(rejected.status()).toBe(400);
   expect(
-    z
-      .object({ json: z.object({ ok: z.boolean() }) })
-      .parse(await (await rejectedResponse).json()).json.ok,
-  ).toBe(false);
+    z.object({ reason: z.string() }).parse(await rejected.json()).reason,
+  ).toBe("CONSTRAINT_VIOLATION");
   const unbooked = await entityApi(page.request).get(
     "financialTransaction",
     transactionId,
@@ -114,10 +114,8 @@ test("reviews spending in the browser with stale and replay guards", async ({
     .getByRole("button", { name: "Review Expense", exact: true })
     .click();
   const review = z
-    .object({
-      json: z.object({ ok: z.literal(true), data: financialBookingPreview }),
-    })
-    .parse(await (await previewResponse).json()).json.data;
+    .object({ ok: z.literal(true), data: financialBookingPreview })
+    .parse(await (await previewResponse).json()).data;
   expect(review.amount).toBe(125);
   expect(review.trade).toBe("flooring");
   expect(review.costType).toBe("services");
@@ -128,10 +126,8 @@ test("reviews spending in the browser with stale and replay guards", async ({
   const committed = await committedResponse;
   expect(committed.ok(), await committed.text()).toBeTruthy();
   const result = z
-    .object({
-      json: z.object({ ok: z.literal(true), data: financialBookingResult }),
-    })
-    .parse(await committed.json()).json.data;
+    .object({ ok: z.literal(true), data: financialBookingResult })
+    .parse(await committed.json()).data;
   await expect(
     page.getByText("Not expected", { exact: true }).first(),
   ).toBeVisible();

@@ -13,7 +13,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { useEntityMetadata } from "~/entity/metadata";
 import { renderOptionCell } from "~/entity/table/column-helpers";
-import { task } from "~/integrations/tanstack-query/generated/catalog/task.gen";
+import { task } from "~/integrations/tanstack-query/generated/domains/task.gen";
 import { DateDisplay } from "~/ui/common/date-display";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";

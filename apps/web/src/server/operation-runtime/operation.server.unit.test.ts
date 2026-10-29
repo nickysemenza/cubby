@@ -12,18 +12,18 @@ import type { AppSpan } from "~/server/observability/tracing";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
-  createStartOperationRunner,
-  normalizeStartOperationError,
-  type StartOperationRuntime,
-} from "./start-operation.server";
+  createOperationExecutor,
+  normalizeOperationError,
+  type OperationExecutorRuntime,
+} from "./operation.server";
 
 const database = createDatabase(() => {
-  throw new Error("The Start operation unit test must not resolve a database");
+  throw new Error("The operation unit test must not resolve a database");
 });
 const context = {
   ...requireActor(
     createTestRequestContext(database, {
-      auth: { userId: testUserId("start-operation-user") },
+      auth: { userId: testUserId("operation-user") },
     }),
   ),
   readConsistency: {
@@ -41,11 +41,12 @@ const span: AppSpan = {
   setError: () => undefined,
   recordException: () => undefined,
 };
-const markCalendarDirty = vi.fn<StartOperationRuntime["markCalendarDirty"]>();
+const markCalendarDirty =
+  vi.fn<OperationExecutorRuntime["markCalendarDirty"]>();
 const recordDatabaseWrite = vi.fn(async () => undefined);
 const observedOperations: string[] = [];
 const inspections: ObservedResult[] = [];
-const runtime: StartOperationRuntime = {
+const runtime: OperationExecutorRuntime = {
   markCalendarDirty,
   recordDatabaseWrite,
   observe: async (definition, observation, run) => {
@@ -56,7 +57,7 @@ const runtime: StartOperationRuntime = {
     return result;
   },
 };
-const runStartOperation = createStartOperationRunner(runtime);
+const executeOperation = createOperationExecutor(runtime);
 
 const browserPrincipal = (overrides: Partial<Principal> = {}): Principal => ({
   ...systemPrincipal(context),
@@ -74,7 +75,7 @@ const request = (
   signal,
 });
 
-describe("runStartOperation", () => {
+describe("executeOperation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     observedOperations.length = 0;
@@ -82,7 +83,7 @@ describe("runStartOperation", () => {
   });
 
   it("runs on the principal's context and fails closed without freshness", async () => {
-    const result = await runStartOperation({
+    const result = await executeOperation({
       operation: "dashboard.counts",
       type: "query",
       input: undefined,
@@ -108,7 +109,7 @@ describe("runStartOperation", () => {
 
   it("resolves server policy for HTTP list reads", async () => {
     const run = vi.fn(async () => true as const);
-    await runStartOperation({
+    await executeOperation({
       operation: "entity.list",
       type: "query",
       input: {},
@@ -133,11 +134,8 @@ describe("runStartOperation", () => {
 
   it("propagates a request id only through the structured failure", () => {
     expect(
-      normalizeStartOperationError(
-        new Error("broken"),
-        "run",
-        "ray-operation-test",
-      ).publicError,
+      normalizeOperationError(new Error("broken"), "run", "ray-operation-test")
+        .publicError,
     ).toMatchObject({
       code: "INTERNAL_SERVER_ERROR",
       requestId: "ray-operation-test",
@@ -150,7 +148,7 @@ describe("runStartOperation", () => {
     }));
 
     await expect(
-      runStartOperation({
+      executeOperation({
         operation: "entity.detail",
         type: "query",
         input: { count: "3" },
@@ -173,7 +171,7 @@ describe("runStartOperation", () => {
   it("hides the cached adapter from an explicitly strong query", async () => {
     const run = vi.fn(async () => ({ ok: true }));
 
-    await runStartOperation({
+    await executeOperation({
       operation: "entity.detail",
       type: "query",
       input: {},
@@ -194,7 +192,7 @@ describe("runStartOperation", () => {
   it("makes the whole mutation workflow authoritative", async () => {
     const run = vi.fn(async () => ({ ok: true }));
 
-    await runStartOperation({
+    await executeOperation({
       operation: "entity.mutate",
       type: "mutation",
       input: {},
@@ -218,7 +216,7 @@ describe("runStartOperation", () => {
 
   it("records freshness when a mutation handler fails after partial work", async () => {
     await expect(
-      runStartOperation({
+      executeOperation({
         operation: "entity.mutate",
         type: "mutation",
         input: {},
@@ -237,7 +235,7 @@ describe("runStartOperation", () => {
 
   it("records freshness when mutation output validation fails", async () => {
     await expect(
-      runStartOperation({
+      executeOperation({
         operation: "entity.mutate",
         type: "mutation",
         input: {},
@@ -256,7 +254,7 @@ describe("runStartOperation", () => {
   });
 
   it("does not mark a catch-up claim as a household data write", async () => {
-    await runStartOperation({
+    await executeOperation({
       operation: "maintenance.requestCatchUp",
       type: "mutation",
       input: undefined,
@@ -272,7 +270,7 @@ describe("runStartOperation", () => {
 
   it("does not record freshness for a pure read", async () => {
     await expect(
-      runStartOperation({
+      executeOperation({
         operation: "entity.detail",
         type: "query",
         input: {},
@@ -289,7 +287,7 @@ describe("runStartOperation", () => {
   it("keeps a default query strong when request context carries the fresh marker decision", async () => {
     const run = vi.fn(async () => ({ ok: true }));
 
-    await runStartOperation({
+    await executeOperation({
       operation: "entity.detail",
       type: "query",
       input: {},
@@ -327,7 +325,7 @@ describe("runStartOperation", () => {
       }),
     };
 
-    await runStartOperation({
+    await executeOperation({
       operation: "entity.detail",
       type: "query",
       input: { entity: "product" },
@@ -342,7 +340,7 @@ describe("runStartOperation", () => {
 
   it("returns normalized validation issues without running the operation", async () => {
     const run = vi.fn();
-    const result = await runStartOperation({
+    const result = await executeOperation({
       operation: "entity.detail",
       type: "query",
       input: { count: "nope" },
@@ -381,7 +379,7 @@ describe("runStartOperation", () => {
     });
 
     await expect(
-      runStartOperation({
+      executeOperation({
         operation: "entity.detail",
         type: "query",
         input: null,
@@ -397,7 +395,7 @@ describe("runStartOperation", () => {
     expect(outputSchema).not.toHaveBeenCalled();
 
     await expect(
-      runStartOperation({
+      executeOperation({
         operation: "entity.detail",
         type: "query",
         input: { kind: "count" },
@@ -411,7 +409,7 @@ describe("runStartOperation", () => {
   });
 
   it("normalizes application and database errors", async () => {
-    const appResult = await runStartOperation({
+    const appResult = await executeOperation({
       operation: "entity.mutate",
       type: "mutation",
       input: {},
@@ -439,7 +437,7 @@ describe("runStartOperation", () => {
       },
     });
 
-    const databaseResult = await runStartOperation({
+    const databaseResult = await executeOperation({
       operation: "entity.mutate",
       type: "mutation",
       input: {},
@@ -475,7 +473,7 @@ describe("runStartOperation", () => {
       code: "ECONNRESET",
     });
     codedInfrastructureError.stack = `${" at fixture\n".repeat(300)}password=synthetic-secret`;
-    const unknown = await runStartOperation({
+    const unknown = await executeOperation({
       operation: "entity.detail",
       type: "query",
       input: {},
@@ -499,7 +497,7 @@ describe("runStartOperation", () => {
       },
     });
 
-    const invalidOutput = await runStartOperation({
+    const invalidOutput = await executeOperation({
       operation: "entity.detail",
       type: "query",
       input: {},
@@ -551,7 +549,7 @@ describe("runStartOperation", () => {
     const run = vi.fn(async () => ({ ok: true }));
 
     await expect(
-      runStartOperation({
+      executeOperation({
         operation: "entity.detail",
         type: "query",
         input: {},
@@ -562,7 +560,7 @@ describe("runStartOperation", () => {
       }),
     ).resolves.toEqual({ ok: true, data: { ok: true } });
     await expect(
-      runStartOperation({
+      executeOperation({
         operation: "entity.mutate",
         type: "mutation",
         input: {},
@@ -588,7 +586,7 @@ describe("runStartOperation", () => {
     const before = new AbortController();
     before.abort(new DOMException("cancelled", "AbortError"));
     await expect(
-      runStartOperation({
+      executeOperation({
         operation: "entity.detail",
         type: "query",
         input: {},
@@ -601,7 +599,7 @@ describe("runStartOperation", () => {
 
     const after = new AbortController();
     await expect(
-      runStartOperation({
+      executeOperation({
         operation: "entity.detail",
         type: "query",
         input: {},

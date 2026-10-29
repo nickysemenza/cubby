@@ -1,3 +1,4 @@
+import { dateTime } from "@cubby/schemas/codec";
 import { storedFieldDecision } from "@cubby/schemas/derived-value";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
@@ -195,11 +196,11 @@ const valueRow = z.object({
   key: z.string(),
   value: z.unknown(),
   decidedBy: z.unknown(),
-  computedAt: z.coerce.date().nullable(),
+  computedAt: dateTime.nullable(),
   stale: z.boolean(),
   pending: z.boolean(),
   error: z.string().nullable(),
-  retryAt: z.coerce.date().nullable(),
+  retryAt: dateTime.nullable(),
 });
 
 /** Page readers start this with their ids beside hydration, never once per row. */

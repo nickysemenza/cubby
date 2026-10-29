@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateTime } from "./codec";
 import { auditChannelSchema } from "./context";
 import { entitySchema } from "./entity";
 import { type ShortcodeEntity } from "./entity-manifest";
@@ -164,7 +165,7 @@ export const auditLogEntryOut = z.object({
     .object({ id: deviceShortcode, name: z.string().nullable() })
     .nullable(),
   runId: runShortcode.nullable(),
-  createdAt: z.date(),
+  createdAt: dateTime,
   user: auditLogUserOut,
 });
 

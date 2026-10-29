@@ -10,7 +10,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
-import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
+import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import { FieldRecordValue } from "~/ui/derived/record-value";

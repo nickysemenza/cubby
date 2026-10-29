@@ -1,15 +1,14 @@
 import { batchResultSchema } from "@cubby/schemas/batch";
 import { createPaginatedResponseSchema } from "@cubby/schemas/pagination";
-import superjson from "superjson";
 import { z } from "zod";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
-import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
-import { superJsonResultSchema } from "~/lib/superjson-wire";
+import { operationDefinitionFor } from "~/lib/operation-observability";
 import {
-  unparsedStartOperationDataSchema,
-  unparsedStartOperationResultSchema,
-} from "~/server/operation-runtime/start-operation.contract";
+  publicOperationErrorSchema,
+  operationWireValueSchema,
+  operationResultSchema,
+} from "~/server/operation-runtime/operation.contract";
 
 import { percentile, readDatabaseTiming } from "./read-performance-metrics";
 import { requestedReadMetadata } from "./read-performance-shape";
@@ -19,10 +18,10 @@ const querySchema = z
     operation: z
       .string()
       .refine(
-        (name) => startOperationDefinitionFor(name)?.kind === "query",
+        (name) => operationDefinitionFor(name)?.kind === "query",
         "Only registered queries can be measured",
       ),
-    input: unparsedStartOperationDataSchema,
+    input: operationWireValueSchema,
   })
   .strict();
 export const readOperationInputSchema = z.union([
@@ -31,9 +30,8 @@ export const readOperationInputSchema = z.union([
 ]);
 const lineSchema = z.object({
   i: z.number().int().nonnegative(),
-  r: superJsonResultSchema,
+  r: batchResultSchema(operationResultSchema),
 });
-const settlementSchema = batchResultSchema(unparsedStartOperationResultSchema);
 const listPageSchema = createPaginatedResponseSchema(z.unknown());
 
 function listPageEvidence(operation: string, data: unknown) {
@@ -89,9 +87,7 @@ export async function measureOperationRead(
 
   const decodeEnvelope = (text: string) => {
     try {
-      return unparsedStartOperationResultSchema.parse(
-        superjson.deserialize(superJsonResultSchema.parse(JSON.parse(text))),
-      );
+      return operationResultSchema.parse(JSON.parse(text));
     } catch {
       throw new InvalidOperationResponse();
     }
@@ -99,7 +95,7 @@ export async function measureOperationRead(
 
   const record = (
     index: number,
-    result: z.output<typeof unparsedStartOperationResultSchema> | null,
+    result: z.output<typeof operationResultSchema> | null,
   ) => {
     const item = items[index];
     if (!item || seen.has(index)) throw new InvalidOperationResponse();
@@ -120,8 +116,7 @@ export async function measureOperationRead(
     try {
       if (batch) {
         const { i, r } = lineSchema.parse(JSON.parse(text));
-        const result = settlementSchema.parse(superjson.deserialize(r));
-        record(i, result.ok ? result.value : null);
+        record(i, r.ok ? r.value : null);
       } else {
         record(0, decodeEnvelope(text));
       }
@@ -133,7 +128,7 @@ export async function measureOperationRead(
   try {
     const requestHeaders = new Headers(headers);
     requestHeaders.set("content-type", "application/json");
-    requestHeaders.set("x-cubby-value-codec", "superjson");
+    requestHeaders.set("x-cubby-surface", "browser");
     response = await fetch(
       new URL(
         browserOperationPath(
@@ -144,7 +139,7 @@ export async function measureOperationRead(
       {
         method: "POST",
         headers: requestHeaders,
-        body: JSON.stringify(superjson.serialize(request)),
+        body: JSON.stringify(request),
         redirect: "error",
         signal: AbortSignal.timeout(120_000),
       },
@@ -152,21 +147,29 @@ export async function measureOperationRead(
     firstResponseMs = performance.now() - started;
     responseBodyBytes = 0;
     if (!response.ok) {
-      failure = "http";
-      responseBodyBytes = (await response.arrayBuffer()).byteLength;
+      const body = await response.arrayBuffer();
+      responseBodyBytes = body.byteLength;
       bodyComplete = true;
+      // A dispatch refusal is the bare error under its status.
+      let refusal: z.output<typeof publicOperationErrorSchema> | undefined;
+      try {
+        refusal = publicOperationErrorSchema.safeParse(
+          JSON.parse(new TextDecoder().decode(body)),
+        ).data;
+      } catch {
+        // SILENT: a non-JSON body is an HTTP failure, classified below.
+      }
+      if (refusal) {
+        failure = "dispatch";
+        dispatchErrorCode = refusal.code;
+        dispatchRequestId = refusal.requestId ?? null;
+        if (!batch) record(0, { ok: false, error: refusal });
+      } else failure = "http";
     } else if (
       batch &&
       !response.headers.get("content-type")?.includes("application/x-ndjson")
     ) {
-      const body = await response.arrayBuffer();
-      responseBodyBytes = body.byteLength;
-      bodyComplete = true;
-      const rejection = decodeEnvelope(new TextDecoder().decode(body));
-      if (rejection.ok) throw new InvalidOperationResponse();
-      failure = "dispatch";
-      dispatchErrorCode = rejection.error.code;
-      dispatchRequestId = rejection.error.requestId ?? null;
+      throw new InvalidOperationResponse();
     } else {
       if (!response.body) throw new InvalidOperationResponse();
       const reader = response.body.getReader();

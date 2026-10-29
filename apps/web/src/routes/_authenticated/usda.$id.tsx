@@ -4,7 +4,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { DetailPagePending } from "~/entity/navigation/route-pending";
 import { Page } from "~/entity/page/page";
 import { USDAFoodDetail } from "~/features/usda-food/usda-food-detail";
-import { usdaFood } from "~/integrations/tanstack-query/generated/catalog/usdaFood.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/domains/usdaFood.gen";
 import { pageTitle } from "~/lib/page-title";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";

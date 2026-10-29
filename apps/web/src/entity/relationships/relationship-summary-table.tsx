@@ -18,7 +18,7 @@ import { z } from "zod";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { VendorMark } from "~/entity/components/vendor-cell";
 import { ImageThumbnail } from "~/entity/table/image-thumbnail";
-import { relatedData } from "~/integrations/tanstack-query/generated/catalog/relatedData.gen";
+import { relatedData } from "~/integrations/tanstack-query/generated/domains/relatedData.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { ROW_DENSITY } from "~/ui/data-table/density";
 import { Stack } from "~/ui/layout";

@@ -7,7 +7,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
-import { search } from "~/integrations/tanstack-query/generated/catalog/search.gen";
+import { search } from "~/integrations/tanstack-query/generated/domains/search.gen";
 
 import type {
   ComboboxItem,

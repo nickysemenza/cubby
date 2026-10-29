@@ -46,8 +46,8 @@ import {
   AmountFieldGroup,
   DEFAULT_AMOUNT_UNIT,
 } from "~/features/inventory/amount-field-group";
-import { inventory } from "~/integrations/tanstack-query/generated/catalog/inventory.gen";
-import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog/product.gen";
+import { inventory } from "~/integrations/tanstack-query/generated/domains/inventory.gen";
+import { product as productOperations } from "~/integrations/tanstack-query/generated/domains/product.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

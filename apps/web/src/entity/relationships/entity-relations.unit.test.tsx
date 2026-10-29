@@ -14,7 +14,7 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { installFeatures } from "~/features/registry";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityRelations, type EntityRelationsState } from "./entity-relations";

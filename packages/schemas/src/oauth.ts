@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateTime } from "./codec";
 
 export const revokeConnectedAppInput = z.object({ consentId: z.string() });
 
@@ -8,7 +9,7 @@ export const connectedAppOut = z.object({
   name: z.string().nullable(),
   uri: z.string().nullable(),
   scopes: z.array(z.string()),
-  grantedAt: z.date().nullable(),
+  grantedAt: dateTime.nullable(),
   /** Live (unrevoked, unexpired) refresh tokens — i.e. can it still get in. */
   activeTokens: z.number(),
   /**
@@ -17,7 +18,7 @@ export const connectedAppOut = z.object({
    * activity. Without it, several connect attempts from the same client are
    * indistinguishable and there's no way to tell which one is still live.
    */
-  lastActiveAt: z.date().nullable(),
+  lastActiveAt: dateTime.nullable(),
 });
 export type ConnectedApp = z.infer<typeof connectedAppOut>;
 
