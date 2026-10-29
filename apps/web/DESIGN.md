@@ -88,6 +88,7 @@ status views, column controls and row inspector as Vendor coverage, with compact
 default columns. Vendor coverage separates Domains from Sender addresses.
 Address controls expose the saved Vendor, learned/member origin, disputed/shared
 state and original Email/Purchase evidence; member exclusions survive learning.
+Address buttons stay within their table cell; the scalar accessor and inspector retain the complete value for copying.
 The inspector exposes complete, selectable sender addresses,
 queries, counts and Run links. Discovery retains its Details disclosure.
 

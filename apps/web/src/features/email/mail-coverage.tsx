@@ -1374,19 +1374,23 @@ function CoverageTable({
             header: "Sender addresses",
             size: 280,
             cell: ({ row }) => (
-              <span data-cell-value>
+              <span
+                data-cell-value
+                className="flex min-w-0 flex-col items-start"
+              >
                 {row.original.senderAddresses.map((address) => (
                   <Button
                     key={address}
                     variant="ghost"
                     size="sm"
+                    className="max-w-full min-w-0 justify-start"
                     onClick={(event) => {
                       event.stopPropagation();
                       setSelectedKey(row.original.key);
                       setSelectedAddress(address);
                     }}
                   >
-                    {address}
+                    <span className="truncate">{address}</span>
                   </Button>
                 ))}
               </span>
