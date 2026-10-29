@@ -163,6 +163,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   repositories import them. Stored-quality evaluators live in
   `generic/data-quality/repo/checks/<entity>.ts`; generation wires them into
   `data-quality-entries.gen.ts`. Neither keeps a hand-written roster.
+  Semantic artifact validation belongs to `findSimilarEntitiesPage` in
+  `generic/embedding/repo/entity-embedding-search.ts`; similarity and identity
+  consumers share its bounded seed/hit hydration and current-artifact checks.
 - Background execution: `server/generic/jobs/` owns durable scheduling, retries
   and claims; `server/workflows/jobs.ts` composes production handlers. Runs retain
   domain progress and history. Derived refresh records broad family Job intent

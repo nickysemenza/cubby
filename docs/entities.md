@@ -1557,7 +1557,12 @@ batch. Retained-claim reads return each accepted receipt once with its current
 live bindings in the same SQL statement, validate the complete receipt, and
 preserve binding order when deriving claims. Connection pages use the same
 Product identity page preparation as catalog evaluations, sharing whole-catalog
-claims and semantic-document validation across their Product sources. Each
+claims across their Product sources. Semantic relatedness and identity reuse
+one page resolver that validates only selected seeds and returned physical hits,
+with canonical text hydration bounded to 100 artifacts at a time. Its compact
+page-local artifact cache retains current metadata, never corpus text. Every
+seed's physical vector and each admitted hit's current text hash remain
+validated; completeness is checked after live validation. Each
 source still rechecks its prepared pair snapshots before inference, and current
 locked evidence remains authoritative at publication. Publication preparation loads dependency row versions for the whole batch
 and retains a separate hash for each pair; each write transaction checks that

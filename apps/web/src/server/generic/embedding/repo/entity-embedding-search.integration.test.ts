@@ -1,3 +1,4 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -26,6 +27,7 @@ import { settleEmbeddingProjectionJobs } from "./embedding-drain.fixtures";
 import {
   findSemanticEntityCandidates,
   findSimilarEntities,
+  findSimilarEntitiesPage,
   getEntityEmbeddingReadiness,
 } from "./entity-embedding-search";
 
@@ -162,16 +164,32 @@ describe("validated semantic candidates", () => {
     await settleEmbeddingProjectionJobs(ctx.db);
     const seed = seeded[0];
     if (!seed) throw new Error("Synthetic seed missing");
-    const result = await findSimilarEntities(
+    const scans = await findSimilarEntitiesPage(
       ctx.db,
       productionVectorStore,
-      seed,
+      seeded.slice(0, 2),
       { targetType: "product", limit: 2, config },
     );
+    const first = scans.get(entityRefKey(seed.entityKind, seed.entityId));
+    if (first?.status !== "fulfilled")
+      throw new Error("Synthetic seed scan failed");
+    const result = first.value;
     expect(result.complete).toBe(true);
     expect(result.candidates.map((row) => row.entityId)).toEqual(
       seeded.slice(1, 3).map((row) => row.entityId),
     );
+    const secondSeed = seeded[1];
+    if (!secondSeed) throw new Error("Synthetic sibling seed missing");
+    const second = scans.get(
+      entityRefKey(secondSeed.entityKind, secondSeed.entityId),
+    );
+    if (second?.status !== "fulfilled")
+      throw new Error("Synthetic sibling scan failed");
+    expect(second.value.complete).toBe(true);
+    expect(second.value.candidates.map((row) => row.entityId)).toEqual([
+      seeded[0]?.entityId,
+      seeded[2]?.entityId,
+    ]);
   });
 
   it("drops a stale vector whose entity no longer hydrates instead of surfacing a ghost hit", async () => {
