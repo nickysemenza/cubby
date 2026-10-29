@@ -1,0 +1,19 @@
+apps/apple/CubbyKit/Tests/CubbyKitTests/Fixtures/product-get.json
+  s_f9b38eae28f662::t_9ad30b25ed79ef 665-844
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a11d1c5e0503778e440e4c85677cc4dca48a711a",
+  "prompts": {},
+  "sessions": {
+    "s_f9b38eae28f662": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15d31a0c-0fdb-4745-b359-8664bbd5360e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
