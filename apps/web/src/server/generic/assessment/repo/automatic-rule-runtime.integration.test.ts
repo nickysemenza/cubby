@@ -249,6 +249,7 @@ const exhausted = () =>
       windowStart: "2026-05-10T00:00:00.000Z",
       windowEnd: "2026-05-10T06:00:00.000Z",
       credit: { limitUsd: 1, spentUsd: 0 },
+      openaiCredit: { limitUsd: 1.5, spentUsd: 0 },
       plan: { limitUsd: 1, spentUsd: 0 },
       paid: { limitUsd: 1, spentUsd: 1 },
     },

@@ -124,7 +124,7 @@ Start streams   →  cancellable workflow streams
   Sonnet 5 first, Haiku 4.5 for the second opinion, then Luna. Anthropic calls
   require the gateway's `subscriber-credit` BYOK alias without wholesale
   fallback; non-2xx responses reach the crate's existing retry/model ladder.
-  Luna tries ChatGPT subscription funding before paid gateway funding. The
+  Luna tries OpenAI API credits, then ChatGPT subscription funding, then paid gateway funding. The
   forwarder folds completed or incomplete Responses SSE into the response JSON
   expected by the extractor, preserving truncation output and usage. Only explicit subscription quota
   or unavailable codes permit a paid rerun; other errors and cancellation stop
@@ -155,7 +155,9 @@ Start streams   →  cancellable workflow streams
   Existing response caching, paid admission, usage accounting, Gateway
   observability and Run checkpoints remain shared. Install the Gateway BYOK
   key before activating this revision. No TypeSafe key is needed in the Worker.
-- OpenAI Responses calls use the household's ChatGPT plan when connected in
+- Tier-routed OpenAI Responses calls try the household's OpenAI API credits
+  before its ChatGPT plan. Fixed-model calls retain their declared funding.
+  The plan is connected in
   Settings, retaining the declared Luna/Sol choices. `CHATGPT_PLAN` owns OAuth
   credentials and serializes rotating refreshes. Other providers and embeddings
   use AI Gateway through the shared production egress Durable Object. It

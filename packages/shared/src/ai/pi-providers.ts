@@ -314,14 +314,14 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
 
 /**
  * The household's one funding order for frontier chat (ADR 0017): the Claude
- * subscriber credit first, then the ChatGPT plan, then paid only where the
+ * subscriber credit first, then OpenAI credits, then the ChatGPT plan, then paid only where the
  * caller allows it. Each step advances only on a funding refusal.
  */
 export function fundedChatAttempts(policy: {
   paid: boolean;
   /**
    * A model that answers first, on its own vendor's plan funding (the
-   * Claude credit or the ChatGPT plan), before the household order.
+   * Claude or OpenAI API credit), before the household order.
    */
   lead?: SupportedChatModel;
 }): readonly {
@@ -330,6 +330,7 @@ export function fundedChatAttempts(policy: {
 }[] {
   const household = [
     { model: "claude-opus-5-5", funding: "subscriber_credit" },
+    { model: "gpt-6-sol", funding: "openai_credit" },
     { model: "gpt-6-sol", funding: "subscription" },
     ...(policy.paid
       ? [{ model: "gpt-6-sol" as const, funding: "paid" as const }]
@@ -341,7 +342,7 @@ export function fundedChatAttempts(policy: {
     funding:
       getChatModelConfig(policy.lead).gatewayProvider === "anthropic"
         ? ("subscriber_credit" as const)
-        : ("subscription" as const),
+        : ("openai_credit" as const),
   };
   return [
     lead,
@@ -401,7 +402,11 @@ export function fundedCubbyPiProviders(
                   await response.clone().text(),
                   attempt.funding,
                 );
-              if (response.ok && attempt.funding === "subscriber_credit")
+              if (
+                response.ok &&
+                (attempt.funding === "subscriber_credit" ||
+                  attempt.funding === "openai_credit")
+              )
                 unbilled?.();
               return response;
             };
@@ -435,7 +440,10 @@ export function fundedCubbyPiProviders(
               result.errorMessage ?? "",
               attempt.funding,
             );
-          if (attempt.funding === "subscriber_credit")
+          if (
+            attempt.funding === "subscriber_credit" ||
+            attempt.funding === "openai_credit"
+          )
             creditMessages.add(result);
           if (
             failed &&

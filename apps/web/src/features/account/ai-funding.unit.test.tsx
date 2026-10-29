@@ -23,6 +23,7 @@ const budget = (overrides: Partial<AiFundingStatus> = {}): AiFundingStatus => ({
   windowStart: "2026-10-01T00:00:00.000Z",
   windowEnd: "2026-10-01T06:00:00.000Z",
   credit: { limitUsd: 5, spentUsd: 2.5, ...AVAILABLE },
+  openaiCredit: { limitUsd: 1.5, spentUsd: 0.25, ...AVAILABLE },
   paid: { limitUsd: 1, spentUsd: 0.4 },
   plan: { limitUsd: 2, spentUsd: 0.75, ...AVAILABLE },
   ...overrides,
@@ -116,13 +117,16 @@ describe("AI funding controls", () => {
     ).toHaveAttribute("href", "https://chatgpt.com/settings/usage");
   });
 
-  it("saves all three edited window budgets inline", () => {
+  it("saves all four edited window budgets inline", () => {
     const onSave = vi.fn();
     render(
       <FundingBudgetEditor budget={budget()} pending={false} onSave={onSave} />,
     );
     fireEvent.change(screen.getByLabelText("Claude credit budget per window"), {
       target: { value: "7.5" },
+    });
+    fireEvent.change(screen.getByLabelText("OpenAI credit budget per window"), {
+      target: { value: "2.5" },
     });
     fireEvent.change(screen.getByLabelText("ChatGPT plan budget per window"), {
       target: { value: "4" },
@@ -133,6 +137,7 @@ describe("AI funding controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save budgets" }));
     expect(onSave).toHaveBeenCalledWith({
       creditLimitUsd: 7.5,
+      openaiCreditLimitUsd: 2.5,
       planLimitUsd: 4,
       paidLimitUsd: 3,
     });

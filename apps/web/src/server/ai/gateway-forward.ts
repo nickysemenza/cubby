@@ -17,7 +17,7 @@ import { createParser } from "eventsource-parser";
 import { z } from "zod";
 
 import { type UnparsedError } from "~/lib/error-utils";
-import { withAiBudget } from "~/server/ai/budget";
+import { withAiBudget, withFreeBudget } from "~/server/ai/budget";
 import { gatewayFetch, type GatewayTransport } from "~/server/ai/gateway";
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
@@ -246,7 +246,11 @@ async function foldResponsesStream(response: Response): Promise<Response> {
   if (failure !== undefined) {
     const body = JSON.stringify({ error: failure });
     return new Response(body, {
-      status: subscriptionCapacityRefusal(body) ? 429 : 502,
+      status:
+        subscriptionCapacityRefusal(body) ||
+        isInferenceFundingRefusal(429, body, "openai_credit")
+          ? 429
+          : 502,
       headers,
     });
   }
@@ -270,11 +274,16 @@ export async function forwardGatewayRequest(
     provider === "anthropic"
       ? "subscriber_credit"
       : provider === "openai"
-        ? "subscription"
+        ? "openai_credit"
         : "paid";
-  const response = await forwardGatewayAttempt(request, opts, port, funding);
+  let response = await forwardGatewayAttempt(request, opts, port, funding);
+  if (funding === "openai_credit") {
+    if (!isInferenceFundingRefusal(response.status, response.body, funding))
+      return response;
+    response = await forwardGatewayAttempt(request, opts, port, "subscription");
+  }
   if (
-    funding === "subscription" &&
+    funding === "openai_credit" &&
     [400, 429].includes(response.status) &&
     subscriptionCapacityRefusal(response.body)
   ) {
@@ -326,7 +335,10 @@ async function forwardGatewayAttempt(
     port.transport(provider, {
       metadata: { feature: opts.feature, operation },
       funding,
-      // Only a paid frontier transmission is budgeted; subscription is not.
+      // Paid calls and background free calls use their own funding budgets.
+      beforeFreeRequest: model
+        ? withFreeBudget(opts.db, { model, runId: opts.runId }, undefined)
+        : undefined,
       beforePaidRequest: model
         ? withAiBudget(opts.db, { model, runId: opts.runId }, undefined)
         : undefined,
@@ -367,7 +379,7 @@ async function forwardGatewayAttempt(
         durationMs,
         {
           ...gatewayResponseInfo(response),
-          ...(funding === "subscriber_credit"
+          ...(funding === "subscriber_credit" || funding === "openai_credit"
             ? {
                 costEvidence: {
                   standard: null,

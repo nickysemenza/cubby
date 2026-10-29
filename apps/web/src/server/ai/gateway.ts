@@ -255,7 +255,10 @@ export function gatewayFetch(
           id: aiGatewayId(controls.metadata.environment),
           ...controls,
         });
-      if (opts.funding === "subscriber_credit")
+      if (
+        opts.funding === "subscriber_credit" ||
+        opts.funding === "openai_credit"
+      )
         return runNativeGateway({
           accountId: CF_ACCOUNT_ID,
           gatewayId: aiGatewayId(controls.metadata.environment),

@@ -23,6 +23,7 @@ describe("AI budget admission", () => {
     });
     await setCreditBudget(ctx.db, {
       creditLimitUsd: 3,
+      openaiCreditLimitUsd: 1.5,
       planLimitUsd: 4,
       paidLimitUsd: 5,
     });
@@ -93,7 +94,8 @@ describe("AI budget admission", () => {
         },
       ]);
     expect(await readAiBudget(ctx.db, now)).toMatchObject({
-      credit: { limitUsd: 3, spentUsd: 0.25 },
+      credit: { limitUsd: 3, spentUsd: 0 },
+      openaiCredit: { limitUsd: 1.5, spentUsd: 0.25 },
       plan: { limitUsd: 4, spentUsd: 0.5 },
       paid: { limitUsd: 5, spentUsd: 0.6 },
     });

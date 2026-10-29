@@ -261,7 +261,7 @@ export const aiFundingContract = defineContract(
   {
     status: query({
       description:
-        "The current six-hour window's funding: credit (Claude subscriber credit spent at standard API cost of limitUsd, default $5, with state available or refused: a recorded Anthropic refusal such as a Console spend limit, skipped until `until` with one probe per window, and its raw `reason`), paid (charged cost of $1) and plan (ChatGPT plan available, paused until a quota reset, disconnected or needing reauthorization, with the raw reason). Frontier calls use credit, then the plan, then paid only where allowed; background work waits instead of paying. Change it with ai_funding.",
+        "The current six-hour window's funding: credit (Claude subscriber credit spent at standard API cost of limitUsd, default $1.50, with state available or refused: a recorded Anthropic refusal such as a Console spend limit, skipped until `until` with one probe per window, and its raw `reason`), openaiCredit (OpenAI API credit, separate standard-cost budget and refusal state), paid (charged cost of $1) and plan (ChatGPT plan available, paused until a quota reset, disconnected or needing reauthorization, with the raw reason). Frontier calls use Claude credit, OpenAI credit, then the plan, then paid only where allowed; background work uses each source within its window budget, then waits. Change it with ai_funding.",
       input: zod.strictObject({}),
       output: aiFundingStatus,
       // Spend and refusals move with model calls; Run writes refresh it.
@@ -269,14 +269,14 @@ export const aiFundingContract = defineContract(
     }),
     setCreditBudget: mutation({
       description:
-        "Set household AI budgets per six-hour window: creditLimitUsd (Claude standard API cost), planLimitUsd (ChatGPT standard API cost, default $2), and paidLimitUsd (charged cost, default $1). Background work moves from credit to plan, then paid within these limits. Also clears a recorded Claude credit refusal, and work paused for free capacity retries now. Returns ai_funding_read.status.",
+        "Set household AI budgets per six-hour window: creditLimitUsd (Claude standard API cost), openaiCreditLimitUsd (OpenAI API credit standard cost, default $1.50), planLimitUsd (ChatGPT standard API cost, default $2), and paidLimitUsd (charged cost, default $1). Background work moves from Claude credit to OpenAI credit to plan, then paid within these limits. Also clears recorded API credit refusals, and work paused for free capacity retries now. Returns ai_funding_read.status.",
       input: aiBudgetSettings,
       output: aiFundingStatus,
       invalidates: ["runOnly"],
     }),
     resetCreditRefusal: mutation({
       description:
-        'Clear a recorded Claude credit refusal ("Retry Claude credit now") so the next frontier call tries Claude credit again, e.g. after raising the Console spend limit; work paused for free capacity retries now. A still-refusing Console records the refusal again on that call. Returns ai_funding_read.status.',
+        "Clear recorded Claude and OpenAI API credit refusals so the next frontier call tries those credits again, e.g. after restoring provider capacity; work paused for free capacity retries now. A still-refusing provider records the refusal again on that call. Returns ai_funding_read.status.",
       input: zod.strictObject({}),
       output: aiFundingStatus,
       invalidates: ["runOnly"],

@@ -579,7 +579,7 @@ the gateway before relying on a feature that selects it.
 
 ### Claude subscriber credits
 
-Every tier-routed chat call uses subscriber credits first (Opus), then the
+Every tier-routed chat call uses subscriber credits first (Opus), then OpenAI API credits (Sol), then the
 ChatGPT subscription transport (Sol), then paid Unified Billing (Sol);
 `fundedChatAttempts` owns the ladder. The implementation
 and model declarations own the model choices; [ADR 0017](adr/0017-subscription-funded-model-fallback.md#background-work-spends-within-window-budgets)
@@ -589,6 +589,9 @@ Background work (a Run whose lineage root was scheduled, discovered or
 backfilled) draws each free rung only within its window budget: the Claude
 credit's (default $1.50) and the ChatGPT plan's ($2, `PLAN_BUDGET_LIMIT_USD`),
 both at standard cost, because the household shares both with its own use.
+OpenAI API credits have a separate $1.50 six-hour default budget, editable as
+`openaiCreditLimitUsd`; usage is split by provider under billing reason
+`subscriber_credit`. Existing Claude settings and usage are retained.
 Past one, `beforeFreeRequest` returns a `cubby_credit_budget_reached` or
 `cubby_plan_budget_reached` funding refusal and the ladder moves on; an
 unladdered plan call skips the plan for its paid or subscription-required
@@ -611,7 +614,7 @@ a spent balance; never Cubby's own `cubby_credit_budget_reached`), the
 Anthropic names ("You will regain access on …"), else the end of the current
 six-hour window. While it holds, credit admission answers at once with a
 `cubby_credit_refused` 400 carrying that raw reason and makes no upstream call,
-so every ladder moves straight to the ChatGPT plan; unified (paid) traffic is
+so every ladder moves on to OpenAI API credits; unified (paid) traffic is
 unaffected. One credit request per window passes as a probe: success clears
 the refusal, another refusal records it again. "Retry Claude credit now"
 (Settings → AI funding, MCP `ai_funding.reset_credit_refusal`) and any credit
@@ -633,7 +636,7 @@ and the AI funding card report it as `credit.state` `refused`, with `until` and
    `cf-aig-no-wholesale: true`; a missing or invalid key fails with raw setup
    diagnostics rather than silently spending paid credits.
 
-Named BYOK uses the native Anthropic endpoint: Universal `gateway.run()` does
+Named BYOK uses the native provider endpoint: Universal `gateway.run()` does
 not honor the alias in its payload. The Worker authenticates native passthrough
 with its `AI_GATEWAY_API_KEY` secret (a Cloudflare inference token, not the
 Anthropic key). Reuse the existing Worker secret; deploying this feature does
@@ -649,6 +652,29 @@ and expiry; do not infer them from Cubby's usage totals. The retired
 `cubby-testing` gateway can be removed after older deployments and local
 processes stop using it; deleting it does not update those callers. Requests
 that omit gateway scoping can recreate Cloudflare's `default` gateway.
+
+### OpenAI subscriber API credits
+
+Link the OpenAI subscription credit benefit to the intended API organization,
+then create a dedicated Cubby project key in that organization. Store it in
+**AI → AI Gateway → cubby → Provider Keys → OpenAI**, alias
+**subscriber-credit**. Keep the default OpenAI key unset and retain Unified Billing
+for the explicit paid rung. No OpenAI key belongs in Worker secrets or source.
+
+OpenAI credit calls use native Gateway passthrough with the named alias and
+`cf-aig-no-wholesale: true`, bypassing ChatGPT OAuth and paid admission. Only
+`credit_balance_exhausted`, `insufficient_quota`, or Cubby credit admission
+refusals advance to the ChatGPT plan; invalid keys, rate limits and unknown
+failures remain errors. Credit refusals and cooldowns are isolated by provider.
+OpenAI refusals without a reset date last until the six-hour window ends;
+resetting API credit refusals clears both providers and permits fresh attempts.
+
+OpenAI applies free credits before purchased credits, and unused subscription
+credits expire each billing cycle. An API key does not distinguish promotional
+from purchased balances: an organization with purchased credits may keep
+billing after the promotional balance is exhausted. Cubby window budgets are
+soft usage pacing, not a live promotional-balance meter. See
+[OpenAI API credit rules](https://developers.openai.com/api/docs/guides/chatgpt-api-credits).
 
 ### Pricing and transport
 

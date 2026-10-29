@@ -90,7 +90,7 @@ expiry.
 
 Every tier-routed chat call (Pi coordinators, Tester Army and structured
 feature runs, including Mail import) consumes the Claude subscriber credit pool
-first on Opus, then Sol on the existing ChatGPT subscription, then paid Sol
+first on Opus, then Sol on OpenAI API credits, then Sol on the existing ChatGPT subscription, then paid Sol
 through Cloudflare Unified Billing. One ladder serves every tier: the credit
 costs nothing at the margin, so a separate fast path saves nothing. Paid fallback
 is explicitly authorized so exhaustion does not stop useful work; callers that
@@ -137,10 +137,12 @@ relevance fallback and the Mail import Runs it starts:
 1. Claude subscriber credit, while the window's credit budget (standard cost of
    `subscriber_credit` usage, default $1.50 per six-hour window, member-editable)
    has room and Anthropic does not refuse.
-2. The ChatGPT plan, while connected, not quota-refused, and the window's plan
+2. OpenAI API credits, while their separate window budget (standard cost of
+   OpenAI `subscriber_credit` usage, default $1.50) has room and OpenAI does not refuse.
+3. The ChatGPT plan, while connected, not quota-refused, and the window's plan
    budget (standard cost of `plan` usage, default $2) has room.
-3. Paid models within the paid budget ($1 per window).
-4. Otherwise the Run pauses and resumes when the next window starts.
+4. Paid models within the paid budget ($1 per window).
+5. Otherwise the Run pauses and resumes when the next window starts.
 
 The isolate shares concurrent reads of a Run's immutable lineage origin and
 retains only found roots. Missing roots and failed reads remain retryable.

@@ -29,13 +29,15 @@ import type { CreditRefusal } from "./gateway-egress-contract";
 /** The refusal a background free-rung call receives once its window budget is spent. */
 export async function freeBudgetRefusal(
   db: Database,
-  funding: "subscriber_credit" | "subscription",
+  funding: "subscriber_credit" | "openai_credit" | "subscription",
 ): Promise<string | null> {
   const status = await readAiBudget(db);
   const [name, use] =
     funding === "subscriber_credit"
       ? ["Claude credit", status.credit]
-      : ["ChatGPT plan", status.plan];
+      : funding === "openai_credit"
+        ? ["OpenAI credit", status.openaiCredit]
+        : ["ChatGPT plan", status.plan];
   return use.spentUsd >= use.limitUsd
     ? `${name} budget reached: ${budgetUsd(use.spentUsd)} of $${use.limitUsd} standard cost since ${status.windowStart}; it resumes at ${status.windowEnd}.`
     : null;
@@ -66,12 +68,13 @@ export interface FundingStatusPorts {
   } | null>;
   /** The egress Durable Object's recorded credit refusal; null without one. */
   creditRefusal?: () => Promise<CreditRefusal | null>;
+  openaiCreditRefusal?: () => Promise<CreditRefusal | null>;
 }
 
 /** The household's one egress object holds the credit refusal (ADR 0017). */
 const egress = () => getAiGatewayEgress(CUBBY_AI_GATEWAY_ID);
 
-/** "Retry Claude credit now", and every credit budget change. */
+/** Retry API credits now, and every credit budget change. */
 export async function resetCreditRefusal() {
   await egress()?.resetCreditRefusal();
 }
@@ -135,11 +138,14 @@ export async function readAiFundingStatus(
 ): Promise<AiFundingStatus> {
   const {
     creditRefusal = async () => (await egress()?.creditRefusal()) ?? null,
+    openaiCreditRefusal = async () =>
+      (await egress()?.creditRefusal(undefined, "openai")) ?? null,
   } = ports;
-  const [budget, plan, refusal] = await Promise.all([
+  const [budget, plan, refusal, openaiRefusal] = await Promise.all([
     readAiBudget(db, ports.now),
     readChatGptPlanAvailability(db, ports),
     creditRefusal(),
+    openaiCreditRefusal(),
   ]);
   return {
     ...budget,
@@ -150,6 +156,16 @@ export async function readAiFundingStatus(
             state: "refused" as const,
             until: new Date(refusal.until).toISOString(),
             reason: refusal.reason,
+          }
+        : { state: "available" as const, until: null, reason: null }),
+    },
+    openaiCredit: {
+      ...budget.openaiCredit,
+      ...(openaiRefusal
+        ? {
+            state: "refused" as const,
+            until: new Date(openaiRefusal.until).toISOString(),
+            reason: openaiRefusal.reason,
           }
         : { state: "available" as const, until: null, reason: null }),
     },
@@ -173,9 +189,12 @@ export async function escalationFundingRefusal(
     if (refusal)
       return `Claude credit refused until ${new Date(refusal.until).toISOString()}: ${refusal.reason}`;
   }
-  return (await isBackgroundRun(db, runId))
-    ? freeBudgetRefusal(db, credit ? "subscriber_credit" : "subscription")
-    : null;
+  if (!(await isBackgroundRun(db, runId))) return null;
+  if (credit) return freeBudgetRefusal(db, "subscriber_credit");
+  const refusal = await egress()?.creditRefusal(undefined, "openai");
+  const creditUnavailable =
+    refusal || (await freeBudgetRefusal(db, "openai_credit"));
+  return creditUnavailable ? freeBudgetRefusal(db, "subscription") : null;
 }
 
 const BACKGROUND_TRIGGERS: readonly string[] = [
