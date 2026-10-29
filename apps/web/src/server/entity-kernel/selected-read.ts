@@ -28,12 +28,13 @@ export async function readSelectedEntityRecords({
     throw new Error(`Missing selected read scaffold for ${entity}`);
   const binding = ENTITY_SCHEMA_BINDINGS[entity];
   const schema = selectedFieldEnvelopeSchema(binding.detail, fields);
+  const includeFieldReads = Object.keys(schema.shape.fields.shape).length > 0;
   // Input-only context keys remain absent, as they are in a complete public read.
   const projection = [
     ...Object.keys(schema.shape).filter((key) => key !== "fields"),
     ...Object.keys(schema.shape.fields.shape),
     // Resolver evidence supplies effective values and provenance before serialization.
-    ...(scaffold.fields.detail.includes("fieldResolutions")
+    ...(includeFieldReads && scaffold.fields.detail.includes("fieldResolutions")
       ? ["fieldResolutions"]
       : []),
   ];
@@ -44,6 +45,7 @@ export async function readSelectedEntityRecords({
     {
       actor: context.actorContext,
     },
+    { includeFieldReads },
   );
   const rows = await publicFieldEnvelopeRows({
     db: context.db,

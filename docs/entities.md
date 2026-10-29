@@ -1395,8 +1395,14 @@ The kernel-owned `readSelectedEntityRecords` assembles canonical selected detail
 rows for connection preparation, generic field refresh, queued suggestion checks
 and publication validation. Each caller declares its basis, target and resolution
 context keys; input-only keys stay absent just as in a complete public read.
-Declared `fieldResolutions` evidence remains an internal dependency of the read,
-so narrowing outward fields does not change effective outcomes or provenance.
+Selections containing governed root fields retain `fieldResolutions` and their
+field-read contexts, so narrowing does not change effective outcomes or
+provenance. Selections with no governed root fields hydrate their declared
+values without building root ownership, assignments or freshness facts. Embedded
+governed records still obtain their own canonical contexts during serialization.
+Public page metadata admits only publications consumed by model fields or their
+declared stored keys; domain-only publications, including private diagnostic
+findings, stay behind explicit domain readers rather than entering every page.
 These partial rows never authorize a write or replace live publication fences.
 Connection field guards share immutable target snapshots by target entity kind
 within one evaluation page. The first capture precedes inference, each source
