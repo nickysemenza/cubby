@@ -209,10 +209,20 @@ export function loadPageStoredMeta(
   entity: Entity,
   ids: readonly string[],
 ): Promise<PageStoredMeta> {
+  // Internal publications can contain unfenced findings; only model consumers
+  // admit their values into public read contexts. Domain readers name other keys explicitly.
+  const exposed = new Set<string>(
+    entityFieldModels[entity].fields.flatMap((field) => [
+      field.key,
+      ...(field.readKey ? [field.readKey] : []),
+      ...(field.storedKey ? [field.storedKey] : []),
+    ]),
+  );
   const keys = storedDerivedDeclarations()
     .filter(
       (declaration) =>
         declaration.entity === entity &&
+        exposed.has(declaration.key) &&
         (declaration.publishes === "derivedValue" ||
           declaration.recordSource !== null),
     )

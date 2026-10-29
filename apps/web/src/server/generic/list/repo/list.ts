@@ -2262,6 +2262,7 @@ export function listScaffold<
       codes: readonly string[],
       projection: ListProjection = readPlan().fields.detail,
       reader?: ListReader,
+      { includeFieldReads = true }: { includeFieldReads?: boolean } = {},
     ): Promise<{ data: ListReadRow[]; fieldReads?: PageFieldReadContexts }> {
       if (codes.length === 0) return { data: [] };
       const plan = readPlan();
@@ -2285,9 +2286,11 @@ export function listScaffold<
             projection,
           );
       if (rows.length === 0) return { data: [] };
-      return withPageFields(db, entity, rows, () =>
-        plan.read(db, rows, projection, context, "live", undefined, "detail"),
-      );
+      const hydrate = () =>
+        plan.read(db, rows, projection, context, "live", undefined, "detail");
+      return includeFieldReads
+        ? withPageFields(db, entity, rows, hydrate)
+        : { data: await hydrate() };
     },
 
     /** {@link get} by internal ids, for writers that hold the row they wrote. */
