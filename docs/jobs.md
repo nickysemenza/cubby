@@ -223,8 +223,11 @@ savepoints inherit the outer transaction's priority.
 
 The drain runs up to `JOB_DRAIN.concurrency` Jobs at once, and the queue
 consumer (`packages/shared/src/background-queue-consumer.json`) runs several
-drains. Free lanes refill while siblings run; a skipped claim stays excluded
-for the invocation, so a locked row cannot consume its budget. An escaped lane
+drains. Free lanes refill while siblings run. A refused claim of an uncapped
+kind stays excluded until another page makes progress, then rejoins fair
+selection; progress during an in-flight refusal also permits reconsideration.
+Capped kinds remain excluded for the invocation. Refusals still consume the
+existing page budget, so locked rows cannot spin without bound. An escaped lane
 error stops new selection, and the drain still joins active lanes before
 returning it. The 20-second budget limits starting work, not the lease: an
 in-flight provider call may cross it and still publish. A drain that stops

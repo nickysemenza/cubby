@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransaction } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
@@ -66,6 +66,61 @@ describe("durable Job selection", () => {
       expect(position).toBeLessThan(4);
     }
   }, 60_000);
+
+  it("publishes a previously busy uncapped Job after another page makes progress", async () => {
+    const busy = await enqueueJob(ctx.db, {
+      key: "synthetic.reconsider.busy",
+      kind: "synthetic.a-busy",
+      input: {},
+    });
+    await enqueueJob(ctx.db, {
+      key: "synthetic.reconsider.progress",
+      kind: "synthetic.b-progress",
+      input: {},
+    });
+    const locked = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const holding = withTransaction(ctx.db, async (tx) => {
+      await tx.select().from(job).where(eq(job.id, busy.id)).for("update");
+      locked.resolve();
+      await release.promise;
+    });
+    await locked.promise;
+    try {
+      await drainDueJobs(
+        ctx.db,
+        {
+          "synthetic.a-busy": {
+            prepare: async () => ({
+              page: { done: true },
+              publish: async () => ({ outcome: "synthetic published result" }),
+            }),
+          },
+          "synthetic.b-progress": {
+            prepare: async () => {
+              release.resolve();
+              await holding;
+              return { page: { done: true } };
+            },
+          },
+        },
+        3,
+        30_000,
+        1,
+      );
+      const [stored] = await getDb(ctx.db)
+        .select({ state: job.state, result: job.result })
+        .from(job)
+        .where(eq(job.id, busy.id));
+      expect(stored).toEqual({
+        state: "completed",
+        result: { outcome: "synthetic published result" },
+      });
+    } finally {
+      release.resolve();
+      await holding;
+    }
+  });
 
   it("enforces maxInFlight across concurrent drains", async () => {
     const kind = "ai.evaluation";
