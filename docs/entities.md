@@ -2447,6 +2447,10 @@ those documents on the exhaustive path. LIKE wildcard/escape queries and longer
 internal queries retain exhaustive matching. These indexes are maintained by
 PostgreSQL with the existing SearchDocument publication, without extra Jobs.
 
+Grouped search loads Inventory's canonical field context explicitly for stock
+placements before serializing their public fields. A search-first request must
+not depend on another route having initialized the Inventory scaffold.
+
 Wish ranges are owned by `apps/web/src/server/domains/wish/price-range.ts`.
 Hydration, sorting and totals use its SQL aggregate over the effective Product
 price; null prices are omitted, zero is priced, and no priced candidates means
