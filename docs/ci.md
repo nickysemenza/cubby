@@ -14,10 +14,9 @@ deployment never waits for post-merge CI.
 
 `ci.yaml` holds the required checks and informational jobs: the
 purchase-import browser after relevant import changes or explicit manual
-opt-in, live Email decisions only with the separate manual opt-in, and
-[web Tester Army journeys](tester-army.md) automatically alongside ordinary
-checks on trusted same-repository changes. Tester Army is nonblocking and
-outside `CI passed`; missing credentials establish no pass.
+opt-in, and live Email decisions only with the separate manual opt-in.
+[Web Tester Army journeys](tester-army.md) run locally on demand; CI does not
+start them or collect their reports.
 Validation exposes generation, tokens, TypeScript, lint, Knip, bindings,
 tooling tests, Worker tests, Swift lint, formatting and the link check as named
 steps on one runner. Once setup succeeds, independent steps run despite earlier
@@ -64,8 +63,8 @@ redispatching cancels the older run.
 
 Native journeys restore SPM and DerivedData caches before their build and take
 macOS slots beyond the required Apple host tests and simulator build.
-Web Tester Army outcome journeys run in `ci.yaml` through the shared browser
-runtime, with real internal processing and scripted app-side model peers.
+Web Tester Army outcome journeys run locally on demand through the shared
+browser runtime, with real internal processing and scripted app-side model peers.
 [Their coverage accounting](tester-army.md#retired-coverage-accounting) maps the
 retired catalog to the recovered outcomes and intentional omissions. Native
 agent navigation, visual snapshots, exploration and coupled live-model
@@ -108,8 +107,7 @@ A manual dispatch starts every lane, still cached. `fresh=true` sets
 reuses prerequisites it just built, avoiding repeated WASM compilation. Fresh
 results do not read or write the remote cache. For timing actual web test
 execution with ordinary build-cache reuse, dispatch `fresh-tests=true` instead:
-Vitest, Playwright and the optional Tester Army execution bypass remote results;
-Tester Army also disables action replay.
+Vitest and Playwright execution bypass remote results.
 Dependency installation, WASM, the explicit web build and other checks retain
 their usual caches. Full `fresh=true` still overrides this narrower mode.
 This is separate from `purchase-import=true` and `live-email=true`; live
@@ -451,13 +449,11 @@ CI records a Playwright trace only for the retry of a failed test
 failure traces. Each browser job uploads Playwright's HTML report and those
 traces for seven days, named by commit SHA and shard, and a blob report.
 
-`Test report` waits for Validation, the test lanes and the optional Tester Army
-shards (not Rust or Apple),
+`Test report` waits for Validation and the test lanes (not Rust or Apple),
 downloads the Vitest and Playwright blobs,
 and merges Vitest and Playwright shards into HTML reports (`vitest --merge-reports`,
-`playwright merge-reports`). It also assembles the Tester Army SDK documents,
-rejecting missing or overlapping shard coverage. It publishes the reports to the Nx cache Worker, which
-serves them publicly at `/reports/{run}/{attempt}/{vitest|playwright|tester-army}/`, and
+`playwright merge-reports`). It publishes the reports to the Nx cache Worker, which
+serves them publicly at `/reports/{run}/{attempt}/{vitest|playwright}/`, and
 also uploads them as 14-day artifacts. Uploader workers receive the validated
 report directory explicitly and share an eight-request upload limit, retrying
 transient failures twice. The workflows set `NX_CACHE_URL`, the
@@ -470,11 +466,7 @@ summary (`apps/web/tooling/ci-report/summary.ts`) lists each Linux test lane's
 result and duration from the Actions API, shard balance, per-runner totals, failures,
 tests that passed only on retry, and the slowest tests. It is informative and
 outside `CI passed`, so merging never delays or fails the gate. CI runs use only
-synthetic data and test credentials, so the report is safe to publish. Tester Army
-runs three independently cached CI shards. Its hosted report includes every
-journey's video and end-state screenshot, steps, timing and failure boundary,
-with links to raw SDK and Worker diagnostics. The combined reporting job remains
-outside the merge gate. Local
+synthetic data and test credentials, so the report is safe to publish. Local
 runs, including the manually dispatched native simulator E2E, keep their
 reports, traces, and run bundles local because they may contain household data
 or credentials.

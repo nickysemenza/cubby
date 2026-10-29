@@ -97,15 +97,13 @@ Two caches have different meanings:
   a passing cache result.
 - Tester Army's local action replay can reuse navigation while still executing
   the journey and its outcome checks. Its ignored `.e2e/cache` is not uploaded
-  or maintained as a separate per-branch CI cache.
+  or maintained as a separate shared cache.
 
 The direct command bypasses whole-suite Nx results. `TESTER_ARMY_FRESH=1` also
-disables action replay. CI's existing manual `fresh` or `fresh-tests` options
-force both layers to execute. Ordinary CI keeps this lane nonblocking and
-independent of `CI passed`; same-repository PR updates start three independent shards automatically. The SDK
-owns partitioning; the combined report rejects missing or overlapping shard
-coverage. Each shard has a separate Nx result key.
-Fork PRs receive no model credentials and do not run it.
+disables action replay. Tester Army runs only on demand locally; CI does not
+start journeys, consume model credentials for them, or collect their reports.
+Local sharding remains available through `CUBBY_TESTER_ARMY_SHARD`; each shard
+has a separate Nx result key.
 
 `apps/web/artifacts/tester-army/` holds the SDK JSON, JUnit, step traces,
 sanitized Worker logs, setup/scenario timings and a static HTML report. Every
@@ -117,15 +115,8 @@ complete, and broken or traversing artifact paths are listed instead of linked. 
 cookies stay inside each fixture's browser and API contexts, never in an
 interchange file. The gateway token is registered as an SDK secret.
 
-The existing CI `Test report` job assembles the three shard reports, checks
-catalog coverage and publishes HTML, screenshots and videos through the existing
-Nx cache Worker's `/reports/{run}/{attempt}/tester-army/` route. The combined
-CI summary keeps its header, failure list and flaky list to the required Vitest
-and Playwright lanes; Tester Army totals, failures and incomplete evidence follow
-under a separate optional heading with the report link, so optional failures
-never hide or flip the gate result. Original execution timestamps remain visible on
-cached evidence. GitHub artifacts remain the fallback when publishing is
-unavailable. Only synthetic CI evidence is published; local reports stay local.
+Local reports stay local. CI's `Test report` job publishes only Vitest and
+Playwright evidence and does not wait for Tester Army.
 
 Failure summaries classify startup/fixture, provider, agent and application/
 outcome boundaries without claiming an automatic root-cause diagnosis. Per-case
