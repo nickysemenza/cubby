@@ -662,6 +662,186 @@
       "work": {
         "kind": "idle"
       }
+    },
+    "unitPrice": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "modelPresence": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "upcPresence": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "notesPresence": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "expenseTotal": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "ledgerExpectedQuantity": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "ledgerExpectedQuantityLabel": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "quantityVarianceLabel": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "unitPriceLabel": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "purchaseDate": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "expenseCount": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "dataGaps": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
     }
   }
 }
