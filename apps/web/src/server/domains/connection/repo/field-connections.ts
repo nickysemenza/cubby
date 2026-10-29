@@ -63,19 +63,21 @@ const targets = new Map<
   >),
 );
 
-export async function prepareConnectionFieldGuard(
+/** One evaluation page owns these immutable, pre-inference target snapshots. */
+export type ConnectionFieldGuardTargets = Map<
+  EntityRef["entityKind"],
+  Promise<ReadonlyMap<string, ReturnType<typeof snapshotJson>>>
+>;
+
+async function captureFieldTargets(
   db: Database,
-  source: EntityRef,
-  field: string,
+  kind: EntityRef["entityKind"],
 ) {
-  const target = targets.get(`${source.entityKind}.${field}`);
-  if (!target) throw new Error("Unsupported connection field");
-  const table =
-    SHORTCODE_TABLE[z.enum(shortcodeEntities).parse(target.entityKind)];
+  const table = SHORTCODE_TABLE[z.enum(shortcodeEntities).parse(kind)];
   const rows = await getDb(db)
     .select({
       code: table.shortcode,
-      row: connectionRelevantRowSql(target.entityKind, table),
+      row: connectionRelevantRowSql(kind, table),
     })
     .from(table)
     .where(notDeleted(table));
@@ -83,8 +85,25 @@ export async function prepareConnectionFieldGuard(
   for (const row of rows)
     targetBasis.set(
       row.code,
-      snapshotJson(connectionRelevantRow(target.entityKind, row.row)),
+      snapshotJson(connectionRelevantRow(kind, row.row)),
     );
+  return targetBasis;
+}
+
+export async function prepareConnectionFieldGuard(
+  db: Database,
+  source: EntityRef,
+  field: string,
+  pageTargets: ConnectionFieldGuardTargets = new Map(),
+) {
+  const target = targets.get(`${source.entityKind}.${field}`);
+  if (!target) throw new Error("Unsupported connection field");
+  let captured = pageTargets.get(target.entityKind);
+  if (!captured) {
+    captured = captureFieldTargets(db, target.entityKind);
+    pageTargets.set(target.entityKind, captured);
+  }
+  const targetBasis = await captured;
   return {
     source: (await connectionRecord(db, source)).row,
     targets: targetBasis,

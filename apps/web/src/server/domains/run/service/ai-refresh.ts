@@ -72,6 +72,7 @@ import {
 } from "~/server/ai/repo/ai-refresh";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
+import type { ConnectionFieldGuardTargets } from "~/server/domains/connection/repo/field-connections";
 import { productIdentityEvidenceFences } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
   productIdentitySnapshots,
@@ -1622,6 +1623,8 @@ const CONNECTION_PAGE_CONCURRENCY = 8;
 function connectionEvaluationPageAdapter(
   ports: AiRefreshPorts = {},
 ): EvaluationPageAdapter<ConnectionPagePreparation, ConnectionPageOutcome> {
+  // A fresh adapter owns each page; catalog evidence never crosses a drain page.
+  const fieldGuardTargets: ConnectionFieldGuardTargets = new Map();
   const changed = () =>
     new Error("Connection discovery source changed during evaluation");
   const usageGroups = new Map<AiRunContext, Map<string, AiRunContext>>();
@@ -1751,6 +1754,7 @@ function connectionEvaluationPageAdapter(
         source,
         {
           initialConnections: ready.prepared.initialConnections,
+          fieldGuardTargets,
           suggestPorts: {
             ...ports.suggestPorts,
             usageFor:
