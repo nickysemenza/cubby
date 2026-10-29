@@ -6,7 +6,6 @@ import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import type { EntityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
 import { basisValueOf } from "@cubby/schemas/field-suggestion";
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { z } from "zod";
 
 import { fieldEnvelopeAtPath, readPathValue } from "~/entity/read-path";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
@@ -43,15 +42,10 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { jsonValue } from "~/server/domains/run/repo/suggestion-sweep-state";
 import { makeSweepSuggestion } from "~/server/domains/run/service/suggestion-sweep";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
-import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
+import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { prepareTagSuggestions } from "~/server/generic/assessment/service/tag-suggestions";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import {
-  publicFieldEnvelopeRows,
-  selectedFieldEnvelopeSchema,
-} from "~/server/generic/derived/repo/public-read";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import {
   lookupShortcodes,
@@ -273,24 +267,14 @@ async function prepareFieldConnections(
   >();
   for (const field of fields)
     guards.set(field, await prepareConnectionFieldGuard(db, source, field));
-  const scaffold = kernelScaffold(entity);
-  if (!scaffold)
-    throw new Error(`Missing connection read scaffold for ${entity}`);
-  const found = await scaffold.get(db, [source.entityId], projection, {
-    actor: context.actorContext,
-  });
-  const [selected] = await publicFieldEnvelopeRows({
-    db,
+  const [selected] = await readSelectedEntityRecords({
+    context: { db, actorContext: context.actorContext },
     entity,
-    schema: selectedFieldEnvelopeSchema(
-      ENTITY_SCHEMA_BINDINGS[entity].detail,
-      projection,
-    ),
-    rows: found.data,
-    contexts: found.fieldReads,
+    ids: [source.entityId],
+    fields: projection,
   });
   if (!selected) throw new Error("Connection source no longer exists");
-  const row = z.record(z.string(), z.unknown()).parse(selected);
+  const row = selected;
   const valueOf = (key: string) => {
     const path = readPaths.get(key);
     if (!path)

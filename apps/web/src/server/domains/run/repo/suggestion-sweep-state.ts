@@ -13,9 +13,8 @@ import {
   run as runTable,
   assessmentState as suggestionTable,
 } from "~/server/db/schema";
-import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
@@ -160,17 +159,13 @@ export async function saveSweepSuggestions(
         db: tx,
         actorContext: { ...context.actorContext, runId },
       };
-      const found = await executeEntity(
-        txContext,
-        entityCommandSchema.parse({
-          action: "get",
-          entity: input.entity,
-          id: publicId,
-        }),
-      );
-      if (found.action !== "get" || !found.item)
-        throw new Error("Suggestion target no longer exists");
-      const record = z.record(z.string(), z.unknown()).parse(found.item);
+      const [record] = await readSelectedEntityRecords({
+        context: txContext,
+        entity: input.entity,
+        ids: [publicId],
+        fields: [input.field],
+      });
+      if (!record) throw new Error("Suggestion target no longer exists");
       const governed = Object.hasOwn(
         entityFieldEnvelopeFields[input.entity],
         input.field,
