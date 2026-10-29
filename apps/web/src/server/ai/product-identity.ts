@@ -637,9 +637,17 @@ export async function evaluateProductIdentity(
   runId: RunId,
   ports: NonNullable<
     Parameters<typeof evaluatePreparedProductIdentityPair>[3]
-  > = {},
+  > & { preparedCatalog?: PreparedProductIdentityPageOutcome } = {},
 ) {
-  const prepared = await prepareProductIdentityCatalog(db, id);
+  const prepared =
+    ports.preparedCatalog ?? (await prepareProductIdentityCatalog(db, id));
+  if (
+    "valid" in prepared &&
+    (!prepared.valid ||
+      prepared.productIds.length !== 1 ||
+      prepared.productIds[0] !== id)
+  )
+    throw new Error("Product identity catalog changed during preparation");
   const pairs = [];
   let failure: string | null = null;
   const usage = ports.usage ?? { db, runId, operation: "product-identity" };

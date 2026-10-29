@@ -99,7 +99,10 @@ import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import type { DrainContext } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
-import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  lookupShortcodes,
+  resolveLiveShortcodes,
+} from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
@@ -1589,6 +1592,7 @@ async function stageProductEnrollment(
 
 type ConnectionPagePreparation = {
   source: EntityRef;
+  preparedCatalog?: PreparedProductIdentityPageOutcome;
   initialConnections?: Awaited<
     ReturnType<
       typeof import("~/server/domains/connection/service/entity-connections").prepareEntityConnections
@@ -1685,18 +1689,47 @@ function connectionEvaluationPageAdapter(
         );
       });
       const initial = await prepareEntityConnectionSources(db, eligible);
+      const productIds = await resolveLiveShortcodes(
+        db,
+        eligible
+          .filter((source) => source.entityKind === "product")
+          .map((source) => source.entityId),
+        "product",
+      );
+      // Catalog claims, semantic-document validation and pair snapshots are
+      // shared by this page; inference still rechecks each source's pairs.
+      const catalogs = new Map(
+        (
+          await prepareProductIdentityPage(
+            db,
+            [...productIds].map(([key, recordId]) => ({
+              key,
+              kind: "product" as const,
+              recordId,
+            })),
+          )
+        ).map((catalog) => [catalog.key, catalog]),
+      );
       return targets.map((entry, index) => {
         const source = sources[index];
         const fingerprint = source
           ? current.get(entityRefKey(source.entityKind, source.entityId))
           : null;
         const captured = source ? initial.get(source.entityId) : undefined;
+        const preparedCatalog = source
+          ? catalogs.get(source.entityId)
+          : undefined;
         if (captured?.status === "rejected")
           return {
             kind: "failed" as const,
             target: entry,
             error: captured.reason,
           };
+        if (
+          source?.entityKind === "product" &&
+          (!preparedCatalog || !preparedCatalog.valid)
+        )
+          return { kind: "failed" as const, target: entry, error: changed() };
         return source &&
           fingerprint === entry.evaluation.provenance.inputFingerprint
           ? {
@@ -1705,6 +1738,7 @@ function connectionEvaluationPageAdapter(
               evidenceDigest: fingerprint,
               prepared: {
                 source,
+                preparedCatalog,
                 initialConnections:
                   captured?.status === "fulfilled" ? captured.value : undefined,
               },
@@ -1735,6 +1769,7 @@ function connectionEvaluationPageAdapter(
           },
           productIdentityPorts: {
             ...ports.productIdentityPorts,
+            preparedCatalog: ready.prepared.preparedCatalog,
             usage:
               ports.productIdentityPorts?.usage ??
               operationUsage(usage, "product-identity"),
