@@ -1,0 +1,41 @@
+docs/agents/mcp.md
+  s_f9b38eae28f662::t_3cdabde612333e 163
+apps/web/generator/entities/render/metadata.ts
+  s_f9b38eae28f662::t_e5f3efcb9e425d 314-318,402,543,546,548,581,583,842
+apps/web/src/entity/model/list-contracts.ts
+  s_f9b38eae28f662::t_f5f35bd6f74c40 35-36,56-60
+apps/web/src/entity/model/read-schemas/define.ts
+  s_f9b38eae28f662::t_20846fc4a67b69 10-13,60
+apps/web/src/features/run/photo-run-detail.preview.test.tsx
+  s_f9b38eae28f662::t_a3350f0be383b4 43
+apps/web/src/integrations/tanstack-query/operation-recorder.unit.test.ts
+  s_f9b38eae28f662::t_8547e6af4446d3 66
+apps/web/src/server/errors/db-errors.ts
+  s_f9b38eae28f662::t_cacf1df4e83168 7
+packages/schemas/src/entity-metadata-types.ts
+  s_f9b38eae28f662::t_2d7125d710faa4 6
+apps/web/generator/operations/collect.ts
+  s_f9b38eae28f662::t_76991ded4c591f 330
+apps/web/src/integrations/tanstack-query/operation-call.unit.test.ts
+  s_f9b38eae28f662::t_278834bee84605 20
+apps/web/src/lib/operation-observability.unit.test.ts
+  s_f9b38eae28f662::t_1f3462b5322bd2 12
+apps/web/src/server/operation-runtime/operation.server.unit.test.ts
+  s_f9b38eae28f662::t_cb7c4373e5b793 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8c382c3fbc92afe9aa8648b15408bccfb3fc8793",
+  "prompts": {},
+  "sessions": {
+    "s_f9b38eae28f662": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15d31a0c-0fdb-4745-b359-8664bbd5360e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
