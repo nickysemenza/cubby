@@ -45,6 +45,7 @@ import {
 } from "~/server/generic/assessment/repo/assessment";
 import * as changes from "~/server/generic/changes/repo/change";
 import { derivedSink } from "~/server/generic/derived/repo/compute";
+import * as derivedDrainRepo from "~/server/generic/derived/repo/drain";
 import {
   DERIVED_DRAIN_JOB_KEY,
   DERIVED_DRAIN,
@@ -61,6 +62,7 @@ import {
   dropWork,
   lockWork,
   markWorkFrom,
+  postponeWorkRefs,
   workItemStates,
 } from "~/server/generic/jobs/repo/work-items";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -247,6 +249,39 @@ describe("stored derived values", () => {
       },
     });
     expect((await valuation(entry))?.value).toBe(10);
+
+    await drain();
+    await markWorkFrom(
+      ctx.db,
+      DERIVED_DRAIN,
+      sql`SELECT 'product.ownership'::text, ${beans}::uuid, 2::int`,
+      { wake: false },
+    );
+    await postponeWorkRefs(
+      ctx.db,
+      "product.ownership",
+      [beans],
+      new Date("2099-01-01T00:00:00Z"),
+    );
+    const deferred = async () =>
+      (
+        await getDb(ctx.db).execute(sql`
+        SELECT to_jsonb(w) AS item FROM "WorkItem" w
+        WHERE w.target = 'product.ownership' AND w.ref = ${beans}::uuid
+      `)
+      ).rows;
+    const retained = await deferred();
+    expect(retained).toHaveLength(1);
+    await getDb(ctx.db)
+      .update(product)
+      .set({ price: 3 })
+      .where(eq(product.id, beans));
+    // Source capture must leave room for its dependent's first preparation.
+    // An unfiltered production page also preserves unrelated backoff exactly.
+    await drainDerivedPage(ctx.db);
+    expect(await valuation(entry)).toMatchObject({ value: 15, stale: false });
+    expect(await marks("inventory.valuation")).not.toContain(entry);
+    expect(await deferred()).toEqual(retained);
   });
 
   it("claims newer member edits before older background source writes without demoting member work", async () => {
@@ -879,6 +914,80 @@ describe("stored derived values", () => {
     }
     await drain();
     expect(await fanoutMarks("inventory.valuation")).toEqual([]);
+
+    const overflowSources = await Promise.all(
+      Array.from({ length: 2 }, (_, index) =>
+        createProductIdentityFixture(
+          ctx.db,
+          makeProductInput({ name: `Synthetic overflow source ${index}` }),
+          TEST_ACTOR,
+        ),
+      ),
+    );
+    await drain();
+    const markSources = (refs: readonly string[]) =>
+      markWorkFrom(
+        ctx.db,
+        DERIVED_DRAIN,
+        sql`SELECT ${valuationFanout}::text, ref, 0::int
+          FROM unnest(${uuidArrayParam(refs)}) source(ref)`,
+        { wake: false },
+      );
+    await markSources([...sourceRefs]);
+    await markWorkFrom(
+      ctx.db,
+      DERIVED_DRAIN,
+      sql`SELECT 'product.price'::text, ${available}::uuid, 0::int`,
+      { wake: false },
+    );
+    await markSources(overflowSources.map((row) => row.entityId));
+    await markWorkFrom(
+      ctx.db,
+      DERIVED_DRAIN,
+      sql`SELECT 'product.dataQuality'::text, ${available}::uuid, 0::int`,
+      { wake: false },
+    );
+    const saturated = (await pending()).filter(
+      (mark) => mark.target === valuationFanout,
+    );
+    expect(saturated).toHaveLength(21);
+    const cappedHeld = Promise.withResolvers<void>();
+    const cappedRelease = Promise.withResolvers<void>();
+    const cappedWriter = withTransaction(ctx.db, async (tx) => {
+      await lockWork(databaseForTransaction(tx), saturated);
+      cappedHeld.resolve();
+      await cappedRelease.promise;
+    });
+    await cappedHeld.promise;
+    const admitted: string[] = [];
+    const prepare = derivedDrainRepo.prepareDerivedPage;
+    const observedPreparation = vi
+      .spyOn(derivedDrainRepo, "prepareDerivedPage")
+      .mockImplementation((...args) => {
+        admitted.push(
+          ...args[2]
+            .filter((mark) => mark.target === valuationFanout)
+            .map((mark) => mark.ref),
+        );
+        return prepare(...args);
+      });
+    try {
+      // The twenty-first source ends the prefix without excluding the
+      // independently publishable value admitted between its source marks.
+      await drainDerivedPage(ctx.db);
+      expect(admitted).toEqual(saturated.slice(0, 20).map((mark) => mark.ref));
+      expect(await marks("product.price")).not.toContain(available);
+      expect(await marks("inventory.valuation")).toContain(entry);
+      expect(await marks("product.dataQuality")).toContain(available);
+      expect(
+        (await pending()).filter((mark) => mark.target === valuationFanout),
+      ).toEqual(saturated);
+    } finally {
+      observedPreparation.mockRestore();
+      cappedRelease.resolve();
+      await cappedWriter;
+    }
+    await drain();
 
     // One fixed-target expansion also covers unclaimed source marks, but a
     // producer holding and re-marking another source must keep its ticket.

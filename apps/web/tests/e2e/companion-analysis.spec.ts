@@ -12,7 +12,12 @@ import {
 } from "@cubby/schemas/image-processing";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
-import { image, imageProcessingAttempt, job } from "~/server/db/schema";
+import {
+  image,
+  imageProcessingAttempt,
+  imageProcessingJob,
+  job,
+} from "~/server/db/schema";
 import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/repo/description-policy";
 import { getDb } from "~/server/db/helpers";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
@@ -128,10 +133,19 @@ test("companion normalization preserves originals and rejects stale or corrupt r
     return { source, jobId: scheduled.jobIds[0] };
   }
   async function claim() {
-    const response = pullCompanionImageProcessingOutput.parse(
-      await post("pull", { hello }),
-    );
-    const command = response.command;
+    let response:
+      | z.output<typeof pullCompanionImageProcessingOutput>
+      | undefined;
+    // Pulls skip busy source rows; an idle response need not mean no work is owed.
+    await expect
+      .poll(async () => {
+        response = pullCompanionImageProcessingOutput.parse(
+          await post("pull", { hello }),
+        );
+        return response.command !== null;
+      })
+      .toBe(true);
+    const command = response?.command;
     if (command?.kind !== "describe_image" || !command.analysisOutput)
       throw new Error("Expected JPEG normalization assignment");
     return { command, output: command.analysisOutput };
@@ -287,6 +301,16 @@ test("companion normalization preserves originals and rejects stale or corrupt r
     .update(job)
     .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
     .where(eq(job.key, `image-processing:${expired.command.jobId}`));
+  await database.transaction(async (tx) => {
+    await tx
+      .select({ id: imageProcessingJob.id })
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, expired.command.jobId))
+      .for("update");
+    expect(
+      pullCompanionImageProcessingOutput.parse(await post("pull", { hello })),
+    ).toMatchObject({ command: null, commands: [] });
+  });
   const reclaimed = await claim();
   expect(reclaimed.command.jobId).toBe(expired.command.jobId);
   expect(

@@ -43,6 +43,9 @@ export const DERIVED_RECONCILE_JOB_KEY = "derived:reconcile";
 const DRAIN_REPEAT_MS = 60_000;
 const RECONCILE_INTERVAL_MS = 60 * 60_000;
 const RECONCILE_BUCKETS = 24;
+// Source expansion has no canonical preparation; retain its previous maximum
+// independently of the direct-only preparation allowance.
+const DERIVED_FANOUT_BATCH = 20;
 
 /**
  * Each page claims ready marks, computes outside the transaction and
@@ -125,7 +128,7 @@ const drainCount = (page: PreparedJobPage, key: string): number => {
   return typeof value === "number" ? value : 0;
 };
 
-/** Expand source marks before input reads, spending one ordered page budget. */
+/** Expand a bounded source prefix before freshly bounded canonical preparation. */
 export const derivedDrainHandler = (
   computes: DerivedComputes,
   /** Explicit limits retain the fixture drain's single-phase behavior. */
@@ -137,41 +140,46 @@ export const derivedDrainHandler = (
       // A superseded invocation can still unwind while its replacement runs.
       // Never share admission state between invocations of this handler.
       let expandedFirst = false;
-      let remaining = 0;
       let directReservation = 0;
       let overflowPriority: number | undefined;
       const first = await derivedDrain(computes, {
         chunk,
         admit(items) {
-          const prefix = admitDerivedPage({ items, computes });
+          let fanoutCount = 0;
+          let directCost = 0;
+          let count = 0;
+          for (const item of items) {
+            if (item.target.includes("@")) {
+              if (fanoutCount === DERIVED_FANOUT_BATCH) break;
+              fanoutCount++;
+            } else {
+              const next = directCost + derivedPreparationCost(item, computes);
+              if (next > DERIVED_COMPUTE_BATCH) break;
+              directCost = next;
+            }
+            count++;
+          }
+          const prefix = items.slice(0, count);
           const fanouts = prefix.filter((item) => item.target.includes("@"));
           // Ordinary direct-only pages keep their existing single read/pass.
           if (!fanouts.length) return prefix;
           expandedFirst = true;
-          const cost = (marks: typeof prefix) =>
-            marks.reduce(
-              (sum, item) => sum + derivedPreparationCost(item, computes),
-              0,
-            );
-          remaining = DERIVED_COMPUTE_BATCH - cost(fanouts);
           overflowPriority = items[prefix.length]?.priority;
-          directReservation = cost(
-            prefix.filter((item) => !item.target.includes("@")),
-          );
+          directReservation = directCost;
           return fanouts;
         },
       }).prepare(db, claim, context);
-      if (!expandedFirst || remaining === 0) return first;
+      if (!expandedFirst) return first;
       await context.check();
       const direct = await derivedDrain(computes, {
         chunk,
-        // Busy fanouts were attempted once already; leave them owed rather
-        // than double-charging their cost ahead of independent direct work.
+        // Busy fanouts spent their expansion slot already and remain owed.
+        // The direct phase never retries them ahead of independent values.
         eligible: (target) =>
           and(derivedWorkEligible(target), notLike(target, "%@%"))!,
         admit(items) {
           if (overflowPriority === undefined)
-            return admitDerivedPage({ items, computes, budget: remaining });
+            return admitDerivedPage({ items, computes });
           let used = 0;
           let count = 0;
           for (const item of items) {
@@ -179,8 +187,8 @@ export const derivedDrainHandler = (
             // At its priority or lower, cumulative cost keeps the reservation.
             const allowance =
               item.priority < overflowPriority
-                ? remaining
-                : Math.min(remaining, directReservation);
+                ? DERIVED_COMPUTE_BATCH
+                : directReservation;
             const next = used + derivedPreparationCost(item, computes);
             if (next > allowance) break;
             used = next;

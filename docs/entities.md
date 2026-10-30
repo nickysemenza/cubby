@@ -2960,12 +2960,17 @@ bounds and blocked targets retain their publications and tickets. Sink checks
 remain immediately before each sink's writer; source-before-work lock order is unchanged.
 Production derived pages expand admitted source fanouts before preparing direct
 values, allowing newly owed values to publish in the same invocation when the
-shared preparation budget has room. Both passes use the existing fenced drain;
+direct preparation budget has room. The observed frontier admits an ordered
+prefix with at most twenty fanout marks and two hundred direct preparation
+units, stopping at the first overflow in either dimension. Expansion does not
+spend the direct-only preparation allowance; a mixed invocation may perform
+both bounded phases and therefore more total database work than one shared
+budget allowed. Both passes use the existing fenced drain;
 direct preparation observes pending fanout tickets afresh after expansion.
 There is no repeated expansion loop. Busy fanouts stay owed without consuming
-the direct pass's budget twice. After an initial overflow, fresh direct work
+another expansion slot. After an initial overflow, fresh direct work
 with strictly higher priority than the item that did not fit may use remaining
-shared capacity. At that priority or lower, cumulative direct cost must fit
+direct capacity. At that priority or lower, cumulative direct cost must fit
 the original direct reservation. Admission stops at the first unaffordable
 direct item. Pages without fanouts keep their single pass.
 Explicit fixture page limits retain the single-pass diagnostic behavior.
