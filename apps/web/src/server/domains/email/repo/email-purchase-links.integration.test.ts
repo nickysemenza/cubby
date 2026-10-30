@@ -688,32 +688,42 @@ describe("Email Purchase links", () => {
       await drainEmail();
       expect(await facts()).toEqual([]);
       expect(await unrelatedWork()).toEqual(deferred);
-      // A predecessor ticket still names a SourceOrder, even after its row is gone.
-      await markWork(ctx.db, DERIVED_DRAIN, [
-        { target: "email.relationshipFacts@8", ref: accepted.id, priority: 0 },
-      ]);
-      await drainDerivedPage(ctx.db, {
-        only: (item) => item.target === "email.relationshipFacts@8",
-      });
-      expect(
-        (
-          await workItemStates(ctx.db, "email.relationshipFacts", [
-            unrelatedEmail.id,
-          ])
-        )[0],
-      ).toMatchObject({ priority: 0 });
-      const beforeLegacyClaim = await unrelatedWork();
-      await markWork(ctx.db, DERIVED_DRAIN, [
-        {
-          target: "email.relationshipFacts@7",
-          ref: identityAlias.id,
-          priority: 0,
-        },
-      ]);
-      await drainDerivedPage(ctx.db, {
-        only: (item) => item.target === "email.relationshipFacts@7",
-      });
-      expect(await unrelatedWork()).not.toEqual(beforeLegacyClaim);
+      // Predecessor tickets keep their broad meaning after source retirement.
+      // Observe member-priority promotion before the same invocation settles it.
+      for (const [target, ref] of [
+        ["email.relationshipFacts@8", accepted.id],
+        ["email.relationshipFacts@7", identityAlias.id],
+      ] as const) {
+        await markWork(ctx.db, DERIVED_DRAIN, [{ target, ref, priority: 0 }]);
+        let promoted = false;
+        await drainDerivedPage(ctx.db, {
+          only: (item) => item.target === target,
+          during: async () => {
+            expect(
+              (
+                await workItemStates(ctx.db, "email.relationshipFacts", [
+                  unrelatedEmail.id,
+                ])
+              )[0],
+            ).toMatchObject({ priority: 0 });
+            promoted = true;
+          },
+        });
+        expect(promoted).toBe(true);
+        expect(await unrelatedWork()).toEqual([]);
+        const [published] = await getDb(ctx.db)
+          .select({ value: derivedValue.value })
+          .from(derivedValue)
+          .where(
+            and(
+              eq(derivedValue.entityId, unrelatedEmail.id),
+              eq(derivedValue.key, "relationshipFacts"),
+            ),
+          );
+        expect(emailRelationshipResult.parse(published?.value).facts).toEqual(
+          [],
+        );
+      }
     },
   );
 
@@ -788,7 +798,7 @@ describe("Email Purchase links", () => {
       orderId: "SYNTHETIC-OTHER-CANDIDATE",
     });
     const fillers = [];
-    for (let index = 0; index < 24; index++)
+    for (let index = 0; index < 25; index++)
       fillers.push(
         await createProductIdentityFixture(
           ctx.db,
@@ -840,7 +850,8 @@ describe("Email Purchase links", () => {
     let preparedOldCandidate = false;
     const selectedFillers = new Set<string>(fillers.map((row) => row.entityId));
     await drainDerivedPage(ctx.db, {
-      // The fanout and 24 compact marks fill the first chunk; Email publishes in the second.
+      // After fanout expansion, 25 compact values fill the first direct chunk;
+      // the newer source ticket must also fence Email in the following chunk.
       only: (item) =>
         (item.target === sourceTarget && item.ref === unrelated.entityId) ||
         (item.target === "product.dataQuality" &&

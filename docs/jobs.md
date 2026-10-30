@@ -85,6 +85,14 @@ scheduling marks add no domain computation; the adapter bounds their observation
 separately from weighted publication work. Newer or writer-held marks stay owed.
 The page reports those settlements as `covered`; `processed` and `published`
 keep counting the original page's claims.
+The production derived drain can use two such passes under the same Job claim:
+it first expands fanouts from the admitted ordered prefix, then observes direct
+work for the remaining preparation budget. Attempted busy fanouts spend their
+cost once and remain owed; they cannot spend it again ahead of independent
+direct work. An initial overflow reserves only the original direct prefix's
+cost for the second pass, leaving overflow slack unused. A direct-only prefix
+keeps the ordinary single pass. Neither pass finishes the Job independently;
+their counters combine and any processed work keeps the page unfinished.
 An item's `lastError` keeps each
 cause, capped so the database's own message survives. A drain with nothing
 ready runs its `idle` publication (derived clock expiry) and completes, or
