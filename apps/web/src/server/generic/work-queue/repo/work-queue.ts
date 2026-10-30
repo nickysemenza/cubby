@@ -278,7 +278,8 @@ async function queryWorkQueue(
     sql`, `,
   );
 
-  // The union materializes once; routing, filters, counts and the page read it.
+  // Inline source and routing stages so common filters can reach their inputs.
+  // Counts and paging share the materialized filtered population below.
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
   const result = await getDb(db).execute(sql`
     WITH
@@ -292,8 +293,8 @@ async function queryWorkQueue(
       SELECT id, shortcode, name FROM "LedgerParty"
       WHERE kind = ${ledgerPartyKind.enum.member} AND ${notDeleted("LedgerParty")}
     ),
-    work AS MATERIALIZED (${union}),
-    routed AS MATERIALIZED (
+    work AS NOT MATERIALIZED (${union}),
+    routed AS NOT MATERIALIZED (
       SELECT work.*, routing.owner_codes,
         CASE WHEN shared THEN 'anyone' ELSE nullif(array_to_string(routing.owner_codes, ','), '') END AS owner_key,
         CASE WHEN shared THEN 'Anyone' ELSE (
