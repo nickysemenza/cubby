@@ -6,7 +6,7 @@ import type {
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { productReadFacts } from "@cubby/schemas/product-read-fields";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { seedEntity, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -701,7 +701,8 @@ describe("stored derived values", () => {
     await drainDerivedPage(ctx.db, {
       only: (mark) => mark.target.includes("@"),
     });
-    expect(await marks("inventory.valuation")).toContain(entry);
+    expect(await marks("inventory.valuation")).not.toContain(entry);
+    expect(await valuation(entry)).toMatchObject({ value: 14, stale: false });
     await drain();
     expect(await fanoutMarks("inventory.valuation")).toEqual([]);
     expect(await valuation(entry)).toMatchObject({
@@ -796,17 +797,46 @@ describe("stored derived values", () => {
   it("leaves a writer's busy fanout mark pending without blocking publication", async () => {
     const location = await makeLocation("Synthetic fanout shelf");
     const item = await makeProduct("Synthetic fanout item", 2);
-    await makeEntry(item, location, 1);
+    const entry = await makeEntry(item, location, 1);
+    const siblings = await Promise.all(
+      Array.from({ length: 18 }, (_, index) =>
+        createProductIdentityFixture(
+          ctx.db,
+          makeProductInput({
+            name: `Synthetic busy source ${index}`,
+            price: 2,
+          }),
+          TEST_ACTOR,
+        ),
+      ),
+    );
+    const available = await makeProduct("Synthetic independent value", 2);
     await drain();
     await getDb(ctx.db)
       .update(product)
       .set({ price: 3 })
-      .where(eq(product.id, item));
-    const fanout = (await pending()).filter(
+      .where(
+        inArray(product.id, [item, ...siblings.map((row) => row.entityId)]),
+      );
+    await getDb(ctx.db)
+      .update(product)
+      .set({ price: 9 })
+      .where(eq(product.id, available));
+    const sourceRefs = new Set<string>([
+      item,
+      ...siblings.map((row) => row.entityId),
+    ]);
+    // Price changes capture multiple inputs; isolate one stable input for the
+    // saturated busy-prefix control, leaving the other tickets owed.
+    const valuationFanout = (await pending()).find(
       (mark) =>
         mark.target.startsWith("inventory.valuation@") && mark.ref === item,
+    )?.target;
+    if (!valuationFanout) throw new Error("Synthetic valuation fanout missing");
+    const fanout = (await pending()).filter(
+      (mark) => mark.target === valuationFanout && sourceRefs.has(mark.ref),
     );
-    expect(fanout.length).toBeGreaterThan(0);
+    expect(fanout).toHaveLength(19);
     const held = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const writer = withTransaction(ctx.db, async (tx) => {
@@ -817,11 +847,32 @@ describe("stored derived values", () => {
     await held.promise;
     try {
       await drainDerivedPage(ctx.db, {
-        only: (mark) => mark.target.startsWith("inventory.valuation@"),
+        only: (mark) =>
+          (mark.target === valuationFanout && sourceRefs.has(mark.ref)) ||
+          (mark.target === "product.price" && mark.ref === available),
       });
-      expect((await fanoutMarks("inventory.valuation")).length).toBeGreaterThan(
-        0,
-      );
+      expect(
+        (await loadStoredDerived(ctx.db, "product", [available], ["price"]))
+          .get(available)
+          ?.get("price")?.value,
+      ).toBe(9);
+      expect(await marks("product.price")).not.toContain(available);
+      expect(
+        (await pending()).filter(
+          (mark) => mark.target === valuationFanout && sourceRefs.has(mark.ref),
+        ),
+      ).toEqual(fanout);
+      await drainDerivedPage(ctx.db, {
+        only: (mark) =>
+          (mark.target === valuationFanout && sourceRefs.has(mark.ref)) ||
+          (mark.target === "inventory.valuation" && mark.ref === entry),
+      });
+      expect(await valuation(entry)).toMatchObject({ value: 3 });
+      expect(
+        (await pending()).filter(
+          (mark) => mark.target === valuationFanout && sourceRefs.has(mark.ref),
+        ),
+      ).toEqual(fanout);
     } finally {
       release.resolve();
       await writer;
@@ -911,21 +962,32 @@ describe("stored derived values", () => {
           parseEntityId("product", await resolved(kettle.id, "product")),
         ),
       );
-    // Expansion runs in the drain Job; member priority must survive it.
-    while ((await fanoutMarks("task.searchDocument")).length > 0)
-      await drainDerivedPage(ctx.db, {
-        only: (mark) => mark.target.startsWith("task.searchDocument@"),
-      });
-    expect(await marks("task.searchDocument")).toEqual(
+    // Inspect owed direct tickets after their inputs load, before publication.
+    const observed = { refs: new Set<string>(), priorities: new Set<number>() };
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target.startsWith("task.searchDocument@"),
+      during: async () => {
+        for (const mark of await pending()) {
+          if (mark.target !== "task.searchDocument") continue;
+          observed.refs.add(mark.ref);
+          observed.priorities.add(mark.priority);
+        }
+      },
+    });
+    expect([...observed.refs].sort()).toEqual(
       [parent, child].map((task) => task.entityId).sort(),
     );
-    // An edit's dependents keep its priority instead of queuing behind backfill.
-    const priorities = new Set(
-      (await pending())
-        .filter((mark) => mark.target === "task.searchDocument")
-        .map((mark) => mark.priority),
-    );
-    expect([...priorities]).toEqual([0]);
+    expect([...observed.priorities]).toEqual([0]);
+    expect(await marks("task.searchDocument")).toEqual([]);
+    const documents = (
+      await getDb(ctx.db).execute(sql`
+      SELECT body FROM "SearchDocument"
+      WHERE "entityId" = ANY(${uuidArrayParam([parent.entityId, child.entityId])})
+    `)
+    ).rows;
+    expect(documents).toHaveLength(2);
+    for (const document of documents)
+      expect(String(document.body)).toContain("Synthetic kettle mk2");
   });
 
   it("marks JSON subject references and follows Feedback to its Email", async () => {
@@ -977,7 +1039,12 @@ describe("stored derived values", () => {
     await drainDerivedPage(ctx.db, {
       only: (mark) => mark.target.startsWith("email.dataQuality@"),
     });
-    expect(await marks("email.dataQuality")).toContain(emailId);
+    expect(await marks("email.dataQuality")).not.toContain(emailId);
+    expect(
+      (await loadStoredDerived(ctx.db, "email", [emailId], ["dataQuality"]))
+        .get(emailId)
+        ?.get("dataQuality"),
+    ).toMatchObject({ resultExists: true });
 
     // Historical evidence can be malformed; extraction must skip it without
     // failing the member save or the rest of a fanout page.

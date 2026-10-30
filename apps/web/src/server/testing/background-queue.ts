@@ -114,19 +114,34 @@ export async function drainDerivedPage(
     return result;
   };
   const observed: DerivedComputes = Object.fromEntries(
-    Object.entries(computes).map(([key, adapter]): [string, DerivedAdapter] => [
-      key,
-      isDerivedSink(adapter)
-        ? { ...adapter, prepare: (tx, ids) => after(adapter.prepare(tx, ids)) }
-        : Object.assign(
-            (tx: Parameters<typeof adapter>[0], ids: readonly string[]) =>
-              after(adapter(tx, ids)),
-            {
-              preparationBatchSize: adapter.preparationBatchSize,
-              fanoutSelections: adapter.fanoutSelections,
-            },
-          ),
-    ]),
+    Object.entries(computes).map(([key, adapter]): [string, DerivedAdapter] => {
+      if (isDerivedSink(adapter))
+        return [
+          key,
+          { ...adapter, prepare: (tx, ids) => after(adapter.prepare(tx, ids)) },
+        ];
+      const shared = adapter.sharedPreparation;
+      return [
+        key,
+        Object.assign(
+          (tx: Parameters<typeof adapter>[0], ids: readonly string[]) =>
+            after(adapter(tx, ids)),
+          {
+            preparationBatchSize: adapter.preparationBatchSize,
+            fanoutSelections: adapter.fanoutSelections,
+            sharedPreparation: shared
+              ? {
+                  ...shared,
+                  prepare: (
+                    tx: Parameters<typeof shared.prepare>[0],
+                    ids: readonly string[],
+                  ) => after(shared.prepare(tx, ids)),
+                }
+              : undefined,
+          },
+        ),
+      ];
+    }),
   );
   const held = only
     ? (await drainItems(db, DERIVED_DRAIN_JOB_KEY)).filter(

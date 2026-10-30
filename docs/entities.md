@@ -2957,7 +2957,15 @@ target-list subquery must not turn each page into a whole-drain scan.
 Value targets in one publication chunk check unobserved fanouts in one statement
 before their shared value write. Each target retains its own indexed prefix
 bounds and blocked targets retain their publications and tickets. Sink checks
-remain immediately before each sink's writer; admission and lock order do not change.
+remain immediately before each sink's writer; source-before-work lock order is unchanged.
+Production derived pages expand admitted source fanouts before preparing direct
+values, allowing newly owed values to publish in the same invocation when the
+shared preparation budget has room. Both passes use the existing fenced drain;
+direct preparation observes pending fanout tickets afresh after expansion.
+There is no repeated expansion loop. Busy fanouts stay owed without consuming
+the direct pass's budget twice, and an admission overflow cannot donate slack
+past the first unaffordable item. Pages without fanouts keep their single pass.
+Explicit fixture page limits retain the single-pass diagnostic behavior.
 For a fixed `targetWhere` input, one expansion also covers up to 200 ready
 source marks for that exact input: they all select the same dependent population.
 The expansion retains ordinary direct-target reticketing and the most urgent

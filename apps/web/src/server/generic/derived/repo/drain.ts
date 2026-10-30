@@ -92,30 +92,39 @@ export const DERIVED_COMPUTE_BATCH = 200;
 // Heavy adapters retain the original recipe-safe cap. Compact adapters can
 // declare a larger batch; mixed pages spend one shared preparation budget.
 const DEFAULT_PREPARATION_BATCH = 20;
+export function derivedPreparationCost(
+  item: WorkItem,
+  computes: DerivedComputes,
+): number {
+  const parsed = parseTarget(item.target);
+  const adapter =
+    parsed && !parsed.fanoutInput
+      ? computes[parsed.declaration.compute]
+      : undefined;
+  const batchSize = Math.max(
+    1,
+    Math.min(
+      DERIVED_COMPUTE_BATCH,
+      adapter?.preparationBatchSize ?? DEFAULT_PREPARATION_BATCH,
+    ),
+  );
+  return Math.ceil(DERIVED_COMPUTE_BATCH / batchSize);
+}
+
 export function admitDerivedPage({
   items,
   computes,
+  budget = DERIVED_COMPUTE_BATCH,
 }: {
   items: readonly WorkItem[];
   computes: DerivedComputes;
+  budget?: number;
 }): readonly WorkItem[] {
   let weight = 0;
   let count = 0;
   for (const item of items) {
-    const parsed = parseTarget(item.target);
-    const adapter =
-      parsed && !parsed.fanoutInput
-        ? computes[parsed.declaration.compute]
-        : undefined;
-    const batchSize = Math.max(
-      1,
-      Math.min(
-        DERIVED_COMPUTE_BATCH,
-        adapter?.preparationBatchSize ?? DEFAULT_PREPARATION_BATCH,
-      ),
-    );
-    const cost = Math.ceil(DERIVED_COMPUTE_BATCH / batchSize);
-    if (weight + cost > DERIVED_COMPUTE_BATCH) break;
+    const cost = derivedPreparationCost(item, computes);
+    if (weight + cost > Math.min(budget, DERIVED_COMPUTE_BATCH)) break;
     weight += cost;
     count++;
   }

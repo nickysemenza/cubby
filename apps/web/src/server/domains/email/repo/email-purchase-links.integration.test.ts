@@ -788,7 +788,7 @@ describe("Email Purchase links", () => {
       orderId: "SYNTHETIC-OTHER-CANDIDATE",
     });
     const fillers = [];
-    for (let index = 0; index < 24; index++)
+    for (let index = 0; index < 25; index++)
       fillers.push(
         await createProductIdentityFixture(
           ctx.db,
@@ -840,7 +840,8 @@ describe("Email Purchase links", () => {
     let preparedOldCandidate = false;
     const selectedFillers = new Set<string>(fillers.map((row) => row.entityId));
     await drainDerivedPage(ctx.db, {
-      // The fanout and 24 compact marks fill the first chunk; Email publishes in the second.
+      // After fanout expansion, 25 compact values fill the first direct chunk;
+      // the newer source ticket must also fence Email in the following chunk.
       only: (item) =>
         (item.target === sourceTarget && item.ref === unrelated.entityId) ||
         (item.target === "product.dataQuality" &&

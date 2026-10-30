@@ -7,6 +7,7 @@
  * drift and converges instead of staying silently wrong.
  */
 import { createLogger } from "@cubby/worker-tracing";
+import { and, notLike } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -17,6 +18,7 @@ import {
   DERIVED_COMPUTE_BATCH,
   admitDerivedPage,
   derivedChunk,
+  derivedPreparationCost,
   derivedWorkEligible,
   type DerivedChunk,
   type DerivedPagePlan,
@@ -27,9 +29,12 @@ import {
   publishDerivedChunk,
 } from "~/server/generic/derived/repo/drain";
 import { repeatJob } from "~/server/generic/jobs/repo/producer";
-import { defineDrain } from "~/server/generic/jobs/service/drain";
+import {
+  defineDrain,
+  type DrainSpec,
+} from "~/server/generic/jobs/service/drain";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
-import type { JobHandler } from "~/server/generic/jobs/types";
+import type { JobHandler, PreparedJobPage } from "~/server/generic/jobs/types";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const log = createLogger("derived");
@@ -43,18 +48,30 @@ const RECONCILE_BUCKETS = 24;
  * Each page claims ready marks, computes outside the transaction and
  * publishes through `defineDrain`; an idle page marks expired clock values.
  */
-export const derivedDrainHandler = (
+type DerivedPreparation = { plan: DerivedPagePlan; chunk: DerivedChunk };
+
+const derivedDrain = (
   computes: DerivedComputes,
-  /** Production keeps the default page and chunk; test drains settle large fixtures in one transaction. */
-  { limit, chunk }: { limit?: number; chunk?: number } = {},
+  {
+    limit,
+    chunk,
+    admit,
+    eligible,
+  }: {
+    limit?: number;
+    chunk?: number;
+    admit?: DrainSpec<DerivedPreparation>["admit"];
+    eligible?: DrainSpec<DerivedPreparation>["eligible"];
+  },
 ): JobHandler =>
-  defineDrain<{ plan: DerivedPagePlan; chunk: DerivedChunk }>({
+  defineDrain<DerivedPreparation>({
     limit: limit ?? DERIVED_COMPUTE_BATCH,
     admit:
-      limit === undefined
+      admit ??
+      (limit === undefined
         ? (items) => admitDerivedPage({ items, computes })
-        : undefined,
-    eligible: derivedWorkEligible,
+        : undefined),
+    eligible: eligible ?? derivedWorkEligible,
     chunk,
     repeats: true,
     async prepare(db, items) {
@@ -99,6 +116,76 @@ export const derivedDrainHandler = (
       await markExpiredClockDerived(tx);
     },
   });
+
+const drainCount = (page: PreparedJobPage, key: string): number => {
+  const result = page.page.result;
+  if (typeof result !== "object" || result === null || Array.isArray(result))
+    return 0;
+  const value = result[key];
+  return typeof value === "number" ? value : 0;
+};
+
+/** Expand source marks before input reads, spending one ordered page budget. */
+export const derivedDrainHandler = (
+  computes: DerivedComputes,
+  /** Explicit limits retain the fixture drain's single-phase behavior. */
+  { limit, chunk }: { limit?: number; chunk?: number } = {},
+): JobHandler => {
+  if (limit !== undefined) return derivedDrain(computes, { limit, chunk });
+  return {
+    async prepare(db, claim, context) {
+      // A superseded invocation can still unwind while its replacement runs.
+      // Never share admission state between invocations of this handler.
+      let expandedFirst = false;
+      let remaining = 0;
+      const first = await derivedDrain(computes, {
+        chunk,
+        admit(items) {
+          const prefix = admitDerivedPage({ items, computes });
+          const fanouts = prefix.filter((item) => item.target.includes("@"));
+          // Ordinary direct-only pages keep their existing single read/pass.
+          if (!fanouts.length) return prefix;
+          expandedFirst = true;
+          const cost = (marks: typeof prefix) =>
+            marks.reduce(
+              (sum, item) => sum + derivedPreparationCost(item, computes),
+              0,
+            );
+          // An overflow's unused slack cannot jump the expensive next item.
+          remaining =
+            prefix.length < items.length
+              ? cost(prefix.filter((item) => !item.target.includes("@")))
+              : DERIVED_COMPUTE_BATCH - cost(fanouts);
+          return fanouts;
+        },
+      }).prepare(db, claim, context);
+      if (!expandedFirst || remaining === 0) return first;
+      await context.check();
+      const direct = await derivedDrain(computes, {
+        chunk,
+        // Busy fanouts were attempted once already; leave them owed rather
+        // than double-charging their cost ahead of independent direct work.
+        eligible: (target) =>
+          and(derivedWorkEligible(target), notLike(target, "%@%"))!,
+        admit: (items) =>
+          admitDerivedPage({ items, computes, budget: remaining }),
+      }).prepare(db, claim, context);
+      return {
+        ...direct,
+        page: {
+          ...direct.page,
+          done: false,
+          result: Object.fromEntries(
+            ["processed", "published", "failed", "covered"].map((key) => [
+              key,
+              drainCount(first, key) + drainCount(direct, key),
+            ]),
+          ),
+        },
+      };
+    },
+  };
+};
 
 export const derivedReconcileHandler: JobHandler = defineJobHandler(
   z.object({}).passthrough(),
