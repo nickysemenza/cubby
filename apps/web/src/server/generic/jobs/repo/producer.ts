@@ -18,6 +18,7 @@ import {
   repositoryTransactionDatabase,
   repositoryTransactionOn,
   type RepositoryQueryInput,
+  type RepositoryQueryTransaction,
 } from "~/server/db/repository-access.boundary";
 import { job, jobInvalidationCapture } from "~/server/db/retained-tables";
 import {
@@ -181,7 +182,12 @@ export async function wakeJob(
   db: RepositoryQueryInput,
   input: Omit<EnqueueJobInput, "invalidate">,
 ) {
-  await repositoryTransactionOn(db, async (tx) => {
+  const current = repositoryQueries(db);
+  // SAFETY: the query projection preserves the actual native object. Its
+  // rollback discriminator identifies the transaction behind a Database facade.
+  const source =
+    "rollback" in current ? (current as RepositoryQueryTransaction) : db;
+  await repositoryTransactionOn(source, async (tx) => {
     await repositoryQueries(tx)
       .insert(jobInvalidationCapture)
       .values({ key: input.key, capturedAt: new Date() });

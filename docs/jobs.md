@@ -318,6 +318,9 @@ save's transaction (`wakeJob`; the generated derived mark function captures
 another capture or the Job's execution row, so concurrent writers share no
 mutable counter, and a rolled-back save leaves no capture. A first wake
 creates the Job.
+`wakeJob` joins the source transaction through either its native handle or a
+transaction-backed Database facade. A standalone wake owns its transaction;
+first-enrollment collision retries retain their explicit savepoints.
 
 A Job is due when it is queued and not waiting, or completed, and has an
 unobserved capture. A claim acknowledges exactly the captures visible in its
