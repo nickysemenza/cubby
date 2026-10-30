@@ -29,7 +29,6 @@ import {
   withAiEvaluationSavepoint,
 } from "~/server/ai/evaluation/repo/ai-evaluation";
 import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
-import { markAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type {
   EvaluationPagePublication,
   EvaluationPageTarget,
@@ -311,16 +310,15 @@ function aiEvaluationDrainSpec(
         else if (overflow.has(id)) entries.set(id, { kind: "skip" });
         else await settle(target, page.failures.get(id));
       }
-      // A fresh ticket keeps the evidence suffix due for the next page
-      // without spending an attempt.
-      if (overflow.size)
-        await context.fenced((tx) => markAiEvaluationWork(tx, [...overflow]));
       return { prepared: { targets, entries, page }, failed };
     },
     async lock(tx, items, prepared) {
+      // Unadmitted evidence stays owed with its original ticket and backoff.
+      const overflow = new Set(prepared.page?.overflow);
+      const admitted = items.filter((item) => !overflow.has(item.ref));
       await lockAiEvaluationPage(
         tx,
-        items.flatMap((item) => {
+        admitted.flatMap((item) => {
           const kind = prepared.entries.get(item.ref)?.kind;
           const target = prepared.targets.get(item.ref);
           return target && kind !== "skip" && kind !== "settled"
@@ -328,6 +326,7 @@ function aiEvaluationDrainSpec(
             : [];
         }),
       );
+      return admitted;
     },
     async publish(tx, items, prepared) {
       const held = items.flatMap((item) => {

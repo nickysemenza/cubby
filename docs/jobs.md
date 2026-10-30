@@ -603,8 +603,9 @@ settles its requesters. A Run cancel withdraws its requests and drops the items
 of evaluations no other requester still wants. `maxInFlight: 2` leaves the
 other drain lanes free for other kinds.
 
-Product identity and connection features prepare a page of up to 100 items
-together and publish it in fenced chunks; other features run up to 8 items, two
+Product identity and connection features observe up to 100 items, prepare
+consecutive waves of up to 8, and publish admitted evidence in fenced chunks;
+other features run up to 8 items, two
 at a time, each in its own guarded transactions under the drain lease.
 Paged evaluations annotate the existing Job heartbeat and completion logs with
 `evaluation.prepare`, `evaluation.stage` and `evaluation.infer` phase timing.
@@ -626,13 +627,20 @@ no target Job/entity id. Distinct Runs remain separate usage groups.
 `settleDecisionWorkItems` supplies finite waves; `DecisionRequestBatch` packs
 up to 64 questions/32,000 text bytes, with four request chunks in flight.
 Routing, response-cache keys and per-question avoided usage stay unchanged.
-An oversized question fails visibly. Page evidence is limited to 4 MiB; an
-unadmitted suffix stays due rather than completing its enumeration receipt.
+An oversized question fails visibly. Page evidence is limited to 4 MiB. Admission
+runs after each preparation wave and stops later canonical reads when the
+ordered evidence prefix fills. Failures and individually oversized evidence
+already prepared in that wave retain their own handling; the unknown suffix
+stays owed. Unadmitted items keep their original ticket, priority, attempts and
+readiness rather than completing their enumeration receipts or being reticketed.
+Staging runs once after admission. Retained evaluation snapshots still load for
+the observed page before preparation; neither the serialized evidence bound nor
+the target count is a total Worker heap bound.
 
 Connection pages evaluate 8 sources at once (a Worker invocation holds five
 strong connections). Expense Project recommendation inputs and
 FinancialTransaction settlement/transfer retrieval load for the page before
-provider work. Evidence capture shares the page's reads and the validated frozen
+provider work. Evidence capture shares each preparation wave's reads and the validated frozen
 JSON of repeated recommendation contexts within that capture pass, instead of
 copying the same context into every candidate tree.
 All evidence fields and serialized fingerprints remain unchanged. Locked
