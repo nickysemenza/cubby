@@ -26,6 +26,7 @@ export const emailWorkSources: WorkSource[] = [
           id: sql`${email.shortcode}`,
           name: sql`coalesce("Email".subject, 'Email')`,
           owners: sql`ARRAY["Email"."ledgerPartyId"]`,
+          exclusiveOwner: sql`"Email"."ledgerPartyId"`,
           date: householdDaySql(sql`"Email"."receivedAt"`),
           ...readGap.columns,
         })

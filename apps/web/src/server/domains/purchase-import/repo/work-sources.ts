@@ -54,6 +54,7 @@ const source: WorkSource = {
       reason: "Finding",
       reasonKeys: ["finding"],
       owners: sql`CASE WHEN cardinality(${findingSources}) > 0 AND NOT EXISTS (SELECT 1 FROM unnest(${findingSources}) owner WHERE owner IS NULL OR owner <> finding."ledgerPartyId") THEN ARRAY[finding."ledgerPartyId"] ELSE ARRAY[NULL::uuid] END`,
+      exclusiveOwner: sql`finding."ledgerPartyId"`,
       ...workRecordFacts(sql`identity.kind`, sql`finding."recordId"`),
     })
       .from(finding)

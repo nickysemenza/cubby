@@ -105,6 +105,11 @@ Owners follow the authority a source needs, never inventory ownership. Shared
 work lists every member, so filtering by a member (including Me) includes it;
 Unresolved is the Owner filter's No value. An agent's MCP read sees shared work
 and work owned only by its own member.
+Sources whose resolved authority can name only one current member may declare
+that necessary owner to narrow admission before routing. Full current authority
+checks still decide access and counts. Owner presence widens selected owners,
+so mixed presence/inclusion requests retain the full population; joint-authority
+sources do not declare a sole-owner hint.
 
 A row states its Reason, Executor, Owner and the source's declared actions.
 Executor is who acts — Cubby automatically, an agent session, a member, or

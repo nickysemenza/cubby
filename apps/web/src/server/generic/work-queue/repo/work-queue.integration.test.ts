@@ -46,6 +46,7 @@ type Row = {
   name?: string;
   reasons: string[];
   owners?: (string | null)[];
+  exclusiveOwner?: string | null;
   shared?: boolean;
   executor?: WorkExecutor;
   amount?: number | null;
@@ -89,11 +90,12 @@ const fakeSource = (
         executor:
           source.executor === "dynamic" ? sql`fixture.executor` : undefined,
         owners: sql`fixture.owners`,
+        exclusiveOwner: sql`fixture."exclusiveOwner"`,
         shared: sql`fixture.shared`,
         amount: sql`fixture.amount`,
         date: sql`fixture.date`,
       }).from(
-        sql`jsonb_to_recordset(${JSON.stringify(rows.map((row) => ({ name: row.key, owners: [], shared: false, amount: null, date: null, ...row })))}::jsonb) AS fixture(key text, name text, reasons text[], owners uuid[], shared boolean, executor text, amount double precision, date date)`,
+        sql`jsonb_to_recordset(${JSON.stringify(rows.map((row) => ({ name: row.key, owners: [], shared: false, amount: null, date: null, ...row })))}::jsonb) AS fixture(key text, name text, reasons text[], owners uuid[], "exclusiveOwner" uuid, shared boolean, executor text, amount double precision, date date)`,
       ),
     })),
   };
@@ -270,15 +272,36 @@ describe("composed Work queue engine", () => {
       userId: otherUser,
     });
     const source = fakeSource("owners", [
-      { key: "mine", reasons: ["a"], owners: [first.id] },
-      { key: "theirs", reasons: ["a"], owners: [second.id] },
+      {
+        key: "mine",
+        reasons: ["a"],
+        owners: [first.id],
+        exclusiveOwner: first.id,
+      },
+      {
+        key: "theirs",
+        reasons: ["a"],
+        owners: [second.id],
+        exclusiveOwner: second.id,
+      },
       { key: "both", reasons: ["a"], owners: [first.id, second.id] },
-      { key: "shared", reasons: ["a"], shared: true },
-      { key: "unresolved", reasons: ["a"], owners: [null] },
+      {
+        key: "shared",
+        reasons: ["a"],
+        shared: true,
+        exclusiveOwner: second.id,
+      },
+      {
+        key: "unresolved",
+        reasons: ["a"],
+        owners: [null],
+        exclusiveOwner: second.id,
+      },
       { key: "missing", reasons: ["a"] },
     ]);
     const composition = { sources: [source], deferrals: [] };
     const household = await read([source]);
+    expect(household.meta.totalCount).toBe(6);
     expect(
       household.items
         .find((row) => row.key === "shared")
@@ -300,6 +323,36 @@ describe("composed Work queue engine", () => {
       memberOnly: false,
     });
     expect(own.items.map((row) => row.key)).toEqual(["both", "mine", "shared"]);
+    const noValue = await read([source], {
+      owner: first.shortcode,
+      ownerPresence: "none",
+    });
+    expect(noValue.items.map((row) => row.key)).toEqual([
+      "both",
+      "mine",
+      "missing",
+      "shared",
+      "unresolved",
+    ]);
+    expect(noValue.meta.totalCount).toBe(5);
+    expect(noValue.meta.viewCounts).toMatchObject({ all: 5, human: 5 });
+    const anyValue = await read([source], {
+      owner: first.shortcode,
+      ownerPresence: "has",
+    });
+    expect(anyValue.items.map((row) => row.key)).toEqual([
+      "both",
+      "mine",
+      "shared",
+      "theirs",
+    ]);
+    expect(anyValue.meta.totalCount).toBe(4);
+    expect(anyValue.meta.viewCounts).toMatchObject({ all: 4, human: 4 });
+    expect(
+      (
+        await read([source], { owner: [first.shortcode, second.shortcode] })
+      ).items.map((row) => row.key),
+    ).toEqual(anyValue.items.map((row) => row.key));
     const fenced = await readWorkQueueWith(ctx.db, composition, {
       input: { pageSize: 100 },
       memberPartyId: first.id,

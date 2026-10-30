@@ -39,6 +39,7 @@ const execution: WorkSource = {
       id: sql`"Run".shortcode`,
       name: sql`"Run".purpose || ' · ' || "Run".status`,
       owners: workRunReviewRead().owners,
+      exclusiveOwner: sql`"Run"."ledgerPartyId"`,
       date: householdDaySql(sql`"Run"."startedAt"`),
       // A Run stopped at its execution limit waits for a member to resume it.
       executor: sql`CASE WHEN "Run".status = ${runStatus.enum.running} THEN ${workExecutor.enum.automatic} WHEN "Run".status = ${runStatus.enum.needs_review} THEN ${workExecutor.enum.human} ELSE ${workExecutor.enum.external} END`,
@@ -80,6 +81,7 @@ const account: WorkSource = {
       id: sql`"Run".shortcode`,
       name: sql`"Run".purpose || ' · ' || "Run".status`,
       owners: workRunReviewRead().owners,
+      exclusiveOwner: sql`"Run"."ledgerPartyId"`,
       date: householdDaySql(sql`"Run"."startedAt"`),
       executor: sql`CASE WHEN "Run".status IN (${runStatus.enum.paused}, ${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline}) THEN ${workExecutor.enum.external} ELSE ${workExecutor.enum.human} END`,
       reason: account.reasons[0]!.label,
