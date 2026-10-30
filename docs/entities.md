@@ -3810,10 +3810,11 @@ exact filter because a member's filter also matches shared work. Saved views
 those filters (ADR 0022); view counts are computed in the same pass before the
 active view applies.
 
-The engine materializes the admitted sources' union once per statement, after
-pruning sources a reason filter or record scope cannot admit and before
-filters, search and the view. The correct filter and stable sort precede
-LIMIT/OFFSET; quality gaps and display images are hydrated for the page only.
+The engine prunes sources a reason filter or record scope cannot admit. Source
+union and owner routing can inline so common filters reach their inputs; the
+filtered population materializes once for the selected view, exact totals and
+view/group counts. The correct filter and stable sort precede LIMIT/OFFSET;
+quality gaps and display images are hydrated for the page only.
 
 Run attention candidates join their current member and source account once in
 the candidate relation. They share the same authority expression with scalar
