@@ -60,7 +60,11 @@ const productionEmbeddingPorts: EmbeddingPorts = {
   // pair, which is deterministic. Repeat search queries were paying the full
   // provider round-trip (p50 ~940ms) without this.
   fetchFor: (metadata, observers) =>
-    gatewayFetch("openai", { ...cachedCall({ metadata }), ...observers }),
+    gatewayFetch("openai", {
+      ...cachedCall({ metadata }),
+      ...observers,
+      funding: "openai_credit",
+    }),
   configured: gatewayConfigured,
   vectorStore: productionVectorStore,
   config: getSemanticEmbeddingConfig,
@@ -165,6 +169,13 @@ export async function embedTexts(
           }
           const body = embeddingsResponseSchema.parse(await response.json());
           return {
+            ...(ports === productionEmbeddingPorts && {
+              costEvidence: {
+                standard: null,
+                charged: null,
+                billingReason: "subscriber_credit" as const,
+              },
+            }),
             embeddings: body.data.map((item) => ({
               index: item.index,
               vector: item.embedding,

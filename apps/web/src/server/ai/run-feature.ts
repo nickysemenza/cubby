@@ -1160,6 +1160,7 @@ export async function runEmbeddingFeature(
     ) => Promise<{
       embeddings: { index: number; vector: number[] }[];
       usage?: { promptTokens?: number | null; totalTokens?: number | null };
+      costEvidence?: AiCostEvidence;
     }>;
   },
   ctx: Omit<AiRunContext, "runId"> & { runId?: RunId },
@@ -1286,6 +1287,7 @@ async function placeEmbeddings(
     await recordFeatureUsage(spec, usageCtx, {
       transport,
       inputTokens,
+      costEvidence: result.costEvidence,
       durationMs: Math.round(performance.now() - startedAt),
       cacheStatus: "none",
       gatewayLogId: gateway?.gatewayLogId,
