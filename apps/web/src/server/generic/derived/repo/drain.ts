@@ -571,19 +571,27 @@ async function publishValues(
       };
     }),
   );
-  const blocked = new Set<string>();
-  for (const { declaration } of groups) {
-    const [row] = z
-      .array(z.object({ blocked: z.boolean() }))
+  // These read-only barriers precede the same value write. Keep each target's
+  // indexable prefix bounds while sharing their statement and snapshot.
+  const blocked = new Set(
+    z
+      .array(z.object({ target: z.string() }))
       .parse(
         (
           await tx.execute(
-            sql`SELECT ${blockedByFanout(declaration.target, plan)} AS blocked`,
+            sql.join(
+              groups.map(
+                ({ declaration }) =>
+                  sql`SELECT ${declaration.target}::text AS target
+                    WHERE ${blockedByFanout(declaration.target, plan)}`,
+              ),
+              sql` UNION ALL `,
+            ),
           )
         ).rows,
-      );
-    if (row?.blocked) blocked.add(declaration.target);
-  }
+      )
+      .map(({ target }) => target),
+  );
   const publishable = rows.filter((row) => !blocked.has(row.target));
   const published = new Map<string, string[]>();
   for (const row of publishable) {
