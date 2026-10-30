@@ -2219,6 +2219,9 @@ describe("statement Transaction suggestions", () => {
     const historical = retained.find(
       (row) => row.rawDescription === "EXAMPLE MKTPL*EF56GH78",
     )!;
+    const previous = rows.find(
+      (row) => row.chargeKey === historical.chargeKey,
+    )!;
     // Intake refuses new unpositioned rows; emulate retained historical surplus.
     await getDb(ctx.db)
       .update(sourceTransactionRecord)
@@ -2228,10 +2231,43 @@ describe("statement Transaction suggestions", () => {
       importId: positioned.batchId,
       statementRowId: historical.id,
     });
+    await expect(
+      previewStatementSuggestion(ctx.db, {
+        assessmentId: previous.assessmentId,
+        expectedFingerprint: previous.fingerprint,
+        application: { kind: "statement_transaction", action: "create" },
+      }),
+    ).rejects.toThrow(/source occurrence|evidence changed/i);
     await generate(ctx);
     const after = await suggestions(ctx);
     expect(after).toHaveLength(3);
     expect(after.every((row) => !row.clean && row.siblings > 0)).toBe(true);
+
+    // Removing live peers cannot turn an unproven historical occurrence into money.
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ deletedAt: new Date() })
+      .where(
+        inArray(
+          sourceTransactionRecord.id,
+          retained
+            .filter((row) => row.id !== historical.id)
+            .map((row) => row.id),
+        ),
+      );
+    await generate(ctx);
+    const held = (await suggestions(ctx)).find(
+      (row) => row.chargeKey === historical.chargeKey,
+    );
+    expect(held).toMatchObject({
+      clean: false,
+      siblings: 0,
+      reviewReason: expect.stringMatching(/source occurrence/),
+    });
+    if (!held) throw new Error("Missing occurrence review hold");
+    await expect(accept(ctx, held)).rejects.toThrow(/source occurrence/);
+    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
   });
 
   // Matching statement labels must not replace the attach target's actual kind.

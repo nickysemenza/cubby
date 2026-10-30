@@ -13,7 +13,11 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { getDb, runAfterCommit } from "~/server/db/helpers";
-import { assessmentState, vendor as vendorTable } from "~/server/db/schema";
+import {
+  assessmentState,
+  sourceTransactionRecord,
+  vendor as vendorTable,
+} from "~/server/db/schema";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
 import { bookFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-booking";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -1197,7 +1201,7 @@ describe("statement spending review and re-import", () => {
     });
     expect(await total()).toBe(42.5);
   });
-  it("automatically books an unchanged matched-but-unbooked import once, retains its audit and skips later Expense edits", async () => {
+  it("books matched historical evidence once, retains its audit and skips later Expense edits", async () => {
     const { input, account, advice, recorded } = await fixture();
     const observed = (await listSourceTransactionRecords(ctx.db, {})).data[0]!;
     await createRepoEntity(ctx, "financialTransaction", {
@@ -1216,6 +1220,11 @@ describe("statement spending review and re-import", () => {
       ctx.actor,
     );
     expect(repeated.inserted).toBe(0);
+    // The accepted transaction owns identity even when historical position metadata is absent.
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ rowPosition: null })
+      .where(eq(sourceTransactionRecord.shortcode, observed.id));
     await label(advice, recorded.batchId!);
     expect(await total()).toBe(42.5);
     await label(advice, recorded.batchId!);

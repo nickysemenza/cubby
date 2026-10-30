@@ -1064,6 +1064,31 @@ describe("transfer-pair suggestions", () => {
       clean: true,
     });
 
+    // A supported leg must never admit its unproven opposite leg, even when
+    // the pair was published clean before that evidence changed.
+    const oppositeCharge = published!.judgment.inflow.charge!;
+    const [opposite] = await unwrapDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord)
+      .where(eq(sourceTransactionRecord.chargeKey, oppositeCharge.chargeKey));
+    await unwrapDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ rowPosition: null, providerTransactionId: null })
+      .where(eq(sourceTransactionRecord.id, opposite!.id));
+    expect(await discoverTransferPairs(ctx.db)).toEqual([]);
+    await expect(apply(published!)).rejects.toThrow(
+      /candidate|occurrence|changed/i,
+    );
+    expect(await liveTransactions()).toEqual([]);
+    expect(await transfers()).toEqual([]);
+    await unwrapDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({
+        rowPosition: opposite!.rowPosition,
+        providerTransactionId: opposite!.providerTransactionId,
+      })
+      .where(eq(sourceTransactionRecord.id, opposite!.id));
+
     const result = await apply(published!);
     const legs = await liveTransactions();
     expect(legs.map((leg) => Number(leg.amount)).sort((a, b) => a - b)).toEqual(
