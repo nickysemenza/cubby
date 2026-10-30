@@ -490,6 +490,132 @@ describe("Email Purchase links", () => {
           changed: fact.changed,
         }));
       };
+      const unchangedAccepted = [{ purchaseId: purchase.id, changed: false }];
+      const [emptyRoot] = await getDb(ctx.db)
+        .insert(importSourceClaim)
+        .values({
+          ledgerPartyId: party.id,
+          kind,
+          externalKey: "synthetic:empty-family-root",
+          checksum,
+          firstRunId: scope.id,
+          lastRunId: scope.id,
+        })
+        .returning();
+      if (!emptyRoot) throw new Error("Synthetic empty source family missing");
+      expect(
+        await workItemStates(ctx.db, "email.relationshipFacts@7", [
+          emptyRoot.id,
+        ]),
+      ).toEqual([]);
+      await drainEmail();
+      expect(await facts()).toEqual(unchangedAccepted);
+      expect(await unrelatedWork()).toEqual(deferred);
+      // Move the matching identity onto an alias with no accepted associations.
+      // Its old parent is the only path to the former family's Purchase after a move.
+      await getDb(ctx.db)
+        .update(importSourceClaim)
+        .set({ externalKey: "synthetic:renamed-family-root" })
+        .where(eq(importSourceClaim.id, root.id));
+      expect(
+        await workItemStates(ctx.db, "email.relationshipFacts@10", [root.id]),
+      ).toHaveLength(1);
+      expect(
+        await workItemStates(ctx.db, "email.relationshipFacts@11", [
+          "00000000-0000-4000-8000-000000000000",
+        ]),
+      ).toHaveLength(1);
+      await drainEmail();
+      expect(await facts()).toEqual([]);
+      const [identityAlias] = await getDb(ctx.db)
+        .insert(importSourceClaim)
+        .values({
+          ledgerPartyId: party.id,
+          kind,
+          externalKey,
+          canonicalClaimId: root.id,
+          checksum,
+          firstRunId: scope.id,
+          lastRunId: scope.id,
+        })
+        .returning();
+      const [nestedParent] = await getDb(ctx.db)
+        .insert(importSourceClaim)
+        .values({
+          ledgerPartyId: party.id,
+          kind,
+          externalKey: "synthetic:intermediate-family-alias",
+          canonicalClaimId: root.id,
+          checksum,
+          firstRunId: scope.id,
+          lastRunId: scope.id,
+        })
+        .returning();
+      if (!identityAlias || !nestedParent)
+        throw new Error("Synthetic source family aliases missing");
+      await drainEmail();
+      expect(await facts()).toEqual(unchangedAccepted);
+      for (const parent of [emptyRoot.id, null, nestedParent.id]) {
+        await getDb(ctx.db)
+          .update(importSourceClaim)
+          .set({ canonicalClaimId: parent })
+          .where(eq(importSourceClaim.id, identityAlias.id));
+        expect(
+          await workItemStates(ctx.db, "email.relationshipFacts@11", [root.id]),
+        ).toHaveLength(1);
+        await drainEmail();
+        expect(await facts()).toEqual([]);
+        expect(await unrelatedWork()).toEqual(deferred);
+        await getDb(ctx.db)
+          .update(importSourceClaim)
+          .set({ canonicalClaimId: root.id })
+          .where(eq(importSourceClaim.id, identityAlias.id));
+        await drainEmail();
+        expect(await facts()).toEqual(unchangedAccepted);
+      }
+      // Invalid cyclic families lose canonical evidence but must finish expansion.
+      await getDb(ctx.db)
+        .update(importSourceClaim)
+        .set({ canonicalClaimId: identityAlias.id })
+        .where(eq(importSourceClaim.id, root.id));
+      await drainEmail();
+      expect(await facts()).toEqual([]);
+      await getDb(ctx.db)
+        .update(importSourceClaim)
+        .set({ canonicalClaimId: null })
+        .where(eq(importSourceClaim.id, root.id));
+      await drainEmail();
+      expect(await facts()).toEqual(unchangedAccepted);
+      for (const changed of [
+        { ledgerPartyId: foreignParty.id },
+        { kind: "browser_order" },
+      ]) {
+        await getDb(ctx.db)
+          .update(importSourceClaim)
+          .set(changed)
+          .where(eq(importSourceClaim.id, root.id));
+        await drainEmail();
+        expect(await facts()).toEqual([]);
+        expect(await unrelatedWork()).toEqual(deferred);
+        await getDb(ctx.db)
+          .update(importSourceClaim)
+          .set({ ledgerPartyId: party.id, kind })
+          .where(eq(importSourceClaim.id, root.id));
+        await drainEmail();
+        expect(await facts()).toEqual(unchangedAccepted);
+      }
+      await getDb(ctx.db)
+        .delete(importSourceClaim)
+        .where(eq(importSourceClaim.id, identityAlias.id));
+      await drainEmail();
+      expect(await facts()).toEqual([]);
+      expect(await unrelatedWork()).toEqual(deferred);
+      await getDb(ctx.db)
+        .update(importSourceClaim)
+        .set({ externalKey })
+        .where(eq(importSourceClaim.id, root.id));
+      await drainEmail();
+      expect(await facts()).toEqual(unchangedAccepted);
       await getDb(ctx.db)
         .update(importSourceOrder)
         .set({ checksum: "b".repeat(64) })
@@ -576,6 +702,18 @@ describe("Email Purchase links", () => {
           ])
         )[0],
       ).toMatchObject({ priority: 0 });
+      const beforeLegacyClaim = await unrelatedWork();
+      await markWork(ctx.db, DERIVED_DRAIN, [
+        {
+          target: "email.relationshipFacts@7",
+          ref: identityAlias.id,
+          priority: 0,
+        },
+      ]);
+      await drainDerivedPage(ctx.db, {
+        only: (item) => item.target === "email.relationshipFacts@7",
+      });
+      expect(await unrelatedWork()).not.toEqual(beforeLegacyClaim);
     },
   );
 

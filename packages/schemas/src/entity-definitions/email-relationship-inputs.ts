@@ -1,5 +1,22 @@
 import type { DerivedStoredInput } from "./definition";
 
+// Canonical families are a root and direct aliases; seeds keep root-owned orders.
+const sourceClaimPurchases = [
+  {
+    table: "ImportSourceClaim",
+    from: "id",
+    to: "canonicalClaimId",
+    recursive: { maxDepth: 1 },
+  },
+  {
+    table: "ImportSourceClaim",
+    from: "canonicalClaimId",
+    to: "id",
+    recursive: { maxDepth: 1 },
+  },
+  { table: "ImportSourceOrder", from: "sourceClaimId", to: "purchaseId" },
+];
+
 /** Inputs of canonical candidate discovery, retained evidence and review precedence. */
 export const EMAIL_RELATIONSHIP_INPUTS: DerivedStoredInput[] = [
   {
@@ -73,7 +90,8 @@ export const EMAIL_RELATIONSHIP_INPUTS: DerivedStoredInput[] = [
   },
   {
     table: "ImportSourceClaim",
-    // Old source-family keys are not retained in the relationship facts.
+    // Pending Claim-ID tickets retain their conservative expansion.
+    capture: false,
     match: { id: "id" },
     targetWhere: { deletedAt: null },
     columns: ["canonicalClaimId", "ledgerPartyId", "kind", "externalKey"],
@@ -96,5 +114,28 @@ export const EMAIL_RELATIONSHIP_INPUTS: DerivedStoredInput[] = [
       retained: { array: ["facts"], key: "purchaseId" },
     },
     columns: ["sourceClaimId", "purchaseId", "checksum"],
+  },
+  {
+    table: "ImportSourceClaim",
+    match: { id: "id" },
+    targetWhere: { deletedAt: null },
+    selection: {
+      key: "purchaseEvidence",
+      path: sourceClaimPurchases,
+      retained: { array: ["facts"], key: "purchaseId" },
+    },
+    columns: ["canonicalClaimId", "ledgerPartyId", "kind", "externalKey"],
+  },
+  {
+    table: "ImportSourceClaim",
+    // Old and new parents keep both families reachable after a move or detach.
+    match: { canonicalClaimId: "id" },
+    targetWhere: { deletedAt: null },
+    selection: {
+      key: "purchaseEvidence",
+      path: sourceClaimPurchases,
+      retained: { array: ["facts"], key: "purchaseId" },
+    },
+    columns: ["canonicalClaimId", "ledgerPartyId", "kind", "externalKey"],
   },
 ];
