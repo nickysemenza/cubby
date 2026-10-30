@@ -1,5 +1,8 @@
 import type { Database } from "~/server/db";
-import { computeAttentionItems } from "~/server/domains/project/repo/attention";
+import {
+  computeAttentionItems,
+  projectAttentionFilterTypes,
+} from "~/server/domains/project/repo/attention";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { WorkScope } from "~/server/generic/work-queue/repo/work-source";
 
@@ -18,6 +21,7 @@ export const projectWorkContext = () => {
           : undefined;
       return computeAttentionItems(db, {
         projectIds: ids,
+        types: Object.values(projectAttentionFilterTypes),
       });
     })());
   const incompleteProjectIds = async () =>

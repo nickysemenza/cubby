@@ -15,7 +15,8 @@
  * already includes the complete subtree, including unmatched children.
  *
  * Expensive Project inputs come from published rollups. Missing roots are
- * reported separately from findings; live Task and Expense checks still run.
+ * reported separately from findings; requested rules retain live Task and
+ * Expense checks.
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import {
@@ -139,12 +140,16 @@ export async function computeAttentionItems(
   options?: {
     /** Matched dashboard projects; omitted means global Problems-page scope. */
     projectIds?: ProjectId[];
+    /** Omitted means every rule; callers prepare only the evidence they consume. */
+    types?: readonly ProjectAttentionType[];
   },
 ): Promise<ProjectAttentionReport> {
   const today = householdLocalDate();
   const activityCutoff = householdDaysAgo(STALE_ACTIVITY_DAYS);
   const items: ProjectAttentionItem[] = [];
   const scopedProjectIds = options?.projectIds;
+  const wants = (type: ProjectAttentionType) =>
+    options?.types === undefined || options.types.includes(type);
   const scopedOrInbox = (column: SQL) =>
     scopedProjectIds === undefined
       ? undefined
@@ -174,70 +179,77 @@ export async function computeAttentionItems(
     unclassifiedExpenseRows,
     actionable,
   ] = await Promise.all([
-    getDb(db)
-      .select({
-        id: task.id,
-        shortcode: task.shortcode,
-        name: task.name,
-        projectId: effectiveFieldSql<ProjectId | null>("task", "projectId"),
-        dueDate: task.dueDate,
-        dueEndDate: task.dueEndDate,
-      })
-      .from(task)
-      .where(
-        and(
-          notDeleted(task),
-          ne(task.status, "done"),
-          isNull(task.parentTaskId),
-          scopedOrInbox(
-            effectiveFieldSql<ProjectId | null>("task", "projectId"),
-          ),
-        ),
-      ),
+    wants("overdue_task")
+      ? getDb(db)
+          .select({
+            id: task.id,
+            shortcode: task.shortcode,
+            name: task.name,
+            projectId: effectiveFieldSql<ProjectId | null>("task", "projectId"),
+            dueDate: task.dueDate,
+            dueEndDate: task.dueEndDate,
+          })
+          .from(task)
+          .where(
+            and(
+              notDeleted(task),
+              ne(task.status, "done"),
+              isNull(task.parentTaskId),
+              scopedOrInbox(
+                effectiveFieldSql<ProjectId | null>("task", "projectId"),
+              ),
+            ),
+          )
+      : [],
+    // Rule selection must preserve the same missing-publication disclosure.
     loadStoredProjectRollups(db, undefined, scopedProjectIds),
-    overdueExpenseRead
-      .select({
-        id: expense.id,
-        shortcode: expense.shortcode,
-        name: expense.name,
-        projectId: effectiveExpenseProjectSql(),
-        date: expense.date,
-        // What the line was planned to cost — the card leads with the money,
-        // which is the whole reason an un-logged plan matters.
-        cost: overdueExpenseRead.cost,
-      })
-      .where(
-        and(
-          notDeleted(expense),
-          plannedExpense(),
-          isNotNull(expense.date),
-          lt(expense.date, today),
-        ),
-      ),
-    getDb(db)
-      .select({
-        id: expense.id,
-        shortcode: expense.shortcode,
-        name: expense.name,
-        projectId: effectiveExpenseProjectSql(),
-        date: expense.date,
-      })
-      .from(expense)
-      .where(
-        and(
-          notDeleted(expense),
-          eq(effectiveExpenseTradeSql(), "other"),
-          eq(expense.lineKind, "principal"),
-          isNull(expense.cost),
-          scopedProjectIds === undefined
-            ? undefined
-            : expenseDerivedMembershipSql(sql`${expense.id}`, {
-                projectIds: scopedProjectIds,
-                presence: "none",
-              }),
-        ),
-      ),
-    readTaskActionability(db),
+    wants("past_due_planned_expense")
+      ? overdueExpenseRead
+          .select({
+            id: expense.id,
+            shortcode: expense.shortcode,
+            name: expense.name,
+            projectId: effectiveExpenseProjectSql(),
+            date: expense.date,
+            // What the line was planned to cost — the card leads with the money,
+            // which is the whole reason an un-logged plan matters.
+            cost: overdueExpenseRead.cost,
+          })
+          .where(
+            and(
+              notDeleted(expense),
+              plannedExpense(),
+              isNotNull(expense.date),
+              lt(expense.date, today),
+            ),
+          )
+      : [],
+    wants("unclassified_expense")
+      ? getDb(db)
+          .select({
+            id: expense.id,
+            shortcode: expense.shortcode,
+            name: expense.name,
+            projectId: effectiveExpenseProjectSql(),
+            date: expense.date,
+          })
+          .from(expense)
+          .where(
+            and(
+              notDeleted(expense),
+              eq(effectiveExpenseTradeSql(), "other"),
+              eq(expense.lineKind, "principal"),
+              isNull(expense.cost),
+              scopedProjectIds === undefined
+                ? undefined
+                : expenseDerivedMembershipSql(sql`${expense.id}`, {
+                    projectIds: scopedProjectIds,
+                    presence: "none",
+                  }),
+            ),
+          )
+      : [],
+    wants("blocked_work") ? readTaskActionability(db) : [],
   ]);
   const projectRowById = new Map(allProjectRows.map((row) => [row.id, row]));
   const parentProject = (projectId: ProjectId | null) => {
@@ -276,7 +288,7 @@ export async function computeAttentionItems(
       );
     }
   };
-  appendOverdueTasks();
+  if (wants("overdue_task")) appendOverdueTasks();
 
   // Activity uses the same own live Task end dates and Expense dates as the
   // rollup's content bounds. Keep descendant activity and manual overrides out:
@@ -312,7 +324,7 @@ export async function computeAttentionItems(
       );
     }
   };
-  appendStalledProjects();
+  if (wants("stalled_project")) appendStalledProjects();
 
   // 3. missing_budget — subtree actual+committed spend > 0, subtree
   // costEstimate still null. Reuses the same batched rollup/aggregation the
@@ -349,7 +361,7 @@ export async function computeAttentionItems(
       );
     }
   };
-  appendMissingBudgets();
+  if (wants("missing_budget")) appendMissingBudgets();
 
   // 3b. spend_below_estimate — a `done` project with its own estimate, no
   // estimated ancestor (an ancestor's estimate already covers this subtree),
@@ -398,7 +410,7 @@ export async function computeAttentionItems(
       );
     }
   };
-  appendSpendBelowEstimate();
+  if (wants("spend_below_estimate")) appendSpendBelowEstimate();
 
   // 4. past_due_planned_expense
   const appendPastDueExpenses = () => {
@@ -427,7 +439,7 @@ export async function computeAttentionItems(
       );
     }
   };
-  appendPastDueExpenses();
+  if (wants("past_due_planned_expense")) appendPastDueExpenses();
 
   // 5. unclassified_expense — trade left at the catch-all "other" AND no
   // cost logged (costType itself stays a clean 3-value enum — no
@@ -481,7 +493,7 @@ export async function computeAttentionItems(
       );
     }
   };
-  appendBlockedProjects();
+  if (wants("blocked_work")) appendBlockedProjects();
 
   // 7. date_window_drift — a manual startDate/endDate override that now hides
   // real derived work (own tasks/expenses, folded up through live
@@ -552,7 +564,7 @@ export async function computeAttentionItems(
       }
     }
   };
-  appendDateWindowDrift();
+  if (wants("date_window_drift")) appendDateWindowDrift();
 
   return projectAttentionReport.parse({
     items,
