@@ -353,7 +353,7 @@ describe("settlement from retained order evidence", () => {
   });
 
   it("retains stored payment evidence when an attachment preview changes the amount", async () => {
-    const { card, vendor, run } = await world();
+    const { card, vendor, run, party } = await world();
     const purchaseId = await importOrder(run, {
       orderId: "attachment-amount-preview",
       total: 50,
@@ -367,6 +367,59 @@ describe("settlement from retained order evidence", () => {
       postedDate: "2026-09-02",
     });
     await charge(card.id, { amount: 30, postedDate: "2026-09-03" });
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ date: "2026-07-01" })
+      .where(eq(purchase.id, purchaseId));
+    await getDb(ctx.db)
+      .update(purchasePaymentEvidence)
+      .set({ chargedAt: null })
+      .where(
+        and(
+          eq(purchasePaymentEvidence.purchaseId, purchaseId),
+          eq(purchasePaymentEvidence.amount, 20),
+        ),
+      );
+    // A mixed dated/undated payment set can match completely, but expanding
+    // discovery must not grant that older candidate automatic settlement authority.
+    expect(
+      Array.isArray(
+        await planPurchaseRetainedSettlement(getDb(ctx.db), {
+          purchaseId,
+          ledgerPartyId: party.id,
+          discovery: true,
+        }),
+      ),
+    ).toBe(true);
+    const held = await previewFinancialSpending(ctx.db, {
+      transactionId: stored.shortcode,
+      advice: financialSpendingAdvice.parse({
+        vendorName: vendor.name,
+        vendorConfidence: "high",
+        counterparty: "business",
+      }),
+    });
+    expect(held).toMatchObject({
+      status: "review_required",
+      candidates: [{ strength: "weak" }],
+    });
+    await expect(
+      commitFinancialSpending(ctx.db, held, ctx.actor),
+    ).rejects.toThrow(/review/i);
+    expect(await allocationsFor([purchaseId])).toEqual([]);
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ date: "2026-09-02" })
+      .where(eq(purchase.id, purchaseId));
+    await getDb(ctx.db)
+      .update(purchasePaymentEvidence)
+      .set({ chargedAt: new Date("2026-09-02T12:00:00Z") })
+      .where(
+        and(
+          eq(purchasePaymentEvidence.purchaseId, purchaseId),
+          eq(purchasePaymentEvidence.amount, 20),
+        ),
+      );
     const plan = await previewFinancialSpending(
       ctx.db,
       {

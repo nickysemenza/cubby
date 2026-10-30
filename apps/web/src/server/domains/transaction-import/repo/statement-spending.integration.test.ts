@@ -1176,7 +1176,7 @@ describe("statement spending review and re-import", () => {
       ],
     });
   });
-  it("accepts a clean spending suggestion as a Purchase and categorized Expense", async () => {
+  it("refuses a clean spending suggestion when older unsettled spending appears", async () => {
     const { advice } = await fixture();
     await label(advice);
     const page = await listSuggestionPage(ctx.db, {
@@ -1187,19 +1187,37 @@ describe("statement spending review and re-import", () => {
       (row) => row.family === "statement_transaction",
     );
     expect(suggestion?.clean).toBe(true);
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: suggestion!.id,
-      operationId: "synthetic-spending-accept",
-      verdict: "correct",
-      intent: "apply",
-      application: {
-        kind: "statement_transaction",
-        action: "create",
-        rejectedCandidateIds: [],
-        fields: [],
-      },
+    const vendor = await getDb(ctx.db).query.vendor.findFirst({
+      where: eq(vendorTable.name, "Synthetic Orchard"),
     });
-    expect(await total()).toBe(42.5);
+    const receipt = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor!.shortcode,
+      date: "2026-03-01",
+    });
+    await createRepoEntity(ctx, "expense", {
+      purchaseId: receipt.output.id,
+      name: "Synthetic older receipt",
+      cost: 40,
+      trade: "other",
+    });
+    await expect(
+      reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: suggestion!.id,
+        operationId: "synthetic-spending-accept",
+        verdict: "correct",
+        intent: "apply",
+        application: {
+          kind: "statement_transaction",
+          action: "create",
+          rejectedCandidateIds: [],
+          fields: [],
+        },
+      }),
+    ).rejects.toThrow(/changed|review|stale/i);
+    expect(await total()).toBe(40);
+    expect(await getDb(ctx.db).query.financialTransaction.findMany()).toEqual(
+      [],
+    );
   });
   it("books matched historical evidence once, retains its audit and skips later Expense edits", async () => {
     const { input, account, advice, recorded } = await fixture();

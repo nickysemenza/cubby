@@ -149,7 +149,7 @@ export const STATEMENT_SUGGESTION_REVISION = "2026-10-21.1";
  * renaming the revision, which the automatic attach rule's measured windows
  * are keyed by.
  */
-const STATEMENT_CLEAN_POLICY = "2026-10-29.2";
+const STATEMENT_CLEAN_POLICY = "2026-10-29.3";
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;
