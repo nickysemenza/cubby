@@ -545,8 +545,9 @@ server-enforced and disclosed.
 
 The Work queue's household and MCP reads share one engine over the composed
 Work sources. Reason include/exclude and record scope prune sources that cannot
-emit a row before the union; filters, search and the view then narrow the one
-materialized union. Exact totals and view/group counts use the complete
+emit a row before the union. Source union and owner routing stages can inline,
+allowing common filters and search to reach their inputs. The filtered
+population materializes once; the selected view, exact totals and view/group counts use the complete
 eligible population in the same pass; quality gaps and display images load only
 for the selected page. A relation list's route derives its search schema from
 its declaration (`relationListSearch`), and its rows' declared actions render
