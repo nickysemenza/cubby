@@ -100,6 +100,9 @@ describe("embedTexts over the AI Gateway", () => {
     const headers = new Headers(call?.init?.headers);
     expect(headers.get("authorization")).toBeNull();
     expect(headers.get("cf-aig-authorization")).toBe("Bearer test-gateway-key");
+    // The default OpenAI key stays unset for explicit paid chat fallback.
+    expect(headers.get("cf-aig-byok-alias")).toBe("subscriber-credit");
+    expect(headers.get("cf-aig-no-wholesale")).toBe("true");
     // Regression: embeddings once sent `cf-aig-skip-cache`, so identical
     // search queries paid the full provider round-trip every time.
     expect(headers.get("cf-aig-skip-cache")).toBeNull();
