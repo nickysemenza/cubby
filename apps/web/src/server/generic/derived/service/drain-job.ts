@@ -138,6 +138,8 @@ export const derivedDrainHandler = (
       // Never share admission state between invocations of this handler.
       let expandedFirst = false;
       let remaining = 0;
+      let directReservation = 0;
+      let overflowPriority: number | undefined;
       const first = await derivedDrain(computes, {
         chunk,
         admit(items) {
@@ -151,11 +153,11 @@ export const derivedDrainHandler = (
               (sum, item) => sum + derivedPreparationCost(item, computes),
               0,
             );
-          // An overflow's unused slack cannot jump the expensive next item.
-          remaining =
-            prefix.length < items.length
-              ? cost(prefix.filter((item) => !item.target.includes("@")))
-              : DERIVED_COMPUTE_BATCH - cost(fanouts);
+          remaining = DERIVED_COMPUTE_BATCH - cost(fanouts);
+          overflowPriority = items[prefix.length]?.priority;
+          directReservation = cost(
+            prefix.filter((item) => !item.target.includes("@")),
+          );
           return fanouts;
         },
       }).prepare(db, claim, context);
@@ -167,8 +169,25 @@ export const derivedDrainHandler = (
         // than double-charging their cost ahead of independent direct work.
         eligible: (target) =>
           and(derivedWorkEligible(target), notLike(target, "%@%"))!,
-        admit: (items) =>
-          admitDerivedPage({ items, computes, budget: remaining }),
+        admit(items) {
+          if (overflowPriority === undefined)
+            return admitDerivedPage({ items, computes, budget: remaining });
+          let used = 0;
+          let count = 0;
+          for (const item of items) {
+            // Fresh member work can precede an unaffordable background item.
+            // At its priority or lower, cumulative cost keeps the reservation.
+            const allowance =
+              item.priority < overflowPriority
+                ? remaining
+                : Math.min(remaining, directReservation);
+            const next = used + derivedPreparationCost(item, computes);
+            if (next > allowance) break;
+            used = next;
+            count++;
+          }
+          return items.slice(0, count);
+        },
       }).prepare(db, claim, context);
       return {
         ...direct,
