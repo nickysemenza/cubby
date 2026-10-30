@@ -387,6 +387,8 @@ model, network or other processing errors as negative cutouts.
 and AVIF cloud descriptions (which need device JPEG preparation) run on
 devices; other cloud calls on the server. Device pulls claim parked work
 directly and prefer work whose last attempt ran on another device.
+They skip busy source rows, so an empty pull can precede a later hand-off
+while work remains owed. Consumers retry through their ordinary pull cycle.
 
 Migration 0029 converted the pre-lane `image.processing` kind under a lock on
 `Job`, then added `Job_kind_retired_check`, which refuses that kind. A
