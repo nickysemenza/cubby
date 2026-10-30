@@ -2949,6 +2949,10 @@ when a stored tree is deeper than the display cap.
 The drain's pre-compute fanout observation exposes each page target's prefix
 bounds directly in an OR predicate so the same index serves that read; a JSON
 target-list subquery must not turn each page into a whole-drain scan.
+Value targets in one publication chunk check unobserved fanouts in one statement
+before their shared value write. Each target retains its own indexed prefix
+bounds and blocked targets retain their publications and tickets. Sink checks
+remain immediately before each sink's writer; admission and lock order do not change.
 For a fixed `targetWhere` input, one expansion also covers up to 200 ready
 source marks for that exact input: they all select the same dependent population.
 The expansion retains ordinary direct-target reticketing and the most urgent
