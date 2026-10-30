@@ -92,6 +92,9 @@ export interface WorkCandidateColumns {
   readonly executor?: WorkExecutor | SQL;
   /** LedgerParty ids that can act; ignored when `shared`. */
   readonly owners: SQL;
+  /** Current necessary owner: resolved `owners` must contain only this member.
+   * Joint authorities omit it. This narrows reads, never grants access. */
+  readonly exclusiveOwner?: SQL;
   readonly shared?: boolean | SQL;
   readonly amount?: SQL;
   readonly date?: SQL;
@@ -137,6 +140,9 @@ const workCandidateColumns = (
           )}]::text[]`
     }`.as("reason_keys"),
     owners: sql<string[]>`(${columns.owners})::uuid[]`.as("owners"),
+    exclusive_owner: sql<
+      string | null
+    >`${columns.exclusiveOwner ?? sql`NULL`}::uuid`.as("exclusive_owner"),
     shared: sql<boolean>`${literal(columns.shared ?? false, "::boolean")}`.as(
       "shared",
     ),

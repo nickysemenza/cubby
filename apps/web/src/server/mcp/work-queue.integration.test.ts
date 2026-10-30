@@ -20,6 +20,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
 // The engine owns filter permutations. This boundary owns identity routing and
 // the invariant that caller filters cannot widen the connected member's fence.
@@ -133,6 +134,40 @@ describe("activity.queue member routing", () => {
     expect(unresolved.meta.totalCount).toBe(firstPage.meta.totalCount - 1);
     expect((await read(otherUser)).items.map((row) => row.id)).not.toContain(
       mine.shortcode,
+    );
+    const findingRun = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    const finding = await seedRunFinding(ctx.db, {
+      runId: findingRun,
+      ledgerPartyId: first.id,
+      entityKind: "product",
+      entityId: shared.entityId,
+      kind: "other",
+      summary: "Synthetic private source review",
+      evidenceFingerprint: "synthetic-current-owner-finding",
+    });
+    const findings = { reason: "finding", owner: CURRENT_MEMBER_FILTER };
+    const visible = await read(ctx.actor.userId, findings);
+    expect(visible.items.map((row) => row.key)).toEqual([
+      `finding:${finding.id}`,
+    ]);
+    expect(visible.meta.totalCount).toBe(1);
+    expect(visible.items[0]?.owners).toEqual([
+      expect.objectContaining({ id: first.shortcode }),
+    ]);
+    expect((await read(otherUser, { reason: "finding" })).meta.totalCount).toBe(
+      0,
+    );
+    await getDb(ctx.db)
+      .update(run)
+      .set({ actorUserId: otherUser })
+      .where(eq(run.id, findingRun));
+    expect((await read(ctx.actor.userId, findings)).meta.totalCount).toBe(0);
+    expect((await read(otherUser, { reason: "finding" })).meta.totalCount).toBe(
+      0,
     );
   });
 });

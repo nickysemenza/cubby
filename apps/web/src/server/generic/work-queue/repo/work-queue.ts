@@ -198,12 +198,28 @@ async function queryWorkQueue(
     ? sql`(shared OR ((${resolved}) AND NOT EXISTS (
         SELECT 1 FROM unnest(owners) owner WHERE owner IS DISTINCT FROM ${read.memberPartyId}::uuid)))`
     : undefined;
+  const ownerCodes = oneOrManyValues(input.owner);
+  // Presence widens Owner inclusion with OR; only plain inclusion can narrow.
+  const ownerAdmission = and(
+    ownerCodes?.length && input.ownerPresence === undefined
+      ? sql`(shared OR exclusive_owner IS NULL OR exclusive_owner = ANY(ARRAY(
+          SELECT member.id FROM members member
+          WHERE member.shortcode IN (${sql.join(
+            ownerCodes.map((code) => sql`${code}`),
+            sql`, `,
+          )}))))`
+      : undefined,
+    read.memberOnly && read.memberPartyId !== null
+      ? sql`(shared OR exclusive_owner IS NULL OR exclusive_owner = ${read.memberPartyId}::uuid)`
+      : undefined,
+  );
   const search = input.query
     ? sql`concat_ws(' ', name, reason, id) ILIKE ${ilikeContains(input.query)}`
     : undefined;
   const { view: _view, ...requested } = input;
   const population = and(
     ...composition.deferrals.map((deferral) => sql`NOT (${deferral})`),
+    ownerAdmission,
     memberFence,
     search,
     filterPredicate(requested),
