@@ -1410,9 +1410,9 @@ declared stored keys; domain-only publications, including private diagnostic
 findings, stay behind explicit domain readers rather than entering every page.
 These partial rows never authorize a write or replace live publication fences.
 Connection field guards share immutable target snapshots by target entity kind
-within each bounded preparation wave of an evaluation page. The first capture precedes inference, each source
+within one evaluation page. The first capture precedes inference, each source
 retains its own evidence, and publication still checks the selected target and
-source against live locked evidence. A fresh wave captures fresh catalogs;
+source against live locked evidence. A fresh page captures fresh catalogs;
 there is no cross-page cache or skipped target validation.
 Enum targets may declare `allowNone: true` to offer an evaluated decline when
 their basis does not support a value. A decline proposes no replacement or
