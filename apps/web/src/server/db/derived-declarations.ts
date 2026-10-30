@@ -23,6 +23,14 @@ export interface DerivedInput {
   readonly path: readonly DerivedPathStep[] | null;
   readonly paths?: readonly (readonly DerivedPathStep[])[];
   readonly targetWhere: Readonly<Record<string, string | null>> | null;
+  readonly selection?: {
+    readonly key: string;
+    readonly path?: readonly DerivedPathStep[];
+    readonly retained: {
+      readonly array: readonly string[];
+      readonly key: string;
+    };
+  };
   /** The matched column is JSON; values are `key` of the array at `array`. */
   readonly json: {
     readonly array?: readonly string[];
@@ -126,6 +134,16 @@ const storedEntry = z.object({
         path: z.array(pathStep).optional(),
         paths: z.array(z.array(pathStep).min(1)).min(1).optional(),
         targetWhere: z.record(z.string(), z.string().nullable()).optional(),
+        selection: z
+          .object({
+            key: z.string(),
+            path: z.array(pathStep).optional(),
+            retained: z.object({
+              array: z.array(z.string()).min(1),
+              key: z.string(),
+            }),
+          })
+          .optional(),
         json: z
           .object({ array: z.array(z.string()).optional(), key: z.string() })
           .optional(),
@@ -213,6 +231,7 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
               path: input.path ?? null,
               ...(input.paths ? { paths: input.paths } : {}),
               targetWhere: input.targetWhere ?? null,
+              ...(input.selection ? { selection: input.selection } : {}),
               json: input.json ?? null,
             };
           }),

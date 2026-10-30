@@ -48,6 +48,12 @@ export type DerivedStoredInput = {
   json?: { array?: string[]; key: string };
   /** Fixed target rows selected during deferred fanout, never inside the source save. */
   targetWhere?: Record<string, string | null>;
+  /** Canonical discovery plus references in this target's retained publication. */
+  selection?: {
+    key: string;
+    path?: DerivedStoredPathStep[];
+    retained: { array: string[]; key: string };
+  };
 };
 
 export const entityFieldKinds = [
@@ -1110,6 +1116,19 @@ const buildMetadataSchemas = () => {
       path: derivedPathSchema.optional(),
       paths: z.array(derivedPathSchema).min(1).optional(),
       targetWhere: derivedTargetWhereSchema.optional(),
+      selection: z
+        .object({
+          key: nonEmptyString(),
+          path: derivedPathSchema.optional(),
+          retained: z
+            .object({
+              array: z.array(nonEmptyString()).min(1),
+              key: nonEmptyString(),
+            })
+            .strict(),
+        })
+        .strict()
+        .optional(),
       /**
        * The matched column is JSON: read `key` from the object, or from each
        * element at `array` (a mail-import Run's `input.sources`).
@@ -1126,6 +1145,11 @@ const buildMetadataSchemas = () => {
     .refine(
       (input) => !input.paths || (!input.path && !input.targetWhere),
       "paths cannot be combined with path or targetWhere",
+    )
+    .refine(
+      (input) =>
+        !input.selection || (input.targetWhere && !input.path && !input.paths),
+      "selection requires targetWhere and cannot be combined with path or paths",
     );
   const derivedStoreSchema = z
     .object({

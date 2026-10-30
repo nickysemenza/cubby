@@ -2955,6 +2955,20 @@ The expansion retains ordinary direct-target reticketing and the most urgent
 observed source priority. The generic drain settles covered source tickets only
 after the expansion, without waiting on writers; newer tickets, claims elsewhere
 in the page and path-dependent fanouts retain their existing handling.
+A value adapter may opt an input into canonical target selection. Background
+expansion unions its current candidates with raw references in that target's
+retained publication, including stale references hidden by current ownership
+gates. Source keys and input positions stay stable, so pending fanouts keep their
+meaning. These selected inputs never settle extra covered source tickets: a
+ticket captured after preparation must remain a fence for later chunks of the
+same page. Unselected pending direct work retains its ticket, priority and
+backoff. The single drain lease, pre-read fanout observation and unchanged-ticket
+publication fences protect missing outputs; missing is never treated as empty.
+Generation checks the retained array and UUID leaf against the declared result
+schema, refusing a typo that would silently miss an old candidate.
+Email Purchase and VendorAccount changes use canonical Purchase evidence plus
+retained `facts` references. Source-claim and accepted-source-order changes keep
+their conservative fanout until old source-family identities are traced.
 
 Service Cost captures the positive actual charge total beside its average, count
 and latest dated charge. The explanation reads those operands from the same
