@@ -70,6 +70,79 @@ export interface EvaluationPageAdapter<P, O> {
   weight?(outcome: EvaluationPageOutcome<O>): number;
 }
 
+/** Admission bounds retained evidence; a wave limits unadmitted canonical reads. */
+const PREPARATION_WAVE = 8;
+const PAGE_EVIDENCE_BYTES = 4 * 1024 * 1024;
+
+type PreparedEvaluationEvidence<P> = {
+  ready: Extract<EvaluationPagePreparation<P>, { kind: "ready" }>[];
+  failures: Map<string, unknown>;
+  oversized: Map<string, string>;
+  overflow: string[];
+  preparedBytes: number;
+};
+
+/** Preserve the ordered byte prefix without capturing every unadmitted source. */
+export async function prepareEvaluationEvidence<P>(
+  db: Database,
+  targets: readonly EvaluationPageTarget[],
+  adapter: Pick<EvaluationPageAdapter<P, unknown>, "prepare">,
+): Promise<PreparedEvaluationEvidence<P>> {
+  const ready: PreparedEvaluationEvidence<P>["ready"] = [];
+  const failures = new Map<string, unknown>();
+  const oversized = new Map<string, string>();
+  const overflow: string[] = [];
+  let preparedBytes = 0;
+  let full = false;
+  for (let start = 0; start < targets.length; start += PREPARATION_WAVE) {
+    const wave = targets.slice(start, start + PREPARATION_WAVE);
+    const prepared = await adapter.prepare(db, wave);
+    const expected = new Set(wave.map((entry) => entry.evaluation.id));
+    if (
+      prepared.length !== wave.length ||
+      new Set(prepared.map((entry) => entry.target.evaluation.id)).size !==
+        wave.length ||
+      prepared.some((entry) => !expected.has(entry.target.evaluation.id))
+    )
+      throw new Error("AI page adapter returned an unexpected preparation set");
+    for (const entry of prepared) {
+      if (entry.kind === "failed") {
+        failures.set(entry.target.evaluation.id, entry.error);
+        continue;
+      }
+      const bytes = new TextEncoder().encode(
+        JSON.stringify(
+          [entry.prepared, entry.target.evaluation.snapshot],
+          (_key, value) => (value instanceof Map ? [...value] : value),
+        ),
+      ).byteLength;
+      if (bytes > PAGE_EVIDENCE_BYTES) {
+        oversized.set(
+          entry.target.evaluation.id,
+          "AI evaluation evidence exceeds the 4 MiB page bound",
+        );
+        continue;
+      }
+      full ||= preparedBytes + bytes > PAGE_EVIDENCE_BYTES;
+      if (full) {
+        overflow.push(entry.target.evaluation.id);
+        continue;
+      }
+      preparedBytes += bytes;
+      ready.push(entry);
+    }
+    if (full) {
+      overflow.push(
+        ...targets
+          .slice(start + wave.length)
+          .map((entry) => entry.evaluation.id),
+      );
+      break;
+    }
+  }
+  return { ready, failures, oversized, overflow, preparedBytes };
+}
+
 /** A paged feature's evaluated page, published in the drain's fenced chunks. */
 export type PreparedEvaluationPage = {
   /** Targets with an evaluated outcome and their publication weight. */

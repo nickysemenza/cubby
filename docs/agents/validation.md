@@ -406,6 +406,12 @@ starts, so post-merge CI does not replace this gate. A PR that adds a
 migration follows the [production change rules](domain-rules.md#production-changes),
 including compatibility with the code running while the release applies it.
 
+Before any merge to `main`, check the production `PRODUCTION_MIGRATION_THROUGH`
+boundary, including for changes without a migration: every deployment can run
+the migration wrapper. Leave an active staged boundary under its named
+operator's control and coordinate the deployment with that cutover. A queued
+deployment's creation time does not establish when its migration job executes.
+
 ## Performance review
 
 AI review owns performance judgment. Performance measurements feed that review;

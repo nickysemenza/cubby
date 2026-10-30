@@ -39,13 +39,14 @@ import {
   type ClaimedAiEvaluation,
 } from "~/server/ai/evaluation/repo/ai-evaluation";
 import { enqueueAiEvaluations } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
-import type {
-  EvaluationPageAdapter,
-  EvaluationPageTarget,
-  EvaluationPagePreparation,
-  EvaluationPageOutcome,
-  EvaluationPagePublication,
-  PreparedEvaluationPage,
+import {
+  prepareEvaluationEvidence,
+  type EvaluationPageAdapter,
+  type EvaluationPageTarget,
+  type EvaluationPagePreparation,
+  type EvaluationPageOutcome,
+  type EvaluationPagePublication,
+  type PreparedEvaluationPage,
 } from "~/server/ai/evaluation/repo/evaluation-page";
 import {
   suggestFields,
@@ -1240,47 +1241,15 @@ async function evaluateAiRefreshPage<P, O>(
     ready: readonly Extract<EvaluationPagePreparation<P>, { kind: "ready" }>[],
   ) => Promise<EvaluationPagePreparation<P>[]>,
 ): Promise<PreparedAiRefreshPage> {
-  const failures = new Map<string, unknown>();
-  const oversized = new Map<string, string>();
-  const overflowed: string[] = [];
-  const prepared = await withJobPhase("evaluation.prepare", () =>
-    adapter.prepare(db, targets),
+  const {
+    failures,
+    oversized,
+    overflow: overflowed,
+    ready,
+    preparedBytes,
+  } = await withJobPhase("evaluation.prepare", () =>
+    prepareEvaluationEvidence(db, targets, adapter),
   );
-  if (
-    prepared.length !== targets.length ||
-    new Set(prepared.map((entry) => entry.target.evaluation.id)).size !==
-      targets.length
-  )
-    throw new Error("AI page adapter returned an unexpected preparation set");
-  const ready: Extract<EvaluationPagePreparation<P>, { kind: "ready" }>[] = [];
-  let preparedBytes = 0;
-  let overflow = false;
-  for (const entry of prepared) {
-    if (entry.kind === "failed") {
-      failures.set(entry.target.evaluation.id, entry.error);
-      continue;
-    }
-    const bytes = new TextEncoder().encode(
-      JSON.stringify(
-        [entry.prepared, entry.target.evaluation.snapshot],
-        (_key, value) => (value instanceof Map ? [...value] : value),
-      ),
-    ).byteLength;
-    if (bytes > 4 * 1024 * 1024) {
-      oversized.set(
-        entry.target.evaluation.id,
-        "AI evaluation evidence exceeds the 4 MiB page bound",
-      );
-      continue;
-    }
-    overflow ||= preparedBytes + bytes > 4 * 1024 * 1024;
-    if (overflow) {
-      overflowed.push(entry.target.evaluation.id);
-      continue;
-    }
-    preparedBytes += bytes;
-    ready.push(entry);
-  }
   if (stage) {
     const staged = await withJobPhase("evaluation.stage", () =>
       stage(db, ready),

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { drainAiEvaluations } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
+import * as productIdentity from "~/server/ai/product-identity";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
@@ -20,6 +21,7 @@ import {
 } from "~/server/db/schema";
 import * as connectionRepo from "~/server/domains/connection/repo/entity-connections";
 import { readEntityConnections } from "~/server/domains/connection/repo/entity-connections";
+import * as connectionService from "~/server/domains/connection/service/entity-connections";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
@@ -215,11 +217,24 @@ describe("connection evaluation pages", () => {
     const single = await scheduleSources(singleSources);
     expect(await runPage(single)).toBe("succeeded");
     expect(await states(single)).toEqual(["completed"]);
-    const sources = await createExpenses(8, "batch");
+    const sources = await createExpenses(9, "batch");
     const ids = (await scheduleSources(sources)).filter(
       (id) => !single.includes(id),
     );
+    const prepare = connectionService.prepareEntityConnectionSources;
+    const expected = await prepare(ctx.db, sources);
+    const captured: typeof expected = new Map();
+    vi.spyOn(
+      connectionService,
+      "prepareEntityConnectionSources",
+    ).mockImplementation(async (db, wave) => {
+      const result = await prepare(db, wave);
+      for (const [id, value] of result)
+        captured.set(id, structuredClone(value));
+      return result;
+    });
     expect(await runPage(ids)).toBe("succeeded");
+    expect(captured).toEqual(expected);
     expect(new Set(await states(ids))).toEqual(new Set(["completed"]));
     for (const source of [...singleSources, ...sources]) {
       const proposals = await readEntityConnections(ctx.db, source);
@@ -437,7 +452,8 @@ describe("connection evaluation pages", () => {
         },
       }),
     );
-    const products = [];
+    const products: Awaited<ReturnType<typeof createProductIdentityFixture>>[] =
+      [];
     for (const suffix of ["alpha", "beta", "gamma", "delta"])
       products.push(
         await createProductIdentityFixture(
@@ -485,6 +501,19 @@ describe("connection evaluation pages", () => {
     const ids = await scheduleSources(
       products.map((item) => ({ entityKind: "product", entityId: item.id })),
     );
+    const prepare = productIdentity.prepareProductIdentityPage;
+    const targets = Array.from({ length: 9 }, (_, index) => ({
+      key: `synthetic-catalog-${index}`,
+      kind: "product" as const,
+      recordId: products[index % products.length]!.entityId,
+    }));
+    const expected = await prepare(ctx.db, targets);
+    const captured = [
+      ...(await prepare(ctx.db, targets.slice(0, 8))),
+      ...(await prepare(ctx.db, targets.slice(8))),
+    ];
+    // Preparation size must preserve complete pairs, neighbors and fences.
+    expect(captured).toEqual(expected);
     expect(await runPage(ids)).toBe("succeeded");
     expect(new Set(await states(ids))).toEqual(new Set(["completed"]));
     // A port bypasses DecisionRequestBatch. Inspect actual gateway requests

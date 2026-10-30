@@ -17,6 +17,7 @@ import {
   enqueueAiEvaluations,
 } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import { markAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
+import { prepareEvaluationEvidence } from "~/server/ai/evaluation/repo/evaluation-page";
 import { aiEvaluationJobHandler } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import {
   aiEvaluationItem,
@@ -25,7 +26,11 @@ import {
 } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import {
+  getDb,
+  uuidArrayParam,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
 import { readAiRefreshWorkSummary } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -86,13 +91,119 @@ describe("AI evaluation drain publication", () => {
     return { runId, rows, inputs };
   }
 
-  it("marks one item per evaluation on its feature drain", async () => {
-    const seeded = await seed(2);
+  it("keeps one owed item per evaluation across bounded evidence pages", async () => {
+    const seeded = await seed(12);
     for (const row of seeded.rows)
       expect(await aiEvaluationItem(ctx.db, row.id)).toMatchObject({
         drain: "ai-evaluation:product-identity",
         attempts: 0,
       });
+    // Mixed urgency and prior attempts must survive admission without reticketing.
+    for (const [index, row] of seeded.rows.entries())
+      await updateWorkItems(
+        ctx.db,
+        { refs: [row.id] },
+        {
+          priority: index < 4 ? 0 : 2,
+          attempts: 2,
+          readyAt: new Date(index * 1000),
+        },
+      );
+    const workRows = async (ids: readonly string[]) =>
+      (
+        await getDb(ctx.db)
+          .execute(sql`SELECT to_jsonb(w) AS value FROM "WorkItem" w
+        WHERE target='ai.evaluation' AND ref=ANY(${uuidArrayParam(ids)}) ORDER BY ref`)
+      ).rows;
+    const original = await workRows(seeded.rows.map((row) => row.id));
+    let before = original;
+    const captured: string[] = [];
+    const payload = "x".repeat(2 * 1024 * 1024);
+    const oversized = "y".repeat(4 * 1024 * 1024);
+    let overflow: string[] = [];
+    const handler = aiEvaluationJobHandler({
+      ...runAiEvaluationExecution(),
+      async preparePage(db, targets) {
+        const admission = await prepareEvaluationEvidence(db, targets, {
+          async prepare(_db, wave) {
+            if (!captured.length) {
+              // A producer can replace an observed suffix ticket during capture.
+              await markAiEvaluationWork(db, [seeded.rows.at(-1)!.id]);
+              before = await workRows(seeded.rows.map((row) => row.id));
+            }
+            return wave.map((target) => {
+              const id = target.evaluation.id;
+              captured.push(id);
+              return id === seeded.rows[1]!.id
+                ? {
+                    kind: "failed" as const,
+                    target,
+                    error: new Error("Synthetic preparation failure"),
+                  }
+                : {
+                    kind: "ready" as const,
+                    target,
+                    evidenceDigest:
+                      target.evaluation.provenance.inputFingerprint,
+                    prepared: id === seeded.rows[0]!.id ? oversized : payload,
+                  };
+            });
+          },
+        });
+        overflow = admission.overflow;
+        return {
+          ready: new Map(
+            admission.ready.map(({ target }) => [
+              target.evaluation.id,
+              { target, weight: 1 },
+            ]),
+          ),
+          failures: admission.failures,
+          oversized: admission.oversized,
+          overflow,
+          publish: async (_tx, ids) =>
+            ids.map((evaluationId) => ({
+              evaluationId,
+              state: "completed" as const,
+              receipt: { synthetic: true },
+            })),
+        };
+      },
+    });
+    const execution = await readJob(ctx.db, {
+      key: "ai-evaluation:product-identity",
+    });
+    if (!execution) throw new Error("Synthetic evaluation drain missing");
+    const handlers = { "ai.evaluation": handler };
+    expect(await advanceJob(ctx.db, execution.id, handlers)).toBe("succeeded");
+    expect(captured.length).toBeLessThan(seeded.rows.length);
+    expect(captured).not.toContain(seeded.rows.at(-1)!.id);
+    expect(overflow).toHaveLength(9);
+    expect(before).not.toEqual(original);
+    expect(await workRows(overflow)).toEqual(
+      before.filter(({ value }) =>
+        overflow.includes((value as { ref: string }).ref),
+      ),
+    );
+    expect(
+      (await getDb(ctx.db).select().from(aiEvaluation)).filter(
+        (row) => row.state === "failed",
+      ),
+    ).toHaveLength(2);
+    for (
+      let page = 0;
+      page < seeded.rows.length && (await workRows(overflow)).length;
+      page++
+    )
+      expect(await advanceJob(ctx.db, execution.id, handlers)).toBe(
+        "succeeded",
+      );
+    expect(await workRows(seeded.rows.map((row) => row.id))).toEqual([]);
+    const settled = await getDb(ctx.db).select().from(aiEvaluation);
+    expect(settled.filter((row) => row.state === "completed")).toHaveLength(10);
+    expect(settled.map((row) => row.snapshot)).toEqual(
+      seeded.rows.map((row) => row.snapshot),
+    );
   });
 
   it("settles receipt sets, preserves explicit retry receipts, and wakes each coordinator", async () => {
