@@ -89,9 +89,12 @@ The production derived drain can use two such passes under the same Job claim:
 it first expands fanouts from the admitted ordered prefix, then observes direct
 work for the remaining preparation budget. Attempted busy fanouts spend their
 cost once and remain owed; they cannot spend it again ahead of independent
-direct work. An initial overflow reserves only the original direct prefix's
-cost for the second pass, leaving overflow slack unused. A direct-only prefix
-keeps the ordinary single pass. Neither pass finishes the Job independently;
+direct work. After an initial overflow, direct work with strictly higher
+priority than the item that did not fit may use remaining shared capacity.
+At that priority or lower, its cumulative cost must fit the original direct
+prefix's reservation. Both allowances include direct cost already spent;
+neither permits skipping an unaffordable item. A direct-only prefix keeps
+the ordinary single pass. Neither pass finishes the Job independently;
 their counters combine and any processed work keeps the page unfinished.
 An item's `lastError` keeps each
 cause, capped so the database's own message survives. A drain with nothing
