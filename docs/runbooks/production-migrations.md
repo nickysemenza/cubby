@@ -102,14 +102,17 @@ externally started legacy consumer. Record the deployment and live version
 throughout this bounded observation. Waiting one Job lease period does not prove
 retirement: old consumers can renew their leases.
 
-After that interval, inspect `derived:drain` under its Job-row lock. If its current
-running claim predates the cutover, release that exact token/generation through
-`releaseJobClaim` in a one-off operator transaction. Its existing token fence
-serializes with any delayed publication transaction. Preserve attempts, cursor,
-result and all WorkItems; use neither cancellation/retry nor a bulk requeue.
-Otherwise record that no old claim retains authority. Keep private claim evidence
-and the temporary operator script outside committed files. New compatible claims
-may continue normally.
+After that interval, inspect `derived:drain` under its Job-row lock. Release its
+exact current running token/generation through `releaseJobClaim` in a one-off
+operator transaction unless compatible-version ownership is positively
+established. A claim timestamp after cutover does not establish compatibility:
+an old invocation can acquire and renew another claim before its wall limit.
+The existing token fence serializes release with any delayed publication
+transaction. Preserve attempts, cursor, result and all WorkItems; use neither
+cancellation/retry nor a bulk requeue. Record the release or positive ownership
+evidence, including a non-running Job with no live claim. Keep private claim
+evidence and the temporary operator script outside committed files. New
+compatible claims may continue normally.
 
 With the boundary and exclusive operator ownership still in place, verify no
 Deploy is queued or running, then apply the committed migration:
