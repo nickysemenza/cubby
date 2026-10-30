@@ -5,7 +5,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import type { EntityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
 import { basisValueOf } from "@cubby/schemas/field-suggestion";
-import type { ProductId } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor, type ProductId } from "@cubby/schemas/identifiers";
 
 import { fieldEnvelopeAtPath, readPathValue } from "~/entity/read-path";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
@@ -30,6 +30,7 @@ import {
   saveConnectionFieldGuard,
   type ConnectionFieldGuardTargets,
 } from "~/server/domains/connection/repo/field-connections";
+import { prepareExpenseProjectRecommendationContexts } from "~/server/domains/expense/repo/project-recommendations";
 import {
   prepareProductPairPublications,
   productPairKey,
@@ -448,9 +449,18 @@ export async function prepareEntityConnectionSources(
     db,
     financial,
   );
+  // Ranking and its initial basis capture share canonical inputs for this call.
+  // Publication and the per-source failure fallback still recapture independently.
+  const expenseProjects = expenses.length
+    ? await prepareExpenseProjectRecommendationContexts(
+        db,
+        expenses.map((source) => parseShortcodeFor("expense", source.entityId)),
+      )
+    : undefined;
   for (const recommendations of await getExpenseRecommendationPage(
     db,
     expenses,
+    expenseProjects,
   ))
     retrieved.set(
       recommendations.source.entityId,
@@ -466,7 +476,11 @@ export async function prepareEntityConnectionSources(
     PromiseSettledResult<PreparedEntityConnection[]>
   >();
   try {
-    const evidence = await prepareEntityConnectionEvidence(db, candidates);
+    const evidence = await prepareEntityConnectionEvidence(
+      db,
+      candidates,
+      expenseProjects,
+    );
     const grouped = new Map<string, PreparedEntityConnection[]>(
       [...retrieved.keys()].map((key) => [key, []]),
     );

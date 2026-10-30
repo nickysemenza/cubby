@@ -14,6 +14,7 @@ import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
   email,
+  expense,
   financialTransaction,
   purchase as purchaseTable,
   orderMailEvent,
@@ -145,6 +146,25 @@ describe("connection evaluation pages", () => {
         .where(inArray(aiEvaluation.id, [...ids]))
     ).map((row) => row.state);
 
+  function semanticEnvironment() {
+    const index = createInMemoryVectorizeIndex();
+    const config = getSemanticEmbeddingConfig();
+    const values = Array.from({ length: config.dimensions }, (_, axis) =>
+      axis === 0 ? 1 : 0,
+    );
+    setCfEnv(
+      fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
+        VECTORIZE: index,
+        BACKGROUND_QUEUE: { sendBatch: async () => {} },
+        CUBBY_TEST_AI_GATEWAY: {
+          fetch: async () =>
+            Response.json({ data: [{ index: 0, embedding: values }] }),
+        },
+      }),
+    );
+    return { index, config, values };
+  }
+
   it("settles a single source and a page of sources", async () => {
     const base = await setup();
     const single = await schedule(
@@ -163,21 +183,7 @@ describe("connection evaluation pages", () => {
 
   it("publishes Expense acquisition candidates for every source on a page", async () => {
     await setup();
-    const index = createInMemoryVectorizeIndex();
-    const config = getSemanticEmbeddingConfig();
-    const values = Array.from({ length: config.dimensions }, (_, axis) =>
-      axis === 0 ? 1 : 0,
-    );
-    setCfEnv(
-      fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
-        VECTORIZE: index,
-        BACKGROUND_QUEUE: { sendBatch: async () => {} },
-        CUBBY_TEST_AI_GATEWAY: {
-          fetch: async () =>
-            Response.json({ data: [{ index: 0, embedding: values }] }),
-        },
-      }),
-    );
+    const { index, config, values } = semanticEnvironment();
     const item = await createProductFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic page anvil" }),
@@ -252,6 +258,7 @@ describe("connection evaluation pages", () => {
 
   it("completes other sources when a candidate disappears during shared evidence capture", async () => {
     await setup();
+    semanticEnvironment();
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic isolation card",
       identity: { kind: "cash" },
@@ -282,29 +289,73 @@ describe("connection evaluation pages", () => {
         entityId: payment.output.id,
       });
     }
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Synthetic isolation project",
+      defaultTrade: "electrical",
+    });
+    const history = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic isolation history",
+      date: "2026-10-01",
+      trade: "electrical",
+      cost: 10,
+      costType: "materials",
+      projectId: project.output.id,
+    });
+    const line = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic isolation source",
+      date: "2026-10-01",
+      trade: "electrical",
+      cost: 24,
+      costType: "materials",
+    });
+    sources.push({ entityKind: "expense", entityId: line.output.id });
     const ids = await scheduleSources(sources);
     const capture = connectionRepo.prepareEntityConnectionEvidence;
+    const expenseFallback: Awaited<ReturnType<typeof capture>> = [];
+    let injected = false;
     // Inject the deletion precisely between retrieval and evidence capture.
     vi.spyOn(
       connectionRepo,
       "prepareEntityConnectionEvidence",
-    ).mockImplementationOnce(async (db, candidates) => {
-      expect(candidates.length).toBeGreaterThan(0);
-      const id = await resolveOrThrow(
-        db,
-        "financialTransaction",
-        candidates[0]!.source.entityId,
-      );
-      await getDb(db)
-        .update(financialTransaction)
-        .set({ deletedAt: new Date() })
-        .where(eq(financialTransaction.id, id));
-      return capture(db, candidates);
+    ).mockImplementation(async (db, candidates, expenseProjects) => {
+      if (!injected) {
+        injected = true;
+        const first = candidates[0];
+        if (!first) throw new Error("Synthetic bulk capture has no candidates");
+        const id = await resolveOrThrow(
+          db,
+          "financialTransaction",
+          first.source.entityId,
+        );
+        await getDb(db)
+          .update(financialTransaction)
+          .set({ deletedAt: new Date() })
+          .where(eq(financialTransaction.id, id));
+        await getDb(db)
+          .update(expense)
+          .set({ date: "2026-10-02" })
+          .where(eq(expense.id, history.entityId));
+      }
+      const prepared = await capture(db, candidates, expenseProjects);
+      if (!expenseProjects)
+        expenseFallback.push(
+          ...prepared.filter(
+            (entry) => entry.candidate.source.entityId === line.output.id,
+          ),
+        );
+      return prepared;
     });
     await runPage(ids);
     expect(
       (await states(ids)).filter((state) => state === "completed"),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
+    expect(expenseFallback.length).toBeGreaterThan(0);
+    expect(expenseFallback).toEqual(
+      await capture(
+        ctx.db,
+        expenseFallback.map((entry) => entry.candidate),
+      ),
+    );
   });
 
   it("settles invalidated connection evidence as obsolete on the final attempt", async () => {
