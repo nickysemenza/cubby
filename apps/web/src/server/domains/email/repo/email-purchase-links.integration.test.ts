@@ -485,12 +485,10 @@ describe("Email Purchase links", () => {
               eq(derivedValue.key, "relationshipFacts"),
             ),
           );
-        return emailRelationshipResult
-          .parse(row?.value)
-          .facts.map((fact) => ({
-            purchaseId: fact.purchaseId,
-            changed: fact.changed,
-          }));
+        return emailRelationshipResult.parse(row?.value).facts.map((fact) => ({
+          purchaseId: fact.purchaseId,
+          changed: fact.changed,
+        }));
       };
       await getDb(ctx.db)
         .update(importSourceOrder)
@@ -540,6 +538,7 @@ describe("Email Purchase links", () => {
         .update(importSourceOrder)
         .set({ purchaseId: null })
         .where(eq(importSourceOrder.id, accepted.id));
+      // Detach preserves the old Purchase ref beside the fixed-target null sentinel.
       expect(
         await workItemStates(ctx.db, "email.relationshipFacts@9", [
           replacement.entityId,
