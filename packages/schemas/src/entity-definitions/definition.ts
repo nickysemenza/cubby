@@ -39,6 +39,8 @@ type DerivedStoredPathStep = {
 export type DerivedStoredInput = {
   table: string;
   match: Record<string, string>;
+  /** Stop new source capture while preserving this input's pending-ticket interpretation. */
+  capture?: false;
   columns?: string[];
   where?: Record<string, string>;
   except?: string[];
@@ -1116,6 +1118,7 @@ const buildMetadataSchemas = () => {
       path: derivedPathSchema.optional(),
       paths: z.array(derivedPathSchema).min(1).optional(),
       targetWhere: derivedTargetWhereSchema.optional(),
+      capture: z.literal(false).optional(),
       selection: z
         .object({
           key: nonEmptyString(),

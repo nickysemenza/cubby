@@ -13,6 +13,8 @@ export interface DerivedInput {
   readonly table: string;
   readonly tableColumn: string;
   readonly entityColumn: string;
+  /** False suppresses source triggers, never pending fanout interpretation. */
+  readonly capture?: false;
   /** Columns whose change matters; null = any column except `updatedAt`. */
   readonly columns: readonly string[] | null;
   /** Only rows holding these column values count. */
@@ -128,6 +130,7 @@ const storedEntry = z.object({
       z.object({
         table: z.string(),
         match: z.record(z.string(), z.string()),
+        capture: z.literal(false).optional(),
         columns: z.array(z.string()).optional(),
         where: z.record(z.string(), z.string()).optional(),
         except: z.array(z.string()).optional(),
@@ -225,6 +228,7 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
               table: input.table,
               tableColumn,
               entityColumn,
+              ...(input.capture === false ? { capture: false as const } : {}),
               columns: input.columns ?? null,
               where: input.where ?? null,
               except: input.except ?? [],
