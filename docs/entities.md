@@ -2967,8 +2967,17 @@ publication fences protect missing outputs; missing is never treated as empty.
 Generation checks the retained array and UUID leaf against the declared result
 schema, refusing a typo that would silently miss an old candidate.
 Email Purchase and VendorAccount changes use canonical Purchase evidence plus
-retained `facts` references. Source-claim and accepted-source-order changes keep
-their conservative fanout until old source-family identities are traced.
+retained `facts` references. Source-claim changes keep their conservative fanout
+until old source-family identities are traced.
+An input with `capture: false` emits no new source-trigger marks while keeping its
+position, reference meaning, read enrollment and pending fanout interpretation.
+Accepted source-order input 8 retains its broad SourceOrder-ID expansion for owed
+tickets; new input 9 captures the old and new Purchase IDs directly from the source
+row. Its current candidates and retained Purchase facts cover reassignment,
+detach, checksum and source-family moves without dependent discovery in saves.
+Source-claim input 7 remains conservative. Activating a new input position requires
+the [staged cutover](runbooks/production-migrations.md#source-order-fanout-capture)
+so incompatible consumers cannot discard its pending work.
 
 Service Cost captures the positive actual charge total beside its average, count
 and latest dated charge. The explanation reads those operands from the same

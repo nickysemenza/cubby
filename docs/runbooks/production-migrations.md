@@ -75,6 +75,55 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Source-order fanout capture
+
+Migration `0061_source_order_purchase_fanout` stops new
+`email.relationshipFacts@8` captures and starts input 9 with the source row's old
+and new Purchase references. Input 8 remains declared so retained SourceOrder-ID
+tickets keep their broad expansion. Neither migration nor cutover clears or
+reinterprets queue work or publications.
+
+The preceding Worker does not recognize input 9 and can settle that unknown work.
+Before merging this migration, set the `cloudflare` Environment's
+`PRODUCTION_MIGRATION_THROUGH` to `0060_precise_location_fanout`. One operator owns
+the cutover; admit no other main merge, Deploy retry or manual schema application
+until it completes. Let Actions deploy the compatible Worker with the previous
+trigger still capturing input 8. Verify its successful Deploy, full source SHA,
+the authoritative Cloudflare deployment assigning 100% to that one version and
+the live Worker version. Keep the migration boundary in place.
+
+Retire incompatible consumers before activating the new trigger. Audit the final
+source: production `drainDueJobs`/`advanceJob` roots must remain Queue delivery and
+Cron recovery; HTTP app-open only enqueues work. Both roots have a
+[15-minute invocation wall limit](https://developers.cloudflare.com/queues/platform/limits/).
+After the compatible deployment completes its full traffic cutover, require at
+least 16 minutes with no intervening deployment, rollback, version override or
+externally started legacy consumer. Record the deployment and live version
+throughout this bounded observation. Waiting one Job lease period does not prove
+retirement: old consumers can renew their leases.
+
+After that interval, inspect `derived:drain` under its Job-row lock. If its current
+running claim predates the cutover, release that exact token/generation through
+`releaseJobClaim` in a one-off operator transaction. Its existing token fence
+serializes with any delayed publication transaction. Preserve attempts, cursor,
+result and all WorkItems; use neither cancellation/retry nor a bulk requeue.
+Otherwise record that no old claim retains authority. Keep private claim evidence
+and the temporary operator script outside committed files. New compatible claims
+may continue normally.
+
+With the boundary and exclusive operator ownership still in place, verify no
+Deploy is queued or running, then apply the committed migration:
+
+```sh
+pnpm --filter @cubby/web db:migrate --target=production --through=0061_source_order_purchase_fanout
+```
+
+Read back the exact trigger/catalog, retained work and publications, and a
+synthetic supported save's input-9 Purchase capture. Remove
+`PRODUCTION_MIGRATION_THROUGH` only after verification. If retirement or any other
+gate cannot be established, leave the old trigger active and the boundary set;
+do not enable input 9. A rollback after activation must retain support for input 9.
+
 ## Coarse Job drains cutover
 
 The coarse Job migrations follow `0046_remaining_derived_results` in the

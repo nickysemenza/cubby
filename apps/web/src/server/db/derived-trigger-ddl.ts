@@ -92,15 +92,17 @@ const markStatement = (input: TriggerInput) => {
   END IF;`;
 };
 
-/** Every source table's inputs, with fanout targets resolved. */
+/** Keep even fully disabled tables so their replacement trigger captures nothing. */
 function derivedTriggerInputs(): Map<string, TriggerInput[]> {
   const byTable = new Map<string, TriggerInput[]>();
   for (const declaration of storedDerivedDeclarations())
     for (const [index, input] of declaration.inputs.entries()) {
+      const entries = byTable.get(input.table) ?? [];
+      byTable.set(input.table, entries);
+      if (input.capture === false) continue;
       const target = isFanoutInput(input)
         ? fanoutTarget(declaration.target, index)
         : declaration.target;
-      const entries = byTable.get(input.table) ?? [];
       if (
         !entries.some(
           (entry) =>
@@ -122,7 +124,6 @@ function derivedTriggerInputs(): Map<string, TriggerInput[]> {
           except: input.except,
           json: input.json,
         });
-      byTable.set(input.table, entries);
     }
   return new Map([...byTable].sort(([a], [b]) => a.localeCompare(b)));
 }

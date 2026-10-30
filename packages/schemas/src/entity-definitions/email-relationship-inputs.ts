@@ -80,8 +80,21 @@ export const EMAIL_RELATIONSHIP_INPUTS: DerivedStoredInput[] = [
   },
   {
     table: "ImportSourceOrder",
+    // Existing tickets still contain SourceOrder IDs and expand conservatively.
+    capture: false,
     match: { id: "id" },
     targetWhere: { deletedAt: null },
+    columns: ["sourceClaimId", "purchaseId", "checksum"],
+  },
+  {
+    table: "ImportSourceOrder",
+    // Capture both Purchase references before reassignment, detach or deletion.
+    match: { purchaseId: "id" },
+    targetWhere: { deletedAt: null },
+    selection: {
+      key: "purchaseEvidence",
+      retained: { array: ["facts"], key: "purchaseId" },
+    },
     columns: ["sourceClaimId", "purchaseId", "checksum"],
   },
 ];

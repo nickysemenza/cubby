@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { migrateDatabase } from "./db-migrate";
 import { withMigrationDatabase } from "./test-database-lease";
 
-it("preserves retained publications and old input tickets across precise Location fanout", async () => {
+it("preserves retained publications and input identities across precise fanout migrations", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
     await migrateDatabase(db, { through: "0059_sender_attribution_policies" });
@@ -44,5 +44,25 @@ it("preserves retained publications and old input tickets across precise Locatio
     const before = await preserved();
     await migrateDatabase(db, { through: "0060_precise_location_fanout" });
     expect(await preserved()).toEqual(before);
+    // A deleted SourceOrder can leave its UUID ticket owed to the predecessor expansion.
+    await client.query(
+      `SELECT derived_mark('email.relationshipFacts@8', ARRAY[$1::uuid])`,
+      [id],
+    );
+    await client.query(
+      `UPDATE "WorkItem" SET priority=2, attempts=1, "readyAt"=now()+interval '1 day' WHERE target='email.relationshipFacts@8'`,
+    );
+    const beforeSourceOrder = await preserved();
+    await migrateDatabase(db, { through: "0061_source_order_purchase_fanout" });
+    expect(await preserved()).toEqual(beforeSourceOrder);
+    const definition = (
+      await client.query(
+        `SELECT pg_get_functiondef('derived_mark_importsourceorder()'::regprocedure) AS value`,
+      )
+    ).rows[0]?.value;
+    expect(definition).toContain("derived_mark('email.relationshipFacts@9'");
+    expect(definition).not.toContain(
+      "derived_mark('email.relationshipFacts@8'",
+    );
   });
 });

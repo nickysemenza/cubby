@@ -3,6 +3,7 @@ import {
   emailPurchaseLink,
   emailPurchaseLinkState,
 } from "@cubby/schemas/email-fields";
+import { emailRelationshipResult } from "@cubby/schemas/email-relationship-facts";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   parseShortcodeFor,
@@ -71,6 +72,7 @@ import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import {
+  markWork,
   markWorkFrom,
   workItemStates,
 } from "~/server/generic/jobs/repo/work-items";
@@ -417,6 +419,164 @@ describe("Email Purchase links", () => {
         linkedRetainedEmails: 0,
         linkedPurchases: 1,
       });
+      const replacement = await createRepoEntity(ctx, "purchase", {
+        vendorId: vendor.shortcode,
+      });
+      const unrelatedSource = await syntheticRetainedMail(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-unrelated-source-order-mailbox",
+        messageId: "synthetic-unrelated-source-order-message",
+        rawChecksum: "d".repeat(64),
+        vendorId: null,
+      });
+      await drainStoredDerived(ctx.db);
+      const [accepted] = await getDb(ctx.db)
+        .select({ id: importSourceOrder.id })
+        .from(importSourceOrder)
+        .where(
+          and(
+            eq(importSourceOrder.sourceClaimId, acceptedClaim.id),
+            eq(importSourceOrder.orderKey, "synthetic-accepted-review-order"),
+          ),
+        );
+      const [unrelatedEmail] = await getDb(ctx.db)
+        .select({ id: emailTable.id })
+        .from(emailTable)
+        .where(eq(emailTable.orderMailId, unrelatedSource.id));
+      const [originalEmail] = await getDb(ctx.db)
+        .select({ id: emailTable.id })
+        .from(emailTable)
+        .where(eq(emailTable.orderMailId, original.id));
+      if (!accepted || !unrelatedEmail || !originalEmail)
+        throw new Error("Synthetic source-order identities missing");
+      await markWork(
+        ctx.db,
+        DERIVED_DRAIN,
+        [
+          {
+            target: "email.relationshipFacts",
+            ref: unrelatedEmail.id,
+            priority: 2,
+          },
+        ],
+        { readyAt: new Date(Date.now() + 86_400_000) },
+      );
+      const unrelatedWork = async () =>
+        (
+          await getDb(ctx.db).execute(
+            sql`SELECT to_jsonb(w) value FROM "WorkItem" w WHERE target = 'email.relationshipFacts' AND ref = ${unrelatedEmail.id}::uuid`,
+          )
+        ).rows;
+      const deferred = await unrelatedWork();
+      const drainEmail = async () => {
+        // One source expansion followed by its direct publications; other owners stay owed.
+        for (let page = 0; page < 2; page++)
+          await drainDerivedPage(ctx.db, {
+            only: (item) => item.target.startsWith("email.relationshipFacts"),
+          });
+      };
+      const facts = async () => {
+        const [row] = await getDb(ctx.db)
+          .select({ value: derivedValue.value })
+          .from(derivedValue)
+          .where(
+            and(
+              eq(derivedValue.entityId, originalEmail.id),
+              eq(derivedValue.key, "relationshipFacts"),
+            ),
+          );
+        return emailRelationshipResult
+          .parse(row?.value)
+          .facts.map((fact) => ({
+            purchaseId: fact.purchaseId,
+            changed: fact.changed,
+          }));
+      };
+      await getDb(ctx.db)
+        .update(importSourceOrder)
+        .set({ checksum: "b".repeat(64) })
+        .where(eq(importSourceOrder.id, accepted.id));
+      expect(
+        await workItemStates(ctx.db, "email.relationshipFacts@8", [
+          accepted.id,
+        ]),
+      ).toEqual([]);
+      expect(
+        await workItemStates(ctx.db, "email.relationshipFacts@9", [
+          purchase.id,
+        ]),
+      ).toHaveLength(1);
+      await drainEmail();
+      expect(await facts()).toEqual([
+        { purchaseId: purchase.id, changed: true },
+      ]);
+      expect(await unrelatedWork()).toEqual(deferred);
+      await getDb(ctx.db)
+        .update(importSourceOrder)
+        .set({ sourceClaimId: foreignClaim.id })
+        .where(eq(importSourceOrder.id, accepted.id));
+      await drainEmail();
+      expect(await facts()).toEqual([]);
+      expect(await unrelatedWork()).toEqual(deferred);
+      await getDb(ctx.db)
+        .update(importSourceOrder)
+        .set({
+          sourceClaimId: acceptedClaim.id,
+          purchaseId: replacement.entityId,
+        })
+        .where(eq(importSourceOrder.id, accepted.id));
+      expect(
+        await workItemStates(ctx.db, "email.relationshipFacts@9", [
+          purchase.id,
+          replacement.entityId,
+        ]),
+      ).toHaveLength(2);
+      await drainEmail();
+      expect(await facts()).toEqual([
+        { purchaseId: replacement.entityId, changed: true },
+      ]);
+      expect(await unrelatedWork()).toEqual(deferred);
+      await getDb(ctx.db)
+        .update(importSourceOrder)
+        .set({ purchaseId: null })
+        .where(eq(importSourceOrder.id, accepted.id));
+      expect(
+        await workItemStates(ctx.db, "email.relationshipFacts@9", [
+          replacement.entityId,
+          "00000000-0000-4000-8000-000000000000",
+        ]),
+      ).toHaveLength(2);
+      await drainEmail();
+      expect(await facts()).toEqual([]);
+      expect(await unrelatedWork()).toEqual(deferred);
+      await getDb(ctx.db)
+        .update(importSourceOrder)
+        .set({ purchaseId: purchase.id })
+        .where(eq(importSourceOrder.id, accepted.id));
+      await drainEmail();
+      expect(await facts()).toEqual([
+        { purchaseId: purchase.id, changed: true },
+      ]);
+      await getDb(ctx.db)
+        .delete(importSourceOrder)
+        .where(eq(importSourceOrder.id, accepted.id));
+      await drainEmail();
+      expect(await facts()).toEqual([]);
+      expect(await unrelatedWork()).toEqual(deferred);
+      // A predecessor ticket still names a SourceOrder, even after its row is gone.
+      await markWork(ctx.db, DERIVED_DRAIN, [
+        { target: "email.relationshipFacts@8", ref: accepted.id, priority: 0 },
+      ]);
+      await drainDerivedPage(ctx.db, {
+        only: (item) => item.target === "email.relationshipFacts@8",
+      });
+      expect(
+        (
+          await workItemStates(ctx.db, "email.relationshipFacts", [
+            unrelatedEmail.id,
+          ])
+        )[0],
+      ).toMatchObject({ priority: 0 });
     },
   );
 
