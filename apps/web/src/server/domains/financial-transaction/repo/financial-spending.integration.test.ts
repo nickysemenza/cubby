@@ -750,7 +750,7 @@ describe("shared spending booking", () => {
     const { account, vendor, transaction, advice, category } = await fixture();
     for (const [date, cost] of [
       ["2026-05-04", 42.5],
-      ["2026-05-06", 19],
+      ["2026-03-06", 19],
     ] as const) {
       const receipt = await createRepoIdentity(ctx, "purchase", {
         vendorId: vendor.output.id,
@@ -997,7 +997,12 @@ describe("shared spending booking", () => {
       trade: "other",
       spendingCategoryId: oldCategory.id,
     });
-    const request = { transactionId: transaction.output.id, advice };
+    const request = {
+      transactionId: transaction.output.id,
+      advice,
+      // This category review has already excluded the older independent receipt.
+      rejectedPurchaseIds: [oldPurchase.output.id],
+    };
     expect((await previewFinancialSpending(ctx.db, request)).status).toBe(
       "review_required",
     );
@@ -1093,14 +1098,14 @@ describe("shared spending booking", () => {
       ).toEqual([{ cost: 42.5 }]);
     },
   );
-  it("holds a nearby same-vendor Purchase instead of duplicating its spending", async () => {
+  it("holds older and undated same-vendor spending until the member excludes it", async () => {
     const { transaction, vendor, advice } = await fixture();
     const receipt = await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor.output.id,
-      date: "2026-05-01",
+      date: "2026-03-01",
       statedTotal: 40,
     });
-    await createRepoIdentity(ctx, "expense", {
+    const line = await createRepoIdentity(ctx, "expense", {
       purchaseId: receipt.output.id,
       name: "Synthetic receipt",
       cost: 40,
@@ -1122,6 +1127,35 @@ describe("shared spending booking", () => {
         .select({ name: purchase.displayLabel })
         .from(purchase),
     ).toHaveLength(1);
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ date: null })
+      .where(eq(purchase.shortcode, receipt.output.id));
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ cost: null })
+      .where(eq(expense.shortcode, line.output.id));
+    expect(
+      await previewFinancialSpending(ctx.db, {
+        transactionId: transaction.output.id,
+        advice,
+      }),
+    ).toMatchObject({ status: "review_required" });
+    const reviewed = await previewFinancialSpending(ctx.db, {
+      transactionId: transaction.output.id,
+      advice,
+      rejectedPurchaseIds: [receipt.output.id],
+    });
+    expect(reviewed).toMatchObject({
+      status: "ready",
+      effect: "create_aggregate",
+    });
+    await commitFinancialSpending(ctx.db, reviewed, ctx.actor);
+    expect(
+      (await getDb(ctx.db).select({ cost: expense.cost }).from(expense))
+        .map((row) => row.cost)
+        .sort(),
+    ).toEqual([42.5, null]);
   });
   // A prospective source must survive creation without identity-only snapshot drift.
   it("commits a prospective source after creation using the same canonical snapshot", async () => {
@@ -1524,6 +1558,36 @@ describe("shared spending booking", () => {
     expect(
       await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
     ).toEqual([{ cost: 42.5 }]);
+    await updateFinancialTransaction(
+      ctx.db,
+      next.output.id,
+      {
+        transactionDate: "2026-07-04",
+        postedDate: "2026-07-04",
+      },
+      ctx.actor,
+    );
+    // Overcoverage is uncertainty, not proof that the old receipt is exhausted.
+    await getDb(ctx.db).update(expense).set({ cost: 40 });
+    expect(
+      await previewFinancialSpending(ctx.db, {
+        transactionId: next.output.id,
+        advice,
+      }),
+    ).toMatchObject({ status: "review_required" });
+    await getDb(ctx.db).update(expense).set({ cost: 42.5 });
+    const independent = await previewFinancialSpending(ctx.db, {
+      transactionId: next.output.id,
+      advice,
+    });
+    expect(independent).toMatchObject({
+      status: "ready",
+      effect: "create_aggregate",
+    });
+    await commitFinancialSpending(ctx.db, independent, ctx.actor);
+    expect(
+      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+    ).toEqual([{ cost: 42.5 }, { cost: 42.5 }]);
   });
   it("allows a reviewed empty Purchase to receive exactly one conserved aggregate", async () => {
     const { transaction, advice, vendor } = await fixture();

@@ -20,7 +20,7 @@ import {
 } from "./financial-transaction-fields";
 import { plainDate } from "./project";
 
-export const FINANCIAL_SPENDING_POLICY = "2026-10-29.1";
+export const FINANCIAL_SPENDING_POLICY = "2026-10-29.2";
 
 /** Advice never bypasses planning; explicit commands and queue policy authorize execution. */
 export const financialSpendingAdvice = z.object({

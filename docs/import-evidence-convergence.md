@@ -106,7 +106,16 @@ card/tender and owner evidence, the existing posting window, and a complete
 unique conserved set. The same evidence checks apply to pending and
 observed charges; status alone neither proves identity nor prevents settlement. Weaker same-Vendor candidates within fourteen days,
 including tips, partial payments, splits and combined charges, need review;
-amount/date coincidence never proves identity. Refunds require supported
+amount/date coincidence never proves identity. For positive charges, actual
+nonfuture vendor Expenses on same-Vendor Purchases outside that window or without dates also prevent
+automatic new spending while their complete graphs have open, unknown or
+overcovered settlement capacity. These additional candidates are review-only:
+even a complete retained payment set cannot make them automatic settlement
+targets. Only confidently zero remaining capacity excludes an additional
+candidate; existing nearby/payment/explicit selectors remain intact. Explicit
+member selection or rejection retains its existing authority. A header total
+without actual vendor lines is outside this check, and exhausted capacity does
+not prove source-event identity. Refunds require supported
 original-Purchase evidence independently of that weak-candidate window. Reuse
 recorded negative Expenses before creating a negative lump line. An identified
 original's single live effective category on vendor spending, excluding future
