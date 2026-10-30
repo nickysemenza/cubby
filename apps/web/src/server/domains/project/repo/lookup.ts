@@ -67,7 +67,9 @@ const projectReadDatabase = (db: Database | DrizzleTransaction): Database =>
 // and blocked-next-action predicates. A caller that already computed the
 // items seeds this prepare (`buildProjectListQuery`).
 export const projectAttention = listPrepare((db) =>
-  computeAttentionItems(projectReadDatabase(db)),
+  computeAttentionItems(projectReadDatabase(db), {
+    types: Object.values(projectAttentionFilterTypes),
+  }),
 );
 
 /**

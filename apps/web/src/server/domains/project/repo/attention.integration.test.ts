@@ -20,7 +20,10 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { computeAttentionItems } from "./attention";
+import {
+  computeAttentionItems,
+  projectAttentionFilterTypes,
+} from "./attention";
 import { loadProjectSubtreeRollups } from "./subtree";
 
 describe("project attention activity", () => {
@@ -161,6 +164,15 @@ describe("project attention activity", () => {
     });
     await drainStoredDerived(ctx.db);
     const measured = await computeAttentionItems(ctx.db);
+    const projectTypes = Object.values(projectAttentionFilterTypes);
+    expect(
+      await computeAttentionItems(ctx.db, { types: projectTypes }),
+    ).toEqual({
+      ...measured,
+      items: measured.items.filter((item) =>
+        projectTypes.some((type) => type === item.type),
+      ),
+    });
     expect(
       measured.items
         .filter((item) => item.type === "stalled_project")
@@ -284,6 +296,18 @@ describe("Project attention input availability", () => {
     });
     const missing = await computeAttentionItems(ctx.db, {
       projectIds: [project.id],
+    });
+    const projectTypes = Object.values(projectAttentionFilterTypes);
+    expect(
+      await computeAttentionItems(ctx.db, {
+        projectIds: [project.id],
+        types: projectTypes,
+      }),
+    ).toEqual({
+      ...missing,
+      items: missing.items.filter((item) =>
+        projectTypes.some((type) => type === item.type),
+      ),
     });
     const filtered = (filters: {
       attention?: string[];

@@ -3092,7 +3092,12 @@ current date windows, but load the date policy alone rather than folding live
 spend/task rollups. Attention consumes stored expensive inputs and compares
 household dates live. Scoped attention reads load only the selected Project
 publications, each with complete subtree totals; the compact identity tree still
-supplies parent labels and ancestor-estimate checks. Detailed cost and latency evidence, including Task's live
+supplies parent labels and ancestor-estimate checks. Attention callers may select
+rule types: Project list filters and Work sources request their declared Project
+rules, skipping overdue-Task and Expense-only evidence reads. Blocked-work checks
+still load the canonical Task dependency graph; unscoped Problems and dashboard
+reports retain every rule. Selection preserves Project publication completeness
+and stays local to that read; it does not cache membership. Detailed cost and latency evidence, including Task's live
 inheritance fields, belongs to #3420.
 
 Email declares one typed `relationshipFacts` result. Canonical candidate discovery
