@@ -167,6 +167,47 @@ describe("recursive field projections", () => {
     expect(() => project(["firstEventDate"])).toThrow(
       "does not match the declared number projection",
     );
+    const email = z
+      .looseObject({
+        model: z.looseObject({ stored: z.record(z.string(), z.unknown()) }),
+      })
+      .parse(declarations.find((declaration) => declaration.key === "email"));
+    const stored = z
+      .looseObject({ inputs: z.array(z.record(z.string(), z.unknown())) })
+      .parse(email.model.stored.relationshipFacts);
+    const selectReference = (array: string[], key: string) =>
+      compileEntity(
+        {
+          ...email,
+          model: {
+            ...email.model,
+            stored: {
+              ...email.model.stored,
+              relationshipFacts: {
+                ...stored,
+                inputs: stored.inputs.map((input, index) =>
+                  index === 5
+                    ? {
+                        ...input,
+                        selection: {
+                          key: "purchaseEvidence",
+                          retained: { array, key },
+                        },
+                      }
+                    : input,
+                ),
+              },
+            },
+          },
+        },
+        0,
+      );
+    expect(() => selectReference(["missingFacts"], "purchaseId")).toThrow(
+      "array of UUID references",
+    );
+    expect(() => selectReference(["facts"], "purchaseShortcode")).toThrow(
+      "array of UUID references",
+    );
   });
   it("publishes canonical wrappers while declaration inputs remain raw", async () => {
     const entities = await loadEntityDeclarations();

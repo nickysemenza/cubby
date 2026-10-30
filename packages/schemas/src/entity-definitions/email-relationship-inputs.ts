@@ -42,12 +42,15 @@ export const EMAIL_RELATIONSHIP_INPUTS: DerivedStoredInput[] = [
       { table: "Email", from: "orderMailId", to: "id" },
     ],
   },
-  // Existing pairs cannot discover every new match after a candidate or source
-  // identity edit. Conservative fanout runs in the drain, never in the save.
+  // Stable Purchase IDs reach current candidates and retained prior facts.
   {
     table: "Purchase",
     match: { id: "id" },
     targetWhere: { deletedAt: null },
+    selection: {
+      key: "purchaseEvidence",
+      retained: { array: ["facts"], key: "purchaseId" },
+    },
     columns: [
       "orderId",
       "vendorId",
@@ -61,10 +64,16 @@ export const EMAIL_RELATIONSHIP_INPUTS: DerivedStoredInput[] = [
     table: "VendorAccount",
     match: { id: "id" },
     targetWhere: { deletedAt: null },
+    selection: {
+      key: "purchaseEvidence",
+      path: [{ table: "Purchase", from: "vendorAccountId", to: "id" }],
+      retained: { array: ["facts"], key: "purchaseId" },
+    },
     columns: ["ledgerPartyId", "deletedAt"],
   },
   {
     table: "ImportSourceClaim",
+    // Old source-family keys are not retained in the relationship facts.
     match: { id: "id" },
     targetWhere: { deletedAt: null },
     columns: ["canonicalClaimId", "ledgerPartyId", "kind", "externalKey"],

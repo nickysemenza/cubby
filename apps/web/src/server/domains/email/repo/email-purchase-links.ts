@@ -69,10 +69,11 @@ const SUGGESTION_WINDOW_DAYS = 45;
  */
 export const emailPurchaseEvidenceSql = (
   accountOwnerScope: "respect" | "ignore" = "respect",
+  purchaseIds?: SQL,
 ): SQL => sql`
   SELECT accepted."purchaseId", NULL::uuid AS "eventId", ${KIND.accepted}::text AS "kind",
     accepted."changed", ${PROPOSER.import}::text AS "proposedBy"
-  FROM (${emailAcceptedEvidenceSql(false, accountOwnerScope)}) accepted
+  FROM (${emailAcceptedEvidenceSql(false, accountOwnerScope, purchaseIds)}) accepted
   UNION ALL
   SELECT decision."purchaseId", event."id", decision."decision",
     decision."evidenceChecksum" <> original."rawChecksum", decision."proposedBy"
@@ -82,6 +83,7 @@ export const emailPurchaseEvidenceSql = (
   INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND ${notDeleted(livePurchase)}
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted(liveAccount)}
   WHERE original."id" = "Email"."orderMailId"
+    ${purchaseIds ? sql`AND p."id" IN (${purchaseIds})` : sql``}
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
     AND event."supersededAt" IS NULL
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
@@ -93,10 +95,12 @@ export const emailPurchaseEvidenceSql = (
   INNER JOIN LATERAL (
     SELECT p."id", p."vendorAccountId", p."deletedAt" FROM "Purchase" p
     WHERE p."orderId" = event."orderId"
+      ${purchaseIds ? sql`AND p."id" IN (${purchaseIds})` : sql``}
       AND (original."vendorId" IS NULL OR p."vendorId" = original."vendorId")
     UNION ALL
     SELECT p."id", p."vendorAccountId", p."deletedAt" FROM "Purchase" p
     WHERE p."vendorId" = original."vendorId"
+        ${purchaseIds ? sql`AND p."id" IN (${purchaseIds})` : sql``}
         AND (event."orderId" IS NULL OR p."orderId" IS NULL)
         AND event."amount" IS NOT NULL AND p."statedTotal" IS NOT NULL
         AND abs(event."amount" - p."statedTotal") < 0.01

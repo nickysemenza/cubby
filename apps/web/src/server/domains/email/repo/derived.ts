@@ -1,6 +1,6 @@
 import { emailPurchaseFact } from "@cubby/schemas/email-relationship-facts";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { and, inArray } from "drizzle-orm";
+import { and, inArray, sql, type SQL } from "drizzle-orm";
 
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { email } from "~/server/db/schema";
@@ -9,6 +9,7 @@ import {
   loadRelationshipPurchaseGates,
   foldScopedEmailPurchaseFacts,
   strongestLinkState,
+  emailPurchaseEvidenceSql,
 } from "~/server/domains/email/repo/email-purchase-links";
 import type {
   DerivedCompute,
@@ -78,5 +79,14 @@ const emailRelationshipCompute: DerivedCompute = async (db, ids) => {
   );
 };
 export const emailDerivedComputes = {
-  "email.relationshipFacts": emailRelationshipCompute,
+  "email.relationshipFacts": Object.assign(emailRelationshipCompute, {
+    fanoutSelections: {
+      purchaseEvidence: (
+        purchaseIds: SQL,
+      ) => sql`SELECT DISTINCT "Email"."id" AS id
+        FROM ${email}
+        CROSS JOIN LATERAL (${emailPurchaseEvidenceSql("ignore", purchaseIds)}) evidence
+        WHERE ${notDeleted(email)}`,
+    },
+  }),
 };

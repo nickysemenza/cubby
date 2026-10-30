@@ -274,6 +274,21 @@ describe("stored derived read sets", () => {
         await (isDerivedSink(adapter)
           ? adapter.prepare(ctx.db, ids)
           : adapter(ctx.db, ids));
+        for (const input of declaration.inputs) {
+          if (!input.selection) continue;
+          const select = !isDerivedSink(adapter)
+            ? adapter.fanoutSelections?.[input.selection.key]
+            : undefined;
+          if (!select)
+            throw new Error(
+              `Unregistered fanout selection ${input.selection.key}`,
+            );
+          // Compile the real selector even when this source currently has no matches.
+          await getDb(ctx.db).execute(
+            select(sql`SELECT ${sql.identifier(input.tableColumn)} AS id
+            FROM ${sql.identifier(input.table)} LIMIT 25`),
+          );
+        }
       } catch (caught) {
         error = String(caught);
       }
@@ -305,6 +320,7 @@ describe("stored derived read sets", () => {
           ...(input.paths ?? []).flatMap((path) =>
             path.map((step) => step.table),
           ),
+          ...(input.selection?.path ?? []).map((step) => step.table),
         ]),
         ...declaration.dependsOn.flatMap((dependency) =>
           "through" in dependency ? [dependency.through.table] : [],

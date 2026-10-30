@@ -3,6 +3,7 @@ import {
   type StoredFieldDecision,
 } from "@cubby/schemas/derived-value";
 import { storedResultSchemas } from "@cubby/schemas/entity-stored-derived";
+import type { SQL } from "drizzle-orm";
 
 /**
  * The compute seam for stored derived values. An adapter receives a batch of
@@ -12,6 +13,9 @@ import { storedResultSchemas } from "@cubby/schemas/entity-stored-derived";
  * derived value unless the declaration lists it in `dependsOn`.
  */
 import type { Database, DrizzleTransaction } from "~/server/db";
+
+/** Current target IDs reached from an input's source-reference relation. */
+export type DerivedFanoutSelection = (refs: SQL) => SQL;
 
 export interface DerivedComputed {
   /** The published value; JSON. */
@@ -65,6 +69,7 @@ export type DerivedCompute = {
   /** Maximum same-adapter records sharing a preparation page; omitted keeps the conservative default. */
   readonly preparationBatchSize?: number;
   readonly sharedPreparation?: DerivedSharedPreparation;
+  readonly fanoutSelections?: Readonly<Record<string, DerivedFanoutSelection>>;
 };
 
 export interface DerivedSharedPreparation<Prepared = unknown> {

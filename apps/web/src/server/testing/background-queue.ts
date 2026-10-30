@@ -123,6 +123,7 @@ export async function drainDerivedPage(
               after(adapter(tx, ids)),
             {
               preparationBatchSize: adapter.preparationBatchSize,
+              fanoutSelections: adapter.fanoutSelections,
             },
           ),
     ]),

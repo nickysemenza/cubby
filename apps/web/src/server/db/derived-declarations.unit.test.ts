@@ -69,7 +69,11 @@ describe("stored derived declarations", () => {
         ...[
           ...(input.path ? [input.path] : []),
           ...(input.paths ?? []),
+          ...(input.selection?.path ? [input.selection.path] : []),
         ].flatMap(missingPath),
+        ...(input.selection && declaration.publishes !== "derivedValue"
+          ? [`${declaration.target} (selection requires a value publication)`]
+          : []),
         ...missing(input.table, [
           input.tableColumn,
           ...(input.columns ?? []),

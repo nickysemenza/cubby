@@ -11,6 +11,7 @@ import { z } from "zod";
 import type { DatabaseChanges } from "~/lib/doorbell";
 import type { Database } from "~/server/db";
 import {
+  type DerivedInput,
   type DerivedPathStep,
   dependentsOf,
   parseTarget,
@@ -18,6 +19,7 @@ import {
   type StoredDerivedDeclaration,
 } from "~/server/db/derived-declarations";
 import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
+import { derivedValue } from "~/server/db/derived-value-schema";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -30,6 +32,7 @@ import {
   type DerivedComputes,
   type DerivedSink,
   type DerivedSharedPreparation,
+  type DerivedFanoutSelection,
   isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
 import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
@@ -131,6 +134,7 @@ export interface DerivedPagePlan {
   readonly fanoutTickets: readonly number[];
   readonly computed: ReadonlyMap<string, ReadonlyMap<string, DerivedComputed>>;
   readonly sinks: ReadonlyMap<string, { sink: DerivedSink; prepared: unknown }>;
+  readonly fanoutSelections: ReadonlyMap<string, DerivedFanoutSelection>;
 }
 
 export interface DerivedPublication {
@@ -192,6 +196,22 @@ export async function prepareDerivedPage(
   const sinks = new Map<string, { sink: DerivedSink; prepared: unknown }>();
   const failed = new Map<WorkItem, unknown>();
   const groups = groupByTarget(items);
+  const fanoutSelections = new Map<string, DerivedFanoutSelection>();
+  for (const target of groups.keys()) {
+    const parsed = parseTarget(target);
+    const selection = parsed?.fanoutInput?.selection;
+    if (!parsed || !selection) continue;
+    const adapter = computes[parsed.declaration.compute];
+    const select =
+      adapter && !isDerivedSink(adapter)
+        ? adapter.fanoutSelections?.[selection.key]
+        : undefined;
+    if (!select || parsed.declaration.publishes !== "derivedValue")
+      throw new Error(
+        `No value fanout selection ${parsed.declaration.target}.${selection.key}`,
+      );
+    fanoutSelections.set(target, select);
+  }
   const sources = new Map<
     object,
     { adapter: DerivedSharedPreparation; ids: Set<string>; targets: number }
@@ -253,7 +273,7 @@ export async function prepareDerivedPage(
       for (const item of group) failed.set(item, error);
     }
   }
-  return { plan: { fanoutTickets, computed, sinks }, failed };
+  return { plan: { fanoutTickets, computed, sinks, fanoutSelections }, failed };
 }
 
 /** Source JSON is evidence: malformed references must not fail a drain page. */
@@ -289,6 +309,34 @@ const pathSql = (path: readonly DerivedPathStep[], start: SQL): SQL =>
           ),
         )}`;
   }, start);
+
+/** Current candidates and prior output references cover both sides of a key edit. */
+function selectedTargetRows(
+  declaration: StoredDerivedDeclaration,
+  input: DerivedInput,
+  refs: SQL,
+  select: DerivedFanoutSelection,
+): SQL {
+  const selection = input.selection;
+  if (!selection || !input.targetWhere)
+    throw new Error(`Invalid fanout selection for ${declaration.target}`);
+  const sourceRefs = selection.path ? pathSql(selection.path, refs) : refs;
+  const retainedArray = sql`v.value #> ARRAY[${sql.join(
+    selection.retained.array.map((key) => sql`${key}`),
+    sql`, `,
+  )}]::text[]`;
+  return sql`SELECT d.id FROM (${fixedTargetRows(declaration.table, input.targetWhere)}) d
+    WHERE d.id IN (
+      WITH derived_fanout_refs(id) AS MATERIALIZED (${sourceRefs})
+      SELECT current_targets.id FROM (${select(sql`SELECT id FROM derived_fanout_refs`)}) current_targets
+      UNION
+      SELECT v."entityId" FROM ${derivedValue} v
+      CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(${retainedArray}) = 'array'
+        THEN ${retainedArray} ELSE '[]'::jsonb END) element(value)
+      WHERE v.kind = ${declaration.entity} AND v.key = ${declaration.key}
+        AND element.value ->> ${selection.retained.key} IN (SELECT id::text FROM derived_fanout_refs)
+    )`;
+}
 
 /** Records whose stored inputs reach a changed record, per kind, bounded for the doorbell ring. */
 class Touched {
@@ -349,12 +397,15 @@ async function expandFanouts(
   tx: Database,
   items: readonly WorkItem[],
   touched: Touched,
+  plan: DerivedPagePlan,
 ): Promise<Pick<DerivedChunk, "expanded" | "covered">> {
   const fixedTargets = [
     ...new Set(
-      items.flatMap(({ target }) =>
-        parseTarget(target)?.fanoutInput?.targetWhere ? [target] : [],
-      ),
+      items.flatMap(({ target }) => {
+        const input = parseTarget(target)?.fanoutInput;
+        // A later covered ticket could remove a later chunk's publication fence.
+        return input?.targetWhere && !input.selection ? [target] : [];
+      }),
     ),
   ];
   const covered = fixedTargets.length
@@ -373,16 +424,19 @@ async function expandFanouts(
       if (!parsed || !input) return [];
       const { declaration } = parsed;
       const refs = sql`SELECT unnest(${uuidArrayParam(group.map((item) => item.ref))})`;
-      const dependents = input.targetWhere
-        ? fixedTargetRows(declaration.table, input.targetWhere)
-        : input.paths
-          ? sql.join(
-              input.paths.map((path) => sql`(${pathSql(path, refs)})`),
-              sql` UNION `,
-            )
-          : input.path
-            ? pathSql(input.path, refs)
-            : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+      const select = plan.fanoutSelections.get(target);
+      const dependents = select
+        ? selectedTargetRows(declaration, input, refs, select)
+        : input.targetWhere
+          ? fixedTargetRows(declaration.table, input.targetWhere)
+          : input.paths
+            ? sql.join(
+                input.paths.map((path) => sql`(${pathSql(path, refs)})`),
+                sql` UNION `,
+              )
+            : input.path
+              ? pathSql(input.path, refs)
+              : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
       return [
         sql`SELECT ${declaration.target}::text, r.id,
         ${Math.min(...group.map((item) => item.priority))}::int
@@ -453,7 +507,7 @@ export async function lockDerivedChunk(
 ): Promise<WorkItem[]> {
   chunk.touched = new Touched();
   chunk.covered = [];
-  const expansion = await expandFanouts(db, items, chunk.touched);
+  const expansion = await expandFanouts(db, items, chunk.touched, plan);
   chunk.expanded = expansion.expanded;
   chunk.covered = expansion.covered;
   const tx = unwrapDb(db);

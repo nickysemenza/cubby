@@ -563,6 +563,44 @@ const validateEnumField = (
   }
 };
 
+/** Retained scheduling references must be real UUID leaves of a checked result. */
+const validateFanoutSelections = (
+  model: EntityFieldModelMetadata,
+  context: string,
+) => {
+  for (const [key, entry] of Object.entries(model.derived ?? {}))
+    if (
+      "stored" in entry &&
+      entry.stored?.inputs.some((input) => input.selection)
+    )
+      throw new EntityDeclarationError(
+        `${context}.derived.${key}: selection requires a resultSchema in model.stored.`,
+      );
+  for (const [key, stored] of Object.entries(model.stored ?? {})) {
+    for (const input of stored.inputs) {
+      if (!input.selection) continue;
+      const retained = input.selection.retained;
+      const path = retained.array.join(".");
+      const array = stored.resultSchema
+        ? schemaAtReadPath(stored.resultSchema, path)
+        : null;
+      const reference = stored.resultSchema
+        ? schemaAtReadPath(stored.resultSchema, `${path}[].${retained.key}`)
+        : null;
+      if (
+        stored.publishes !== "derivedValue" ||
+        !(array instanceof z.ZodArray) ||
+        !reference ||
+        reference._zod.def.type !== "string" ||
+        z.toJSONSchema(reference).format !== "uuid"
+      )
+        throw new EntityDeclarationError(
+          `${context}.stored.${key}: selection must name an array of UUID references in a derivedValue resultSchema.`,
+        );
+    }
+  }
+};
+
 // oxlint-disable-next-line eslint/complexity -- Field compilation enforces cross-property model invariants in one pass.
 const compileFieldModel = (
   value: EntityFieldModelMetadata | undefined,
@@ -592,6 +630,7 @@ const compileFieldModel = (
     };
   }
   const model = value;
+  validateFanoutSelections(model, context);
   const fields = model.fields.map((field, index): EntityField => {
     const fieldContext = `${entityKey}.${field.key}`;
     const key = field.key;

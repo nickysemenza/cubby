@@ -60,6 +60,7 @@ const automatedStagesSql = sql`(${rule}, ${decision}, ${model})`;
 export const emailAcceptedEvidenceSql = (
   includeDeleted = false,
   accountOwnerScope: "respect" | "ignore" = "respect",
+  purchaseIds?: SQL,
 ): SQL => sql`
   SELECT accepted."id" AS "sourceOrderId", p."id" AS "purchaseId", accepted."checksum" AS "evidenceChecksum", accepted."createdAt" AS "acceptedAt",
     -- The accepted bytes differ from the current original: the Email's own
@@ -96,6 +97,7 @@ export const emailAcceptedEvidenceSql = (
   }
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted("account")}
   WHERE identity."ledgerPartyId" = "Email"."ledgerPartyId"
+    ${purchaseIds ? sql`AND p."id" IN (${purchaseIds})` : sql``}
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
     -- Separate source keys let the composite identity index resolve each arm.
     AND (identity."kind", identity."externalKey") IN (

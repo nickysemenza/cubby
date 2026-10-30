@@ -12,6 +12,7 @@ import {
 import { purchaseShortcode, SHORTCODE_CHARS } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 /**
  * Email↔Purchase failure modes (ADR 0011: links are derived, never stored as
@@ -27,10 +28,12 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { account as googleAccount } from "~/server/db/auth.schema";
+import { derivedValue } from "~/server/db/derived-value-schema";
 import {
   databaseForTransaction,
   getDb,
   withTransaction,
+  uuidArrayParam,
 } from "~/server/db/helpers";
 import {
   importSourceClaim,
@@ -61,19 +64,33 @@ import {
   mergePurchases,
 } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { executeEntity } from "~/server/entity-kernel";
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
+import {
+  markWorkFrom,
+  workItemStates,
+} from "~/server/generic/jobs/repo/work-items";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
-import { drainStoredDerived } from "~/server/testing/background-queue";
+import {
+  drainDerivedPage,
+  drainStoredDerived,
+} from "~/server/testing/background-queue";
 import {
   callMcpTool,
   kernelRequestContext,
 } from "~/server/testing/mcp-test-utils";
-import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
+import {
+  insertEntityFixtures,
+  createProductIdentityFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
+import { derivedComputes } from "~/server/workflows/derived-computes";
 
 describe("Email Purchase links", () => {
   const ctx = withTestDb();
@@ -469,6 +486,114 @@ describe("Email Purchase links", () => {
 
   it("discovers newly eligible matches and keeps live owner gates separate from cached facts", async () => {
     const f = await retainedReviewFixture();
+    const unrelated = await createRepoEntity(ctx, "purchase", {
+      vendorId: f.vendor.shortcode,
+      orderId: "SYNTHETIC-OTHER-CANDIDATE",
+    });
+    const fillers = [];
+    for (let index = 0; index < 24; index++)
+      fillers.push(
+        await createProductIdentityFixture(
+          ctx.db,
+          makeProductInput({ name: `Synthetic cross-chunk filler ${index}` }),
+          ctx.actor,
+        ),
+      );
+    await drainStoredDerived(ctx.db);
+    const [emailIdentity] = await getDb(ctx.db)
+      .select({ id: emailTable.id })
+      .from(emailTable)
+      .where(eq(emailTable.shortcode, f.email));
+    if (!emailIdentity) throw new Error("Synthetic Email missing");
+    // Model a retained pre-backfill row: no publication is not an empty result.
+    await getDb(ctx.db)
+      .delete(derivedValue)
+      .where(
+        and(
+          eq(derivedValue.entityId, emailIdentity.id),
+          eq(derivedValue.key, "relationshipFacts"),
+        ),
+      );
+    const sourceTarget = "email.relationshipFacts@5";
+    await executeEntity(kernelCtx(ctx), {
+      action: "update",
+      entity: "purchase",
+      id: unrelated.output.id,
+      data: { orderId: "SYNTHETIC-OTHER-CANDIDATE-EDITED" },
+    });
+    await markWorkFrom(
+      ctx.db,
+      DERIVED_DRAIN,
+      sql`SELECT ${"product.dataQuality"}::text, ref, 0 FROM unnest(${uuidArrayParam(fillers.map((row) => row.entityId))}) refs(ref)`,
+      { wake: false },
+    );
+    await markWorkFrom(
+      ctx.db,
+      DERIVED_DRAIN,
+      sql`SELECT ${"email.relationshipFacts"}::text, ${emailIdentity.id}::uuid, 0`,
+      { wake: false },
+    );
+    const [before] = await workItemStates(ctx.db, "email.relationshipFacts", [
+      emailIdentity.id,
+    ]);
+    if (!before) throw new Error("Synthetic direct mark missing");
+    const compute = derivedComputes["email.relationshipFacts"];
+    if (typeof compute !== "function")
+      throw new Error("Expected Email compute");
+    let preparedOldCandidate = false;
+    const selectedFillers = new Set<string>(fillers.map((row) => row.entityId));
+    await drainDerivedPage(ctx.db, {
+      // The fanout and 24 compact marks fill the first chunk; Email publishes in the second.
+      only: (item) =>
+        (item.target === sourceTarget && item.ref === unrelated.entityId) ||
+        (item.target === "product.dataQuality" &&
+          selectedFillers.has(item.ref)) ||
+        (item.target === "email.relationshipFacts" &&
+          item.ref === emailIdentity.id),
+      computes: {
+        ...derivedComputes,
+        "email.relationshipFacts": Object.assign(
+          async (db: Parameters<typeof compute>[0], ids: readonly string[]) => {
+            const values = await compute(db, ids);
+            preparedOldCandidate = (
+              JSON.stringify(values.get(emailIdentity.id)?.value) ?? ""
+            ).includes(f.purchase.id);
+            // The newer source ticket must fence the obsolete facts in the later chunk.
+            await executeEntity(kernelCtx(ctx), {
+              action: "update",
+              entity: "purchase",
+              id: f.purchase.shortcode,
+              data: { orderId: "SYNTHETIC-NO-MATCH" },
+            });
+            return values;
+          },
+          { fanoutSelections: compute.fanoutSelections },
+        ),
+      },
+    });
+    expect(preparedOldCandidate).toBe(true);
+    expect(
+      await workItemStates(ctx.db, sourceTarget, [f.purchase.id]),
+    ).toHaveLength(1);
+    const [after] = await workItemStates(ctx.db, "email.relationshipFacts", [
+      emailIdentity.id,
+    ]);
+    expect(after).toMatchObject({
+      ticket: before.ticket,
+      priority: before.priority,
+      attempts: before.attempts,
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ value: derivedValue.value })
+        .from(derivedValue)
+        .where(
+          and(
+            eq(derivedValue.entityId, emailIdentity.id),
+            eq(derivedValue.key, "relationshipFacts"),
+          ),
+        ),
+    ).toEqual([]);
     await getDb(ctx.db)
       .update(purchaseTable)
       .set({ orderId: "SYNTHETIC-NO-MATCH" })
