@@ -11,6 +11,7 @@ import type { Database } from "~/server/db";
 import {
   expenseProjectRecommendationContext,
   expenseProjectRecommendationContexts,
+  type prepareExpenseProjectRecommendationContexts,
 } from "~/server/domains/expense/repo/project-recommendations";
 import { readInventory } from "~/server/domains/inventory/repo/crud";
 import { getPlacementRecommendation } from "~/server/domains/inventory/service/placement-recommendation.service";
@@ -34,11 +35,16 @@ async function expenseRecommendations(
 export async function getExpenseRecommendationPage(
   db: Database,
   sources: readonly EntityRef[],
+  prepared?: Awaited<
+    ReturnType<typeof prepareExpenseProjectRecommendationContexts>
+  >,
 ) {
-  const contexts = await expenseProjectRecommendationContexts(
-    db,
-    sources.map((source) => parseShortcodeFor("expense", source.entityId)),
+  const ids = sources.map((source) =>
+    parseShortcodeFor("expense", source.entityId),
   );
+  const contexts = prepared
+    ? prepared(ids)
+    : await expenseProjectRecommendationContexts(db, ids);
   return sources.map((source) =>
     expenseRecommendationsFromContext(
       source,

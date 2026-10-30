@@ -79,6 +79,7 @@ export type PreparedEntityConnection = z.infer<
 export async function prepareEntityConnectionEvidence(
   db: Database,
   raws: readonly ConnectionCandidate[],
+  expenseProjects?: Parameters<typeof prepareConnectionBases>[2],
 ): Promise<PreparedEntityConnection[]> {
   const candidates = raws.map((raw) => connectionCandidate.parse(raw));
   const prepared: PreparedEntityConnection[] = [];
@@ -89,6 +90,7 @@ export async function prepareEntityConnectionEvidence(
       // Both children are validated already; retain the capture's frozen shared JSON.
       prepared.push({ version: 1, candidate, basis });
     },
+    expenseProjects,
   );
   await assertAcquisitionConnectionsEligible(db, candidates);
   return prepared;

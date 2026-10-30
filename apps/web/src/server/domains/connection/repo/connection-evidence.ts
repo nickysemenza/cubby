@@ -208,15 +208,20 @@ export async function forEachConnectionBasis<
     entry: T,
     basis: Awaited<ReturnType<typeof captureConnectionBasis>>,
   ) => Promise<void>,
+  expenseProjects?: Awaited<
+    ReturnType<typeof prepareExpenseProjectRecommendationContexts>
+  >,
 ) {
   const expenseIds = entries.flatMap(({ candidate }) =>
     candidate.relation === "expense-project"
       ? [parseShortcodeFor("expense", candidate.source.entityId)]
       : [],
   );
-  const expenseProjects = expenseIds.length
-    ? await prepareExpenseProjectRecommendationContexts(db, expenseIds)
-    : undefined;
+  const preparedExpenseProjects =
+    expenseProjects ??
+    (expenseIds.length
+      ? await prepareExpenseProjectRecommendationContexts(db, expenseIds)
+      : undefined);
   // Every candidate for one source carries the same frozen recommendation evidence.
   // Keep one snapshot across construction batches, never across capture passes.
   const expenseProjectEvidence = new Map<string, ConnectionJson>();
@@ -226,7 +231,7 @@ export async function forEachConnectionBasis<
     const prepared = await prepareConnectionBases(
       db,
       batch.map((entry) => entry.candidate),
-      expenseProjects,
+      preparedExpenseProjects,
     );
     prepared.expenseProjectEvidence = expenseProjectEvidence;
     for (const entry of batch)

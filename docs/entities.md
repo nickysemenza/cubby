@@ -1414,6 +1414,11 @@ within one evaluation page. The first capture precedes inference, each source
 retains its own evidence, and publication still checks the selected target and
 source against live locked evidence. A fresh page captures fresh catalogs;
 there is no cross-page cache or skipped target validation.
+Initial connection candidate ranking and basis capture share the canonical
+Expense recommendation preparation within one capture call. Each source retains
+its own history and date exclusion; candidate batches retain the same frozen
+evidence. Per-source failure fallback and locked publication load fresh inputs
+independently. This preparation never crosses capture calls or inference.
 Enum targets may declare `allowNone: true` to offer an evaluated decline when
 their basis does not support a value. A decline proposes no replacement or
 clearing of the current field; exhaustive enums keep `allowNone: false`.

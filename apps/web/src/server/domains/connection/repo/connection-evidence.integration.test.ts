@@ -10,10 +10,12 @@ import { describe, expect, it } from "vitest";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   entityLink,
+  expense as expenseTable,
   financialTransactionAllocation,
   product as productTable,
   project as projectTable,
 } from "~/server/db/schema";
+import { prepareEntityConnectionSources } from "~/server/domains/connection/service/entity-connections";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -29,7 +31,11 @@ import {
   prepareConnectionBases,
 } from "./connection-evidence";
 import { connectionDiscoveryFingerprint } from "./discovery-fingerprint";
-import { prepareEntityConnectionEvidence } from "./entity-connections";
+import {
+  prepareEntityConnectionEvidence,
+  publishPreparedEntityConnections,
+  readEntityConnections,
+} from "./entity-connections";
 
 // Freshness checks capture many bases from prepared, batched reads. Each must
 // equal the basis the same candidate captures alone, and an endpoint that no
@@ -87,6 +93,14 @@ describe("prepared connection bases", () => {
       costType: "materials",
       cost: 40,
       purchaseId: order.output.id,
+    });
+    const history = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic contributing project history",
+      date: "2026-09-10",
+      trade: "electrical",
+      costType: "materials",
+      cost: 10,
+      projectId: project.output.id,
     });
     // Payload rows each relation reads: an allocation of the charge, and a
     // linked line of the Product on the order.
@@ -192,6 +206,36 @@ describe("prepared connection bases", () => {
       false,
     );
     expect(canonicalJson(basis)).toBe(before);
+    const sourceRef = {
+      entityKind: "expense" as const,
+      entityId: line.output.id,
+    };
+    const sourceFingerprint = await connectionDiscoveryFingerprint(
+      ctx.db,
+      sourceRef,
+    );
+    const sourceCapture = (
+      await prepareEntityConnectionSources(ctx.db, [sourceRef])
+    ).get(line.output.id);
+    expect(sourceCapture?.status).toBe("fulfilled");
+    if (sourceCapture?.status !== "fulfilled")
+      throw new Error("Synthetic source capture failed");
+    const capturedProjects = sourceCapture.value.filter(
+      (entry) => entry.candidate.relation === "expense-project",
+    );
+    expect(capturedProjects.length).toBeGreaterThan(0);
+    await getDb(ctx.db)
+      .update(expenseTable)
+      .set({ date: "2026-10-10" })
+      .where(eq(expenseTable.id, history.entityId));
+    expect(await connectionDiscoveryFingerprint(ctx.db, sourceRef)).toBe(
+      sourceFingerprint,
+    );
+    // The shared capture cannot authorize changed history or ancestor windows.
+    await expect(
+      publishPreparedEntityConnections(ctx.db, capturedProjects),
+    ).rejects.toThrow("Connection evidence changed after candidate retrieval");
+    expect(await readEntityConnections(ctx.db, sourceRef)).toEqual([]);
     await getDb(ctx.db)
       .update(projectTable)
       .set({ name: "Synthetic current Project evidence" })
