@@ -71,6 +71,8 @@ import {
 import {
   chargeKeyOf,
   chargeStateOf,
+  hasStatementOccurrence,
+  OCCURRENCE_IDENTITY_REVIEW,
   pendingSuggestion,
   suggestionField,
   suggestionRefKey,
@@ -147,7 +149,7 @@ export const STATEMENT_SUGGESTION_REVISION = "2026-10-21.1";
  * renaming the revision, which the automatic attach rule's measured windows
  * are keyed by.
  */
-const STATEMENT_CLEAN_POLICY = "2026-10-29.1";
+const STATEMENT_CLEAN_POLICY = "2026-10-29.2";
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;
@@ -1037,9 +1039,10 @@ async function providerActionIdentityFacts(
 }
 
 /** The transfer writer also checks its complete source set inside its transaction. */
-export async function assertStatementProviderIdentity(
+export async function assertStatementSourceIdentity(
   db: Database,
   charges: readonly ChargeRef[],
+  creatingCharges: readonly ChargeRef[],
 ) {
   if (!charges.length) return;
   const unique = [
@@ -1052,6 +1055,14 @@ export async function assertStatementProviderIdentity(
     [...facts.values()].some((fact) => fact.unresolved)
   )
     throw createAppError("CONSTRAINT_VIOLATION", PROVIDER_IDENTITY_REVIEW);
+  const creating = new Set(creatingCharges.map(chargeId));
+  if (
+    inputs.some(
+      ({ charge, canonical }) =>
+        creating.has(chargeId(charge)) && !hasStatementOccurrence(canonical),
+    )
+  )
+    throw createAppError("CONSTRAINT_VIOLATION", OCCURRENCE_IDENTITY_REVIEW);
 }
 
 async function assertProviderIdentityPublication(
@@ -1189,9 +1200,11 @@ export async function buildChargeProposals(
       : undefined;
     const reviewReason = providerFacts.get(chargeId(charge))?.unresolved
       ? PROVIDER_IDENTITY_REVIEW
-      : priorTransaction && priorTransaction.accountId !== accountId
-        ? "The source account conflicts with the accepted transaction account; review the account evidence."
-        : sourceCorrectionReason(priorTransaction, canonical);
+      : !matchedCode && !hasStatementOccurrence(canonical)
+        ? OCCURRENCE_IDENTITY_REVIEW
+        : priorTransaction && priorTransaction.accountId !== accountId
+          ? "The source account conflicts with the accepted transaction account; review the account evidence."
+          : sourceCorrectionReason(priorTransaction, canonical);
     const effectiveStatus = canonical.providerStatus ?? "observed";
     const statementAmount = row.proposed.amount;
     const candidates: StatementTransactionCandidate[] =

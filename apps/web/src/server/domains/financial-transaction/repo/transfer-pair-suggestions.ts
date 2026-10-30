@@ -59,6 +59,7 @@ import {
   CHARGE_STATE,
   chargeKeyOf,
   chargeStateOf,
+  hasStatementOccurrence,
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import { statementTransactionKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
@@ -85,7 +86,7 @@ import {
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** Rule revision stamped on every published pair; bump with any policy change. */
-const TRANSFER_PAIR_REVISION = "2026-10-19.1";
+const TRANSFER_PAIR_REVISION = "2026-10-29.1";
 const stateData = z.record(z.string(), z.json());
 /** Candidates: the opposite leg posted within this many days. */
 const CANDIDATE_WINDOW_DAYS = 5;
@@ -488,6 +489,7 @@ async function loadStatementLegs(
     const canonical = observations.find((row) => row.current);
     if (
       !canonical ||
+      !hasStatementOccurrence(canonical) ||
       canonical.withdrawnAt !== null ||
       canonical.providerAmount === 0
     )
@@ -2123,12 +2125,15 @@ export async function applyTransferPair(
         "This transfer pair is no longer a candidate: a leg was paired, matched or removed. Refresh suggestions and review again.",
       );
     const raw = current.judgment;
-    const { assertStatementProviderIdentity } =
+    const { assertStatementSourceIdentity } =
       await import("~/server/domains/transaction-import/repo/statement-suggestions");
-    await assertStatementProviderIdentity(
+    await assertStatementSourceIdentity(
       txDb,
       [raw.outflow, raw.inflow].flatMap((leg) =>
         leg.charge ? [leg.charge] : [],
+      ),
+      [raw.outflow, raw.inflow].flatMap((leg) =>
+        !leg.transactionId && leg.charge ? [leg.charge] : [],
       ),
     );
     // Any status: the suggestion's own handler marks it applied first.

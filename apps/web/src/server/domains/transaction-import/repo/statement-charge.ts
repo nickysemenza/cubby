@@ -55,6 +55,17 @@ export const chargeStateOf = (scope: SQL) => sql`(
 
 export const CHARGE_STATE = chargeStateOf(sql`true`);
 
+export const OCCURRENCE_IDENTITY_REVIEW =
+  "This statement observation has no proven source occurrence. Review its original evidence before creating or attaching a transaction.";
+
+/** Membership and equal bank facts cannot establish an independent occurrence. */
+export function hasStatementOccurrence(row: {
+  providerTransactionId: string | null;
+  rowPosition: number | null;
+}): boolean {
+  return Boolean(row.providerTransactionId) || row.rowPosition !== null;
+}
+
 /** Settlement-ref keys stored on a suggestion's projection, `source:externalId`. */
 export const suggestionRefKey = (source: string, externalId: string) =>
   `${source}:${externalId}`;

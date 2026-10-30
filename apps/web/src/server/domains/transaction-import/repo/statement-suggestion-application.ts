@@ -13,7 +13,6 @@ import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { assessment, type assessmentState } from "~/server/db/schema";
-import { PROVIDER_IDENTITY_REVIEW } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import { createAppError } from "~/server/errors/app-error";
 
 import {
@@ -77,7 +76,7 @@ export async function currentStatementApplication(
     throw refuseStatementApplication(
       "The statement or transaction evidence changed since this suggestion was made. Refresh suggestions and review again.",
     );
-  if (current.judgment.reviewReason === PROVIDER_IDENTITY_REVIEW)
+  if (current.judgment.reviewReason)
     throw refuseStatementApplication(current.judgment.reviewReason);
   return current;
 }

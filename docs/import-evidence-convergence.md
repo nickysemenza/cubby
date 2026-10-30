@@ -485,6 +485,18 @@ to both observations' original shared collection. Genuine positioned purchases
 remain independent; unresolved overlaps remain review work without changing
 observations, member dispositions or financial records.
 
+A Transaction suggestion cannot create or attach financial evidence for an
+observation without a provider ID or an original physical row position while it
+has no accepted FinancialTransaction identity. This hold applies even when no
+sibling can be detected; hashes and membership do not establish a separate
+occurrence. Transfer discovery and application enforce it for every source leg
+they can create, including an opposite leg reached from a supported observation.
+Generation, fresh preview and
+transactional application retain the hold, including for previously clean
+advice. Resolve the original occurrence through supported evidence or reviewed
+source lineage. Existing accepted transaction identities and member decisions
+remain intact, including otherwise supported booking of those transactions.
+
 Replaying a retained collection with newly supplied provider IDs cannot silently
 replace its ID-less charge identities. Intake refuses a provider identity that
 overlaps an ID-less member at the same physical position, or an unpositioned
