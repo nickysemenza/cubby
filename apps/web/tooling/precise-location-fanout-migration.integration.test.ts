@@ -64,5 +64,30 @@ it("preserves retained publications and input identities across precise fanout m
     expect(definition).not.toContain(
       "derived_mark('email.relationshipFacts@8'",
     );
+    // A retired Claim can still have broad predecessor work with retained backoff.
+    await client.query(
+      `SELECT derived_mark('email.relationshipFacts@7', ARRAY[$1::uuid])`,
+      [id],
+    );
+    await client.query(
+      `UPDATE "WorkItem" SET priority=2, attempts=2, "readyAt"=now()+interval '2 days' WHERE target='email.relationshipFacts@7'`,
+    );
+    const beforeSourceClaim = await preserved();
+    await migrateDatabase(db, { through: "0062_source_claim_family_fanout" });
+    expect(await preserved()).toEqual(beforeSourceClaim);
+    const claimDefinition = (
+      await client.query(
+        `SELECT pg_get_functiondef('derived_mark_importsourceclaim()'::regprocedure) AS value`,
+      )
+    ).rows[0]?.value;
+    expect(claimDefinition).not.toContain(
+      "derived_mark('email.relationshipFacts@7'",
+    );
+    expect(claimDefinition).toContain(
+      "derived_mark('email.relationshipFacts@10'",
+    );
+    expect(claimDefinition).toContain(
+      "derived_mark('email.relationshipFacts@11'",
+    );
   });
 });

@@ -127,6 +127,37 @@ synthetic supported save's input-9 Purchase capture. Remove
 gate cannot be established, leave the old trigger active and the boundary set;
 do not enable input 9. A rollback after activation must retain support for input 9.
 
+## Source-claim fanout capture
+
+Migration `0062_source_claim_family_fanout` stops new
+`email.relationshipFacts@7` captures and starts inputs 10 and 11 with the changed
+Claim ID and its old/new canonical parent IDs. Input 7 keeps its broad expansion
+for retained Claim-ID tickets; input 9's Purchase capture and other Claim consumers
+remain unchanged. The migration replaces only `derived_mark_importsourceclaim`;
+it neither rewrites publications nor clears or reinterprets queue work.
+
+The preceding Worker can settle unknown inputs 10 and 11. Before merging, set
+the `cloudflare` Environment's `PRODUCTION_MIGRATION_THROUGH` to exactly
+`0061_source_order_purchase_fanout`. Use the exclusive operator, deployment,
+consumer-root audit, at-least-16-minute full-cutover observation and exact-current
+Job-claim fencing procedure above. Establish that evidence for this cutover;
+the earlier source-order observation is not evidence that these preceding
+consumers have retired. Keep the old Claim trigger active until every gate holds.
+Claim acquisition time never establishes executing-version compatibility.
+
+After compatible code serves 100% and retirement plus claim fencing is recorded,
+verify no Deploy is queued or running, then apply the committed migration:
+
+```sh
+pnpm --filter @cubby/web db:migrate --target=production --through=0062_source_claim_family_fanout
+```
+
+Read back its exact migration hash and trigger body, retained work/publications,
+and a synthetic supported save's own-Claim and old/new-parent captures. Preserve
+attempts, readiness, cursor and result; no cancellation, requeue or bulk lease
+invalidation. Remove the boundary only after verification. Any rollback after
+activation must recognize inputs 10 and 11.
+
 ## Coarse Job drains cutover
 
 The coarse Job migrations follow `0046_remaining_derived_results` in the

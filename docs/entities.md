@@ -2967,16 +2967,22 @@ publication fences protect missing outputs; missing is never treated as empty.
 Generation checks the retained array and UUID leaf against the declared result
 schema, refusing a typo that would silently miss an old candidate.
 Email Purchase and VendorAccount changes use canonical Purchase evidence plus
-retained `facts` references. Source-claim changes keep their conservative fanout
-until old source-family identities are traced.
+retained `facts` references. Source-claim changes reach accepted Purchases through
+the canonical family's root and direct aliases, with raw retained Purchase facts
+covering former candidates after identity or ownership changes.
 An input with `capture: false` emits no new source-trigger marks while keeping its
 position, reference meaning, read enrollment and pending fanout interpretation.
 Accepted source-order input 8 retains its broad SourceOrder-ID expansion for owed
 tickets; new input 9 captures the old and new Purchase IDs directly from the source
 row. Its current candidates and retained Purchase facts cover reassignment,
 detach, checksum and source-family moves without dependent discovery in saves.
-Source-claim input 7 remains conservative. Activating a new input position requires
-the [staged cutover](runbooks/production-migrations.md#source-order-fanout-capture)
+Source-claim input 7 retains broad Claim-ID expansion for owed tickets with capture
+disabled. Inputs 10 and 11 capture the changed Claim and its old/new canonical
+parents. Their seed-inclusive, cycle-guarded one-edge up/down paths retain both
+families after a move or detach, without filtering source ownership or liveness;
+canonical computation decides eligibility. Other source-claim consumers retain
+their declared conservative fanout. Activating these new input positions requires
+the [staged cutover](runbooks/production-migrations.md#source-claim-fanout-capture)
 so incompatible consumers cannot discard its pending work.
 
 Service Cost captures the positive actual charge total beside its average, count
