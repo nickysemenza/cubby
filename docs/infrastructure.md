@@ -674,6 +674,8 @@ egress. They retain their fixed embedding model and do not try ChatGPT or
 managed credentials after a refusal. A failed request leaves semantic evidence
 unavailable and durable refresh work owed. Embedding models remain outside the
 frontier-model budget caps; response caching and usage accounting still apply.
+Usage retains the standard API cost comparison and records the existing
+subscriber-credit zero-charge evidence; cache hits keep their cache reason.
 
 OpenAI applies free credits before purchased credits, and unused subscription
 credits expire each billing cycle. An API key does not distinguish promotional

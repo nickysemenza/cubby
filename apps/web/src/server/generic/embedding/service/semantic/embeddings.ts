@@ -169,6 +169,13 @@ export async function embedTexts(
           }
           const body = embeddingsResponseSchema.parse(await response.json());
           return {
+            ...(ports === productionEmbeddingPorts && {
+              costEvidence: {
+                standard: null,
+                charged: null,
+                billingReason: "subscriber_credit" as const,
+              },
+            }),
             embeddings: body.data.map((item) => ({
               index: item.index,
               vector: item.embedding,

@@ -83,7 +83,12 @@ function stubInferenceFetch(inference: typeof fetch) {
     async (input: RequestInfo | URL, init?: RequestInit) =>
       String(input).includes("models.dev")
         ? Response.json({
-            openai: { models: { "gpt-6-sol": { cost: decisionCost } } },
+            openai: {
+              models: {
+                "gpt-6-sol": { cost: decisionCost },
+                "text-embedding-3-small": { cost: { input: 0.02, output: 0 } },
+              },
+            },
             "cloudflare-ai-gateway": {
               models: { "typesafe/jev": { cost: decisionCost } },
             },
@@ -266,7 +271,10 @@ describe("AiUsage accounting", () => {
       cacheStatus: "none",
       gatewayLogId: "log-embedding",
       transport: "gateway",
+      chargedCost: 0,
+      costEvidence: { billingReason: "subscriber_credit" },
     });
+    expect(rows[0]?.standardCost).toBeGreaterThan(0);
   });
 
   it("records one row for one location vision model call", async () => {
