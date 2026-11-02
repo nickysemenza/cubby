@@ -8,6 +8,12 @@ counts and paging. Its All, Automatic, Agent, Review, Waiting and Problems views
 share that one server read with record work sections, including Runs. GitHub
 Issues owns delivery and remaining domain coverage.
 
+Record-scoped Expense Work passes its record ID into canonical list preparation,
+as well as restricting the final population. Allocation prepares the selected
+Purchase's complete siblings, preserving its denominators while excluding
+unrelated purchases. This bounds that root selection; Task dependency graphs
+and other Work preparations retain their own required closure.
+
 Statement review work probes current eligibility only for the admitted financial
 accounts, stopping after the first eligible proposal per account. Record work
 for another entity never prepares statement suggestions. These reads retain

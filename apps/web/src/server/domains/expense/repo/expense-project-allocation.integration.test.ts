@@ -18,6 +18,7 @@ import {
   expenseDerivedValueSql,
   prepareExpenseDerivedRead,
 } from "~/server/domains/expense/repo/expense-derived-read";
+import { expenseWorkSources } from "~/server/domains/expense/repo/work-sources";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadRelatedSummary } from "~/server/generic/entity-links/repo/related-view";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -290,6 +291,40 @@ describe("expense project allocation", () => {
         .where(filteredWhere),
     ).toEqual([{ id: tax.id }]);
 
+    // Kernel IDs must bound preparation before allocating the complete selected
+    // purchase. An outer ID predicate leaves unrelated principals in that work.
+    const scopedWhere = await expenseScaffold.prepareWhere(ctx.db, {
+      ids: [tax.shortcode.toLowerCase()],
+      projectId: smallProject.shortcode,
+    });
+    const scopedPlan = await unwrapDb(ctx.db).execute<{
+      "QUERY PLAN": string;
+    }>(sql`EXPLAIN (ANALYZE, COSTS OFF)
+      SELECT ${expense.id} FROM ${expense} WHERE ${scopedWhere}`);
+    expect(
+      scopedPlan.rows
+        .map((row) => row["QUERY PLAN"])
+        .join("\n")
+        .match(/CTE principal_fact\n[^\n]*rows=(\d+) loops=1/u)?.[1],
+    ).toBe("3");
+    expect(
+      await unwrapDb(ctx.db)
+        .select({ id: expense.id })
+        .from(expense)
+        .where(scopedWhere),
+    ).toEqual([{ id: tax.id }]);
+    expect(
+      await unwrapDb(ctx.db)
+        .select({ id: expense.id })
+        .from(expense)
+        .where(
+          await expenseScaffold.prepareWhere(ctx.db, {
+            ids: [],
+            projectId: smallProject.shortcode,
+          }),
+        ),
+    ).toEqual([]);
+
     // Filtering the output to one adjustment must retain both principals in
     // its denominator, and each selected line must produce just one total.
     const totals = await unwrapDb(ctx.db).execute<{
@@ -497,6 +532,30 @@ describe("expense project allocation", () => {
       cost: number | null;
     }>(expenseDerivedCostsSql({ projectIds: [unpricedProject.id] }));
     expect(unknownCosts.rows).toMatchObject([{ cost: null }]);
+
+    // Record Work must retain the same complete candidate facts as its full
+    // source, including an unknown cost, after restricting preparation.
+    const source = expenseWorkSources().find(
+      (source) => source.id === "unclassifiedExpenses",
+    );
+    expect(source).toBeDefined();
+    if (!source) throw new Error("Missing unclassified Expense source");
+    const full = await source.candidates(ctx.db, {});
+    expect(full).not.toBeNull();
+    if (!full) throw new Error("Missing full Expense candidates");
+    const fullRows = await unwrapDb(ctx.db).execute<{ id: string }>(
+      sql`${full.query}`,
+    );
+    expect(fullRows.rows).toHaveLength(1);
+    const id = fullRows.rows[0]!.id;
+    const scoped = await source.candidates(ctx.db, {
+      record: { entity: "expense", id },
+    });
+    expect(scoped).not.toBeNull();
+    if (!scoped) throw new Error("Missing scoped Expense candidates");
+    expect((await unwrapDb(ctx.db).execute(sql`${scoped.query}`)).rows).toEqual(
+      fullRows.rows,
+    );
 
     const summary = await loadRelatedSummary(ctx.db, {
       relationKey: "purchase.projects",

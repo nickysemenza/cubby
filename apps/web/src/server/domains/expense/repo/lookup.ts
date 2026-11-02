@@ -35,6 +35,7 @@ import {
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import {
   declaredFilterPredicates,
+  listIdsCondition,
   listScaffold,
   rowSetFilterKeys,
 } from "~/server/generic/list/repo/list";
@@ -154,6 +155,7 @@ const readsShare = (values: ListFilterValues, terminal: string) =>
  */
 const allocationBound = (values: ListFilterValues): SQL | undefined => {
   const selected = and(
+    listIdsCondition(expense.shortcode, values),
     ...declaredFilterPredicates(
       "expense",
       expense,

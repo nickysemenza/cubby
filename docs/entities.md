@@ -2244,6 +2244,12 @@ Ingredient records and embedded Products from their respective scaffolds. The
 enrichment workbench adds its recipe count and cookbook-only flag to those reads.
 Expense analytics removes share-scoped filters before preparing its scaffold
 WHERE because allocation shares apply those filters themselves.
+The kernel's `filters.ids` restriction also bounds filter-dependent Expense
+allocation preparation, before expanding complete selected-Purchase siblings.
+The shared `listIdsCondition` owns shortcode normalization and empty-set behavior
+for both that preparation and the final scaffold WHERE. Restricting output IDs
+alone does not bound preparation, and selecting an adjustment never removes its
+principal siblings from the allocation denominator.
 
 Repository `read.title` owns computed SQL labels; otherwise the scaffold
 resolves the declared stored title field. Shortcode lookups, reference pickers

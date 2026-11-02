@@ -168,6 +168,13 @@ export const recordScope = (
 ): SQL | undefined =>
   scope.record ? sql`${shortcode}::text = ${scope.record.id}` : undefined;
 
+/** Carry the record selection into canonical preparation, before its final WHERE. */
+export const recordListFilters = <Filters extends object>(
+  scope: WorkScope,
+  filters: Filters,
+): Filters & { ids?: string[] } =>
+  scope.record ? { ...filters, ids: [scope.record.id] } : filters;
+
 export const workProblemActions = (
   key: Parameters<typeof problemActionsFor>[0],
 ): WorkAction[] =>

@@ -1244,8 +1244,11 @@ const listSearchSchema = z
 const listIdsSchema = z
   .object({ ids: z.array(z.string()).optional() })
   .passthrough();
-/** Shared by scaffold lists and repositories with a custom WHERE builder. */
-const listIdsCondition = (shortcode: AnyColumn, filters: unknown) =>
+/** Root selection shared by scaffold WHEREs and filter-dependent preparation. */
+export const listIdsCondition = <Filters extends object>(
+  shortcode: AnyColumn,
+  filters: Filters,
+): SQL | undefined =>
   shortcodeSetCondition(sql`${shortcode}`, listIdsSchema.parse(filters).ids);
 
 const listNestingCarrier = z

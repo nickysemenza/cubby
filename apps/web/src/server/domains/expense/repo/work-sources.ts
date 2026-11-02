@@ -14,6 +14,7 @@ import {
   entityProblemSources,
   gapDeclaration,
   gapPublicationRead,
+  recordListFilters,
   recordScope,
 } from "~/server/generic/work-queue/repo/work-declarations";
 import {
@@ -43,7 +44,10 @@ const gapSource: WorkSource = {
           and(
             await expenseScaffold.prepareWhere(
               db,
-              expenseFiltersSchema.parse(readGap.filters),
+              recordListFilters(
+                scope,
+                expenseFiltersSchema.parse(readGap.filters),
+              ),
             ),
             readGap.admission,
             recordScope(scope, sql`${table.shortcode}`),
@@ -72,7 +76,7 @@ export const expenseWorkSources = (): WorkSource[] => [
           and(
             await expenseScaffold.prepareWhere(
               db,
-              expenseFiltersSchema.parse(filters),
+              recordListFilters(scope, expenseFiltersSchema.parse(filters)),
             ),
             recordScope(scope, sql`${table.shortcode}`),
           ),
