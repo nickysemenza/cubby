@@ -2479,6 +2479,7 @@ describe("shared purchase-import prepare and commit", () => {
     categorized = false,
     includeTax = false,
     delivered = false,
+    deferProduct = false,
   ) {
     const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
       vendor: {
@@ -2599,10 +2600,12 @@ describe("shared purchase-import prepare and commit", () => {
         {
           stableOrderId: "manual-order-1",
           stableLineId: "manual-order-1:line-1",
-          resolution: {
-            kind: "existing" as const,
-            productId: parseShortcodeFor("product", productRow.shortcode),
-          },
+          resolution: deferProduct
+            ? { kind: "unresolved", reason: "Exact variant needs review" }
+            : {
+                kind: "existing",
+                productId: parseShortcodeFor("product", productRow.shortcode),
+              },
         },
       ],
     });
@@ -2614,6 +2617,8 @@ describe("shared purchase-import prepare and commit", () => {
       productRow,
       category,
       result,
+      commitInput,
+      importRunId: run.id,
     };
   }
 
@@ -2974,8 +2979,37 @@ describe("shared purchase-import prepare and commit", () => {
   );
 
   it("files product_unresolved for goods an applied replacement leaves unresolved", async () => {
-    const { manualPurchase, manualExpense } =
-      await importOverManualAggregate(false);
+    const { manualPurchase, manualExpense, commitInput, importRunId, result } =
+      await importOverManualAggregate(false, false, false, false, true);
+    expect(result.status).toBe("needs_review");
+    const [stopped] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, importRunId));
+    expect(stopped).toMatchObject({
+      status: "needs_review",
+      agentSessionId: null,
+    });
+    expect(stopped?.auditedAt).toBeInstanceOf(Date);
+    const beforeReplay = {
+      expenses: await getDb(ctx.db).select().from(expense),
+      observations: await getDb(ctx.db).select().from(sourceOrderObservation),
+    };
+    expect(await commitPurchaseImport(ctx.db, commitInput, ctx.actor)).toEqual(
+      result,
+    );
+    expect(await commitPurchaseImport(ctx.db, commitInput, ctx.actor)).toEqual(
+      result,
+    );
+    expect(await getDb(ctx.db).select().from(expense)).toEqual(
+      beforeReplay.expenses,
+    );
+    expect(await getDb(ctx.db).select().from(sourceOrderObservation)).toEqual(
+      beforeReplay.observations,
+    );
+    expect(
+      await getDb(ctx.db).select().from(run).where(eq(run.id, importRunId)),
+    ).toEqual([stopped]);
     const finding = await replacementFinding(manualPurchase.id);
     const review = await prepareSourceOrderReconciliation(
       ctx.db,

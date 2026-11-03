@@ -942,6 +942,13 @@ async function finalizeReviewRun(
   runId: RunId,
   operationId: string,
 ) {
+  const [finished] = await getDb(db)
+    .select({ status: runTable.status, auditedAt: runTable.auditedAt })
+    .from(runTable)
+    .where(eq(runTable.id, runId));
+  // The saved commit can replay after its required audit ended the Run.
+  if (finished?.status === "needs_review" && finished.auditedAt !== null)
+    return;
   await auditAllImportBatches(db, {
     runId,
     operationId: `${operationId}:required-audit`,

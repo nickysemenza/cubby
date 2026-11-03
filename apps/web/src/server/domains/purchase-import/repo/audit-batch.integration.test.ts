@@ -1,5 +1,5 @@
 import { userId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -189,11 +189,16 @@ describe("purchase audit restart recovery", () => {
       summary: "Inherited line needs member investigation",
     });
   });
-  it("keeps a mismatched inherited expense fix report-only beside a writable purchase", async () => {
+  it("audits a member import without a coordinator and keeps inherited expense fixes report-only", async () => {
     const f = await importedPurchaseFixture(ctx.db, ctx.actor, {
       auditLogged: true,
     });
     const successor = await successorFor(f);
+    // Member-driven imports have a retained actor and owner, but no coordinator.
+    await getDb(ctx.db)
+      .update(run)
+      .set({ purpose: "file_import", agentSessionId: null })
+      .where(inArray(run.id, [f.parent.id, successor.id]));
     const writable = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: f.order.vendorId,
       orderId: "SYNTHETIC-SUCCESSOR",
