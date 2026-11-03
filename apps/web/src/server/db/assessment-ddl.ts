@@ -23,6 +23,15 @@ DROP FUNCTION IF EXISTS "assessment_mail_lifecycle"();
 DROP TRIGGER IF EXISTS "Assessment_immutable" ON "Assessment";
 DROP TRIGGER IF EXISTS "Feedback_immutable" ON "Feedback";
 DROP FUNCTION IF EXISTS "assessment_history_immutable"();
+
+-- Point-match immutable connection endpoints without reopening wide evidence
+-- for every unrelated Assessment. Both UUID and shortcode values remain text.
+CREATE INDEX IF NOT EXISTS "Assessment_connection_source_ref_idx" ON "Assessment"
+ ((evidence #>> '{candidate,source,entityKind}'), (evidence #>> '{candidate,source,entityId}')) INCLUDE (id)
+ WHERE served AND subject->>'scope' LIKE 'connection.%';
+CREATE INDEX IF NOT EXISTS "Assessment_connection_target_ref_idx" ON "Assessment"
+ ((evidence #>> '{candidate,target,entityKind}'), (evidence #>> '{candidate,target,entityId}')) INCLUDE (id)
+ WHERE served AND subject->>'scope' LIKE 'connection.%';
 `;
 
 /** Inactive statement revisions retain suppression and paid labels, so history lookups cannot use an active-only index. */
