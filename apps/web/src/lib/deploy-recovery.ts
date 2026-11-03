@@ -16,7 +16,7 @@ export interface PreloadRecoveryRuntime {
 }
 
 export interface PreloadRecovery {
-  handlePreloadError: (event: Pick<Event, "preventDefault">) => boolean;
+  handlePreloadError: () => boolean;
   handleDocumentLeaving: () => void;
 }
 
@@ -48,13 +48,10 @@ export function createPreloadRecovery(
   };
 
   return {
-    handlePreloadError(event) {
+    handlePreloadError() {
       if (documentLeaving) return false;
 
-      if (pending) {
-        event.preventDefault();
-        return true;
-      }
+      if (pending) return true;
 
       if (!runtime.isOnline()) return false;
 
@@ -72,9 +69,8 @@ export function createPreloadRecovery(
         ) {
           return false;
         }
-        // Write before suppressing the error. If storage is unavailable
-        // (notably some private modes), surface the original error instead of
-        // risking an unbounded reload loop.
+        // Record the attempt before scheduling so unavailable storage cannot
+        // turn repeated failures into an unbounded reload loop.
         runtime.storage.setItem(PRELOAD_RELOAD_KEY, marker);
       } catch {
         return false;
@@ -95,7 +91,6 @@ export function createPreloadRecovery(
       }
 
       pending = attempt;
-      event.preventDefault();
       return true;
     },
 
@@ -126,8 +121,10 @@ export function installPreloadErrorRecovery(): void {
     cancel: (handle) => window.clearTimeout(handle),
   });
 
-  window.addEventListener("vite:preloadError", (event) => {
-    recovery.handlePreloadError(event);
+  window.addEventListener("vite:preloadError", () => {
+    // Preventing Vite's event makes a rejected import fulfill with undefined,
+    // which breaks lazy module consumers before the delayed reload.
+    recovery.handlePreloadError();
   });
   window.addEventListener("beforeunload", recovery.handleDocumentLeaving);
   window.addEventListener("pagehide", recovery.handleDocumentLeaving);

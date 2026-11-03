@@ -1,12 +1,8 @@
 import type { SqlStorage } from "@cloudflare/workers-types";
 import type { AgentModelUsage } from "@cubby/schemas/agent-conversation";
-import { CURRENT_SQLITE_SCHEMA_VERSION } from "@earendil-works/pi-durable/storage/sqlite";
 import { z } from "zod";
 
-// Reads pi's `pi.usage` documents in place, like the retained transcript
-// reader: the table layout below is pi SQLite schema 1 behind the Agents
-// adapter's pi_ prefix, so an upgraded pi fails here instead of misreading.
-const SUPPORTED_PI_SQLITE_SCHEMA_VERSION = 1;
+import { assertReadablePiSqliteSchema } from "./pi-sqlite-read";
 
 const usageState = z.object({
   models: z.record(
@@ -22,10 +18,6 @@ const usageState = z.object({
 
 /** pi's token totals per `provider/model`, summed over every conversation. */
 export function readPiModelUsage(sql: SqlStorage): AgentModelUsage[] {
-  if (CURRENT_SQLITE_SCHEMA_VERSION !== SUPPORTED_PI_SQLITE_SCHEMA_VERSION)
-    throw new Error(
-      `Installed pi SQLite schema ${CURRENT_SQLITE_SCHEMA_VERSION}; model usage reader supports ${SUPPORTED_PI_SQLITE_SCHEMA_VERSION}`,
-    );
   // A store pi never wrote a document to has nothing to total.
   if (
     !sql
@@ -35,6 +27,12 @@ export function readPiModelUsage(sql: SqlStorage): AgentModelUsage[] {
       .toArray().length
   )
     return [];
+  const [schema] = sql
+    .exec<{ version: number }>(
+      "SELECT version FROM pi_durable_schema WHERE singleton = 1",
+    )
+    .toArray();
+  assertReadablePiSqliteSchema(schema?.version);
   // `pi.usage` checkpoints every write, so a live document's newest revision
   // is a whole base value.
   const rows = sql

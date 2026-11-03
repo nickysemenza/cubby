@@ -87,7 +87,7 @@ export const connectionRelation = z.enum([
 ]);
 export type ConnectionRelation = z.infer<typeof connectionRelation>;
 
-const connectionEndpoints = {
+export const connectionEndpoints = {
   "product-purchase": ["product", "purchase"],
   "product-expense": ["product", "expense"],
   "product-identity": ["product", "product"],

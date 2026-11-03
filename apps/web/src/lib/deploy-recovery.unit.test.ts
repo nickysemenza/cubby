@@ -40,7 +40,6 @@ function createAttempt({
     cancel: (handle) => clearTimeout(handle),
   };
   return {
-    event: { preventDefault: vi.fn() },
     recovery: createPreloadRecovery(runtime),
     reload,
     storage,
@@ -54,8 +53,7 @@ describe("preload deployment recovery", () => {
   it("defers the first online failure and reloads exactly once", () => {
     const attempt = createAttempt();
 
-    expect(attempt.recovery.handlePreloadError(attempt.event)).toBe(true);
-    expect(attempt.event.preventDefault).toHaveBeenCalledOnce();
+    expect(attempt.recovery.handlePreloadError()).toBe(true);
     expect(attempt.storage.value()).toBe("100000:1");
 
     vi.advanceTimersByTime(PRELOAD_RECOVERY_DELAY_MS - 1);
@@ -68,12 +66,10 @@ describe("preload deployment recovery", () => {
 
   it("coalesces repeated failures while recovery is pending", () => {
     const attempt = createAttempt();
-    const repeated = { preventDefault: vi.fn() };
 
-    expect(attempt.recovery.handlePreloadError(attempt.event)).toBe(true);
-    expect(attempt.recovery.handlePreloadError(repeated)).toBe(true);
+    expect(attempt.recovery.handlePreloadError()).toBe(true);
+    expect(attempt.recovery.handlePreloadError()).toBe(true);
 
-    expect(repeated.preventDefault).toHaveBeenCalledOnce();
     expect(attempt.storage.setItem).toHaveBeenCalledOnce();
     vi.advanceTimersByTime(PRELOAD_RECOVERY_DELAY_MS);
     expect(attempt.reload).toHaveBeenCalledOnce();
@@ -83,7 +79,7 @@ describe("preload deployment recovery", () => {
     "cancels pending recovery when %s starts the document leaving",
     () => {
       const attempt = createAttempt();
-      attempt.recovery.handlePreloadError(attempt.event);
+      attempt.recovery.handlePreloadError();
 
       attempt.recovery.handleDocumentLeaving();
       vi.advanceTimersByTime(PRELOAD_RECOVERY_DELAY_MS);
@@ -98,7 +94,7 @@ describe("preload deployment recovery", () => {
 
   it("does not remove a cooldown marker it no longer owns", () => {
     const attempt = createAttempt();
-    attempt.recovery.handlePreloadError(attempt.event);
+    attempt.recovery.handlePreloadError();
     attempt.storage.setItem("cubby:preload-reload-at", "200000:other");
 
     attempt.recovery.handleDocumentLeaving();
@@ -110,15 +106,14 @@ describe("preload deployment recovery", () => {
   it("enforces the cooldown after an actual reload", () => {
     const storage = createStorage();
     const first = createAttempt({ storage, now: 100_000 });
-    first.recovery.handlePreloadError(first.event);
+    first.recovery.handlePreloadError();
     vi.advanceTimersByTime(PRELOAD_RECOVERY_DELAY_MS);
 
     const repeated = createAttempt({
       storage,
       now: 100_000 + PRELOAD_RELOAD_COOLDOWN_MS - 1,
     });
-    expect(repeated.recovery.handlePreloadError(repeated.event)).toBe(false);
-    expect(repeated.event.preventDefault).not.toHaveBeenCalled();
+    expect(repeated.recovery.handlePreloadError()).toBe(false);
     expect(repeated.reload).not.toHaveBeenCalled();
   });
 
@@ -128,20 +123,19 @@ describe("preload deployment recovery", () => {
       now: 100_000 + PRELOAD_RELOAD_COOLDOWN_MS,
     });
 
-    expect(attempt.recovery.handlePreloadError(attempt.event)).toBe(true);
+    expect(attempt.recovery.handlePreloadError()).toBe(true);
   });
 
   it("does nothing while offline", () => {
     const attempt = createAttempt({ online: false });
 
-    expect(attempt.recovery.handlePreloadError(attempt.event)).toBe(false);
+    expect(attempt.recovery.handlePreloadError()).toBe(false);
     expect(attempt.storage.getItem).not.toHaveBeenCalled();
-    expect(attempt.event.preventDefault).not.toHaveBeenCalled();
     expect(attempt.reload).not.toHaveBeenCalled();
   });
 
   it.each(["get", "set"])(
-    "does not suppress when storage %s fails",
+    "does not reload when storage %s fails",
     (operation) => {
       const storage = createStorage();
       storage[operation === "get" ? "getItem" : "setItem"].mockImplementation(
@@ -151,8 +145,7 @@ describe("preload deployment recovery", () => {
       );
       const attempt = createAttempt({ storage });
 
-      expect(attempt.recovery.handlePreloadError(attempt.event)).toBe(false);
-      expect(attempt.event.preventDefault).not.toHaveBeenCalled();
+      expect(attempt.recovery.handlePreloadError()).toBe(false);
       expect(attempt.reload).not.toHaveBeenCalled();
     },
   );

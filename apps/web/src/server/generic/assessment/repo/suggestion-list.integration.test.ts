@@ -410,8 +410,8 @@ describe("cross-family Suggestion list", () => {
     expect(fieldsOnly.meta.cleanCount).toBe(0);
   });
 
-  // Failure mode: a connection lists only under the endpoint that requested
-  // discovery, so the other record's view misses it.
+  // Reference pruning must retain both endpoints and mixed scopes without
+  // admitting a connection under an unrelated record kind.
   it("lists a connection under both of its endpoints", async () => {
     const { item, charge, proposal } = await connection(ctx);
     for (const recordId of [item.id, charge.output.id]) {
@@ -433,6 +433,28 @@ describe("cross-family Suggestion list", () => {
         ],
       });
     }
+    const category = await createRepoEntity(ctx, "productCategory", {
+      name: "Synthetic unrelated category",
+    });
+    const task = await createRepoEntity(ctx, "task", { trade: "other" });
+    for (const recordId of [category.output.id, task.output.id]) {
+      expect(
+        (
+          await listSuggestionPage(ctx.db, {
+            recordIds: [recordId],
+            family: "recommendation",
+          })
+        ).items,
+      ).toEqual([]);
+    }
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          recordIds: [category.output.id, charge.output.id],
+          family: "recommendation",
+        })
+      ).items.map((row) => row.id),
+    ).toEqual([proposal.review.assessmentId]);
     // Excluding either value in a multi-valued column removes the row.
     for (const entityKind of ["product", "expense"]) {
       expect(
@@ -452,6 +474,23 @@ describe("cross-family Suggestion list", () => {
         })
       ).items.map((row) => row.id),
     ).toEqual([proposal.review.assessmentId]);
+    const taskConnection = await publishEntityConnection(ctx.db, {
+      relation: "task-subject-product",
+      source: { entityKind: "task", entityId: task.output.id },
+      target: { entityKind: "product", entityId: item.id },
+      label: "Synthetic Task subject",
+      evidence: { reasons: [], contradictions: [], unknowns: [] },
+    });
+    for (const recordId of [task.output.id, item.id]) {
+      expect(
+        (
+          await listSuggestionPage(ctx.db, {
+            recordIds: [recordId],
+            family: "recommendation",
+          })
+        ).items.map((row) => row.id),
+      ).toContain(taskConnection.review.assessmentId);
+    }
   });
 
   // Failure mode: the uniform row recomputes clean and drifts from the

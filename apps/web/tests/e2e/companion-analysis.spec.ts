@@ -9,6 +9,8 @@ import {
   imageProcessingNormalizedOutcome,
   pullCompanionImageProcessingOutput,
   pullCompanionImageProcessingInput,
+  renewCompanionImageProcessingInput,
+  renewCompanionImageProcessingOutput,
 } from "@cubby/schemas/image-processing";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
@@ -40,7 +42,8 @@ const hash = (bytes: Buffer) =>
 
 type CompanionRequest =
   | z.input<typeof pullCompanionImageProcessingInput>
-  | z.input<typeof completeCompanionImageProcessingInput>;
+  | z.input<typeof completeCompanionImageProcessingInput>
+  | z.input<typeof renewCompanionImageProcessingInput>;
 type NormalizedResult = Omit<
   z.input<typeof completeCompanionImageProcessingInput>["result"],
   "outcome"
@@ -295,12 +298,27 @@ test("companion normalization preserves originals and rejects stale or corrupt r
     .where(eq(imageProcessingAttempt.id, invalid.command.attemptId));
   expect(failed?.state).toBe("failed");
   expect(failed?.error).toContain("does not match");
-  await seed();
+  const resumedSource = await seed();
   const expired = await claim();
-  await database
-    .update(job)
-    .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
-    .where(eq(job.key, `image-processing:${expired.command.jobId}`));
+  const renewal = {
+    deviceId: hello.deviceId,
+    jobId: expired.command.jobId,
+    attemptId: expired.command.attemptId,
+  };
+  const expire = () =>
+    database
+      .update(job)
+      .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
+      .where(eq(job.key, `image-processing:${expired.command.jobId}`));
+  expect(
+    renewCompanionImageProcessingOutput.parse(await post("renew", renewal)),
+  ).toMatchObject({ ok: true });
+  await expire();
+  // Expiry alone does not revoke an attempt that no other device has claimed.
+  expect(
+    renewCompanionImageProcessingOutput.parse(await post("renew", renewal)),
+  ).toMatchObject({ ok: true });
+  await expire();
   await database.transaction(async (tx) => {
     await tx
       .select({ id: imageProcessingJob.id })
@@ -313,6 +331,10 @@ test("companion normalization preserves originals and rejects stale or corrupt r
   });
   const reclaimed = await claim();
   expect(reclaimed.command.jobId).toBe(expired.command.jobId);
+  expect(reclaimed.command.attemptId).not.toBe(expired.command.attemptId);
+  expect(
+    renewCompanionImageProcessingOutput.parse(await post("renew", renewal)),
+  ).toEqual({ ok: false, reason: "lease_lost" });
   expect(
     completeCompanionImageProcessingOutput.parse(
       await post("complete", {
@@ -326,4 +348,41 @@ test("companion normalization preserves originals and rejects stale or corrupt r
       }),
     ).adopted,
   ).toBe(false);
+  expect(
+    renewCompanionImageProcessingOutput.parse(
+      await post("renew", {
+        ...renewal,
+        attemptId: reclaimed.command.attemptId,
+      }),
+    ),
+  ).toMatchObject({ ok: true });
+  expect(
+    (
+      await request.put(reclaimed.output.uploadUrl, {
+        data: jpeg,
+        headers: { "Content-Type": "image/jpeg" },
+      })
+    ).ok(),
+  ).toBe(true);
+  expect(
+    completeCompanionImageProcessingOutput.parse(
+      await post("complete", {
+        deviceId: hello.deviceId,
+        result: {
+          ...result,
+          jobId: reclaimed.command.jobId,
+          attemptId: reclaimed.command.attemptId,
+          outcome: { ...result.outcome, key: reclaimed.output.key },
+        },
+      }),
+    ).adopted,
+  ).toBe(true);
+  const [resumed] = await database
+    .select()
+    .from(imageProcessingAttempt)
+    .where(eq(imageProcessingAttempt.id, reclaimed.command.attemptId));
+  expect(resumed?.state, resumed?.error ?? "No attempt error").toBe("ready");
+  if (!resumed?.inputKey) throw new Error("Resumed analysis snapshot missing");
+  expect(await stored(request, resumed.inputKey)).toEqual(jpeg);
+  expect(await stored(request, resumedSource.source.key)).toEqual(original);
 });
