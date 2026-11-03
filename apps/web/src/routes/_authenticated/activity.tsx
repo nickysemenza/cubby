@@ -5,7 +5,6 @@ import { jobLane, jobState, jobWaitingOnReason } from "@cubby/schemas/job";
 import { RUN_KINDS } from "@cubby/schemas/run-fields";
 import { workFamily } from "@cubby/schemas/work-queue";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
 import { z } from "zod";
 
 import { EmbeddedEntityList } from "~/entity/entity-list/generic-entity-list";
@@ -92,14 +91,6 @@ function ActivityBody() {
       : search.entityKind || search.channel
         ? "history"
         : "needs-you");
-  const [visited, setVisited] = useState<ReadonlySet<string>>(
-    () => new Set([active]),
-  );
-  useEffect(() => {
-    setVisited((previous) =>
-      previous.has(active) ? previous : new Set([...previous, active]),
-    );
-  }, [active]);
   return (
     <Stack gap="lg">
       <Row gap="md" wrap>
@@ -144,8 +135,8 @@ function ActivityBody() {
           ))}
         </TabsList>
         {views.map((view) => (
-          <TabsContent key={view.key} value={view.key} keepMounted>
-            {visited.has(view.key) || active === view.key ? (
+          <TabsContent key={view.key} value={view.key}>
+            {active === view.key ? (
               <div className="pt-3">
                 {view.key === "needs-you" ? (
                   <Stack gap="lg">
@@ -251,8 +242,8 @@ function ActivityBody() {
                   <Stack gap="lg">
                     <Section
                       headingAs="h2"
-                      title="Nightly maintenance"
-                      caption="One standard pass, with each step recorded in a Run. Review its effects before starting."
+                      title="Daily maintenance"
+                      caption="Daily at 7 a.m. America/Los_Angeles, following daylight saving time. Each step is recorded in a Run."
                     >
                       <Stack gap="md">
                         <WorkEffects

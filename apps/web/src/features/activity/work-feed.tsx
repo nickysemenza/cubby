@@ -5,9 +5,9 @@ import { HourglassIcon } from "@phosphor-icons/react/dist/csr/Hourglass";
 import { PauseIcon } from "@phosphor-icons/react/dist/csr/Pause";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
-import { useQuery } from "@tanstack/react-query";
+import { onlineManager, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 
 import { derived } from "~/integrations/tanstack-query/generated/domains/derived.gen";
 import { job } from "~/integrations/tanstack-query/generated/domains/job.gen";
@@ -159,22 +159,34 @@ export function WorkFeed({
   attentionOnly?: boolean;
   onShowJobs: (kind: string) => void;
 }) {
+  const online = useSyncExternalStore(
+    onlineManager.subscribe,
+    () => onlineManager.isOnline(),
+    () => true,
+  );
   const activity = useQuery({
     ...job.activity.queryOptions({}),
-    refetchInterval: POLL_MS,
+    refetchInterval: (query) =>
+      query.state.data?.streams.some(
+        (stream) => stream.running > 0 || stream.due > 0,
+      )
+        ? POLL_MS
+        : false,
   });
   const backlog = useQuery({
     ...derived.backlog.queryOptions({}),
-    refetchInterval: POLL_MS,
+    refetchInterval: false,
   });
   const now = useDisplayNow() ?? Date.now();
-  const activityStale = Boolean(
-    activity.data && now - Date.parse(activity.data.measuredAt) > 3 * POLL_MS,
-  );
+  const activityStale =
+    activity.isError ||
+    (!online &&
+      now -
+        Date.parse(activity.data?.measuredAt ?? new Date(now).toISOString()) >
+        3 * POLL_MS);
   // Backlog has no measurement timestamp; age its last successful read instead.
-  const backlogStale = Boolean(
-    backlog.data && now - backlog.dataUpdatedAt > 3 * POLL_MS,
-  );
+  const backlogStale =
+    backlog.isError || (!online && now - backlog.dataUpdatedAt > 3 * POLL_MS);
   const unknown =
     !activity.data ||
     activity.isError ||

@@ -50,7 +50,6 @@ const workerQueueNames = {
   telemetry: identityName(workerIdentity.queues.telemetry),
 };
 const workerCronSchedules = {
-  backgroundRecovery: identityName(workerIdentity.crons.backgroundRecovery),
   dailyMaintenance: identityName(workerIdentity.crons.dailyMaintenance),
 };
 
@@ -96,9 +95,8 @@ export const productionWorker = defineWorker({
   },
   domains: ["cubby.nickysemenza.com"],
   // Background delivery wakes durable Jobs; other queues own their payloads.
-  // The minute cron recovers missed Job wakeups.
+  // Daily recovery repairs exceptional missed delivery.
   triggers: [
-    triggers.scheduled({ schedule: workerCronSchedules.backgroundRecovery }),
     triggers.scheduled({
       schedule: workerCronSchedules.dailyMaintenance,
     }),
@@ -166,6 +164,10 @@ export const productionWorker = defineWorker({
       worker: "cubby",
       exportName: "AiGatewayEgressDurableObject",
     }),
+    JOB_SCHEDULER: bindings.durableObject({
+      worker: "cubby",
+      exportName: "JobSchedulerDurableObject",
+    }),
     DB_FRESHNESS: bindings.durableObject({
       worker: "cubby",
       exportName: "DatabaseFreshnessDurableObject",
@@ -198,6 +200,7 @@ export const productionWorker = defineWorker({
     CF_VERSION_METADATA: bindings.versionMetadata(),
   },
   exports: {
+    JobSchedulerDurableObject: exports.durableObject({ storage: "sqlite" }),
     AiGatewayEgressDurableObject: exports.durableObject({
       storage: "sqlite",
     }),

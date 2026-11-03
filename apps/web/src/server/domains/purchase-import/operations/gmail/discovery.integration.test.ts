@@ -633,14 +633,14 @@ describe("scheduled Gmail discovery", () => {
         availableAt: new Date(Date.now() + 3_600_000),
       },
     );
-    expect(await reconcileWorkflowRuns(ctx.db)).toBe(0);
+    expect((await reconcileWorkflowRuns(ctx.db)).reconciled).toBe(0);
     expect((await readRun(state.params.runId)).status).toBe("running");
     await updateJobs(
       ctx.db,
       { key: `run:${state.params.runId}` },
       { state: "failed", error: "HTTP 503: Synthetic ended execution" },
     );
-    expect(await reconcileWorkflowRuns(ctx.db)).toBe(1);
+    expect((await reconcileWorkflowRuns(ctx.db)).reconciled).toBe(1);
     expect(await readRun(state.params.runId)).toMatchObject({
       status: "failed",
       endedAt: expect.any(Date),

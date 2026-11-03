@@ -1,3 +1,4 @@
+import { jobShortcode } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 import type { z } from "zod";
 
@@ -116,12 +117,25 @@ async function executeClaim(
       waitReason: null,
     });
   entry().info("claim");
+  const { reconcileJobSchedule } =
+    await import("~/server/generic/jobs/scheduler/client");
+  // Arm crash recovery before entering potentially long provider execution.
+  await reconcileJobSchedule(
+    "job.claim",
+    jobShortcode.parse(claimed.shortcode),
+  );
   const lease = new AbortController();
   let renewing: Promise<unknown> | undefined;
   const heartbeat = setInterval(() => {
     renewing ??= renewJob(db, claimed)
-      .then((renewed) => {
-        if (renewed) return entry().info("lease renewed");
+      .then(async (renewed) => {
+        if (renewed) {
+          await reconcileJobSchedule(
+            "job.renew",
+            jobShortcode.parse(claimed.shortcode),
+          );
+          return entry().info("lease renewed");
+        }
         entry().warn("lease lost");
         lease.abort(new JobSupersededError());
       })
@@ -198,6 +212,10 @@ async function executeClaim(
   } finally {
     clearInterval(heartbeat);
     await renewing;
+    await reconcileJobSchedule(
+      "job.settled",
+      jobShortcode.parse(claimed.shortcode),
+    );
   }
 }
 
@@ -269,13 +287,17 @@ export async function drainDueJobs(
         const outcome = await advanceJob(db, candidate.id, handlers);
         outcomes.push(outcome);
         if (outcome === "skipped") {
-          if (jobKindPolicy(candidate.kind).maxInFlight !== undefined)
+          if (
+            jobKindPolicy(candidate.kind).maxInFlight !== undefined &&
+            progressBefore === progressed
+          )
             cappedSkips.add(candidate.id);
           // A sibling may have progressed while this refusal was in flight.
           else if (progressBefore === progressed) busy.add(candidate.id);
         } else {
           progressed++;
           busy.clear();
+          cappedSkips.clear();
         }
       } finally {
         reserved.delete(candidate.id);
@@ -293,7 +315,12 @@ export async function drainDueJobs(
     ),
   );
   if (failure) throw failure.reason;
-  if ((await dueJobs(db, 1)).length) {
+  await (
+    await import("~/server/generic/jobs/scheduler/client")
+  ).reconcileJobSchedule("drain.finished");
+  if (
+    (await dueJobs(db, 1, { excludeIds: [...cappedSkips, ...busy] })).length
+  ) {
     await (
       await import("~/server/workflows/background-tasks/publish")
     ).wakeJobs({ source: "job.drain-budget" });
