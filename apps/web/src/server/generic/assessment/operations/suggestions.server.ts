@@ -1,4 +1,8 @@
+import { sql } from "drizzle-orm";
+
 import { suggestionsContract } from "~/contracts/suggestions.contract";
+import type { Database } from "~/server/db";
+import { unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   listAutomaticRules,
   setAutomaticRule,
@@ -14,14 +18,33 @@ import { implementOperationDomain } from "~/server/operation-runtime/operation-d
 
 import { listAutomaticDecisions } from "../repo/automatic-decisions";
 
+/** SET LOCAL must share the reader's connection; a browser timeout cannot stop origin work. */
+const assessmentRead = <T>(
+  db: Database,
+  read: (scoped: Database) => Promise<T>,
+) =>
+  withTransactionDatabase(
+    db,
+    async (scoped) => {
+      await unwrapDb(scoped).execute(
+        sql`SELECT set_config('statement_timeout', '10000', true)`,
+      );
+      return read(scoped);
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+
 export const suggestionsHandlers = implementOperationDomain(
   suggestionsContract,
   {
     automaticDecisions: (context, input) =>
-      listAutomaticDecisions(context.db, input),
-    recordCounts: (context, input) => suggestionRecordCounts(context.db, input),
-    list: (context, input) => listSuggestionPage(context.db, input),
-    counts: (context, input) => suggestionCountsByFamily(context.db, input),
+      assessmentRead(context.db, (db) => listAutomaticDecisions(db, input)),
+    recordCounts: (context, input) =>
+      assessmentRead(context.db, (db) => suggestionRecordCounts(db, input)),
+    list: (context, input) =>
+      assessmentRead(context.db, (db) => listSuggestionPage(db, input)),
+    counts: (context, input) =>
+      assessmentRead(context.db, (db) => suggestionCountsByFamily(db, input)),
     enrollCorrections: (context, input) =>
       enrollSuggestionCorrections(context.db, input),
     acceptClean: (context, input) =>

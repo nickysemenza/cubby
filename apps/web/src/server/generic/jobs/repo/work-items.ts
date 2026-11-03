@@ -157,7 +157,7 @@ export async function markWorkFrom(
   // priority and never updates one conflict row twice in a statement.
   const insert = queries.insert(workItem).select(
     sql`SELECT ${drain.key}, s.target, s.ref, nextval('"WorkTicket"'),
-          min(s.priority), now(), now(), 0, NULL
+          min(s.priority), now(), now(), 0, NULL, NULL, NULL, NULL
           FROM (${source}) AS s(target, ref, priority)
          WHERE s.ref IS NOT NULL
          GROUP BY s.target, s.ref ORDER BY s.target, s.ref`,
@@ -333,13 +333,43 @@ export const workPending = (target: string | SQL, ref: SQL) =>
 export const workPendingWhere = (target: (column: SQL) => SQL) =>
   sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${target(sql`${workItem.target}`)})`;
 
-/**
- * The owed item of `target`/`ref` (correlated), for a `LEFT JOIN LATERAL`:
- * columns `ref`, `lastError` and `readyAt`.
- */
+/** Shared by point reads and the drain aggregate; aliases name the indexed item and its Job. */
+const currentWorkExecution = sql`j.state = ${jobState.enum.running}
+  AND j."leaseToken" = w."executionLeaseToken" AND j."leaseExpiresAt" > now()
+  AND w."executionTicket" = w.ticket
+  AND w."executionStartedAt" >= w."readyAt" AND w."readyAt" <= now()`;
+
+/** The indexed owed item, retry facts and exact execution observation for a lateral point read. */
 export const owedWorkItem = (target: SQL, ref: SQL) =>
-  sql`(SELECT ${workItem.ref} AS ref, ${workItem.lastError} AS "lastError", ${workItem.readyAt} AS "readyAt"
-    FROM ${workItem} WHERE ${workItem.target} = ${target} AND ${workItem.ref} = ${ref})`;
+  sql`(SELECT w.ref, w."lastError", w."readyAt",
+      (w."readyAt" > now()) IS TRUE AS waiting,
+      CASE WHEN ${currentWorkExecution}
+        THEN w."executionStartedAt" ELSE NULL END AS "runningSince",
+      j."leaseExpiresAt" AS "leaseExpiresAt"
+    FROM ${workItem} w
+    LEFT JOIN ${job} j ON j.key = w.drain
+    WHERE w.target = ${target} AND w.ref = ${ref})`;
+
+/** Fenced caller only. An observation grants no authority over a work ticket. */
+export async function observeWorkExecution(
+  tx: RepositoryQueryInput,
+  items: readonly WorkItem[],
+  leaseToken: string,
+) {
+  if (!items.length) return;
+  // Producers may hold marks while saving domain rows; observation must not
+  // delay independent members of this page behind those busy marks.
+  const held = await lockWork(tx, items);
+  if (!held.length) return;
+  await repositoryQueries(tx)
+    .update(workItem)
+    .set({
+      executionLeaseToken: leaseToken,
+      executionTicket: workItem.ticket,
+      executionStartedAt: sql`now()`,
+    })
+    .where(workTickets(held));
+}
 
 /** Whether any item of `targets` is still owed. */
 export const workPendingIn = (targets: readonly string[]) =>
@@ -377,25 +407,31 @@ export const unobservedWork = (
 
 /** Pending items per target-prefix (before any `@`) and the oldest mark's age, for a drain. */
 export async function drainBacklog(db: RepositoryQueryInput, drain: string) {
-  const family = sql<string>`split_part(${workItem.target}, '@', 1)`;
+  const family = sql<string>`split_part(w.target, '@', 1)`;
+  const notRunning = sql`(${currentWorkExecution}) IS NOT TRUE`;
   const queries = repositoryQueries(db);
-  const [targets, [oldest]] = await Promise.all([
-    queries
-      .select({ target: family, count: sql<number>`count(*)::int` })
-      .from(workItem)
-      .where(eq(workItem.drain, drain))
-      .groupBy(family)
-      .orderBy(family),
-    queries
-      .select({
-        seconds: sql<
-          number | null
-        >`extract(epoch FROM now() - min(${workItem.dirtiedAt}))::int`,
-      })
-      .from(workItem)
-      .where(eq(workItem.drain, drain)),
-  ]);
-  return { targets, oldestSeconds: oldest?.seconds ?? null };
+  const targets = await queries
+    .select({
+      target: family,
+      count: sql<number>`count(*)::int`,
+      queued: sql<number>`count(*) FILTER (WHERE ${notRunning} AND w."lastError" IS NULL AND w."readyAt" <= now())::int`,
+      running: sql<number>`count(*) FILTER (WHERE ${currentWorkExecution})::int`,
+      waiting: sql<number>`count(*) FILTER (WHERE ${notRunning} AND w."lastError" IS NULL AND w."readyAt" > now())::int`,
+      failed: sql<number>`count(*) FILTER (WHERE ${notRunning} AND w."lastError" IS NOT NULL)::int`,
+      nextAttemptAt: sql<Date | null>`min(w."readyAt") FILTER (WHERE w."readyAt" > now())`,
+      oldestSeconds: sql<number>`extract(epoch FROM now() - min(w."dirtiedAt"))::int`,
+    })
+    .from(sql`${workItem} w`)
+    .leftJoin(sql`${job} j`, sql`j.key = w.drain`)
+    .where(sql`w.drain = ${drain}`)
+    .groupBy(family)
+    .orderBy(family);
+  return {
+    targets,
+    oldestSeconds: targets.length
+      ? Math.max(...targets.map((row) => row.oldestSeconds))
+      : null,
+  };
 }
 
 /** A target's owed item priority for `ref` (a correlated column), or null. */

@@ -1579,6 +1579,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   return (
     <ProposalCountProvider
       entity={entity}
+      viewportOnly
       records={
         isLoading || isTransitioning ? [] : rows.map((row) => row.original)
       }

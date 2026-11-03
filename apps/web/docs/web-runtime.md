@@ -363,6 +363,17 @@ replace this fresh decision read or the receiving command's current-stock checks
 
 ## List loading and enrichment
 
+Proposal badges demand counts only for mounted table rows, including the
+virtualizer's overscan. Stable batches of 50 roster records prefetch nearby
+counts; inactive batches retain their cached values without refetching until
+their rows return. Bulk review continues to use the full selected population.
+
+Assessment browsing runs inside a read-only repeatable-read transaction with
+a 10-second PostgreSQL statement timeout. PostgreSQL cancels a statement without
+terminating its pooled connection, and the boundary rolls back before reuse.
+This is a per-statement execution budget, separate from the request deadline;
+mutations and background execution retain their own policies.
+
 Pure WASM result memoization belongs to the current runtime. The browser keeps
 up to 2,048 primitive-keyed results; a reused Worker isolate keeps at most 128
 and bypasses keys over 1,024 characters. Object inputs are batched and bypass

@@ -34,10 +34,22 @@ export async function readDerivedBacklog(
     oldestWaitingSeconds: oldestSeconds,
     recent: { windowMinutes: RECENT_MINUTES, perMinute },
     total: rows.reduce((sum, row) => sum + row.count, 0),
-    kinds: storedDerivedDeclarations().map((declaration) => ({
-      entity: declaration.entity,
-      field: declaration.key,
-      count: rows.find((row) => row.target === declaration.target)?.count ?? 0,
-    })),
+    kinds: storedDerivedDeclarations().map((declaration) => {
+      const row = rows.find((row) => row.target === declaration.target);
+      return {
+        entity: declaration.entity,
+        field: declaration.key,
+        count: row?.count ?? 0,
+        states: {
+          queued: row?.queued ?? 0,
+          running: row?.running ?? 0,
+          waiting: row?.waiting ?? 0,
+          failed: row?.failed ?? 0,
+        },
+        nextAttemptAt: row?.nextAttemptAt
+          ? z.coerce.date().parse(row.nextAttemptAt).toISOString()
+          : null,
+      };
+    }),
   };
 }

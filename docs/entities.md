@@ -2923,6 +2923,13 @@ edge and gets the toggle like any other.
 
 ### Background derived data
 
+Refresh execution observations are separate from work ownership. A derived
+preparation page records its current WorkItem ticket, Job lease and start time;
+readers report execution only while that exact ticket and unexpired running
+lease still match. A newer source ticket, a postponed attempt or a lost lease
+cannot inherit an older attempt's execution status. These nullable observations
+do not replace Job fencing, retries or retained publications.
+
 Compute adapters may share an authoritative preparation source within one admitted
 page. The union of its admitted IDs stays inside the existing page budget;
 each target projects only its own IDs. A failed shared preparation falls back
@@ -4826,6 +4833,13 @@ Scoped Suggestions reads match primary UUID identities and secondary family grap
 separate SQL branches before joining immutable Assessment evidence. This keeps
 unrelated pending families out of the evidence join; overlapping branches
 still contribute each Assessment once to the caller's identity set.
+Field-reference predicates inspect only declared reference fields and their
+current/proposed values rather than constructing a complete display-reference
+array for every candidate. Automatic history materializes scoped identities
+before correction-receipt eligibility; family counts share their resolved scope.
+Count-only reads omit ordering-only receipt lookups. These are live canonical
+reads, not a new eligibility cache; any future stored projection must retain
+dynamic old/new memberships and complete invalidation.
 Non-actionable Product pairs remain ordinary history. A merge still requires
 explicit survivor and impact confirmation, and identity conflicts cannot merge.
 Tag proposals retain the source and every supporting Product's revision; listing,

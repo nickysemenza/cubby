@@ -117,12 +117,15 @@ assessments and current projections without discovery/model calls.
 
 Suggestions lists/counts and record-scoped Automatic Decisions intersect the same
 family-declared references. Admission uses a typed scope (families, status, Run)
-rather than caller-supplied SQL aliases. Primary-reference hits skip JSON graph
-construction; secondary references retain the declared family expansion, including
-UUID and shortcode matching. For record-scoped automatic history, materialize the
-matched identities before checking application and member Feedback. Broad entity
-scopes use one join so the identity barrier does not duplicate full-table work.
-The existing family/active/status and Feedback assessment indexes serve both paths.
+rather than caller-supplied SQL aliases. Primary-reference hits use typed UUID
+equality. Family branches narrow declared reference fields before inspecting
+current and proposed scalar, object or list values; UUID and shortcode matching
+remain supported. Dynamic statement and Email graphs retain their canonical
+expansion. Automatic history materializes matched identity, family and status
+before checking correction receipts, application and member Feedback. Family
+counts reuse their resolved scope, and count-only reads omit ordering-only
+correction lookups. Existing identity/family/status and Feedback assessment
+indexes serve these reads; no second eligibility cache is introduced.
 
 ## Cutover preservation
 

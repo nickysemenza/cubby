@@ -8,6 +8,15 @@ export const derivedBacklog = z.object({
       entity: entitySchema,
       field: z.string(),
       count: z.number().int().nonnegative(),
+      states: z
+        .object({
+          queued: z.number().int().nonnegative(),
+          running: z.number().int().nonnegative(),
+          waiting: z.number().int().nonnegative(),
+          failed: z.number().int().nonnegative(),
+        })
+        .optional(),
+      nextAttemptAt: z.iso.datetime().nullable().optional(),
     }),
   ),
   /** How long the oldest waiting value has waited; null when none waits. */

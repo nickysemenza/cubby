@@ -7,8 +7,11 @@ import { useQueries, type UseQueryResult } from "@tanstack/react-query";
 import { chunk } from "es-toolkit";
 import {
   createContext,
+  useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -25,6 +28,9 @@ import {
 } from "~/ui/primitives/popover";
 
 const identity = z.object({ id: z.string() });
+const ActiveRecordsContext = createContext<((id: string) => () => void) | null>(
+  null,
+);
 const Context = createContext<{
   counts: ReadonlyMap<string, number>;
   error: unknown;
@@ -36,16 +42,36 @@ const combine = (
   error: queries.find((query) => query.error)?.error,
 });
 
-/** One bounded roster read per table batch, shared by every row. */
+/** Stable roster batches retain counts; only the viewport and its buffer fetch. */
 export function ProposalCountProvider({
   entity,
   records,
+  viewportOnly = false,
   children,
 }: {
   entity: Entity | undefined;
   records: readonly unknown[];
+  viewportOnly?: boolean;
   children: ReactNode;
 }) {
+  const [activeRecordIds, setActiveRecordIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const activeCounts = useRef(new Map<string, number>());
+  const activateRecord = useCallback((id: string) => {
+    const counts = activeCounts.current;
+    const count = counts.get(id) ?? 0;
+    counts.set(id, count + 1);
+    if (count === 0) setActiveRecordIds(new Set(counts.keys()));
+    return () => {
+      const remaining = (counts.get(id) ?? 1) - 1;
+      if (remaining) counts.set(id, remaining);
+      else {
+        counts.delete(id);
+        setActiveRecordIds(new Set(counts.keys()));
+      }
+    };
+  }, []);
   const batches = useMemo(
     () =>
       chunk(
@@ -54,14 +80,17 @@ export function ProposalCountProvider({
           const code = row.success ? parseShortcode(row.data.id) : null;
           return code && code.type === entity ? [code.shortcode] : [];
         }),
-        250,
+        50,
       ),
     [records, entity],
   );
   const result = useQueries({
-    queries: batches.map((recordIds) =>
-      suggestions.recordCounts.queryOptions({ recordIds }),
-    ),
+    queries: batches.map((recordIds) => ({
+      ...suggestions.recordCounts.queryOptions({ recordIds }),
+      // Keep inactive observers' cached counts without refreshing the entire
+      // loaded roster when a suggestion changes. Re-entry refetches stale data.
+      enabled: !viewportOnly || recordIds.some((id) => activeRecordIds.has(id)),
+    })),
     combine,
   });
   const context = useMemo(
@@ -71,7 +100,11 @@ export function ProposalCountProvider({
     }),
     [result.records, result.error],
   );
-  return <Context value={context}>{children}</Context>;
+  return (
+    <ActiveRecordsContext value={viewportOnly ? activateRecord : null}>
+      <Context value={context}>{children}</Context>
+    </ActiveRecordsContext>
+  );
 }
 
 export function ProposalCount({
@@ -104,6 +137,8 @@ function EligibleProposalCount({
   recordId: NonNullable<ReturnType<typeof parseShortcode>>["shortcode"];
   children: ReactNode;
 }) {
+  const activate = useContext(ActiveRecordsContext);
+  useEffect(() => activate?.(recordId), [activate, recordId]);
   const context = useContext(Context);
   const [open, setOpen] = useState(false);
   const count = context?.counts.get(recordId) ?? 0;

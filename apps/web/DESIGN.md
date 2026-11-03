@@ -540,9 +540,12 @@ no false completion mark and does not block approval.
 
 `ui/derived` owns the ADR 0021 envelope presentation. Own values carry no mark.
 Inherited values have a muted leading ↳ in a 12px slot. Auto suggestions reuse
-the dashed ochre suggestion pill with a small “auto” label. Stale and waiting
-values show the info-tone Updating dot immediately, independently of hover;
-its gentle pulse is static under reduced motion. Failed values expose the raw
+the dashed ochre suggestion pill with a small “auto” label. Refresh marks remain
+visible independently of hover: queued, waiting and stale-unscheduled values
+have a static info-tone dot with their distinct status label. Only an observed
+executing ticket with an unexpired Job lease pulses; reduced motion keeps it
+static. A local timer expires that observation without fetching and labels its
+status as potentially out of date. Failed values expose the raw
 diagnostic on hover and keyboard focus. Missing values retain Not assessed or
 the field's normal dash. Marks preserve 32px table rows.
 
@@ -560,8 +563,10 @@ and allocated results retain their Mixed or Allocated label. An allocated
 result without a scalar value reads Allocated rather than Not set; its shares
 remain the source of project amounts. Quality checks and their exception controls share this
 explanation. Quality cards keep the explanation trigger available beside missing or failed results. Interpretations retain their readable result, caveats and next steps.
-The footer compares stored and live values and shows computation
-age and Updating. `ui/derived` is the app-aware generic composition boundary:
+The footer compares stored and live values and shows the last computation,
+observed execution start and known retry deadline. It links to Activity's
+derived-work view; unknown invalidation causes or finish times remain unknown.
+`ui/derived` is the app-aware generic composition boundary:
 it may reuse entity links, evidence and existing mutation actions.
 
 Display image sources are read-only strips in precedence order, with a linked

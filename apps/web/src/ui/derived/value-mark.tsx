@@ -3,25 +3,60 @@ import {
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
 import { fieldMissingLabel } from "@cubby/schemas/field-envelope-presentation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
+import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
 
-export function UpdatingDot() {
+/** Expire the observation locally; a timer never asserts that replacement work is queued. */
+export function useFieldExecutionCurrent(
+  execution: Extract<
+    ReadableFieldEnvelope["work"],
+    { kind: "pending" }
+  >["execution"],
+) {
+  const now = useDisplayNow();
+  const [expiredLease, setExpiredLease] = useState<string>();
+  const expiresAt = execution?.leaseExpiresAt;
+  useEffect(() => {
+    if (!expiresAt) return;
+    const remaining = Date.parse(expiresAt) - Date.now();
+    if (remaining <= 0) return;
+    const timer = setTimeout(() => setExpiredLease(expiresAt), remaining);
+    return () => clearTimeout(timer);
+  }, [expiresAt]);
+  return (
+    expiresAt !== undefined &&
+    expiredLease !== expiresAt &&
+    now !== undefined &&
+    Date.parse(expiresAt) > now
+  );
+}
+
+export function UpdatingDot({
+  label = "Updating",
+  active = true,
+}: {
+  label?: string;
+  active?: boolean;
+}) {
   return (
     <output
-      aria-label="Updating"
-      title="Updating"
+      aria-label={label}
+      title={label}
       className="inline-flex size-3 shrink-0 items-center justify-center"
     >
       <span
         aria-hidden="true"
-        className="size-1.5 rounded-full bg-info motion-safe:animate-pulse"
+        className={cn(
+          "size-1.5 rounded-full bg-info",
+          active && "motion-safe:animate-pulse",
+        )}
       />
     </output>
   );
@@ -55,6 +90,18 @@ export function FieldValueMark({
     (envelope?.result.kind === "cached" &&
       envelope.result.freshness === "stale");
   const error = envelope?.work.kind === "failed" ? envelope.work.error : null;
+  const execution =
+    envelope?.work.kind === "pending" ? envelope.work.execution : undefined;
+  const running = useFieldExecutionCurrent(execution);
+  const refreshLabel = running
+    ? "Updating"
+    : execution
+      ? "Refresh status may be out of date"
+      : envelope?.work.kind === "pending"
+        ? "Queued for refresh"
+        : envelope?.work.kind === "waiting"
+          ? "Waiting to refresh"
+          : "Stale result";
   const missing = envelope?.result.kind === "missing";
   return (
     <span
@@ -78,7 +125,9 @@ export function FieldValueMark({
         {missing && envelope ? fieldMissingLabel(envelope.work) : children}
       </span>
       {auto ? <span className="shrink-0 text-3xs">auto</span> : null}
-      {updating ? <UpdatingDot /> : null}
+      {updating && error === null ? (
+        <UpdatingDot label={refreshLabel} active={running} />
+      ) : null}
       {error !== null && !interactive ? (
         <span title={error} className="shrink-0 text-destructive">
           <span aria-hidden="true">!</span>

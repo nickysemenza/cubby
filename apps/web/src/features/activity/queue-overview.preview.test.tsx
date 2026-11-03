@@ -74,6 +74,7 @@ let harness: ReturnType<typeof createBrowserTestHarness>;
 let restore: (() => void) | undefined;
 let quiet = false;
 let backlogFails = false;
+let backlogStates = false;
 let failuresOnly = false;
 let measuredAt = Date.now();
 
@@ -81,6 +82,7 @@ beforeEach(async () => {
   await page.viewport(1440, 1200);
   quiet = false;
   backlogFails = false;
+  backlogStates = false;
   failuresOnly = false;
   measuredAt = Date.now();
   reads.length = 0;
@@ -122,9 +124,19 @@ beforeEach(async () => {
       return {
         ok: true,
         data: {
-          total: 0,
-          kinds: [],
-          oldestWaitingSeconds: null,
+          total: backlogStates ? 10 : 0,
+          kinds: backlogStates
+            ? [
+                {
+                  entity: "product",
+                  field: "price",
+                  count: 10,
+                  states: { queued: 4, running: 2, waiting: 3, failed: 1 },
+                  nextAttemptAt: new Date(measuredAt + 60_000).toISOString(),
+                },
+              ]
+            : [],
+          oldestWaitingSeconds: backlogStates ? 90 : null,
           recent: { windowMinutes: 15, perMinute: [] },
         },
       };
@@ -330,6 +342,19 @@ it("embeds bounded attention and Job tables, scopes chips, and expands the selec
   await waitFor(() =>
     expect(retried).toContainEqual({ filter: { codes: [code] } }),
   );
+});
+
+it("shows observed per-value refresh states and the next known attempt", async () => {
+  backlogStates = true;
+  render(<Overview />, { wrapper: harness.wrapper });
+  expect(
+    await screen.findByText("4 queued · 2 running · 3 waiting · 1 failed"),
+  ).toBeVisible();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Refresh states by value" }),
+  );
+  expect(await screen.findByText("Product · Price")).toBeVisible();
+  expect(screen.getByText(/Next attempt/)).toBeVisible();
 });
 
 it("retries the current filter without widening to other lanes", async () => {

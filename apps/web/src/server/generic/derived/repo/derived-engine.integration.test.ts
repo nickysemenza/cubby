@@ -685,10 +685,36 @@ describe("stored derived values", () => {
       only: (mark) => mark.ref === entry,
       // Delete and re-create the same mark: a fresh sequence ticket.
       during: async () => {
+        expect((await valuation(entry))?.execution?.startedAt).toEqual(
+          expect.any(String),
+        );
+        await getDb(ctx.db).execute(sql`
+          UPDATE "WorkItem" SET "executionLeaseToken" = gen_random_uuid()
+          WHERE target = 'inventory.valuation' AND ref = ${entry}::uuid`);
+        expect((await valuation(entry))?.execution).toBeUndefined();
+        await getDb(ctx.db).execute(sql`
+          UPDATE "WorkItem" w SET "executionLeaseToken" = j."leaseToken"
+          FROM "Job" j WHERE j.key = w.drain
+            AND w.target = 'inventory.valuation' AND w.ref = ${entry}::uuid`);
+        expect((await valuation(entry))?.execution?.startedAt).toEqual(
+          expect.any(String),
+        );
+        await postponeWorkRefs(
+          ctx.db,
+          "inventory.valuation",
+          [entry],
+          new Date(Date.now() + 60_000),
+        );
+        expect(await valuation(entry)).toMatchObject({
+          pending: true,
+          waiting: true,
+        });
+        expect((await valuation(entry))?.execution).toBeUndefined();
         await dropWork(ctx.db, "inventory.valuation", [entry]);
         await getDb(ctx.db).execute(
           sql`SELECT derived_mark('inventory.valuation', ARRAY[${entry}::uuid])`,
         );
+        expect((await valuation(entry))?.execution).toBeUndefined();
       },
     });
     expect(await marks("inventory.valuation")).toEqual([entry]);

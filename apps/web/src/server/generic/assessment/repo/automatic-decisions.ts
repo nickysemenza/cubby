@@ -20,8 +20,7 @@ import { correctionOutcomeExists } from "~/server/generic/assessment/repo/correc
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
-  automaticFamilyEligibility,
-  automaticAssessmentCandidate,
+  automaticAssessmentEligibility,
   automaticApplicationVerified,
   isReviewFamily,
   readAssessmentRecordRefs,
@@ -55,18 +54,20 @@ export async function listAutomaticDecisions(
       totalCount: 0,
       nextOffset: null,
     });
-  const where = sql`a.served AND ${automaticAssessmentCandidate} AND (
-    ${automaticFamilyEligibility}
-    OR ${rule} IS NOT NULL)
-    ${input.family ? sql`AND a.family = ${input.family}` : sql``}
-    ${touching ? sql`AND a.id = ANY(${uuidArrayParam([...touching])})` : sql``}
+  // Record-scoped discovery has already proved automatic admission. Repeating
+  // it here validates the same correction receipts for the count and page.
+  const admission = touching
+    ? sql`a.id = ANY(${uuidArrayParam([...touching])})`
+    : sql`a.served AND ${automaticAssessmentEligibility(rule)}
+        ${input.family ? sql`AND a.family = ${input.family}` : sql``}`;
+  const where = sql`${admission}
     ${input.reviewStatus === "wrong" ? sql`AND latest.verdict = ${feedbackVerdict.enum.wrong}` : input.reviewStatus === "unreviewed" ? sql`AND latest.id IS NULL` : input.reviewStatus === "reviewed" ? sql`AND latest.id IS NOT NULL` : sql``}`;
   const from = sql`FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
     LEFT JOIN LATERAL (SELECT f.id, f.verdict, f."createdAt" FROM "Feedback" f
       WHERE f."assessmentId" = a.id AND f.authority = ${feedbackAuthority.enum.member} AND f."operationId" <> ${"decision"}
         AND f.metadata->>${"kind"} IS DISTINCT FROM ${correctionAuthorityReceiptKinds.enum.assessment_application}
-      ORDER BY f."createdAt" DESC, f.id DESC LIMIT 1) latest ON true
-    LEFT JOIN LATERAL (SELECT c."createdAt" FROM "Feedback" c
+      ORDER BY f."createdAt" DESC, f.id DESC LIMIT 1) latest ON true`;
+  const correctionOrder = sql`LEFT JOIN LATERAL (SELECT c."createdAt" FROM "Feedback" c
       WHERE ${correctionOutcomeExists(sql`a.id`, sql`c.id`)}
       ORDER BY c."createdAt" DESC, c.id DESC LIMIT 1) latest_correction ON true`;
   const total = await unwrapDb(db).execute<{ count: number }>(
@@ -86,7 +87,7 @@ export async function listAutomaticDecisions(
     applicationVerified: boolean;
   }>(sql`
     SELECT a.id, a.family, a.judgment, a."createdAt", s.fingerprint, ${rule} AS "automaticRule", ${automaticApplicationVerified} AS "applicationVerified", latest.verdict,
-      latest."createdAt" AS "reviewedAt", s.active, s.status ${from} WHERE ${where}
+      latest."createdAt" AS "reviewedAt", s.active, s.status ${from} ${correctionOrder} WHERE ${where}
     ORDER BY coalesce(latest_correction."createdAt", a."createdAt") DESC, a.id DESC LIMIT ${input.limit} OFFSET ${input.offset}`);
   const records = await readAssessmentRecordRefs(
     db,

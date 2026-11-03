@@ -2,11 +2,14 @@ import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
 import { getDb } from "~/server/db/helpers";
 import {
   deleteWorkItems,
   insertWorkItems,
+  updateJobs,
 } from "~/server/generic/jobs/jobs.fixtures";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 import { readDerivedBacklog } from "./backlog";
 
@@ -33,11 +36,46 @@ describe("derived backlog", () => {
       FROM entities JOIN ages ON entities.shortcode = 'PRD-ZZZ' || ages.n`);
     await insertWorkItems(ctx.db, [
       {
-        target: `${KIND}.${KEY}`,
+        target: `${KIND}.price`,
         ref: crypto.randomUUID(),
         dirtiedAt: sql`now() - interval '90 seconds'`,
       },
     ]);
+    const runningRef = crypto.randomUUID();
+    const leaseToken = crypto.randomUUID();
+    await enqueueJob(ctx.db, {
+      key: DERIVED_DRAIN_JOB_KEY,
+      kind: "derived.drain",
+      input: {},
+    });
+    await updateJobs(
+      ctx.db,
+      { key: DERIVED_DRAIN_JOB_KEY },
+      {
+        state: "running",
+        leaseToken,
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      },
+    );
+    await insertWorkItems(ctx.db, [
+      {
+        target: `${KIND}.price`,
+        ref: crypto.randomUUID(),
+        readyAt: new Date(Date.now() + 30_000),
+      },
+      {
+        target: `${KIND}.price`,
+        ref: crypto.randomUUID(),
+        lastError: "Synthetic prior failure",
+        readyAt: new Date(Date.now() + 40_000),
+      },
+      { target: `${KIND}.price`, ref: runningRef },
+    ]);
+    await getDb(ctx.db).execute(sql`
+      UPDATE "WorkItem" SET "executionLeaseToken" = ${leaseToken}::uuid,
+        "executionTicket" = ticket, "executionStartedAt" = now(),
+        "lastError" = 'Synthetic previous attempt failure'
+      WHERE target = ${`${KIND}.price`} AND ref = ${runningRef}::uuid`);
 
     const backlog = await readDerivedBacklog(ctx.db);
 
@@ -49,6 +87,28 @@ describe("derived backlog", () => {
     expect(backlog.recent.perMinute[14]).toBe(2);
     expect(backlog.recent.perMinute.reduce((sum, n) => sum + n, 0)).toBe(4);
     expect(backlog.oldestWaitingSeconds).toBeGreaterThanOrEqual(89);
+    expect(
+      backlog.kinds.find(
+        (kind) => kind.entity === KIND && kind.field === "price",
+      ),
+    ).toMatchObject({
+      count: 4,
+      states: { queued: 1, running: 1, waiting: 1, failed: 1 },
+      nextAttemptAt: expect.any(String),
+    });
+    await updateJobs(
+      ctx.db,
+      { key: DERIVED_DRAIN_JOB_KEY },
+      {
+        leaseExpiresAt: new Date(Date.now() - 1_000),
+      },
+    );
+    const expired = await readDerivedBacklog(ctx.db);
+    expect(
+      expired.kinds.find(
+        (kind) => kind.entity === KIND && kind.field === "price",
+      )?.states,
+    ).toEqual({ queued: 1, running: 0, waiting: 1, failed: 2 });
   });
 
   it("reports no wait when nothing is queued", async () => {
