@@ -74,7 +74,7 @@ export async function controlWorkflowRun(
     throw new Error("Only the member this Run belongs to can control it");
   if (input.action === "pause") {
     if (
-      !["mail_reclassify", "suggestion_sweep"].includes(purpose) ||
+      (purpose !== "mail_reclassify" && purpose !== "sweep") ||
       row.status !== "running"
     )
       throw createAppError(
