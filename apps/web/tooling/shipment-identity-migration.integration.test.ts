@@ -28,8 +28,8 @@ it("preserves populated duplicate shipment evidence when installing identity enf
         },
       ],
     );
-    for (const n of [1, 2]) {
-      const code = n === 1 ? "SHIP-23456" : "SHIP-23457";
+    for (const n of [1, 2, 3]) {
+      const code = ["SHIP-23456", "SHIP-23457", "SHIP-23458"][n - 1];
       await client.query(
         `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'shipment',$2)`,
         [id(n), code],
@@ -55,7 +55,10 @@ it("preserves populated duplicate shipment evidence when installing identity enf
           id(20 + n),
           {
             kind: "delivered",
-            time: { kind: "date", value: "2026-06-03" },
+            time:
+              n === 3
+                ? { kind: "unknown" }
+                : { kind: "date", value: "2026-06-03" },
             trackingNumber: "EXAMPLE-MIGRATION",
             rawStatus: "Synthetic delivered",
             carrierId: null,
@@ -71,6 +74,14 @@ it("preserves populated duplicate shipment evidence when installing identity enf
         [id(30 + n), id(10)],
       );
     }
+    await client.query(
+      `INSERT INTO "ShipmentObservation"
+      (id,"shipmentId","sourceCaptureId","sourcePackageId","sourceKey","occurrenceKey",fingerprint,event,"memberReviewed","firstSeenAt","lastSeenAt")
+      SELECT $1,"shipmentId","sourceCaptureId","sourcePackageId","sourceKey",'distant-event','distant-fingerprint',
+        jsonb_set(event,'{time,value}','"2026-09-03"'::jsonb),false,"firstSeenAt","lastSeenAt"
+      FROM "ShipmentObservation" WHERE id=$2`,
+      [id(99), id(31)],
+    );
     const snapshot = async () => {
       const values = [];
       for (const table of [
@@ -96,5 +107,21 @@ it("preserves populated duplicate shipment evidence when installing identity enf
       await client.query(`SELECT count(*)::int AS count FROM pg_trigger
       WHERE tgname IN ('Shipment_tracking_period_unique','ShipmentObservation_tracking_period_unique') AND tgdeferrable AND tginitdeferred`);
     expect(triggers.rows[0].count).toBe(2);
+    await client.query(
+      `UPDATE "Shipment" SET notes='Synthetic corrected note',purpose='incoming'`,
+    );
+    expect(
+      (
+        await client.query(
+          `SELECT count(*)::int AS count FROM "Shipment" WHERE notes='Synthetic corrected note'`,
+        )
+      ).rows[0].count,
+    ).toBe(3);
+    await expect(
+      client.query(
+        `UPDATE "Shipment" SET "trackingNumber"='EXAMPLE-NEW' WHERE id=$1`,
+        [id(3)],
+      ),
+    ).rejects.toMatchObject({ constraint: "Shipment_tracking_period_check" });
   });
 });

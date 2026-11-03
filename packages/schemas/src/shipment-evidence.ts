@@ -239,13 +239,14 @@ export const recordShipmentEvidenceOut = z.object({
   shipmentIds: z.array(shortcodeSchema("shipment")),
   insertedObservations: z.number().int().nonnegative(),
   repeatedObservations: z.number().int().nonnegative(),
-  unresolvedPackages: z.array(
-    z.object({
-      sourceCaptureId: z.uuid(),
-      sourceShipmentKey: z.string().nullable(),
-      reason: z.string(),
-    }),
-  ),
+  unresolvedPackages: z
+    .array(
+      z.object({
+        sourceShipmentKey: z.string().nullable(),
+        reason: z.string(),
+      }),
+    )
+    .optional(),
 });
 export const associateShipmentInput = z.strictObject({
   shipmentId: shortcodeSchema("shipment"),

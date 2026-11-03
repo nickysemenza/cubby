@@ -274,13 +274,18 @@ Deferred database constraints enforce nearby tracking uniqueness across primary
 and additional references and validate the final current evidence period. Writers
 share the shipment transaction lock; a single revision row additionally forces
 stale snapshot transactions to retry. The migration preserves existing duplicates
-unchanged for explicit cleanup; newly changed records must satisfy the guard.
+unchanged for explicit cleanup; new identity/reference or event changes must
+satisfy the guard. Unrelated Purchase, purpose, notes and unchanged replay updates
+remain available on legacy records. Undated references require review before
+assigning another shipping period. Consolidate Shipment duplicates before merging
+carrier Vendors, whose reference rewrites must also satisfy identity enforcement.
 Confirmed duplicates are merged as a group in one transaction, keeping the oldest
 record and retaining notes, missing carrier identity, observations, capture
 memberships, source-package bindings and member-reviewed Purchase decisions.
 Conflicting known directions or Purchase decisions require correction first.
 Reassigning the last source package merges its empty former Shipment into the
-target. Old identities retain their merge destination; writes require the current
+target and inherits the same Purchase-decision and direction preconditions.
+Old identities retain their merge destination; writes require the current
 reference and the specialist timeline can follow the saved destination.
 Tracking reports show the source Email's received timestamp when the event time
 is unknown, labeled as Email receipt rather than an observed event time. This

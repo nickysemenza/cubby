@@ -100,4 +100,23 @@ describe("translateDatabaseError", () => {
       translateDatabaseError(checkViolation("EntityLink_no_self_check")),
     ).toMatchObject({ reason: "SELF_DEPENDENCY" });
   });
+  it("retains shipment identity constraint diagnostics", () => {
+    for (const [code, constraint, message] of [
+      [
+        "23505",
+        "Shipment_tracking_period_unique",
+        "Shipment tracking identity conflicts with SHIP-23456; resolve or merge its retained evidence",
+      ],
+      [
+        "23514",
+        "Shipment_tracking_period_check",
+        "Shipment tracking identity requires source-event dates within 60 days",
+      ],
+    ]) {
+      const error = Object.assign(new Error("Failed query"), {
+        cause: Object.assign(new Error(message), { code, constraint }),
+      });
+      expect(translateDatabaseError(error)).toMatchObject({ message });
+    }
+  });
 });

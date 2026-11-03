@@ -1,4 +1,5 @@
 /* oxlint-disable cubby/no-raw-deleted-at-predicate -- Desired-state PostgreSQL functions own live-row predicates. */
+import { SHIPMENT_IDENTITY_PERIOD_DAYS } from "@cubby/schemas/shipment-fields";
 /** Shipment identity uses source-event days, never intake or cache timestamps. */
 export function shipmentIdentityDdl(): string {
   return `CREATE OR REPLACE FUNCTION shipment_event_day(event jsonb) RETURNS date
@@ -64,7 +65,7 @@ LANGUAGE sql STABLE AS $$
   CROSS JOIN jsonb_array_elements(p_refs) b
   WHERE s."deletedAt" IS NULL AND a->>'trackingNumber' = b->>'trackingNumber'
     AND (p_first IS NULL OR w.first_day IS NULL OR
-      (p_first <= w.last_day + 60 AND w.first_day <= p_last + 60))
+      (p_first <= w.last_day + ${SHIPMENT_IDENTITY_PERIOD_DAYS} AND w.first_day <= p_last + ${SHIPMENT_IDENTITY_PERIOD_DAYS}))
   GROUP BY s.id, s.shortcode, s."purchaseId", w.first_day, w.last_day
 $$;
 
@@ -87,6 +88,16 @@ CREATE OR REPLACE FUNCTION shipment_identity_check() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE p_id uuid; ids uuid[]; refs jsonb; w record; other record;
 BEGIN
+  -- Metadata edits and unchanged replays cannot introduce another identity.
+  -- Legacy evidence remains correctable without freezing Purchase/purpose/notes.
+  IF TG_OP = 'UPDATE' THEN
+    IF TG_TABLE_NAME = 'Shipment' THEN
+      IF (NEW."carrierId", NEW."trackingNumber", NEW."extraTrackingNumbers", NEW."deletedAt")
+        IS NOT DISTINCT FROM (OLD."carrierId", OLD."trackingNumber", OLD."extraTrackingNumbers", OLD."deletedAt") THEN RETURN NULL; END IF;
+    ELSIF (NEW.event, NEW."shipmentId", NEW."supersededById")
+      IS NOT DISTINCT FROM (OLD.event, OLD."shipmentId", OLD."supersededById") THEN RETURN NULL;
+    END IF;
+  END IF;
   IF TG_TABLE_NAME = 'Shipment' THEN ids := ARRAY[NEW.id];
   ELSIF TG_OP = 'UPDATE' THEN ids := ARRAY[NEW."shipmentId", OLD."shipmentId"];
   ELSIF TG_OP = 'DELETE' THEN ids := ARRAY[OLD."shipmentId"];
@@ -97,10 +108,9 @@ BEGIN
     refs := shipment_tracking_refs(p_id);
     IF jsonb_array_length(refs) = 0 THEN CONTINUE; END IF;
     SELECT * INTO w FROM shipment_identity_window(p_id);
-    -- Explicit reassignment can leave an evidence-free historical shell.
-    IF NOT EXISTS (SELECT 1 FROM "ShipmentObservation" WHERE "shipmentId" = p_id) THEN CONTINUE; END IF;
-    IF w.first_day IS NULL OR w.last_day - w.first_day > 60 THEN
-      RAISE EXCEPTION 'Shipment tracking identity requires source-event dates within 60 days' USING ERRCODE = '23514';
+    IF w.first_day IS NULL OR w.last_day - w.first_day > ${SHIPMENT_IDENTITY_PERIOD_DAYS} THEN
+      RAISE EXCEPTION 'Shipment tracking identity requires source-event dates within ${SHIPMENT_IDENTITY_PERIOD_DAYS} days'
+        USING ERRCODE = '23514', CONSTRAINT = 'Shipment_tracking_period_check';
     END IF;
     SELECT * INTO other FROM shipment_identity_candidates(refs, w.first_day, w.last_day)
       WHERE id <> p_id AND NOT carrier_conflict LIMIT 1;

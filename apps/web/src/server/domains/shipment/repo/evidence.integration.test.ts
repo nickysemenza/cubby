@@ -557,7 +557,11 @@ describe("Shipment retained evidence", () => {
       {
         shipmentId: code,
         observationId: original.observationId,
-        patch: { rawStatus: "Member verified pickup", location: null },
+        patch: {
+          rawStatus: "Member verified pickup",
+          location: null,
+          time: { kind: "date", value: "2025-06-03" },
+        },
       },
       ctx.actor,
     );
@@ -579,6 +583,10 @@ describe("Shipment retained evidence", () => {
     const report = await readShipmentTimeline(ctx.db, code);
     expect(report.timeline).toHaveLength(1);
     expect(report.timeline[0]?.event.rawStatus).toBe("Member verified pickup");
+    expect(report.timeline[0]?.event.time).toEqual({
+      kind: "date",
+      value: "2025-06-03",
+    });
     expect(report.observations).toHaveLength(3);
     expect(
       report.observations.filter((observation) => observation.superseded),
@@ -600,6 +608,21 @@ describe("Shipment retained evidence", () => {
     );
     expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
     expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    const collision = packet("EXAMPLE-COLLISION");
+    collision.carrierName = "Other synthetic carrier";
+    collision.observations[0]!.carrierName = collision.carrierName;
+    const other = await recordShipmentEvidence(
+      ctx.db,
+      capture("carrier-collision", [collision]),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({ trackingNumber: "EXAMPLE-123" })
+      .where(eq(shipment.shortcode, other.shipmentIds[0]!));
+    const boundReplay = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+    expect(boundReplay.shipmentIds).toEqual(first.shipmentIds);
+    expect(boundReplay.unresolvedPackages).toEqual([]);
   });
 
   it("keeps source revisions and ignores superseded observations in milestones", async () => {
@@ -1105,8 +1128,8 @@ describe("Shipment retained evidence", () => {
       { ...capture("master", packages), purchaseId: order.output.id },
       ctx.actor,
     );
-    expect(result.shipmentIds).toHaveLength(0);
-    expect(result.unresolvedPackages).toHaveLength(2);
+    expect(result.shipmentIds).toHaveLength(1);
+    expect(result.unresolvedPackages).toHaveLength(1);
     expect(
       await getDb(ctx.db).select().from(shipmentSourceCapture),
     ).toHaveLength(1);

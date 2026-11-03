@@ -91,6 +91,16 @@ CREATE OR REPLACE FUNCTION shipment_identity_check() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE p_id uuid; ids uuid[]; refs jsonb; w record; other record;
 BEGIN
+  -- Metadata edits and unchanged replays cannot introduce another identity.
+  -- Legacy evidence remains correctable without freezing Purchase/purpose/notes.
+  IF TG_OP = 'UPDATE' THEN
+    IF TG_TABLE_NAME = 'Shipment' THEN
+      IF (NEW."carrierId", NEW."trackingNumber", NEW."extraTrackingNumbers", NEW."deletedAt")
+        IS NOT DISTINCT FROM (OLD."carrierId", OLD."trackingNumber", OLD."extraTrackingNumbers", OLD."deletedAt") THEN RETURN NULL; END IF;
+    ELSIF (NEW.event, NEW."shipmentId", NEW."supersededById")
+      IS NOT DISTINCT FROM (OLD.event, OLD."shipmentId", OLD."supersededById") THEN RETURN NULL;
+    END IF;
+  END IF;
   IF TG_TABLE_NAME = 'Shipment' THEN ids := ARRAY[NEW.id];
   ELSIF TG_OP = 'UPDATE' THEN ids := ARRAY[NEW."shipmentId", OLD."shipmentId"];
   ELSIF TG_OP = 'DELETE' THEN ids := ARRAY[OLD."shipmentId"];
@@ -101,10 +111,9 @@ BEGIN
     refs := shipment_tracking_refs(p_id);
     IF jsonb_array_length(refs) = 0 THEN CONTINUE; END IF;
     SELECT * INTO w FROM shipment_identity_window(p_id);
-    -- Explicit reassignment can leave an evidence-free historical shell.
-    IF NOT EXISTS (SELECT 1 FROM "ShipmentObservation" WHERE "shipmentId" = p_id) THEN CONTINUE; END IF;
     IF w.first_day IS NULL OR w.last_day - w.first_day > 60 THEN
-      RAISE EXCEPTION 'Shipment tracking identity requires source-event dates within 60 days' USING ERRCODE = '23514';
+      RAISE EXCEPTION 'Shipment tracking identity requires source-event dates within 60 days'
+        USING ERRCODE = '23514', CONSTRAINT = 'Shipment_tracking_period_check';
     END IF;
     SELECT * INTO other FROM shipment_identity_candidates(refs, w.first_day, w.last_day)
       WHERE id <> p_id AND NOT carrier_conflict LIMIT 1;
