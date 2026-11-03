@@ -233,7 +233,12 @@ them.
 A Mail import commit files supported Purchases and Product findings while
 keeping the batch running; an unresolved principal line does not prevent the
 next Email from being claimed. A member's own `file_import` still ends with
-its commit. At Mail batch settlement, every import batch is audited, and open
+its commit. Unresolved goods send that member import through its required audit
+to `needs_review`, using the saved member actor and owner without requiring a
+coordinator session. If auditing fails after commit, exact commit replay resumes
+finalization from the saved result; replay after the audited stop returns that
+result without importing again or auditing the stopped Run. At Mail batch
+settlement, every import batch is audited, and open
 commit or audit findings require review alongside any unresolved Emails.
 
 A Mail import Run that fails on its own (its coordinator fails or aborts), or

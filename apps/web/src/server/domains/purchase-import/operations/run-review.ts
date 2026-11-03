@@ -36,11 +36,13 @@ import { z } from "zod";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   getDb,
+  notDeleted,
   withTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
   auditLog,
+  ledgerParty,
   photoGroupProposal,
   run as runTable,
   assessmentState,
@@ -467,14 +469,28 @@ export async function auditImportBatch(
   },
   assessor?: typeof import("~/server/domains/purchase-import/operations/agents/extract").auditPurchaseImportBatch,
 ) {
-  const scope = await loadRunScope(db, input.runId);
+  // A member import has audit authority without a coordinator session.
+  const runId = runEntityId.parse(input.runId);
+  const [scope] = await getDb(db)
+    .select({
+      status: runTable.status,
+      actorUserId: runTable.actorUserId,
+      ledgerPartyId: ledgerParty.id,
+    })
+    .from(runTable)
+    .innerJoin(
+      ledgerParty,
+      and(eq(ledgerParty.id, runTable.ledgerPartyId), notDeleted(ledgerParty)),
+    )
+    .where(and(eq(runTable.id, runId), notDeleted(runTable)))
+    .limit(1);
+  if (!scope?.actorUserId)
+    throw new Error("Import run ownership is unavailable");
   if (
     !input.allowPaused ||
-    !ACTIVE_RUN_STATUSES.some((status) => status === scope.public.status)
+    !ACTIVE_RUN_STATUSES.some((status) => status === scope.status)
   )
-    assertRunActive(scope.public.status);
-  if (!scope.actorUserId) throw new Error("Import run actor is unavailable");
-  const runId = runEntityId.parse(input.runId);
+    assertRunActive(scope.status);
   const renderedBatch = await loadPurchaseAuditBatch(
     db,
     runId,
