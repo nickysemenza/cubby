@@ -109,5 +109,30 @@ it("preserves retained publications and input identities across precise fanout m
        WHERE "executionLeaseToken" IS NOT NULL OR "executionTicket" IS NOT NULL OR "executionStartedAt" IS NOT NULL`,
     );
     expect(observations.rows[0]?.count).toBe(0);
+    await client.query(
+      `INSERT INTO "Assessment" ("publicationKey",family,subject,judgment,evidence)
+       VALUES ('synthetic-index-upgrade','recommendation','{"scope":"connection.synthetic"}','{}',
+         jsonb_build_object('candidate',jsonb_build_object('source',jsonb_build_object('entityKind','product','entityId',$1::text)),
+           'records',jsonb_build_array(jsonb_build_object('entity','product','id',$1::text))))`,
+      [id],
+    );
+    const beforeIndexes = await preserved();
+    const history = await client.query(
+      `SELECT to_jsonb(a) value FROM "Assessment" a ORDER BY id`,
+    );
+    await migrateDatabase(db, { through: "0065_assessment_reference_indexes" });
+    expect(await preserved()).toEqual(beforeIndexes);
+    expect(
+      (
+        await client.query(
+          `SELECT to_jsonb(a) value FROM "Assessment" a ORDER BY id`,
+        )
+      ).rows,
+    ).toEqual(history.rows);
+    const indexes = await client.query(
+      `SELECT count(*)::int AS count FROM pg_indexes WHERE schemaname='public'
+       AND indexname IN ('Assessment_reference_source_idx','Assessment_reference_target_idx','Assessment_reference_records_idx')`,
+    );
+    expect(indexes.rows[0]?.count).toBe(3);
   });
 });
