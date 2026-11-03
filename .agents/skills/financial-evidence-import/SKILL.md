@@ -179,6 +179,29 @@ A stale refusal requires fresh evidence and review; listing or stored clean
 status does not grant acceptance authority. Preview writes nothing, and explicit
 Suggestions review validates the application again.
 
+### Booking classification and read-back
+
+For an authorized explicit booking, check existing Purchases, Expenses and
+settlement allocations before creating aggregate spending. Refresh that check
+when resuming a retained proposal; a fresh booking preview checks the selected
+transaction's state, not the completeness of a prior duplicate search.
+
+Choose cost type from what was purchased: a membership service uses `services`,
+even when the Vendor usually sells goods. Vendor-default spending categories
+are suggestions, not evidence of the purchase's purpose. Resolve category IDs
+against live records before previewing; a merged category's successor need not
+fit the purchase. When category is uncertain, preserve supported booking under
+the member's uncategorized-booking policy rather than inventing a category.
+
+Keep issuer benefit credits separate from purchase charges. Equal amounts,
+nearby dates and a membership benefit do not alone prove a credit allocation or
+net household cost. Review their meaning and settlement independently. After
+commit, read back the Purchase, Expense, allocation and attribution graph;
+check effective category and beneficiary defaults rather than assuming empty
+overrides mean uncategorized or Household. Preserve explicit member decisions
+about who benefits independently of who funded the payment. Report booked gross
+spending separately from unresolved credits.
+
 ## Completion
 
 Report account/date/visibility partitions with expected, fetched and recorded
