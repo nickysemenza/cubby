@@ -818,6 +818,7 @@ linked to Jobs and disclosed wake/delivery/recovery history. Observation timesta
 are explicit. No known deadline does not establish that Neon is suspended. An
 observed wake delivery or still-armed alarm over five minutes overdue appears in
 Needs you; stale snapshots alone do not establish scheduler failure. Status reads
-are on demand, inactive Activity panels unmount, and only runnable work keeps the
+are on demand. Inactive Activity panels unmount, except maintenance preserves
+inspected previews with hidden queries disabled. Only runnable work keeps the
 work feed's periodic refresh active. Scheduler transitions use structured Worker
 logs and bounded DO history, with no database-backed idle heartbeat.
