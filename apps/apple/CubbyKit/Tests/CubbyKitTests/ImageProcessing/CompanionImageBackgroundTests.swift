@@ -91,10 +91,11 @@ struct CompanionImageBackgroundTests {
         #expect(try await outbox.pending().isEmpty)
     }
 
-    @Test func replayAcknowledgesWithoutRepeatingExecution() async throws {
+    @Test func renewalFailureThenReplayAcknowledgesWithoutRepeatingExecution() async throws {
         let command = try command()
         let transport = BackgroundTransportFixture(
-            commands: [command], failFirstCompletion: true, validateDescriptionClaims: true)
+            commands: [command], failFirstCompletion: true, validateDescriptionClaims: true,
+            renewError: CubbyAPIError(status: 500, operationID: "imageProcessing.renew", detail: nil))
         let original = try JSONDecoder.companionImageProcessing.decode(
             ImageProcessingResult.self,
             from: Data(
@@ -106,13 +107,24 @@ struct CompanionImageBackgroundTests {
         defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
         let executions = BackgroundExecutionFixture()
         let delivery = CompanionResultDelivery(outbox: outbox, failureObserver: nil)
+        let execution = Gate()
+        let heartbeat = Gate()
         let runner = CompanionImageBackgroundRunner(
             outbox: outbox, delivery: delivery,
             execute: { _ in
+                try await execution.pass()
                 await executions.record()
                 return original
-            })
-        await runner.run(transport: transport, hello: hello(), maximumJobs: 1)
+            }, heartbeatPause: { try await heartbeat.pass() })
+        let firstRun = Task { await runner.run(transport: transport, hello: hello(), maximumJobs: 1) }
+        await execution.arrivals()
+        await heartbeat.arrivals()
+        heartbeat.release()
+        // The next pause proves the failed renewal was caught and execution continued.
+        await heartbeat.arrivals(2)
+        #expect(await transport.renewCount == 1)
+        execution.open()
+        _ = await firstRun.value
         #expect(try await outbox.pending().map(\.result) == [original])
         #expect(await delivery.snapshot.completedCount == 0)
         let restored = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)

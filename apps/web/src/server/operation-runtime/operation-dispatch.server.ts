@@ -232,12 +232,12 @@ export function createOperationDispatch(
     let stage: OperationStage = "context";
     const refusal = <TError>(
       error: TError,
-      stage: OperationStage,
+      failureStage: OperationStage,
       status?: number,
       extraHeaders?: HeadersInit,
     ) =>
       errorResponse(
-        normalizeOperationError(error, stage, requestId, {
+        normalizeOperationError(error, failureStage, requestId, {
           operation,
           authenticated,
           headers: request.headers,

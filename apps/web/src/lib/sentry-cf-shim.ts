@@ -18,6 +18,8 @@
  *     Genuinely used on the server; forwards to the Cloudflare SDK, which
  *     shares `@sentry/core`'s scope with the `withSentry` init.
  *   - `captureMessage` — catch-up.service.ts warnings. Same forwarding.
+ *   - `addBreadcrumb` — router recovery diagnostics. The listener is client-only;
+ *     forwarding keeps the isomorphic module's SDK surface consistent.
  *   - `getClient` — report-error.ts returns a Sentry event id only when the
  *     installed client will send it; on the worker that is the
  *     `@sentry/cloudflare` client `withSentry` installs.
@@ -32,6 +34,7 @@
  * missing export can't ship as `undefined is not a function` on the error path.
  */
 export {
+  addBreadcrumb,
   captureException,
   captureMessage,
   getClient,

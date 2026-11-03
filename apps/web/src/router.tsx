@@ -62,7 +62,14 @@ export const getRouter = () => {
   if (!router.isServer) {
     // Must be installed before a user can request a lazy route chunk. A tab
     // left open across a deploy gets one guarded reload onto the new build.
-    installPreloadErrorRecovery();
+    installPreloadErrorRecovery((decision) => {
+      Sentry.addBreadcrumb({
+        category: "preload.recovery",
+        message: "Preload recovery decision",
+        level: "info",
+        data: { decision, online: navigator.onLine },
+      });
+    });
 
     const isProd = import.meta.env.PROD;
     Sentry.init({
