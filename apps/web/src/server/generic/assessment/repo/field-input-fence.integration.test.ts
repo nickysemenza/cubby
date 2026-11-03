@@ -44,6 +44,33 @@ describe("current field suggestion inputs", () => {
       suggestedValue: "room",
       kind: "correction",
     });
+    const otherParent = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic unchanged parent", type: "house" }),
+      ctx.actor,
+    );
+    const otherChild = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Synthetic unchanged child",
+        type: "area",
+        parentId: otherParent.id,
+      }),
+      ctx.actor,
+    );
+    const other = await seedPending(ctx, {
+      entity: "location",
+      recordId: otherChild.entityId,
+      field: "type",
+      currentValue: "area",
+      suggestedValue: "room",
+      kind: "correction",
+    });
+    expect(
+      (await readFieldSuggestions(ctx.db, [pending.id, other.id]))
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual([pending.id, other.id].sort());
     await executeEntityAs(kernelCtx(ctx), "update", {
       entity: "location",
       id: parent.id,
@@ -52,7 +79,9 @@ describe("current field suggestion inputs", () => {
     await expect(
       acceptSuggestion(ctx.db, kernelCtx(ctx), { id: pending.id }),
     ).rejects.toThrow("Suggestion inputs changed");
-    expect(await readFieldSuggestions(ctx.db, [pending.id])).toEqual([]);
+    expect(await readFieldSuggestions(ctx.db, [pending.id, other.id])).toEqual([
+      expect.objectContaining({ id: other.id }),
+    ]);
     expect(await suggestionStatus(ctx.db, pending.id)).toBe("pending");
   });
 

@@ -91,6 +91,7 @@ const referenceValue = (row: SourceRow | undefined): SourceRow | null => {
 
 type PreparedInputs = {
   sources: Map<string, SourceRow>;
+  liveSources: ReadonlySet<string>;
   classifications: Map<string, string>;
   revisions: Map<string, string | null>;
 };
@@ -124,6 +125,7 @@ export async function fieldInputFingerprintsIfLive(
   if (!subjects.length) return [];
   const specs = subjects.map(inputSpec);
   const sources = await readSources(db, subjects);
+  const liveSources = new Set(sources.keys());
   const references: Pick<FieldSubject, "entity" | "recordId">[] = [];
   const products = new Set<string>();
   for (const spec of specs) {
@@ -172,11 +174,12 @@ export async function fieldInputFingerprintsIfLive(
     for (const row of result.rows) classifications.set(row.id, row.evidence);
   }
   const live = subjects.filter((subject) =>
-    sources.has(sourceKey(subject.entity, subject.recordId)),
+    liveSources.has(sourceKey(subject.entity, subject.recordId)),
   );
   const revisions = await fieldWriteRevisions(db, live);
   const prepared: PreparedInputs = {
     sources,
+    liveSources,
     classifications,
     revisions: new Map(
       live.map((subject, index) => [
@@ -234,7 +237,10 @@ async function fingerprintFromInputs(
   prepared?: PreparedInputs,
 ) {
   const { entity, recordId, field, kind, table, backings, keys } = spec;
-  const preparedRow = prepared?.sources.get(sourceKey(entity, recordId));
+  const key = sourceKey(entity, recordId);
+  const preparedRow = prepared?.liveSources.has(key)
+    ? prepared.sources.get(key)
+    : undefined;
   const source = prepared
     ? preparedRow
       ? { value: preparedRow }
