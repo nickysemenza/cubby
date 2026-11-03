@@ -364,7 +364,9 @@ Inspect CI logs and annotations before editing. Fix only change-caused failures;
 report flakes, infrastructure, and unavailable checks separately. Use an
 isolated worktree when maintenance must not alter the configured checkout.
 Validate deploy-only steps against CI token scopes because PR jobs do not
-exercise them. Prefer a fresh branch after a squash merge.
+exercise them. After a squash merge, base independent follow-up work on current
+main and inspect the base-to-head diff; a fresh branch from the old head can
+reintroduce already-merged changes into the next PR.
 
 When a shell call runs a check before dependent Git operations, stop on failure
 with `set -e` or use separate calls. A failed check must not be followed by a
