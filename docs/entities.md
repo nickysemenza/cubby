@@ -4844,6 +4844,10 @@ Scoped Suggestions reads match primary UUID identities and secondary family grap
 separate SQL branches before joining immutable Assessment evidence. This keeps
 unrelated pending families out of the evidence join; overlapping branches
 still contribute each Assessment once to the caller's identity set.
+Batched references group UUID and shortcode IDs by entity kind into one
+membership predicate per kind. This keeps both connection-index keys in the
+index condition instead of filtering many per-record alternatives after
+reopening unrelated evidence. Mixed kinds retain their separate alternatives.
 Field-reference predicates inspect only declared reference fields and their
 current/proposed values rather than constructing a complete display-reference
 array for every candidate. Statement settlement predicates apply resolved record

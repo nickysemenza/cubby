@@ -128,16 +128,21 @@ function relatedRecordMatch(
         )
       : isNotNull(id);
   }
+  // One ID predicate per kind keeps both composite-index keys in the scan.
+  // Pairwise ORs can leave batch IDs as filters over every wide evidence row.
+  const idsByEntity = new Map<string, string[]>();
+  for (const record of scope.records ?? []) {
+    const ids = idsByEntity.get(record.entity) ?? [];
+    ids.push(record.id, record.code);
+    idsByEntity.set(record.entity, ids);
+  }
   return and(
     isNotNull(id),
     scope.entity ? eq(entity, scope.entity) : undefined,
     scope.records
       ? or(
-          ...scope.records.map((record) =>
-            and(
-              eq(entity, record.entity),
-              inArray(id, [record.id, record.code]),
-            ),
+          ...Array.from(idsByEntity, ([kind, ids]) =>
+            and(eq(entity, kind), inArray(id, ids)),
           ),
         )
       : undefined,
