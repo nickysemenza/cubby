@@ -234,7 +234,9 @@ it("compares the displayed publication with current inputs only after an explici
   const diagnostic = await screen.findByRole("button", {
     name: "Compare with current inputs",
   });
-  expect(screen.getByText("Refresh trigger")).toBeVisible();
+  await waitFor(() =>
+    expect(screen.getByText("Refresh trigger")).toBeVisible(),
+  );
   expect(screen.getByText("Product price changed")).toBeVisible();
   expect(screen.queryByText("24")).not.toBeInTheDocument();
   expect(calls).toEqual([expect.objectContaining({ displayedResult })]);
