@@ -260,6 +260,13 @@ transaction and counts nothing.
 
 ## Execution
 
+Import-scoped statement generation processes at most four charges per page.
+Each charge still regenerates current evidence before serial automatic-rule
+application. The smaller shared page limit bounds retained preparation and
+repeated ledger reads between durable checkpoints; interrupted pages replay
+their existing publications and effects through the same guards. It does not
+increase attempts, provider budgets or Worker limits.
+
 A handler has one shape: `prepare(db, claim, input, ctx)` reads and calls
 providers outside a transaction and returns an outcome with an optional
 `publish(tx)`. The executor (`generic/jobs/service/jobs.ts`, private) owns
