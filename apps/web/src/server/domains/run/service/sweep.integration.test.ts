@@ -451,6 +451,37 @@ describe("Sweeps", () => {
       trigger: "manual",
       families,
     });
+    const stepsBeforePause = await readRunSteps(ctx.db, runId);
+    const savedRun = await getDb(ctx.db).query.run.findFirst({
+      where: eq(run.id, runId),
+    });
+    if (!savedRun) throw new Error("Missing scoped Sweep");
+    const request = await memberRequest();
+    expect(
+      await runHandlers.operations.lifecycle({
+        request,
+        data: { runId: savedRun.shortcode, controlAction: "pause" },
+      }),
+    ).toMatchObject({
+      ok: true,
+      data: {
+        run: { publicId: savedRun.shortcode, status: "paused" },
+        successor: null,
+      },
+    });
+    expect(await readRunSteps(ctx.db, runId)).toEqual(stepsBeforePause);
+    expect(
+      await runHandlers.operations.lifecycle({
+        request,
+        data: { runId: savedRun.shortcode, controlAction: "resume" },
+      }),
+    ).toMatchObject({
+      ok: true,
+      data: {
+        run: { publicId: savedRun.shortcode, status: "running" },
+        successor: null,
+      },
+    });
     expect(await drive(runId)).toBe("finished");
     const steps = await readRunSteps(ctx.db, runId);
     expect(steps.map((step) => step.key)).toEqual([
