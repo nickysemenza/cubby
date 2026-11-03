@@ -276,6 +276,13 @@ still regenerates current evidence before applying automatic rules; this
 lifetime boundary does not reuse financial candidates across money writes or
 establish a Worker memory bound.
 
+`Statement generation phase` logs enter selection, preparation, publication,
+and each charge's regeneration and application before awaiting that work.
+Publication reports aggregate observation and candidate counts, without source
+identities or content. These entry events complement the completed-page timings
+when an invocation exits before it can publish a page summary; they do not
+measure heap usage or establish a memory bound.
+
 A handler has one shape: `prepare(db, claim, input, ctx)` reads and calls
 providers outside a transaction and returns an outcome with an optional
 `publish(tx)`. The executor (`generic/jobs/service/jobs.ts`, private) owns
@@ -465,6 +472,10 @@ records it as the Job's `leaseHolder` in the same transaction. Its saved views a
 `waiting-for-apple` and `processing` (live leases).
 
 ## Diagnostics and repair
+
+A Worker memory termination can prevent item failures or a checkpoint from
+being recorded. Read invocation outcomes alongside Run counters; a zero item
+failure count alone does not establish uninterrupted execution.
 
 - `job.queue`: live Jobs counted by lane and waiting-on reason, the set's
   leased image work per executor (`leases`: live and expired), and a page of
