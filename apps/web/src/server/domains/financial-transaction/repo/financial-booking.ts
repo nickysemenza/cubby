@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   financialBookingInput,
@@ -10,7 +12,6 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { cents } from "@cubby/shared";
-import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
@@ -47,8 +48,15 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 
 import { updateFinancialTransaction } from "./financial-transaction";
 
-export const digestValue = <T extends object>(value: T) =>
-  sha256Hex(JSON.stringify(value));
+/** Preserve persisted JSON fingerprint bytes without a separate encoding buffer. */
+export const digestValue = <T extends object>(value: T) => {
+  const serialized = JSON.stringify(value);
+  return Promise.resolve(
+    createHash("sha256")
+      .update(serialized ?? "")
+      .digest("hex"),
+  );
+};
 const fail = (message: string): never => {
   throw createAppError("CONSTRAINT_VIOLATION", message);
 };
