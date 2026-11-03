@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { shortcodeSchema } from "./identifier-fields";
 
+export const SHIPMENT_IDENTITY_PERIOD_DAYS = 60;
+
 /** Reconciled event facts are published as one revision for all list projections. */
 export const shipmentEventSummarySchema = z.object({
   firstEventDate: z.string().nullable(),

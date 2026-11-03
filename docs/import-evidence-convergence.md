@@ -244,11 +244,23 @@ Images, notes, Purchase association and source count do not affect this score.
 Record quality, list quality sorts and filters share these checks.
 
 Source package identity is retained separately from event versions. Identical
-tracked packages across lifecycle Emails reuse the established Purchase,
-resolved carrier and tracking reference. Extraction leaves
-`distinctPackageEvidence` null for these updates; only explicit evidence of a
-separate package bypasses that matching. A new Email, item list or status change
-alone does not establish a separate package. Trackingless packages still need
+tracked packages across lifecycle Emails match normalized primary and additional
+tracking references without requiring a Purchase or a known carrier. Current,
+non-estimated source-event dates must fit one inclusive 60-day period. Instants
+use the household calendar day; date-only and valid local clocks retain their
+literal day. Import dates and cached summaries never establish identity. A
+retained Email's received date or exported SMS's sent date supplies the identity
+day when its observations have no non-estimated event date; this does not change
+the observations, their provenance, or delivery milestones. A
+tracking reference can be reused after a gap greater than 60 days, but nearby
+evidence cannot transitively extend an existing period past 60 days.
+
+Conflicting known carriers, Purchases, multiple candidates, unknown event dates,
+and separate-package claims stay unresolved: intake retains the literal capture,
+returns `unresolvedPackages`, and publishes an Email review finding when the source
+has an owned Email. It creates no speculative Shipment for that packet.
+`distinctPackageEvidence` never bypasses tracked identity matching. A new Email,
+item list or status change alone does not establish a separate package. Trackingless packages still need
 a stable source package key and distinct-package evidence. Identical
 unkeyed source rows retain their multiplicity; replay updates the same
 occurrences. Native event keys scope changed versions to their source package.
@@ -257,6 +269,24 @@ replace a newer current version. Every supporting capture retains membership
 with its observations, including unchanged events in changed page snapshots.
 Page content is retained and hashed without trimming. Email captures retain
 their original content alongside the verified Email reference and checksum.
+
+Deferred database constraints enforce nearby tracking uniqueness across primary
+and additional references and validate the final current evidence period. Writers
+share the shipment transaction lock; a single revision row additionally forces
+stale snapshot transactions to retry. The migration preserves existing duplicates
+unchanged for explicit cleanup; new identity/reference or event changes must
+satisfy the guard. Unrelated Purchase, purpose, notes and unchanged replay updates
+remain available on legacy records. Undated references require review before
+assigning another shipping period. Consolidate Shipment duplicates before merging
+carrier Vendors, whose reference rewrites must also satisfy identity enforcement.
+Confirmed duplicates are merged as a group in one transaction, keeping the oldest
+record and retaining notes, missing carrier identity, observations, capture
+memberships, source-package bindings and member-reviewed Purchase decisions.
+Conflicting known directions or Purchase decisions require correction first.
+Reassigning the last source package merges its empty former Shipment into the
+target and inherits the same Purchase-decision and direction preconditions.
+Old identities retain their merge destination; writes require the current
+reference and the specialist timeline can follow the saved destination.
 Tracking reports show the source Email's received timestamp when the event time
 is unknown, labeled as Email receipt rather than an observed event time. This
 display fallback does not replace retained event time or enter milestone duration

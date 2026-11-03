@@ -168,6 +168,15 @@ export function translateDatabaseError(
   if (!pg) return null;
 
   const entity = prettyTable(pg.table);
+  if (
+    pg.constraint === "Shipment_tracking_period_unique" ||
+    pg.constraint === "Shipment_tracking_period_check"
+  )
+    return createAppError(
+      "CONSTRAINT_VIOLATION",
+      pg.message ?? "Shipment tracking identity needs review.",
+      error,
+    );
 
   switch (pg.code) {
     case "23505": {

@@ -16,8 +16,12 @@ import {
   datedShipmentEventTime,
   type RecordShipmentEvidenceInput,
   type ShipmentEvidence,
+  type ShipmentObservationInput,
 } from "@cubby/schemas/shipment-evidence";
-import { shipmentPurpose } from "@cubby/schemas/shipment-fields";
+import {
+  shipmentPurpose,
+  SHIPMENT_IDENTITY_PERIOD_DAYS,
+} from "@cubby/schemas/shipment-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -49,6 +53,7 @@ import {
 import { loadImportScope } from "~/server/domains/purchase-import/repo/import-scope";
 import { assertMailRunMembership } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";
+import { publishRunFinding } from "~/server/domains/purchase-import/repo/run-finding";
 import {
   resolveProductBrand,
   resolveProductBrandName,
@@ -57,7 +62,7 @@ import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identi
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { finalizeMerge } from "~/server/generic/merge/repo/core";
+import { finalizeMerge, mergeNotes } from "~/server/generic/merge/repo/core";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
@@ -98,6 +103,77 @@ const retainedRecordInput = z.strictObject({
 });
 type ShipmentWriterInput = Omit<RecordShipmentEvidenceInput, "shipments"> &
   Pick<z.infer<typeof retainedRecordInput>, "shipments">;
+
+async function observationIdentity(
+  observation: ShipmentObservationInput,
+  occurrences: Map<string, number>,
+) {
+  const fingerprint = await sha256Hex(canonical(observation));
+  const { timeBasis: _timeBasis, ...literalObservation } = observation;
+  const literalFingerprint = await sha256Hex(canonical(literalObservation));
+  const ordinal = occurrences.get(literalFingerprint) ?? 0;
+  occurrences.set(literalFingerprint, ordinal + 1);
+  return {
+    fingerprint,
+    literalFingerprint,
+    occurrenceKey: observation.sourceEventKey
+      ? `event:${observation.sourceEventKey}`
+      : `content:${literalFingerprint}:${ordinal}`,
+  };
+}
+
+const identityWindowSchema = z.object({
+  first: z.string().nullable(),
+  last: z.string().nullable(),
+});
+
+async function identityCandidates(
+  db: Database,
+  references: readonly { number: string; carrier: string | null }[],
+  observations: readonly ShipmentObservationInput[],
+  notificationDate: string | null,
+) {
+  const dates = await getDb(db).execute(sql`SELECT
+    min(shipment_event_day(e))::text AS first, max(shipment_event_day(e))::text AS last
+    FROM jsonb_array_elements(${JSON.stringify(observations)}::jsonb) e`);
+  const observedWindow = identityWindowSchema.parse(dates.rows[0]);
+  const window = {
+    first: observedWindow.first ?? notificationDate,
+    last: observedWindow.last ?? notificationDate,
+  };
+  const result = await getDb(db).execute(sql`SELECT id, shortcode, purchase_id,
+    first_day::text, last_day::text, carrier_conflict FROM shipment_identity_candidates(
+    (SELECT coalesce(jsonb_agg(jsonb_build_object('trackingNumber', r->>'trackingNumber',
+      'carrier', shipment_carrier_key(r->>'carrier'))), '[]'::jsonb)
+     FROM jsonb_array_elements(${JSON.stringify(references.map((ref) => ({ trackingNumber: ref.number, carrier: ref.carrier })))}::jsonb) r),
+    ${window.first}::date, ${window.last}::date)`);
+  return {
+    window,
+    candidates: z
+      .array(
+        z.object({
+          id: z.uuid(),
+          shortcode: z.string(),
+          purchase_id: z.uuid().nullable(),
+          first_day: z.string().nullable(),
+          last_day: z.string().nullable(),
+          carrier_conflict: z.boolean(),
+        }),
+      )
+      .parse(result.rows),
+  };
+}
+
+const withinIdentityPeriod = (days: readonly (string | null)[]) => {
+  const dates = days
+    .filter((day) => day !== null)
+    .map((day) => Date.parse(day));
+  return (
+    dates.length > 0 &&
+    Math.max(...dates) - Math.min(...dates) <=
+      SHIPMENT_IDENTITY_PERIOD_DAYS * 86400000
+  );
+};
 
 // Intake and explicit corrections share this transaction lock: replay cannot race a package merge.
 async function lockShipmentWrites(db: Database) {
@@ -412,6 +488,10 @@ async function writeShipmentEvidence(
     const purchaseId = await purchaseReference(tdb, input.purchaseId);
     await assertPurchaseSourceOwner(tdb, purchaseId, ownerId);
     const shipmentIds = [];
+    const unresolvedPackages: {
+      sourceShipmentKey: string | null;
+      reason: string;
+    }[] = [];
     let insertedObservations = 0;
     let repeatedObservations = 0;
     const observedAt =
@@ -457,48 +537,8 @@ async function writeShipmentEvidence(
           );
         row = resolved;
       }
-      // A number is reusable. Cross-source reuse needs an established Purchase and carrier identity.
-      if (
-        !row &&
-        purchaseId &&
-        number &&
-        carrier.id &&
-        !packet.distinctPackageEvidence
-      ) {
-        const candidates = await database
-          .select()
-          .from(shipment)
-          .where(and(eq(shipment.purchaseId, purchaseId), notDeleted(shipment)))
-          .for("update")
-          .then((rows) =>
-            rows.filter(
-              (candidate) =>
-                (candidate.carrierId === carrier.id &&
-                  candidate.trackingNumber === number) ||
-                candidate.extraTrackingNumbers.some(
-                  (reference) =>
-                    reference.carrierId === carrier.code &&
-                    normalizeNumber(reference.trackingNumber) === number,
-                ),
-            ),
-          );
-        if (candidates.length > 1)
-          return refuse(
-            "Multiple packages match this tracking reference; select a Shipment explicitly.",
-          );
-        row = candidates[0];
-      }
-      if (
-        row &&
-        !row.purchaseAssociationReviewed &&
-        purchaseId &&
-        row.purchaseId &&
-        row.purchaseId !== purchaseId
-      )
-        return refuse(
-          "The Shipment belongs to another Purchase; explicitly reassign it.",
-        );
-      if (row) await assertPurchaseSourceOwner(tdb, row.purchaseId, ownerId);
+      if (row && purchaseId)
+        await assertShipmentAssociation(tdb, row.id, purchaseId);
       const extraTrackingNumbers = [];
       for (const extra of packet.extraTrackingNumbers) {
         const reference = await carrierReference(
@@ -512,6 +552,149 @@ async function writeShipmentEvidence(
           trackingNumber: normalizeNumber(extra.trackingNumber),
         });
       }
+      const references = [
+        ...(number ? [{ number, carrier: carrier.code }] : []),
+        ...extraTrackingNumbers.map((ref) => ({
+          number: ref.trackingNumber,
+          carrier: ref.carrierId,
+        })),
+      ];
+      const history = binding
+        ? await database
+            .select()
+            .from(shipmentObservation)
+            .where(eq(shipmentObservation.sourcePackageId, binding.id))
+        : [];
+      const identityOccurrences = new Map<string, number>();
+      const effectiveObservations = [];
+      for (const observation of packet.observations) {
+        const key = await observationIdentity(observation, identityOccurrences);
+        const versions = history
+          .filter((version) => version.occurrenceKey === key.occurrenceKey)
+          .sort((a, b) => b.firstSeenAt.getTime() - a.firstSeenAt.getTime());
+        const current = versions.find((version) => !version.supersededById);
+        const matching = versions.filter(
+          (version) =>
+            version.fingerprint === key.fingerprint ||
+            (version.event.timeBasis === undefined &&
+              version.fingerprint === key.literalFingerprint),
+        );
+        const prior =
+          matching.find((version) => version.firstSeenAt <= observedAt) ??
+          matching.at(-1);
+        const restored =
+          prior?.supersededById &&
+          current &&
+          !current.memberReviewed &&
+          observedAt >= current.lastSeenAt &&
+          observedAt > prior.lastSeenAt;
+        // Period admission must use the same retained/reviewed revision replay keeps.
+        const keepCurrent =
+          current &&
+          (current.memberReviewed ||
+            (prior && !restored) ||
+            current.lastSeenAt >= observedAt);
+        effectiveObservations.push(keepCurrent ? current.event : observation);
+      }
+      const identity = await identityCandidates(
+        tdb,
+        references,
+        effectiveObservations,
+        notificationDate,
+      );
+      const possible = identity.candidates.filter(
+        (candidate) =>
+          candidate.id !== row?.id && (!row || !candidate.carrier_conflict),
+      );
+      const candidate = !row && possible.length === 1 ? possible[0] : undefined;
+      const existingDates = row
+        ? identityWindowSchema.parse(
+            (
+              await database.execute(
+                sql`SELECT first_day::text AS first, last_day::text AS last FROM shipment_identity_window(${row.id}::uuid)`,
+              )
+            ).rows[0],
+          )
+        : null;
+      let ambiguity: string | null = null;
+      if (
+        !row &&
+        possible.length > 0 &&
+        references.length &&
+        packet.distinctPackageEvidence
+      )
+        ambiguity =
+          "A separate-package claim under a tracking reference requires member review; the source is retained without creating another Shipment.";
+      else if (
+        references.length &&
+        (!identity.window.first ||
+          !withinIdentityPeriod([identity.window.first, identity.window.last]))
+      )
+        ambiguity =
+          "Tracking identity needs non-estimated source-event dates within one 60-day period.";
+      else if (
+        references.length &&
+        existingDates &&
+        !withinIdentityPeriod([
+          identity.window.first,
+          identity.window.last,
+          existingDates.first,
+          existingDates.last,
+        ])
+      )
+        ambiguity =
+          "The proposed evidence spans separate shipping periods; review its source-package association.";
+      else if (possible.length > (row ? 0 : 1))
+        ambiguity =
+          "Multiple nearby Shipments share this tracking reference; review and merge the retained evidence.";
+      else if (
+        candidate &&
+        (candidate.carrier_conflict ||
+          !candidate.first_day ||
+          !withinIdentityPeriod([
+            identity.window.first,
+            identity.window.last,
+            candidate.first_day,
+            candidate.last_day,
+          ]) ||
+          (purchaseId &&
+            candidate.purchase_id &&
+            candidate.purchase_id !== purchaseId))
+      )
+        ambiguity =
+          "Nearby tracking evidence has conflicting carrier, Purchase, or shipping-period identity; review it before association.";
+      if (ambiguity) {
+        unresolvedPackages.push({
+          sourceShipmentKey: packet.sourceShipmentKey,
+          reason: ambiguity,
+        });
+        if (capture.emailId && ownerId)
+          await publishRunFinding(tdb, {
+            runId: actor.runId ?? null,
+            ledgerPartyId: parseEntityId("ledgerParty", ownerId),
+            entityKind: "email",
+            entityId: capture.emailId,
+            kind: "shipment_identity_ambiguous",
+            summary: ambiguity,
+            proposedFix: null,
+            evidenceFingerprint: await sha256Hex(
+              canonical({ sourceKey, packageKey, packet }),
+            ),
+          });
+        continue;
+      }
+      if (candidate) row = await canonicalShipment(tdb, candidate.shortcode);
+      if (
+        row &&
+        !row.purchaseAssociationReviewed &&
+        purchaseId &&
+        row.purchaseId &&
+        row.purchaseId !== purchaseId
+      )
+        return refuse(
+          "The Shipment belongs to another Purchase; explicitly reassign it.",
+        );
+      if (row) await assertPurchaseSourceOwner(tdb, row.purchaseId, ownerId);
       if (!row) {
         row = await insertWithShortcode(tdb, "shipment", {
           name:
@@ -541,9 +724,17 @@ async function writeShipmentEvidence(
           purchaseId,
         );
         const refs = [...row.extraTrackingNumbers, ...extraTrackingNumbers];
+        const adoptedCarrier = !row.trackingNumber
+          ? (carrier.id ?? row.carrierId)
+          : (row.carrierId ??
+            (normalizeNumber(row.trackingNumber) === number
+              ? carrier.id
+              : null));
         if (
           number &&
-          (row.trackingNumber !== number || row.carrierId !== carrier.id)
+          row.trackingNumber &&
+          (normalizeNumber(row.trackingNumber) !== number ||
+            (adoptedCarrier && carrier.id && adoptedCarrier !== carrier.id))
         )
           refs.push({
             carrierId: carrier.code,
@@ -557,6 +748,8 @@ async function writeShipmentEvidence(
           .update(shipment)
           .set({
             purchaseId: acceptedPurchaseId,
+            carrierId: adoptedCarrier,
+            trackingNumber: row.trackingNumber ?? number,
             extraTrackingNumbers: uniqueRefs,
           })
           .where(eq(shipment.id, row.id));
@@ -580,18 +773,10 @@ async function writeShipmentEvidence(
           observation.carrierName,
         );
         const event = { ...observation, carrierId: eventCarrier.code };
-        const fingerprint = await sha256Hex(canonical(observation));
         // Provenance was absent in historical JSON. Keep its occurrence identity and
         // fingerprint intact when the same literal scan is replayed with provenance.
-        const { timeBasis: _timeBasis, ...literalObservation } = observation;
-        const literalFingerprint = await sha256Hex(
-          canonical(literalObservation),
-        );
-        const ordinal = occurrences.get(literalFingerprint) ?? 0;
-        occurrences.set(literalFingerprint, ordinal + 1);
-        const occurrenceKey = event.sourceEventKey
-          ? `event:${event.sourceEventKey}`
-          : `content:${literalFingerprint}:${ordinal}`;
+        const { fingerprint, literalFingerprint, occurrenceKey } =
+          await observationIdentity(observation, occurrences);
         const sameOccurrence = and(
           eq(shipmentObservation.sourcePackageId, sourcePackage.id),
           eq(shipmentObservation.occurrenceKey, occurrenceKey),
@@ -703,6 +888,7 @@ async function writeShipmentEvidence(
       shipmentIds: [...new Set(shipmentIds)],
       insertedObservations,
       repeatedObservations,
+      unresolvedPackages,
     };
   });
 }
@@ -890,6 +1076,14 @@ export async function mergeShipment(
     if (source.id === target.id)
       return { shipmentId: parseShortcodeFor("shipment", target.shortcode) };
     if (
+      source.purpose !== "unknown" &&
+      target.purpose !== "unknown" &&
+      source.purpose !== target.purpose
+    )
+      return refuse(
+        "Shipment directions disagree; explicitly correct the direction before merging.",
+      );
+    if (
       source.purchaseId &&
       target.purchaseId &&
       source.purchaseId !== target.purchaseId
@@ -946,6 +1140,15 @@ export async function mergeShipment(
       .update(shipment)
       .set({
         purchaseId,
+        notes: mergeNotes(target.notes, source.notes),
+        carrierId:
+          target.carrierId ??
+          (!target.trackingNumber ||
+          target.trackingNumber === source.trackingNumber
+            ? source.carrierId
+            : null),
+        trackingNumber: target.trackingNumber ?? source.trackingNumber,
+        purpose: target.purpose === "unknown" ? source.purpose : target.purpose,
         purchaseAssociationReviewed:
           target.purchaseAssociationReviewed ||
           source.purchaseAssociationReviewed,
@@ -1024,6 +1227,18 @@ export async function reassignShipmentEvidence(
       .update(shipmentObservation)
       .set({ shipmentId: target.id })
       .where(eq(shipmentObservation.sourcePackageId, binding.id));
+    const [remaining] = await getDb(tdb)
+      .select({ id: shipmentObservation.id })
+      .from(shipmentObservation)
+      .where(eq(shipmentObservation.shipmentId, binding.shipmentId))
+      .limit(1);
+    // An emptied source is the same historical package, not another live shell.
+    if (!remaining)
+      await mergeShipment(
+        tdb,
+        { sourceId: previous.shortcode, targetId: target.shortcode },
+        actor,
+      );
     await logAuditEntries(tdb, actor, [
       {
         entityKind: "shipment",

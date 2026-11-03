@@ -11,11 +11,12 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   shipment,
   shipmentObservation,
   shipmentSourceCapture,
+  shipmentSourcePackage,
   expense,
   inventoryEntry,
   email,
@@ -30,6 +31,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { shipmentTrackingReport } from "~/server/generic/entity-report/repo/shipment";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
@@ -555,7 +557,11 @@ describe("Shipment retained evidence", () => {
       {
         shipmentId: code,
         observationId: original.observationId,
-        patch: { rawStatus: "Member verified pickup", location: null },
+        patch: {
+          rawStatus: "Member verified pickup",
+          location: null,
+          time: { kind: "date", value: "2025-06-03" },
+        },
       },
       ctx.actor,
     );
@@ -577,6 +583,10 @@ describe("Shipment retained evidence", () => {
     const report = await readShipmentTimeline(ctx.db, code);
     expect(report.timeline).toHaveLength(1);
     expect(report.timeline[0]?.event.rawStatus).toBe("Member verified pickup");
+    expect(report.timeline[0]?.event.time).toEqual({
+      kind: "date",
+      value: "2025-06-03",
+    });
     expect(report.observations).toHaveLength(3);
     expect(
       report.observations.filter((observation) => observation.superseded),
@@ -598,6 +608,21 @@ describe("Shipment retained evidence", () => {
     );
     expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
     expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    const collision = packet("EXAMPLE-COLLISION");
+    collision.carrierName = "Other synthetic carrier";
+    collision.observations[0]!.carrierName = collision.carrierName;
+    const other = await recordShipmentEvidence(
+      ctx.db,
+      capture("carrier-collision", [collision]),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({ trackingNumber: "EXAMPLE-123" })
+      .where(eq(shipment.shortcode, other.shipmentIds[0]!));
+    const boundReplay = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+    expect(boundReplay.shipmentIds).toEqual(first.shipmentIds);
+    expect(boundReplay.unresolvedPackages).toEqual([]);
   });
 
   it("keeps source revisions and ignores superseded observations in milestones", async () => {
@@ -644,7 +669,15 @@ describe("Shipment retained evidence", () => {
     );
     const unrelated = await recordShipmentEvidence(
       ctx.db,
-      capture("another-order"),
+      capture("another-order", [
+        {
+          ...packet(),
+          observations: packet().observations.map((event) => ({
+            ...event,
+            time: { kind: "date", value: "2026-09-03" },
+          })),
+        },
+      ]),
       ctx.actor,
     );
     expect(first.shipmentIds).toHaveLength(2);
@@ -652,7 +685,28 @@ describe("Shipment retained evidence", () => {
     expect(await getDb(ctx.db).select().from(shipment)).toHaveLength(3);
   });
 
-  it("combines sources only with a supported Purchase/carrier/tracking identity", async () => {
+  it("combines nearby tracking evidence without a Purchase or known carrier", async () => {
+    const firstPacket = packet(" example-123 ");
+    firstPacket.carrierName = null;
+    firstPacket.observations[0]!.carrierName = null;
+    const first = await recordShipmentEvidence(
+      ctx.db,
+      capture("first-source", [firstPacket]),
+      ctx.actor,
+    );
+    const nextPacket = packet();
+    const next = await recordShipmentEvidence(
+      ctx.db,
+      capture("next-source", [nextPacket]),
+      ctx.actor,
+    );
+    expect(next.shipmentIds).toEqual(first.shipmentIds);
+    expect(
+      (await readShipmentTimeline(ctx.db, first.shipmentIds[0]!)).observations,
+    ).toHaveLength(2);
+  });
+
+  it("combines sources with a supported Purchase/carrier/tracking identity", async () => {
     const seller = await createRepoIdentity(ctx, "vendor", {
       name: "Synthetic Seller",
     });
@@ -670,6 +724,109 @@ describe("Shipment retained evidence", () => {
     const report = await readShipmentTimeline(ctx.db, first.shipmentIds[0]!);
     expect(report.observations).toHaveLength(2);
     expect(report.timeline).toHaveLength(1);
+  });
+
+  it("matches additional references at the 60-day boundary without bridging later periods", async () => {
+    const first = await recordShipmentEvidence(
+      ctx.db,
+      capture("period-start"),
+      ctx.actor,
+    );
+    const handoff = packet("EXAMPLE-HANDOFF");
+    handoff.extraTrackingNumbers = [
+      { carrierId: null, carrierName: null, trackingNumber: " example-123 " },
+    ];
+    handoff.observations[0]!.time = { kind: "date", value: "2026-08-02" };
+    const last = await recordShipmentEvidence(
+      ctx.db,
+      capture("period-end", [handoff]),
+      ctx.actor,
+    );
+    expect(last.shipmentIds).toEqual(first.shipmentIds);
+    const bridge = packet();
+    bridge.observations[0]!.time = { kind: "date", value: "2026-08-03" };
+    const held = await recordShipmentEvidence(
+      ctx.db,
+      capture("period-bridge", [bridge]),
+      ctx.actor,
+    );
+    expect(held.shipmentIds).toEqual([]);
+    expect(held.unresolvedPackages).toHaveLength(1);
+    const reused = packet();
+    reused.observations[0]!.time = { kind: "date", value: "2026-10-05" };
+    const next = await recordShipmentEvidence(
+      ctx.db,
+      capture("recycled-period", [reused]),
+      ctx.actor,
+    );
+    expect(next.shipmentIds).toHaveLength(1);
+    expect(next.shipmentIds[0]).not.toBe(first.shipmentIds[0]);
+    expect(
+      (await readShipmentTimeline(ctx.db, first.shipmentIds[0]!)).observations,
+    ).toHaveLength(2);
+  });
+
+  it("enforces tracking uniqueness for concurrent direct writers, including snapshot transactions", async () => {
+    await recordShipmentEvidence(
+      ctx.db,
+      capture("race-seed", [packet("EXAMPLE-SEED")]),
+      ctx.actor,
+    );
+    const [original] = await getDb(ctx.db).select().from(shipmentObservation);
+    if (!original) throw new Error("Synthetic race evidence missing");
+    const attempt = (key: string) =>
+      withTransactionDatabase(
+        ctx.db,
+        async (tdb) => {
+          const created = await insertWithShortcode(tdb, "shipment", {
+            name: "Synthetic concurrent package",
+            trackingNumber: " example-race ",
+          });
+          const [binding] = await getDb(tdb)
+            .insert(shipmentSourcePackage)
+            .values({
+              shipmentId: created.id,
+              sourceKey: original.sourceKey,
+              packageKey: key,
+            })
+            .returning();
+          if (!binding) throw new Error("Synthetic race binding missing");
+          await getDb(tdb)
+            .insert(shipmentObservation)
+            .values({
+              ...original,
+              id: undefined,
+              shipmentId: created.id,
+              sourcePackageId: binding.id,
+              event: { ...original.event, trackingNumber: "EXAMPLE-RACE" },
+            });
+          return created.id;
+        },
+        { isolationLevel: "repeatable read" },
+      );
+    const results = await Promise.allSettled([
+      attempt("race-a"),
+      attempt("race-b"),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual([
+      "fulfilled",
+      "rejected",
+    ]);
+    const failure = results.find((result) => result.status === "rejected");
+    const databaseError = failure?.reason.cause ?? failure?.reason;
+    expect(databaseError).toMatchObject({
+      code: expect.stringMatching(/^(23505|40001)$/),
+    });
+    await expect(attempt("race-after-commit")).rejects.toMatchObject({
+      cause: {
+        constraint: "Shipment_tracking_period_unique",
+      },
+    });
+    const stored = await getDb(ctx.db)
+      .select()
+      .from(shipment)
+      .where(eq(shipment.trackingNumber, " example-race "));
+    expect(stored).toHaveLength(1);
   });
 
   it("retains handoff references and all observations through explicit merge", async () => {
@@ -690,6 +847,14 @@ describe("Shipment retained evidence", () => {
       capture("last-mile", [handoff]),
       ctx.actor,
     );
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({ notes: "Synthetic keeper note" })
+      .where(eq(shipment.shortcode, first.shipmentIds[0]!));
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({ notes: "Synthetic donor note" })
+      .where(eq(shipment.shortcode, last.shipmentIds[0]!));
     await mergeShipment(
       ctx.db,
       { sourceId: last.shipmentIds[0], targetId: first.shipmentIds[0] },
@@ -706,6 +871,9 @@ describe("Shipment retained evidence", () => {
       expect.arrayContaining([
         expect.objectContaining({ trackingNumber: "EXAMPLE-LAST-MILE" }),
       ]),
+    );
+    expect(survivor?.notes).toBe(
+      "Synthetic keeper note\n\nSynthetic donor note",
     );
     expect(await getDb(ctx.db).select().from(shipment)).toHaveLength(2);
   });
@@ -780,9 +948,21 @@ describe("Shipment retained evidence", () => {
       recordShipmentEvidence(ctx.db, input, ctx.actor),
     ).rejects.toThrow(/Los Angeles calendar date/);
     expect(await getDb(ctx.db).select().from(shipment)).toEqual([]);
-    scan.time = { kind: "date", value: "2026-09-20" };
+    scan.timeBasis = "estimate";
+    scan.time = { kind: "date", value: "2026-09-23" };
     const result = await recordShipmentEvidence(ctx.db, input, ctx.actor);
     expect(result.shipmentIds).toHaveLength(1);
+    const update = packet();
+    update.observations[0]!.time = { kind: "date", value: "2026-09-20" };
+    expect(
+      (
+        await recordShipmentEvidence(
+          ctx.db,
+          capture("notification-identity", [update]),
+          ctx.actor,
+        )
+      ).shipmentIds,
+    ).toEqual(result.shipmentIds);
     const shipmentId = result.shipmentIds[0];
     if (!shipmentId) throw new Error("Synthetic Shipment missing");
     const source = {
@@ -931,7 +1111,7 @@ describe("Shipment retained evidence", () => {
     });
   });
 
-  it("keeps explicitly distinct packages under one master tracking number", async () => {
+  it("does not let free-text package claims bypass tracking identity", async () => {
     const seller = await createRepoIdentity(ctx, "vendor", {
       name: "Synthetic split seller",
     });
@@ -948,7 +1128,11 @@ describe("Shipment retained evidence", () => {
       { ...capture("master", packages), purchaseId: order.output.id },
       ctx.actor,
     );
-    expect(result.shipmentIds).toHaveLength(2);
+    expect(result.shipmentIds).toHaveLength(1);
+    expect(result.unresolvedPackages).toHaveLength(1);
+    expect(
+      await getDb(ctx.db).select().from(shipmentSourceCapture),
+    ).toHaveLength(1);
   });
 
   it("retains A to B to A revisions without resurrecting old replays", async () => {
