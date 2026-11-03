@@ -190,6 +190,13 @@ A stale refusal requires fresh evidence and review; listing or stored clean
 status does not grant acceptance authority. Preview writes nothing, and explicit
 Suggestions review validates the application again.
 
+Supplying `booking` or `kindOverride`, or choosing a nonrecommended action,
+requires `suggestions.review` with `verdict: "wrong"` and
+`correction: { present: true, value: application }`, using the same
+`application`. This includes a Create draft whose action stays unchanged but
+whose booking choices are supplied. Preview checks financial effects; apply
+also enforces this review-input contract.
+
 Statement attachment also converges spending. A successful preview whose
 spending result requires review is not ready to apply, even with no transaction
 fields selected. Resolve that spending review first. For an already accepted
