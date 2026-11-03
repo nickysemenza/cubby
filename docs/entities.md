@@ -2934,7 +2934,9 @@ Refresh trigger descriptions travel with existing WorkItem tickets through
 source capture, fanout and dependent publication. Field work metadata and
 Activity's per-value trigger counts read those same observations. A missing
 description stays unknown; it never means no work or a zero result. Clock expiry
-can identify a daily refresh even before scheduling. Reasons are diagnostic
+can identify a daily refresh even before scheduling. Before fanout expansion,
+the conservative target-wide pending flag shows only a generic related refresh;
+it cannot attribute a source ticket's cause to an individual record. Reasons are diagnostic
 metadata and do not participate in calculation fingerprints or publication
 authority.
 

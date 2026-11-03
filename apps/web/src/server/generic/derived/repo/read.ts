@@ -247,21 +247,22 @@ export async function loadStoredDerived(
   const declarations = keys.map((key) => requireStored(entity, key));
   const out = new Map<string, Map<string, StoredDerivedRead>>();
   if (ids.length === 0 || declarations.length === 0) return out;
+  // A target-wide fanout flag does not establish which record it affects.
+  // Only a direct ticket can attribute a recorded source cause to this record.
   const result = await unwrapDb(db).execute(sql`
     WITH keys AS MATERIALIZED (
-      SELECT declared.*, f.ref IS NOT NULL AS "fanoutPending", f.reason AS "fanoutReason"
+      SELECT declared.*, EXISTS (SELECT 1 FROM "WorkItem" w
+        WHERE ${fanoutTargetMatches(sql`w.target`, sql`declared.target`)}) AS "fanoutPending"
       FROM jsonb_to_recordset(${JSON.stringify(
         declarations.map(({ key, target, clock }) => ({ key, target, clock })),
       )}::jsonb) AS declared(key text, target text, clock text)
-      LEFT JOIN LATERAL (SELECT w.ref, w.reason FROM "WorkItem" w
-        WHERE ${fanoutTargetMatches(sql`w.target`, sql`declared.target`)} LIMIT 1) f ON true
     )
     SELECT i.id AS "entityId", k.key, v.value,
            ${options.includeEvidence ? sql`v."decidedBy"` : sql`v."decidedBy" - ${storedFieldDecision.keyof().enum.evidence}`} AS "decidedBy", v."computedAt",
            (d.ref IS NOT NULL OR k."fanoutPending") AS pending,
            (d.ref IS NOT NULL OR k."fanoutPending" OR (k.clock = 'householdDay' AND
              ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date)) IS TRUE AS stale,
-           CASE WHEN d.ref IS NOT NULL THEN d.reason WHEN k."fanoutPending" THEN k."fanoutReason"
+           CASE WHEN d.ref IS NOT NULL THEN d.reason WHEN k."fanoutPending" THEN 'Related refresh pending'
              WHEN k.clock = 'householdDay' AND ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date THEN 'Daily refresh due' END AS "refreshReason",
            d."lastError" AS error, d."readyAt" AS "retryAt",
            coalesce(d.waiting, false) AS waiting,

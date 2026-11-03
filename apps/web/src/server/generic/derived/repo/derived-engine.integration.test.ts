@@ -930,7 +930,7 @@ describe("stored derived values", () => {
     );
     expect(await valuation(entry)).toMatchObject({
       pending: true,
-      refreshReason: "Product changed",
+      refreshReason: "Related refresh pending",
     });
     const held = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
