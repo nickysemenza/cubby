@@ -1,8 +1,6 @@
-import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
 
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
@@ -14,6 +12,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
+import { writeShipmentCarrierAudit } from "tooling/shipment-carrier-audit";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -389,26 +388,14 @@ describe("Shipment retained evidence", () => {
     try {
       const output = join(directory, "private.json");
       const runAudit = (file: string, databaseUrl = ctx.databaseUrl) =>
-        promisify(execFile)(
-          "pnpm",
-          [
-            "exec",
-            "tsx",
-            "tooling/shipment-carrier-audit.ts",
-            "--output",
-            file,
-          ],
-          {
-            env: { ...process.env, CARRIER_AUDIT_DATABASE_URL: databaseUrl },
-          },
-        );
+        writeShipmentCarrierAudit({ databaseUrl, output: file });
       await runAudit(output);
       expect(JSON.parse(await readFile(output, "utf8"))).toEqual(audit);
       expect((await stat(output)).mode & 0o777).toBe(0o600);
       const existing = join(directory, "existing.json");
       await writeFile(existing, "Synthetic existing report", { mode: 0o644 });
       await expect(runAudit(existing)).rejects.toMatchObject({
-        stderr: expect.stringContaining("EEXIST"),
+        code: "EEXIST",
       });
       expect(await readFile(existing, "utf8")).toBe(
         "Synthetic existing report",
@@ -417,11 +404,7 @@ describe("Shipment retained evidence", () => {
       url.searchParams.set("options", "-c statement_timeout=30000");
       await expect(
         runAudit(join(directory, "options.json"), url.toString()),
-      ).rejects.toMatchObject({
-        stderr: expect.stringContaining(
-          "Connection URL options are not accepted",
-        ),
-      });
+      ).rejects.toThrow("Connection URL options are not accepted");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

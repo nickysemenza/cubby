@@ -218,7 +218,9 @@ to their exact capture and original source-package key, including unresolved
 packets. Literal packet/observation identities and fingerprints are unchanged.
 New extraction supplies `carrierClaims`: reference, literal carrier name,
 service wording, carrier/intermediary role, and an exact package-specific source
-statement or label excerpt. Intake checks the excerpt against retained text,
+statement or label excerpt. Evidence variants retain literal kind discriminants
+while emitting provider-compatible `anyOf` in extraction output schemas.
+Intake checks the excerpt against retained text,
 its exact bounded reference and unambiguous existing Vendor name/alias. Proof
 requires a complete bounded attribution statement: a direct carrier/tracking
 pair, a carrier field or positive shipped-via statement with a labeled reference.

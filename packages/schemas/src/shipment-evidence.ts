@@ -78,7 +78,9 @@ export const shipmentCarrierClaim = z.strictObject({
   carrierName: text.max(300),
   role: z.enum(["carrier", "intermediary"]),
   service: text.max(300).nullable(),
-  evidence: z.discriminatedUnion("kind", [
+  // Extraction embeds this schema: plain unions emit supported anyOf, while
+  // literal kinds retain the same validation and TypeScript narrowing.
+  evidence: z.union([
     z.strictObject({ kind: z.literal("statement"), quote: text.max(1500) }),
     z.strictObject({ kind: z.literal("label"), quote: text.max(1500) }),
     z.strictObject({ kind: z.literal("link"), href: z.url().max(2000) }),
