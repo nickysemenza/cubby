@@ -1018,13 +1018,16 @@ existing item Expense without comparing foreign amounts to USD; it cannot bind a
 aggregate or change money. Historical missing lines require a reviewed maintenance
 repair, not a replay that silently changes accepted data.
 
-Pricing a foreign item through ordinary Expense update is refused. Later actual
+Pricing a foreign item through ordinary Expense update is refused. This protection
+follows its retained source binding even if its Purchase or classification changes;
+coverage separately requires the current Purchase and item role to agree. Later actual
 USD itemization uses reviewed source reconciliation: review the complete unpriced
 roster together with its USD aggregate, reuse each acquisition once, preserve item
 identity and supported quantities, remove the aggregate, and conserve recorded
 USD spend and attribution in one transaction. Source-claimed aggregates retain
 their explicit financial correction requirements. Original foreign bindings remain
-on the reused Expenses; no exchange rate or per-item USD allocation is inferred.
+on the reused Expenses, including when revised USD evidence uses the same source
+identity; changed monetary fingerprints cannot erase the reviewed correspondence; no exchange rate or per-item USD allocation is inferred.
 Foreign refunds and cancellations remain reviewed accounting work. Native foreign
 balances, optional USD allocations and automatic stock changes are unsupported.
 

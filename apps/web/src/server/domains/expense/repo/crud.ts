@@ -36,6 +36,7 @@ import {
   withTransaction,
   touchUpdatedAt,
 } from "~/server/db/helpers";
+import { outer } from "~/server/db/helpers/related";
 import { expense, product, purchase } from "~/server/db/schema";
 import { replaceExpenseAttributionRole } from "~/server/domains/expense/repo/expense-attribution";
 import {
@@ -51,7 +52,7 @@ import {
   syncChangedEffectivePrices,
 } from "~/server/domains/product/repo/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
-import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
+import { foreignExpenseOriginSql } from "~/server/domains/purchase-import/repo/writer-policy";
 import {
   findOrCreatePurchase,
   foldChargeInto,
@@ -511,10 +512,7 @@ export const updateExpense = defineMutationWriter({
           .select({ id: expense.id })
           .from(expense)
           .where(
-            and(
-              eq(expense.id, id),
-              sql.raw(unpricedForeignExpenseSql("Expense")),
-            ),
+            and(eq(expense.id, id), foreignExpenseOriginSql(outer(expense.id))),
           )
           .limit(1);
         if (original)

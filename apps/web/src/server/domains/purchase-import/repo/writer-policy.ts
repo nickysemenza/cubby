@@ -1,9 +1,17 @@
+import { mailEvent } from "@cubby/schemas/mailbox-research";
 import type {
   ExtractedPaymentEvidence,
   ExtractedPurchaseLine,
   ExtractedOrderCandidate,
 } from "@cubby/schemas/purchase-import";
 import { cents } from "@cubby/shared";
+import { sql, type SQL } from "drizzle-orm";
+
+import {
+  importSourceOrder,
+  importSourceProduct,
+} from "~/server/db/generated/entity-table-definitions.gen";
+import { related } from "~/server/db/helpers/related";
 
 /** Cosmetic evidence changes cannot replace accepted ledger or payment rows. */
 export const sourceFinancialFacts = (candidate: ExtractedOrderCandidate) => {
@@ -85,23 +93,54 @@ export const originalItemFacts = (candidate: ExtractedOrderCandidate) => ({
   })),
 });
 
-/** A retained foreign receipt values this item in source units, never in USD. */
-export const foreignReceiptExpenseSql = (alias: string): string => {
-  const row = `"${alias.replaceAll('"', '""')}"`;
-  return `EXISTS (
-    SELECT 1 FROM "ImportSourceProduct" original_binding
-    JOIN "ImportSourceOrder" original_order ON original_order.id = original_binding."sourceOrderId"
-    WHERE original_binding."expenseId" = ${row}.id
-      AND original_order."purchaseId" = ${row}."purchaseId"
-      AND original_order."originalOrder" #>> '{extraction,candidate,currency}' <> 'USD'
-      AND original_order."originalOrder" #>> '{extraction,candidate,currency}' ~ '^[A-Z]{3}$'
-      AND COALESCE(original_order."originalOrder" #>> '{extraction,candidate,sourceEvent}', '') NOT IN ('refunded', 'cancelled')
-      AND (original_order."originalOrder" #> '{extraction,candidate,lines}') -> original_binding."lineIndex" ->> 'lineKind' = ${row}."lineKind"
-  )`;
-};
+/** Eligible original evidence, independent of its USD ledger valuation. */
+export const foreignReceiptSourceSql = (
+  original: SQL,
+): SQL<boolean> => sql<boolean>`(
+  ${original} #>> '{extraction,candidate,currency}' <> 'USD'
+  AND ${original} #>> '{extraction,candidate,currency}' ~ '^[A-Z]{3}$'
+  AND COALESCE(${original} #>> '{extraction,candidate,sourceEvent}', '') NOT IN (${mailEvent.enum.refunded}, ${mailEvent.enum.cancelled})
+)`;
 
-export const unpricedForeignExpenseSql = (alias: string): string =>
-  `("${alias.replaceAll('"', '""')}"."cost" IS NULL AND ${foreignReceiptExpenseSql(alias)})`;
+/** Pricing protection follows immutable provenance, even after moving/reclassifying the Expense. */
+export const foreignExpenseOriginSql = (expenseId: SQL): SQL<boolean> =>
+  related(
+    importSourceProduct,
+    (binding) => sql`${binding.expenseId} = ${expenseId}`,
+  )
+    .join(
+      importSourceOrder,
+      (order, binding) => sql`${order.id} = ${binding.sourceOrderId}
+  AND ${order.originalOrder} #>> '{extraction,candidate,currency}' IS NOT NULL
+  AND ${order.originalOrder} #>> '{extraction,candidate,currency}' <> 'USD'`,
+    )
+    .exists();
+
+/** Coverage requires the current item still to belong to the original Purchase and role. */
+export const foreignReceiptExpenseSql = (row: {
+  id: SQL;
+  purchaseId: SQL;
+  lineKind: SQL;
+}): SQL<boolean> =>
+  related(
+    importSourceProduct,
+    (binding) => sql`${binding.expenseId} = ${row.id}`,
+  )
+    .join(
+      importSourceOrder,
+      (order, binding) => sql`${order.id} = ${binding.sourceOrderId}
+  AND ${order.purchaseId} = ${row.purchaseId} AND ${foreignReceiptSourceSql(order.originalOrder)}
+  AND (${order.originalOrder} #> '{extraction,candidate,lines}') -> ${binding.lineIndex} ->> ${"lineKind"} = ${row.lineKind}`,
+    )
+    .exists();
+
+export const unpricedForeignExpenseSql = (row: {
+  id: SQL;
+  purchaseId: SQL;
+  lineKind: SQL;
+  cost: SQL;
+}): SQL<boolean> =>
+  sql<boolean>`(${row.cost} IS NULL AND ${foreignReceiptExpenseSql(row)})`;
 
 export const importedLineMatchesExpense = (
   row: Pick<

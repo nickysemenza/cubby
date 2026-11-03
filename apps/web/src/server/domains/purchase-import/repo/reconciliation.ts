@@ -26,6 +26,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/db/helpers";
+import { outer } from "~/server/db/helpers/related";
 import {
   entityAttachment,
   expense,
@@ -1008,7 +1009,7 @@ export async function commitSourceOrderReconciliation(
   const [sum] = await tx
     .select({
       amount: sql<number>`sum(${expense.cost})::double precision`,
-      unknown: sql<number>`count(*) FILTER (WHERE ${expense.cost} IS NULL AND NOT ${sql.raw(unpricedForeignExpenseSql("Expense"))})::int`,
+      unknown: sql<number>`count(*) FILTER (WHERE ${expense.cost} IS NULL AND NOT ${unpricedForeignExpenseSql({ id: outer(expense.id), purchaseId: outer(expense.purchaseId), lineKind: outer(expense.lineKind), cost: outer(expense.cost) })})::int`,
     })
     .from(expense)
     .where(and(eq(expense.purchaseId, state.target.id), notDeleted(expense)));
@@ -1140,6 +1141,10 @@ export async function commitSourceOrderReconciliation(
     .returning();
   if (!association)
     throw new Error("Accepted source association was not persisted.");
+  const preservedOriginalExpenses = new Map<
+    number,
+    typeof expense.$inferSelect.id
+  >();
   if (resolution.kind === "replace_lines") {
     const selectedIds = new Set(selected.map((row) => row.id));
     // A reused Expense may now describe a different item. Check every receipt
@@ -1157,20 +1162,28 @@ export async function commitSourceOrderReconciliation(
         replacementIndex === undefined
           ? null
           : candidate.lines[replacementIndex];
+      const foreignHandover = !!(
+        original &&
+        replacement &&
+        originalCandidate?.currency &&
+        originalCandidate.currency !== "USD" &&
+        candidate.currency === "USD" &&
+        original.title === replacement.title &&
+        original.lineKind === replacement.lineKind &&
+        (original.quantity === undefined ||
+          replacement.quantity === undefined ||
+          (original.quantity ?? null) === replacement.quantity)
+      );
+      // The same source's final upsert must retain this explicitly reviewed
+      // acquisition even though its new USD amounts have different fingerprints.
+      if (foreignHandover && prior.sourceOrderId === association.id)
+        preservedOriginalExpenses.set(prior.lineIndex, prior.expenseId);
       if (
         !original ||
         !replacement ||
         ((await reconciliationFingerprint(original)) !==
           (await reconciliationFingerprint(replacement)) &&
-          !(
-            originalCandidate?.currency &&
-            originalCandidate.currency !== "USD" &&
-            candidate.currency === "USD" &&
-            original.title === replacement.title &&
-            original.lineKind === replacement.lineKind &&
-            (replacement.quantity === undefined ||
-              (original.quantity ?? null) === replacement.quantity)
-          ))
+          !foreignHandover)
       )
         await tx
           .update(importSourceProduct)
@@ -1201,9 +1214,10 @@ export async function commitSourceOrderReconciliation(
         ? matches[0]
         : undefined;
     const expenseId =
-      proposedIndex === undefined
+      preservedOriginalExpenses.get(lineIndex) ??
+      (proposedIndex === undefined
         ? null
-        : (lineExpenses.get(proposedIndex) ?? null);
+        : (lineExpenses.get(proposedIndex) ?? null));
     const binding = firstObservation.productBindings.find(
       (row) => row.lineIndex === lineIndex,
     );

@@ -602,7 +602,7 @@ async function liveExpenseTotalCents(
       >`sum(CASE WHEN ${expense.cost} >= 0 OR ${expense.lineKind} <> ${expenseLineKindSchema.enum.principal} THEN ${expense.cost} END)`,
       priced: sql<number>`count(${expense.cost})::int`,
       uncovered: sql<number>`CASE WHEN count(*) FILTER (WHERE ${expense.cost} IS NULL) > 0 AND count(*) FILTER (WHERE ${expense.lineBasis} = ${expenseLineBasisSchema.enum.allocation} AND ${expense.cost} IS NOT NULL) = 0 THEN 1 ELSE 0 END`,
-      unresolved: sql<number>`count(*) FILTER (WHERE (${expense.cost} IS NULL AND NOT ${sql.raw(unpricedForeignExpenseSql("Expense"))}) OR ${expense.lineKind} = ${expenseLineKindSchema.enum.unclassified})::int`,
+      unresolved: sql<number>`count(*) FILTER (WHERE (${expense.cost} IS NULL AND NOT ${unpricedForeignExpenseSql({ id: outer(expense.id), purchaseId: outer(expense.purchaseId), lineKind: outer(expense.lineKind), cost: outer(expense.cost) })}) OR ${expense.lineKind} = ${expenseLineKindSchema.enum.unclassified})::int`,
     })
     .from(expense)
     .where(

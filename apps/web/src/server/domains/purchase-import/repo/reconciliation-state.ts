@@ -4,10 +4,11 @@ import type {
   ProposedImportFix,
   SourceOrderReconciliationResolution,
 } from "@cubby/schemas/purchase-import";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers";
+import { outer } from "~/server/db/helpers/related";
 import {
   entityAttachment,
   expense,
@@ -364,7 +365,12 @@ export async function loadSourceReconciliationState(
       and(
         eq(expense.purchaseId, target.id),
         notDeleted(expense),
-        sql.raw(unpricedForeignExpenseSql("Expense")),
+        unpricedForeignExpenseSql({
+          id: outer(expense.id),
+          purchaseId: outer(expense.purchaseId),
+          lineKind: outer(expense.lineKind),
+          cost: outer(expense.cost),
+        }),
       ),
     );
   return {
