@@ -122,10 +122,17 @@ equality. Family branches narrow declared reference fields before inspecting
 current and proposed scalar, object or list values; UUID and shortcode matching
 remain supported. Dynamic statement and Email graphs retain their canonical
 expansion. Automatic history materializes matched identity, family and status
-before checking correction receipts, application and member Feedback. Family
-counts reuse their resolved scope, and count-only reads omit ordering-only
-correction lookups. Existing identity/family/status and Feedback assessment
-indexes serve these reads; no second eligibility cache is introduced.
+before checking correction receipts, application and member Feedback. Suggestions
+retain the matched State family roster from that same discovery query and skip
+key adapters for absent families; automatic history retains immutable family
+authority. Unscoped reads still consult every requested family, and family counts
+retain zero entries for absent families. Family counts reuse their resolved scope.
+Record counts share the queue's complete current-candidate preparation, including
+member decisions and freshness hydration; their record-only input needs no
+additional relation-filter or ordering query. Other filtered and ordered reads
+retain that SQL stage. Count-only automatic reads omit ordering-only correction
+lookups. Existing identity/family/status and Feedback assessment indexes serve
+these reads; no second eligibility cache is introduced.
 
 Connection endpoints use separate source and target branches with partial
 expression indexes on the immutable candidate references. Literal JSON paths and
