@@ -33,13 +33,13 @@ const ActiveRecordsContext = createContext<((id: string) => () => void) | null>(
 );
 const Context = createContext<{
   counts: ReadonlyMap<string, number>;
-  error: unknown;
+  errors: ReadonlyMap<string, unknown>;
 } | null>(null);
 const combine = (
   queries: UseQueryResult<z.infer<typeof suggestionRecordCountsOut>>[],
 ) => ({
   records: queries.flatMap((query) => query.data?.records ?? []),
-  error: queries.find((query) => query.error)?.error,
+  errors: queries.map((query) => query.error),
 });
 
 /** Stable roster batches retain counts; only the viewport and its buffer fetch. */
@@ -96,9 +96,15 @@ export function ProposalCountProvider({
   const context = useMemo(
     () => ({
       counts: new Map(result.records.map((row) => [row.id, row.pending])),
-      error: result.error,
+      // Retain each batch's diagnostics with its records, just like its data.
+      // An inactive failed batch must not label healthy visible rows as failed.
+      errors: new Map(
+        result.errors.flatMap((error, index) =>
+          error ? (batches[index] ?? []).map((id) => [id, error] as const) : [],
+        ),
+      ),
     }),
-    [result.records, result.error],
+    [result.records, result.errors, batches],
   );
   return (
     <ActiveRecordsContext value={viewportOnly ? activateRecord : null}>
@@ -140,13 +146,14 @@ function EligibleProposalCount({
   const activate = useContext(ActiveRecordsContext);
   useEffect(() => activate?.(recordId), [activate, recordId]);
   const context = useContext(Context);
+  const error = context?.errors.get(recordId);
   const [open, setOpen] = useState(false);
   const count = context?.counts.get(recordId) ?? 0;
   return (
     <span className="inline-flex min-w-0 items-center gap-1">
       <span className="min-w-0">{children}</span>
-      {context?.error ? (
-        <ErrorDisplay error={context.error} title="pending suggestions" />
+      {error ? (
+        <ErrorDisplay error={error} title="pending suggestions" />
       ) : null}
       {count > 0 ? (
         <Popover open={open} onOpenChange={setOpen}>

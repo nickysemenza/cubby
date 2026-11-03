@@ -54,6 +54,9 @@ describe("field value automatic ownership", () => {
       expect(
         screen.getByLabelText("Queued for refresh").firstChild,
       ).not.toHaveClass("motion-safe:animate-pulse");
+      // The mounted queued field keeps the shared minute clock subscribed.
+      // Opening an already-expired observation must not trust that older tick.
+      await act(async () => vi.advanceTimersByTime(10_000));
       view.rerender(
         <FieldValueMark
           envelope={{
@@ -63,6 +66,25 @@ describe("field value automatic ownership", () => {
               execution: {
                 startedAt: "2026-11-03T12:00:00Z",
                 leaseExpiresAt: "2026-11-03T12:00:15Z",
+              },
+            },
+          }}
+        >
+          Blue
+        </FieldValueMark>,
+      );
+      expect(
+        screen.getByLabelText("Refresh status may be out of date").firstChild,
+      ).not.toHaveClass("motion-safe:animate-pulse");
+      view.rerender(
+        <FieldValueMark
+          envelope={{
+            ...envelope,
+            work: {
+              kind: "pending",
+              execution: {
+                startedAt: "2026-11-03T12:00:20Z",
+                leaseExpiresAt: "2026-11-03T12:00:25Z",
               },
             },
           }}

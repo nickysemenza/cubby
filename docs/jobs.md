@@ -59,6 +59,9 @@ same ticket under a current unexpired Job lease, with no later postponement.
 Queued, future-waiting and failed items remain distinct. Activity's derived
 backlog reports their observed per-value counts and next known attempt without
 adding idle polling or assuming an empty queue means Neon is suspended.
+Execution observations belong to public refresh metadata. Derived computations
+that depend on owed work use the owed-item reader without joining Job state;
+an observation must not add Job lifecycle changes to a calculation's inputs.
 `markWork` upserts items in the producer's transaction and wakes the drain
 Job; `markWorkFrom` marks the rows a SQL source selects in one statement,
 returning per-target counts (and a bounded ref sample) so a large fanout never

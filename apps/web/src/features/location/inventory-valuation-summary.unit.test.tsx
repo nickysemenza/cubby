@@ -52,7 +52,7 @@ describe.each(["compact", "full"] as const)(
     it("keeps an unpublished pending result distinct from zero and pricing counts", () => {
       show(envelope({ kind: "missing" }, { kind: "pending" }));
       expect(screen.getByText("Updating…")).toBeVisible();
-      expect(screen.getByLabelText("Updating")).toBeVisible();
+      expect(screen.getByLabelText("Queued for refresh")).toBeVisible();
       expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
       expect(screen.queryByText(/no pricing/)).not.toBeInTheDocument();
     });
@@ -105,7 +105,7 @@ describe.each(["compact", "full"] as const)(
       );
       expect(screen.getByText("$37.00")).toBeVisible();
       expect(screen.getByText(/no pricing for 2/)).toBeVisible();
-      expect(screen.getByLabelText("Updating")).toBeVisible();
+      expect(screen.queryByLabelText("Updating")).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: error })).toBeVisible();
     });
 

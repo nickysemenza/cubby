@@ -26,7 +26,10 @@ export function useFieldExecutionCurrent(
   useEffect(() => {
     if (!expiresAt) return;
     const remaining = Date.parse(expiresAt) - Date.now();
-    if (remaining <= 0) return;
+    if (remaining <= 0) {
+      setExpiredLease(expiresAt);
+      return;
+    }
     const timer = setTimeout(() => setExpiredLease(expiresAt), remaining);
     return () => clearTimeout(timer);
   }, [expiresAt]);

@@ -367,6 +367,8 @@ Proposal badges demand counts only for mounted table rows, including the
 virtualizer's overscan. Stable batches of 50 roster records prefetch nearby
 counts; inactive batches retain their cached values without refetching until
 their rows return. Bulk review continues to use the full selected population.
+Count-fetch errors stay attached to their batch's records; a retained offscreen
+error cannot label healthy visible rows as failed.
 
 Assessment browsing runs inside a read-only repeatable-read transaction with
 a 10-second PostgreSQL statement timeout. PostgreSQL cancels a statement without

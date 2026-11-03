@@ -81,7 +81,7 @@ it("keeps inherited provenance visible while refresh work changes independently"
       Plumbing
     </FieldRecordValue>,
   );
-  expect(screen.getByLabelText("Updating")).toBeVisible();
+  expect(screen.getByLabelText("Queued for refresh")).toBeVisible();
   expect(screen.getByLabelText("Inherited")).toBeVisible();
   view.rerender(
     <FieldRecordValue
@@ -91,7 +91,7 @@ it("keeps inherited provenance visible while refresh work changes independently"
       Plumbing
     </FieldRecordValue>,
   );
-  expect(screen.queryByLabelText("Updating")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Queued for refresh")).not.toBeInTheDocument();
   expect(screen.getByLabelText("Inherited")).toBeVisible();
 });
 
@@ -122,7 +122,7 @@ it("retains cached provenance and the raw failure alongside stale status", () =>
   );
   expect(screen.getByText("Plumbing")).toBeVisible();
   expect(screen.getByLabelText("Inherited")).toBeVisible();
-  expect(screen.getByLabelText("Updating")).toBeVisible();
+  expect(screen.queryByLabelText("Updating")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: error })).toBeVisible();
 });
 

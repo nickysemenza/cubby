@@ -339,8 +339,13 @@ const currentWorkExecution = sql`j.state = ${jobState.enum.running}
   AND w."executionTicket" = w.ticket
   AND w."executionStartedAt" >= w."readyAt" AND w."readyAt" <= now()`;
 
-/** The indexed owed item, retry facts and exact execution observation for a lateral point read. */
+/** Owed work is an input to derived computations; Job execution is not. */
 export const owedWorkItem = (target: SQL, ref: SQL) =>
+  sql`(SELECT ${workItem.ref} AS ref, ${workItem.lastError} AS "lastError", ${workItem.readyAt} AS "readyAt"
+    FROM ${workItem} WHERE ${workItem.target} = ${target} AND ${workItem.ref} = ${ref})`;
+
+/** Public refresh metadata additionally observes the exact executing Job lease. */
+export const observedWorkItem = (target: SQL, ref: SQL) =>
   sql`(SELECT w.ref, w."lastError", w."readyAt",
       (w."readyAt" > now()) IS TRUE AS waiting,
       CASE WHEN ${currentWorkExecution}

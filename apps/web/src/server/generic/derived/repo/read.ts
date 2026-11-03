@@ -26,7 +26,7 @@ import type {
   CurrentReadFacts,
 } from "~/server/generic/derived/repo/read-context";
 import {
-  owedWorkItem,
+  observedWorkItem,
   workPendingWhere,
 } from "~/server/generic/jobs/repo/work-items";
 
@@ -272,7 +272,7 @@ export async function loadStoredDerived(
         { entityId: sql`v."entityId"`, kind: sql`v.kind`, key: sql`v.key` },
         { entity, id: sql`i.id`, key: sql`k.key` },
       )}
-      LEFT JOIN LATERAL ${owedWorkItem(sql`k.target`, sql`i.id`)} d ON true`);
+      LEFT JOIN LATERAL ${observedWorkItem(sql`k.target`, sql`i.id`)} d ON true`);
   for (const row of z.array(valueRow).parse(result.rows)) {
     const byKey = out.get(row.entityId) ?? new Map();
     const metadata = storedFieldDecision.safeParse(row.decidedBy);
