@@ -89,5 +89,25 @@ it("preserves retained publications and input identities across precise fanout m
     expect(claimDefinition).toContain(
       "derived_mark('email.relationshipFacts@11'",
     );
+    await migrateDatabase(db, { through: "0063_shipment_tracking_identity" });
+    const beforeObservation = await preserved();
+    await migrateDatabase(db, {
+      through: "0064_derived_execution_observation",
+    });
+    const afterObservation = await preserved();
+    const retainedWork = await client.query(
+      `SELECT to_jsonb(w) - 'executionLeaseToken' - 'executionTicket' - 'executionStartedAt' AS value
+       FROM "WorkItem" w ORDER BY target,ref`,
+    );
+    expect(retainedWork.rows).toEqual(beforeObservation.work);
+    expect(afterObservation.publications).toEqual(
+      beforeObservation.publications,
+    );
+    expect(afterObservation.products).toEqual(beforeObservation.products);
+    const observations = await client.query(
+      `SELECT count(*)::int AS count FROM "WorkItem"
+       WHERE "executionLeaseToken" IS NOT NULL OR "executionTicket" IS NOT NULL OR "executionStartedAt" IS NOT NULL`,
+    );
+    expect(observations.rows[0]?.count).toBe(0);
   });
 });

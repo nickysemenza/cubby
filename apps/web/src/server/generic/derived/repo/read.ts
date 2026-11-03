@@ -26,7 +26,7 @@ import type {
   CurrentReadFacts,
 } from "~/server/generic/derived/repo/read-context";
 import {
-  owedWorkItem,
+  observedWorkItem,
   workPendingWhere,
 } from "~/server/generic/jobs/repo/work-items";
 
@@ -200,6 +200,9 @@ const valueRow = z.object({
   computedAt: dateTime.nullable(),
   stale: z.boolean(),
   pending: z.boolean(),
+  waiting: z.boolean(),
+  runningSince: dateTime.nullable(),
+  leaseExpiresAt: dateTime.nullable(),
   error: z.string().nullable(),
   retryAt: dateTime.nullable(),
 });
@@ -260,14 +263,16 @@ export async function loadStoredDerived(
            (d.ref IS NOT NULL OR k."fanoutPending") AS pending,
            (d.ref IS NOT NULL OR k."fanoutPending" OR (k.clock = 'householdDay' AND
              ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date)) IS TRUE AS stale,
-           d."lastError" AS error, d."readyAt" AS "retryAt"
+           d."lastError" AS error, d."readyAt" AS "retryAt",
+           coalesce(d.waiting, false) AS waiting,
+           d."runningSince", d."leaseExpiresAt"
       FROM unnest(${uuidArrayParam(ids)}) AS i(id)
      CROSS JOIN keys k
       LEFT JOIN "DerivedValue" v ON ${storedPublicationMatch(
         { entityId: sql`v."entityId"`, kind: sql`v.kind`, key: sql`v.key` },
         { entity, id: sql`i.id`, key: sql`k.key` },
       )}
-      LEFT JOIN LATERAL ${owedWorkItem(sql`k.target`, sql`i.id`)} d ON true`);
+      LEFT JOIN LATERAL ${observedWorkItem(sql`k.target`, sql`i.id`)} d ON true`);
   for (const row of z.array(valueRow).parse(result.rows)) {
     const byKey = out.get(row.entityId) ?? new Map();
     const metadata = storedFieldDecision.safeParse(row.decidedBy);
@@ -291,6 +296,15 @@ export async function loadStoredDerived(
       resultExists: row.computedAt !== null && decision.success,
       stale: row.stale,
       pending: row.pending,
+      waiting: row.waiting,
+      ...(row.runningSince && row.leaseExpiresAt
+        ? {
+            execution: {
+              startedAt: row.runningSince.toISOString(),
+              leaseExpiresAt: row.leaseExpiresAt.toISOString(),
+            },
+          }
+        : {}),
       retryAt: row.retryAt?.toISOString() ?? null,
       computedAt: row.computedAt?.toISOString() ?? null,
       error: row.error,

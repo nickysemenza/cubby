@@ -68,8 +68,8 @@ export class DatabaseRuntimeResolver {
         role === "strong"
           ? scope.connections.strong
           : scope.connections.boundedStale;
-      // Hyperdrive owns lifecycle and timeouts; do not add per-session
-      // overrides here.
+      // Hyperdrive owns pooled connection lifecycle. Operation-specific execution
+      // budgets use SET LOCAL inside their transaction, never session overrides here.
       const runtime = this.#createRuntime(
         connectionString,
         WORKER_REQUEST_CONNECTIONS[role],

@@ -59,9 +59,10 @@ export const workTicket = pgSequence("WorkTicket");
  * Pending work a drain Job claims in pages (docs/jobs.md#coarse-jobs-and-work-items). `drain` is
  * the owning Job key; `target` names the work family (derived targets are
  * `<entity>.<key>` or `<entity>.<key>@<column>` fanout marks) and is unique
- * across drains, so `(target, ref)` identifies an item. Items carry retry
- * state only: the drain Job's lease fences every claimed item, and a
- * publication clears an item only while its ticket is unchanged.
+ * across drains, so `(target, ref)` identifies an item. The drain Job's lease
+ * fences every claimed item, and publication clears an item only while its
+ * ticket is unchanged. Execution columns are observations, valid only for
+ * their exact ticket and current live Job lease; they grant no authority.
  */
 export const workItem = pgTable(
   "WorkItem",
@@ -78,6 +79,9 @@ export const workItem = pgTable(
     readyAt: timestamp("readyAt", { mode: "date" }).notNull().defaultNow(),
     attempts: integer("attempts").notNull().default(0),
     lastError: text("lastError"),
+    executionLeaseToken: uuid("executionLeaseToken"),
+    executionTicket: bigint("executionTicket", { mode: "number" }),
+    executionStartedAt: timestamp("executionStartedAt", { mode: "date" }),
   },
   (t) => [
     // The retired automaticFields family must never be marked again (0045).

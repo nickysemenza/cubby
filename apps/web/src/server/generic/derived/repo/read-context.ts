@@ -1,6 +1,7 @@
 import type { StoredFieldDecision } from "@cubby/schemas/derived-value";
 import type {
   fieldAssignmentOwnership,
+  fieldWork,
   ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
 import { z } from "zod";
@@ -19,6 +20,11 @@ export interface StoredDerivedRead {
   readonly stale: boolean;
   /** Actual queued work; expiry alone does not imply a worker is pending. */
   readonly pending?: boolean;
+  readonly waiting?: boolean;
+  readonly execution?: Extract<
+    z.output<typeof fieldWork>,
+    { kind: "pending" }
+  >["execution"];
   readonly retryAt: string | null;
 }
 

@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/field-envelope-presentation";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -18,7 +19,7 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Button } from "~/ui/primitives/button";
 
-import { UpdatingDot } from "./value-mark";
+import { UpdatingDot, useFieldExecutionCurrent } from "./value-mark";
 import { ExplanationEntityLink, ReadableExplanationValue } from "./why-value";
 
 export function DecisionValue({
@@ -272,6 +273,9 @@ function Freshness({
   contextual?: boolean;
 }) {
   const result = envelope.result;
+  const execution =
+    envelope.work.kind === "pending" ? envelope.work.execution : undefined;
+  const running = useFieldExecutionCurrent(execution);
   return (
     <div className="grid gap-1 text-xs text-muted-foreground">
       {result.kind === "cached" ? (
@@ -283,19 +287,67 @@ function Freshness({
             : result.freshness === "stale"
               ? "Stale result"
               : "Cached result"}{" "}
-          · <DateDisplay timestamp={result.computedAt} />
+          · Last computed <DateDisplay timestamp={result.computedAt} />
         </p>
       ) : null}
       {envelope.work.kind === "pending" ? (
-        <span>
-          <UpdatingDot /> Updating
-        </span>
+        <p>
+          <UpdatingDot
+            active={running}
+            label={
+              execution
+                ? running
+                  ? "Updating"
+                  : "Refresh status may be out of date"
+                : "Queued for refresh"
+            }
+          />{" "}
+          {execution ? (
+            <>
+              {running ? "Updating" : "Refresh status may be out of date"} ·
+              Started <DateDisplay timestamp={execution.startedAt} />
+            </>
+          ) : (
+            "Queued for refresh"
+          )}
+        </p>
       ) : null}
-      {envelope.work.kind === "waiting" ? <p>{envelope.work.reason}</p> : null}
+      {envelope.work.kind === "waiting" ? (
+        <p>
+          {envelope.work.reason}
+          {envelope.work.retryAt ? (
+            <>
+              {" "}
+              · Next attempt <DateDisplay timestamp={envelope.work.retryAt} />
+            </>
+          ) : null}
+        </p>
+      ) : null}
       {envelope.work.kind === "failed" ? (
         <p role="alert" className="break-words text-destructive">
           {envelope.work.error}
+          {envelope.work.retryAt ? (
+            <>
+              {" "}
+              · Next retry <DateDisplay timestamp={envelope.work.retryAt} />
+            </>
+          ) : null}
         </p>
+      ) : null}
+      {envelope.work.kind === "idle" &&
+      result.kind === "cached" &&
+      result.freshness === "stale" ? (
+        <p>No refresh is currently queued.</p>
+      ) : null}
+      {envelope.work.kind !== "idle" ||
+      (result.kind === "cached" && result.freshness === "stale") ? (
+        <Link
+          to="/activity"
+          hash="derived-values"
+          className="underline underline-offset-2"
+        >
+          Open Activity
+        </Link>
       ) : null}
     </div>
   );

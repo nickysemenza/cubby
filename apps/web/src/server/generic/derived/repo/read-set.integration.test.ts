@@ -57,8 +57,9 @@ const UNDECLARED_READS = new Set(["Entity", "DerivedValue"]);
 
 /** Full read models also load presentation fields these sinks never publish. */
 const INCIDENTAL_READS = {
-  // Input availability reads queue status; scheduling changes are not diagnostic inputs.
-  "project.workDiagnosticFacts": new Set(["WorkItem"]),
+  // Input availability reads queue status and envelope execution observations.
+  // The calculation discards execution metadata; Job lifecycle is not an input.
+  "project.workDiagnosticFacts": new Set(["WorkItem", "Job"]),
   "recipe.totals": new Set([
     // getRecipesByIDs loads cookbook metadata; recipeWasmInput uses only yield and rows.
     "Cookbook",

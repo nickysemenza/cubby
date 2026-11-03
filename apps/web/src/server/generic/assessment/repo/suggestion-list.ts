@@ -294,11 +294,13 @@ async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
   return { families, touching, familyScope };
 }
 
-async function scopedKeys(db: Database, filters: SuggestionListFilters) {
-  const { families, touching, familyScope } = await scopedFamilyQuery(
-    db,
-    filters,
-  );
+async function scopedKeys(
+  db: Database,
+  filters: SuggestionListFilters,
+  prepared?: Awaited<ReturnType<typeof scopedFamilyQuery>>,
+) {
+  const { families, touching, familyScope } =
+    prepared ?? (await scopedFamilyQuery(db, filters));
   if (touching?.size === 0) return { families, keys: [], all: [] };
   const keys = (
     await Promise.all(
@@ -512,7 +514,18 @@ export async function suggestionCountsByFamily(
         ) {
           pending = await presentation.pendingCounts(db, familyScope);
         } else {
-          const { keys: own } = await scopedKeys(db, { ...filters, family });
+          const { keys: own } = await scopedKeys(
+            db,
+            { ...filters, family },
+            {
+              families: [family],
+              touching,
+              familyScope: {
+                ...familyScope,
+                filters: { ...familyScope.filters, family },
+              },
+            },
+          );
           for (const key of own) {
             pending.pending++;
             if (key.clean) pending.clean++;

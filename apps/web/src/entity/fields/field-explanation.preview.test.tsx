@@ -241,5 +241,5 @@ it("compares the displayed publication with current inputs only after an explici
   await waitFor(() => expect(screen.getByText("24")).toBeVisible());
   expect(fieldExplanationInput.parse(calls.at(-1)).diagnostic).toBe(true);
   expect(screen.getByRole("dialog")).toHaveTextContent("Stored 18 → live 24");
-  expect(screen.getByLabelText("Updating")).toBeVisible();
+  expect(screen.getByLabelText("Queued for refresh")).toBeVisible();
 });

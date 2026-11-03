@@ -472,11 +472,19 @@ export function buildFieldEnvelopeRow<S extends z.ZodObject>({
     fields[key] = {
       current: { assignment, controls },
       result,
-      work: read?.error
-        ? { kind: "failed", error: read.error, retryAt: read.retryAt }
-        : (read?.pending ?? read?.stale)
-          ? { kind: "pending" }
-          : { kind: "idle" },
+      work: read?.execution
+        ? { kind: "pending", execution: read.execution }
+        : read?.error
+          ? { kind: "failed", error: read.error, retryAt: read.retryAt }
+          : read?.waiting
+            ? {
+                kind: "waiting",
+                reason: "Refresh is scheduled",
+                ...(read.retryAt ? { retryAt: read.retryAt } : {}),
+              }
+            : (read?.pending ?? read?.stale)
+              ? { kind: "pending" }
+              : { kind: "idle" },
     };
   }
   const ordinary = Object.fromEntries(

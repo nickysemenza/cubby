@@ -136,8 +136,20 @@ export const fieldResult = shareSchema(<V extends z.ZodType>(value: V) =>
 /** A failed or waiting refresh does not imply whether a usable result exists. */
 export const fieldWork = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("idle") }),
-  z.object({ kind: z.literal("pending") }),
-  z.object({ kind: z.literal("waiting"), reason: z.string() }),
+  z.object({
+    kind: z.literal("pending"),
+    execution: z
+      .object({
+        startedAt: z.iso.datetime(),
+        leaseExpiresAt: z.iso.datetime(),
+      })
+      .optional(),
+  }),
+  z.object({
+    kind: z.literal("waiting"),
+    reason: z.string(),
+    retryAt: z.iso.datetime().optional(),
+  }),
   z.object({
     kind: z.literal("failed"),
     error: z.string(),

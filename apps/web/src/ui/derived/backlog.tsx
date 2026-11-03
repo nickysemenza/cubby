@@ -1,3 +1,4 @@
+import type { DerivedBacklog } from "@cubby/schemas/derived-backlog";
 import { entityRoster } from "@cubby/schemas/entity-roster";
 import { humanize } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
@@ -7,7 +8,9 @@ import { useState } from "react";
 import { derived } from "~/integrations/tanstack-query/generated/domains/derived.gen";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
+import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
 import { HEAT_CLASSES, heatBucket } from "~/ui/matrix/heat-scale";
 import { totalCell } from "~/ui/matrix/matrix-chrome";
@@ -135,7 +138,66 @@ export function DerivedBacklogOverview() {
           />
         )}
       </RecordList>
+      {result.data && result.data.total > 0 ? (
+        <DerivedRefreshStates
+          kinds={result.data.kinds}
+          observedAt={result.dataUpdatedAt}
+        />
+      ) : null}
       {matrix && <DerivedBacklogMatrix matrix={matrix} />}
+    </div>
+  );
+}
+
+const refreshStateSummary = (
+  states: NonNullable<DerivedBacklog["kinds"][number]["states"]>,
+) =>
+  `${formatCount(states.queued)} queued · ${formatCount(states.running)} running · ${formatCount(states.waiting)} waiting · ${formatCount(states.failed)} failed`;
+
+function DerivedRefreshStates({
+  kinds,
+  observedAt,
+}: {
+  kinds: DerivedBacklog["kinds"];
+  observedAt: number;
+}) {
+  const known = kinds.flatMap((kind) =>
+    kind.states && kind.count > 0 ? [{ ...kind, states: kind.states }] : [],
+  );
+  if (!known.length) return null;
+  const total = known.reduce(
+    (sum, kind) => ({
+      queued: sum.queued + kind.states.queued,
+      running: sum.running + kind.states.running,
+      waiting: sum.waiting + kind.states.waiting,
+      failed: sum.failed + kind.states.failed,
+    }),
+    { queued: 0, running: 0, waiting: 0, failed: 0 },
+  );
+  return (
+    <div className="grid gap-1 text-xs">
+      <p>{refreshStateSummary(total)}</p>
+      <p className="text-muted-foreground">
+        Declared values · Observed <DateDisplay timestamp={observedAt} />
+      </p>
+      <Disclosure summary="Refresh states by value">
+        <RecordList empty="No declared values waiting.">
+          {known.map((kind) => (
+            <RecordRow
+              key={`${kind.entity}.${kind.field}`}
+              primary={`${entityRoster[kind.entity].singular} · ${humanize(kind.field)}`}
+              secondary={refreshStateSummary(kind.states)}
+              trailing={
+                kind.nextAttemptAt ? (
+                  <span>
+                    Next attempt <DateDisplay timestamp={kind.nextAttemptAt} />
+                  </span>
+                ) : undefined
+              }
+            />
+          ))}
+        </RecordList>
+      </Disclosure>
     </div>
   );
 }

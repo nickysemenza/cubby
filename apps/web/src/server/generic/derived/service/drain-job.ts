@@ -28,6 +28,7 @@ import {
   publishDerivedChunk,
 } from "~/server/generic/derived/repo/drain";
 import { repeatJob } from "~/server/generic/jobs/repo/producer";
+import { observeWorkExecution } from "~/server/generic/jobs/repo/work-items";
 import {
   defineDrain,
   type DrainSpec,
@@ -73,7 +74,10 @@ const derivedDrain = (
         : undefined),
     eligible: eligible ?? derivedWorkEligible,
     chunk,
-    async prepare(db, items) {
+    async prepare(db, items, context) {
+      await context.fenced((tx) =>
+        observeWorkExecution(tx, items, context.claim.leaseToken),
+      );
       const { plan, failed } = await withTrace(
         TraceNames.service("derived", "prepare"),
         () => prepareDerivedPage(db, computes, items),

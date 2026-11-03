@@ -234,6 +234,24 @@ function setup(
 describe("stored suggestions in generic list cells", () => {
   it("updates proposal counts without subscribing unrelated fields", async () => {
     const harness = createBrowserTestHarness();
+    const offscreen = { id: testShortcode("product", "offscreen-count-error") };
+    const roster = [
+      record,
+      ...Array.from({ length: 49 }, (_, index) => ({
+        id: testShortcode("product", `count-buffer-${index}`),
+      })),
+      offscreen,
+    ];
+    harness.queryClient
+      .getQueryCache()
+      .build(
+        harness.queryClient,
+        suggestions.recordCounts.queryOptions({ recordIds: [offscreen.id] }),
+      )
+      .setState({
+        status: "error",
+        error: new Error("Synthetic offscreen count failure"),
+      });
     const identityReads = vi.fn();
     const unrelatedRecord = {
       get id() {
@@ -242,14 +260,14 @@ describe("stored suggestions in generic list cells", () => {
       },
     };
     const key = suggestions.recordCounts.queryOptions({
-      recordIds: [record.id],
+      recordIds: roster.slice(0, 50).map((row) => row.id),
     }).queryKey;
     harness.queryClient.setQueryData(key, {
       records: [{ id: record.id, pending: 1 }],
     });
     const commits = vi.fn();
     const view = render(
-      <ProposalCountProvider entity="product" records={[record]}>
+      <ProposalCountProvider entity="product" records={roster} viewportOnly>
         <Profiler id="unrelated-count-field" onRender={commits}>
           <ProposalCount record={unrelatedRecord} field="expenseCount">
             <span>12 expenses</span>
@@ -266,6 +284,7 @@ describe("stored suggestions in generic list cells", () => {
     );
     try {
       await screen.findAllByRole("button", { name: "1 pending suggestion" });
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
       const before = commits.mock.calls.length;
       const readsBefore = identityReads.mock.calls.length;
       await act(async () => {
