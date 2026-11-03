@@ -22,6 +22,7 @@ export type WorkItem = {
   ticket: number;
   priority: number;
   attempts: number;
+  reason?: string | null;
 };
 
 /** The drain Job a family of items belongs to. */
@@ -33,6 +34,7 @@ const itemColumns = {
   ticket: workItem.ticket,
   priority: workItem.priority,
   attempts: workItem.attempts,
+  reason: workItem.reason,
 };
 
 /** Bounded ready-work observations; no locks or scheduling changes. */
@@ -97,6 +99,7 @@ const remark = {
   target: [workItem.target, workItem.ref],
   set: {
     drain: sql`excluded.drain`,
+    reason: sql`excluded.reason`,
     ticket: sql`nextval('"WorkTicket"')`,
     priority: sql`least(${workItem.priority}, excluded.priority)`,
     readyAt: sql`excluded."readyAt"`,
@@ -109,21 +112,44 @@ const remark = {
 export async function markWork(
   db: RepositoryQueryInput,
   drain: Drain,
-  items: readonly { target: string; ref: string; priority?: number }[],
+  items: readonly {
+    target: string;
+    ref: string;
+    priority?: number;
+    reason?: string | null;
+  }[],
   { readyAt }: { readyAt?: Date } = {},
 ) {
   if (!items.length) return;
   const merged = new Map<
     string,
-    { target: string; ref: string; priority: number }
+    {
+      target: string;
+      ref: string;
+      priority: number;
+      reason: string | null;
+      reasonPriority: number;
+    }
   >();
-  for (const { target, ref, priority = 0 } of items) {
+  for (const {
+    target,
+    ref,
+    priority = 0,
+    reason = "Refresh requested",
+  } of items) {
     const key = `${target}\0${ref}`;
     const previous = merged.get(key);
+    const keepReason =
+      previous?.reason != null &&
+      (reason == null ||
+        previous.reasonPriority < priority ||
+        (previous.reasonPriority === priority && previous.reason < reason));
     merged.set(key, {
       target,
       ref,
       priority: Math.min(priority, previous?.priority ?? priority),
+      reason: keepReason ? previous.reason : reason,
+      reasonPriority: keepReason ? previous.reasonPriority : priority,
     });
   }
   // Sorted keys keep concurrent markers from deadlocking on each other. The
@@ -136,7 +162,10 @@ export async function markWork(
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .map(([, item]) => ({
           drain: drain.key,
-          ...item,
+          target: item.target,
+          ref: item.ref,
+          priority: item.priority,
+          reason: item.reason,
           ...(readyAt ? { readyAt } : {}),
         })),
     )
@@ -145,7 +174,7 @@ export async function markWork(
 }
 
 /**
- * Mark the rows `source` selects, as `(target text, ref uuid, priority int)`,
+ * Mark the rows `source` selects, as `(target text, ref uuid, priority int, reason text)`,
  * in one statement. Returns each target's marked count and up to `sample`
  * refs, so a large fanout never materializes in the Worker. `wake: false` is
  * for the drain's own publication, which is already due again while items
@@ -171,8 +200,9 @@ export async function markWorkFrom(
   // priority and never updates one conflict row twice in a statement.
   const insert = queries.insert(workItem).select(
     sql`SELECT ${drain.key}, s.target, s.ref, nextval('"WorkTicket"'),
-          min(s.priority), now(), now(), 0, NULL, NULL, NULL, NULL
-          FROM (${source}) AS s(target, ref, priority)
+          min(s.priority), now(), now(), 0, NULL, NULL, NULL, NULL,
+          (array_agg(s.reason ORDER BY s.priority, s.reason) FILTER (WHERE s.reason IS NOT NULL))[1]
+          FROM (${source}) AS s(target, ref, priority, reason)
          WHERE s.ref IS NOT NULL
          GROUP BY s.target, s.ref ORDER BY s.target, s.ref`,
   );
@@ -360,7 +390,7 @@ export const owedWorkItem = (target: SQL, ref: SQL) =>
 
 /** Public refresh metadata additionally observes the exact executing Job lease. */
 export const observedWorkItem = (target: SQL, ref: SQL) =>
-  sql`(SELECT w.ref, w."lastError", w."readyAt",
+  sql`(SELECT w.ref, w.reason, w."lastError", w."readyAt",
       (w."readyAt" > now()) IS TRUE AS waiting,
       CASE WHEN ${currentWorkExecution}
         THEN w."executionStartedAt" ELSE NULL END AS "runningSince",
@@ -429,9 +459,10 @@ export async function drainBacklog(db: RepositoryQueryInput, drain: string) {
   const family = sql<string>`split_part(w.target, '@', 1)`;
   const notRunning = sql`(${currentWorkExecution}) IS NOT TRUE`;
   const queries = repositoryQueries(db);
-  const targets = await queries
+  const buckets = await queries
     .select({
       target: family,
+      reason: sql<string | null>`w.reason`,
       count: sql<number>`count(*)::int`,
       queued: sql<number>`count(*) FILTER (WHERE ${notRunning} AND w."lastError" IS NULL AND w."readyAt" <= now())::int`,
       running: sql<number>`count(*) FILTER (WHERE ${currentWorkExecution})::int`,
@@ -443,8 +474,43 @@ export async function drainBacklog(db: RepositoryQueryInput, drain: string) {
     .from(sql`${workItem} w`)
     .leftJoin(sql`${job} j`, sql`j.key = w.drain`)
     .where(sql`w.drain = ${drain}`)
-    .groupBy(family)
+    .groupBy(family, sql`w.reason`)
     .orderBy(family);
+  const grouped = new Map<
+    string,
+    Omit<(typeof buckets)[number], "reason"> & {
+      refreshReasons: { reason: string | null; count: number }[];
+    }
+  >();
+  for (const { reason, ...bucket } of buckets) {
+    const previous = grouped.get(bucket.target);
+    if (!previous) {
+      grouped.set(bucket.target, {
+        ...bucket,
+        refreshReasons: [{ reason, count: bucket.count }],
+      });
+      continue;
+    }
+    previous.refreshReasons.push({ reason, count: bucket.count });
+    for (const key of [
+      "count",
+      "queued",
+      "running",
+      "waiting",
+      "failed",
+    ] as const)
+      previous[key] += bucket[key];
+    previous.oldestSeconds = Math.max(
+      previous.oldestSeconds,
+      bucket.oldestSeconds,
+    );
+    if (
+      bucket.nextAttemptAt &&
+      (!previous.nextAttemptAt || bucket.nextAttemptAt < previous.nextAttemptAt)
+    )
+      previous.nextAttemptAt = bucket.nextAttemptAt;
+  }
+  const targets = [...grouped.values()];
   return {
     targets,
     oldestSeconds: targets.length

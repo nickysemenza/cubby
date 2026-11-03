@@ -40,6 +40,7 @@ export async function readDerivedBacklog(
         entity: declaration.entity,
         field: declaration.key,
         count: row?.count ?? 0,
+        refreshReasons: row?.refreshReasons ?? [],
         states: {
           queued: row?.queued ?? 0,
           running: row?.running ?? 0,

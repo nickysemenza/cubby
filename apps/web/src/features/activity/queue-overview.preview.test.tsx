@@ -132,6 +132,10 @@ beforeEach(async () => {
                   field: "price",
                   count: 10,
                   states: { queued: 4, running: 2, waiting: 3, failed: 1 },
+                  refreshReasons: [
+                    { reason: "Product price changed", count: 7 },
+                    { reason: null, count: 3 },
+                  ],
                   nextAttemptAt: new Date(measuredAt + 60_000).toISOString(),
                 },
               ]
@@ -389,6 +393,13 @@ it("shows observed per-value refresh states and the next known attempt", async (
     screen.getByRole("button", { name: "Refresh states by value" }),
   );
   expect(await screen.findByText("Product · Price")).toBeVisible();
+  const triggers = within(
+    screen.getByRole("group", { name: "Product price refresh triggers" }),
+  );
+  expect(triggers.getByText("Product price changed")).toBeVisible();
+  expect(triggers.getByText("7")).toBeVisible();
+  expect(triggers.getByText("Trigger not recorded")).toBeVisible();
+  expect(triggers.getByText("3")).toBeVisible();
   expect(screen.getByText(/Next attempt/)).toBeVisible();
 });
 

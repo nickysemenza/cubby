@@ -360,7 +360,7 @@ export async function recordFeedbackWithInsertion(
       // repo here broke the Worker's Env type inference.
       if ("recordId" in prediction.subject && prediction.subject.recordId)
         await client.execute(
-          sql`SELECT derived_mark('email.dataQuality', ARRAY[${prediction.subject.recordId}::uuid])`,
+          sql`SELECT derived_mark('email.dataQuality', ARRAY[${prediction.subject.recordId}::uuid], 'Assessment review changed')`,
         );
     }
     return { event: row, inserted: inserted !== undefined };

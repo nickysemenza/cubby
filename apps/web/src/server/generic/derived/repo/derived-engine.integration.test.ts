@@ -255,7 +255,7 @@ describe("stored derived values", () => {
     await markWorkFrom(
       ctx.db,
       DERIVED_DRAIN,
-      sql`SELECT 'product.ownership'::text, ${beans}::uuid, 2::int`,
+      sql`SELECT 'product.ownership'::text, ${beans}::uuid, 2::int, 'Scheduled consistency check'::text`,
       { wake: false },
     );
     await postponeWorkRefs(
@@ -682,6 +682,9 @@ describe("stored derived values", () => {
     const location = await makeLocation("Attic box");
     const nails = await makeProduct("Synthetic nails", 1);
     const entry = await makeEntry(nails, location, 1);
+    expect(await valuation(entry)).toMatchObject({
+      refreshReason: "Inventory entry created",
+    });
     await drainDerivedPage(ctx.db, {
       only: (mark) => mark.ref === entry,
       // Delete and re-create the same mark: a fresh sequence ticket.
@@ -709,16 +712,39 @@ describe("stored derived values", () => {
         expect(await valuation(entry)).toMatchObject({
           pending: true,
           waiting: true,
+          refreshReason: "Inventory entry created",
         });
         expect((await valuation(entry))?.execution).toBeUndefined();
         await dropWork(ctx.db, "inventory.valuation", [entry]);
         await getDb(ctx.db).execute(
-          sql`SELECT derived_mark('inventory.valuation', ARRAY[${entry}::uuid])`,
+          sql`SELECT derived_mark('inventory.valuation', ARRAY[${entry}::uuid], 'Refresh requested')`,
         );
         expect((await valuation(entry))?.execution).toBeUndefined();
       },
     });
     expect(await marks("inventory.valuation")).toEqual([entry]);
+    expect(await valuation(entry)).toMatchObject({
+      refreshReason: "Refresh requested",
+    });
+    await markWorkFrom(
+      ctx.db,
+      DERIVED_DRAIN,
+      sql`SELECT 'inventory.valuation'::text, ${entry}::uuid, 0, NULL::text`,
+      { existing: "keep", wake: false },
+    );
+    expect(await valuation(entry)).toMatchObject({
+      refreshReason: "Refresh requested",
+    });
+    await markWorkFrom(
+      ctx.db,
+      DERIVED_DRAIN,
+      sql`SELECT 'inventory.valuation'::text, ${entry}::uuid, 0, NULL::text`,
+      { wake: false },
+    );
+    expect(await valuation(entry)).toMatchObject({
+      refreshReason: null,
+      pending: true,
+    });
   });
 
   it("marks both endpoints when a row moves to another record", async () => {
@@ -899,6 +925,13 @@ describe("stored derived values", () => {
       (mark) => mark.target === valuationFanout && sourceRefs.has(mark.ref),
     );
     expect(fanout).toHaveLength(19);
+    expect(fanout.map((mark) => mark.reason)).toEqual(
+      Array.from({ length: 19 }, () => "Product changed"),
+    );
+    expect(await valuation(entry)).toMatchObject({
+      pending: true,
+      refreshReason: "Related refresh pending",
+    });
     const held = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const writer = withTransaction(ctx.db, async (tx) => {
@@ -956,7 +989,7 @@ describe("stored derived values", () => {
       markWorkFrom(
         ctx.db,
         DERIVED_DRAIN,
-        sql`SELECT ${valuationFanout}::text, ref, 0::int
+        sql`SELECT ${valuationFanout}::text, ref, 0::int, NULL::text
           FROM unnest(${uuidArrayParam(refs)}) source(ref)`,
         { wake: false },
       );
@@ -964,14 +997,14 @@ describe("stored derived values", () => {
     await markWorkFrom(
       ctx.db,
       DERIVED_DRAIN,
-      sql`SELECT 'product.price'::text, ${available}::uuid, 0::int`,
+      sql`SELECT 'product.price'::text, ${available}::uuid, 0::int, NULL::text`,
       { wake: false },
     );
     await markSources(overflowSources.map((row) => row.entityId));
     await markWorkFrom(
       ctx.db,
       DERIVED_DRAIN,
-      sql`SELECT 'product.dataQuality'::text, ${available}::uuid, 0::int`,
+      sql`SELECT 'product.dataQuality'::text, ${available}::uuid, 0::int, NULL::text`,
       { wake: false },
     );
     const saturated = (await pending()).filter(
@@ -1041,7 +1074,7 @@ describe("stored derived values", () => {
       await markWorkFrom(
         databaseForTransaction(tx),
         DERIVED_DRAIN,
-        sql`SELECT ${busy.target}::text, ${busy.ref}::uuid, ${busy.priority}::int`,
+        sql`SELECT ${busy.target}::text, ${busy.ref}::uuid, ${busy.priority}::int, NULL::text`,
         { wake: false },
       );
       fixedHeld.resolve();

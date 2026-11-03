@@ -8,6 +8,14 @@ export const derivedBacklog = z.object({
       entity: entitySchema,
       field: z.string(),
       count: z.number().int().nonnegative(),
+      refreshReasons: z
+        .array(
+          z.object({
+            reason: z.string().nullable(),
+            count: z.number().int().nonnegative(),
+          }),
+        )
+        .optional(),
       states: z
         .object({
           queued: z.number().int().nonnegative(),

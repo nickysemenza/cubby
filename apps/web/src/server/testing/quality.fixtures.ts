@@ -19,7 +19,7 @@ export async function publishQualityFixtures(db: Database, kind: ScoredEntity) {
   await markWorkFrom(
     db,
     DERIVED_DRAIN,
-    sql`SELECT ${`${kind}.dataQuality`}, t.id, 0 FROM ${table} t`,
+    sql`SELECT ${`${kind}.dataQuality`}, t.id, 0, NULL::text FROM ${table} t`,
     { wake: false },
   );
   await drainStoredDerived(db);

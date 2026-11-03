@@ -483,6 +483,59 @@ describe("cross-family Suggestion list", () => {
         })
       ).items.map((row) => row.id),
     ).toEqual([proposal.review.assessmentId]);
+    const [originalReference] = await getDb(ctx.db)
+      .select({ subject: assessment.subject, evidence: assessment.evidence })
+      .from(assessment)
+      .where(eq(assessment.id, proposal.review.assessmentId));
+    if (!originalReference) throw new Error("Synthetic recommendation missing");
+
+    const retained = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic retained recommendation endpoint" }),
+      ctx.actor,
+    );
+    const touchesRetained = () =>
+      touchingAssessmentIds(ctx.db, {
+        records: [
+          { entity: "product", id: retained.entityId, code: retained.id },
+        ],
+        eligibility: {
+          kind: "suggestions",
+          families: ["recommendation"],
+          status: "pending",
+        },
+      });
+    for (const id of [retained.entityId, retained.id]) {
+      await getDb(ctx.db)
+        .update(assessment)
+        .set({
+          evidence: sql`${assessment.evidence} || ${JSON.stringify({ records: [{ entity: "product", id, label: "Synthetic retained reference" }] })}::jsonb`,
+        })
+        .where(eq(assessment.id, proposal.review.assessmentId));
+      // Connection endpoints stay authoritative even when retained records exist.
+      expect((await touchesRetained())?.size).toBe(0);
+    }
+    await getDb(ctx.db)
+      .update(assessment)
+      .set({
+        subject: sql`jsonb_set(${assessment.subject}, '{scope}', '"synthetic.retained-history"'::jsonb)`,
+      })
+      .where(eq(assessment.id, proposal.review.assessmentId));
+    for (const id of [retained.entityId, retained.id]) {
+      await getDb(ctx.db)
+        .update(assessment)
+        .set({
+          evidence: sql`${assessment.evidence} || ${JSON.stringify({ records: [{ entity: "product", id, label: "Synthetic retained reference" }] })}::jsonb`,
+        })
+        .where(eq(assessment.id, proposal.review.assessmentId));
+      expect(await touchesRetained()).toEqual(
+        new Set([proposal.review.assessmentId]),
+      );
+    }
+    await getDb(ctx.db)
+      .update(assessment)
+      .set(originalReference)
+      .where(eq(assessment.id, proposal.review.assessmentId));
     const taskUuid = await resolveOrThrow(ctx.db, "task", task.output.id);
     const taskConnection = await publishEntityConnection(ctx.db, {
       relation: "task-subject-product",

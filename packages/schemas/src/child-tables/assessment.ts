@@ -58,6 +58,12 @@ export const assessmentChildren = [
         on: ["publicationKey"],
       },
       { name: "Assessment_family_idx", on: ["family", "createdAt"] },
+      {
+        name: "Assessment_reference_records_idx",
+        using: "gin",
+        on: [{ sql: "({evidence}->'records')" }],
+        where: "{served}",
+      },
     ],
   }),
   defineChildTable({

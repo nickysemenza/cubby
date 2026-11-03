@@ -25,10 +25,7 @@ import type {
   StoredDerivedRead,
   CurrentReadFacts,
 } from "~/server/generic/derived/repo/read-context";
-import {
-  observedWorkItem,
-  workPendingWhere,
-} from "~/server/generic/jobs/repo/work-items";
+import { observedWorkItem } from "~/server/generic/jobs/repo/work-items";
 
 import { fanoutTargetMatches } from "./fanout";
 export type {
@@ -205,6 +202,7 @@ const valueRow = z.object({
   leaseExpiresAt: dateTime.nullable(),
   error: z.string().nullable(),
   retryAt: dateTime.nullable(),
+  refreshReason: z.string().nullable(),
 });
 
 /** Page readers start this with their ids beside hydration, never once per row. */
@@ -249,11 +247,12 @@ export async function loadStoredDerived(
   const declarations = keys.map((key) => requireStored(entity, key));
   const out = new Map<string, Map<string, StoredDerivedRead>>();
   if (ids.length === 0 || declarations.length === 0) return out;
+  // A target-wide fanout flag does not establish which record it affects.
+  // Only a direct ticket can attribute a recorded source cause to this record.
   const result = await unwrapDb(db).execute(sql`
     WITH keys AS MATERIALIZED (
-      SELECT declared.*, ${workPendingWhere((column) =>
-        fanoutTargetMatches(column, sql`declared.target`),
-      )} AS "fanoutPending"
+      SELECT declared.*, EXISTS (SELECT 1 FROM "WorkItem" w
+        WHERE ${fanoutTargetMatches(sql`w.target`, sql`declared.target`)}) AS "fanoutPending"
       FROM jsonb_to_recordset(${JSON.stringify(
         declarations.map(({ key, target, clock }) => ({ key, target, clock })),
       )}::jsonb) AS declared(key text, target text, clock text)
@@ -263,6 +262,8 @@ export async function loadStoredDerived(
            (d.ref IS NOT NULL OR k."fanoutPending") AS pending,
            (d.ref IS NOT NULL OR k."fanoutPending" OR (k.clock = 'householdDay' AND
              ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date)) IS TRUE AS stale,
+           CASE WHEN d.ref IS NOT NULL THEN d.reason WHEN k."fanoutPending" THEN 'Related refresh pending'
+             WHEN k.clock = 'householdDay' AND ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date THEN 'Daily refresh due' END AS "refreshReason",
            d."lastError" AS error, d."readyAt" AS "retryAt",
            coalesce(d.waiting, false) AS waiting,
            d."runningSince", d."leaseExpiresAt"
@@ -296,6 +297,7 @@ export async function loadStoredDerived(
       resultExists: row.computedAt !== null && decision.success,
       stale: row.stale,
       pending: row.pending,
+      refreshReason: row.refreshReason,
       waiting: row.waiting,
       ...(row.runningSince && row.leaseExpiresAt
         ? {

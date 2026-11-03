@@ -1,4 +1,3 @@
-import { suggestionListOut } from "@cubby/schemas/suggestion-list";
 import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { seedProductPrerequisite } from "./fixtures/catalog";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
@@ -33,7 +32,6 @@ import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
-  operationResult,
   dispatchesOperation,
   dispatchOperations,
   unbatchFor,
@@ -398,17 +396,18 @@ test("Suggestions lists every family with named records and category pills, and 
           .data?.entityExclude.includes("product") === true,
     ),
   );
-  await gotoAuthenticatedPage(
-    page,
-    `/suggestions?family=field&record=product:${item.id}&entityExclude=product`,
-  );
-  const excludedPage = await operationResult(
-    await excludedRead,
-    "suggestions.list",
-    suggestionListOut,
-  );
-  expect(excludedPage.items).toEqual([]);
-  expect(excludedPage.meta.totalCount).toBe(0);
+  await Promise.all([
+    excludedRead,
+    gotoAuthenticatedPage(
+      page,
+      `/suggestions?family=field&record=product:${item.id}&entityExclude=product`,
+    ),
+  ]);
+  await expect(
+    page.getByText(
+      "No pending suggestions here. Find suggestions to look again.",
+    ),
+  ).toBeVisible();
   await expect(
     suggestionsTable(page).getByRole("link", { name: productName }),
   ).toHaveCount(0);

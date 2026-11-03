@@ -17,6 +17,7 @@ import {
 import { compactFieldText } from "~/entity/fields/field-text";
 import { useEntityMetadata } from "~/entity/metadata";
 import { DateDisplay } from "~/ui/common/date-display";
+import { Facts } from "~/ui/common/facts";
 import { Button } from "~/ui/primitives/button";
 
 import { UpdatingDot, useFieldExecutionCurrent } from "./value-mark";
@@ -276,6 +277,9 @@ function Freshness({
   const execution =
     envelope.work.kind === "pending" ? envelope.work.execution : undefined;
   const running = useFieldExecutionCurrent(execution);
+  const refreshOwed =
+    envelope.work.kind !== "idle" ||
+    (result.kind === "cached" && result.freshness === "stale");
   return (
     <div className="grid gap-1 text-xs text-muted-foreground">
       {result.kind === "cached" ? (
@@ -339,8 +343,18 @@ function Freshness({
       result.freshness === "stale" ? (
         <p>No refresh is currently queued.</p>
       ) : null}
-      {envelope.work.kind !== "idle" ||
-      (result.kind === "cached" && result.freshness === "stale") ? (
+      {refreshOwed ? (
+        <Facts
+          layout="inline"
+          facts={[
+            {
+              label: "Refresh trigger",
+              value: envelope.work.refreshReason ?? "Not recorded",
+            },
+          ]}
+        />
+      ) : null}
+      {refreshOwed ? (
         <Link
           to="/activity"
           hash="derived-values"

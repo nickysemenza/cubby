@@ -409,7 +409,8 @@
                   "kind": "missing"
                 },
                 "work": {
-                  "kind": "pending"
+                  "kind": "pending",
+                  "refreshReason": "Refresh requested"
                 }
               }
             }

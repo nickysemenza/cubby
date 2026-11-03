@@ -5,6 +5,7 @@
  * changed values. A mark clears only while its ticket is unchanged since the
  * claim, so a save that lands during compute keeps the record dirty.
  */
+import { humanize } from "@cubby/shared";
 import { inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -446,9 +447,18 @@ async function expandFanouts(
             : input.path
               ? pathSql(input.path, refs)
               : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+      const reasons = new Set(group.map((item) => item.reason ?? null));
+      // Different source refs can reach disjoint dependents. Do not attribute
+      // one ref's exact operation to every dependent in the combined expansion.
+      const reason =
+        reasons.size === 1
+          ? (group[0]?.reason ?? null)
+          : [...reasons].some((value) => value !== null)
+            ? `Related ${humanize(input.table).toLowerCase()} refresh requested`
+            : null;
       return [
         sql`SELECT ${declaration.target}::text, r.id,
-        ${Math.min(...group.map((item) => item.priority))}::int
+        ${Math.min(...group.map((item) => item.priority))}::int, ${reason}::text
         FROM (${dependents}) r(id)`,
       ];
     },
@@ -692,7 +702,7 @@ async function propagate(
                 JOIN ${ident(declaration.table)} s
                   ON s.${ident(dependency.sourceColumn)} = d.${ident(dependency.entityColumn)}
                WHERE s.id = ANY(${uuidArrayParam(changedIds)})`;
-      return sql`SELECT ${dependent.target}::text, r.id, 1 FROM (${refs}) AS r(id)`;
+      return sql`SELECT ${dependent.target}::text, r.id, 1, ${`${humanize(declaration.table)} ${humanize(declaration.key).toLowerCase()} publication changed`}::text FROM (${refs}) AS r(id)`;
     },
   );
   if (selections.length)
@@ -806,7 +816,7 @@ export async function markAllStoredDerived(
     const rows = await markWorkFrom(
       db,
       DERIVED_DRAIN,
-      sql`SELECT ${declaration.target}::text, t.id, ${RECONCILE_PRIORITY}::int
+      sql`SELECT ${declaration.target}::text, t.id, ${RECONCILE_PRIORITY}::int, 'Scheduled consistency check'::text
         FROM ${ident(declaration.table)} t
         ${slice ? sql`WHERE mod(abs(hashtext(t.id::text)), ${slice.count}) = ${slice.index}` : sql``}`,
       { existing: "keep" },
@@ -830,7 +840,7 @@ export async function markExpiredClockDerived(
   const rows = await markWorkFrom(
     db,
     DERIVED_DRAIN,
-    sql`SELECT k.target, v."entityId", ${RECONCILE_PRIORITY}::int
+    sql`SELECT k.target, v."entityId", ${RECONCILE_PRIORITY}::int, 'Daily refresh due'::text
         FROM jsonb_to_recordset(${JSON.stringify(targets)}::jsonb) AS k(target text, key text, entity text)
         JOIN "DerivedValue" v ON v.key = k.key
         JOIN ${entityIdentity} ON ${entityIdentity.id} = v."entityId" AND ${entityIdentity.kind} = k.entity AND ${notDeleted(entityIdentity)}

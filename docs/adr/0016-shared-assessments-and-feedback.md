@@ -201,6 +201,12 @@ Record-scoped reads restrict reference kinds before expanding related graphs.
 Email outcomes traverse linked Purchases only for Purchase scopes; field
 reference expansion selects only the requested target kinds. Mixed scopes keep
 every requested endpoint, while presentation still enumerates all references.
+Recommendation membership uses indexed source/target expressions and retained
+record containment, preserving the distinction between connection endpoints and
+other retained references. Legacy Email-link membership resolves only requested
+Email UUIDs before comparing their retained OrderMail identity; an explicit
+subject record ID always wins over that fallback. Receipt probes retain an
+identity-correlated planner barrier so scoped reads do not hash all Feedback.
 Reference expansion is projected inside the materialized eligibility relation.
 Consumers match those references directly; rejoining the base tables can let the
 planner expand unrelated history before intersecting eligible identities.

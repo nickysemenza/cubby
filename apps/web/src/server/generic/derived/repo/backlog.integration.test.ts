@@ -77,7 +77,22 @@ describe("derived backlog", () => {
         "lastError" = 'Synthetic previous attempt failure'
       WHERE target = ${`${KIND}.price`} AND ref = ${runningRef}::uuid`);
 
+    await getDb(ctx.db).execute(
+      sql`UPDATE "WorkItem" SET reason = 'Product price changed' WHERE ref = ${runningRef}::uuid`,
+    );
     const backlog = await readDerivedBacklog(ctx.db);
+    const price = backlog.kinds.find(
+      (kind) => kind.entity === KIND && kind.field === "price",
+    );
+    expect(price?.refreshReasons).toEqual(
+      expect.arrayContaining([
+        { reason: null, count: 3 },
+        { reason: "Product price changed", count: 1 },
+      ]),
+    );
+    expect(
+      price?.refreshReasons?.reduce((sum, bucket) => sum + bucket.count, 0),
+    ).toBe(price?.count);
 
     expect(backlog.recent.windowMinutes).toBe(15);
     expect(backlog.recent.perMinute).toHaveLength(15);

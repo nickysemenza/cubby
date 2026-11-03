@@ -549,7 +549,7 @@ describe("category-based service Products", () => {
       decision: { outcome: { kind: "empty", reason: "not_applicable" } },
     });
     expect(restored.fields.cost.result).toEqual({ kind: "missing" });
-    expect(restored.fields.cost.work).toEqual({ kind: "pending" });
+    expect(restored.fields.cost.work).toMatchObject({ kind: "pending" });
     const valued = await listProductsFixture(
       ctx.db,
       { ids: [service.id], pricePresenceFilter: "has" },

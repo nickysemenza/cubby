@@ -9,6 +9,7 @@ import { derived } from "~/integrations/tanstack-query/generated/domains/derived
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
+import { Facts } from "~/ui/common/facts";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
@@ -187,6 +188,21 @@ function DerivedRefreshStates({
               key={`${kind.entity}.${kind.field}`}
               primary={`${entityRoster[kind.entity].singular} · ${humanize(kind.field)}`}
               secondary={refreshStateSummary(kind.states)}
+              detail={
+                kind.refreshReasons?.length ? (
+                  <fieldset
+                    aria-label={`${entityRoster[kind.entity].singular} ${humanize(kind.field).toLowerCase()} refresh triggers`}
+                  >
+                    <Facts
+                      layout="inline"
+                      facts={kind.refreshReasons.map(({ reason, count }) => ({
+                        label: reason ?? "Trigger not recorded",
+                        value: formatCount(count),
+                      }))}
+                    />
+                  </fieldset>
+                ) : undefined
+              }
               trailing={
                 kind.nextAttemptAt ? (
                   <span>

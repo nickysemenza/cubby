@@ -36,8 +36,13 @@ const correctionFeedbackId = (
 ) =>
   sql`substring(correction_outcome.metadata->>${key} FROM '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')::uuid`;
 
-/** Historical attempts are visible only with their automatic receipt and bound member application. */
-export function correctionOutcomeExists(assessmentId: SQL, receiptId?: SQL) {
+/** Historical attempts need their automatic receipt and bound member application.
+ * Bounded discovery keeps this probe correlated; unscoped history retains set-based planning. */
+export function correctionOutcomeExists(
+  assessmentId: SQL,
+  receiptId?: SQL,
+  bounded = false,
+) {
   return sql`EXISTS (
     SELECT 1 FROM "Feedback" correction_outcome
     JOIN "Feedback" correction_root ON correction_root.id = ${correctionFeedbackId("sourceFeedbackId")}
@@ -72,6 +77,7 @@ export function correctionOutcomeExists(assessmentId: SQL, receiptId?: SQL) {
       AND correction_application.intent = ${feedbackEvent.shape.intent.unwrap().enum.apply}
       AND correction_application."actorUserId" = correction_root."actorUserId"
       AND correction_application.suppression IS NULL AND correction_application.receipt IS NOT NULL
+    ${bounded ? sql`OFFSET 0` : sql``}
   )`;
 }
 
