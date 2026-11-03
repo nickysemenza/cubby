@@ -175,7 +175,7 @@ export function Scheduling({
               >
                 {[...snapshot.events].reverse().map((entry) => (
                   <RecordRow
-                    key={entry.id}
+                    key={entry.key}
                     primary={entry.event.replaceAll("-", " ")}
                     secondary={
                       entry.job ? (

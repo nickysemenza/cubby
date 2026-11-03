@@ -95,15 +95,19 @@ const defaultOperations: MaintenanceRunOperations = {
   run: maintenance.run.mutationOptions,
 };
 
-/** The nightly pass: Run now, the last or running pass, and every backlog it drains. */
+/** The daily pass: Run now, the last or running pass, and every backlog it drains. */
 export function MaintenanceRunCard({
   operations = defaultOperations,
+  visible = true,
 }: {
   operations?: MaintenanceRunOperations;
+  visible?: boolean;
 }) {
   const status = useQuery({
     ...operations.status(),
-    refetchInterval: (query) => maintenanceRefetchInterval(query.state.data),
+    enabled: visible,
+    refetchInterval: (query) =>
+      visible && maintenanceRefetchInterval(query.state.data),
   });
   const launch = useActionMutation({
     mutationFn: operations.run,
@@ -152,8 +156,8 @@ export function MaintenanceRunCard({
       <Row align="start" justify="between" gap="md" wrap>
         <Description size="xs">
           {active
-            ? `Started ${formatInstant(active.startedAt, "dateShortTime")}${active.trigger === "scheduled" ? " by the nightly schedule" : ""}. One pass at a time.`
-            : "Runs nightly. Each pass runs the declared upkeep steps and keeps their outcomes. Other background work has its own Jobs."}
+            ? `Started ${formatInstant(active.startedAt, "dateShortTime")}${active.trigger === "scheduled" ? " by the daily schedule" : ""}. One pass at a time.`
+            : "Runs daily at 7 a.m. America/Los_Angeles. Each pass runs the declared upkeep steps and keeps their outcomes. Other background work has its own Jobs."}
         </Description>
         <Button
           size="sm"

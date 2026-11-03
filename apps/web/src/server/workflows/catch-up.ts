@@ -23,7 +23,7 @@ export async function requestCatchUp(
   const claimedAt = new Date();
   if (!(await claimCatchUp(db, claimedAt))) return { status: "recent" };
   try {
-    await recoverMissedWork(db, undefined, false);
+    await recoverMissedWork(db, undefined, { daily: false, wake: false });
     // A wake alone cannot discover new mail without a durable admission task.
     await (
       await import("~/server/workflows/background-tasks/publish")
@@ -48,7 +48,7 @@ export async function requestCatchUp(
 export async function recoverMissedWork(
   db: Database,
   coordinatorRetireBefore?: Date,
-  daily = true,
+  { daily = true, wake = true }: { daily?: boolean; wake?: boolean } = {},
 ) {
   const { jobScheduler } =
     await import("~/server/generic/jobs/scheduler/client");
@@ -82,9 +82,10 @@ export async function recoverMissedWork(
       } while (after);
     })(),
   ]);
-  await (
-    await import("~/server/workflows/background-tasks/publish")
-  ).wakeJobs({ source: daily ? "daily-recovery" : "app-open-recovery" });
+  if (wake || obligations.some((result) => result.status === "rejected"))
+    await (
+      await import("~/server/workflows/background-tasks/publish")
+    ).wakeJobs({ source: daily ? "daily-recovery" : "app-open-recovery" });
   const errors = obligations.flatMap((result) =>
     result.status === "rejected" ? [result.reason] : [],
   );

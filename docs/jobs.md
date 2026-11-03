@@ -587,7 +587,9 @@ current search text and hashes it, so a re-mark during a page simply takes a
 new ticket. `embedding:cleanup` items are keyed by `EntityEmbedding` id, which
 is also the physical Vectorize vector id: a Job id is never a vector id.
 Search publication, search-index repair and derived compute mark sources with
-`markWork`; cleanup marks every retired, failed or deleted artifact whose
+`markWork`. Explicit search repair completes when its search marks settle;
+unrelated derived items retain their own retry deadlines on the shared drain.
+Cleanup marks every retired, failed or deleted artifact whose
 vector has no delete receipt.
 
 An artifact moves `prepared` → `submitting` → `submitted` → `selected` →

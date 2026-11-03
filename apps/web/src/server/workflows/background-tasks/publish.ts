@@ -16,6 +16,7 @@ import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
 import { imageProcessingJob } from "~/server/db/schema";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { jobScheduler } from "~/server/generic/jobs/scheduler/client";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
 
@@ -28,8 +29,6 @@ export interface PublishOptions {
 export async function wakeJobs(
   options: PublishOptions & { queue?: BackgroundQueueProducer },
 ) {
-  const { jobScheduler } =
-    await import("~/server/generic/jobs/scheduler/client");
   const scheduler = options.queue ? undefined : jobScheduler();
   if (scheduler) {
     await afterResponse(

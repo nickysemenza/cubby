@@ -8,7 +8,7 @@ export const schedulerDeadline = z.object({
   reason: z.enum(["available", "lease-expiry"]),
 });
 export const schedulerEvent = z.object({
-  id: z.uuid(),
+  key: z.string().regex(/^wake:[a-z0-9-]+$/u),
   job: jobShortcode.nullable().default(null),
   at: z.iso.datetime(),
   event: z.string(),

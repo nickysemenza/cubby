@@ -66,7 +66,7 @@ export class JobSchedulerDurableObject
     this.state.events = [
       ...this.state.events,
       {
-        id: crypto.randomUUID(),
+        key: `wake:${crypto.randomUUID()}`,
         at: new Date().toISOString(),
         event,
         job,

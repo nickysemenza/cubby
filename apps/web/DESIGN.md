@@ -628,7 +628,9 @@ Activity is the operational entry point. Its URL-addressable Needs you, Now,
 History and Advanced maintenance views use the shared Tabs primitives. Needs
 you separates Decisions from Problems and exposes existing Run/Job attention
 views; Now retains quiet retries, waits, dependencies and measured progress.
-Inactive panels unmount so hidden operational views cannot keep polling. URL
+Inactive panels unmount so hidden operational views cannot keep polling. Maintenance
+retains inspected previews between tabs with its queries and status polling disabled
+while hidden. URL
 filters survive view switching. Tab triggers stay disabled until their route handlers are ready.
 Existing Work queue views and direct Run/Job links stay available.
 

@@ -181,7 +181,7 @@ beforeEach(async () => {
           events: [
             {
               at: new Date(measuredAt).toISOString(),
-              id: crypto.randomUUID(),
+              key: `wake:${crypto.randomUUID()}`,
               event: "wake-accepted",
               cause: "app-open",
               error: null,

@@ -5,6 +5,7 @@ import { jobLane, jobState, jobWaitingOnReason } from "@cubby/schemas/job";
 import { RUN_KINDS } from "@cubby/schemas/run-fields";
 import { workFamily } from "@cubby/schemas/work-queue";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 
 import { EmbeddedEntityList } from "~/entity/entity-list/generic-entity-list";
@@ -91,6 +92,12 @@ function ActivityBody() {
       : search.entityKind || search.channel
         ? "history"
         : "needs-you");
+  const [maintenanceVisited, setMaintenanceVisited] = useState(
+    active === "maintenance",
+  );
+  useEffect(() => {
+    if (active === "maintenance") setMaintenanceVisited(true);
+  }, [active]);
   return (
     <Stack gap="lg">
       <Row gap="md" wrap>
@@ -135,8 +142,13 @@ function ActivityBody() {
           ))}
         </TabsList>
         {views.map((view) => (
-          <TabsContent key={view.key} value={view.key}>
-            {active === view.key ? (
+          <TabsContent
+            key={view.key}
+            value={view.key}
+            keepMounted={view.key === "maintenance"}
+          >
+            {active === view.key ||
+            (view.key === "maintenance" && maintenanceVisited) ? (
               <div className="pt-3">
                 {view.key === "needs-you" ? (
                   <Stack gap="lg">
@@ -252,7 +264,9 @@ function ActivityBody() {
                         <Disclosure summary="The maintenance pass, step by step">
                           <DefinedRunSteps kind={RUN_KINDS.maintenance} />
                         </Disclosure>
-                        <MaintenanceRunCard />
+                        <MaintenanceRunCard
+                          visible={active === "maintenance"}
+                        />
                       </Stack>
                     </Section>
                     <Section
@@ -260,7 +274,7 @@ function ActivityBody() {
                       title="Repair tools"
                       caption="Occasional repairs. Each command owns its scope and effects; previews inspect current candidates."
                     >
-                      <MaintenanceTools />
+                      <MaintenanceTools active={active === "maintenance"} />
                     </Section>
                   </Stack>
                 )}

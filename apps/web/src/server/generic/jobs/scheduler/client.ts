@@ -39,7 +39,7 @@ export async function bootstrapJobSchedule(env: Env): Promise<void> {
         );
         await (
           await import("~/server/workflows/catch-up")
-        ).recoverMissedWork(db, undefined, false);
+        ).recoverMissedWork(db, undefined, { daily: false });
       },
     );
     await scheduler.finishBootstrap(env.CF_VERSION_METADATA.id, token, null);

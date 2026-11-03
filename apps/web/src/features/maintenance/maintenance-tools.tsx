@@ -7,7 +7,7 @@ import type { MaintenanceCounts } from "@cubby/schemas/problems";
 import { getErrorMessage } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
@@ -131,7 +131,10 @@ function MaintenanceDryRunRow({
 // The force-recompute button stays — it's the only path that catches
 // logic-change drift the stale flag misses. It publishes bounded queue tasks
 // rather than holding one request open for the full CPU-heavy pass.
+const MaintenanceActive = createContext(true);
+
 function RecomputeAction() {
+  const active = useContext(MaintenanceActive);
   const dryRun = useQuery({
     ...recipe.dryRunRecomputeTotals.queryOptions(),
     enabled: false,
@@ -141,6 +144,7 @@ function RecomputeAction() {
   // where a lingering count gets settled.
   const { data: counts } = useQuery({
     ...problems.getMaintenanceCounts.queryOptions(),
+    enabled: active,
   });
   return (
     <MaintenanceDryRunRow
@@ -635,33 +639,36 @@ const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
  * One-off repair tools in Activity → Advanced maintenance. Routine upkeep runs
  * automatically; Activity supplies the heading.
  */
-export function MaintenanceTools() {
+export function MaintenanceTools({ active = true }: { active?: boolean }) {
   // Always-on "N to do" figures — one cheap DB query (no USDA/UPC network).
   const { data: counts } = useQuery({
     ...problems.getMaintenanceCounts.queryOptions(),
+    enabled: active,
   });
 
   return (
-    <Stack gap="lg">
-      {MAINTENANCE_GROUPS.map(({ group, tools }) => (
-        <Stack key={group} gap="tight">
-          <Eyebrow>{group}</Eyebrow>
-          <div className="divide-y divide-border/60">
-            {tools.map((t) => (
-              <MaintenanceRow
-                key={t.label}
-                label={t.label}
-                description={t.description}
-                showCount={!!t.count}
-                count={t.count && counts ? t.count(counts) : undefined}
-                approximate={t.approximate}
-                action={t.action}
-                actionPlacement={t.actionPlacement}
-              />
-            ))}
-          </div>
-        </Stack>
-      ))}
-    </Stack>
+    <MaintenanceActive value={active}>
+      <Stack gap="lg">
+        {MAINTENANCE_GROUPS.map(({ group, tools }) => (
+          <Stack key={group} gap="tight">
+            <Eyebrow>{group}</Eyebrow>
+            <div className="divide-y divide-border/60">
+              {tools.map((t) => (
+                <MaintenanceRow
+                  key={t.label}
+                  label={t.label}
+                  description={t.description}
+                  showCount={!!t.count}
+                  count={t.count && counts ? t.count(counts) : undefined}
+                  approximate={t.approximate}
+                  action={t.action}
+                  actionPlacement={t.actionPlacement}
+                />
+              ))}
+            </div>
+          </Stack>
+        ))}
+      </Stack>
+    </MaintenanceActive>
   );
 }

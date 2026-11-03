@@ -78,7 +78,7 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     .click();
   await expect(page).toHaveURL(/tab=maintenance/);
   await expect(
-    page.getByRole("heading", { name: "Nightly maintenance", exact: true }),
+    page.getByRole("heading", { name: "Daily maintenance", exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "The maintenance pass, step by step" })
@@ -142,7 +142,7 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     page.getByRole("heading", { name: "Internal queue upkeep", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("This is separate from the nightly maintenance Run.", {
+    page.getByText("This is part of daily background recovery.", {
       exact: false,
     }),
   ).toBeVisible();
@@ -150,7 +150,7 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
   await page.setViewportSize({ width: 390, height: 844 });
   await gotoAuthenticatedPage(page, "/activity?tab=maintenance");
   await expect(
-    page.getByRole("heading", { name: "Nightly maintenance", exact: true }),
+    page.getByRole("heading", { name: "Daily maintenance", exact: true }),
   ).toBeVisible();
   for (const tab of await page.getByRole("tab").all())
     expect(
