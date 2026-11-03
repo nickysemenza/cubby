@@ -94,8 +94,8 @@ their counters combine and any processed work keeps the page unfinished.
 An item's `lastError` keeps each
 cause, capped so the database's own message survives. A drain with nothing
 ready runs its `idle` publication (derived clock expiry) and completes, or
-waits until its next item's `readyAt`; a `repeats` drain (derived, re-armed
-each minute by `repeatJob`) completes even while items back off. Paid results that must survive a later publication
+waits until its next item's `readyAt`. Backed-off items retain a parent Job
+deadline; no recurring enrollment is needed. Paid results that must survive a later publication
 failure are written through `ctx.fenced` before publication (an evaluation's
 `result_ready`). `postponeWork` waits without spending an attempt.
 
@@ -516,8 +516,8 @@ shared table renderer. Apple Activity hands the household queue off to
 `/work-queue` ([native Activity](../apps/apple/README.md#activity)).
 The web audit-log changes feed follows the queue.
 
-The `jobs.maintenance` Job (`workflows/job-maintenance.ts`) re-arms every five
-minutes from the minute cron. Each pass repairs image execution in bounded
+The `jobs.maintenance` Job (`workflows/job-maintenance.ts`) is admitted by daily
+recovery and completes after draining its pages. Each pass repairs image execution in bounded
 batches (retires moot work, gives open rows without a live execution one;
 failed image executions count as live) and keeps the device wake armed. Every
 six hours it also prunes completed and cancelled Jobs older than
@@ -533,8 +533,8 @@ Queue messages are best-effort wake-ups for intent already committed in
 PostgreSQL. The shared `wakeJobs` sender uses the fetch request's `waitUntil`
 lifetime, so a slow queue send does not delay a committed mutation receipt.
 Without a request context (including queue and cron invocations), the caller
-still awaits the send. Queue failures are logged and cron recovers committed
-work; transaction rollback schedules no wake. Producers use this same sender
+still awaits the send. Queue failures receive bounded delivery retries; daily/app-open recovery repairs exceptional missed
+wakes; transaction rollback schedules no wake. Producers use this same sender
 rather than implementing their own request-lifetime branch.
 
 A producer must not enqueue faster than the drain can serve. One unbounded
@@ -587,7 +587,9 @@ current search text and hashes it, so a re-mark during a page simply takes a
 new ticket. `embedding:cleanup` items are keyed by `EntityEmbedding` id, which
 is also the physical Vectorize vector id: a Job id is never a vector id.
 Search publication, search-index repair and derived compute mark sources with
-`markWork`; cleanup marks every retired, failed or deleted artifact whose
+`markWork`. Explicit search repair completes when its search marks settle;
+unrelated derived items retain their own retry deadlines on the shared drain.
+Cleanup marks every retired, failed or deleted artifact whose
 vector has no delete receipt.
 
 An artifact moves `prepared` → `submitting` → `submitted` → `selected` →
@@ -776,10 +778,47 @@ waits, raw errors and retry controls remain on their existing records.
 Definitions are not evidence that execution happened. Retained unknown kinds
 keep their diagnostics and explicitly lack a current definition.
 
-Nightly maintenance is a `maintenance` Run, separate from the five-minute
+Daily maintenance is a `maintenance` Run, separate from the daily
 `jobs.maintenance` queue-upkeep Job. Its declared effects are inspectable before
 launch; it remains one standard action. Exact input populations become known
 at step start, provider estimates stay estimates, and one-call/admission
 tallies do not imply a fixed total or ETA. Image maintenance classification
 counts use the current processor revision and can overlap; uncertain cutout
 eligibility does not imply a human review queue.
+
+## Deadline scheduling and idle recovery
+
+PostgreSQL owns Jobs, WorkItems, claims, progress, member pauses and retry policy.
+The queue executes ready work immediately; subsequent pages continue while work
+is runnable. Kind capacity refusals do not themselves generate immediate wake loops.
+The shared `JobSchedulerDurableObject` stores only wake obligations and a bounded
+100-event diagnostic history. It serializes deadline observations across database
+awaits so an older read cannot overwrite a newer notification. Live server leases
+are registered before provider work and refreshed on renewal and settlement.
+Future availability and lease expiry arm one alarm; an empty deadline set disarms it.
+An alarm delivers the ordinary generic queue wake, never executes a second runtime.
+Queue transport and deadline-observation failures retry with bounded backoff; accepted queue deliveries use
+queue retry semantics for runtime failures. A process dying between commit and its
+post-commit signal remains recoverable on app-open or the daily sweep.
+
+Derived drains retain WorkItem retry deadlines rather than completing and relying
+on minute enrollment. Daily reconciliation pages through all 24 buckets. Queue
+maintenance finishes after bounded repair/retention pages instead of repeating every
+five minutes. Existing Job identities, cursors, tickets, errors and stops survive.
+
+Daily recovery runs at 7 a.m. America/Los_Angeles. UTC triggers at 14:00 and 15:00
+check the scheduled instant's household hour before database access; only the 7 a.m.
+invocation admits work, with a leased household-date claim preventing duplicate admission. Failed enrollment releases the claim for retry; only successful durable enrollment completes the date.
+Deployment's first request bootstraps existing work and AI activation once per Worker
+version; deployment probes initiate this explicitly. App-open coalesces recovery
+and mail discovery. Gmail provider push is not implemented here.
+
+Activity → Now shows Running, Next wake, Waiting and Last recovery enrollment, known deadlines
+linked to Jobs and disclosed wake/delivery/recovery history. Observation timestamps
+are explicit. No known deadline does not establish that Neon is suspended. An
+observed wake delivery or still-armed alarm over five minutes overdue appears in
+Needs you; stale snapshots alone do not establish scheduler failure. Status reads
+are on demand. Inactive Activity panels unmount, except maintenance preserves
+inspected previews with hidden queries disabled. Only runnable work keeps the
+work feed's periodic refresh active. Scheduler transitions use structured Worker
+logs and bounded DO history, with no database-backed idle heartbeat.

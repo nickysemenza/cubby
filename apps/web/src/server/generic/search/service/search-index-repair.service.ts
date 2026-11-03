@@ -10,7 +10,7 @@ import { WorkflowCancelledError } from "~/server/workflows/runtime";
 
 import {
   scheduleSearchRepair,
-  readSearchRepairJobs,
+  readSearchRepairProgress,
 } from "../repo/search-index-repair";
 
 const createSearchIndexRepairCounters = (): SearchIndexRepairCounters => ({
@@ -35,7 +35,7 @@ export async function* repairSearchIndex(
         committed: true,
         effectsPending: true,
       });
-    const executions = await readSearchRepairJobs(db, ids);
+    const { executions, pending } = await readSearchRepairProgress(db, ids);
     if (executions.length !== ids.length)
       throw new Error("Search repair Job disappeared");
     const stopped = executions.find((execution) =>
@@ -54,9 +54,8 @@ export async function* repairSearchIndex(
       for (const key of searchIndexRepairCountersSchema.keyof().options)
         counters[key] += parsed.data[key] ?? 0;
     }
-    const done = executions.every(
-      (execution) => execution.state === "completed",
-    );
+    // Other derived families retain their own retry deadlines on this shared Job.
+    const done = !pending;
     if (done) {
       yield { type: "done", result: counters };
       return;

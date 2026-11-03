@@ -49,10 +49,10 @@ import * as derivedDrainRepo from "~/server/generic/derived/repo/drain";
 import {
   DERIVED_DRAIN_JOB_KEY,
   DERIVED_DRAIN,
-  markAllStoredDerived,
 } from "~/server/generic/derived/repo/drain";
 import { explainLiveDerived } from "~/server/generic/derived/repo/explain";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
+import { derivedReconcileHandler } from "~/server/generic/derived/service/drain-job";
 import { attachLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { withJobExecution } from "~/server/generic/jobs/context";
 import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
@@ -65,6 +65,7 @@ import {
   postponeWorkRefs,
   workItemStates,
 } from "~/server/generic/jobs/repo/work-items";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   drainDerivedPage,
@@ -1539,15 +1540,20 @@ describe("stored derived values", () => {
     for (const name of ["Synthetic tape", "Synthetic glue", "Synthetic rope"])
       await makeEntry(await makeProduct(name, 1), location, 1);
     await drain();
-    const include = (declaration: { target: string }) =>
-      declaration.target === "inventory.valuation";
-    let marked = 0;
-    for (let index = 0; index < 4; index++)
-      marked += await markAllStoredDerived(ctx.db, include, {
-        index,
-        count: 4,
-      });
-    expect(marked).toBe(3);
+    const reconciliation = await enqueueJob(ctx.db, {
+      key: "synthetic.daily-reconcile",
+      kind: "derived.reconcile",
+      input: {},
+    });
+    const handlers = { "derived.reconcile": derivedReconcileHandler };
+    // Consecutive claims resume the stored bucket cursor; no hourly clock is involved.
+    for (let page = 0; page < 24; page++)
+      expect(await advanceJob(ctx.db, reconciliation.id, handlers)).toBe(
+        "succeeded",
+      );
+    expect(await advanceJob(ctx.db, reconciliation.id, handlers)).toBe(
+      "skipped",
+    );
     expect(await marks("inventory.valuation")).toHaveLength(3);
   });
 });

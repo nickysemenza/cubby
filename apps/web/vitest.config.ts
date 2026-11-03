@@ -501,6 +501,7 @@ export default defineConfig({
             include: [
               "src/server/domains/calendar/**/*.workers.test.ts",
               "src/server/db/freshness/*.workers.test.ts",
+              "src/server/generic/jobs/**/*.workers.test.ts",
               "src/server/domains/purchase-import/**/*.workers.test.ts",
               "src/server/ai/**/*.workers.test.ts",
               "src/server/domains/run/**/*.workers.test.ts",

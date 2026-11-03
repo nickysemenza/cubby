@@ -16,7 +16,6 @@ import {
 } from "~/server/domains/run/repo/derived-discovery";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
-import { wakeJobs } from "~/server/workflows/background-tasks/publish";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 // Short: a full backlog drains within about a minute, and a longer wait idles
@@ -116,5 +115,5 @@ export const connectionDiscoveryJobHandler = defineJobHandler(
 
 export async function scheduleDerivedDiscovery(db: Database) {
   await claimDerivedDiscovery(db);
-  await wakeJobs({ source: "connection-discovery" });
+  // Recovery sends one wake after all admission families have committed.
 }

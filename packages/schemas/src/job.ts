@@ -333,15 +333,16 @@ export const JOB_KIND_POLICY = {
     ...MAINTENANCE,
     label: "Internal queue upkeep",
     purpose: "Repairs queue execution and prunes old completed queue records.",
-    trigger: "Periodic internal upkeep, re-armed every five minutes.",
+    trigger:
+      "Daily repair and retention; finishes when its backlog is drained.",
     targets:
       "Missing image execution and old completed or cancelled Jobs eligible for retention cleanup.",
     effects:
-      "Repairs image execution and device wake; every six hours prunes retained queue records in bounded pages.",
+      "Repairs image execution and device wake, and prunes retained queue records in bounded daily pages.",
     dependencies: "Database and queue execution.",
     cost: "No AI call is made by queue upkeep.",
     exclusions:
-      "Failed Jobs and domain evidence remain. This is separate from the nightly maintenance Run.",
+      "Failed Jobs and domain evidence remain. This is part of daily background recovery.",
   },
   "ai-refresh.activate": {
     label: "Activate AI refresh",

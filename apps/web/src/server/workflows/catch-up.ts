@@ -1,5 +1,10 @@
+import type { JobId } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 
+import {
+  describeErrorCauses,
+  scrubErrorMessage,
+} from "~/lib/error-diagnostics";
 import {
   getPurchaseImportRunAgentNamespace,
   isCloudflareRuntime,
@@ -18,6 +23,7 @@ export async function requestCatchUp(
   const claimedAt = new Date();
   if (!(await claimCatchUp(db, claimedAt))) return { status: "recent" };
   try {
+    await recoverMissedWork(db, undefined, { daily: false, wake: false });
     // A wake alone cannot discover new mail without a durable admission task.
     await (
       await import("~/server/workflows/background-tasks/publish")
@@ -42,20 +48,57 @@ export async function requestCatchUp(
 export async function recoverMissedWork(
   db: Database,
   coordinatorRetireBefore?: Date,
+  { daily = true, wake = true }: { daily?: boolean; wake?: boolean } = {},
 ) {
-  await (
-    await import("~/server/generic/derived/service/drain-job")
-  ).scheduleDerivedJobs(db);
-  await (
-    await import("~/server/domains/run/service/derived-discovery")
-  ).scheduleDerivedDiscovery(db);
-  await (
-    await import("~/server/workflows/job-maintenance")
-  ).enrollQueueMaintenance(db);
-  await (await import("~/server/workflows/jobs")).drainProductionJobs(db);
-  await (
-    await import("~/server/workflows/runs/lifecycle")
-  ).reconcileWorkflowRuns(db);
+  const { jobScheduler } =
+    await import("~/server/generic/jobs/scheduler/client");
+  const obligations = await Promise.allSettled([
+    (async () => {
+      const { scheduleDerivedJobs } =
+        await import("~/server/generic/derived/service/drain-job");
+      await scheduleDerivedJobs(db, daily);
+    })(),
+    (async () => {
+      const { scheduleDerivedDiscovery } =
+        await import("~/server/domains/run/service/derived-discovery");
+      await scheduleDerivedDiscovery(db);
+    })(),
+    ...(daily
+      ? [
+          (async () => {
+            const { enrollQueueMaintenance } =
+              await import("~/server/workflows/job-maintenance");
+            await enrollQueueMaintenance(db);
+          })(),
+        ]
+      : []),
+    (async () => {
+      const { reconcileWorkflowRuns } =
+        await import("~/server/workflows/runs/lifecycle");
+      // Every bounded page is owed; don't stop after the first hundred Runs.
+      let after: JobId | null = null;
+      do {
+        after = (await reconcileWorkflowRuns(db, after)).next;
+      } while (after);
+    })(),
+  ]);
+  if (wake || obligations.some((result) => result.status === "rejected"))
+    await (
+      await import("~/server/workflows/background-tasks/publish")
+    ).wakeJobs({ source: daily ? "daily-recovery" : "app-open-recovery" });
+  const errors = obligations.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : [],
+  );
+  await jobScheduler()?.recovered(
+    daily ? "daily" : "app-open",
+    errors.length
+      ? scrubErrorMessage(
+          JSON.stringify(errors.map((error) => describeErrorCauses(error))),
+        )
+      : null,
+  );
+  if (errors.length)
+    throw new AggregateError(errors, "Background recovery failed");
   // Operator recovery with its own fixed cutoff; the nightly retirement is
   // a maintenance step.
   if (coordinatorRetireBefore)
@@ -70,7 +113,7 @@ export async function maintainRunHistory(db: Database) {
   ]);
   const stale = await expireStaleRuns(db);
   const reconciled = await reconcileWorkflowRuns(db);
-  return { ...stale, reconciled };
+  return { ...stale, reconciled: reconciled.reconciled };
 }
 
 /**

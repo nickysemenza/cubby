@@ -16,6 +16,7 @@ import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
 import { imageProcessingJob } from "~/server/db/schema";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { jobScheduler } from "~/server/generic/jobs/scheduler/client";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
 
@@ -28,6 +29,29 @@ export interface PublishOptions {
 export async function wakeJobs(
   options: PublishOptions & { queue?: BackgroundQueueProducer },
 ) {
+  const scheduler = options.queue ? undefined : jobScheduler();
+  if (scheduler) {
+    await afterResponse(
+      (async () => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await scheduler.wake(options.source);
+            return;
+          } catch (error) {
+            log.error("scheduler notification failed", {
+              source: options.source,
+              attempt,
+              error,
+            });
+          }
+        }
+        // The queue remains usable if the alarm service is temporarily unavailable.
+        const fallback = getBackgroundQueue();
+        if (fallback) await wakeJobs({ ...options, queue: fallback });
+      })(),
+    );
+    return;
+  }
   const queue = options.queue ?? getBackgroundQueue();
   if (!queue) return;
   const send = async () => {
@@ -41,7 +65,7 @@ export async function wakeJobs(
         },
       ]);
     } catch (error) {
-      log.error("wake failed; cron will drain committed jobs", {
+      log.error("wake failed; daily recovery will drain committed jobs", {
         source: options.source,
         error,
       });

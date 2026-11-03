@@ -7,20 +7,19 @@ import {
   pruneFinishedJobs,
   pruneObservedInvalidationCaptures,
 } from "~/server/generic/jobs/repo/job-retention";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { repeatJob } from "~/server/generic/jobs/repo/producer";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 
 const log = createLogger("job-maintenance");
 
 const MAINTENANCE_KEY = "jobs.maintenance";
-export const JOB_MAINTENANCE_INTERVAL_MS = 5 * 60_000;
 const RETENTION_INTERVAL_MS = 6 * 60 * 60_000;
 const RETENTION_BATCH = 2_000;
 const IMAGE_REPAIR_BATCH = 500;
 
 /** Enroll the one recurring Job for image recovery, device wake and retention. */
 export async function enrollQueueMaintenance(db: Database) {
-  await enqueueJob(db, {
+  await repeatJob(db, {
     key: MAINTENANCE_KEY,
     kind: MAINTENANCE_KEY,
     input: {},
@@ -58,10 +57,7 @@ export const jobMaintenanceHandler = defineJobHandler(
     log.info("job maintenance", { repair, pruned, captures });
     return {
       page: {
-        done: false,
-        availableAt: new Date(
-          Date.now() + (more ? 0 : JOB_MAINTENANCE_INTERVAL_MS),
-        ),
+        done: !more,
         result: { retainedAt: nextRetainedAt },
       },
     };

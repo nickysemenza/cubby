@@ -17,7 +17,6 @@ export const QUEUE_NAMES = {
 };
 
 export const CRON_SCHEDULES = {
-  backgroundRecovery: identityKey(identity.crons.backgroundRecovery),
   dailyMaintenance: identityKey(identity.crons.dailyMaintenance),
 };
 

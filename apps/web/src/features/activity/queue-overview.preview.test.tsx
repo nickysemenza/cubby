@@ -156,6 +156,41 @@ beforeEach(async () => {
         ok: true,
         data: { nodes: [], edges: [], branches: [], truncated: false },
       };
+    if (operation === "job.schedule")
+      return {
+        ok: true,
+        data: {
+          observedAt: new Date(measuredAt).toISOString(),
+          readAt: new Date(measuredAt).toISOString(),
+          deadlines: [
+            {
+              job: code,
+              kind: "image.device.wake",
+              at: new Date(measuredAt + 60_000).toISOString(),
+              reason: "available",
+            },
+          ],
+          alarmAt: new Date(measuredAt + 60_000).toISOString(),
+          deliveryPendingSince: null,
+          deliveryAttempts: 0,
+          lastRecovery: {
+            at: new Date(measuredAt).toISOString(),
+            cause: "daily",
+            error: null,
+          },
+          events: [
+            {
+              at: new Date(measuredAt).toISOString(),
+              key: `wake:${crypto.randomUUID()}`,
+              event: "wake-accepted",
+              cause: "app-open",
+              error: null,
+            },
+          ],
+          running: 0,
+          waiting: 3,
+        },
+      };
     if (operation === "job.queue") {
       reads.push({ operation, input });
       return {

@@ -3134,7 +3134,7 @@ live evidence.
 
 Stored results whose canonical policy depends on today's household date declare
 `clock: "householdDay"`. A publication from an earlier household day reads as
-stale even before work is queued. The existing minute drain discovers expired
+stale even before work is queued. App-open and daily recovery admit expired
 publications when its ready queue is empty, marks them at reconciliation priority
 and captures its own invalidation. Discovery preserves existing tickets, retry
 errors and member-edit priority; it adds no per-record timer or separate Job.
@@ -3283,9 +3283,8 @@ retires the observed missing documents in one update within the same transaction
 This retains stable lock order without splitting mixed backfill pages into
 one write per record. Missing records without documents create no placeholders.
 Publication rings the existing reader notifications for every kind
-it touched. `derived.reconcile` marks one of 24 id buckets each hour at the
-lowest priority, so every stored value is rechecked daily without recomputing
-the corpus hourly, and logs `derived.drift` when a recompute changes a value:
+it touched. `derived.reconcile` pages through all 24 id buckets in the daily recovery pass at the
+lowest priority, so every stored value is rechecked daily, and logs `derived.drift` when a recompute changes a value:
 an undeclared input converges instead of staying silently wrong. The daily
 maintenance Run's search artifact cleanup step retires search documents of
 records removed before their triggers existed and queues retired embedding

@@ -26,6 +26,7 @@ import {
 } from "drizzle-orm";
 
 import type {
+  JobQueueOut,
   JobFacts,
   JobSetFilter,
   RunRollup,
@@ -258,7 +259,7 @@ export async function readJobQueue(
     pageIndex: number;
     pageSize: number;
   },
-) {
+): Promise<JobQueueOut> {
   const where = jobSetWhere(input.filter, input.runId);
   const reason = jobWaitingOnReasonSql();
   const [tallies, rows, leases] = await Promise.all([
