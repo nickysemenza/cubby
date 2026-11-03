@@ -37,7 +37,9 @@ surfaces. Order and receipt work uses [purchase-import](../purchase-import/SKILL
    Monarch tool exposed no cursor/offset and capped detailed responses at 20;
    recheck the current tools. A returned continuation such as `next_offset` is
    usable only when the live request schema accepts it; a response hint alone
-   does not supply a pagination capability. Use basic enumeration plus targeted detail reads,
+   does not supply a pagination capability. Verify account filters against every
+   returned row's account ID: unknown filter keys can be silently ignored.
+   An accepted request alone does not prove account scope. Use basic enumeration plus targeted detail reads,
    subdividing accounts/date windows until all identities can be enumerated.
    A nontruncated flag, a short page, count agreement or signed-total agreement
    alone does not prove completeness. Reconcile actual identity coverage with
