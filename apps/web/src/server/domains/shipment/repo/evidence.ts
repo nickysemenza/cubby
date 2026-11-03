@@ -67,6 +67,8 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
+import { deduplicateShipmentTrackingReferences } from "./carrier-references";
+
 const refuse = (message: string): never => {
   throw createAppError("CONSTRAINT_VIOLATION", message);
 };
@@ -703,7 +705,14 @@ async function writeShipmentEvidence(
           purchaseId,
           carrierId: carrier.id,
           trackingNumber: number,
-          extraTrackingNumbers,
+          extraTrackingNumbers: await deduplicateShipmentTrackingReferences(
+            tdb,
+            {
+              trackingNumber: number,
+              carrierId: carrier.id,
+              extraTrackingNumbers,
+            },
+          ),
           purpose:
             packet.purpose === "unknown" && input.source.kind === "sms_export"
               ? "incoming"
@@ -741,9 +750,11 @@ async function writeShipmentEvidence(
             carrierName: packet.carrierName,
             trackingNumber: number,
           });
-        const uniqueRefs = [
-          ...new Map(refs.map((ref) => [canonical(ref), ref])).values(),
-        ];
+        const uniqueRefs = await deduplicateShipmentTrackingReferences(tdb, {
+          trackingNumber: row.trackingNumber ?? number,
+          carrierId: adoptedCarrier,
+          extraTrackingNumbers: refs,
+        });
         await database
           .update(shipment)
           .set({
@@ -1152,9 +1163,16 @@ export async function mergeShipment(
         purchaseAssociationReviewed:
           target.purchaseAssociationReviewed ||
           source.purchaseAssociationReviewed,
-        extraTrackingNumbers: [
-          ...new Map(refs.map((ref) => [canonical(ref), ref])).values(),
-        ],
+        extraTrackingNumbers: await deduplicateShipmentTrackingReferences(tdb, {
+          trackingNumber: target.trackingNumber ?? source.trackingNumber,
+          carrierId:
+            target.carrierId ??
+            (!target.trackingNumber ||
+            target.trackingNumber === source.trackingNumber
+              ? source.carrierId
+              : null),
+          extraTrackingNumbers: refs,
+        }),
       })
       .where(eq(shipment.id, target.id));
     await getDb(tdb)
