@@ -134,6 +134,11 @@ references remain independent. UUID and shortcode endpoints, unknown historical
 connection scopes, and retained null-scope evidence records keep their matches.
 Presentation still enumerates the complete original references.
 
+Statement settlement matching follows the
+[shared proposal contract](../entities.md#shared-proposal-queue-and-automatic-decisions):
+an unrelated record scope must not aggregate every statement's linked display
+references.
+
 ## Cutover preservation
 
 One owner controls the production cutover. An early expansion/copy is not the

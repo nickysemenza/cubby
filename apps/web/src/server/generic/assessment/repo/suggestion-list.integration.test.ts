@@ -18,6 +18,7 @@ import { getDb } from "~/server/db/helpers";
 import {
   assessment,
   assessmentState,
+  financialTransactionAllocation,
   sourceTransactionRecord,
   transactionImport,
 } from "~/server/db/schema";
@@ -45,6 +46,7 @@ import {
   publishFieldAssessment,
   recordFeedback,
 } from "./assessment";
+import { listAutomaticDecisions } from "./automatic-decisions";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
@@ -299,6 +301,177 @@ describe("cross-family Suggestion list", () => {
         ).items.map((row) => row.assessmentId),
       ).toEqual(unscoped.items.map((row) => row.assessmentId));
     }
+  });
+
+  it("scopes statement history through settlement allocations to Expenses", async () => {
+    const account = (await card(ctx)).output;
+    await record(ctx, [
+      rowInput({ providerTransactionId: "synthetic-scope-charge" }),
+    ]);
+    await generate(ctx);
+    const [source] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord)
+      .where(
+        eq(
+          sourceTransactionRecord.providerTransactionId,
+          "synthetic-scope-charge",
+        ),
+      );
+    if (!source) throw new Error("Synthetic source observation missing");
+    const proposal = (
+      await listSuggestionPage(ctx.db, { family: "statement_transaction" })
+    ).items.find(
+      (row) =>
+        row.family === "statement_transaction" &&
+        row.evidence.rawDescription === "EXAMPLE GROCER 0001",
+    );
+    if (!proposal) throw new Error("Synthetic statement proposal missing");
+    const vendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic settlement vendor",
+    });
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-05-04",
+    });
+    const expense = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic allocated line",
+      purchaseId: purchase.output.id,
+      date: "2026-05-04",
+      cost: 42.5,
+      costType: "materials",
+      trade: "building",
+    });
+    const unrelated = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic unrelated line",
+      costType: "materials",
+      trade: "building",
+    });
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-04",
+      sourceRefs: [{ source: "monarch", externalId: source.externalId }],
+      allocations: [{ purchaseId: purchase.output.id, amount: 42.5 }],
+    });
+    const expenseId = await resolveOrThrow(
+      ctx.db,
+      "expense",
+      expense.output.id,
+    );
+    const unrelatedId = await resolveOrThrow(
+      ctx.db,
+      "expense",
+      unrelated.output.id,
+    );
+    const accountId = await resolveOrThrow(
+      ctx.db,
+      "financialAccount",
+      account.id,
+    );
+    const expenseRef = {
+      entity: "expense",
+      id: expenseId,
+      code: expense.output.id,
+    };
+    const unrelatedRef = {
+      entity: "expense",
+      id: unrelatedId,
+      code: unrelated.output.id,
+    };
+    const accountRef = {
+      entity: "financialAccount",
+      id: accountId,
+      code: account.id,
+    };
+    const eligibility = {
+      kind: "suggestions",
+      families: [assessmentFamily.enum.statement_transaction],
+      status: "pending",
+    } satisfies Parameters<typeof touchingAssessmentIds>[1]["eligibility"];
+    const scoped = async (
+      records: NonNullable<
+        Parameters<typeof touchingAssessmentIds>[1]["records"]
+      >,
+    ) =>
+      await touchingAssessmentIds(ctx.db, {
+        records,
+        eligibility,
+      });
+    expect(await scoped([expenseRef])).toContain(proposal.assessmentId);
+    expect(await scoped([unrelatedRef])).not.toContain(proposal.assessmentId);
+    expect(await scoped([unrelatedRef, accountRef])).toContain(
+      proposal.assessmentId,
+    );
+    expect(
+      await touchingAssessmentIds(ctx.db, { entity: "expense", eligibility }),
+    ).toContain(proposal.assessmentId);
+
+    const purchaseId = await resolveOrThrow(
+      ctx.db,
+      "purchase",
+      purchase.output.id,
+    );
+    await getDb(ctx.db)
+      .update(financialTransactionAllocation)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialTransactionAllocation.purchaseId, purchaseId));
+    expect(await scoped([expenseRef])).not.toContain(proposal.assessmentId);
+    await getDb(ctx.db)
+      .update(financialTransactionAllocation)
+      .set({ deletedAt: null })
+      .where(eq(financialTransactionAllocation.purchaseId, purchaseId));
+
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ status: "superseded", active: false })
+      .where(eq(assessmentState.id, proposal.assessmentId));
+    await recordFeedback(ctx.db, {
+      assessmentId: proposal.assessmentId,
+      operationId: "synthetic.statement-history",
+      verdict: "ungraded",
+      authority: "automatic",
+      intent: "apply",
+      actorUserId: ctx.actor.userId,
+      metadata: {
+        kind: "assessment_application",
+        rule: { key: "synthetic-statement-rule", revision: 1 },
+      },
+      receipt: { synthetic: true },
+    });
+    const history = async (recordIds: string[]) =>
+      (
+        await listAutomaticDecisions(ctx.db, {
+          family: "statement_transaction",
+          recordIds,
+        })
+      ).items.map((row) => row.id);
+    expect(await history([expense.output.id])).toContain(proposal.assessmentId);
+    expect(await history([unrelated.output.id])).not.toContain(
+      proposal.assessmentId,
+    );
+    expect(await history([unrelated.output.id, account.id])).toContain(
+      proposal.assessmentId,
+    );
+    expect(
+      await touchingAssessmentIds(ctx.db, {
+        entity: "expense",
+        eligibility: {
+          kind: "automatic",
+          appliedRule: automaticApplicationRule,
+        },
+      }),
+    ).toContain(proposal.assessmentId);
+
+    await getDb(ctx.db)
+      .update(financialTransactionAllocation)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialTransactionAllocation.purchaseId, purchaseId));
+    expect(await history([expense.output.id])).not.toContain(
+      proposal.assessmentId,
+    );
   });
 
   it("excludes matching column values while keeping null and absent values", async () => {
