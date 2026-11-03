@@ -12,6 +12,8 @@ import { env } from "cloudflare:workers";
 import { expect, it } from "vitest";
 import type { z } from "zod";
 
+import type { JobSchedulerDurableObject } from "./durable-object";
+
 const deadline = (offset: number) =>
   schedulerDeadline.parse({
     job: jobShortcode.parse("JOB-A3F2A3F2A3"),
@@ -113,7 +115,12 @@ it("bounds failed deadline observations and allows explicit recovery after the d
   await runInDurableObject(stub, (instance) => {
     Object.defineProperty(instance, "readDeadlines", {
       value: async () => {
-        if (unavailable) throw new Error("Synthetic database unavailable");
+        if (unavailable)
+          throw new Error("Synthetic query wrapper", {
+            cause: Object.assign(new Error("Synthetic database unavailable"), {
+              code: "08006",
+            }),
+          });
         return [];
       },
     });
@@ -126,10 +133,50 @@ it("bounds failed deadline observations and allows explicit recovery after the d
   const failed = schedulerSnapshot.parse(await stub.snapshot());
   expect(failed.observationAttempts).toBe(6);
   expect(failed.observationError).toContain("Synthetic database unavailable");
+  expect(failed.observationError).toContain("08006");
   expect(failed.alarmAt).toBeNull();
   unavailable = false;
   await stub.reconcile("synthetic.database-returned");
   const recovered = schedulerSnapshot.parse(await stub.snapshot());
   expect(recovered.observationError).toBeNull();
   expect(recovered.alarmAt).toBeNull();
+});
+
+it("propagates a history persistence failure after queue acceptance without reporting failed delivery", async () => {
+  const stub = env.JOB_SCHEDULER.getByName(crypto.randomUUID());
+  const error = await runInDurableObject(
+    stub,
+    async (instance: JobSchedulerDurableObject, state) => {
+      Object.defineProperty(instance, "readDeadlines", {
+        value: async () => [],
+      });
+      const put = state.storage.put.bind(state.storage);
+      let failed = false;
+      Object.defineProperty(state.storage, "put", {
+        value: async (key: string, value: unknown) => {
+          const snapshot = schedulerSnapshot.safeParse(value);
+          if (
+            !failed &&
+            snapshot.success &&
+            snapshot.data.events.at(-1)?.event === "wake-accepted"
+          ) {
+            failed = true;
+            throw new Error("Synthetic history persistence failed");
+          }
+          return put(key, value);
+        },
+      });
+      try {
+        await instance.wake("synthetic.persistence");
+        return null;
+      } catch (failure) {
+        return failure instanceof Error ? failure.message : String(failure);
+      }
+    },
+  );
+  expect(error).toBe("Synthetic history persistence failed");
+  const snapshot = schedulerSnapshot.parse(await stub.snapshot());
+  expect(snapshot.events.some((entry) => entry.event === "wake-failed")).toBe(
+    false,
+  );
 });

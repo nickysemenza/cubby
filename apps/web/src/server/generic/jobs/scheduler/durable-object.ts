@@ -5,11 +5,13 @@ import {
   type SchedulerSnapshot,
 } from "@cubby/schemas/job-scheduler";
 import { BACKGROUND_TASK_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
-import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
-import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { DurableObject } from "cloudflare:workers";
 
+import {
+  describeErrorCauses,
+  scrubErrorMessage,
+} from "~/lib/error-diagnostics";
 import { withCfEnv } from "~/server/cf-env";
 import { notifyDatabaseChanges } from "~/server/db/freshness/client";
 
@@ -122,7 +124,9 @@ export class JobSchedulerDurableObject
     } catch (error) {
       // Own the bounded observation retry, rather than layering it with platform retries.
       this.state.observationAttempts++;
-      this.state.observationError = scrubErrorMessage(getErrorMessage(error));
+      this.state.observationError = scrubErrorMessage(
+        JSON.stringify(describeErrorCauses(error)),
+      );
       await this.arm();
       await this.record(
         "reconciliation-failed",
@@ -169,17 +173,19 @@ export class JobSchedulerDurableObject
     this.state.deliveryPendingSince ??= new Date().toISOString();
     try {
       await this.sendWake();
-      this.state.deliveryPendingSince = null;
-      this.state.deliveryAttempts = 0;
-      await this.record("wake-accepted", cause);
     } catch (error) {
       this.state.deliveryAttempts++;
       await this.record(
         "wake-failed",
         cause,
-        scrubErrorMessage(getErrorMessage(error)),
+        scrubErrorMessage(JSON.stringify(describeErrorCauses(error))),
       );
+      return;
     }
+    // Persistence failures must propagate; the queue has already accepted this wake.
+    this.state.deliveryPendingSince = null;
+    this.state.deliveryAttempts = 0;
+    await this.record("wake-accepted", cause);
   }
 
   private sendWake(): Promise<void> {
