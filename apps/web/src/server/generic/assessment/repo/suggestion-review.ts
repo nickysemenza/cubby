@@ -58,6 +58,7 @@ import { transitionAssessmentState } from "~/server/generic/assessment/repo/asse
 import {
   fieldInputFingerprint,
   fieldInputFingerprintIfLive,
+  fieldInputFingerprintsIfLive,
   fenceFieldInputsAtCommit,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
@@ -189,6 +190,25 @@ type StoredFieldRow = {
 
 /** Public queue rows: records and receipt Runs named by shortcode. */
 async function presentFieldRows(db: Database, rows: StoredFieldRow[]) {
+  const ordinary = rows.filter(({ suggestion }) => {
+    if (suggestion.status !== "pending") return false;
+    const data = z.record(z.string(), z.json()).parse(suggestion.data);
+    return (
+      !("connectionEvidence" in data) &&
+      typeof data.liveInputFingerprint === "string"
+    );
+  });
+  const current = await fieldInputFingerprintsIfLive(
+    db,
+    ordinary.map(({ suggestion }) => ({
+      entity: suggestion.entity,
+      recordId: suggestion.recordId,
+      field: suggestion.field,
+    })),
+  );
+  const fingerprints = new Map(
+    ordinary.map(({ suggestion }, index) => [suggestion.id, current[index]]),
+  );
   const currentRows: StoredFieldRow[] = [];
   for (const row of rows) {
     const suggestion = row.suggestion;
@@ -210,13 +230,7 @@ async function presentFieldRows(db: Database, rows: StoredFieldRow[]) {
       } else {
         if (
           typeof data.liveInputFingerprint !== "string" ||
-          data.liveInputFingerprint !==
-            (await fieldInputFingerprintIfLive(
-              db,
-              suggestion.entity,
-              suggestion.recordId,
-              suggestion.field,
-            ))
+          data.liveInputFingerprint !== fingerprints.get(suggestion.id)
         )
           continue;
       }
