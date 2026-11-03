@@ -786,9 +786,6 @@ export function pendingRecommendationEligibility() {
 }
 
 function assessmentRecordMatches(scope: AssessmentRecordScope): SQL[] {
-  const requested = scope.entity
-    ? [scope.entity]
-    : scope.records?.map((r) => r.entity);
   const primaryFamilies = Object.entries(reviewFamilyDeclarations).flatMap(
     ([family]) =>
       family !== assessmentFamily.enum.email_link &&
@@ -833,15 +830,7 @@ function assessmentRecordMatches(scope: AssessmentRecordScope): SQL[] {
   const secondary = Object.entries(reviewFamilyDeclarations).flatMap(
     ([family, spec]) => {
       if ("primaryOnly" in spec) return [];
-      const match =
-        "matchesRelatedRecords" in spec
-          ? spec.matchesRelatedRecords(scope)
-          : recordRefsMatch(
-              scope,
-              requested && "recordsFor" in spec
-                ? spec.recordsFor(requested)
-                : spec.records,
-            );
+      const match = spec.matchesRelatedRecords(scope);
       return match ? [{ family: assessmentFamily.parse(family), match }] : [];
     },
   );
