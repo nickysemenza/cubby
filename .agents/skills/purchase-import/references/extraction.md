@@ -75,9 +75,10 @@ package, with `shipmentId` null unless a verified existing `SHIP-` is supplied.
 Preserve `sourceShipmentKey` from a stable source package identifier. Set
 `distinctPackageEvidence` to null for ordinary tracked-package updates: a new
 Email, tracking number, item list, or changed shipping status does not establish
-a separate package. A non-null value bypasses automatic tracking matching, so
-quote it only when the source establishes a distinct package, such as "package
-2 of 2" under a shared master number. A new trackingless package requires both
+a separate package. A non-null value records a separate-package claim for
+review; it never bypasses tracking identity matching. Quote it only when the
+source establishes a distinct package, such as "package 2 of 2" under a shared
+master number. A new trackingless package requires both
 a stable source key and distinct-package evidence; an order number or generic
 order-wide status alone cannot distinguish packages. Keep ambiguous facts in
 the original rather than inventing a packet. Split packages stay separate even
@@ -90,8 +91,21 @@ package. Give each source its supported observations with
 
 Retain the primary `carrierName` and `trackingNumber` verbatim, and explicit
 handoff pairs in `extraTrackingNumbers`. Carrier IDs, when supplied by verified
-lookups, are Vendor `VEN-` codes; otherwise leave `carrierId` null and let the
-writer resolve the literal name using existing Vendor name resolution. Supply
+lookups, are Vendor `VEN-` codes; otherwise leave `carrierId` null. Supply
+`carrierClaims` for each package-specific carrier statement/label: its exact
+tracking reference, literal name, service wording, carrier/intermediary role,
+and a short exact quote positively attributing the package to that carrier
+(direct carrier/tracking pair, carrier field, or shipped-via statement with a
+labeled reference). Co-occurrence and negated statements are insufficient.
+A `link` claim copies the exact original Email hyperlink; intake verifies its
+host, supported tracking route and exact reference against the retained original.
+Keep unsupported routes as evidence. Mark number-shape or constructed-URL
+guesses as inference. Intake resolves existing unambiguous
+Vendor names/aliases from retained proof; unsupported claims stay unknown.
+Merchant, broker and label-service names belong to intermediary claims unless
+the source identifies them as the actual carrier. Preserve explicit handoffs.
+UPS supports 12-digit numbers; shape alone never establishes or excludes a
+carrier. Supply
 an explicit carrier reference only when the literal name matches that Vendor or
 one of its aliases; a merchant reference cannot stand in for a carrier.
 `purpose` is direction relative to the household: incoming, outgoing or

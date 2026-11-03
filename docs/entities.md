@@ -164,7 +164,9 @@ provenance, and `work` reports background activity independently. Inherit, expli
 value and explicit None are separate intents. A successful empty outcome is not
 a missing computation. A missing result renders Updating… (or Unavailable with its raw failure); it never renders the successful empty state. Automatic ownership comes from current receipts and audit
 evidence, never a cached `automaticFields` value; edits and same-value confirmation
-end that ownership immediately.
+end that ownership immediately. Member field review and deterministic source
+assignment share the existing field-correction gate before record writes, including
+reviews that leave the stored value unchanged.
 
 `packages/schemas/src/field-envelope-presentation.ts` and CubbyKit's
 `FieldEnvelopePresentation.swift` are the client twin owners of empty and missing
@@ -4842,6 +4844,10 @@ Scoped Suggestions reads match primary UUID identities and secondary family grap
 separate SQL branches before joining immutable Assessment evidence. This keeps
 unrelated pending families out of the evidence join; overlapping branches
 still contribute each Assessment once to the caller's identity set.
+Batched references group UUID and shortcode IDs by entity kind into one
+membership predicate per kind. This keeps both connection-index keys in the
+index condition instead of filtering many per-record alternatives after
+reopening unrelated evidence. Mixed kinds retain their separate alternatives.
 Field-reference predicates inspect only declared reference fields and their
 current/proposed values rather than constructing a complete display-reference
 array for every candidate. Statement settlement predicates apply resolved record
