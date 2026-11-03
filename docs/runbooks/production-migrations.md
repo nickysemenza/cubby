@@ -86,6 +86,27 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Assessment endpoint indexes (0065)
+
+`0065_assessment_connection_reference_indexes` adds two partial expression
+indexes over the immutable connection source and target. It changes no rows,
+stored evidence, Feedback, queues or app state. The normal migration-before-deploy
+sequence builds them before the indexed scoped reads ship. This ordinary migration
+runs both non-concurrent index builds in one transaction. Each build reads the
+retained connection evidence. It can wait behind an existing writer, then blocks
+Assessment writes until both builds commit. The runner sets no lock or statement
+timeout for this migration; its two-second lock timeout applies only to opted-in
+transaction-per-statement migrations. Keep single-operator ownership. A failed
+build rolls back both indexes atomically and must stop deployment without
+bypassing bookkeeping.
+
+After deployment, verify both `Assessment_connection_source_ref_idx` and
+`Assessment_connection_target_ref_idx` are ready and valid in `pg_index`. Verify
+normal scoped Suggestions/Automatic Decisions and record counts, then correlate
+their database I/O and transaction-start, backlog and session-lookup behavior
+with Worker/Hyperdrive evidence. Quiet Sentry groups alone do not establish
+recovery. Preserve the independent native and retained-work acceptance checks.
+
 ## Source-order fanout capture
 
 Migration `0061_source_order_purchase_fanout` stops new

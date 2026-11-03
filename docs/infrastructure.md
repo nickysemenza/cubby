@@ -177,6 +177,13 @@ The Run page observes without resuming work. Opening a harness resumes its
 pending tasks, so `/stream` from an object whose agent is already constructed
 for Run work is the agent's live push stream; every other observation reads the
 retained pi_ SQLite tables (`agent-transcript.ts`, version-fenced). Both
+read adapters accept the known SQLite 1 and 2 layouts: upstream
+[schema 2](https://github.com/earendil-works/pi/commit/f75b3240abc354bd1a666748e9101220554f5be2)
+adds sleeping tasks without changing committed entries, usage documents or
+their revisions. A sleeping task remains unfinished in the observed status.
+The readers reject unknown retained or installed versions, never migrate
+storage, and do not imply that the installed execution SDK can resume a newer
+store. Live and retained observations
 include pi's own `pi.usage` token totals per model (`model-usage.ts`), which
 the Run page compares against the Run's `AiUsage` rows to expose calls the
 usage hook missed, such as compaction summaries; cost stays in `AiUsage`. The
@@ -953,6 +960,10 @@ in `packages/worker-tracing/src/sentry-dsn.ts`; the web client and Worker, the
 dev-only Node preload, and every auxiliary Worker import it from there. The
 native app uses a separate `cubby-apple` Sentry project. Authentication and
 ownership for both projects remain provider-side state.
+Hermetic Worker tests set `SENTRY_ENVIRONMENT=test`, which disables error
+delivery through the same policy as the E2E runtime. A missing test identity
+otherwise defaults the Durable Object wrapper to production with an unknown
+release, so those tags alone do not establish production origin.
 
 Cloudflare joins service-binding, JS RPC, and Durable Object subrequests into
 one trace, so the run page's proxy into the purchase agent's Durable Object
@@ -1018,6 +1029,10 @@ Authenticated Start, workflow-stream, HTTP and MCP failures follow the
 values are redacted. Request-scoped reporting captures the original exception
 and supplies correlation/Sentry references; a capture ID is an attempt, not
 proof of ingestion, and MCP batch items retain separate references.
+Operation dispatch authenticates before reading input. A session lookup failure
+retains the context stage and a generic unauthenticated message; only input
+parsing and validation failures use the input stage. Authentication failures
+must not be presented as invalid operation input.
 
 Authenticated diagnostics retain complete messages, stacks, SQL and parameters,
 upstream response bodies, and all distinct causes, with cycle detection rather

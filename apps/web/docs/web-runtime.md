@@ -117,6 +117,14 @@ bounded entry-aware schema grouping read an undefined `schema.shape` during
 Product startup in a paired probe. A successful bundle build does not
 establish client initialization; verify real authenticated navigation when
 changing chunk boundaries.
+Deployment preload recovery schedules a bounded reload while leaving Vite's
+preload error uncancelled. Preventing that event makes the import promise fulfill
+with `undefined`, turning an asset-fetch failure into a second lazy-module error.
+Keep the original rejection, cooldown, offline guard and navigation cancellation.
+The existing browser Sentry scope records the guarded decision in a
+`preload.recovery` breadcrumb, before the original error is captured. A scheduled
+decision does not prove the reload completed or recovered. Denied session-storage
+access declines recovery without breaking router setup.
 Specialist list columns are declared as `route.listColumns` source references.
 The account menu loads after hydration behind its existing SSR placeholder;
 its session-dependent controls do not belong in the Worker render closure.

@@ -86,7 +86,7 @@ describe("operation endpoint", () => {
     });
   });
 
-  it("renders an authentication challenge without dispatching", async () => {
+  it("keeps authentication refusals and failures separate from input errors", async () => {
     const loadOperationHandler = vi.fn();
     const { handleOperationRequest } = createOperationDispatch({
       authenticate: async () => ({
@@ -102,6 +102,45 @@ describe("operation endpoint", () => {
     expect(await response.json()).toMatchObject({
       code: "FORBIDDEN",
       diagnostics: { operation: "dispatch", stage: "context" },
+    });
+    expect(loadOperationHandler).not.toHaveBeenCalled();
+
+    const { handleOperationRequest: failingAuthentication } =
+      createOperationDispatch({
+        authenticate: async () => {
+          throw new Error("Failed to get session", {
+            cause: new Error("Synthetic database acquisition failure"),
+          });
+        },
+        loadOperationHandler,
+      });
+    const renewal = post("imageProcessing.renew");
+    const failure = await failingAuthentication(renewal);
+    expect(failure.status).toBe(500);
+    expect(await failure.json()).toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "The operation could not be completed",
+      diagnostics: { operation: "dispatch", stage: "context", causes: [] },
+    });
+    expect(renewal.bodyUsed).toBe(false);
+    expect(loadOperationHandler).not.toHaveBeenCalled();
+
+    const { handleOperationRequest: authenticatedRequest } =
+      createOperationDispatch({
+        authenticate: async () => principal("cli"),
+        loadOperationHandler,
+      });
+    const malformed = await authenticatedRequest(
+      new Request("https://cubby.example/api/operations/entity.detail", {
+        method: "POST",
+        body: JSON.stringify({ unexpected: true }),
+      }),
+    );
+    expect(malformed.status).toBe(400);
+    expect(await malformed.json()).toMatchObject({
+      code: "BAD_REQUEST",
+      reason: "INVALID_INPUT",
+      diagnostics: { stage: "input" },
     });
     expect(loadOperationHandler).not.toHaveBeenCalled();
   });

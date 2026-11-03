@@ -11,6 +11,8 @@ export const testWorker = defineWorker({
       exportName: "JobSchedulerDurableObject",
     }),
     BACKGROUND_QUEUE: bindings.queue({ name: "cubby-scheduler-test" }),
+    // Hermetic Durable Object failures must not become production issues.
+    SENTRY_ENVIRONMENT: bindings.text("test"),
     AI_GATEWAY_EGRESS: bindings.durableObject({
       worker: "cubby-calendar-test",
       exportName: "AiGatewayEgressDurableObject",
