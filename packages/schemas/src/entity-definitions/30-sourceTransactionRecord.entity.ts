@@ -22,6 +22,7 @@ export const { definition, readSchemas } = defineEntityModel({
   identifiers: { brand: "SourceTransactionRecordId", shortcode: "STR-" },
   route: { basePath: "source-transaction-records" },
   presentation: {
+    searchFacts: ["statementDate", "amount"],
     titleField: "displayName",
     domain: "finance",
     description: "One retained version of a source-reported transaction.",

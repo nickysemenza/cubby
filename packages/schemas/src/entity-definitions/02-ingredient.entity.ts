@@ -21,6 +21,7 @@ export const { definition, readSchemas } = defineEntityModel(
     table: "Ingredient",
     identifiers: { brand: "IngredientId", shortcode: "ING-" },
     presentation: {
+      searchFacts: ["usuallyOnHand"],
       titleField: "name",
       domain: "cook",
       description: "Canonical cooking ingredients and aliases.",

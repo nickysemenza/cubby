@@ -35,6 +35,7 @@ export const { definition, readSchemas } = defineEntityModel(
     table: "Location",
     identifiers: { brand: "LocationId", shortcode: "LOC-" },
     presentation: {
+      searchFacts: ["type"],
       titleField: "name",
       domain: "pantry",
       description: "The hierarchy of household storage places.",

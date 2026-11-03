@@ -55,6 +55,7 @@ export const { definition, readSchemas } = defineEntityModel(
     children: imageChildren,
     identifiers: { brand: "ImageId", shortcode: "IMG-" },
     presentation: {
+      searchFacts: ["capturedAt", "size"],
       titleField: "filename",
       domain: null,
       description: "Images attached to household records.",

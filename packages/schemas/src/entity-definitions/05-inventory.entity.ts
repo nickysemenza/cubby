@@ -49,6 +49,7 @@ export const { definition, readSchemas } = defineEntityModel(
     // only `inventoryListItemOut`/`inventoryWithLocationAndProductOut` (see
     // `inventoryDisplayName` in packages/schemas/src/inventory.ts) carry it.
     presentation: {
+      searchFacts: ["verifiedAt", "amount"],
       titleField: "displayName",
       domain: "pantry",
       description: "Approximate quantities at physical locations.",

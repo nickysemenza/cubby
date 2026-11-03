@@ -1651,6 +1651,8 @@ const buildMetadataSchemas = () => {
   const entityPresentationMetadataSchema = z
     .object({
       titleField: nonEmptyString(),
+      /** Ordered disambiguating list fields for Cmd+K and full search; no fallbacks. */
+      searchFacts: z.array(nonEmptyString()).max(2).default([]),
       /**
        * The wayfinding line an entity's records live on, or `null` for one
        * that belongs to no line (image). Drives nav grouping, domain colours

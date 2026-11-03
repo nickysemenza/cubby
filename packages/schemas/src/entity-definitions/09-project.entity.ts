@@ -223,6 +223,7 @@ export const { definition, readSchemas } = defineEntityModel({
   table: "Project",
   identifiers: { brand: "ProjectId", shortcode: "PRJ-" },
   presentation: {
+    searchFacts: ["status", "spent"],
     edit: {
       sections: [
         {

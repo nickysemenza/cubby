@@ -19,6 +19,10 @@ import {
 } from "react";
 
 import { entities } from "~/entity/entities";
+import {
+  SearchFacts,
+  SearchShortcode,
+} from "~/entity/presentation/search-facts";
 import { search } from "~/integrations/tanstack-query/generated/domains/search.gen";
 import { cn } from "~/lib/utils";
 import { MobileCard } from "~/ui/data-table/mobile-card";
@@ -34,7 +38,6 @@ import {
   useEntityPreview,
 } from "../../entity/hooks/use-entity-preview";
 import {
-  getSearchMatchText,
   getSearchResultHref,
   getSearchResultRoute,
   SearchResultMedia,
@@ -389,20 +392,8 @@ function SearchRow({
         )}
       </div>
       <PreviewButton onClick={() => onPreview(previewRow)} />
-      <div className="hidden max-w-44 shrink-0 text-right sm:block">
-        <span className="block truncate text-xs font-medium text-muted-foreground">
-          {entities[item.entityKind].label}
-        </span>
-        <span className="block truncate font-mono text-2xs text-foreground tabular-nums">
-          {item.id}
-        </span>
-        <span
-          className="block truncate text-2xs text-muted-foreground"
-          title={item.matchReason}
-        >
-          {getSearchMatchText(item)}
-        </span>
-      </div>
+      <SearchFacts item={item} />
+      <SearchShortcode item={item} />
     </div>
   );
 }
@@ -501,20 +492,8 @@ function ProductSearchRow({
           </span>
         </div>
         <PreviewButton onClick={() => onPreview(previewRow)} />
-        <div className="hidden max-w-44 shrink-0 text-right sm:block">
-          <span className="block text-xs font-medium text-muted-foreground">
-            Product
-          </span>
-          <span className="block font-mono text-2xs text-foreground tabular-nums">
-            {group.primary.id}
-          </span>
-          <span
-            className="block max-w-44 truncate text-2xs text-muted-foreground"
-            title={group.bestMatch.matchReason}
-          >
-            {getSearchMatchText(group.bestMatch)}
-          </span>
-        </div>
+        <SearchFacts item={group.primary} />
+        <SearchShortcode item={group.primary} />
       </div>
       {expanded && hasChildren && (
         <ProductFamilyLinks id={regionId} group={group} />
@@ -575,7 +554,9 @@ function MobileSearchResults({
                         variant="mobile"
                       />
                     }
-                    rightValues={[group.primary.id, "Product"]}
+                    rightValues={[
+                      <SearchShortcode key="code" item={group.primary} />,
+                    ]}
                     // A real `<Link>` href gives TanStack's touchstart intent
                     // preload (`defaultPreload: "intent"` in `src/router.tsx`)
                     // a chance to resolve the detail loader before the tap
@@ -587,7 +568,9 @@ function MobileSearchResults({
                     onClick={() =>
                       navigate(getSearchResultRoute(group.primary))
                     }
-                  />
+                  >
+                    <SearchFacts item={group.primary} mobile />
+                  </MobileCard>
                 </div>
                 {hasChildren && (
                   <ProductFamilyToggle
@@ -622,10 +605,12 @@ function MobileSearchResults({
                 : (searchHitContext(item) ?? undefined)
             }
             imageSlot={<SearchResultMedia item={item} variant="mobile" />}
-            rightValues={[item.id, entities[item.entityKind].label]}
+            rightValues={[<SearchShortcode key="code" item={item} />]}
             detailsHref={getSearchResultHref(item)}
             onClick={() => navigate(getSearchResultRoute(item))}
-          />
+          >
+            <SearchFacts item={item} mobile />
+          </MobileCard>
         );
       })}
     </div>

@@ -145,6 +145,7 @@ export const searchHitSchema = z.object({
   typeHint: z.string().nullable(),
   imageUrl: z.string().nullable(),
   facts: z.array(z.string()).max(3).default([]),
+  fieldFacts: z.record(z.string(), z.json()).optional(),
   matchKind: searchMatchKindSchema,
   matchField: searchMatchFieldSchema,
   matchReason: z.string(),
@@ -164,6 +165,7 @@ export const searchDestinationSchema = searchHitSchema.pick({
   typeHint: true,
   imageUrl: true,
   facts: true,
+  fieldFacts: true,
 });
 export type SearchDestination = z.infer<typeof searchDestinationSchema>;
 

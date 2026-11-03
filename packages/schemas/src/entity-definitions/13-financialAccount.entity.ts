@@ -31,6 +31,7 @@ export const { definition, readSchemas } = defineEntityModel({
   table: "FinancialAccount",
   identifiers: { brand: "FinancialAccountId", shortcode: "FAC-" },
   presentation: {
+    searchFacts: ["providerVendorName", "network"],
     edit: {
       sections: [
         {
