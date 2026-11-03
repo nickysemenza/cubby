@@ -255,8 +255,28 @@ const recommendationScopes = {
   tagPropagation: sql`a.subject->>'scope' = 'product.tag-propagation'`,
 };
 
+const statementSettlementFrom = sql`FROM "EntityExternalId" evidence
+  JOIN "FinancialTransaction" settled ON settled.id=evidence."entityId" AND ${notDeleted("settled")}
+  JOIN "FinancialAccount" account ON account.id=settled."accountId"
+  LEFT JOIN "FinancialTransactionAllocation" allocation ON allocation."transactionId"=settled.id AND ${notDeleted("allocation")}
+  LEFT JOIN "Purchase" booked ON booked.id=allocation."purchaseId" AND ${notDeleted("booked")}
+  LEFT JOIN "Expense" line ON line."purchaseId"=booked.id AND ${notDeleted("line")}`;
+const statementSettlementScope = sql`evidence.kind=${entityExternalIdKind.enum.settlement_ref} AND ${notDeleted("evidence")}
+  AND evidence.source=a.judgment #>> '{create,sourceRef,source}'
+  AND evidence."externalId"=a.judgment #>> '{create,sourceRef,externalId}'`;
+const statementSettlementRefs = [
+  { entity: entities.financialTransaction, id: sql<string>`settled.id` },
+  { entity: entities.purchase, id: sql<string>`booked.id` },
+  { entity: entities.expense, id: sql<string>`line.id` },
+  { entity: entities.vendor, id: sql<string>`booked."vendorId"` },
+  { entity: entities.ledgerParty, id: sql<string>`account."ledgerPartyId"` },
+];
+
 /** Narrow requested reference kinds before expanding candidate and settlement graphs. */
-function statementRecords(requested?: readonly string[]) {
+function statementRecordParts(
+  requested?: readonly string[],
+  withSettlements = true,
+) {
   const includes = (entity: string) => !requested || requested.includes(entity);
   const parts: SQL[] = [];
   const add = (entity: string, id: SQL) => {
@@ -292,28 +312,17 @@ function statementRecords(requested?: readonly string[]) {
     entities.spendingCategory,
     sql`(SELECT category.id::text FROM "SpendingCategory" category WHERE category.shortcode=a.judgment->${statementTransactionJudgment.keyof().enum.spending}->>'spendingCategoryId' AND ${notDeleted("category")})`,
   );
-  const related = [
-    { entity: entities.financialTransaction, id: sql`settled.id::text` },
-    { entity: entities.purchase, id: sql`booked.id::text` },
-    { entity: entities.expense, id: sql`line.id::text` },
-    { entity: entities.vendor, id: sql`booked."vendorId"::text` },
-    { entity: entities.ledgerParty, id: sql`account."ledgerPartyId"::text` },
-  ].filter(({ entity }) => includes(entity));
+  const related = statementSettlementRefs.filter(
+    ({ entity }) => withSettlements && includes(entity),
+  );
   if (related.length)
     parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
-        FROM "EntityExternalId" evidence
-        JOIN "FinancialTransaction" settled ON settled.id=evidence."entityId" AND ${notDeleted("settled")}
-        JOIN "FinancialAccount" account ON account.id=settled."accountId"
-        LEFT JOIN "FinancialTransactionAllocation" allocation ON allocation."transactionId"=settled.id AND ${notDeleted("allocation")}
-        LEFT JOIN "Purchase" booked ON booked.id=allocation."purchaseId" AND ${notDeleted("booked")}
-        LEFT JOIN "Expense" line ON line."purchaseId"=booked.id AND ${notDeleted("line")}
+        ${statementSettlementFrom}
         CROSS JOIN LATERAL (VALUES ${sql.join(
           related.map(({ entity, id }) => sql`(${entity},${id})`),
           sql`, `,
         )}) related(kind,id)
-        WHERE evidence.kind=${entityExternalIdKind.enum.settlement_ref} AND ${notDeleted("evidence")}
-          AND evidence.source=a.judgment->${statementTransactionAction.enum.create}->'sourceRef'->>${financialTransactionSourceRef.keyof().enum.source}
-          AND evidence."externalId"=a.judgment->${statementTransactionAction.enum.create}->'sourceRef'->>'externalId'
+        WHERE ${statementSettlementScope}
           AND related.id IS NOT NULL), '[]'::jsonb)`);
   if (includes(entities.purchase))
     parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.purchase}`, sql`p.id::text`)})
@@ -323,7 +332,45 @@ function statementRecords(requested?: readonly string[]) {
     parts.push(
       sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.financialTransaction}`, sql`c->>'transactionId'`)}) FROM jsonb_array_elements(a.judgment->'candidates') c), '[]'::jsonb)`,
     );
+  return parts;
+}
+
+function statementRecords(requested?: readonly string[]) {
+  const parts = statementRecordParts(requested);
   return parts.length ? sql.join(parts, sql` || `) : sql`'[]'::jsonb`;
+}
+
+function recordRefsMatch(scope: AssessmentRecordScope, refs: SQL) {
+  return sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${refs}) r
+    WHERE ${relatedRecordMatch(scope, sql`r->>'entity'`, sql<string>`r->>'id'`)})`;
+}
+
+function statementReferenceMatch(scope: AssessmentRecordScope) {
+  const requested = scope.entity
+    ? [scope.entity]
+    : scope.records?.map((r) => r.entity);
+  const direct = statementRecordParts(requested, false);
+  const settled = statementSettlementRefs.flatMap(({ entity, id }) => {
+    if (scope.entity && scope.entity !== entity) return [];
+    const records = scope.records?.filter((record) => record.entity === entity);
+    if (records?.length === 0) return [];
+    // Resolved UUIDs keep the relation's primary-key lookup available. Display
+    // JSON instead casts every linked id to text before applying the scope.
+    return [
+      records
+        ? sql`${id} = ANY(${uuidArrayParam(records.map((record) => record.id))})`
+        : isNotNull(id),
+    ];
+  });
+  return or(
+    direct.length
+      ? recordRefsMatch(scope, sql.join(direct, sql` || `))
+      : undefined,
+    settled.length
+      ? sql`EXISTS (SELECT 1 ${statementSettlementFrom}
+          WHERE ${statementSettlementScope} AND ${or(...settled)})`
+      : undefined,
+  );
 }
 
 /** Families reviewed as Suggestions; Problems findings and grading rosters have their own reads. */
@@ -401,6 +448,7 @@ export const reviewFamilyDeclarations = {
     ...assessmentReviewFamilies.statement_transaction,
     records: statementRecords(),
     recordsFor: statementRecords,
+    matchesRelatedRecords: statementReferenceMatch,
     actionable: sql`true`,
     summarize: (value: unknown) => {
       const decision = assessmentJudgments.statement_transaction.parse(value);
@@ -763,18 +811,6 @@ function assessmentRecordMatches(scope: AssessmentRecordScope): SQL[] {
         )
       : undefined,
   );
-  const recordMatch = scope.records
-    ? or(
-        ...scope.records.map((r) =>
-          and(
-            eq(sql<string>`r->>'entity'`, r.entity),
-            inArray(sql<string>`r->>'id'`, [r.id, r.code]),
-          ),
-        ),
-      )
-    : undefined;
-  const recordExists = (refs: SQL) =>
-    sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${refs}) r WHERE ${and(isNotNull(sql`r->>'id'`), scope.entity ? eq(sql<string>`r->>'entity'`, scope.entity) : undefined, recordMatch)})`;
   // Fixed JSON paths and the literal predicate also match generic-plan indexes.
   // Immutable endpoints remain independent of the mutable primary reference.
   const connectionMatches = [
@@ -800,7 +836,8 @@ function assessmentRecordMatches(scope: AssessmentRecordScope): SQL[] {
       const match =
         "matchesRelatedRecords" in spec
           ? spec.matchesRelatedRecords(scope)
-          : recordExists(
+          : recordRefsMatch(
+              scope,
               requested && "recordsFor" in spec
                 ? spec.recordsFor(requested)
                 : spec.records,

@@ -134,6 +134,12 @@ references remain independent. UUID and shortcode endpoints, unknown historical
 connection scopes, and retained null-scope evidence records keep their matches.
 Presentation still enumerates the complete original references.
 
+Statement settlement matching applies the resolved record UUID inside the live
+settlement/allocation graph before expanding display references. Suggestions and
+Automatic Decisions share this predicate and the same deletion rules. An
+unrelated Expense must not aggregate every statement's linked records; direct
+statement, account and candidate references keep their existing meaning.
+
 ## Cutover preservation
 
 One owner controls the production cutover. An early expansion/copy is not the
