@@ -14,6 +14,11 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/wasm.ts",
+  "src/server/domains/shipment/repo/carrier-packets.ts",
+  "src/server/domains/vendor/repo/vendor-name-match.ts",
+  "src/server/domains/shipment/repo/carrier-evidence.ts",
+  "src/server/domains/shipment/repo/carrier-audit.ts",
   "src/server/domains/purchase-import/repo/sender-attribution-read.ts",
   "src/server/domains/purchase-import/repo/mail-import-settings.ts",
   "src/server/domains/purchase-import/repo/controlled-mail-import.ts",

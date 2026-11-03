@@ -4,6 +4,7 @@ import {
   parseEntityId,
   parseShortcodeFor,
   type PurchaseId,
+  type ShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import {
   recordShipmentEvidenceInput,
@@ -55,12 +56,27 @@ import { assertMailRunMembership } from "~/server/domains/purchase-import/repo/m
 import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { publishRunFinding } from "~/server/domains/purchase-import/repo/run-finding";
 import {
-  resolveProductBrand,
-  resolveProductBrandName,
-} from "~/server/domains/vendor/repo/product-brand";
+  assessCarrierPacket,
+  carrierCaptureEvidence,
+  loadCarrierHistory,
+  carrierPacketReferenceSql,
+  carrierClaimsConflict,
+  resolveCarrierName,
+} from "~/server/domains/shipment/repo/carrier-evidence";
+import {
+  shipmentCarrierEvidence,
+  retainCarrierPacket,
+} from "~/server/domains/shipment/repo/carrier-packets";
+import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
 import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
+import {
+  loadReceiptFieldAuthority,
+  recordFieldAssignmentReceipt,
+} from "~/server/generic/assessment/repo/automatic-fields";
+import { lockFieldCorrectionScope } from "~/server/generic/assessment/repo/correction-lock";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
+import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { finalizeMerge, mergeNotes } from "~/server/generic/merge/repo/core";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -143,6 +159,7 @@ async function identityCandidates(
     first: observedWindow.first ?? notificationDate,
     last: observedWindow.last ?? notificationDate,
   };
+  // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- carrier is the existing identity JSON object's key, not a carrier-role value.
   const result = await getDb(db).execute(sql`SELECT id, shortcode, purchase_id,
     first_day::text, last_day::text, carrier_conflict FROM shipment_identity_candidates(
     (SELECT coalesce(jsonb_agg(jsonb_build_object('trackingNumber', r->>'trackingNumber',
@@ -179,6 +196,8 @@ const withinIdentityPeriod = (days: readonly (string | null)[]) => {
 
 // Intake and explicit corrections share this transaction lock: replay cannot race a package merge.
 async function lockShipmentWrites(db: Database) {
+  // Member grading and source corrections take the shared field gate before Shipment records.
+  await lockFieldCorrectionScope(db, "shipment", "carrierId");
   await getDb(db).execute(
     sql`SELECT pg_advisory_xact_lock(hashtextextended('shipment-evidence-intake', 0))`,
   );
@@ -226,7 +245,7 @@ async function carrierReference(
     identity.kind === "vendor" &&
     !identity.canonicalDeletedAt
       ? parseShortcodeFor("vendor", identity.canonicalShortcode)
-      : (code ?? (await resolveProductBrandName(db, name)));
+      : (code ?? (await resolveCarrierName(db, name))?.code ?? null);
   if (code && carrierCode && name?.trim()) {
     const [claimed] = await getDb(db)
       .select({ name: vendor.name, aliases: vendor.aliases })
@@ -269,6 +288,73 @@ async function purchaseReference(
       "The Purchase changed during shipment intake; read it again.",
     );
   return row.id;
+}
+
+async function projectCarrierReferences(
+  db: Database,
+  input: {
+    row: typeof shipment.$inferSelect;
+    carrier: Awaited<ReturnType<typeof carrierReference>>;
+    number: string | null;
+    carrierName: string | null;
+    authority: "unknown" | "automatic" | "member";
+    extraTrackingNumbers: (typeof shipment.$inferSelect)["extraTrackingNumbers"];
+    correctingCarrier: boolean;
+  },
+) {
+  const { row, carrier, number, extraTrackingNumbers, correctingCarrier } =
+    input;
+  const database = getDb(db);
+  const [previousCarrier] =
+    correctingCarrier && row.carrierId
+      ? await database
+          .select({ shortcode: vendor.shortcode })
+          .from(vendor)
+          .where(eq(vendor.id, row.carrierId))
+      : [];
+  const refs = [
+    ...row.extraTrackingNumbers.filter(
+      (ref) =>
+        !correctingCarrier ||
+        !(
+          ref.carrierId === previousCarrier?.shortcode &&
+          normalizeNumber(ref.trackingNumber) === number
+        ),
+    ),
+    ...extraTrackingNumbers,
+  ];
+  const adoptedCarrier =
+    input.authority === "member"
+      ? row.carrierId
+      : correctingCarrier
+        ? carrier.id
+        : !row.trackingNumber
+          ? (carrier.id ?? row.carrierId)
+          : (row.carrierId ??
+            (normalizeNumber(row.trackingNumber) === number
+              ? carrier.id
+              : null));
+  if (
+    number &&
+    row.trackingNumber &&
+    (normalizeNumber(row.trackingNumber) !== number ||
+      (adoptedCarrier && carrier.id && adoptedCarrier !== carrier.id))
+  )
+    refs.push({
+      carrierId: carrier.code,
+      carrierName: input.carrierName,
+      trackingNumber: number,
+    });
+  const uniqueRefs = await deduplicateShipmentTrackingReferences(db, {
+    trackingNumber: row.trackingNumber ?? number,
+    carrierId: adoptedCarrier,
+    extraTrackingNumbers: refs,
+  });
+  return {
+    carrierId: adoptedCarrier,
+    trackingNumber: row.trackingNumber ?? number,
+    extraTrackingNumbers: uniqueRefs,
+  };
 }
 
 async function sourceCapture(
@@ -501,11 +587,17 @@ async function writeShipmentEvidence(
         ? new Date(input.source.capturedAt)
         : new Date();
     for (const packet of input.shipments) {
-      const carrier = await carrierReference(
+      if (packet.carrierId)
+        await carrierReference(tdb, packet.carrierId, packet.carrierName);
+      const assessment = await assessCarrierPacket(
         tdb,
-        packet.carrierId,
-        packet.carrierName,
+        packet,
+        carrierCaptureEvidence(capture),
       );
+      // Original packet fields still own replay keys; only supported claims own live identity.
+      const carrier = assessment.primary.carrier
+        ? await carrierReference(tdb, assessment.primary.carrier.code, null)
+        : { id: null, code: null };
       const number = packet.trackingNumber
         ? normalizeNumber(packet.trackingNumber)
         : null;
@@ -516,7 +608,7 @@ async function writeShipmentEvidence(
       let row = packet.shipmentId
         ? await canonicalShipment(tdb, packet.shipmentId)
         : undefined;
-      const [binding] = await database
+      let [binding] = await database
         .select()
         .from(shipmentSourcePackage)
         .where(
@@ -526,6 +618,64 @@ async function writeShipmentEvidence(
           ),
         )
         .limit(1);
+      let sourceBindingAmbiguous = false;
+      if (!binding && !packet.sourceShipmentKey && number) {
+        const priorBindings = await database
+          .select({ binding: shipmentSourcePackage })
+          .from(shipmentSourcePackage)
+          .innerJoin(
+            shipmentObservation,
+            eq(shipmentObservation.sourcePackageId, shipmentSourcePackage.id),
+          )
+          .where(
+            and(
+              eq(shipmentSourcePackage.sourceKey, sourceKey),
+              sql`upper(regexp_replace(${shipmentObservation.event}->>'trackingNumber', '[[:space:]]', '', 'g')) = ${number}`,
+            ),
+          );
+        const packetBindings = await database
+          .select({ binding: shipmentSourcePackage })
+          .from(shipmentSourcePackage)
+          .innerJoin(
+            shipmentSourceCapture,
+            eq(
+              shipmentSourceCapture.sourceKey,
+              shipmentSourcePackage.sourceKey,
+            ),
+          )
+          .innerJoin(
+            shipmentCarrierEvidence,
+            and(
+              eq(shipmentCarrierEvidence.captureId, shipmentSourceCapture.id),
+              eq(
+                shipmentCarrierEvidence.packageKey,
+                shipmentSourcePackage.packageKey,
+              ),
+            ),
+          )
+          .where(
+            and(
+              eq(shipmentSourcePackage.sourceKey, sourceKey),
+              carrierPacketReferenceSql(shipmentCarrierEvidence.packet, number),
+            ),
+          );
+        const uniqueBindings = [
+          ...new Map(
+            [...priorBindings, ...packetBindings].map(({ binding }) => [
+              binding.id,
+              binding,
+            ]),
+          ).values(),
+        ];
+        if (uniqueBindings.length === 1) binding = uniqueBindings[0];
+        sourceBindingAmbiguous = uniqueBindings.length > 1;
+      }
+      await retainCarrierPacket(
+        tdb,
+        capture,
+        binding?.packageKey ?? packageKey,
+        packet,
+      );
       if (binding) {
         const [bound] = await database
           .select()
@@ -543,19 +693,30 @@ async function writeShipmentEvidence(
         await assertShipmentAssociation(tdb, row.id, purchaseId);
       const extraTrackingNumbers = [];
       for (const extra of packet.extraTrackingNumbers) {
-        const reference = await carrierReference(
-          tdb,
-          extra.carrierId,
-          extra.carrierName,
-        );
+        const supported = assessment.forReference(extra.trackingNumber).carrier;
+        const reference = supported
+          ? await carrierReference(tdb, supported.code, null)
+          : { code: null };
         extraTrackingNumbers.push({
           carrierId: reference.code,
           carrierName: extra.carrierName,
           trackingNumber: normalizeNumber(extra.trackingNumber),
         });
       }
+      const [boundCarrier] =
+        row?.carrierId && binding && !carrier.code
+          ? await database
+              .select({ code: vendor.shortcode })
+              .from(vendor)
+              .where(eq(vendor.id, row.carrierId))
+          : [];
+      const primaryCarrierCode =
+        carrier.code ??
+        (row?.trackingNumber && normalizeNumber(row.trackingNumber) === number
+          ? (boundCarrier?.code ?? null)
+          : null);
       const references = [
-        ...(number ? [{ number, carrier: carrier.code }] : []),
+        ...(number ? [{ number, carrier: primaryCarrierCode }] : []),
         ...extraTrackingNumbers.map((ref) => ({
           number: ref.trackingNumber,
           carrier: ref.carrierId,
@@ -604,11 +765,25 @@ async function writeShipmentEvidence(
         effectiveObservations,
         notificationDate,
       );
-      const possible = identity.candidates.filter(
-        (candidate) =>
-          candidate.id !== row?.id && (!row || !candidate.carrier_conflict),
-      );
-      const candidate = !row && possible.length === 1 ? possible[0] : undefined;
+      // Select the sole candidate before assessing authority: even a
+      // historical null may represent an unknown member decision. Period checks still apply.
+      if (
+        !row &&
+        !packet.distinctPackageEvidence &&
+        identity.candidates.length === 1 &&
+        identity.candidates[0]
+      ) {
+        const proposed = await canonicalShipment(
+          tdb,
+          identity.candidates[0].shortcode,
+        );
+        if (
+          !purchaseId ||
+          !proposed.purchaseId ||
+          proposed.purchaseId === purchaseId
+        )
+          row = proposed;
+      }
       const existingDates = row
         ? identityWindowSchema.parse(
             (
@@ -618,7 +793,113 @@ async function writeShipmentEvidence(
             ).rows[0],
           )
         : null;
-      let ambiguity: string | null = null;
+      const authority = row
+        ? await loadReceiptFieldAuthority(
+            tdb,
+            "shipment",
+            row.id,
+            "carrierId",
+            row.carrierId,
+          )
+        : null;
+      let carrierIssue: string | null = sourceBindingAmbiguous
+        ? "The source has multiple package bindings for this reference; review the original source key before alias re-extraction."
+        : carrierClaimsConflict(assessment.explicit)
+          ? "Explicit package-specific carrier claims conflict; retain them for handoff review."
+          : null;
+      if (row || references.length) {
+        // Unresolved source claims also constrain first admission, before a Shipment exists.
+        const history = await loadCarrierHistory(tdb, {
+          ...(row ? { shipmentId: row.id } : { window: identity.window }),
+          references: references.map((ref) => ref.number),
+        });
+        if (history.truncated)
+          carrierIssue =
+            "Carrier evidence exceeds the bounded history scan; review before correction.";
+        else if (
+          carrierClaimsConflict([...assessment.explicit, ...history.claims])
+        )
+          carrierIssue =
+            "Conflicting explicit carrier evidence may describe a handoff; review before association or correction.";
+      }
+      let correctingCarrier = false;
+      if (
+        row &&
+        carrier.id &&
+        row.carrierId !== carrier.id &&
+        (!row.trackingNumber || normalizeNumber(row.trackingNumber) === number)
+      ) {
+        if (authority?.kind === "member")
+          carrierIssue =
+            "Source carrier claim conflicts with an explicit member decision.";
+        else if (authority?.kind !== "automatic")
+          carrierIssue =
+            "Historical carrier assignment authority is unknown; member review is required.";
+        else {
+          correctingCarrier = !carrierIssue;
+        }
+      }
+      const currentRowId = row?.id;
+      if (
+        row &&
+        identity.candidates.some(
+          (candidate) =>
+            candidate.id === currentRowId && candidate.carrier_conflict,
+        ) &&
+        !correctingCarrier
+      )
+        carrierIssue ??=
+          "Nearby tracking evidence has conflicting carrier identity; review before association.";
+      const projection = row
+        ? await projectCarrierReferences(tdb, {
+            row,
+            carrier,
+            number,
+            extraTrackingNumbers,
+            correctingCarrier,
+            carrierName: assessment.primary.carrier?.name ?? null,
+            authority: authority?.kind ?? "unknown",
+          })
+        : null;
+      let projectedCollision = false;
+      if (row && projection && correctingCarrier) {
+        const [primaryCarrier] = projection.carrierId
+          ? await database
+              .select({ code: vendor.shortcode })
+              .from(vendor)
+              .where(eq(vendor.id, projection.carrierId))
+          : [];
+        const completeReferences = [
+          ...(projection.trackingNumber
+            ? [
+                {
+                  number: normalizeNumber(projection.trackingNumber),
+                  carrier: primaryCarrier?.code ?? null,
+                },
+              ]
+            : []),
+          ...projection.extraTrackingNumbers.map((ref) => ({
+            number: normalizeNumber(ref.trackingNumber),
+            carrier: ref.carrierId,
+          })),
+        ];
+        const complete = await identityCandidates(
+          tdb,
+          completeReferences,
+          effectiveObservations,
+          notificationDate,
+        );
+        projectedCollision = complete.candidates.some(
+          (candidate) =>
+            candidate.id !== currentRowId && !candidate.carrier_conflict,
+        );
+      }
+      const possible = identity.candidates.filter(
+        (candidate) =>
+          candidate.id !== row?.id && (!row || !candidate.carrier_conflict),
+      );
+      const candidate = !row && possible.length === 1 ? possible[0] : undefined;
+      let ambiguity: string | null = carrierIssue;
       if (
         !row &&
         possible.length > 0 &&
@@ -637,12 +918,13 @@ async function writeShipmentEvidence(
       else if (
         references.length &&
         existingDates &&
-        !withinIdentityPeriod([
-          identity.window.first,
-          identity.window.last,
-          existingDates.first,
-          existingDates.last,
-        ])
+        (!existingDates.first ||
+          !withinIdentityPeriod([
+            identity.window.first,
+            identity.window.last,
+            existingDates.first,
+            existingDates.last,
+          ]))
       )
         ambiguity =
           "The proposed evidence spans separate shipping periods; review its source-package association.";
@@ -665,17 +947,36 @@ async function writeShipmentEvidence(
       )
         ambiguity =
           "Nearby tracking evidence has conflicting carrier, Purchase, or shipping-period identity; review it before association.";
+      if (correctingCarrier && (possible.length || projectedCollision))
+        ambiguity =
+          "Carrier correction collides with another Shipment identity; review without automatic merging.";
       if (ambiguity) {
         unresolvedPackages.push({
           sourceShipmentKey: packet.sourceShipmentKey,
           reason: ambiguity,
         });
-        if (capture.emailId && ownerId)
+        const [member] = ownerId
+          ? [{ id: parseEntityId("ledgerParty", ownerId) }]
+          : await database
+              .select({ id: ledgerParty.id })
+              .from(ledgerParty)
+              .where(
+                and(
+                  eq(ledgerParty.userId, actor.userId),
+                  eq(ledgerParty.kind, "member"),
+                  notDeleted(ledgerParty),
+                ),
+              );
+        if (member)
           await publishRunFinding(tdb, {
             runId: actor.runId ?? null,
-            ledgerPartyId: parseEntityId("ledgerParty", ownerId),
-            entityKind: "email",
-            entityId: capture.emailId,
+            ledgerPartyId: member.id,
+            entityKind: row
+              ? "shipment"
+              : capture.emailId
+                ? "email"
+                : "ledgerParty",
+            entityId: row?.id ?? capture.emailId ?? member.id,
             kind: "shipment_identity_ambiguous",
             summary: ambiguity,
             proposedFix: null,
@@ -685,7 +986,10 @@ async function writeShipmentEvidence(
           });
         continue;
       }
-      if (candidate) row = await canonicalShipment(tdb, candidate.shortcode);
+      if (candidate)
+        return refuse(
+          "The final Shipment candidate must pass carrier authority checks before association.",
+        );
       if (
         row &&
         !row.purchaseAssociationReviewed &&
@@ -700,8 +1004,9 @@ async function writeShipmentEvidence(
       if (!row) {
         row = await insertWithShortcode(tdb, "shipment", {
           name:
-            [packet.carrierName, number].filter(Boolean).join(" · ") ||
-            "Package",
+            [assessment.primary.carrier?.name ?? "Package", number]
+              .filter(Boolean)
+              .join(" · ") || "Package",
           purchaseId,
           carrierId: carrier.id,
           trackingNumber: number,
@@ -718,52 +1023,71 @@ async function writeShipmentEvidence(
               ? "incoming"
               : packet.purpose,
         });
-        await logAuditEntries(tdb, actor, [
-          {
-            entityKind: "shipment",
-            entityId: row.id,
-            action: "create",
-            changes: { name: { from: null, to: row.name } },
-          },
-        ]);
+        const createdRow = row;
+        const { auditIds } = await withAuditReceipts(() =>
+          logAuditEntries(tdb, actor, [
+            {
+              entityKind: "shipment",
+              entityId: createdRow.id,
+              action: "create",
+              changes: {
+                name: { from: null, to: createdRow.name },
+                carrierId: { from: null, to: createdRow.carrierId },
+              },
+            },
+          ]),
+        );
+        await recordFieldAssignmentReceipt(tdb, {
+          entity: "shipment",
+          recordId: row.id,
+          field: "carrierId",
+          rawValue: row.carrierId,
+          value: carrier.code,
+          authority: "automatic",
+          actor,
+          auditIds,
+        });
       } else {
         const acceptedPurchaseId = await automaticPurchaseAssociation(
           tdb,
           row,
           purchaseId,
         );
-        const refs = [...row.extraTrackingNumbers, ...extraTrackingNumbers];
-        const adoptedCarrier = !row.trackingNumber
-          ? (carrier.id ?? row.carrierId)
-          : (row.carrierId ??
-            (normalizeNumber(row.trackingNumber) === number
-              ? carrier.id
-              : null));
-        if (
-          number &&
-          row.trackingNumber &&
-          (normalizeNumber(row.trackingNumber) !== number ||
-            (adoptedCarrier && carrier.id && adoptedCarrier !== carrier.id))
-        )
-          refs.push({
-            carrierId: carrier.code,
-            carrierName: packet.carrierName,
-            trackingNumber: number,
-          });
-        const uniqueRefs = await deduplicateShipmentTrackingReferences(tdb, {
-          trackingNumber: row.trackingNumber ?? number,
-          carrierId: adoptedCarrier,
-          extraTrackingNumbers: refs,
-        });
         await database
           .update(shipment)
           .set({
             purchaseId: acceptedPurchaseId,
-            carrierId: adoptedCarrier,
-            trackingNumber: row.trackingNumber ?? number,
-            extraTrackingNumbers: uniqueRefs,
+            ...projection,
           })
           .where(eq(shipment.id, row.id));
+        if (projection && projection.carrierId !== row.carrierId) {
+          const changedRow = row;
+          const { auditIds } = await withAuditReceipts(() =>
+            logAuditEntries(tdb, actor, [
+              {
+                entityKind: "shipment",
+                entityId: changedRow.id,
+                action: "update",
+                changes: {
+                  carrierId: {
+                    from: changedRow.carrierId,
+                    to: projection.carrierId,
+                  },
+                },
+              },
+            ]),
+          );
+          await recordFieldAssignmentReceipt(tdb, {
+            entity: "shipment",
+            recordId: row.id,
+            field: "carrierId",
+            rawValue: projection.carrierId,
+            value: carrier.code,
+            authority: "automatic",
+            actor,
+            auditIds,
+          });
+        }
       }
       const sourcePackage =
         binding ??
@@ -1084,6 +1408,20 @@ export async function mergeShipment(
     await lockShipmentWrites(tdb);
     const source = await canonicalShipment(tdb, input.sourceId);
     const target = await canonicalShipment(tdb, input.targetId);
+    const sourceAuthority = await loadReceiptFieldAuthority(
+      tdb,
+      "shipment",
+      source.id,
+      "carrierId",
+      source.carrierId,
+    );
+    const targetAuthority = await loadReceiptFieldAuthority(
+      tdb,
+      "shipment",
+      target.id,
+      "carrierId",
+      target.carrierId,
+    );
     if (source.id === target.id)
       return { shipmentId: parseShortcodeFor("shipment", target.shortcode) };
     if (
@@ -1109,6 +1447,21 @@ export async function mergeShipment(
     )
       return refuse(
         "Reviewed Shipment associations disagree; correct them before merging.",
+      );
+    if (
+      sourceAuthority.kind === "member" &&
+      targetAuthority.kind === "member" &&
+      source.carrierId !== target.carrierId
+    )
+      return refuse(
+        "Reviewed carrier decisions disagree; explicitly correct them before merging.",
+      );
+    if (
+      sourceAuthority.kind === "member" &&
+      target.carrierId !== source.carrierId
+    )
+      return refuse(
+        "The merge target would discard a member carrier decision; correct its carrier first.",
       );
     const purchaseId = target.purchaseAssociationReviewed
       ? target.purchaseId
@@ -1147,17 +1500,22 @@ export async function mergeShipment(
         trackingNumber: source.trackingNumber,
       });
     }
+    const mergedCarrierId =
+      targetAuthority.kind === "member"
+        ? target.carrierId
+        : sourceAuthority.kind === "member"
+          ? source.carrierId
+          : (target.carrierId ??
+            (!target.trackingNumber ||
+            target.trackingNumber === source.trackingNumber
+              ? source.carrierId
+              : null));
     await getDb(tdb)
       .update(shipment)
       .set({
         purchaseId,
         notes: mergeNotes(target.notes, source.notes),
-        carrierId:
-          target.carrierId ??
-          (!target.trackingNumber ||
-          target.trackingNumber === source.trackingNumber
-            ? source.carrierId
-            : null),
+        carrierId: mergedCarrierId,
         trackingNumber: target.trackingNumber ?? source.trackingNumber,
         purpose: target.purpose === "unknown" ? source.purpose : target.purpose,
         purchaseAssociationReviewed:
@@ -1165,16 +1523,53 @@ export async function mergeShipment(
           source.purchaseAssociationReviewed,
         extraTrackingNumbers: await deduplicateShipmentTrackingReferences(tdb, {
           trackingNumber: target.trackingNumber ?? source.trackingNumber,
-          carrierId:
-            target.carrierId ??
-            (!target.trackingNumber ||
-            target.trackingNumber === source.trackingNumber
-              ? source.carrierId
-              : null),
+          carrierId: mergedCarrierId,
           extraTrackingNumbers: refs,
         }),
       })
       .where(eq(shipment.id, target.id));
+    const mergedAuthority =
+      targetAuthority.kind === "member" || sourceAuthority.kind === "member"
+        ? "member"
+        : targetAuthority.kind === "unknown" ||
+            sourceAuthority.kind === "unknown"
+          ? "unknown"
+          : "automatic";
+    if (
+      mergedCarrierId !== target.carrierId ||
+      mergedAuthority !== targetAuthority.kind
+    ) {
+      const { auditIds } = await withAuditReceipts(() =>
+        logAuditEntries(tdb, actor, [
+          {
+            entityKind: "shipment",
+            entityId: target.id,
+            action: "update",
+            changes: {
+              carrierId: { from: target.carrierId, to: mergedCarrierId },
+            },
+          },
+        ]),
+      );
+      if (mergedAuthority !== "unknown") {
+        const [mergedCarrier] = mergedCarrierId
+          ? await getDb(tdb)
+              .select({ code: vendor.shortcode })
+              .from(vendor)
+              .where(eq(vendor.id, mergedCarrierId))
+          : [];
+        await recordFieldAssignmentReceipt(tdb, {
+          entity: "shipment",
+          recordId: target.id,
+          field: "carrierId",
+          rawValue: mergedCarrierId,
+          value: mergedCarrier?.code ?? null,
+          authority: mergedAuthority,
+          actor,
+          auditIds,
+        });
+      }
+    }
     await getDb(tdb)
       .update(shipmentObservation)
       .set({ shipmentId: target.id })
@@ -1273,5 +1668,51 @@ export async function reassignShipmentEvidence(
     ]);
     await recordChange(tdb, { kind: "source", categories: ["shipment"] });
     return { shipmentId: parseShortcodeFor("shipment", target.shortcode) };
+  });
+}
+
+/** Explicit intent, never inferred from ActorContext or whether the value changed. */
+export async function applyMemberShipmentCarrier(
+  db: Database,
+  input: {
+    shipmentId: ShortcodeFor<"shipment">;
+    carrierId: ShortcodeFor<"vendor"> | null;
+  },
+  actor: ActorContext,
+) {
+  if (actor.runId || actor.channel === "system")
+    return refuse(
+      "Carrier confirmation requires an interactive member decision.",
+    );
+  return withTransactionDatabase(db, async (tdb) => {
+    await lockShipmentWrites(tdb);
+    const row = await canonicalShipment(tdb, input.shipmentId);
+    const carrier = await carrierReference(tdb, input.carrierId, null);
+    await getDb(tdb)
+      .update(shipment)
+      .set({ carrierId: carrier.id })
+      .where(eq(shipment.id, row.id));
+    const { auditIds } = await withAuditReceipts(() =>
+      logAuditEntries(tdb, actor, [
+        {
+          entityKind: "shipment",
+          entityId: row.id,
+          action: "update",
+          changes: { carrierId: { from: row.carrierId, to: carrier.id } },
+        },
+      ]),
+    );
+    await recordFieldAssignmentReceipt(tdb, {
+      entity: "shipment",
+      recordId: row.id,
+      field: "carrierId",
+      rawValue: carrier.id,
+      value: carrier.code,
+      authority: "member",
+      actor,
+      auditIds,
+    });
+    await recordChange(tdb, { kind: "source", categories: ["shipment"] });
+    return { shipmentId: parseShortcodeFor("shipment", row.shortcode) };
   });
 }

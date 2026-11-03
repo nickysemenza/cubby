@@ -213,6 +213,100 @@ establish a historical event date. Label creation and vendor-shipped
 reports do not establish carrier possession. Repeated source observations use
 the shared writer's idempotent path; conflicts remain evidence.
 
+Carrier claims are retained as immutable evidence in the existing Assessment ledger, linked
+to their exact capture and original source-package key, including unresolved
+packets. Literal packet/observation identities and fingerprints are unchanged.
+New extraction supplies `carrierClaims`: reference, literal carrier name,
+service wording, carrier/intermediary role, and an exact package-specific source
+statement or label excerpt. Intake checks the excerpt against retained text,
+its exact bounded reference and unambiguous existing Vendor name/alias. Proof
+requires a complete bounded attribution statement: a direct carrier/tracking
+pair, a carrier field or positive shipped-via statement with a labeled reference.
+Clipped or conditional prose, mere co-occurrence, negation, unrelated-page
+branding and URL-only excerpts remain unproven.
+`link` claims must match an exact hyperlink in the checksum-verified Email
+original and a supported carrier tracking route with one exact reference.
+Hostnames, path and query semantics are parsed; redirects, lookalike hosts,
+multi-reference links and the submitted tracking-page URL are unproven.
+Current bounded link coverage is UPS `/track` and FedEx `/fedextrack` or
+`/apps/fedextrack`; other routes remain retained for review. A name alone,
+constructed URL, number shape, merchant, broker or label service supplies no
+carrier identity. Missing or ambiguous identity stays unknown without losing
+useful evidence. Image-only/PDF text not present in a retained text capture
+cannot establish automatic correction proof; retain the original for review.
+
+Existing application receipts and the shared field-write revision fence distinguish
+machine assignments, explicit member decisions and unknown historical authority.
+No carrier registry, regex storage or Shipment authority column is added. A
+historical assignment without a matching receipt stays unknown; creator attribution
+never establishes intent. Explicit `carrierId` submissions through the normal Shipment
+entity update record member intent, including unchanged values and null, and protect
+it from replay. Omission has no carrier effect; null means explicit unknown. The declared
+repository port owns this policy; bulk carrier updates use its record writer. Run-backed
+automation cannot submit carrier edits as member decisions. Other submitted fields commit
+atomically with the carrier decision. No carrier addon registry or separate confirmation
+operation is needed. Intake can replace only positively machine-owned assignments
+from exact-reference source proof; conflicting explicit claims remain findings
+because they may describe handoffs. Every matched candidate passes the same
+authority gate, including matches through additional references and historical
+null primary numbers. Conflicts are checked across primary and additional
+references, including unresolved literal carrier names and retained unbound
+packets in the same complete source-event period, before first creation as well
+as subsequent association/correction. Original claims remain historical evidence;
+unsupported guesses never become active extra carrier references on replay.
+Corrections recheck complete identity candidates and periods under the shipment
+lock and revision fence, commit with audit/change publication, and never merge a
+collision automatically. Member confirmation uses the same enforcement. Merges
+preserve member authority and refuse incompatible carrier decisions.
+
+For an interactive member, `entity.update` accepts, for example,
+`{"entity":"shipment","id":"SHIP-4K7MN","data":{"carrierId":"VEN-4K7MN"}}`.
+Submitting the current Vendor again confirms that value. Submitting
+`{"carrierId":null}` as `data` confirms unknown; it does not reset the field to
+machine ownership. A purpose-only update omits `carrierId` and records no carrier
+decision. The generic bulk operation applies the same rules to every selected
+Shipment and rolls back the whole update on an identity conflict.
+
+Carrier format assessments are small code-owned rules matched against existing
+Vendor names and aliases. They are advisory and outside quality scoring; regexes
+are never stored in the database. The
+[UPS tracking FAQ](https://www.ups.com/us/en/support/tracking-support) explicitly
+includes 12-digit numbers, T/1Z/9-digit forms and freight/Mail Innovations
+exceptions. [FedEx Ship documentation](https://developer.fedex.com/api/en-us/catalog/ship/docs.html)
+describes 12-digit references, longer barcode encodings and Ground Economy dual
+identifiers. A 12-digit match is ambiguous, not a UPS exclusion. Current bounded
+format coverage reports documented/ambiguous matches or unsupported formats;
+it makes no definite-invalidity or checksum assertion.
+
+`auditShipmentCarriers` is an internal SELECT-only repository reader. Its maintenance
+entry point is `apps/web/tooling/shipment-carrier-audit.ts`; it is not a public operation
+or scheduled Run. Set `CARRIER_AUDIT_DATABASE_URL` explicitly and invoke from the web
+workspace with `pnpm exec tsx tooling/shipment-carrier-audit.ts --scope shipments
+--limit 50 --output artifacts/carrier-audit-private.json`. The connection enforces
+`default_transaction_read_only=on`; connection URLs with `options` parameters are
+refused so driver precedence cannot override it. Each invocation exclusively creates
+a new report with mode `0600` and refuses existing output paths. The report contains private evidence
+pointers: keep it outside commits and outward diagnostics. Page `shipments` and
+`unresolved` separately with `--after` set to each returned `next` cursor. It reports current authority, retained proof,
+conflicts/handoffs, insufficient evidence and advisory formats without writing
+findings, replaying imports or applying corrections. Packet hydration is bounded;
+`coverage.complete: false` reports remaining pages, hydration limits or historical
+coverage gaps. `packetLimitReached`, `shipmentsWithoutPackets` and
+`historicalUnindexedCaptures` distinguish those limits. Legacy Shipments without
+carrier packets explicitly report historical proof gaps; older captures without
+a packet index require source review. Eligibility uses the same cross-source
+claim history as intake and excludes identity collisions or unknown periods.
+Audit eligibility is a candidate, never permission to apply a stale result.
+Application revalidates current authority, all explicit claims and identity.
+
+Identity/carrier findings reuse run findings and generic Problems. Known records
+use Shipment, retained mail uses Email, and unbound SMS/page packages use the
+acting member LedgerParty as the existing generic destination. No speculative
+Shipment is created to host a finding. Unlinked logins retain unresolved packets
+and receive unresolved outcomes; a finding requires a linked member ledger.
+Publication preserves dismissals for unchanged evidence. Audit reads never
+publish findings.
+
 Shipment lists and details show First event, Last event, Event span and Events.
 These read the reconciled, non-superseded tracking timeline; distinct retained
 occurrences count even when their time is unknown, while clear duplicate reports

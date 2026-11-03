@@ -1,4 +1,10 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   RecordShipmentEvidenceInput,
   ShipmentEvidence,
@@ -17,6 +23,9 @@ import {
   shipmentObservation,
   shipmentSourceCapture,
   shipmentSourcePackage,
+  vendor,
+  assessmentState,
+  feedback,
   expense,
   inventoryEntry,
   email,
@@ -26,8 +35,18 @@ import {
   memberImportWorld,
   retainedMailFixture,
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
+import { shipmentCarrierEvidence } from "~/server/domains/shipment/repo/carrier-packets";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
+import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
+import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
+import {
+  loadReceiptFieldAuthority,
+  recordFieldAssignmentReceipt,
+} from "~/server/generic/assessment/repo/automatic-fields";
+import { listSuggestions } from "~/server/generic/assessment/repo/suggestion-review";
+import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
+import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { shipmentTrackingReport } from "~/server/generic/entity-report/repo/shipment";
@@ -35,6 +54,13 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
+import { auditShipmentCarriers } from "./carrier-audit";
+import {
+  carrierFormatEvidence,
+  retainedCarrierClaim,
+  assessCarrierPacket,
+  carrierCaptureEvidence,
+} from "./carrier-evidence";
 import {
   recordShipmentEvidence,
   associateShipment,
@@ -84,8 +110,829 @@ const capture = (
   shipments,
 });
 
+const carrierClaim = (
+  trackingNumber: string,
+  carrierName: string,
+  quote = `${carrierName} tracking ${trackingNumber}`,
+): NonNullable<ShipmentEvidence["carrierClaims"]>[number] => ({
+  trackingNumber,
+  carrierName,
+  role: "carrier",
+  service: null,
+  evidence: { kind: "statement", quote },
+});
+
 describe("Shipment retained evidence", () => {
   const ctx = withTestDb();
+
+  const authorityOf = async (code: string) => {
+    const [row] = await getDb(ctx.db)
+      .select()
+      .from(shipment)
+      .where(eq(shipment.shortcode, code));
+    return loadReceiptFieldAuthority(
+      ctx.db,
+      "shipment",
+      row!.id,
+      "carrierId",
+      row!.carrierId,
+    );
+  };
+  const seedAuthority = async (
+    code: string,
+    carrierId: (typeof shipment.$inferSelect)["carrierId"],
+    authority: "automatic" | "unknown",
+  ) => {
+    const [row] = await getDb(ctx.db)
+      .select()
+      .from(shipment)
+      .where(eq(shipment.shortcode, code));
+    const { auditIds } = await withAuditReceipts(async () => {
+      await getDb(ctx.db)
+        .update(shipment)
+        .set({ carrierId })
+        .where(eq(shipment.id, row!.id));
+      await logAuditEntries(ctx.db, ctx.actor, [
+        {
+          entityKind: "shipment",
+          entityId: row!.id,
+          action: "update",
+          changes: { carrierId: { from: row!.carrierId, to: carrierId } },
+        },
+      ]);
+    });
+    if (authority === "automatic") {
+      const [carrier] = carrierId
+        ? await getDb(ctx.db)
+            .select()
+            .from(vendor)
+            .where(eq(vendor.id, carrierId))
+        : [];
+      await recordFieldAssignmentReceipt(ctx.db, {
+        entity: "shipment",
+        recordId: row!.id,
+        field: "carrierId",
+        rawValue: carrierId,
+        value: carrier?.shortcode ?? null,
+        authority,
+        actor: ctx.actor,
+        auditIds,
+      });
+    }
+  };
+
+  it("corrects only machine-owned carrier assignments and protects member intent and replay", async () => {
+    await memberImportWorld(ctx.db, ctx.actor);
+    const wrong = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Courier Alpha",
+    });
+    const correct = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Courier Beta",
+      aliases: ["Synthetic Beta Ground"],
+    });
+    const original = capture("authority", [
+      {
+        ...packet("123456789012"),
+        sourceShipmentKey: null,
+        carrierName: "Synthetic Courier Alpha",
+      },
+    ]);
+    const created = await recordShipmentEvidence(ctx.db, original, ctx.actor);
+    const code = created.shipmentIds[0]!;
+    const [initial] = await getDb(ctx.db)
+      .select()
+      .from(shipment)
+      .where(eq(shipment.shortcode, code));
+    expect(initial).toMatchObject({
+      carrierId: null,
+    });
+    // Seed a positively machine-owned historical mistake; legacy default authority is tested separately.
+    const wrongId = (
+      await getDb(ctx.db)
+        .select()
+        .from(vendor)
+        .where(eq(vendor.shortcode, wrong.output.id))
+    )[0]!.id;
+    const correctId = (
+      await getDb(ctx.db)
+        .select()
+        .from(vendor)
+        .where(eq(vendor.shortcode, correct.output.id))
+    )[0]!.id;
+    await seedAuthority(code, wrongId, "automatic");
+    const quote = "Synthetic Beta Ground tracking 123456789012";
+    const proof = capture(
+      "authority-proof",
+      [
+        {
+          ...packet("123456789012"),
+          carrierName: "Synthetic Beta Ground",
+          carrierClaims: [
+            {
+              trackingNumber: "123456789012",
+              carrierName: "Synthetic Beta Ground",
+              role: "carrier",
+              service: "Ground",
+              evidence: { kind: "statement", quote },
+            },
+          ],
+        },
+      ],
+      "2026-06-07T09:00:00Z",
+      quote,
+    );
+    const corrected = await recordShipmentEvidence(ctx.db, proof, ctx.actor);
+    expect(corrected.shipmentIds).toEqual([code]);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(shipment)
+          .where(eq(shipment.shortcode, code))
+      )[0],
+    ).toMatchObject({
+      carrierId: correctId,
+      extraTrackingNumbers: [],
+    });
+    const observations = await getDb(ctx.db).select().from(shipmentObservation);
+    const bindings = await getDb(ctx.db).select().from(shipmentSourcePackage);
+    await recordShipmentEvidence(ctx.db, original, ctx.actor);
+    expect(await getDb(ctx.db).select().from(shipmentSourcePackage)).toEqual(
+      bindings,
+    );
+    expect(
+      (await getDb(ctx.db).select().from(shipmentObservation))
+        .map((row) => [row.id, row.fingerprint, row.occurrenceKey])
+        .sort(),
+    ).toEqual(
+      observations
+        .map((row) => [row.id, row.fingerprint, row.occurrenceKey])
+        .sort(),
+    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(shipment)
+          .where(eq(shipment.shortcode, code))
+      )[0],
+    ).toMatchObject({ carrierId: correctId, extraTrackingNumbers: [] });
+    const automaticOwner = await authorityOf(code);
+    expect(automaticOwner.kind).toBe("automatic");
+    const kernel = buildKernelContext(ctx.db, ctx.actor.userId);
+    const automated = {
+      ...kernel,
+      actorContext: {
+        ...kernel.actorContext,
+        runId: parseEntityId("run", crypto.randomUUID()),
+      },
+    };
+    await expect(
+      executeEntity(automated, {
+        action: "update",
+        entity: "shipment",
+        id: code,
+        data: { carrierId: correct.output.id },
+      }),
+    ).rejects.toThrow(/interactive member/);
+    expect((await authorityOf(code)).kind).toBe("automatic");
+    await expect(
+      executeEntity(
+        {
+          ...kernel,
+          actorContext: { ...kernel.actorContext, channel: "system" },
+        },
+        {
+          action: "update",
+          entity: "shipment",
+          id: code,
+          data: { carrierId: correct.output.id },
+        },
+      ),
+    ).rejects.toThrow(/interactive member/);
+    await executeEntity(kernel, {
+      action: "update",
+      entity: "shipment",
+      id: code,
+      data: { purpose: "incoming" },
+    });
+    expect((await authorityOf(code)).kind).toBe("automatic");
+    expect(
+      (await listAutomaticDecisions(ctx.db, { recordIds: [code] })).items,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          family: "field",
+          applicationVerified: true,
+          automaticRule: "retained-source@1",
+        }),
+      ]),
+    );
+    expect(
+      await listSuggestions(ctx.db, {
+        entity: "shipment",
+        recordIds: [code],
+        status: "pending",
+      }),
+    ).toEqual([]);
+    if (automaticOwner.kind === "unknown")
+      throw new Error("Synthetic automatic receipt missing");
+    const [application] = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .where(eq(feedback.id, automaticOwner.receiptId));
+    await recordFeedback(ctx.db, {
+      assessmentId: application!.assessmentId,
+      operationId: "synthetic-carrier-confirmation",
+      verdict: "correct",
+      authority: "member",
+      actorUserId: ctx.actor.userId,
+      intent: "history",
+    });
+    expect((await authorityOf(code)).kind).toBe("unknown");
+    await executeEntity(buildKernelContext(ctx.db, ctx.actor.userId), {
+      action: "update",
+      entity: "shipment",
+      id: code,
+      data: { carrierId: correct.output.id },
+    });
+    expect((await authorityOf(code)).kind).toBe("member");
+    await executeEntity(buildKernelContext(ctx.db, ctx.actor.userId), {
+      action: "bulkUpdate",
+      entity: "shipment",
+      ids: [code],
+      data: { carrierId: null, purpose: "outgoing" },
+    });
+    const held = await recordShipmentEvidence(ctx.db, proof, ctx.actor);
+    expect(held.unresolvedPackages).toHaveLength(1);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(shipment)
+          .where(eq(shipment.shortcode, code))
+      )[0],
+    ).toMatchObject({ carrierId: null, purpose: "outgoing" });
+    const before = await getDb(ctx.db).select().from(assessmentState);
+    const retained = await getDb(ctx.db).select().from(shipmentCarrierEvidence);
+    const audit = await auditShipmentCarriers(ctx.db, {});
+    expect(
+      audit.candidates.some(
+        (candidate) => candidate.category === "member_decision",
+      ),
+    ).toBe(true);
+    expect(await getDb(ctx.db).select().from(assessmentState)).toEqual(before);
+    expect(await getDb(ctx.db).select().from(shipmentCarrierEvidence)).toEqual(
+      retained,
+    );
+    const directory = await mkdtemp(join(tmpdir(), "synthetic-carrier-audit-"));
+    try {
+      const output = join(directory, "private.json");
+      const runAudit = (file: string, databaseUrl = ctx.databaseUrl) =>
+        promisify(execFile)(
+          "pnpm",
+          [
+            "exec",
+            "tsx",
+            "tooling/shipment-carrier-audit.ts",
+            "--output",
+            file,
+          ],
+          {
+            env: { ...process.env, CARRIER_AUDIT_DATABASE_URL: databaseUrl },
+          },
+        );
+      await runAudit(output);
+      expect(JSON.parse(await readFile(output, "utf8"))).toEqual(audit);
+      expect((await stat(output)).mode & 0o777).toBe(0o600);
+      const existing = join(directory, "existing.json");
+      await writeFile(existing, "Synthetic existing report", { mode: 0o644 });
+      await expect(runAudit(existing)).rejects.toMatchObject({
+        stderr: expect.stringContaining("EEXIST"),
+      });
+      expect(await readFile(existing, "utf8")).toBe(
+        "Synthetic existing report",
+      );
+      const url = new URL(ctx.databaseUrl);
+      url.searchParams.set("options", "-c statement_timeout=30000");
+      await expect(
+        runAudit(join(directory, "options.json"), url.toString()),
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining(
+          "Connection URL options are not accepted",
+        ),
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+    expect(carrierFormatEvidence("123456789012")).toMatchObject({
+      outcome: "ambiguous_match",
+      carriers: ["UPS", "FedEx"],
+    });
+    expect(
+      carrierFormatEvidence("123456789012", ["United Parcel Service"]),
+    ).toMatchObject({ outcome: "documented_match", carriers: ["UPS"] });
+    expect(
+      carrierFormatEvidence("123456789012", ["Synthetic Courier Beta"]),
+    ).toMatchObject({ outcome: "unsupported_format", carriers: [] });
+  });
+
+  it("holds unknown authority, conflicting source claims and identity collisions without speculative packages", async () => {
+    await memberImportWorld(ctx.db, ctx.actor);
+    const alpha = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Alpha Carrier",
+    });
+    const beta = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Beta Carrier",
+    });
+    const carriers = await getDb(ctx.db).select().from(vendor);
+    const alphaId = carriers.find(
+      (row) => row.shortcode === alpha.output.id,
+    )!.id;
+    const betaId = carriers.find((row) => row.shortcode === beta.output.id)!.id;
+    const quote = "Synthetic Beta Carrier tracking EXAMPLE-PROOF";
+    const claim = {
+      trackingNumber: "EXAMPLE-PROOF",
+      carrierName: "Synthetic Beta Carrier",
+      role: "carrier",
+      service: null,
+      evidence: { kind: "statement", quote },
+    } satisfies NonNullable<ShipmentEvidence["carrierClaims"]>[number];
+    expect(
+      retainedCarrierClaim(
+        claim,
+        "Synthetic Beta Carrier tracking EXAMPLE-PROOF-LONGER",
+      ),
+    ).toBe(false);
+    expect(
+      retainedCarrierClaim({ ...claim, role: "intermediary" }, quote),
+    ).toBe(false);
+    const unknown = await recordShipmentEvidence(
+      ctx.db,
+      capture("unknown-authority", [packet("EXAMPLE-PROOF")]),
+      ctx.actor,
+    );
+    const code = unknown.shipmentIds[0]!;
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({ carrierId: alphaId })
+      .where(eq(shipment.shortcode, code));
+    const proof = capture(
+      "unknown-proof",
+      [{ ...packet("EXAMPLE-PROOF"), carrierClaims: [claim] }],
+      "2026-06-07T09:00:00Z",
+      quote,
+    );
+    expect(
+      (await recordShipmentEvidence(ctx.db, proof, ctx.actor))
+        .unresolvedPackages,
+    ).toHaveLength(1);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(shipment)
+          .where(eq(shipment.shortcode, code))
+      )[0],
+    ).toMatchObject({ carrierId: alphaId });
+    const findings = await getDb(ctx.db).select().from(assessmentState);
+    await recordShipmentEvidence(ctx.db, proof, ctx.actor);
+    expect(await getDb(ctx.db).select().from(assessmentState)).toEqual(
+      findings,
+    );
+    expect(
+      (await auditShipmentCarriers(ctx.db, { scope: "unresolved" })).candidates,
+    ).toHaveLength(1);
+    await seedAuthority(code, alphaId, "automatic");
+    const other = await recordShipmentEvidence(
+      ctx.db,
+      capture("collision-peer", [packet("EXAMPLE-PEER")]),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({ carrierId: betaId, trackingNumber: "EXAMPLE-PROOF" })
+      .where(eq(shipment.shortcode, other.shipmentIds[0]!));
+    const collision = await recordShipmentEvidence(
+      ctx.db,
+      { ...proof, shipments: [{ ...proof.shipments[0]!, shipmentId: code }] },
+      ctx.actor,
+    );
+    expect(collision.unresolvedPackages[0]?.reason).toMatch(/collid|Multiple/);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(shipment)
+          .where(eq(shipment.shortcode, code))
+      )[0]?.carrierId,
+    ).toBe(alphaId);
+    await expect(
+      executeEntity(buildKernelContext(ctx.db, ctx.actor.userId), {
+        action: "update",
+        entity: "shipment",
+        id: code,
+        data: { carrierId: beta.output.id, purpose: "outgoing" },
+      }),
+    ).rejects.toMatchObject({
+      cause: {
+        message: expect.stringMatching(/Shipment tracking identity conflicts/),
+      },
+    });
+    expect((await authorityOf(code)).kind).toBe("automatic");
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(shipment)
+          .where(eq(shipment.shortcode, code))
+      )[0],
+    ).toMatchObject({ carrierId: alphaId, purpose: "incoming" });
+    const conflictQuote = "Synthetic Alpha Carrier tracking EXAMPLE-CONFLICT";
+    const conflicting = capture(
+      "conflicting-explicit",
+      [
+        {
+          ...packet("EXAMPLE-CONFLICT"),
+          carrierClaims: [
+            {
+              ...claim,
+              trackingNumber: "EXAMPLE-CONFLICT",
+              carrierName: "Synthetic Alpha Carrier",
+              evidence: { kind: "label", quote: conflictQuote },
+            },
+            {
+              ...claim,
+              trackingNumber: "EXAMPLE-CONFLICT",
+              evidence: {
+                kind: "statement",
+                quote: "Synthetic Beta Carrier tracking EXAMPLE-CONFLICT",
+              },
+            },
+          ],
+        },
+      ],
+      "2026-06-07T09:00:00Z",
+      conflictQuote + "\nSynthetic Beta Carrier tracking EXAMPLE-CONFLICT",
+    );
+    const held = await recordShipmentEvidence(ctx.db, conflicting, ctx.actor);
+    expect(held.shipmentIds).toEqual([]);
+    expect(held.unresolvedPackages).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(shipment)).toHaveLength(2);
+    const laterSingleClaim = await recordShipmentEvidence(
+      ctx.db,
+      capture(
+        "conflict-followup",
+        [
+          {
+            ...conflicting.shipments[0]!,
+            carrierClaims: [conflicting.shipments[0]!.carrierClaims![0]!],
+          },
+        ],
+        "2026-06-08T09:00:00Z",
+        conflictQuote,
+      ),
+      ctx.actor,
+    );
+    expect(laterSingleClaim.shipmentIds).toEqual([]);
+    expect(laterSingleClaim.unresolvedPackages).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(shipment)).toHaveLength(2);
+    expect(
+      (
+        await auditShipmentCarriers(ctx.db, { scope: "unresolved" })
+      ).candidates.some((row) => row.category === "conflicting_or_handoff"),
+    ).toBe(true);
+    const constructed = capture(
+      "constructed",
+      [packet("EXAMPLE-URL")],
+      "2026-06-07T09:00:00Z",
+      "Synthetic URL-only evidence",
+    );
+    constructed.source = {
+      ...constructed.source,
+      kind: "tracking_page",
+      url: "https://www.fedex.com/fedextrack/?trknbr=EXAMPLE-URL",
+      externalKey: "constructed",
+      capturedAt: "2026-06-07T09:00:00Z",
+      content: "Synthetic URL-only evidence",
+    };
+    const urlResult = await recordShipmentEvidence(
+      ctx.db,
+      constructed,
+      ctx.actor,
+    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(shipment)
+          .where(eq(shipment.shortcode, urlResult.shipmentIds[0]!))
+      )[0]?.carrierId,
+    ).toBeNull();
+  });
+
+  it("review regression: co-occurrence, negation and URL-only text cannot prove carrier attribution", () => {
+    const number = "123456789012";
+    for (const quote of [
+      `We do not ship via UPS. Tracking: ${number}.`,
+      `https://www.ups.com/track?tracking=${number}`,
+      `Merchant UPS; another carrier handles tracking ${number}.`,
+      `UPS appears on this page. Tracking: ${number}.`,
+      `Maybe UPS tracking ${number}.`,
+      `If UPS tracking ${number} is correct, use that carrier.`,
+    ])
+      expect(
+        retainedCarrierClaim(carrierClaim(number, "UPS", quote), quote),
+      ).toBe(false);
+    expect(
+      retainedCarrierClaim(
+        carrierClaim(number, "UPS", `UPS tracking ${number}`),
+        `We do not ship via UPS tracking ${number}.`,
+      ),
+    ).toBe(false);
+    expect(
+      retainedCarrierClaim(
+        carrierClaim(number, "UPS", `UPS tracking ${number}`),
+        `Maybe UPS tracking ${number}.`,
+      ),
+    ).toBe(false);
+    const label = `Carrier: UPS\nTracking number: ${number}`;
+    expect(
+      retainedCarrierClaim(carrierClaim(number, "UPS", label), label),
+    ).toBe(true);
+  });
+
+  it("review regression: additional-only identity cannot bypass historical carrier authority", async () => {
+    await createRepoIdentity(ctx, "vendor", { name: "Synthetic Beta Carrier" });
+    const number = "EXAMPLE-LEGACY-EXTRA";
+    const initial = await recordShipmentEvidence(
+      ctx.db,
+      capture("legacy-extra", [packet(number)]),
+      ctx.actor,
+    );
+    const code = initial.shipmentIds[0]!;
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({
+        trackingNumber: null,
+        carrierId: null,
+        extraTrackingNumbers: [
+          { trackingNumber: number, carrierId: null, carrierName: null },
+        ],
+      })
+      .where(eq(shipment.shortcode, code));
+    await seedAuthority(code, null, "unknown");
+    const claim = carrierClaim(number, "Synthetic Beta Carrier");
+    const result = await recordShipmentEvidence(
+      ctx.db,
+      capture(
+        "legacy-extra-proof",
+        [{ ...packet(number), carrierClaims: [claim] }],
+        "2026-06-07T09:00:00Z",
+        claim.evidence.kind === "statement" || claim.evidence.kind === "label"
+          ? claim.evidence.quote
+          : "",
+      ),
+      ctx.actor,
+    );
+    expect(result.unresolvedPackages).toHaveLength(1);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(shipment)
+          .where(eq(shipment.shortcode, code))
+      )[0],
+    ).toMatchObject({
+      trackingNumber: null,
+      carrierId: null,
+    });
+  });
+
+  it("review regression: conflicting additional carriers hold before unknown-reference matching", async () => {
+    await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Alpha Carrier",
+    });
+    await createRepoIdentity(ctx, "vendor", { name: "Synthetic Beta Carrier" });
+    const number = "EXAMPLE-SHARED-EXTRA";
+    const alpha = carrierClaim(number, "Synthetic Alpha Carrier");
+    const beta = carrierClaim(number, "Synthetic Beta Carrier");
+    await recordShipmentEvidence(
+      ctx.db,
+      capture(
+        "extra-established",
+        [{ ...packet(number), carrierClaims: [alpha] }],
+        "2026-06-06T09:00:00Z",
+        `Synthetic Alpha Carrier tracking ${number}`,
+      ),
+      ctx.actor,
+    );
+    const result = await recordShipmentEvidence(
+      ctx.db,
+      capture(
+        "extra-conflict",
+        [
+          {
+            ...packet("EXAMPLE-NEW-PRIMARY"),
+            extraTrackingNumbers: [
+              { trackingNumber: number, carrierName: null, carrierId: null },
+            ],
+            carrierClaims: [alpha, beta],
+          },
+        ],
+        "2026-06-07T09:00:00Z",
+        `Synthetic Alpha Carrier tracking ${number}\nSynthetic Beta Carrier tracking ${number}`,
+      ),
+      ctx.actor,
+    );
+    expect(result.unresolvedPackages).toHaveLength(1);
+    expect(result.shipmentIds).toEqual([]);
+    expect(await getDb(ctx.db).select().from(shipmentObservation)).toHaveLength(
+      1,
+    );
+  });
+
+  it("review regression: unresolved explicit carrier claims conflict across captures", async () => {
+    await memberImportWorld(ctx.db, ctx.actor);
+    await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Alpha Carrier",
+    });
+    const number = "EXAMPLE-CROSS-CAPTURE";
+    await recordShipmentEvidence(
+      ctx.db,
+      capture(
+        "cross-established",
+        [
+          {
+            ...packet(number),
+            carrierClaims: [carrierClaim(number, "Synthetic Alpha Carrier")],
+          },
+        ],
+        "2026-06-06T09:00:00Z",
+        `Synthetic Alpha Carrier tracking ${number}`,
+      ),
+      ctx.actor,
+    );
+    const result = await recordShipmentEvidence(
+      ctx.db,
+      capture(
+        "cross-unresolved",
+        [
+          {
+            ...packet(number),
+            carrierClaims: [
+              carrierClaim(number, "Synthetic Unresolved Carrier"),
+            ],
+          },
+        ],
+        "2026-06-07T09:00:00Z",
+        `Synthetic Unresolved Carrier tracking ${number}`,
+      ),
+      ctx.actor,
+    );
+    expect(result.unresolvedPackages).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(shipmentObservation)).toHaveLength(
+      1,
+    );
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.family, "run_finding")),
+    ).toHaveLength(1);
+  });
+
+  it("review regression: alias replay recovers package-level references when event numbers are absent", async () => {
+    const original = packet("EXAMPLE-ALIAS-REPLAY");
+    original.sourceShipmentKey = null;
+    original.observations = original.observations.map((event) => ({
+      ...event,
+      trackingNumber: null,
+    }));
+    const input = capture("alias-without-event-number", [original]);
+    const first = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+    const replay = await recordShipmentEvidence(
+      ctx.db,
+      {
+        ...input,
+        shipments: [
+          { ...original, carrierName: "Synthetic Parcel Service Alias" },
+        ],
+      },
+      ctx.actor,
+    );
+    expect(replay.shipmentIds).toEqual(first.shipmentIds);
+    expect(
+      await getDb(ctx.db).select().from(shipmentSourcePackage),
+    ).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(shipmentObservation)).toHaveLength(
+      1,
+    );
+  });
+
+  it("uses exact carrier tracking links only from the independently retained Email original", async () => {
+    const world = await memberImportWorld(ctx.db, ctx.actor);
+    const fedex = await createRepoIdentity(ctx, "vendor", { name: "FedEx" });
+    await createRepoIdentity(ctx, "vendor", { name: "UPS" });
+    const number = "EXAMPLE-LINK";
+    const href = `https://www.fedex.com/apps/fedextrack/?action=track&tracknumbers=${number}&cntry_code=us`;
+    const originalContent = {
+      snippet: null,
+      bodyText: null,
+      bodyHtml: `<p>Synthetic parcel</p><a href="${href.replaceAll("&", "&amp;")}">Track parcel</a>`,
+    };
+    await retainedMailFixture(ctx.db, {
+      ledgerPartyId: world.party.id,
+      messageId: "synthetic-carrier-link",
+      checksum: "d".repeat(64),
+      content: originalContent,
+    });
+    const [message] = await getDb(ctx.db)
+      .select()
+      .from(email)
+      .where(eq(email.messageId, "synthetic-carrier-link"));
+    const source = {
+      kind: "email",
+      emailId: parseShortcodeFor("email", message!.shortcode),
+      checksum: "d".repeat(64),
+    } satisfies RecordShipmentEvidenceInput["source"];
+    const parcel = {
+      ...packet(number),
+      carrierClaims: [
+        { ...carrierClaim(number, "FedEx"), evidence: { kind: "link", href } },
+      ],
+    } satisfies ShipmentEvidence;
+    const recorded = await recordShipmentEvidence(
+      ctx.db,
+      { source, purchaseId: null, shipments: [parcel] },
+      ctx.actor,
+    );
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(shipment)
+      .where(eq(shipment.shortcode, recorded.shipmentIds[0]!));
+    const [identity] = await getDb(ctx.db)
+      .select()
+      .from(vendor)
+      .where(eq(vendor.id, stored!.carrierId!));
+    expect(identity?.shortcode).toBe(fedex.output.id);
+    const independent = carrierCaptureEvidence({ source, originalContent });
+    for (const invalid of [
+      `https://www.fedex.com.evil.example/apps/fedextrack/?tracknumbers=${number}`,
+      `https://www.fedex.com/apps/fedextrack/?tracknumbers=${number}&tracknumbers=EXAMPLE-OTHER`,
+      `https://www.fedex.com/apps/fedextrack/?tracknumbers=EXAMPLE-OTHER`,
+      `https://tracking.example/redirect?target=${encodeURIComponent(href)}`,
+    ]) {
+      const result = await assessCarrierPacket(
+        ctx.db,
+        {
+          ...parcel,
+          carrierClaims: [
+            {
+              ...carrierClaim(number, "FedEx"),
+              evidence: { kind: "link", href: invalid },
+            },
+          ],
+        },
+        { texts: [], links: [{ href: invalid, text: "Track" }] },
+      );
+      expect(result.primary.carrier).toBeNull();
+    }
+    expect(
+      (await assessCarrierPacket(ctx.db, parcel, { texts: [href], links: [] }))
+        .primary.carrier,
+    ).toBeNull();
+    expect(
+      (
+        await assessCarrierPacket(
+          ctx.db,
+          {
+            ...parcel,
+            carrierClaims: [
+              {
+                ...carrierClaim(number, "UPS"),
+                evidence: { kind: "link", href },
+              },
+            ],
+          },
+          independent,
+        )
+      ).primary.carrier,
+    ).toBeNull();
+    const fabricatedPage = capture("constructed-link", [parcel]);
+    expect(
+      (
+        await assessCarrierPacket(
+          ctx.db,
+          parcel,
+          carrierCaptureEvidence({
+            source: fabricatedPage.source,
+            originalContent: null,
+          }),
+        )
+      ).primary.carrier,
+    ).toBeNull();
+  });
 
   it("reads and sorts one retained summary revision until new evidence is published", async () => {
     const first = await recordShipmentEvidence(
@@ -608,6 +1455,21 @@ describe("Shipment retained evidence", () => {
     );
     expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
     expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    const firstCarrier = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Parcel Carrier",
+    });
+    const secondCarrier = await createRepoIdentity(ctx, "vendor", {
+      name: "Other synthetic carrier",
+    });
+    const identities = await getDb(ctx.db).select().from(vendor);
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({
+        carrierId: identities.find(
+          (row) => row.shortcode === firstCarrier.output.id,
+        )!.id,
+      })
+      .where(eq(shipment.shortcode, first.shipmentIds[0]!));
     const collision = packet("EXAMPLE-COLLISION");
     collision.carrierName = "Other synthetic carrier";
     collision.observations[0]!.carrierName = collision.carrierName;
@@ -618,7 +1480,12 @@ describe("Shipment retained evidence", () => {
     );
     await getDb(ctx.db)
       .update(shipment)
-      .set({ trackingNumber: "EXAMPLE-123" })
+      .set({
+        trackingNumber: "EXAMPLE-123",
+        carrierId: identities.find(
+          (row) => row.shortcode === secondCarrier.output.id,
+        )!.id,
+      })
       .where(eq(shipment.shortcode, other.shipmentIds[0]!));
     const boundReplay = await recordShipmentEvidence(ctx.db, input, ctx.actor);
     expect(boundReplay.shipmentIds).toEqual(first.shipmentIds);
@@ -830,9 +1697,31 @@ describe("Shipment retained evidence", () => {
   });
 
   it("retains handoff references and all observations through explicit merge", async () => {
+    const internationalCarrier = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Parcel Carrier",
+    });
+    const postalCarrier = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Postal Carrier",
+    });
+    const primaryQuote = "Synthetic Parcel Carrier tracking EXAMPLE-123";
+    const initialPacket = packet();
+    initialPacket.carrierClaims = [
+      {
+        trackingNumber: "EXAMPLE-123",
+        carrierName: "Synthetic Parcel Carrier",
+        role: "carrier",
+        service: null,
+        evidence: { kind: "statement", quote: primaryQuote },
+      },
+    ];
     const first = await recordShipmentEvidence(
       ctx.db,
-      capture("international"),
+      capture(
+        "international",
+        [initialPacket],
+        "2026-06-06T09:00:00Z",
+        primaryQuote,
+      ),
       ctx.actor,
     );
     const handoff = packet("EXAMPLE-LAST-MILE");
@@ -842,9 +1731,19 @@ describe("Shipment retained evidence", () => {
       carrierName: handoff.carrierName,
       kind: "delivered",
     }));
+    const postalQuote = "Synthetic Postal Carrier tracking EXAMPLE-LAST-MILE";
+    handoff.carrierClaims = [
+      {
+        trackingNumber: "EXAMPLE-LAST-MILE",
+        carrierName: "Synthetic Postal Carrier",
+        role: "carrier",
+        service: null,
+        evidence: { kind: "label", quote: postalQuote },
+      },
+    ];
     const last = await recordShipmentEvidence(
       ctx.db,
-      capture("last-mile", [handoff]),
+      capture("last-mile", [handoff], "2026-06-06T09:00:00Z", postalQuote),
       ctx.actor,
     );
     await getDb(ctx.db)
@@ -877,9 +1776,20 @@ describe("Shipment retained evidence", () => {
       .select()
       .from(shipment)
       .where(eq(shipment.shortcode, report.shipmentId));
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(vendor)
+          .where(eq(vendor.id, survivor!.carrierId!))
+      )[0]?.shortcode,
+    ).toBe(internationalCarrier.output.id);
     expect(survivor?.extraTrackingNumbers).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ trackingNumber: "EXAMPLE-LAST-MILE" }),
+        expect.objectContaining({
+          trackingNumber: "EXAMPLE-LAST-MILE",
+          carrierId: postalCarrier.output.id,
+        }),
       ]),
     );
     expect(

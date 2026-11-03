@@ -189,7 +189,7 @@ export const { definition, readSchemas } = defineEntityModel({
         validation: {
           read: shortcodeSchema("vendor").nullable(),
           create: null,
-          update: null,
+          update: shortcodeSchema("vendor").nullable().optional(),
         },
       },
       {
