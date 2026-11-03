@@ -276,6 +276,11 @@ still regenerates current evidence before applying automatic rules; this
 lifetime boundary does not reuse financial candidates across money writes or
 establish a Worker memory bound.
 
+Financial fingerprints hash the same JSON serialization through server crypto,
+preserving their UTF-8 SHA-256 bytes while avoiding a separate encoded WebCrypto
+input buffer. This reduces one allocation; it does not establish a Worker
+memory bound or identify the cause of an invocation's memory exit.
+
 `Statement generation phase` logs enter selection, preparation, publication,
 and each charge's regeneration and application before awaiting that work.
 Publication reports aggregate observation and candidate counts, without source
