@@ -645,6 +645,27 @@ describe("cross-family Suggestion list", () => {
         ],
       });
     }
+    // The connection adapter uses immutable family authority even when State
+    // differs; primary-record discovery must retain that adapter.
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ family: "image_description" })
+      .where(eq(assessmentState.id, proposal.review.assessmentId));
+    expect(
+      (await listSuggestionPage(ctx.db, { recordIds: [item.id] })).items.map(
+        (row) => row.id,
+      ),
+    ).toEqual([proposal.review.assessmentId]);
+    expect(await batchCounts([item.id])).toEqual([{ id: item.id, pending: 1 }]);
+    expect(
+      (
+        await suggestionCountsByFamily(ctx.db, { recordIds: [item.id] })
+      ).families.find((row) => row.family === "recommendation")?.pending,
+    ).toBe(1);
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ family: "recommendation" })
+      .where(eq(assessmentState.id, proposal.review.assessmentId));
     const category = await createRepoEntity(ctx, "productCategory", {
       name: "Synthetic unrelated category",
     });

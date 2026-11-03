@@ -284,7 +284,9 @@ async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
     },
   });
   const touching = matched ? new Set(matched.keys()) : null;
-  const matchedFamilies = matched ? new Set(matched.values()) : null;
+  const matchedFamilies = matched
+    ? new Set([...matched.values()].flat())
+    : null;
   const familyScope = {
     filters: {
       ...query.filters,

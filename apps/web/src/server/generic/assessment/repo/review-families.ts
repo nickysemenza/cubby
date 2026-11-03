@@ -879,6 +879,9 @@ function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
           id: a.id,
           family:
             scope.eligibility.kind === "suggestions" ? s.family : a.family,
+          immutableFamily: sql<AssessmentFamily>`${a.family}`.as(
+            "immutableFamily",
+          ),
           status: s.status,
         })
         .from(a)
@@ -895,23 +898,27 @@ function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   // still enter through the same candidate and authority checks.
   return sql`WITH matched AS MATERIALIZED (
     SELECT DISTINCT id, family, status FROM (${matched}) identities)
-    SELECT DISTINCT a.id, a.family FROM matched a
+    SELECT DISTINCT a.id, a.family, a.family AS "immutableFamily" FROM matched a
     CROSS JOIN LATERAL (SELECT a.status) s
     WHERE ${automaticAssessmentEligibility(scope.eligibility.appliedRule(sql`${a.id}`), true)}`;
 }
 
-/** Discovery retains the same family authority as its consumer's admission. */
+/** Adapters use both State and immutable family authority after discovery. */
 export async function touchingAssessmentFamilies(
   db: Database,
   scope: AssessmentRecordScope,
-): Promise<Map<string, AssessmentFamily> | null> {
+): Promise<Map<string, readonly AssessmentFamily[]> | null> {
   if (!scope.entity && !scope.records) return null;
-  if (scope.records?.length === 0) return new Map<string, AssessmentFamily>();
+  if (scope.records?.length === 0)
+    return new Map<string, readonly AssessmentFamily[]>();
   const { rows } = await unwrapDb(db).execute<{
     id: string;
     family: AssessmentFamily;
+    immutableFamily: AssessmentFamily;
   }>(touchingAssessmentQuery(db, scope));
-  return new Map(rows.map((row) => [row.id, row.family]));
+  return new Map(
+    rows.map((row) => [row.id, [row.family, row.immutableFamily]]),
+  );
 }
 
 export async function touchingAssessmentIds(
