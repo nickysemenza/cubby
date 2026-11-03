@@ -95,6 +95,7 @@ describe("Sweeps", () => {
           label: "synthetic-export.csv",
           fingerprint,
           dateKind: "posted",
+          observedAt: "2026-10-01T00:00:00Z",
           rowCountDeclared: null,
           notes: null,
         },

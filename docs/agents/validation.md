@@ -180,6 +180,11 @@ generator, or test, and again before pushing: results from a stale base miss
 migrations, generated artifacts, and ratchets (schema budgets)
 that main has since changed, so they are not evidence for the merge.
 
+Evidence-revision and withdrawal fixtures must set an explicit initial
+`observedAt` before their later observations. Mixing a wall-clock default with
+fixed revision dates eventually inverts the chronology and tests stale-evidence
+guards instead of the intended correction.
+
 Construct synthetic domain fixtures through the supported `createRepoEntity`
 writer roster. For other entities, use the owning `create…Fixture` and
 `make…Input` helpers so required defaults survive. When setup consumes only

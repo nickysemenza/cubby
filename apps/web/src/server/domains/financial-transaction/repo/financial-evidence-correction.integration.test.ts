@@ -103,6 +103,7 @@ describe("generated booking evidence corrections", () => {
           source: "synthetic-bank",
           label: "Synthetic observations",
           fingerprint: "synthetic-correction",
+          observedAt: "2026-10-01T00:00:00Z",
         },
         rows: [25, 30].map((amount, index) => ({
           rowPosition: index + 1,
