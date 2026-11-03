@@ -849,7 +849,17 @@ describe("Shipment retained evidence", () => {
     );
     await getDb(ctx.db)
       .update(shipment)
-      .set({ notes: "Synthetic keeper note" })
+      .set({
+        notes: "Synthetic keeper note",
+        extraTrackingNumbers: [
+          { carrierId: null, carrierName: null, trackingNumber: "EXAMPLE-123" },
+          {
+            carrierId: null,
+            carrierName: "Synthetic legacy carrier label",
+            trackingNumber: "example-123",
+          },
+        ],
+      })
       .where(eq(shipment.shortcode, first.shipmentIds[0]!));
     await getDb(ctx.db)
       .update(shipment)
@@ -872,6 +882,9 @@ describe("Shipment retained evidence", () => {
         expect.objectContaining({ trackingNumber: "EXAMPLE-LAST-MILE" }),
       ]),
     );
+    expect(
+      survivor?.extraTrackingNumbers.map((ref) => ref.trackingNumber),
+    ).toEqual(["EXAMPLE-LAST-MILE"]);
     expect(survivor?.notes).toBe(
       "Synthetic keeper note\n\nSynthetic donor note",
     );

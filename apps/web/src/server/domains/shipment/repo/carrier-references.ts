@@ -4,9 +4,53 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers";
+import {
+  repositoryQueries,
+  type RepositoryQueryInput,
+} from "~/server/db/repository-access.boundary";
 import { shipment, vendor } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
+
+export async function deduplicateShipmentTrackingReferences(
+  db: RepositoryQueryInput,
+  row: Pick<
+    typeof shipment.$inferSelect,
+    "trackingNumber" | "carrierId" | "extraTrackingNumbers"
+  >,
+) {
+  const [carrier] = row.carrierId
+    ? await repositoryQueries(db)
+        .select({ code: vendor.shortcode })
+        .from(vendor)
+        .where(eq(vendor.id, row.carrierId))
+    : [];
+  const normalize = (number: string) =>
+    number.replaceAll(/\s/g, "").toUpperCase();
+  const primary = row.trackingNumber ? normalize(row.trackingNumber) : null;
+  const knownNumbers = new Set(
+    row.extraTrackingNumbers
+      .filter((ref) => ref.carrierId)
+      .map((ref) => normalize(ref.trackingNumber)),
+  );
+  const unique = new Map<string, (typeof row.extraTrackingNumbers)[number]>();
+  for (const ref of row.extraTrackingNumbers) {
+    const number = normalize(ref.trackingNumber);
+    // Carrier wording is evidence, not a second reference. Distinct known carriers
+    // remain separate because they can identify a real carrier handoff.
+    if (
+      number === primary &&
+      (!ref.carrierId || ref.carrierId === carrier?.code)
+    )
+      continue;
+    if (!ref.carrierId && knownNumbers.has(number)) continue;
+    const key = JSON.stringify([number, ref.carrierId]);
+    const previous = unique.get(key);
+    if (!previous || (!previous.carrierName && ref.carrierName))
+      unique.set(key, { ...ref, trackingNumber: number });
+  }
+  return [...unique.values()];
+}
 
 const references = (codes: string[]) =>
   sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${shipment.extraTrackingNumbers}) reference WHERE reference->>'carrierId' IN (${sql.join(
@@ -62,7 +106,7 @@ export async function repointShipmentCarrierReferences(
     .where(and(notDeleted(shipment), references(codes)))
     .for("update");
   for (const row of rows) {
-    const updated = row.extraTrackingNumbers.map((reference) =>
+    const references = row.extraTrackingNumbers.map((reference) =>
       reference.carrierId && codes.includes(reference.carrierId)
         ? {
             ...reference,
@@ -70,6 +114,14 @@ export async function repointShipmentCarrierReferences(
           }
         : reference,
     );
+    const updated = await deduplicateShipmentTrackingReferences(tx, {
+      ...row,
+      carrierId:
+        row.carrierId && loserIds.includes(row.carrierId)
+          ? keepId
+          : row.carrierId,
+      extraTrackingNumbers: references,
+    });
     await tx
       .update(shipment)
       .set({ extraTrackingNumbers: updated })

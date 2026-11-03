@@ -282,6 +282,11 @@ carrier Vendors, whose reference rewrites must also satisfy identity enforcement
 Confirmed duplicates are merged as a group in one transaction, keeping the oldest
 record and retaining notes, missing carrier identity, observations, capture
 memberships, source-package bindings and member-reviewed Purchase decisions.
+Intake and merges consolidate tracking references by normalized number and carrier
+identity, ignoring carrier-label differences. Extras omit references already
+covered by the primary number/carrier and unknown-carrier copies covered by a
+known reference. Distinct known-carrier handoff references and original source
+wording remain retained.
 Conflicting known directions or Purchase decisions require correction first.
 Reassigning the last source package merges its empty former Shipment into the
 target and inherits the same Purchase-decision and direction preconditions.
