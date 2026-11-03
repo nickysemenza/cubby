@@ -58,7 +58,7 @@ export const { definition, readSchemas } = defineEntityModel({
   table: "Plant",
   identifiers: { brand: "PlantId", shortcode: "PLANT-" },
   presentation: {
-    searchFacts: ["latinName", "verdict"],
+    searchFacts: ["latinName", "breeding"],
     titleField: "displayName",
     domain: "garden",
     description:

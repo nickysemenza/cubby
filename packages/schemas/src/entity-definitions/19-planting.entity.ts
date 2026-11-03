@@ -23,7 +23,7 @@ export const { definition, readSchemas } = defineEntityModel({
   table: "Planting",
   identifiers: { brand: "PlantingId", shortcode: "PLT-" },
   presentation: {
-    searchFacts: ["season", "status"],
+    searchFacts: ["season", "quantity"],
     titleField: "displayName",
     domain: "garden",
     description: "Crops growing now and planned for later.",

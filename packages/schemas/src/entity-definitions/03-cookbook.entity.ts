@@ -21,7 +21,7 @@ export const { definition, readSchemas } = defineEntityModel(
     table: "Cookbook",
     identifiers: { brand: "CookbookId", shortcode: "CKB-" },
     presentation: {
-      searchFacts: ["author", "recipeCount"],
+      searchFacts: ["recipeCount"],
       titleField: "name",
       domain: "cook",
       description: "Imported and maintained recipe collections.",
