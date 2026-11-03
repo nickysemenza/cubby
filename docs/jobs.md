@@ -281,6 +281,14 @@ preserving their UTF-8 SHA-256 bytes while avoiding a separate encoded WebCrypto
 input buffer. This reduces one allocation; it does not establish a Worker
 memory bound or identify the cause of an invocation's memory exit.
 
+Canonical spending evidence keeps the same JSON normalization and persisted
+fingerprint format. Its canonical writer feeds escaped, complete JSON tokens
+into the hash in buffered batches instead of retaining the entire canonical
+string and its outer JSON serialization. The buffer holds at most 32,768
+characters unless an individual token is larger. This reduces intermediate string
+allocation without narrowing candidates, changing evidence, or reusing snapshots
+across financial writes. It does not establish a total Worker memory bound.
+
 `Statement generation phase` logs enter selection, preparation, publication,
 and each charge's regeneration and application before awaiting that work.
 Publication reports aggregate observation and candidate counts, without source
