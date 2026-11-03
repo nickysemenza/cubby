@@ -55,13 +55,14 @@ import {
   type SettlementRef,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 import {
   bookFinancialTransaction,
   bookingGraph,
   bookingGraphs,
   digestValue,
+  digestCanonicalEvidence,
   loadFinancialBookingLineage,
   previewFinancialBooking,
 } from "./financial-booking";
@@ -1101,9 +1102,7 @@ async function discoverSpendingEvidence(
       spendingCategoryId: row?.spendingCategoryId ?? null,
     },
   };
-  const snapshot = await digestValue({
-    evidence: canonicalJson(jsonSnapshot.parse(snapshotEvidence)),
-  });
+  const snapshot = await digestCanonicalEvidence(snapshotEvidence);
   const basis = {
     request,
     snapshot,
@@ -1226,9 +1225,7 @@ export async function previewFinancialSpending(
     const basis = {
       request,
       candidates: [],
-      snapshot: await digestValue({
-        evidence: canonicalJson(jsonSnapshot.parse(facts)),
-      }),
+      snapshot: await digestCanonicalEvidence(facts),
     };
     if (deferred)
       return {
