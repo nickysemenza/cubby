@@ -84,7 +84,7 @@ const shipmentEvidenceFields = z.strictObject({
     .max(2000)
     .nullable()
     .describe(
-      "Null for ordinary tracked-package updates. Non-null forces a separate package instead of reusing a matching tracking reference: quote explicit evidence of a distinct package (such as package 2 of 2 under a shared master number). A new trackingless package also requires this evidence and a stable sourceShipmentKey. A tracking number, item list, new Email, or changed shipping status alone is not distinct-package evidence.",
+      "Retained evidence identifying a trackingless package, which also needs a stable sourceShipmentKey. This text never bypasses tracking identity matching. Separate packages sharing a tracking reference require member review.",
     ),
   carrierId: shortcodeSchema("vendor").nullable(),
   carrierName: text.max(300).nullable(),
@@ -239,6 +239,13 @@ export const recordShipmentEvidenceOut = z.object({
   shipmentIds: z.array(shortcodeSchema("shipment")),
   insertedObservations: z.number().int().nonnegative(),
   repeatedObservations: z.number().int().nonnegative(),
+  unresolvedPackages: z.array(
+    z.object({
+      sourceCaptureId: z.uuid(),
+      sourceShipmentKey: z.string().nullable(),
+      reason: z.string(),
+    }),
+  ),
 });
 export const associateShipmentInput = z.strictObject({
   shipmentId: shortcodeSchema("shipment"),

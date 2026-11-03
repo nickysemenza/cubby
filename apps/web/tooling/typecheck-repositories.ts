@@ -59,6 +59,7 @@ export const repositoryOwners = [
   "src/server/db/derived-value-schema.ts",
   "src/server/db/derived-declarations.ts",
   "src/server/db/derived-trigger-ddl.ts",
+  "src/server/db/shipment-identity-ddl.ts",
   "src/server/lib/canonical-json.ts",
   "src/server/db/computed/product-classification-evidence.ts",
   "src/server/db/computed/image-description-confirmation.ts",

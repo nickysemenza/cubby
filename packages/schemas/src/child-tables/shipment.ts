@@ -1,6 +1,15 @@
 import { defineChildTable } from "../entity-definitions/child-definition.js";
 
 export const shipmentChildren = [
+  // The revision makes snapshot transactions retry after a concurrent identity writer.
+  defineChildTable({
+    name: "ShipmentIdentityLock",
+    exportName: "shipmentIdentityLock",
+    columns: [
+      { key: "key", kind: "text", primaryKey: true },
+      { key: "revision", kind: "integer", notNull: true, default: 0 },
+    ],
+  }),
   defineChildTable({
     name: "ShipmentSourceCapture",
     exportName: "shipmentSourceCapture",
