@@ -33,8 +33,8 @@ import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helper
 import {
   GENERIC_BRAND_SYSTEM_KEY,
   parseBrandClaim,
-  vendorNamedSql,
 } from "~/server/domains/vendor/repo/product-brand";
+import { vendorNamedSql } from "~/server/domains/vendor/repo/vendor-name-match";
 
 import { productScaffold } from "./crud";
 import { mapProductListInventoryEntries } from "./mappers";

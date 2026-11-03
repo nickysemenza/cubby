@@ -72,7 +72,31 @@ export const newShipmentObservationInput = shipmentObservationInput.extend({
   ),
 });
 
+// Optional on historical extractions: never default or rewrite fingerprinted JSON.
+export const shipmentCarrierClaim = z.strictObject({
+  trackingNumber: text.max(300),
+  carrierName: text.max(300),
+  role: z.enum(["carrier", "intermediary"]),
+  service: text.max(300).nullable(),
+  // Extraction embeds this schema: plain unions emit supported anyOf, while
+  // literal kinds retain the same validation and TypeScript narrowing.
+  evidence: z.union([
+    z.strictObject({ kind: z.literal("statement"), quote: text.max(1500) }),
+    z.strictObject({ kind: z.literal("label"), quote: text.max(1500) }),
+    z.strictObject({ kind: z.literal("link"), href: z.url().max(2000) }),
+    z.strictObject({ kind: z.literal("inference") }),
+  ]),
+});
+export type ShipmentCarrierClaim = z.infer<typeof shipmentCarrierClaim>;
+
 const shipmentEvidenceFields = z.strictObject({
+  carrierClaims: z
+    .array(shipmentCarrierClaim)
+    .max(30)
+    .optional()
+    .describe(
+      "Package-specific carrier or intermediary claims. Copy an exact retained source statement/label containing the reference and literal carrier name. A constructed URL or format guess is inference, never proof. Preserve service wording; do not call merchants or brokers carriers.",
+    ),
   shipmentId: shortcodeSchema("shipment").nullable(),
   sourceShipmentKey: text
     .max(500)

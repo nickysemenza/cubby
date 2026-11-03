@@ -1,22 +1,18 @@
 import type { VendorId, VendorShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import {
   getDb,
   notDeleted,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { vendor } from "~/server/db/schema";
+import { vendorNamedSql } from "~/server/domains/vendor/repo/vendor-name-match";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import {
-  nameMatchesAnySql,
-  textArraySomeSql,
-} from "~/server/lib/name-alias-match";
 
 export const GENERIC_BRAND_SYSTEM_KEY = "generic-unbranded";
 
@@ -32,10 +28,6 @@ export const parseBrandClaim = (raw: string | null | undefined) => {
   );
   return { name, generic };
 };
-
-/** A live Vendor's trimmed name or any alias equals `name`, case-insensitively. */
-export const vendorNamedSql = (name: string) =>
-  sql`(${nameMatchesAnySql(trimTextSql(vendor.name), [name])} OR ${textArraySomeSql(vendor.aliases, (value) => nameMatchesAnySql(trimTextSql(value), [name]))})`;
 
 /** External evidence names a marketed brand; ordinary domain writes use its reference. */
 export async function resolveProductBrandName(

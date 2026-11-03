@@ -1,3 +1,4 @@
+import { entitySchema } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sql, and, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -45,8 +46,8 @@ const loadEmbeddingText = async (
 };
 export const shipmentSearch = {
   document: ({ types, requested, bounded }) => sql`
-      SELECT 'shipment', s.id::text, s.shortcode, s.name, s."trackingNumber",
+      SELECT ${entitySchema.enum.shipment}, s.id::text, s.shortcode, s.name, s."trackingNumber",
         s.purpose, ARRAY[]::text[], ARRAY[s.notes]::text[]
-      FROM "Shipment" s WHERE ${notDeleted(alias(searchTableshipment, "s"))} AND 'shipment' IN (${types}) AND ${requested(sql`s.id`)} AND ${bounded(sql`s."createdAt"`)}`,
+      FROM "Shipment" s WHERE ${notDeleted(alias(searchTableshipment, "s"))} AND ${entitySchema.enum.shipment} IN (${types}) AND ${requested(sql`s.id`)} AND ${bounded(sql`s."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

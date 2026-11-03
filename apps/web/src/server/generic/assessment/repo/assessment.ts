@@ -1,5 +1,6 @@
 import {
   assessmentChildHandle,
+  assessmentSubjects,
   assessmentPublication,
   assessmentJudgments,
   assessmentProjectionTargets,
@@ -21,6 +22,7 @@ import {
   assessmentState,
   feedback,
 } from "~/server/db/retained-tables";
+import { lockFieldCorrectionScope } from "~/server/generic/assessment/repo/correction-lock";
 import {
   recordAssessmentChange,
   recordChange,
@@ -311,6 +313,20 @@ export async function recordFeedbackWithInsertion(
       throw new Error(
         "Evaluation Feedback cannot apply or suppress operational results",
       );
+    // A grade can end automatic ownership without changing the field value.
+    // Share the source/correction gate before recording that member intent.
+    if (
+      prediction.family === "field" &&
+      input.authority === "member" &&
+      (input.verdict === "correct" || input.verdict === "wrong")
+    ) {
+      const subject = assessmentSubjects.field.parse(prediction.subject);
+      await lockFieldCorrectionScope(
+        transactionDb,
+        subject.entity,
+        subject.field,
+      );
+    }
     const [inserted] = await client
       .insert(feedback)
       .values(input)

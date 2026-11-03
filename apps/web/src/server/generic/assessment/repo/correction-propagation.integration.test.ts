@@ -59,6 +59,7 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { enrollSuggestionCorrections } from "~/server/generic/assessment/repo/correction-enrollment";
+import { lockFieldCorrectionScope } from "~/server/generic/assessment/repo/correction-lock";
 import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
 import {
   readConfirmedCorrection,
@@ -68,7 +69,6 @@ import {
 } from "~/server/generic/assessment/repo/correction-sources";
 import { recordCorrectionWork } from "~/server/generic/assessment/repo/correction-work";
 import { fieldCorrectionIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
-import { lockFieldCorrectionScope } from "~/server/generic/assessment/repo/field-correction-lock";
 import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
 import { fieldCorrectionRepair } from "~/server/generic/assessment/repo/field-correction-repair";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";

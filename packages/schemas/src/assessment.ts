@@ -51,6 +51,8 @@ export const feedbackVerdict = z.enum([
 ]);
 const record = { entity: z.string().min(1), recordId: z.uuid() };
 export const runFindingEntity = z.enum([
+  "shipment",
+  "ledgerParty",
   "purchase",
   "expense",
   "product",

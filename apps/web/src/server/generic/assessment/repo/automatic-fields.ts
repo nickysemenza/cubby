@@ -1,4 +1,5 @@
 import { suggestionStatus, fieldSuggestionsInput } from "@cubby/schemas/ai";
+import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import {
   assessmentFamily,
   assessmentSubjects,
@@ -7,22 +8,32 @@ import {
 } from "@cubby/schemas/assessment";
 /** Current field decisions backed by Automatic rule applications, never model confidence alone. */
 import { auditLogActionSchema } from "@cubby/schemas/audit";
+import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
 import {
   entityFieldByKey,
   entityFieldModels,
 } from "@cubby/schemas/entity-fields";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldAssignmentOwnership } from "@cubby/schemas/field-envelope";
-import { sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
+import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import { assessment, feedback } from "~/server/db/retained-tables";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
-import { automaticApplicationRule } from "~/server/generic/assessment/repo/assessment";
+import {
+  automaticApplicationRule,
+  publishAssessment,
+  recordFeedback,
+} from "~/server/generic/assessment/repo/assessment";
+import { fieldWriteRevision } from "~/server/generic/audit-log/repo/field-write";
 import type { CurrentFieldOwnership } from "~/server/generic/derived/repo/read-context";
 export type { CurrentFieldOwnership } from "~/server/generic/derived/repo/read-context";
 
@@ -96,4 +107,175 @@ export async function loadCurrentFieldOwnership(
       ),
     ]),
   );
+}
+
+const receiptFieldAuthority = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("unknown") }),
+  z.object({
+    kind: z.literal("automatic"),
+    receiptId: z.uuid(),
+    auditIds: z.array(z.uuid()),
+  }),
+  z.object({
+    kind: z.literal("member"),
+    receiptId: z.uuid(),
+    auditIds: z.array(z.uuid()),
+  }),
+]);
+
+const sourceAssignmentWitness = z.object({
+  kind: z.literal("source_assignment"),
+  writeRevision: z.string(),
+  rawValue: z.json(),
+});
+
+/** Reuse the shared field-write fence and immutable application receipts; unknown history stays unknown. */
+export async function loadReceiptFieldAuthority(
+  db: RepositoryQueryInput,
+  entity: ShortcodeEntity,
+  recordId: string,
+  field: string,
+  rawValue: z.infer<ReturnType<typeof z.json>>,
+): Promise<z.infer<typeof receiptFieldAuthority>> {
+  const revision = await fieldWriteRevision(db, entity, recordId, field);
+  const rows = await unwrapDb(db)
+    .select({
+      id: feedback.id,
+      authority: feedback.authority,
+      verdict: feedback.verdict,
+      intent: feedback.intent,
+      receipt: feedback.receipt,
+      evidence: assessment.evidence,
+    })
+    .from(assessment)
+    .innerJoin(feedback, eq(feedback.assessmentId, assessment.id))
+    .where(
+      and(
+        eq(assessment.family, assessmentFamily.enum.field),
+        sql`${assessment.subject}->>'entity' = ${entity}`,
+        sql`${assessment.subject}->>'recordId' = ${recordId}`,
+        sql`${assessment.subject}->>${assessmentSubjects.field.keyof().enum.field} = ${field}`,
+        inArray(feedback.authority, [
+          feedbackAuthority.enum.automatic,
+          feedbackAuthority.enum.member,
+        ]),
+      ),
+    )
+    .orderBy(desc(feedback.createdAt), desc(feedback.id))
+    .limit(50);
+  for (const row of rows) {
+    const witness = sourceAssignmentWitness.safeParse(row.evidence);
+    const receipt = suggestionAcceptanceReceipt.safeParse(row.receipt);
+    if (
+      witness.success &&
+      receipt.success &&
+      receipt.data.mode === row.authority &&
+      receipt.data.auditIds.length &&
+      witness.data.writeRevision === revision &&
+      isEqual(witness.data.rawValue, rawValue)
+    )
+      return row.authority === "automatic" &&
+        rows.some(
+          (review) =>
+            review.authority === "member" &&
+            (review.verdict === "correct" || review.verdict === "wrong"),
+        )
+        ? { kind: "unknown" }
+        : receiptFieldAuthority.parse({
+            kind: row.authority,
+            receiptId: row.id,
+            auditIds: receipt.data.auditIds,
+          });
+  }
+  return { kind: "unknown" };
+}
+
+/** Records specialist assignment intent in the shared receipt ledger, atomically with its field audit. */
+export async function recordFieldAssignmentReceipt(
+  db: Database,
+  input: {
+    entity: ShortcodeEntity;
+    recordId: string;
+    field: string;
+    value: z.infer<ReturnType<typeof z.json>>;
+    rawValue: z.infer<ReturnType<typeof z.json>>;
+    authority: "automatic" | "member";
+    actor: ActorContext;
+    auditIds: readonly string[];
+  },
+) {
+  if (!input.auditIds.length)
+    throw new Error(
+      "Assignment intent requires its actual field audit receipt",
+    );
+  const auditIds = [...new Set(input.auditIds)];
+  const writeRevision = await fieldWriteRevision(
+    db,
+    input.entity,
+    input.recordId,
+    input.field,
+  );
+  const receipt = suggestionAcceptanceReceipt.parse({
+    mode: input.authority,
+    runId: input.actor.runId ?? null,
+    auditIds,
+    acceptedAt: new Date().toISOString(),
+    reason:
+      input.authority === "member"
+        ? "member_acceptance"
+        : "confident_assignment",
+    confidence: null,
+    threshold: null,
+  });
+  const publication = await publishAssessment(
+    db,
+    {
+      publicationKey: `field-assignment:${input.entity}:${input.recordId}:${input.field}:${crypto.randomUUID()}`,
+      family: "field",
+      subject: {
+        kind: "field",
+        entity: input.entity,
+        recordId: input.recordId,
+        field: input.field,
+        draft: false,
+      },
+      judgment: { value: input.value },
+      fingerprint: null,
+      producer: {
+        kind: "rule",
+        model: null,
+        revision: "source-assignment@1",
+        runId: input.actor.runId ?? null,
+        evaluationId: null,
+      },
+      evidence: {
+        kind: "source_assignment",
+        writeRevision,
+        rawValue: input.rawValue,
+      },
+      served: true,
+    },
+    {
+      status: "applied",
+      field: input.field,
+      acceptanceReceipt: receipt,
+      currentValue: input.value,
+      suggestedValue: input.value,
+    },
+  );
+  await recordFeedback(db, {
+    assessmentId: publication.id,
+    operationId: "source-assignment-application",
+    verdict: "correct",
+    authority: input.authority,
+    actorUserId: input.actor.userId,
+    intent: "apply",
+    receipt,
+    metadata: {
+      kind: "assessment_application",
+      ...(input.authority === "automatic"
+        ? { rule: { key: "retained-source", revision: 1 } }
+        : {}),
+    },
+  });
 }
