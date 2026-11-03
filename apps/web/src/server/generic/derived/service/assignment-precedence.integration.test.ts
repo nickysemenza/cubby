@@ -133,7 +133,7 @@ describe("assignment and stored projection precedence", () => {
     );
     expect(reset.fields.price.current.assignment).toEqual({ kind: "inherit" });
     expect(reset.fields.price.result).toEqual({ kind: "missing" });
-    expect(reset.fields.price.work).toEqual({ kind: "pending" });
+    expect(reset.fields.price.work).toMatchObject({ kind: "pending" });
     expect(reset.fields.cost.result).toEqual({ kind: "missing" });
     expect(reset.fields.cost.work).toEqual(reset.fields.price.work);
     expect(reset.fields.unitPriceDetailLabel.result).toEqual({

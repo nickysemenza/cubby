@@ -387,26 +387,29 @@ test("Suggestions lists every family with named records and category pills, and 
 
   // Exclusion survives route validation and a reload, and the shared editor
   // can clear it without losing the scoped proposal.
-  const excludedRead = page.waitForResponse((response) =>
-    dispatchesOperation(
-      response.request(),
-      "suggestions.list",
-      ({ input }) =>
-        z
-          .object({ entityExclude: z.array(z.string()) })
-          .safeParse(input)
-          .data?.entityExclude.includes("product") === true,
+  // Read the body as soon as it arrives, before navigation can evict it.
+  const excludedRead = page
+    .waitForResponse((response) =>
+      dispatchesOperation(
+        response.request(),
+        "suggestions.list",
+        ({ input }) =>
+          z
+            .object({ entityExclude: z.array(z.string()) })
+            .safeParse(input)
+            .data?.entityExclude.includes("product") === true,
+      ),
+    )
+    .then((response) =>
+      operationResult(response, "suggestions.list", suggestionListOut),
+    );
+  const [excludedPage] = await Promise.all([
+    excludedRead,
+    gotoAuthenticatedPage(
+      page,
+      `/suggestions?family=field&record=product:${item.id}&entityExclude=product`,
     ),
-  );
-  await gotoAuthenticatedPage(
-    page,
-    `/suggestions?family=field&record=product:${item.id}&entityExclude=product`,
-  );
-  const excludedPage = await operationResult(
-    await excludedRead,
-    "suggestions.list",
-    suggestionListOut,
-  );
+  ]);
   expect(excludedPage.items).toEqual([]);
   expect(excludedPage.meta.totalCount).toBe(0);
   await expect(
