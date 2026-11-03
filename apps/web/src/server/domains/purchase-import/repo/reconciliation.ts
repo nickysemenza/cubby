@@ -47,6 +47,7 @@ import {
 } from "~/server/domains/household-contribution/repo/allocation";
 import {
   matchCompletePaymentSet,
+  unpricedForeignExpenseSql,
   sourceFinancialFacts,
 } from "~/server/domains/purchase-import/repo/writer-policy";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
@@ -97,9 +98,21 @@ function reappliesAcceptedObservation(
 ) {
   return (
     intent === "product_binding" &&
-    resolution.kind === "attach_only" &&
-    (state.association?.acceptedObservationId === state.observation.id ||
-      state.currentOriginalReview)
+    (foreignProductBinding(state.observation.extraction.candidate, intent) ||
+      (resolution.kind === "attach_only" &&
+        (state.association?.acceptedObservationId === state.observation.id ||
+          state.currentOriginalReview)))
+  );
+}
+
+function foreignProductBinding(
+  candidate: ReconciliationFix["proposedExtraction"]["candidate"],
+  intent: "financial" | "product_binding",
+) {
+  return (
+    intent === "product_binding" &&
+    candidate?.currency != null &&
+    candidate.currency !== "USD"
   );
 }
 
@@ -138,7 +151,23 @@ export async function reviewResolution(
   resolution = await reviewPreparedNewProducts(tx, state, resolution);
   const candidate = fix.proposedExtraction.candidate;
   if (!candidate) throw new Error("Reconciliation needs a readable candidate.");
-  if (candidate.currency !== "USD")
+  const foreign = foreignProductBinding(candidate, intent);
+  if (foreign && resolution.kind !== "attach_only")
+    throw new Error(
+      "Foreign Product review only attaches existing unpriced item Expenses; monetary replacement requires USD evidence.",
+    );
+  if (
+    foreign &&
+    (candidate.sourceEvent === "refunded" ||
+      candidate.sourceEvent === "cancelled" ||
+      candidate.lines.some(
+        (line) => line.lineKind === "principal" && line.amount < 0,
+      ))
+  )
+    throw new Error(
+      "Foreign refunds and cancellations require reviewed accounting reconciliation.",
+    );
+  if (candidate.currency !== "USD" && !foreign)
     throw new Error(
       "Monetary source reconciliation requires explicit USD currency.",
     );
@@ -251,12 +280,15 @@ export async function reviewResolution(
     if (
       resolution.kind === "attach_only" &&
       (!selected ||
-        selected.cost === null ||
-        cents(selected.cost) !== cents(line.amount) ||
+        (foreign
+          ? selected.lineBasis !== "item_line"
+          : selected.cost === null ||
+            cents(selected.cost) !== cents(line.amount)) ||
         selected.lineKind !== line.lineKind ||
         (selected.productQuantity !== null &&
           binding.productId !== null &&
-          selected.productQuantity !== (line.quantity ?? 1)) ||
+          line.quantity !== undefined &&
+          selected.productQuantity !== line.quantity) ||
         (selected.productId &&
           state.products.find((row) => row.id === selected.productId)
             ?.shortcode !== binding.productId))
@@ -266,8 +298,18 @@ export async function reviewResolution(
         "Attach-only evidence must preserve each reviewed ledger amount, line kind and Product.",
       );
   }
-  const beforeCents = state.expenses.every((row) => row.cost !== null)
-    ? state.expenses.reduce((sum, row) => sum + cents(row.cost!), 0)
+  const unpricedIds = new Set(
+    state.unpricedForeignExpenses.map((row) => row.id),
+  );
+  const beforeCents = state.expenses.every(
+    (row) =>
+      row.cost !== null ||
+      (unpricedIds.has(row.id) &&
+        state.expenses.some(
+          (item) => item.lineBasis === "allocation" && item.cost !== null,
+        )),
+  )
+    ? state.expenses.reduce((sum, row) => sum + cents(row.cost ?? 0), 0)
     : null;
   let afterCents = beforeCents;
   let attributions: Awaited<
@@ -300,11 +342,68 @@ export async function reviewResolution(
     if (
       selected.length !== selectedIds.size ||
       selectedIds.size !== resolution.expenseIds.length ||
-      selected.some((row) => row.cost === null || row.economicRole !== "vendor")
+      selected.some(
+        (row) =>
+          row.economicRole !== "vendor" ||
+          (row.cost === null && !unpricedIds.has(row.id)),
+      )
     )
       throw createAppError(
         "PURCHASE_IMPORT_REVIEW_INVALID",
         "Review live vendor Expenses with known costs for replacement.",
+      );
+    if (
+      !foreign &&
+      selected.some(
+        (row) => unpricedIds.has(row.id) || row.lineBasis === "allocation",
+      ) &&
+      unpricedIds.size
+    ) {
+      if (
+        state.expenses.some(
+          (row) =>
+            (unpricedIds.has(row.id) || row.lineBasis === "allocation") &&
+            !selectedIds.has(row.shortcode),
+        )
+      )
+        throw createAppError(
+          "PURCHASE_IMPORT_REVIEW_INVALID",
+          "Review the foreign item roster and its USD aggregate together before pricing items.",
+        );
+      for (const row of selected.filter((item) => unpricedIds.has(item.id))) {
+        const binding = bindings.find(
+          (item) => item.expenseId === row.shortcode,
+        );
+        const line = binding && candidate.lines[binding.lineIndex];
+        if (
+          !line ||
+          line.title !== row.name ||
+          line.lineKind !== row.lineKind ||
+          (line.quantity !== undefined &&
+            row.productQuantity !== null &&
+            line.quantity !== row.productQuantity)
+        )
+          throw createAppError(
+            "PURCHASE_IMPORT_REVIEW_INVALID",
+            "USD pricing must preserve each source item's identity and supported quantity.",
+          );
+      }
+    }
+    // USD pricing must reuse each original acquisition, never split or silently remove it.
+    if (
+      !foreign &&
+      selected.some((row) => unpricedIds.has(row.id)) &&
+      selected
+        .filter((row) => unpricedIds.has(row.id))
+        .some(
+          (row) =>
+            bindings.filter((binding) => binding.expenseId === row.shortcode)
+              .length !== 1,
+        )
+    )
+      throw createAppError(
+        "PURCHASE_IMPORT_REVIEW_INVALID",
+        "Reuse each unpriced foreign item exactly once when replacing its USD aggregate.",
       );
     if (
       bindings.some((row) => row.expenseId && !selectedIds.has(row.expenseId))
@@ -328,7 +427,7 @@ export async function reviewResolution(
         "Source-claimed Expenses need their existing explicit correction workflow.",
       );
     const selectedTotal = selected.reduce(
-      (sum, row) => sum + cents(row.cost!),
+      (sum, row) => sum + cents(row.cost ?? 0),
       0,
     );
     const proposedTotal = candidate.lines.reduce(
@@ -433,8 +532,9 @@ export async function reviewResolution(
     spend: {
       before: beforeCents === null ? null : beforeCents / 100,
       after: afterCents === null ? null : afterCents / 100,
-      delta:
-        beforeCents === null || afterCents === null
+      delta: foreign
+        ? 0
+        : beforeCents === null || afterCents === null
           ? null
           : (afterCents - beforeCents) / 100,
     },
@@ -452,7 +552,7 @@ export async function reviewResolution(
       tender: row.tender,
       description: row.description ?? undefined,
     })),
-    proposedPayments: candidate.payments,
+    proposedPayments: foreign ? [] : candidate.payments,
     allocationTotal:
       state.allocations.reduce((sum, row) => sum + cents(row.amount), 0) / 100,
     allocations: state.allocations.map((row) => ({
@@ -657,6 +757,7 @@ export async function commitSourceOrderReconciliation(
     );
   const candidate = fix.proposedExtraction.candidate!;
   const resolution = current.resolution;
+  const foreign = foreignProductBinding(candidate, intent);
   const audit = [];
   const reused = new Set<typeof expense.$inferSelect.id>();
   const resolvedBindings = [];
@@ -726,13 +827,7 @@ export async function commitSourceOrderReconciliation(
             productId,
             productQuantity:
               existing.productQuantity ??
-              (binding.newProduct
-                ? receiptProductQuantity(productId, line, {
-                    reversalKind: null,
-                  })
-                : productId
-                  ? (line.quantity ?? 1)
-                  : null),
+              receiptProductQuantity(productId, line, { reversalKind: null }),
             updatedAt: new Date(),
           })
           .where(eq(expense.id, existing.id));
@@ -762,7 +857,11 @@ export async function commitSourceOrderReconciliation(
       lineKind: line.lineKind,
       lineBasis: "item_line" as const,
       productId,
-      productQuantity: productId ? (line.quantity ?? 1) : null,
+      productQuantity: productId
+        ? (receiptProductQuantity(productId, line, { reversalKind: null }) ??
+          existing?.productQuantity ??
+          null)
+        : null,
       projectId: principal ? (template?.projectId ?? null) : null,
       spendingCategoryId: principal
         ? (template?.spendingCategoryId ?? null)
@@ -793,7 +892,7 @@ export async function commitSourceOrderReconciliation(
         entityId: existing.id,
         action: "update" as const,
         changes: {
-          cost: { from: existing.cost, to: line.amount },
+          cost: { from: existing.cost, to: fields.cost },
           name: { from: existing.name, to: line.title },
           productId: { from: existing.productId, to: productId },
         },
@@ -862,7 +961,7 @@ export async function commitSourceOrderReconciliation(
   const [sum] = await tx
     .select({
       amount: sql<number>`sum(${expense.cost})::double precision`,
-      unknown: sql<number>`count(*) FILTER (WHERE ${expense.cost} IS NULL)::int`,
+      unknown: sql<number>`count(*) FILTER (WHERE ${expense.cost} IS NULL AND NOT ${sql.raw(unpricedForeignExpenseSql("Expense"))})::int`,
     })
     .from(expense)
     .where(and(eq(expense.purchaseId, state.target.id), notDeleted(expense)));
@@ -873,7 +972,7 @@ export async function commitSourceOrderReconciliation(
     throw new Error(
       "Reconciliation did not conserve the reviewed Expense total.",
     );
-  if (resolution.kind === "replace_lines") {
+  if (resolution.kind === "replace_lines" && !foreign) {
     await tx
       .update(purchase)
       .set({
@@ -1000,9 +1099,10 @@ export async function commitSourceOrderReconciliation(
     // that referred to it, including sibling sources, before retaining its SKU.
     for (const prior of state.productBindings) {
       if (!prior.expenseId || !selectedIds.has(prior.expenseId)) continue;
-      const original = state.sourceOrders.find(
+      const originalCandidate = state.sourceOrders.find(
         (order) => order.id === prior.sourceOrderId,
-      )?.originalOrder?.extraction.candidate?.lines[prior.lineIndex];
+      )?.originalOrder?.extraction.candidate;
+      const original = originalCandidate?.lines[prior.lineIndex];
       const replacementIndex = [...lineExpenses].find(
         ([, id]) => id === prior.expenseId,
       )?.[0];
@@ -1013,8 +1113,17 @@ export async function commitSourceOrderReconciliation(
       if (
         !original ||
         !replacement ||
-        (await reconciliationFingerprint(original)) !==
-          (await reconciliationFingerprint(replacement))
+        ((await reconciliationFingerprint(original)) !==
+          (await reconciliationFingerprint(replacement)) &&
+          !(
+            originalCandidate?.currency &&
+            originalCandidate.currency !== "USD" &&
+            candidate.currency === "USD" &&
+            original.title === replacement.title &&
+            original.lineKind === replacement.lineKind &&
+            (replacement.quantity === undefined ||
+              (original.quantity ?? null) === replacement.quantity)
+          ))
       )
         await tx
           .update(importSourceProduct)
@@ -1151,7 +1260,7 @@ export async function commitSourceOrderReconciliation(
     },
   });
   await logAuditEntries(tx, actor, audit);
-  if (resolution.kind === "replace_lines") {
+  if (resolution.kind === "replace_lines" && !foreign) {
     // The fingerprint covers Purchase identity as well as money and
     // attribution. Refresh only after every covered write, including a later
     // source's previously unknown order id, has completed in this transaction.

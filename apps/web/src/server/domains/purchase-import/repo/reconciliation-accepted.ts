@@ -323,11 +323,13 @@ function validateAcceptedAttachmentExpenses(
       selected.economicRole !== "vendor" ||
       selected.lineBasis !== "item_line" ||
       !titleMatches ||
-      selected.cost === null ||
-      cents(selected.cost) !== cents(line.amount) ||
+      (candidate?.currency === "USD" &&
+        (selected.cost === null ||
+          cents(selected.cost) !== cents(line.amount))) ||
       selected.lineKind !== line.lineKind ||
       (selected.productQuantity !== null &&
-        selected.productQuantity !== (line.quantity ?? 1)) ||
+        line.quantity !== undefined &&
+        selected.productQuantity !== line.quantity) ||
       ledgerClaimCount > 0
     )
       throw new Error(

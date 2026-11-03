@@ -159,6 +159,28 @@ synthetic supported save's input-9 Purchase capture. Remove
 gate cannot be established, leave the old trigger active and the boundary set;
 do not enable input 9. A rollback after activation must retain support for input 9.
 
+## Foreign receipt coverage capture
+
+Migration `0067_foreign_receipt_coverage` appends source-binding inputs to Purchase
+and FinancialTransaction quality; it adds no table or acquisition rows. Existing
+normalized input ordinals remain unchanged. It updates only the existing
+ImportSourceOrder/ImportSourceProduct capture functions and marks current quality
+values for recomputation. The preceding Worker does not recognize the new fanout
+targets and can silently settle their work.
+
+Use the preserving **compatible-code-before-capture** sequence above, with
+`PRODUCTION_MIGRATION_THROUGH=0066_assessment_refresh_metadata` until the compatible
+Worker is deployed. Verify the journal's exact preceding tag before release; do
+not assume this example tag after rebasing. Audit Queue/Cron consumer roots and
+wall-time limits again. Require full compatible traffic, the 16-minute retirement
+interval and exact Job claim fencing under its row lock before applying `0067`.
+Preserve all WorkItems, attempts and publications. No other merge or deployment may
+cross the boundary during the cutover. If any gate is unverified, keep the boundary
+and old captures active. After activation, read back both capture functions,
+retained work and recomputed Purchase/transaction coverage before releasing the
+boundary. Any rollback must continue recognizing the appended targets. Household
+repair is separate, requires approval, and never runs in this migration.
+
 ## Source-claim fanout capture
 
 Migration `0062_source_claim_family_fanout` stops new

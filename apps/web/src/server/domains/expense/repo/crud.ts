@@ -51,6 +51,7 @@ import {
   syncChangedEffectivePrices,
 } from "~/server/domains/product/repo/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
+import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
 import {
   findOrCreatePurchase,
   foldChargeInto,
@@ -505,6 +506,23 @@ export const updateExpense = defineMutationWriter({
       });
       const nextCost =
         data.cost === undefined ? (qualityBefore?.cost ?? null) : data.cost;
+      if (qualityBefore?.cost === null && nextCost !== null) {
+        const [original] = await tx
+          .select({ id: expense.id })
+          .from(expense)
+          .where(
+            and(
+              eq(expense.id, id),
+              sql.raw(unpricedForeignExpenseSql("Expense")),
+            ),
+          )
+          .limit(1);
+        if (original)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Use reviewed source reconciliation to price a foreign receipt line.",
+          );
+      }
       assertExpenseDate(
         nextCost,
         data.date === undefined ? (qualityBefore?.date ?? null) : data.date,

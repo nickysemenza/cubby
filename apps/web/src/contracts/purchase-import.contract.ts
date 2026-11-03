@@ -46,7 +46,7 @@ export const purchaseImportContract = defineContract(
   {
     commitAcceptedReconciliation: mutation({
       description:
-        "Product-only repair: sourceOrderId plus attach_only lines bind existing exact item Expenses using productId or newProduct {kind:'new'}. A known original uses an exact owned preparation. For unknown historical extraction, reviewedPreparation {run,stableOrderId} names a fresh preparation of the unchanged retained Email against this Purchase; new review provenance preserves the unknown historical snapshot. Rechecks ownership, original, item, identity and claims; unchanged repeats return alreadyApplied. Changes no money, payments or Inventory.",
+        "Product-only repair: sourceOrderId plus attach_only lines bind existing exact item Expenses (foreign source amounts stay evidence; USD costs are preserved) using productId or newProduct {kind:'new'}. A known original uses an exact owned preparation. For unknown historical extraction, reviewedPreparation {run,stableOrderId} names a fresh preparation of the unchanged retained Email against this Purchase; new review provenance preserves the unknown historical snapshot. Rechecks ownership, original, item, identity and claims; unchanged repeats return alreadyApplied. Changes no money, payments or Inventory.",
       input: commitAcceptedSourceOrderReconciliationInput,
       output: commitAcceptedSourceOrderReconciliationOut,
       invalidates: ["expense", "product", "purchase", "runOnly"],

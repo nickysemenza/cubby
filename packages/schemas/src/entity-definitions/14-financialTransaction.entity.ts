@@ -2050,6 +2050,29 @@ export const { definition, readSchemas } = defineEntityModel(
               },
             ],
           },
+          {
+            table: "ImportSourceOrder",
+            match: { purchaseId: "id" },
+            path: [
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+            ],
+          },
+          {
+            table: "ImportSourceProduct",
+            match: { sourceOrderId: "id" },
+            path: [
+              { table: "ImportSourceOrder", from: "id", to: "purchaseId" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+            ],
+          },
         ],
 
         exceptions: true,

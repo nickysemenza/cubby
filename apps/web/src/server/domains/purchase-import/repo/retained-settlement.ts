@@ -1,5 +1,8 @@
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
-import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
+import {
+  expenseLineBasisSchema,
+  expenseLineKindSchema,
+} from "@cubby/schemas/expense-line-kind";
 import { cardLastFoursOn } from "@cubby/schemas/financial-account";
 import {
   financialTransactionKind,
@@ -48,6 +51,7 @@ import {
   purchaseRefundAccountIdsSql,
   transactionSettlementConflicts,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
 import {
   matchCompletePaymentSet,
   type SettlementCandidate,
@@ -597,7 +601,8 @@ async function liveExpenseTotalCents(
         string | null
       >`sum(CASE WHEN ${expense.cost} >= 0 OR ${expense.lineKind} <> ${expenseLineKindSchema.enum.principal} THEN ${expense.cost} END)`,
       priced: sql<number>`count(${expense.cost})::int`,
-      unresolved: sql<number>`count(*) FILTER (WHERE ${expense.cost} IS NULL OR ${expense.lineKind} = ${expenseLineKindSchema.enum.unclassified})::int`,
+      uncovered: sql<number>`CASE WHEN count(*) FILTER (WHERE ${expense.cost} IS NULL) > 0 AND count(*) FILTER (WHERE ${expense.lineBasis} = ${expenseLineBasisSchema.enum.allocation} AND ${expense.cost} IS NOT NULL) = 0 THEN 1 ELSE 0 END`,
+      unresolved: sql<number>`count(*) FILTER (WHERE (${expense.cost} IS NULL AND NOT ${sql.raw(unpricedForeignExpenseSql("Expense"))}) OR ${expense.lineKind} = ${expenseLineKindSchema.enum.unclassified})::int`,
     })
     .from(expense)
     .where(
@@ -608,7 +613,11 @@ async function liveExpenseTotalCents(
         eq(expense.economicRole, "vendor"),
       ),
     );
-  return row && row.priced > 0 && row.unresolved === 0 && row.total !== null
+  return row &&
+    row.priced > 0 &&
+    row.unresolved === 0 &&
+    Number(row.uncovered) === 0 &&
+    row.total !== null
     ? cents(Number(row.total))
     : null;
 }

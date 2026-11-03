@@ -73,16 +73,48 @@ const linesTotal = (lines: ExtractedPurchaseLine[]): number =>
 export const sameLineTitle = (left: string, right: string) =>
   left.trim().replace(/\s+/gu, " ") === right.trim().replace(/\s+/gu, " ");
 
+/** Original amounts describe evidence, independent of the USD Expense valuation. */
+export const originalItemFacts = (candidate: ExtractedOrderCandidate) => ({
+  currency: candidate.currency,
+  total: candidate.printedGrandTotal,
+  lines: candidate.lines.map(({ title, amount, quantity, lineKind }) => ({
+    title,
+    amount,
+    quantity: quantity ?? null,
+    lineKind,
+  })),
+});
+
+/** A retained foreign receipt values this item in source units, never in USD. */
+export const foreignReceiptExpenseSql = (alias: string): string => {
+  const row = `"${alias.replaceAll('"', '""')}"`;
+  return `EXISTS (
+    SELECT 1 FROM "ImportSourceProduct" original_binding
+    JOIN "ImportSourceOrder" original_order ON original_order.id = original_binding."sourceOrderId"
+    WHERE original_binding."expenseId" = ${row}.id
+      AND original_order."purchaseId" = ${row}."purchaseId"
+      AND original_order."originalOrder" #>> '{extraction,candidate,currency}' <> 'USD'
+      AND original_order."originalOrder" #>> '{extraction,candidate,currency}' ~ '^[A-Z]{3}$'
+      AND COALESCE(original_order."originalOrder" #>> '{extraction,candidate,sourceEvent}', '') NOT IN ('refunded', 'cancelled')
+      AND (original_order."originalOrder" #> '{extraction,candidate,lines}') -> original_binding."lineIndex" ->> 'lineKind' = ${row}."lineKind"
+  )`;
+};
+
+export const unpricedForeignExpenseSql = (alias: string): string =>
+  `("${alias.replaceAll('"', '""')}"."cost" IS NULL AND ${foreignReceiptExpenseSql(alias)})`;
+
 export const importedLineMatchesExpense = (
   row: Pick<
     ExistingExpenseSnapshot,
     "title" | "amount" | "lineKind" | "productQuantity"
   >,
   line: ExtractedPurchaseLine,
+  valuation: "USD" | "unknown" = "USD",
 ) =>
   sameLineTitle(line.title, row.title) &&
-  row.amount !== null &&
-  cents(line.amount) === cents(row.amount) &&
+  (valuation === "unknown"
+    ? row.amount === null
+    : row.amount !== null && cents(line.amount) === cents(row.amount)) &&
   line.lineKind === row.lineKind &&
   (row.productQuantity == null ||
     line.quantity === undefined ||
@@ -96,6 +128,7 @@ export const importedLineMatchesExpense = (
 export const decideLineWrite = (
   existing: ExistingExpenseSnapshot[],
   extracted: ExtractedPurchaseLine[],
+  valuation: "USD" | "unknown" = "USD",
 ): LineWriteDecision => {
   if (extracted.length === 0) return { kind: "no_op" };
   if (existing.length === 0) return { kind: "insert", lines: extracted };
@@ -119,12 +152,20 @@ export const decideLineWrite = (
     existing.every(
       (line) => line.lineBasis === "item_line" || line.sourceClaimed,
     ) &&
-    JSON.stringify(roster(existing)) === JSON.stringify(roster(extracted))
+    JSON.stringify(roster(existing)) ===
+      JSON.stringify(
+        roster(
+          extracted.map((line) => ({
+            ...line,
+            amount: valuation === "unknown" ? null : line.amount,
+          })),
+        ),
+      )
   ) {
     const unused = [...extracted];
     for (const row of existing) {
       const match = unused.findIndex((line) =>
-        importedLineMatchesExpense(row, line),
+        importedLineMatchesExpense(row, line, valuation),
       );
       if (match < 0) return { kind: "conflict", reason: "duplicate_lines" };
       unused.splice(match, 1);
@@ -134,6 +175,7 @@ export const decideLineWrite = (
 
   const [aggregate] = existing;
   if (
+    valuation === "USD" &&
     existing.length === 1 &&
     aggregate !== undefined &&
     aggregate.lineKind === "principal" &&

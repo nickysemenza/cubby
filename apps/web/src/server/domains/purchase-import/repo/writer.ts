@@ -77,6 +77,7 @@ import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-ord
 import {
   decideLineWrite,
   importedLineMatchesExpense,
+  originalItemFacts,
   sourceFinancialFacts,
   type ExistingExpenseSnapshot,
 } from "~/server/domains/purchase-import/repo/writer-policy";
@@ -1061,15 +1062,33 @@ export async function importVendorOrder(
   const semanticPlan = buildPurchaseImportPlan(input.extraction);
 
   const skipsLineWrites = semanticPlan.writeBlockReason !== null;
-  const identityOnly = [
-    "missing_currency",
-    "foreign_currency",
-    "missing_date",
-    "missing_total",
-  ].includes(semanticPlan.writeBlockReason ?? "");
+  const foreignReversal =
+    input.extraction.candidate?.currency !== "USD" &&
+    (input.extraction.candidate?.sourceEvent === "refunded" ||
+      input.extraction.candidate?.sourceEvent === "cancelled" ||
+      input.extraction.candidate?.lines.some(
+        (line) => line.lineKind === "principal" && line.amount < 0,
+      ));
+  const unpricedForeign =
+    semanticPlan.writeBlockReason === "foreign_currency" &&
+    !foreignReversal &&
+    (input.extraction.status === "ready" ||
+      (input.extraction.status === "needs_review" &&
+        input.extraction.reason === "foreign_currency"));
+  const writesLines = !skipsLineWrites || unpricedForeign;
+  const valuation = unpricedForeign ? "unknown" : "USD";
+  const identityOnly =
+    !unpricedForeign &&
+    !foreignReversal &&
+    [
+      "missing_currency",
+      "foreign_currency",
+      "missing_date",
+      "missing_total",
+    ].includes(semanticPlan.writeBlockReason ?? "");
   const explicitResolutions = input.productResolutions ?? [];
   const identityDecisions =
-    skipsLineWrites && !identityOnly
+    skipsLineWrites && !identityOnly && !unpricedForeign
       ? []
       : await explicitLineDecisions(
           input.extraction.candidate?.lines ?? [],
@@ -1437,7 +1456,7 @@ export async function importVendorOrder(
     let target = chosen ?? ordered;
     const created = target == null;
     let recordCanonicalProductBindings = true;
-    if (target && !identityOnly) {
+    if (target && writesLines) {
       const [lockedTarget] = await tx
         .select()
         .from(purchase)
@@ -1464,10 +1483,66 @@ export async function importVendorOrder(
         )
         .for("update");
     }
-    const current =
-      target && !identityOnly ? await existingExpenses(tx, target.id) : [];
-    const decision = decideLineWrite(current, candidate.lines);
-    if (target && !identityOnly) {
+    const ledger =
+      target && writesLines ? await existingExpenses(tx, target.id) : [];
+    // A booked aggregate carries USD spending; these lines add only unpriced items.
+    const current = unpricedForeign
+      ? ledger.filter((row) => row.lineBasis !== "allocation")
+      : ledger;
+    const originalExpenses = new Map<number, string>();
+    if (target && unpricedForeign && current.length) {
+      const sources = await tx
+        .select()
+        .from(importSourceOrder)
+        .where(eq(importSourceOrder.purchaseId, target.id));
+      const bindings = sources.length
+        ? await tx
+            .select()
+            .from(importSourceProduct)
+            .where(
+              inArray(
+                importSourceProduct.sourceOrderId,
+                sources.map((row) => row.id),
+              ),
+            )
+        : [];
+      for (const source of sources) {
+        const prior = source.originalOrder?.extraction.candidate;
+        const lines = bindings.filter((row) => row.sourceOrderId === source.id);
+        if (
+          !prior ||
+          JSON.stringify(originalItemFacts(prior)) !==
+            JSON.stringify(originalItemFacts(candidate)) ||
+          lines.length !== candidate.lines.length ||
+          lines.length !== current.length ||
+          new Set(lines.map((row) => row.expenseId)).size !== lines.length ||
+          lines.some(
+            (row) =>
+              !row.expenseId ||
+              !current.some((item) => item.id === row.expenseId),
+          )
+        )
+          continue;
+        for (const line of lines)
+          originalExpenses.set(line.lineIndex, line.expenseId!);
+        break;
+      }
+    }
+    const matchingExpenses = (
+      line: (typeof candidate.lines)[number],
+      lineIndex: number,
+    ) =>
+      current.filter(
+        (row) =>
+          (!originalExpenses.size ||
+            originalExpenses.get(lineIndex) === row.id) &&
+          importedLineMatchesExpense(row, line, valuation),
+      );
+    const decision =
+      unpricedForeign && current.length && !originalExpenses.size
+        ? { kind: "conflict" as const, reason: "duplicate_lines" as const }
+        : decideLineWrite(current, candidate.lines, valuation);
+    if (target && writesLines) {
       const [priorSourceOrder] =
         decision.kind === "no_op"
           ? await tx
@@ -1484,9 +1559,7 @@ export async function importVendorOrder(
             return false;
           const line = candidate.lines[resolution.lineIndex];
           if (!line || line.lineKind !== "principal") return false;
-          const matches = current.filter((row) =>
-            importedLineMatchesExpense(row, line),
-          );
+          const matches = matchingExpenses(line, resolution.lineIndex);
           if (matches.length !== 1) return true;
           const row = matches[0]!;
           if (row.productId)
@@ -1512,6 +1585,7 @@ export async function importVendorOrder(
           })),
       }).payments;
       const incompatiblePayments =
+        !unpricedForeign &&
         candidate.payments.length > 0 &&
         retainedPayments.length > 0 &&
         JSON.stringify(priorPaymentFacts) !==
@@ -1773,8 +1847,8 @@ export async function importVendorOrder(
         ),
       );
     } else if (
-      reviewReason === "foreign_currency" ||
-      candidate.currency !== "USD"
+      !unpricedForeign &&
+      (reviewReason === "foreign_currency" || candidate.currency !== "USD")
     ) {
       findingIds.push(
         await fileFinding(
@@ -1795,9 +1869,7 @@ export async function importVendorOrder(
           const identity = identityDecisions[lineIndex];
           if (!identity || identity.lineKind !== "principal") continue;
           if (identity.unresolvedReason) {
-            const matches = current.filter((row) =>
-              importedLineMatchesExpense(row, line),
-            );
+            const matches = matchingExpenses(line, lineIndex);
             if (matches.length === 1 && matches[0])
               productLines.push({
                 lineIndex,
@@ -1835,9 +1907,7 @@ export async function importVendorOrder(
             },
           );
           if (!productId) continue;
-          const matches = current.filter((row) =>
-            importedLineMatchesExpense(row, line),
-          );
+          const matches = matchingExpenses(line, lineIndex);
           const row = matches[0];
           if (matches.length !== 1 || !row)
             throw new Error(
@@ -1903,7 +1973,7 @@ export async function importVendorOrder(
             notes: line.seller ? `Seller: ${line.seller}` : null,
             // The line's product page is where a later enrichment pass starts.
             url: line.productUrl ?? null,
-            cost: line.amount,
+            cost: unpricedForeign ? null : line.amount,
             date: orderDate,
             lineKind: identity.lineKind,
             lineBasis: "item_line",
