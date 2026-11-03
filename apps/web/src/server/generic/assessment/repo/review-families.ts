@@ -74,7 +74,8 @@ const feedbackForAssessment = (predicate: SQL | undefined, bounded = false) => {
     .from(receipt)
     .where(and(eq(receipt.assessmentId, reviewAssessment.id), predicate));
   // Scoped readers must not turn a few identity probes into a global receipt hash.
-  return bounded ? query.offset(0) : query;
+  // Drizzle omits a numeric zero offset, so this barrier must be literal SQL.
+  return bounded ? sql`(${query.getSQL()} OFFSET 0)` : query;
 };
 const emailApplication = (bounded = false) =>
   exists(

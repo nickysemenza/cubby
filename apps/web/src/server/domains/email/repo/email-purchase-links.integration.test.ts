@@ -1,4 +1,3 @@
-import { suggestionStatus } from "@cubby/schemas/ai";
 import type { EmailFilters } from "@cubby/schemas/email";
 import {
   emailPurchaseLink,
@@ -67,6 +66,7 @@ import {
 } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
+import { automaticApplicationRule } from "~/server/generic/assessment/repo/assessment";
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { touchingAssessmentIds } from "~/server/generic/assessment/repo/review-families";
@@ -1160,6 +1160,7 @@ describe("Email Purchase links", () => {
       decision: "linked",
       evidenceChecksum: f.checksum,
       decidedByUserId: ctx.actor.userId,
+      proposedBy: "heuristic",
     });
     const [history] = await getDb(ctx.db)
       .select()
@@ -1252,9 +1253,9 @@ describe("Email Purchase links", () => {
       touchingAssessmentIds(ctx.db, {
         records: [{ entity: "email", id: identity.id, code: f.email }],
         eligibility: {
-          kind: "suggestions",
-          families: ["email_link"],
-          status: suggestionStatus.parse(state.status),
+          kind: "automatic",
+          family: "email_link",
+          appliedRule: automaticApplicationRule,
         },
       });
     for (const [recordId, expected] of [
