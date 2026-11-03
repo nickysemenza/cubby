@@ -116,6 +116,32 @@ function foreignProductBinding(
   );
 }
 
+/** Original supported quantity survives USD evidence that omits a count. */
+function originalExpenseQuantity(
+  state: ReconciliationState,
+  expenseId: string,
+) {
+  const quantities = new Set(
+    state.productBindings.flatMap((binding) => {
+      if (binding.expenseId !== expenseId) return [];
+      const candidate = state.sourceOrders.find(
+        (order) => order.id === binding.sourceOrderId,
+      )?.originalOrder?.extraction.candidate;
+      const quantity = candidate?.lines[binding.lineIndex]?.quantity;
+      return candidate?.currency &&
+        candidate.currency !== "USD" &&
+        quantity !== undefined
+        ? [quantity]
+        : [];
+    }),
+  );
+  if (quantities.size > 1)
+    throw new Error(
+      "Original source quantities disagree; review item correspondence before USD pricing.",
+    );
+  return quantities.values().next().value ?? null;
+}
+
 function partyCentTargets(
   rows: readonly Pick<
     ExpenseAllocationRow,
@@ -354,10 +380,11 @@ export async function reviewResolution(
       );
     if (
       !foreign &&
-      selected.some(
-        (row) => unpricedIds.has(row.id) || row.lineBasis === "allocation",
-      ) &&
-      unpricedIds.size
+      unpricedIds.size &&
+      (selected.some((row) => unpricedIds.has(row.id)) ||
+        candidate.lines.some(
+          (line) => line.lineKind === "principal" && line.amount >= 0,
+        ))
     ) {
       if (
         state.expenses.some(
@@ -370,18 +397,34 @@ export async function reviewResolution(
           "PURCHASE_IMPORT_REVIEW_INVALID",
           "Review the foreign item roster and its USD aggregate together before pricing items.",
         );
+      if (
+        bindings.some(
+          (binding) =>
+            candidate.lines[binding.lineIndex]?.lineKind === "principal" &&
+            !selected.some(
+              (row) =>
+                row.shortcode === binding.expenseId && unpricedIds.has(row.id),
+            ),
+        )
+      )
+        throw createAppError(
+          "PURCHASE_IMPORT_REVIEW_INVALID",
+          "USD itemization must reuse the original principal acquisitions.",
+        );
       for (const row of selected.filter((item) => unpricedIds.has(item.id))) {
         const binding = bindings.find(
           (item) => item.expenseId === row.shortcode,
         );
         const line = binding && candidate.lines[binding.lineIndex];
+        const quantity =
+          row.productQuantity ?? originalExpenseQuantity(state, row.id);
         if (
           !line ||
           line.title !== row.name ||
           line.lineKind !== row.lineKind ||
           (line.quantity !== undefined &&
-            row.productQuantity !== null &&
-            line.quantity !== row.productQuantity)
+            quantity !== null &&
+            line.quantity !== quantity)
         )
           throw createAppError(
             "PURCHASE_IMPORT_REVIEW_INVALID",
@@ -860,7 +903,10 @@ export async function commitSourceOrderReconciliation(
       productQuantity: productId
         ? (receiptProductQuantity(productId, line, { reversalKind: null }) ??
           existing?.productQuantity ??
-          null)
+          (existing &&
+          state.unpricedForeignExpenses.some((row) => row.id === existing.id)
+            ? originalExpenseQuantity(state, existing.id)
+            : null))
         : null,
       projectId: principal ? (template?.projectId ?? null) : null,
       spendingCategoryId: principal

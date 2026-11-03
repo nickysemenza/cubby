@@ -305,6 +305,16 @@ describe("incomplete itemized purchase identity", () => {
       productQuantity: null,
       cost: null,
     });
+    await updateExpense(
+      ctx.db,
+      parseShortcodeFor("expense", original[0]!.shortcode),
+      { productId: null },
+      ctx.actor,
+    );
+    expect(
+      (await lines()).find((row) => row.id === original[0]!.id)
+        ?.productQuantity,
+    ).toBeNull();
     const usd = structuredClone(input);
     usd.source = {
       kind: "vendor_export",
@@ -343,6 +353,23 @@ describe("incomplete itemized purchase identity", () => {
         };
       }),
     };
+    await expect(
+      prepareSourceOrderReconciliation(
+        ctx.db,
+        {
+          id: finding.id,
+          resolution: {
+            ...resolution,
+            expenseIds: [],
+            lines: resolution.lines.map((line) => ({
+              ...line,
+              expenseId: null,
+            })),
+          },
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/foreign item roster/);
     const review = await prepareSourceOrderReconciliation(
       ctx.db,
       { id: finding.id, resolution },
