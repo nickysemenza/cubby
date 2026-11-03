@@ -179,6 +179,18 @@ A stale refusal requires fresh evidence and review; listing or stored clean
 status does not grant acceptance authority. Preview writes nothing, and explicit
 Suggestions review validates the application again.
 
+Statement attachment also converges spending. A successful preview whose
+spending result requires review is not ready to apply, even with no transaction
+fields selected. Resolve that spending review first. For an already accepted
+transaction with a separately authorized explicit booking, use the reviewed
+classification below, then refresh the statement proposal and preview its
+attachment against the completed booking. Preserve the accepted transaction
+and inspect the resulting source references and allocations. A booking-lineage
+refusal remains unresolved; never restore old Expense values or member
+attributions to force attachment. A separately authorized identity-only repair
+must merge the current reference set inside one transaction through the existing
+writer; replacing a client-side snapshot can remove concurrent attachments.
+
 ### Booking classification and read-back
 
 For an authorized explicit booking, check existing Purchases, Expenses and
