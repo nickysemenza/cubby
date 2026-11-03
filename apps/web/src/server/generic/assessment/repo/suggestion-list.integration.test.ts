@@ -9,7 +9,7 @@ import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { suggestionListFilters } from "@cubby/schemas/suggestion-list";
 import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
-import { createRepoEntity } from "tooling/factories/repo";
+import { createRepoEntity, createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -596,6 +596,36 @@ describe("cross-family Suggestion list", () => {
   // admitting a connection under an unrelated record kind.
   it("lists a connection under both of its endpoints", async () => {
     const { item, charge, proposal } = await connection(ctx);
+    const unrelatedExpenses: Awaited<
+      ReturnType<typeof createRepoIdentity<"expense">>
+    >[] = [];
+    for (let index = 0; index < 49; index++) {
+      unrelatedExpenses.push(
+        await createRepoIdentity(ctx, "expense", {
+          name: `Synthetic unrelated expense ${index}`,
+          costType: "materials",
+          trade: "other",
+        }),
+      );
+    }
+    const unrelatedCodes = unrelatedExpenses.map((row) => row.output.id);
+    const batchCounts = async (recordIds: string[]) =>
+      (await suggestionRecordCounts(ctx.db, { recordIds })).records;
+    expect(await batchCounts([charge.output.id, ...unrelatedCodes])).toEqual([
+      { id: charge.output.id, pending: 1 },
+      ...unrelatedCodes.map((id) => ({ id, pending: 0 })),
+    ]);
+    expect(
+      await batchCounts([
+        charge.output.id,
+        item.id,
+        ...unrelatedCodes.slice(0, 48),
+      ]),
+    ).toEqual([
+      { id: charge.output.id, pending: 1 },
+      { id: item.id, pending: 1 },
+      ...unrelatedCodes.slice(0, 48).map((id) => ({ id, pending: 0 })),
+    ]);
     for (const recordId of [item.id, charge.output.id]) {
       const page = await listSuggestionPage(ctx.db, {
         recordIds: [recordId],
@@ -671,6 +701,11 @@ describe("cross-family Suggestion list", () => {
       touchingAssessmentIds(ctx.db, {
         records: [
           { entity: "product", id: retained.entityId, code: retained.id },
+          ...unrelatedExpenses.map((expense) => ({
+            entity: "expense",
+            id: expense.entityId,
+            code: expense.output.id,
+          })),
         ],
         eligibility: {
           kind: "suggestions",
