@@ -51,6 +51,7 @@ export const { definition, readSchemas } = defineEntityModel(
     // `displayName` falls back through `rawDescription` and `kind` for a
     // human-identifying label that is never blank.
     presentation: {
+      searchFacts: ["transactionDate", "amount"],
       edit: {
         sections: [
           {

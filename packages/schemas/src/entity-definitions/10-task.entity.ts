@@ -39,6 +39,7 @@ export const { definition, readSchemas } = defineEntityModel({
   table: "Task",
   identifiers: { brand: "TaskId", shortcode: "TSK-" },
   presentation: {
+    searchFacts: ["due", "status"],
     edit: {
       sections: [
         {

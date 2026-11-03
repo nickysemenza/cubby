@@ -142,6 +142,19 @@ per-entity code as possible.
   remainder in a shrink-only baseline and a GitHub issue. Lint rules in `tools/oxlint/cubby/` and shrink-only
   boundary tests enforce the common cases.
 
+### Search result facts
+
+`presentation.searchFacts` declares zero to two ordered existing list-field keys
+for Cmd+K and full search. Generation rejects unreadable fields. These facts
+are separate from search-hit subtitle/placement context and hover-preview
+rosters. Grouped search hydrates only returned records through the canonical
+selected-field list reader, batched by entity kind; rows never query data.
+Choose facts that add useful context beyond the retained title and subtitle.
+The shared compact field renderer owns formatting and resolved envelopes.
+Missing values leave their declared positions empty, without substitutions;
+zero and false remain values. Source transaction records declare statement date
+and reported amount; Purchase uses Expense-backed recorded spend.
+
 ## Field resolution and overrides
 
 ADR 0021 defines one typed `fields.<readKey>` envelope for governed and derived

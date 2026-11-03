@@ -53,6 +53,7 @@ export const { definition, readSchemas } = defineEntityModel({
   children: expenseChildren,
   identifiers: { brand: "ExpenseId", shortcode: "EXP-" },
   presentation: {
+    searchFacts: ["date", "cost"],
     titleField: "name",
     domain: "finance",
     description: "The authoritative record of household spend.",

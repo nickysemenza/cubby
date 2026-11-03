@@ -41,6 +41,7 @@ export const { definition, readSchemas } = defineEntityModel(
     children: recipeChildren,
     identifiers: { brand: "RecipeId", shortcode: "RCP-" },
     presentation: {
+      searchFacts: ["totalMinutes", "servings"],
       edit: {
         sections: [
           {

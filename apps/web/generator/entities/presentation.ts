@@ -955,6 +955,23 @@ export const compilePresentation = (
         );
       return field.key;
     });
+  if (
+    new Set(presentation.searchFacts).size !== presentation.searchFacts.length
+  )
+    throw new EntityDeclarationError(
+      `${context}.searchFacts must not repeat fields.`,
+    );
+  for (const key of presentation.searchFacts) {
+    const field = fieldModel.fields.find((item) => item.key === key);
+    if (
+      !field ||
+      !listReadable.has(key) ||
+      (field.kind === "json" && field.display.format === null)
+    )
+      throw new EntityDeclarationError(
+        `${context}.searchFacts: "${key}" must be a readable list field.`,
+      );
+  }
   const timelineSection = checkSections(
     sections,
     detail.summary,

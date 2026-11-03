@@ -30,6 +30,7 @@ export const { definition, readSchemas } = defineEntityModel({
   table: "Vendor",
   identifiers: { brand: "VendorId", shortcode: "VEN-" },
   presentation: {
+    searchFacts: ["purchaseCount", "spend"],
     edit: {
       sections: [
         {

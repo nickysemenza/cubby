@@ -35,6 +35,7 @@ export const { definition, readSchemas } = defineEntityModel(
     children: mealChildren,
     identifiers: { brand: "MealId", shortcode: "MEL-" },
     presentation: {
+      searchFacts: ["date", "mealType"],
       titleField: "displayName",
       domain: "plan",
       description: "Dated meal plans and preparation records.",

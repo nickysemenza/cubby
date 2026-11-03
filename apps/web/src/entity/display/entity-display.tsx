@@ -1195,6 +1195,35 @@ export function entityPreviewFacts<TRecord extends object>(
   return facts;
 }
 
+/** Search keeps declaration positions, including holes, and never substitutes another fact. */
+export function entitySearchFacts<TRecord extends object>(
+  queryClient: QueryClient,
+  entity: Entity,
+  record: TRecord,
+): { label: string; value: ReactNode; showLabel: boolean }[] {
+  const metadata = entityMetadata(queryClient, entity);
+  return metadata.summary.searchFacts.map((key) => {
+    const field = metadata.fields.fields.find(
+      (candidate) => candidate.key === key,
+    );
+    return {
+      label: field?.label ?? key,
+      showLabel:
+        field?.kind === "boolean" ||
+        (field?.kind === "number" && field.display.format === null),
+      value:
+        field &&
+        ![null, ""].includes(
+          copyScalarField(queryClient, entity, record, field),
+        )
+          ? renderCompactFieldValue(queryClient, entity, record, field, {
+              singleLine: true,
+            })
+          : null,
+    };
+  });
+}
+
 /**
  * The declared `hero.when` — when the thing happened — rendered by the field's
  * own renderer; null when undeclared or empty, so the header falls back to

@@ -22,6 +22,7 @@ export const { definition, readSchemas } = defineEntityModel({
   table: "Wish",
   identifiers: { brand: "WishId", shortcode: "WSH-" },
   presentation: {
+    searchFacts: ["candidateCount"],
     titleField: "name",
     domain: "purchases",
     description: "Wanted items and candidate products.",

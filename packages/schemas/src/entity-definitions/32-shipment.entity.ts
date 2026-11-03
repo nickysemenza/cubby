@@ -35,6 +35,7 @@ export const { definition, readSchemas } = defineEntityModel({
   route: { basePath: "shipments" },
   children: shipmentChildren,
   presentation: {
+    searchFacts: ["lastEventDate", "carrierName"],
     titleField: "name",
     domain: "purchases",
     description: "A package and its retained shipping evidence.",

@@ -12,6 +12,7 @@ export const { definition, readSchemas } = defineEntityModel({
   identifiers: { brand: "TransactionImportId", shortcode: "TIM-" },
   route: { basePath: "transaction-imports" },
   presentation: {
+    searchFacts: ["observedAt", "rowCountStored"],
     titleField: "label",
     domain: "finance",
     description: "One resumable transaction import and its received records.",

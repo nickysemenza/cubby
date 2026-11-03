@@ -41,6 +41,7 @@ export const { definition, readSchemas } = defineEntityModel({
   children: purchaseChildren,
   identifiers: { brand: "PurchaseId", shortcode: "PUR-" },
   presentation: {
+    searchFacts: ["date", "expenseTotal"],
     edit: {
       // Vendor, date, and total lead (the untitled remainder); how the
       // order is classified follows.

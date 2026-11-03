@@ -136,6 +136,7 @@ export const { definition, readSchemas } = defineEntityModel(
     children: productChildren,
     identifiers: { brand: "ProductId", shortcode: "PRD-" },
     presentation: {
+      searchFacts: ["model", "price"],
       titleField: "name",
       // Pantry/Inventory wayfinding, not a Product status colour; USDA data
       // follows the product catalog onto the same line.

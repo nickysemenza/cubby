@@ -20,6 +20,10 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { entityDetailFor } from "~/entity/entity-detail";
+import {
+  SearchFacts,
+  SearchShortcode,
+} from "~/entity/presentation/search-facts";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useDebug } from "~/ui/hooks/use-debug";
 import { Row } from "~/ui/layout";
@@ -671,7 +675,7 @@ function SearchGroupItem({
           onSelect={() => onSelect(group.primary)}
           aria-expanded={hasChildren ? expanded : undefined}
           aria-controls={hasChildren ? regionId : undefined}
-          className="min-w-0 flex-1 items-center gap-2"
+          className="min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap"
         >
           <SearchResultMedia item={group.primary} />
           <div className="min-w-0 flex-1">
@@ -690,14 +694,8 @@ function SearchGroupItem({
               </div>
             )}
           </div>
-          <div className="max-w-28 shrink-0 self-start pt-1 text-right">
-            <span className="block truncate text-xs font-medium text-slate">
-              Product
-            </span>
-            <span className="block truncate font-mono text-2xs text-muted-foreground tabular-nums">
-              {group.primary.id}
-            </span>
-          </div>
+          <SearchFacts item={group.primary} />
+          <SearchShortcode item={group.primary} />
         </CommandItem>
         {hasChildren && (
           <ProductFamilyToggle
@@ -705,7 +703,7 @@ function SearchGroupItem({
             expanded={expanded}
             regionId={regionId}
             onToggle={onToggle}
-            className="size-11 hover:bg-muted focus-visible:outline-offset-[-2px] sm:size-9"
+            className="order-first size-11 hover:bg-muted focus-visible:outline-offset-[-2px] sm:size-9"
           />
         )}
       </div>
@@ -754,7 +752,7 @@ function SearchEntityResultItem({
     <CommandItem
       value={`${item.entityKind}-${item.id}`}
       onSelect={() => onSelect(item)}
-      className="flex items-center gap-2"
+      className="flex flex-wrap items-center gap-2 sm:flex-nowrap"
     >
       <SearchResultMedia item={item} />
       <div className="min-w-0 flex-1">
@@ -778,14 +776,8 @@ function SearchEntityResultItem({
           </div>
         )}
       </div>
-      <div className="max-w-28 shrink-0 self-start pt-1 text-right">
-        <span className="block truncate text-xs font-medium text-slate">
-          {entities[item.entityKind].label}
-        </span>
-        <span className="block truncate font-mono text-2xs text-muted-foreground tabular-nums">
-          {item.id}
-        </span>
-      </div>
+      <SearchFacts item={item} />
+      <SearchShortcode item={item} />
     </CommandItem>
   );
 }
