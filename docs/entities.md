@@ -4844,7 +4844,12 @@ unrelated pending families out of the evidence join; overlapping branches
 still contribute each Assessment once to the caller's identity set.
 Field-reference predicates inspect only declared reference fields and their
 current/proposed values rather than constructing a complete display-reference
-array for every candidate. Automatic history materializes scoped identities
+array for every candidate. Statement settlement predicates apply resolved record
+UUIDs inside the live settlement/allocation graph before expanding display
+references. Suggestions and Automatic Decisions share that predicate and its
+deletion rules; direct statement, account and candidate references retain their
+matches, while presentation still enumerates all affected records.
+Automatic history materializes scoped identities
 before correction-receipt eligibility; family counts share their resolved scope.
 Count-only reads omit ordering-only receipt lookups. These are live canonical
 reads, not a new eligibility cache; any future stored projection must retain
