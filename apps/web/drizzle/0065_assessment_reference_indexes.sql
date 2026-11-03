@@ -1,0 +1,3 @@
+CREATE INDEX "Assessment_reference_source_idx" ON "Assessment" USING btree (("evidence"->'candidate'->'source'->>'entityKind'),("evidence"->'candidate'->'source'->>'entityId')) WHERE "Assessment"."served";--> statement-breakpoint
+CREATE INDEX "Assessment_reference_target_idx" ON "Assessment" USING btree (("evidence"->'candidate'->'target'->>'entityKind'),("evidence"->'candidate'->'target'->>'entityId')) WHERE "Assessment"."served";--> statement-breakpoint
+CREATE INDEX "Assessment_reference_records_idx" ON "Assessment" USING gin (("evidence"->'records')) WHERE "Assessment"."served";

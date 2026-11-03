@@ -68,7 +68,7 @@ export async function listAutomaticDecisions(
         AND f.metadata->>${"kind"} IS DISTINCT FROM ${correctionAuthorityReceiptKinds.enum.assessment_application}
       ORDER BY f."createdAt" DESC, f.id DESC LIMIT 1) latest ON true`;
   const correctionOrder = sql`LEFT JOIN LATERAL (SELECT c."createdAt" FROM "Feedback" c
-      WHERE ${correctionOutcomeExists(sql`a.id`, sql`c.id`)}
+      WHERE c."assessmentId" = a.id AND ${correctionOutcomeExists(sql`a.id`, sql`c.id`, true)}
       ORDER BY c."createdAt" DESC, c.id DESC LIMIT 1) latest_correction ON true`;
   const total = await unwrapDb(db).execute<{ count: number }>(
     sql`SELECT count(*)::int AS count ${from} WHERE ${where}`,

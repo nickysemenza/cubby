@@ -68,38 +68,48 @@ const linkedPurchases = sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.purc
 const receipt = alias(feedback, "receipt");
 const reviewQueryBuilder = new QueryBuilder();
 const receiptKind = sql<string>`${receipt.metadata}->>${assessmentProducer.keyof().enum.kind}`;
-const feedbackForAssessment = (predicate: SQL | undefined) =>
-  reviewQueryBuilder
+const feedbackForAssessment = (predicate: SQL | undefined, bounded = false) => {
+  const query = reviewQueryBuilder
     .select({ id: receipt.id })
     .from(receipt)
     .where(and(eq(receipt.assessmentId, reviewAssessment.id), predicate));
-const emailApplication = exists(
-  feedbackForAssessment(
-    and(
-      eq(receipt.authority, feedbackAuthority.enum.automatic),
-      or(
-        eq(receiptKind, EMAIL_APPLICATION_RECEIPT),
-        eq(receipt.operationId, mailboxClassificationStage.enum.resolution),
-      ),
-    ),
-  ),
-);
-const emailAudit = and(
-  notExists(
+  // Scoped readers must not turn a few identity probes into a global receipt hash.
+  return bounded ? query.offset(0) : query;
+};
+const emailApplication = (bounded = false) =>
+  exists(
     feedbackForAssessment(
       and(
-        eq(receipt.operationId, mailboxClassificationStage.enum.resolution),
-        eq(receipt.authority, feedbackAuthority.enum.member),
+        eq(receipt.authority, feedbackAuthority.enum.automatic),
+        or(
+          eq(receiptKind, EMAIL_APPLICATION_RECEIPT),
+          eq(receipt.operationId, mailboxClassificationStage.enum.resolution),
+        ),
+      ),
+      bounded,
+    ),
+  );
+const emailAudit = (bounded: boolean) =>
+  and(
+    notExists(
+      feedbackForAssessment(
+        and(
+          eq(receipt.operationId, mailboxClassificationStage.enum.resolution),
+          eq(receipt.authority, feedbackAuthority.enum.member),
+        ),
+        bounded,
       ),
     ),
-  ),
-  or(
-    emailApplication,
-    notExists(
-      feedbackForAssessment(eq(receiptKind, EMAIL_OBSERVATION_RECEIPT)),
+    or(
+      emailApplication(bounded),
+      notExists(
+        feedbackForAssessment(
+          eq(receiptKind, EMAIL_OBSERVATION_RECEIPT),
+          bounded,
+        ),
+      ),
     ),
-  ),
-)!;
+  )!;
 /** Match stored UUID/shortcode references without constructing display JSON. */
 function relatedRecordMatch(
   scope: AssessmentRecordScope,
@@ -197,6 +207,33 @@ const emailLinkRecords = (requested?: readonly string[]) => {
     );
   return parts.length ? sql.join(parts, sql` || `) : sql`'[]'::jsonb`;
 };
+
+function emailLinkRecordMatch(scope: AssessmentRecordScope) {
+  const explicit = relatedRecordMatch(
+    scope,
+    entities.email,
+    sql<string>`a.subject->>'recordId'`,
+  );
+  const purchase = relatedRecordMatch(
+    scope,
+    entities.purchase,
+    sql<string>`s.data->>'purchaseId'`,
+  );
+  const emails = scope.records?.filter(
+    (record) => record.entity === entities.email,
+  );
+  const legacy = explicit
+    ? sql`a.subject->>'recordId' IS NULL AND EXISTS (
+        SELECT 1 FROM "Email" mail
+        WHERE ${notDeleted("mail")}
+          ${emails ? sql`AND mail.id = ANY(${uuidArrayParam(emails.map((record) => record.id))})` : sql``}
+          AND mail."orderMailId" = substring(a.subject->>'originalId'
+            FROM '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')::uuid)`
+    : undefined;
+  // COALESCE never falls through a non-null explicit ID, even an empty one.
+  // Guarding canonical text preserves historical equality while indexing OrderMail IDs.
+  return or(explicit, legacy, purchase);
+}
 const mailImportOutcomeRecords = (requested?: readonly string[]) =>
   // Linked Purchase expansion cannot match another requested entity kind.
   !requested || requested.includes(entities.purchase)
@@ -323,13 +360,25 @@ export const reviewFamilyDeclarations = {
           return match ? [match] : [];
         }),
       );
-      const retained = relatedRecordMatch(
-        scope,
-        sql`r->>'entity'`,
-        sql<string>`r->>'id'`,
+      const retained = scope.records
+        ? or(
+            ...scope.records.flatMap((record) =>
+              [record.id, record.code].map(
+                (id) =>
+                  sql`a.evidence->'records' @> ${JSON.stringify([{ entity: record.entity, id }])}::jsonb`,
+              ),
+            ),
+          )
+        : sql`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(a.evidence->'records', '[]'::jsonb)) r
+            WHERE ${relatedRecordMatch(scope, sql`r->>'entity'`, sql<string>`r->>'id'`)})`;
+      return or(
+        connection
+          ? and(recommendationScopes.connection, connection)
+          : undefined,
+        retained
+          ? and(sql`(${recommendationScopes.connection}) IS NOT TRUE`, retained)
+          : undefined,
       );
-      return sql`CASE WHEN ${recommendationScopes.connection} THEN ${connection ?? sql`false`}
-        ELSE EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(a.evidence->'records', '[]'::jsonb)) r WHERE ${retained}) END`;
     },
     actionable: sql`(${sql.join(Object.values(recommendationScopes), sql` OR `)})`,
   },
@@ -349,16 +398,18 @@ export const reviewFamilyDeclarations = {
     records: one,
     primaryOnly: true,
     actionable: sql`jsonb_typeof(a.judgment) = 'string' AND ${hasTextSql(sql`a.judgment #>> '{}'`)}`,
-    audit: exists(
-      feedbackForAssessment(
-        and(
-          eq(receipt.authority, "automatic"),
-          eq(receipt.actorUserId, SYSTEM_USER_ID),
-          eq(receipt.intent, "history"),
-          eq(receiptKind, CORRECTION_OUTCOME_RECEIPT_KIND),
+    audit: (bounded: boolean) =>
+      exists(
+        feedbackForAssessment(
+          and(
+            eq(receipt.authority, "automatic"),
+            eq(receipt.actorUserId, SYSTEM_USER_ID),
+            eq(receipt.intent, "history"),
+            eq(receiptKind, CORRECTION_OUTCOME_RECEIPT_KIND),
+          ),
+          bounded,
         ),
       ),
-    ),
   },
   statement_transaction: {
     ...assessmentReviewFamilies.statement_transaction,
@@ -403,7 +454,7 @@ export const reviewFamilyDeclarations = {
     primaryOnly: true,
     actionable: sql`false`,
     audit: emailAudit,
-    verified: emailApplication,
+    verified: emailApplication(),
     summarize: (value: unknown) =>
       `Classified ${assessmentJudgments.email_relevance.parse(value).classification}`,
     correction: {
@@ -419,15 +470,18 @@ export const reviewFamilyDeclarations = {
     ...assessmentReviewFamilies.email_link,
     records: emailLinkRecords(),
     recordsFor: emailLinkRecords,
+    matchesRelatedRecords: emailLinkRecordMatch,
     actionable: sql`false`,
-    audit: exists(
-      feedbackForAssessment(
-        and(
-          eq(receipt.operationId, mailboxClassificationStage.enum.decision),
-          eq(receipt.authority, feedbackAuthority.enum.automatic),
+    audit: (bounded: boolean) =>
+      exists(
+        feedbackForAssessment(
+          and(
+            eq(receipt.operationId, mailboxClassificationStage.enum.decision),
+            eq(receipt.authority, feedbackAuthority.enum.automatic),
+          ),
+          bounded,
         ),
       ),
-    ),
     summarize: (value: unknown) =>
       `Email link ${assessmentJudgments.email_link.parse(value).decision}`,
     correction: {
@@ -453,7 +507,7 @@ export const reviewFamilyDeclarations = {
         : undefined;
     },
     actionable: sql`false`,
-    audit: sql`true`,
+    audit: () => sql`true`,
     summarize: (value: unknown) => {
       const outcome = assessmentJudgments.mail_import_outcome.parse(value);
       return outcome.kind === "imported"
@@ -474,7 +528,7 @@ export const reviewFamilyDeclarations = {
     matchesRelatedRecords?: (scope: AssessmentRecordScope) => SQL | undefined;
     actionable: SQL;
     scopes?: typeof recommendationScopes;
-    audit?: SQL;
+    audit?: (bounded: boolean) => SQL;
     verified?: SQL;
     summarize?: (value: DecisionValue) => string;
     correction?: {
@@ -485,7 +539,10 @@ export const reviewFamilyDeclarations = {
 >;
 
 /** Rule applications leave pending; automatic families retain legacy pending history. */
-export function automaticAssessmentEligibility(appliedRule: SQL) {
+export function automaticAssessmentEligibility(
+  appliedRule: SQL,
+  bounded = false,
+) {
   const familyCandidate = or(
     inArray(
       reviewAssessment.family,
@@ -505,7 +562,7 @@ export function automaticAssessmentEligibility(appliedRule: SQL) {
           ? [
               and(
                 eq(reviewAssessment.family, assessmentFamily.parse(family)),
-                declaration.audit,
+                declaration.audit(bounded),
               )!,
             ]
           : [],
@@ -522,7 +579,7 @@ export function automaticAssessmentEligibility(appliedRule: SQL) {
       ),
     ),
     or(
-      correctionOutcomeExists(sql`${reviewAssessment.id}`),
+      correctionOutcomeExists(sql`${reviewAssessment.id}`, undefined, bounded),
       and(familyCandidate, familyAudit),
     ),
   );
@@ -794,10 +851,11 @@ function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   // family/status directly prevents the planner from scanning Assessment again
   // and validating receipts before the matched-id join. Held pending corrections
   // still enter through the same candidate and authority checks.
-  return sql`WITH matched AS MATERIALIZED (${matched})
+  return sql`WITH matched AS MATERIALIZED (
+    SELECT DISTINCT id, family, status FROM (${matched}) identities)
     SELECT DISTINCT a.id FROM matched a
     CROSS JOIN LATERAL (SELECT a.status) s
-    WHERE ${automaticAssessmentEligibility(scope.eligibility.appliedRule(sql`${a.id}`))}`;
+    WHERE ${automaticAssessmentEligibility(scope.eligibility.appliedRule(sql`${a.id}`), true)}`;
 }
 
 export async function touchingAssessmentIds(

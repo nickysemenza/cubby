@@ -1,3 +1,4 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
 import type { EmailFilters } from "@cubby/schemas/email";
 import {
   emailPurchaseLink,
@@ -68,6 +69,7 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { executeEntity } from "~/server/entity-kernel";
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { touchingAssessmentIds } from "~/server/generic/assessment/repo/review-families";
 import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
@@ -1240,6 +1242,58 @@ describe("Email Purchase links", () => {
     for (const row of plans)
       row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
     expect(examined).toBeLessThan(10);
+
+    const [identity] = await getDb(ctx.db)
+      .select({ id: emailTable.id })
+      .from(emailTable)
+      .where(eq(emailTable.shortcode, f.email));
+    if (!identity) throw new Error("Synthetic Email identity missing");
+    const touchesEmail = () =>
+      touchingAssessmentIds(ctx.db, {
+        records: [{ entity: "email", id: identity.id, code: f.email }],
+        eligibility: {
+          kind: "suggestions",
+          families: ["email_link"],
+          status: suggestionStatus.parse(state.status),
+        },
+      });
+    for (const [recordId, expected] of [
+      [identity.id, true],
+      [undefined, true],
+      ["", false],
+      [crypto.randomUUID(), false],
+    ] as const) {
+      await getDb(ctx.db)
+        .update(assessment)
+        .set({
+          subject: sql`${JSON.stringify({ ...history.subject, originalId: f.source.id, recordId })}::jsonb`,
+        })
+        .where(eq(assessment.id, prediction.id));
+      expect((await touchesEmail())?.has(prediction.id)).toBe(expected);
+    }
+    await getDb(ctx.db)
+      .update(assessment)
+      .set({
+        subject: sql`${JSON.stringify({ ...history.subject, originalId: "synthetic-invalid-original", recordId: undefined })}::jsonb`,
+      })
+      .where(eq(assessment.id, prediction.id));
+    expect((await touchesEmail())?.has(prediction.id)).toBe(false);
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(emailTable.id, identity.id));
+    for (const [recordId, expected] of [
+      [undefined, false],
+      [identity.id, true],
+    ] as const) {
+      await getDb(ctx.db)
+        .update(assessment)
+        .set({
+          subject: sql`${JSON.stringify({ ...history.subject, originalId: f.source.id, recordId })}::jsonb`,
+        })
+        .where(eq(assessment.id, prediction.id));
+      expect((await touchesEmail())?.has(prediction.id)).toBe(expected);
+    }
   });
 
   // A boolean link check must stop at accepted evidence instead of reading and

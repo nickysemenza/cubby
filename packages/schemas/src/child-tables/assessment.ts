@@ -58,6 +58,28 @@ export const assessmentChildren = [
         on: ["publicationKey"],
       },
       { name: "Assessment_family_idx", on: ["family", "createdAt"] },
+      {
+        name: "Assessment_reference_source_idx",
+        on: [
+          { sql: "({evidence}->'candidate'->'source'->>'entityKind')" },
+          { sql: "({evidence}->'candidate'->'source'->>'entityId')" },
+        ],
+        where: "{served}",
+      },
+      {
+        name: "Assessment_reference_target_idx",
+        on: [
+          { sql: "({evidence}->'candidate'->'target'->>'entityKind')" },
+          { sql: "({evidence}->'candidate'->'target'->>'entityId')" },
+        ],
+        where: "{served}",
+      },
+      {
+        name: "Assessment_reference_records_idx",
+        using: "gin",
+        on: [{ sql: "({evidence}->'records')" }],
+        where: "{served}",
+      },
     ],
   }),
   defineChildTable({
