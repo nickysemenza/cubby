@@ -180,7 +180,11 @@ Events, updates and commit-only invalidation remain in the caller's transaction;
 rebuilding does not depend on batch boundaries. Native update hooks run once per
 statement, so rows in a batch may share an update timestamp.
 Pending field reads compare captured authoritative field, basis and reference
-snapshots and the latest explicit field-write intent. Applying locks those
+snapshots and the latest explicit field-write intent. A read prepares source and
+direct-reference rows by entity, Product classification evidence by roster and
+field-write revisions in batches, then uses the same fingerprint construction
+as single-record validation. Preparation lasts only for that read; it does not
+publish eligibility or share cached inputs across requests. Applying locks those
 inputs through commit and repeats the specific fingerprint check; unrelated
 table-wide revision changes do not invalidate advice. History remains available
 when current advice becomes stale. Schema changes include the derived-DDL
