@@ -172,6 +172,15 @@ read-only outside intake. Provider facts and memberships change only through
 recording source evidence. The [evidence lifecycle](../../../docs/import-evidence-convergence.md#financial-evidence-entities)
 owns create/merge restrictions and deletion guards.
 
+For temporary review holds, retain prior judgments and a unique marker, keep the
+cases visible in the member review, and count them as unresolved. If holding
+depends on current booking eligibility, check that eligibility and apply the
+hold atomically with the relevant source and transaction locks. Intake copies
+judgments into later revisions: reopening must discover original rows and
+marked descendants within the proven source identity. Restore only exact
+temporary-hold matches and preserve every newer member decision; restoring a
+fixed list of old row IDs can leave newer observations held.
+
 Before reviewing a statement Suggestion, use `finance_read.preview_suggestion`
 with its listed assessment ID, expected fingerprint and declared application.
 Inspect the current financial, Purchase/Expense, vendor and settlement effects.
