@@ -26,6 +26,12 @@ book the same money, settle the duplicate expenses through the rule below and
 verify allocations before proceeding. Honor cross-vendor and order-identity
 refusals rather than changing identifiers to force a merge.
 
+When owned originals explicitly connect a draft invoice to its paid order,
+follow the [invoice identity correction contract](../../../../docs/import-evidence-convergence.md#invoice-to-paid-order-identity-correction).
+The generic merge refusal still applies. An authorized maintenance correction
+needs a reviewed atomic procedure preserving source bindings and durable
+identity; the maintenance exception alone does not supply those guarantees.
+
 ## Expenses
 
 Expense has no merge operation. Direct `entity.delete expense` cleanup is

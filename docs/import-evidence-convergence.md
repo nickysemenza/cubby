@@ -390,6 +390,37 @@ aggregate reimbursement to its original Purchase or retire an unchanged
 aggregate and attach its bank evidence to a reviewed transfer. Edited,
 itemized, or source-claimed lines require individual review.
 
+## Invoice-to-paid-order identity correction
+
+A draft invoice and its completed order can name one economic event with
+different identifiers. Original paperwork must establish that relationship;
+matching amounts, dates or items alone cannot. The generic Purchase merge still
+refuses distinct order identifiers. Never clear or rename them to pass that guard.
+
+An explicitly authorized data-only correction may use the
+[maintenance exception](agents/domain-rules.md#production-changes). Its reviewed
+transaction locks and fingerprints both Purchase graphs and owned source
+families, accounts for every live line and payment, and names each duplicate
+Expense's survivor. Resolve classification, Project and attribution differences
+from provenance before retirement; an automatic import's defaults do not replace
+an established member decision.
+
+Transfer current source-order and line bindings atomically with retirement.
+Keep source owners, keys, checksums, original extractions and immutable
+observations unchanged. Historical subjects require the existing durable Entity
+redirect lifecycle. Use the declared edge policies, Expense removal owner and
+merge finalization; preserve archived rows, documents, shipments, payments and
+member decisions. Do not carry draft defaults into the paid Purchase or mark
+independent reconciliation findings resolved.
+
+Exercise the complete procedure in a rolled-back transaction before applying it.
+Verify exact redundant spending and acquisition reduction, unchanged stock,
+surviving source bindings and unrelated records. Retain the audited identity
+decision and line mapping, independent post-commit read-back and inert repair
+replay. Replaying the unchanged source must reach the survivor without recreating
+spending. An uncertain commit requires read-back before retry; missing ownership
+or preservation guarantees leave the duplicate unresolved.
+
 ## Financial evidence entities
 
 [Terminology](guide/terminology.md#naming-policy) owns the names; the
