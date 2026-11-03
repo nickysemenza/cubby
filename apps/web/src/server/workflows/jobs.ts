@@ -142,5 +142,8 @@ export async function drainProductionJobs(
   await (
     await import("~/server/domains/purchase-import/repo/dispatch")
   ).reconcilePurchaseDispatches(db);
+  await (
+    await import("~/server/workflows/runs/lifecycle")
+  ).reconcileWorkflowRuns(db);
   return outcomes;
 }

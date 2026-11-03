@@ -1,15 +1,17 @@
 import { jobState } from "@cubby/schemas/job";
-import { eq } from "drizzle-orm";
+import { eq, inArray, asc } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getDb, withTransaction } from "~/server/db/helpers";
-import { job } from "~/server/db/schema";
+import { job, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { reconcileWorkflowRuns } from "~/server/workflows/runs/lifecycle";
 
 import { defineDrain } from "../service/drain";
 import { drainDueJobs } from "../service/jobs";
 import { enqueueJob, enqueueJobs } from "./producer";
+import * as jobQueue from "./queue";
 import { dueJobs } from "./queue";
 import { markWork } from "./work-items";
 
@@ -187,5 +189,116 @@ describe("durable Job selection", () => {
       ),
     ).toBe(true);
     expect(ids).toHaveLength(3);
+  });
+
+  it("reconsiders a capped Job after holders release capacity in the same drain", async () => {
+    const kind = "ai.evaluation";
+    const items = await enqueueJobs(
+      ctx.db,
+      [0, 1, 2].map((index) => ({
+        key: `synthetic.cap-release.${index}`,
+        kind,
+        input: {},
+      })),
+    );
+    for (const item of items)
+      await markWork(ctx.db, { key: item.key, kind }, [
+        { target: "synthetic", ref: crypto.randomUUID() },
+      ]);
+    const refused = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const original = jobQueue.claimJob;
+    const claim = vi
+      .spyOn(jobQueue, "claimJob")
+      .mockImplementation(async (...args) => {
+        const result = await original(...args);
+        if (!result) refused.resolve();
+        return result;
+      });
+    const handler = defineDrain({
+      limit: 1,
+      prepare: async () => {
+        await release.promise;
+        return { prepared: null };
+      },
+      publish: async () => {},
+    });
+    const draining = drainDueJobs(ctx.db, { [kind]: handler }, 20, 30_000, 3);
+    try {
+      await refused.promise;
+      release.resolve();
+      await draining;
+      expect(
+        (
+          await getDb(ctx.db).select().from(job).where(eq(job.kind, kind))
+        ).every((row) => row.state === "completed"),
+      ).toBe(true);
+    } finally {
+      release.resolve();
+      await draining;
+      claim.mockRestore();
+    }
+  });
+
+  it("walks past a locked reconciliation page and revisits skipped Runs on a later pass", async () => {
+    const jobs = [];
+    for (let index = 0; index < 101; index++) {
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "background",
+        trigger: "manual",
+        status: "running",
+        execution: false,
+      });
+      jobs.push(
+        await enqueueJob(ctx.db, {
+          key: `synthetic.reconcile.${index}`,
+          kind: "run.execute",
+          runId,
+          input: {},
+        }),
+      );
+    }
+    await getDb(ctx.db)
+      .update(job)
+      .set({ state: "failed", error: "Synthetic stopped execution" })
+      .where(
+        inArray(
+          job.id,
+          jobs.map((row) => row.id),
+        ),
+      );
+    const ordered = await getDb(ctx.db)
+      .select({ id: job.id, runId: job.runId })
+      .from(job)
+      .where(eq(job.kind, "run.execute"))
+      .orderBy(asc(job.id));
+    const locked = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const holding = withTransaction(ctx.db, async (tx) => {
+      await tx
+        .select()
+        .from(run)
+        .where(
+          inArray(
+            run.id,
+            ordered.slice(0, 100).map((row) => row.runId!),
+          ),
+        )
+        .for("update");
+      locked.resolve();
+      await release.promise;
+    });
+    await locked.promise;
+    try {
+      const first = await reconcileWorkflowRuns(ctx.db);
+      expect(first.reconciled).toBe(0);
+      expect(first.next).not.toBeNull();
+      const second = await reconcileWorkflowRuns(ctx.db, first.next);
+      expect(second).toEqual({ reconciled: 1, next: null });
+    } finally {
+      release.resolve();
+      await holding;
+    }
+    expect((await reconcileWorkflowRuns(ctx.db)).reconciled).toBe(100);
   });
 });

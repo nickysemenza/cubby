@@ -66,6 +66,20 @@ export async function observeReadyWork(
     .limit(limit);
 }
 
+/** Pending items include future retries; callers may narrow to their owned targets. */
+export async function hasPendingWork(
+  db: RepositoryQueryInput,
+  drain: string,
+  eligible: (target: SQL) => SQL,
+): Promise<boolean> {
+  const [row] = await repositoryQueries(db)
+    .select({ target: workItem.target })
+    .from(workItem)
+    .where(and(eq(workItem.drain, drain), eligible(sql`${workItem.target}`)))
+    .limit(1);
+  return !!row;
+}
+
 /** Exactly these tickets: a re-marked item no longer matches. */
 // Drizzle has no tuple IN; a jsonb record set keeps one parameter per call.
 export const workTickets = (items: readonly WorkItem[]) => sql`(

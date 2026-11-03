@@ -482,10 +482,10 @@ native PostgreSQL installation remain owned by their existing runners.
   configuration dependencies. Runtime/local adapters use `server/worker-identity.ts`.
   Keep resource IDs, binding declarations, placement and DO lifecycle in native config;
   generated Env inference remains authoritative. DO named exports preserve namespaces.
-- **Background queue messages wake durable Jobs** on `cubby-background`. The minute
-  recovery cron repairs missed wakes; domain consumers retain per-message ack/retry.
+- **Background queue messages wake durable Jobs** on `cubby-background`. The shared deadline scheduler wakes future Jobs; daily and app-open
+  recovery repair exceptional missed wakes; domain consumers retain per-message ack/retry.
   Unknown transport queues are rejected before message parsing or DB access.
-  - Daily maintenance is a `maintenance` Run (cron `scheduled`, Activity's
+  - Daily maintenance at 7 a.m. household time is a `maintenance` Run (cron `scheduled`, Activity's
     Advanced maintenance Run now `manual`; one active pass at a time) whose steps
     (`domains/maintenance/service/maintenance-run.ts`) drain every backlog page
     by page: image-processing repair, EXIF/GPS, embeddings, stale recipe

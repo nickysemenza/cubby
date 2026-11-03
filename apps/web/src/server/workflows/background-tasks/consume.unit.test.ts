@@ -9,7 +9,7 @@ const unavailable = createDatabase(() => {
 });
 
 describe("Job wake consumption", () => {
-  it("acks failed drains; cron owns recovery when the database is unavailable", async () => {
+  it("retries failed delivery when the database is unavailable", async () => {
     const message = {
       body: { version: 3, queueType: "background" },
       ack: vi.fn(),
@@ -22,8 +22,8 @@ describe("Job wake consumption", () => {
         handlers: {},
       }),
     ).toBe("failed");
-    expect(message.retry).not.toHaveBeenCalled();
-    expect(message.ack).toHaveBeenCalledOnce();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+    expect(message.ack).not.toHaveBeenCalled();
     expect(captureException).toHaveBeenCalledOnce();
   });
 });

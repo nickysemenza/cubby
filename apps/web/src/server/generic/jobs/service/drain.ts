@@ -87,11 +87,6 @@ export type DrainSpec<P> = {
   ): Promise<void | DrainPublication>;
   /** Fenced writes when a page finds nothing ready (derived clock expiry). */
   idle?(tx: Database): Promise<void>;
-  /**
-   * A schedule re-arms this drain (`repeatJob`), so a page with nothing ready
-   * completes even while items back off; the next run retries them.
-   */
-  repeats?: true;
   /** Record the terminal outcome of items that ran out of attempts. */
   exhaust?(
     tx: Database,
@@ -147,7 +142,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
       );
       const items = spec.admit?.(observed) ?? observed;
       if (!items.length) {
-        const next = spec.repeats ? null : await nextWorkReadyAt(db, claim.key);
+        const next = await nextWorkReadyAt(db, claim.key);
         return {
           page: next ? { done: false, availableAt: next } : { done: true },
           ...(spec.idle ? { publish: (tx) => spec.idle!(tx) } : {}),

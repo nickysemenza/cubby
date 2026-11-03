@@ -92,13 +92,11 @@ function ActivityBody() {
       : search.entityKind || search.channel
         ? "history"
         : "needs-you");
-  const [visited, setVisited] = useState<ReadonlySet<string>>(
-    () => new Set([active]),
+  const [maintenanceVisited, setMaintenanceVisited] = useState(
+    active === "maintenance",
   );
   useEffect(() => {
-    setVisited((previous) =>
-      previous.has(active) ? previous : new Set([...previous, active]),
-    );
+    if (active === "maintenance") setMaintenanceVisited(true);
   }, [active]);
   return (
     <Stack gap="lg">
@@ -144,8 +142,13 @@ function ActivityBody() {
           ))}
         </TabsList>
         {views.map((view) => (
-          <TabsContent key={view.key} value={view.key} keepMounted>
-            {visited.has(view.key) || active === view.key ? (
+          <TabsContent
+            key={view.key}
+            value={view.key}
+            keepMounted={view.key === "maintenance"}
+          >
+            {active === view.key ||
+            (view.key === "maintenance" && maintenanceVisited) ? (
               <div className="pt-3">
                 {view.key === "needs-you" ? (
                   <Stack gap="lg">
@@ -251,8 +254,8 @@ function ActivityBody() {
                   <Stack gap="lg">
                     <Section
                       headingAs="h2"
-                      title="Nightly maintenance"
-                      caption="One standard pass, with each step recorded in a Run. Review its effects before starting."
+                      title="Daily maintenance"
+                      caption="Daily at 7 a.m. America/Los_Angeles, following daylight saving time. Each step is recorded in a Run."
                     >
                       <Stack gap="md">
                         <WorkEffects
@@ -261,7 +264,9 @@ function ActivityBody() {
                         <Disclosure summary="The maintenance pass, step by step">
                           <DefinedRunSteps kind={RUN_KINDS.maintenance} />
                         </Disclosure>
-                        <MaintenanceRunCard />
+                        <MaintenanceRunCard
+                          visible={active === "maintenance"}
+                        />
                       </Stack>
                     </Section>
                     <Section
@@ -269,7 +274,7 @@ function ActivityBody() {
                       title="Repair tools"
                       caption="Occasional repairs. Each command owns its scope and effects; previews inspect current candidates."
                     >
-                      <MaintenanceTools />
+                      <MaintenanceTools active={active === "maintenance"} />
                     </Section>
                   </Stack>
                 )}

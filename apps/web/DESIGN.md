@@ -633,8 +633,10 @@ Activity is the operational entry point. Its URL-addressable Needs you, Now,
 History and Advanced maintenance views use the shared Tabs primitives. Needs
 you separates Decisions from Problems and exposes existing Run/Job attention
 views; Now retains quiet retries, waits, dependencies and measured progress.
-Visited panels remain mounted so filters, previews and foreground work survive
-view switching. Tab triggers stay disabled until their route handlers are ready.
+Inactive panels unmount so hidden operational views cannot keep polling. Maintenance
+retains inspected previews between tabs with its queries and status polling disabled
+while hidden. URL
+filters survive view switching. Tab triggers stay disabled until their route handlers are ready.
 Existing Work queue views and direct Run/Job links stay available.
 
 Run types is the permanent “What does each Run do?” reference. Definitions
@@ -647,8 +649,8 @@ Execution drivers and ownership details stay behind a technical disclosure.
 Job definitions share the canonical kind-policy declaration, and Job/Run headers
 link to their definitions. Historical types remain distinct.
 
-Advanced maintenance explains the standard nightly pass before its Run now
-action; internal five-minute queue upkeep has its own Job definition. Backlog
+Advanced maintenance explains the standard daily 7 a.m. household pass before its Run now
+action; internal daily queue upkeep has its own Job definition. Backlog
 and image classification counts sit behind disclosure. Image classification
 rows can overlap and uncertain cutout eligibility is not a review queue.
 Recipe re-parsing and alias pruning require an explicit successful preview
@@ -659,3 +661,9 @@ Activity tabs keep their intrinsic label widths and wrap as whole controls on
 narrow screens. Expanded repair comparisons span the available width below
 the description and action controls; comparison content never competes with
 the description for a narrow right-hand column.
+
+Activity Now leads with a flat scheduling summary: Running, Next wake, Waiting
+and Last recovery. Known deadlines link to Jobs; wake and recovery history sits
+behind disclosure. Observations carry timestamps, normal waits stay neutral and
+observed unexplained overdue wakes receive attention. An empty schedule never
+claims the database is asleep. Idle operational views do not poll the database.

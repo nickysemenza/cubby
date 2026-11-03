@@ -21,6 +21,7 @@ import type {
   BaseListRow,
   UseEntityListReturn,
 } from "~/entity/hooks/use-entity-list";
+import { Scheduling } from "~/features/activity/scheduling";
 import { WorkFeed } from "~/features/activity/work-feed";
 import { JobLogPanel } from "~/features/job/job-diagnostics";
 import { RetryJobsButton } from "~/features/job/retry-jobs";
@@ -54,7 +55,7 @@ const formatEta = (seconds: number) => {
 function DeviceBacklogNotice() {
   const backlog = useQuery({
     ...job.deviceBacklog.queryOptions({}),
-    refetchInterval: 15_000,
+    refetchInterval: false,
   });
   const data = backlog.data;
   if (!data?.waiting) return null;
@@ -151,7 +152,7 @@ function QueueSummary({
 }) {
   const all = useQuery({
     ...job.queue.queryOptions({ filter: { entityFilters: {} }, pageSize: 1 }),
-    refetchInterval: 15_000,
+    refetchInterval: false,
   });
   if (all.isPending) return <StatusText>Loading queue counts…</StatusText>;
   if (all.isError)
@@ -274,7 +275,7 @@ const DERIVED_BREAKDOWN_AFTER_SECONDS = 60;
 function DerivedBacklogSection() {
   const backlog = useQuery({
     ...derived.backlog.queryOptions({}),
-    refetchInterval: 15_000,
+    refetchInterval: false,
   });
   if (
     !backlog.isPending &&
@@ -318,6 +319,7 @@ export function QueueOverview({
   );
   return (
     <Stack gap="lg">
+      <Scheduling attentionOnly={mode === "attention"} />
       {mode === "attention" ? (
         <WorkFeed
           attentionOnly
@@ -354,7 +356,6 @@ export function QueueOverview({
           pageSize={10}
           sort={RUN_SORT}
           columns={RUN_COLUMNS}
-          refreshIntervalMs={15_000}
           allLink
         />
       </Section>
@@ -381,7 +382,6 @@ export function QueueOverview({
           columns={JOB_COLUMNS}
           detail={JOB_DETAIL}
           actions={(list) => <JobActions list={list} />}
-          refreshIntervalMs={15_000}
           allLink
         />
       </Section>

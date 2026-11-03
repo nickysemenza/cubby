@@ -269,7 +269,6 @@ describe("durable calendar dirty-mark fallback", () => {
       await expect(tasks[0]).resolves.toBeUndefined();
       expect(consoleError).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: "[jobs] wake failed; cron will drain committed jobs",
           source: "calendar-feed.mark-dirty-fallback",
           error: expect.objectContaining({ message: "queue down" }),
         }),

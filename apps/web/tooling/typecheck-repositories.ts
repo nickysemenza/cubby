@@ -76,6 +76,7 @@ export const repositoryOwners = [
   "src/server/generic/jobs/errors.ts",
   "src/server/generic/jobs/failure.ts",
   "src/server/generic/jobs/repo/queue.ts",
+  "src/server/generic/jobs/repo/deadlines.ts",
   "src/server/generic/jobs/repo/producer.ts",
   "src/server/generic/jobs/repo/external-claim.ts",
   "src/server/generic/jobs/repo/job-reads.ts",

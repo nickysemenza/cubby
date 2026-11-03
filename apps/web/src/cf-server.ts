@@ -21,3 +21,5 @@ export default Sentry.withSentry(workerSentryOptions, {
 });
 
 export { AiGatewayEgressDurableObject } from "./server/domains/run/operations/gateway-egress-durable-object";
+
+export { JobSchedulerDurableObject } from "./server/generic/jobs/scheduler/durable-object";

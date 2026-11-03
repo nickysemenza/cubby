@@ -31,7 +31,12 @@ export type AiGatewayEgressDurableObject =
   import("./ai/gateway-egress-contract").AiGatewayEgressRpc &
     Rpc.DurableObjectBranded;
 
+export type JobSchedulerDurableObject =
+  import("./generic/jobs/scheduler/rpc").JobSchedulerRpc &
+    Rpc.DurableObjectBranded;
+
 export interface WorkerRpc {
+  JobSchedulerDurableObject: JobSchedulerDurableObject;
   AiGatewayEgressDurableObject: AiGatewayEgressDurableObject;
   AiResponseCacheDurableObject: AiResponseCacheDurableObject;
   ChatGptPlanDurableObject: ChatGptPlanDurableObject;

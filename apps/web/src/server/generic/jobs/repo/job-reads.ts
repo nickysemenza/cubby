@@ -10,6 +10,7 @@ import {
   and,
   asc,
   eq,
+  gt,
   inArray,
   sql,
   type SQL,
@@ -123,6 +124,7 @@ export const stoppedRunExecutions = (
   db: RepositoryQueryInput,
   runWhere: SQL | undefined,
   limit: number,
+  after: JobRow["id"] | null = null,
 ) =>
   repositoryQueries(db)
     .select({
@@ -135,8 +137,14 @@ export const stoppedRunExecutions = (
     .from(job)
     .innerJoin(run, eq(run.id, job.runId))
     .where(
-      and(eq(job.kind, "run.execute"), runWhere, inArray(job.state, STOPPED)),
+      and(
+        eq(job.kind, "run.execute"),
+        runWhere,
+        inArray(job.state, STOPPED),
+        after ? gt(job.id, after) : undefined,
+      ),
     )
+    .orderBy(asc(job.id))
     .limit(limit);
 
 /**

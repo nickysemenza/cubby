@@ -21,7 +21,7 @@ export type BackgroundQueueMessageOutcome =
   | "unreadable"
   | "failed";
 
-/** Every delivery wakes durable work; unreadable bodies and failed drains always ack. */
+/** Queue delivery retries transport/runtime failures; Job owns execution retries. */
 export async function handleBackgroundQueueMessage(
   db: Database,
   message: BackgroundQueueDeliveredMessage,
@@ -34,12 +34,12 @@ export async function handleBackgroundQueueMessage(
         await import("~/server/generic/jobs/service/jobs")
       ).drainDueJobs(db, ports.handlers);
     else await drainProductionJobs(db);
+    message.ack();
     return parsed.success ? "succeeded" : "unreadable";
   } catch (error) {
     ports.captureException(error);
+    message.retry({ delaySeconds: 30 });
     return "failed";
-  } finally {
-    message.ack();
   }
 }
 

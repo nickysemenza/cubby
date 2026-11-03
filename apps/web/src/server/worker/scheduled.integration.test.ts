@@ -16,7 +16,10 @@ it("rejects daily completion with both independent database failures", async () 
   connection.searchParams.set("options", "-c search_path=pg_catalog");
   await expect(
     handleScheduledInvocation(
-      { scheduledTime: 0, cron: CRON_SCHEDULES.dailyMaintenance },
+      {
+        scheduledTime: Date.parse("2026-01-15T15:00:00Z"),
+        cron: CRON_SCHEDULES.dailyMaintenance,
+      },
       fromPartial<Env>({
         HYPERDRIVE_BACKGROUND: { connectionString: connection.toString() },
         CF_VERSION_METADATA: { id: "synthetic-version" },
@@ -28,3 +31,18 @@ it("rejects daily completion with both independent database failures", async () 
     errors: [expect.any(Error), expect.any(Error)],
   });
 });
+
+it.each(["2026-01-15T14:00:00Z", "2026-07-15T15:00:00Z"])(
+  "skips the non-household hour before opening Postgres (%s)",
+  async (instant) => {
+    await expect(
+      handleScheduledInvocation(
+        {
+          scheduledTime: Date.parse(instant),
+          cron: CRON_SCHEDULES.dailyMaintenance,
+        },
+        fromPartial<Env>({ CF_VERSION_METADATA: { id: "synthetic-version" } }),
+      ),
+    ).resolves.toBeUndefined();
+  },
+);

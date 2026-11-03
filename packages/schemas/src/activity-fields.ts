@@ -346,7 +346,7 @@ export const RUN_KINDS = {
       targets:
         "Eligible household upkeep backlogs, connected mailboxes and images still needing processing.",
       exclusions:
-        "Each step applies its own eligibility and cutoff. Later arrivals may wait for the next pass. This is separate from internal five-minute queue upkeep.",
+        "Each step applies its own eligibility and cutoff. Later arrivals may wait for the next pass. Internal queue upkeep is admitted by the same daily recovery.",
       effects:
         "Repairs missing image executors, extracts metadata, deletes abandoned uploads and disposable Email originals, reconciles Runs, cleans search artifacts, refreshes the calendar, starts mail discovery and admits paid image work.",
       dependencies:
@@ -356,7 +356,7 @@ export const RUN_KINDS = {
         "Open the actual Run for step outcomes and supported retries. Failed image processing can continue retrying independently of this pass.",
     },
     label: "Maintenance",
-    description: "The nightly pass over household backlogs and upkeep.",
+    description: "The daily 7 a.m. household pass over backlogs and upkeep.",
     trigger: "scheduled",
     execution: "steps",
     progress: "steps",

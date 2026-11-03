@@ -1,5 +1,9 @@
 import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
-import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import {
+  runEntityId,
+  type RunId,
+  type JobId,
+} from "@cubby/schemas/identifiers";
 import { runStepState } from "@cubby/schemas/run-step";
 import { and, or, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 
@@ -241,7 +245,10 @@ export async function failWorkflowRun(
 }
 
 /** Lost wakes and interrupted workers are recovered by dueJobs, never new Run attempts. */
-export async function reconcileWorkflowRuns(db: Database) {
+export async function reconcileWorkflowRuns(
+  db: Database,
+  after: JobId | null = null,
+) {
   const reconcilable = () =>
     or(
       eq(runTable.status, "running"),
@@ -250,19 +257,20 @@ export async function reconcileWorkflowRuns(db: Database) {
         eq(runTable.failureCode, "execution_limit"),
       ),
     );
-  const rows = await stoppedRunExecutions(db, reconcilable(), 100);
+  const rows = await stoppedRunExecutions(db, reconcilable(), 100, after);
+  let reconciled = 0;
   for (const row of rows) {
     if (!row.runId || !["failed", "cancelled", "paused"].includes(row.state))
       continue;
-    await withTransactionDatabase(db, async (tx) => {
+    const updated = await withTransactionDatabase(db, async (tx) => {
       // Match launch's Run-before-Job order without waiting on an active writer.
       const [owner] = await getDb(tx)
         .select({ id: runTable.id })
         .from(runTable)
         .where(and(eq(runTable.id, row.runId!), reconcilable()))
         .for("update", { skipLocked: true });
-      if (!owner) return;
-      if (!(await lockUnchangedJob(tx, row))) return;
+      if (!owner) return false;
+      if (!(await lockUnchangedJob(tx, row))) return false;
       await getDb(tx)
         .update(runTable)
         .set({
@@ -277,7 +285,9 @@ export async function reconcileWorkflowRuns(db: Database) {
                 : null,
         })
         .where(and(eq(runTable.id, row.runId!), reconcilable()));
+      return true;
     });
+    if (updated) reconciled++;
   }
-  return rows.length;
+  return { reconciled, next: rows.length === 100 ? rows.at(-1)!.id : null };
 }
