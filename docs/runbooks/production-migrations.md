@@ -11,6 +11,17 @@ requirements and [CI](../ci.md#deployment) for workflow execution and retries.
 Do not run production migrations by hand while a Deploy run is queued or
 running; Actions serialization does not cover operator shells.
 
+## Historical investigation
+
+For Neon snapshot readback, pass `finalize: false` explicitly to
+`restore_snapshot`, omit `target_branch_id`, and use a separate endpoint on the
+returned branch. `finalize: true` can replace the source branch's production
+endpoint and default designation even when the restore creates a new branch;
+it is a production cutover, not an isolated copy. Before querying, verify both
+branch IDs and endpoint assignments: the production hostname and default branch
+must still point to the original production branch. Retain any unexpected
+branch writes for reconciliation before removing an investigation branch.
+
 ## Staged and breaking cutovers
 
 One exclusive operator owns a staged cutover, including Actions and local
