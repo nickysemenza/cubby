@@ -267,6 +267,13 @@ repeated ledger reads between durable checkpoints; interrupted pages replay
 their existing publications and effects through the same guards. It does not
 increase attempts, provider budgets or Worker limits.
 
+Generation preparation and publication finish in a separate function that
+returns only charge references, counters and timing values. The initial
+proposal graph does not remain in the serial application frame. Each charge
+still regenerates current evidence before applying automatic rules; this
+lifetime boundary does not reuse financial candidates across money writes or
+establish a Worker memory bound.
+
 A handler has one shape: `prepare(db, claim, input, ctx)` reads and calls
 providers outside a transaction and returns an outcome with an optional
 `publish(tx)`. The executor (`generic/jobs/service/jobs.ts`, private) owns

@@ -2760,6 +2760,63 @@ export async function retryStatementGenerationRefs(
   return { done, skipped, failed, published, labelsReused, unchanged };
 }
 
+/** Keep the publication proposal graph out of the serial application frame. */
+async function publishStatementGenerationPage(
+  db: Database,
+  charges: readonly ChargeRef[],
+  scope: StatementSuggestionScope | undefined,
+  runId: RunId | null,
+  failed: RunStepError[],
+) {
+  let published = 0;
+  let labelsReused = 0;
+  let unchanged = 0;
+  const accountIds = scope?.accountIds;
+  const built = await prepareStatementGenerationPage(db, charges, failed);
+  const preparedAt = performance.now();
+  const proposals = accountIds?.length
+    ? built.filter((proposal) =>
+        accountIds.includes(proposal.judgment.accountId),
+      )
+    : built;
+  const outOfScope = built.length - proposals.length;
+  // Publish independent charges first; import applications then recheck the
+  // current ledger sequentially, including reused labels on unchanged imports.
+  const producer = ruleProducer(runId);
+  await publishSuggestionBatches(
+    db,
+    statementSuggestions,
+    proposals.map((proposal) => ({ proposal })),
+    producer,
+    {
+      concurrency: STATEMENT_PUBLISH_CONCURRENCY,
+      onOutcome: (_, result) => {
+        const outcome = statementOutcome(result, producer);
+        labelsReused += outcome.labelsReused;
+        if (outcome.outcome === "published") published++;
+        else unchanged++;
+      },
+      onFailure: ({ proposal }, error) =>
+        failed.push(
+          statementGenerationFailure(
+            `charge:${chargeId(proposal.charge)}`,
+            error,
+          ),
+        ),
+    },
+  );
+  const publishedAt = performance.now();
+  return {
+    charges: proposals.map(({ charge }) => charge),
+    published,
+    labelsReused,
+    unchanged,
+    outOfScope,
+    preparedAt,
+    publishedAt,
+  };
+}
+
 /** One generation page: deterministic, safe to repeat, resumable at `next`. */
 export async function generateStatementSuggestionPage(
   db: Database,
@@ -2802,60 +2859,32 @@ export async function generateStatementSuggestionPage(
         limit,
         scope: input.scope ?? {},
       });
-  let published = 0;
-  let labelsReused = 0;
-  let unchanged = 0;
   const failed: RunStepError[] = [];
-  const accountIds = input.scope?.accountIds;
   const selectedAt = performance.now();
-  const built = await prepareStatementGenerationPage(db, charges, failed);
-  const preparedAt = performance.now();
-  const proposals = accountIds?.length
-    ? built.filter((proposal) =>
-        accountIds.includes(proposal.judgment.accountId),
-      )
-    : built;
-  const outOfScope = built.length - proposals.length;
-  // Publish independent charges first; import applications then recheck the
-  // current ledger sequentially, including reused labels on unchanged imports.
-  const producer = ruleProducer(input.runId);
-  await publishSuggestionBatches(
+  const {
+    charges: proposalCharges,
+    published,
+    labelsReused,
+    unchanged,
+    outOfScope,
+    preparedAt,
+    publishedAt,
+  } = await publishStatementGenerationPage(
     db,
-    statementSuggestions,
-    proposals.map((proposal) => ({ proposal })),
-    producer,
-    {
-      concurrency: STATEMENT_PUBLISH_CONCURRENCY,
-      onOutcome: (_, result) => {
-        const outcome = statementOutcome(result, producer);
-        labelsReused += outcome.labelsReused;
-        if (outcome.outcome === "published") published++;
-        else unchanged++;
-      },
-      onFailure: ({ proposal }, error) =>
-        failed.push(
-          statementGenerationFailure(
-            `charge:${chargeId(proposal.charge)}`,
-            error,
-          ),
-        ),
-    },
+    charges,
+    input.scope,
+    input.runId,
+    failed,
   );
-  const publishedAt = performance.now();
   if (input.scope?.importId) {
     const { applyAutomaticRulesForCharge } =
       await import("~/server/generic/assessment/repo/automatic-rule-runtime");
-    for (const proposal of proposals) {
-      const ref = `charge:${chargeId(proposal.charge)}`;
+    for (const charge of proposalCharges) {
+      const ref = `charge:${chargeId(charge)}`;
       if (failed.some((failure) => failure.ref === ref)) continue;
       try {
-        await regenerateCharges(db, [proposal.charge], input.scope);
-        await applyAutomaticRulesForCharge(
-          db,
-          proposal.charge,
-          true,
-          input.scope,
-        );
+        await regenerateCharges(db, [charge], input.scope);
+        await applyAutomaticRulesForCharge(db, charge, true, input.scope);
       } catch (error) {
         if (isWorkflowInterrupted(error)) throw error;
         failed.push(statementGenerationFailure(ref, error));
@@ -2870,7 +2899,7 @@ export async function generateStatementSuggestionPage(
   };
   log.info("Statement generation page", {
     charges: charges.length,
-    proposals: proposals.length,
+    proposals: proposalCharges.length,
     published,
     unchanged,
     failed: failed.length,
@@ -2882,7 +2911,10 @@ export async function generateStatementSuggestionPage(
   input.work?.add({
     timings,
     concurrency: {
-      publication: peakWorkers(STATEMENT_PUBLISH_CONCURRENCY, proposals.length),
+      publication: peakWorkers(
+        STATEMENT_PUBLISH_CONCURRENCY,
+        proposalCharges.length,
+      ),
     },
   });
   return {
