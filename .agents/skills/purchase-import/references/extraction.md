@@ -29,7 +29,11 @@ selected color/size; do not replace that line's identifier with a different
 identifier found in generic page prose.
 
 For a saved confirmation, extract only its explicitly assigned order. A generic
-subject is not itemization. Preserve literal SKU, quantities, line amounts,
+subject is not itemization. Exclude recommendations, upsells and promotional
+sections even when they show item prices. A savings banner is not an additional
+discount unless the order's accounting applies it separately. A total labeled
+as including fees, taxes or tips does not state any component's amount; never
+assign the total to a tip or another component. Preserve literal SKU, quantities, line amounts,
 adjustments, printed order date, currency, and total. A checkout card or order
 total does not establish payment; placement does not establish delivery.
 Set `orderedAt` to a source-printed calendar date as `YYYY-MM-DD` without
