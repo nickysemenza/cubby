@@ -5,6 +5,7 @@
  * changed values. A mark clears only while its ticket is unchanged since the
  * claim, so a save that lands during compute keeps the record dirty.
  */
+import { humanize } from "@cubby/shared";
 import { inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -446,14 +447,15 @@ async function expandFanouts(
             : input.path
               ? pathSql(input.path, refs)
               : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+      const reasons = new Set(group.map((item) => item.reason ?? null));
+      // Different source refs can reach disjoint dependents. Do not attribute
+      // one ref's exact operation to every dependent in the combined expansion.
       const reason =
-        group
-          .filter((item) => item.reason != null)
-          .sort(
-            (a, b) =>
-              a.priority - b.priority ||
-              (a.reason ?? "").localeCompare(b.reason ?? ""),
-          )[0]?.reason ?? null;
+        reasons.size === 1
+          ? (group[0]?.reason ?? null)
+          : [...reasons].some((value) => value !== null)
+            ? `Related ${humanize(input.table).toLowerCase()} refresh requested`
+            : null;
       return [
         sql`SELECT ${declaration.target}::text, r.id,
         ${Math.min(...group.map((item) => item.priority))}::int, ${reason}::text
@@ -700,7 +702,7 @@ async function propagate(
                 JOIN ${ident(declaration.table)} s
                   ON s.${ident(dependency.sourceColumn)} = d.${ident(dependency.entityColumn)}
                WHERE s.id = ANY(${uuidArrayParam(changedIds)})`;
-      return sql`SELECT ${dependent.target}::text, r.id, 1, ${`${declaration.table} ${declaration.key} publication changed`}::text FROM (${refs}) AS r(id)`;
+      return sql`SELECT ${dependent.target}::text, r.id, 1, ${`${humanize(declaration.table)} ${humanize(declaration.key).toLowerCase()} publication changed`}::text FROM (${refs}) AS r(id)`;
     },
   );
   if (selections.length)

@@ -2930,6 +2930,14 @@ lease still match. A newer source ticket, a postponed attempt or a lost lease
 cannot inherit an older attempt's execution status. These nullable observations
 do not replace Job fencing, retries or retained publications.
 
+Refresh trigger descriptions travel with existing WorkItem tickets through
+source capture, fanout and dependent publication. Field work metadata and
+Activity's per-value trigger counts read those same observations. A missing
+description stays unknown; it never means no work or a zero result. Clock expiry
+can identify a daily refresh even before scheduling. Reasons are diagnostic
+metadata and do not participate in calculation fingerprints or publication
+authority.
+
 Compute adapters may share an authoritative preparation source within one admitted
 page. The union of its admitted IDs stays inside the existing page budget;
 each target projects only its own IDs. A failed shared preparation falls back

@@ -1,5 +1,5 @@
 {
-  "id": "4ee158b2-818f-4ab2-9790-15dd66399263",
+  "id": "a6b84077-da9d-4272-bb77-ba7ff5351673",
   "prevId": "575ab687-acb4-4e0d-88f5-1e600088b22a",
   "version": "7",
   "dialect": "postgresql",
@@ -5300,6 +5300,12 @@
         "executionStartedAt": {
           "name": "executionStartedAt",
           "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         }

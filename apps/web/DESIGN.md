@@ -548,6 +548,10 @@ static. A local timer expires that observation without fetching and labels its
 status as potentially out of date. Failed values expose the raw
 diagnostic on hover and keyboard focus. Missing values retain Not assessed or
 the field's normal dash. Marks preserve 32px table rows.
+An owed refresh's explanation shows its recorded trigger as a labelled fact;
+older work without that metadata says Not recorded. Activity's existing
+per-value disclosure lists the same trigger descriptions and their counts,
+including the unknown bucket. Trigger text carries no record names or values.
 
 Why this value is one viewport-bounded popover: a vertical chain in declared
 precedence order, with a filled deciding level and muted skipped levels. Set,

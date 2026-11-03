@@ -50,9 +50,15 @@ feature, and one item per `(target, ref)` it still owes. Drains:
 | `embedding:refresh`       | `embedding.refresh` | `embedding.refresh` | source entity id   |
 | `embedding:cleanup`       | `embedding.cleanup` | `embedding.cleanup` | EntityEmbedding id |
 
-An item holds only scheduling state: `drain` (its owning Job key), a fresh
+An item holds scheduling and refresh metadata: `drain` (its owning Job key), a fresh
 `ticket` per mark, `priority` (0 for member and Run demand, 1 for automatic
 work), `readyAt`, `attempts` and `lastError`. Domain rows keep outcomes.
+Nullable `reason` records one trigger for the current ticket, without record
+names, values or identifiers. Source marks record their operation; fanout carries
+that reason or a broader source description when several causes coalesce.
+Dependency publications, clock expiry and consistency checks use their owning
+producer's description. A new ticket replaces its reason; retries and `keep`
+preserve it. Existing work can have no recorded trigger.
 Nullable execution observations record a page's lease token, exact item ticket
 and start time. They grant no authority: readers show running only for the
 same ticket under a current unexpired Job lease, with no later postponement.
