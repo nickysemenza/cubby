@@ -112,6 +112,7 @@ function foreignProductBinding(
   return (
     intent === "product_binding" &&
     candidate?.currency != null &&
+    /^[A-Z]{3}$/.test(candidate.currency) &&
     candidate.currency !== "USD"
   );
 }

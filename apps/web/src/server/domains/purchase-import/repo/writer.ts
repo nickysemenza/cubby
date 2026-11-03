@@ -1071,6 +1071,7 @@ export async function importVendorOrder(
       ));
   const unpricedForeign =
     semanticPlan.writeBlockReason === "foreign_currency" &&
+    /^[A-Z]{3}$/.test(input.extraction.candidate?.currency ?? "") &&
     !foreignReversal &&
     (input.extraction.status === "ready" ||
       (input.extraction.status === "needs_review" &&
