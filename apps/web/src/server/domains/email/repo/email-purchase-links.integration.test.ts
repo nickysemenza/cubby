@@ -833,13 +833,13 @@ describe("Email Purchase links", () => {
     await markWorkFrom(
       ctx.db,
       DERIVED_DRAIN,
-      sql`SELECT ${"product.dataQuality"}::text, ref, 0 FROM unnest(${uuidArrayParam(fillers.map((row) => row.entityId))}) refs(ref)`,
+      sql`SELECT ${"product.dataQuality"}::text, ref, 0, NULL::text FROM unnest(${uuidArrayParam(fillers.map((row) => row.entityId))}) refs(ref)`,
       { wake: false },
     );
     await markWorkFrom(
       ctx.db,
       DERIVED_DRAIN,
-      sql`SELECT ${"email.relationshipFacts"}::text, ${emailIdentity.id}::uuid, 0`,
+      sql`SELECT ${"email.relationshipFacts"}::text, ${emailIdentity.id}::uuid, 0, NULL::text`,
       { wake: false },
     );
     const [before] = await workItemStates(ctx.db, "email.relationshipFacts", [

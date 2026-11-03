@@ -82,6 +82,7 @@ export const workItem = pgTable(
     executionLeaseToken: uuid("executionLeaseToken"),
     executionTicket: bigint("executionTicket", { mode: "number" }),
     executionStartedAt: timestamp("executionStartedAt", { mode: "date" }),
+    reason: text("reason"),
   },
   (t) => [
     // The retired automaticFields family must never be marked again (0045).

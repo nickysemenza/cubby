@@ -58,7 +58,9 @@ const refsSql = (row: "OLD" | "NEW", input: TriggerInput) => {
     : refs;
 };
 
-const markStatement = (input: TriggerInput) => {
+const markStatement = (input: TriggerInput, table: string) => {
+  const label = table.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
+  const description = label.charAt(0).toUpperCase() + label.slice(1);
   const column = ident(input.tableColumn);
   const ignored = `ARRAY[${["updatedAt", ...input.except].map(literal).join(", ")}]`;
   // A row entering or leaving the input's `where` filter changes membership
@@ -84,11 +86,11 @@ const markStatement = (input: TriggerInput) => {
   const oldWhere = whereSql("OLD", input.where);
   const newWhere = whereSql("NEW", input.where);
   return `  IF TG_OP = 'INSERT' THEN
-    IF ${newWhere} THEN PERFORM derived_mark(${target}, ${refsSql("NEW", input)}); END IF;
+    IF ${newWhere} THEN PERFORM derived_mark(${target}, ${refsSql("NEW", input)}, ${literal(`${description} created`)}); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF ${oldWhere} THEN PERFORM derived_mark(${target}, ${refsSql("OLD", input)}); END IF;
+    IF ${oldWhere} THEN PERFORM derived_mark(${target}, ${refsSql("OLD", input)}, ${literal(`${description} removed`)}); END IF;
   ELSIF (${oldWhere} OR ${newWhere}) AND ${changedCondition} THEN
-    PERFORM derived_mark(${target}, ${refsSql("OLD", input)} || ${refsSql("NEW", input)});
+    PERFORM derived_mark(${target}, ${refsSql("OLD", input)} || ${refsSql("NEW", input)}, ${literal(`${description} changed`)});
   END IF;`;
 };
 
@@ -130,14 +132,16 @@ function derivedTriggerInputs(): Map<string, TriggerInput[]> {
 
 /** The shared mark function: upsert a fresh ticket and capture the drain Job once per transaction. */
 const derivedMarkFunctionSql =
-  () => `CREATE OR REPLACE FUNCTION derived_mark(p_target text, p_refs uuid[]) RETURNS void
+  () => `DROP FUNCTION IF EXISTS derived_mark(text, uuid[]);
+CREATE OR REPLACE FUNCTION derived_mark(p_target text, p_refs uuid[], p_reason text DEFAULT 'Refresh requested') RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN
-  INSERT INTO "WorkItem" (target, ref, priority)
+  INSERT INTO "WorkItem" (target, ref, priority, reason)
     SELECT DISTINCT p_target, r,
-      CASE current_setting('cubby.derived_priority', true) WHEN '1' THEN 1 ELSE 0 END
+      CASE current_setting('cubby.derived_priority', true) WHEN '1' THEN 1 ELSE 0 END, p_reason
     FROM unnest(p_refs) AS r WHERE r IS NOT NULL
   ON CONFLICT (target, ref) DO UPDATE SET
+    reason = EXCLUDED.reason,
     ticket = nextval('"WorkTicket"'),
     priority = LEAST("WorkItem".priority, EXCLUDED.priority),
     "readyAt" = now(),
@@ -158,7 +162,7 @@ export function derivedTriggerDdl(): string {
     parts.push(`CREATE OR REPLACE FUNCTION ${fn}() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
-${inputs.map(markStatement).join("\n")}
+${inputs.map((input) => markStatement(input, table)).join("\n")}
   RETURN NULL;
 END $$;
 DROP TRIGGER IF EXISTS ${ident(`${table}_derived_mark`)} ON ${ident(table)};

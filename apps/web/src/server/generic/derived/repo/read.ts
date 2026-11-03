@@ -25,10 +25,7 @@ import type {
   StoredDerivedRead,
   CurrentReadFacts,
 } from "~/server/generic/derived/repo/read-context";
-import {
-  observedWorkItem,
-  workPendingWhere,
-} from "~/server/generic/jobs/repo/work-items";
+import { observedWorkItem } from "~/server/generic/jobs/repo/work-items";
 
 import { fanoutTargetMatches } from "./fanout";
 export type {
@@ -205,6 +202,7 @@ const valueRow = z.object({
   leaseExpiresAt: dateTime.nullable(),
   error: z.string().nullable(),
   retryAt: dateTime.nullable(),
+  refreshReason: z.string().nullable(),
 });
 
 /** Page readers start this with their ids beside hydration, never once per row. */
@@ -251,18 +249,20 @@ export async function loadStoredDerived(
   if (ids.length === 0 || declarations.length === 0) return out;
   const result = await unwrapDb(db).execute(sql`
     WITH keys AS MATERIALIZED (
-      SELECT declared.*, ${workPendingWhere((column) =>
-        fanoutTargetMatches(column, sql`declared.target`),
-      )} AS "fanoutPending"
+      SELECT declared.*, f.ref IS NOT NULL AS "fanoutPending", f.reason AS "fanoutReason"
       FROM jsonb_to_recordset(${JSON.stringify(
         declarations.map(({ key, target, clock }) => ({ key, target, clock })),
       )}::jsonb) AS declared(key text, target text, clock text)
+      LEFT JOIN LATERAL (SELECT w.ref, w.reason FROM "WorkItem" w
+        WHERE ${fanoutTargetMatches(sql`w.target`, sql`declared.target`)} LIMIT 1) f ON true
     )
     SELECT i.id AS "entityId", k.key, v.value,
            ${options.includeEvidence ? sql`v."decidedBy"` : sql`v."decidedBy" - ${storedFieldDecision.keyof().enum.evidence}`} AS "decidedBy", v."computedAt",
            (d.ref IS NOT NULL OR k."fanoutPending") AS pending,
            (d.ref IS NOT NULL OR k."fanoutPending" OR (k.clock = 'householdDay' AND
              ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date)) IS TRUE AS stale,
+           CASE WHEN d.ref IS NOT NULL THEN d.reason WHEN k."fanoutPending" THEN k."fanoutReason"
+             WHEN k.clock = 'householdDay' AND ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date THEN 'Daily refresh due' END AS "refreshReason",
            d."lastError" AS error, d."readyAt" AS "retryAt",
            coalesce(d.waiting, false) AS waiting,
            d."runningSince", d."leaseExpiresAt"
@@ -296,6 +296,7 @@ export async function loadStoredDerived(
       resultExists: row.computedAt !== null && decision.success,
       stale: row.stale,
       pending: row.pending,
+      refreshReason: row.refreshReason,
       waiting: row.waiting,
       ...(row.runningSince && row.leaseExpiresAt
         ? {

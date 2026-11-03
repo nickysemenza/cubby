@@ -446,9 +446,17 @@ async function expandFanouts(
             : input.path
               ? pathSql(input.path, refs)
               : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+      const reason =
+        group
+          .filter((item) => item.reason != null)
+          .sort(
+            (a, b) =>
+              a.priority - b.priority ||
+              (a.reason ?? "").localeCompare(b.reason ?? ""),
+          )[0]?.reason ?? null;
       return [
         sql`SELECT ${declaration.target}::text, r.id,
-        ${Math.min(...group.map((item) => item.priority))}::int
+        ${Math.min(...group.map((item) => item.priority))}::int, ${reason}::text
         FROM (${dependents}) r(id)`,
       ];
     },
@@ -692,7 +700,7 @@ async function propagate(
                 JOIN ${ident(declaration.table)} s
                   ON s.${ident(dependency.sourceColumn)} = d.${ident(dependency.entityColumn)}
                WHERE s.id = ANY(${uuidArrayParam(changedIds)})`;
-      return sql`SELECT ${dependent.target}::text, r.id, 1 FROM (${refs}) AS r(id)`;
+      return sql`SELECT ${dependent.target}::text, r.id, 1, ${`${declaration.table} ${declaration.key} publication changed`}::text FROM (${refs}) AS r(id)`;
     },
   );
   if (selections.length)
@@ -806,7 +814,7 @@ export async function markAllStoredDerived(
     const rows = await markWorkFrom(
       db,
       DERIVED_DRAIN,
-      sql`SELECT ${declaration.target}::text, t.id, ${RECONCILE_PRIORITY}::int
+      sql`SELECT ${declaration.target}::text, t.id, ${RECONCILE_PRIORITY}::int, 'Scheduled consistency check'::text
         FROM ${ident(declaration.table)} t
         ${slice ? sql`WHERE mod(abs(hashtext(t.id::text)), ${slice.count}) = ${slice.index}` : sql``}`,
       { existing: "keep" },
@@ -830,7 +838,7 @@ export async function markExpiredClockDerived(
   const rows = await markWorkFrom(
     db,
     DERIVED_DRAIN,
-    sql`SELECT k.target, v."entityId", ${RECONCILE_PRIORITY}::int
+    sql`SELECT k.target, v."entityId", ${RECONCILE_PRIORITY}::int, 'Daily refresh due'::text
         FROM jsonb_to_recordset(${JSON.stringify(targets)}::jsonb) AS k(target text, key text, entity text)
         JOIN "DerivedValue" v ON v.key = k.key
         JOIN ${entityIdentity} ON ${entityIdentity.id} = v."entityId" AND ${entityIdentity.kind} = k.entity AND ${notDeleted(entityIdentity)}
