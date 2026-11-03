@@ -73,8 +73,9 @@ stored charge competitors; plausible payments retain the complete planner. A rev
 plan with an unresolved booking prerequisite does not hydrate candidate
 Expenses, attributions, allocations or vendor category history. Refund category inheritance and
 already-booked checks still read their necessary graphs. Page preparation
-batches read-only candidate facts; it never supplies cached evidence to a
-booking commit. Ready plans and commit-time validation retain the complete
+batches read-only candidate facts and coalesces in-flight receipt-graph reads
+for concurrent previews. Cached page evidence never reaches a booking commit.
+Ready plans and commit-time validation retain the complete
 graph and current ownership checks.
 Matched transactions with live allocations create no new statement booking
 work; an existing pending booking is revisited so completion can retire it.

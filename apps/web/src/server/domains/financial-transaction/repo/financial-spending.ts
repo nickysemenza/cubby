@@ -466,6 +466,24 @@ async function loadSpendingGraph(
   return graph;
 }
 
+/** Reserve the whole batch before another preview can request overlapping graphs. */
+async function prepareSpendingGraphs(
+  db: Database,
+  purchaseIds: Parameters<typeof loadSpendingGraphs>[1],
+  page?: FinancialSpendingPage,
+): ReturnType<typeof loadSpendingGraphs> {
+  if (!page || !purchaseIds.length) return loadSpendingGraphs(db, purchaseIds);
+  const loading = loadSpendingGraphs(db, purchaseIds);
+  const entries = purchaseIds.map((id) => {
+    const pending = loading.then(
+      (graphs) => graphs.get(id) ?? loadSpendingGraph(db, id),
+    );
+    page.graphs.set(id, pending);
+    return pending.then((graph) => [id, graph] as const);
+  });
+  return new Map(await Promise.all(entries));
+}
+
 async function loadSpendingGraphs(
   db: Database,
   purchaseIds: readonly NonNullable<Parameters<typeof bookingGraph>[1]>[],
@@ -962,10 +980,7 @@ async function discoverSpendingEvidence(
   const uncachedIds = graphCandidates
     .map((candidate) => parseEntityId("purchase", candidate.id))
     .filter((id) => !page?.graphs.has(id));
-  const loadedGraphs = await loadSpendingGraphs(db, uncachedIds);
-  loadedGraphs.forEach((graph, id) => {
-    page?.graphs.set(id, Promise.resolve(graph));
-  });
+  const loadedGraphs = await prepareSpendingGraphs(db, uncachedIds, page);
   const candidateEvidence = await Promise.all(
     graphCandidates.map(async (candidate) => ({
       ...candidate,
