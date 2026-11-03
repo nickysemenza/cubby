@@ -45,7 +45,6 @@ import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { jsonSnapshot, writeCanonicalJson } from "~/server/lib/canonical-json";
 
 import { updateFinancialTransaction } from "./financial-transaction";
 
@@ -58,14 +57,14 @@ export const digestValue = <T extends object>(value: T) => {
       .digest("hex"),
   );
 };
-/** Preserve the persisted {evidence: canonicalJson(...)} hash without its large strings. */
-export const digestCanonicalEvidence = <T extends object>(value: T) => {
-  const normalized = jsonSnapshot.parse(value);
+/** The caller emits validated canonical JSON without splitting surrogate pairs. */
+export const digestCanonicalEvidenceStream = (
+  writeEvidence: (write: (fragment: string) => void) => void,
+) => {
   const hash = createHash("sha256");
   let buffered = '{"evidence":"';
-  writeCanonicalJson(normalized, (fragment) => {
-    // Escape each complete token as part of the outer JSON string. Token
-    // boundaries never split a surrogate pair between UTF-8 hash updates.
+  writeEvidence((fragment) => {
+    // Escaping is additive across fragments with complete Unicode characters.
     const escaped = JSON.stringify(fragment).slice(1, -1);
     if (buffered.length + escaped.length > 32_768) {
       hash.update(buffered);

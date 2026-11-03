@@ -27,6 +27,7 @@ import {
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
+  purchasePaymentEvidence,
   spendingCategory,
   vendor as vendorTable,
 } from "~/server/db/schema";
@@ -55,14 +56,18 @@ import {
   type SettlementRef,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { canonicalJson } from "~/server/lib/canonical-json";
+import {
+  canonicalJson,
+  jsonSnapshot,
+  writeCanonicalJson,
+} from "~/server/lib/canonical-json";
 
 import {
   bookFinancialTransaction,
   bookingGraph,
   bookingGraphs,
   digestValue,
-  digestCanonicalEvidence,
+  digestCanonicalEvidenceStream,
   loadFinancialBookingLineage,
   previewFinancialBooking,
 } from "./financial-booking";
@@ -490,6 +495,23 @@ async function loadSpendingGraphs(
   purchaseIds: readonly NonNullable<Parameters<typeof bookingGraph>[1]>[],
 ) {
   const ids = [...new Set(purchaseIds)];
+  const batchSize = 128;
+  const graphs = await loadSpendingGraphBatch(db, ids.slice(0, batchSize));
+  for (let offset = batchSize; offset < ids.length; offset += batchSize) {
+    for (const [id, graph] of await loadSpendingGraphBatch(
+      db,
+      ids.slice(offset, offset + batchSize),
+    ))
+      graphs.set(id, graph);
+  }
+  return graphs;
+}
+
+async function loadSpendingGraphBatch(
+  db: Database,
+  purchaseIds: readonly NonNullable<Parameters<typeof bookingGraph>[1]>[],
+) {
+  const ids = [...new Set(purchaseIds)];
   const graphs = await bookingGraphs(db, ids);
   const categories = ids.length
     ? (
@@ -541,9 +563,8 @@ async function loadSpendingGraphs(
   const categoriesByPurchase = groupBy(categories, (row) => row.purchaseId);
   const settlementsByPurchase = groupBy(settlements, (row) => row.purchaseId);
   return new Map(
-    [...graphs].map(([id, graph]) => [
-      id,
-      {
+    [...graphs].map(([id, graph]) => {
+      const complete = {
         ...graph,
         categories: (categoriesByPurchase[id] ?? []).map(
           ({ purchaseId: _purchaseId, ...row }) => row,
@@ -551,9 +572,121 @@ async function loadSpendingGraphs(
         settlements: (settlementsByPurchase[id] ?? []).map(
           ({ purchaseId: _purchaseId, ...row }) => row,
         ),
-      },
-    ]),
+      };
+      return [
+        id,
+        {
+          // Keep every original snapshot dependency without retaining its row graph.
+          canonical: canonicalJson(jsonSnapshot.parse(complete)),
+          target: graph.target
+            ? {
+                id: graph.target.id,
+                shortcode: graph.target.shortcode,
+                vendorId: graph.target.vendorId,
+                statedTotal: graph.target.statedTotal,
+              }
+            : undefined,
+          lines: graph.lines.map((line) => ({
+            id: line.id,
+            cost: line.cost,
+            future: line.future,
+            economicRole: line.economicRole,
+            lineKind: line.lineKind,
+            bookingTransactionCode: line.bookingTransactionCode,
+          })),
+          categories: complete.categories,
+          settlements: complete.settlements.map(
+            ({
+              transaction: _transaction,
+              account: _account,
+              owner: _owner,
+              ...settlement
+            }) => settlement,
+          ),
+        },
+      ] as const;
+    }),
   );
+}
+
+/** Reinsert normalized graph JSON without cloning every candidate graph again. */
+function digestSpendingEvidence(
+  evidence: unknown,
+  graphEvidence: { graphs: readonly string[]; candidates?: readonly string[] },
+) {
+  const normalized = jsonSnapshot.parse(evidence);
+  if (
+    !normalized ||
+    typeof normalized !== "object" ||
+    Array.isArray(normalized)
+  )
+    throw new Error("Spending snapshot must be an object.");
+  return digestCanonicalEvidenceStream((write) => {
+    const writeGraph = (graph: string) => {
+      for (let start = 0; start < graph.length;) {
+        let end = Math.min(start + 32_768, graph.length);
+        const last = graph.charCodeAt(end - 1);
+        const next = graph.charCodeAt(end);
+        if (
+          last >= 0xd800 &&
+          last <= 0xdbff &&
+          next >= 0xdc00 &&
+          next <= 0xdfff
+        )
+          end--;
+        write(graph.slice(start, end));
+        start = end;
+      }
+    };
+    const writeObject = (
+      value: Record<string, z.infer<ReturnType<typeof z.json>>>,
+      replace: (key: string) => boolean,
+    ) => {
+      write("{");
+      for (const [index, key] of Object.keys(value).sort().entries()) {
+        if (index) write(",");
+        write(JSON.stringify(key));
+        write(":");
+        if (!replace(key)) writeCanonicalJson(value[key]!, write);
+      }
+      write("}");
+    };
+    writeObject(normalized, (key) => {
+      const graphs =
+        key === "graphs"
+          ? graphEvidence.graphs
+          : key === "candidates"
+            ? graphEvidence.candidates
+            : undefined;
+      if (!graphs) return false;
+      const entries = normalized[key];
+      if (!Array.isArray(entries) || entries.length !== graphs.length)
+        throw new Error("Spending snapshot graph positions changed.");
+      write("[");
+      for (const [index, entry] of entries.entries()) {
+        if (index) write(",");
+        if (key === "graphs") writeGraph(graphs[index]!);
+        else {
+          if (
+            !entry ||
+            typeof entry !== "object" ||
+            Array.isArray(entry) ||
+            !Object.hasOwn(entry, "graph")
+          )
+            throw new Error(
+              "Spending candidate snapshot must retain its graph.",
+            );
+          writeObject(entry, (field) => {
+            if (field !== "graph") return false;
+            writeGraph(graphs[index]!);
+            return true;
+          });
+        }
+      }
+      write("]");
+      return true;
+    });
+  });
 }
 
 function availableCents(
@@ -666,24 +799,39 @@ export function resolveFinancialSpendingVendors(
   return lookup;
 }
 
-async function purchasePayments(db: Database, purchaseId: string) {
+async function purchasePayments(db: Database, purchaseIds: readonly string[]) {
   return (
-    await getDb(db).execute(
-      sql`SELECT * FROM "PurchasePaymentEvidence" WHERE "purchaseId" = ${purchaseId} ORDER BY id`,
+    await getDb(db).execute<typeof purchasePaymentEvidence.$inferSelect>(
+      sql`SELECT * FROM "PurchasePaymentEvidence" WHERE "purchaseId" IN (${sql.join(
+        purchaseIds.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )}) ORDER BY id`,
     )
   ).rows;
 }
 
-function spendingPayments(
+async function prepareSpendingPayments(
   db: Database,
-  purchaseId: string,
+  purchaseIds: readonly string[],
   page?: FinancialSpendingPage,
 ) {
-  const cached = page?.payments.get(purchaseId);
-  if (cached) return cached;
-  const payments = purchasePayments(db, purchaseId);
-  page?.payments.set(purchaseId, payments);
-  return payments;
+  const ids = [...new Set(purchaseIds)];
+  const missing = ids.filter((id) => !page?.payments.has(id));
+  const loading: Promise<
+    Record<string, Awaited<ReturnType<typeof purchasePayments>>>
+  > = missing.length
+    ? purchasePayments(db, missing).then((rows) =>
+        groupBy(rows, (row) => row.purchaseId),
+      )
+    : Promise.resolve({});
+  const entries = ids.map((id) => {
+    const pending =
+      page?.payments.get(id) ?? loading.then((rows) => rows[id] ?? []);
+    // Reserve every missing read before another preview can request the batch.
+    page?.payments.set(id, pending);
+    return pending.then((rows) => [id, rows] as const);
+  });
+  return new Map(await Promise.all(entries));
 }
 
 type CandidateInput = {
@@ -982,6 +1130,13 @@ async function discoverSpendingEvidence(
     .map((candidate) => parseEntityId("purchase", candidate.id))
     .filter((id) => !page?.graphs.has(id));
   const loadedGraphs = await prepareSpendingGraphs(db, uncachedIds, page);
+  const payments = await prepareSpendingPayments(
+    db,
+    graphCandidates
+      .filter((candidate) => !candidate.reviewOnly)
+      .map((candidate) => candidate.id),
+    page,
+  );
   const candidateEvidence = await Promise.all(
     graphCandidates.map(async (candidate) => ({
       ...candidate,
@@ -994,7 +1149,8 @@ async function discoverSpendingEvidence(
         )),
       payments: candidate.reviewOnly
         ? []
-        : await spendingPayments(db, candidate.id, page),
+        : (payments.get(candidate.id) ??
+          (await purchasePayments(db, [candidate.id]))),
       plan: strong.get(candidate.shortcode) ?? null,
     })),
   );
@@ -1080,6 +1236,7 @@ async function discoverSpendingEvidence(
     },
     candidates: candidateEvidence.map((candidate) => ({
       ...candidate,
+      graph: null,
       plan: Array.isArray(candidate.plan)
         ? candidate.plan.map((entry) => ({
             ...entry,
@@ -1094,7 +1251,7 @@ async function discoverSpendingEvidence(
         : candidate.plan,
     })),
     allocations,
-    graphs,
+    graphs: graphs.map(() => null),
     transactionState: {
       ledgerTransferId: row?.ledgerTransferId ?? null,
       bookingDecisionFingerprint: row?.bookingDecisionFingerprint ?? null,
@@ -1102,7 +1259,10 @@ async function discoverSpendingEvidence(
       spendingCategoryId: row?.spendingCategoryId ?? null,
     },
   };
-  const snapshot = await digestCanonicalEvidence(snapshotEvidence);
+  const snapshot = await digestSpendingEvidence(snapshotEvidence, {
+    graphs: graphs.map((graph) => graph.canonical),
+    candidates: candidateEvidence.map((candidate) => candidate.graph.canonical),
+  });
   const basis = {
     request,
     snapshot,
@@ -1225,7 +1385,10 @@ export async function previewFinancialSpending(
     const basis = {
       request,
       candidates: [],
-      snapshot: await digestCanonicalEvidence(facts),
+      snapshot: await digestSpendingEvidence(
+        { ...facts, graphs: facts.graphs.map(() => null) },
+        { graphs: facts.graphs.map((graph) => graph.canonical) },
+      ),
     };
     if (deferred)
       return {

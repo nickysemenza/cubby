@@ -304,6 +304,20 @@ characters unless an individual token is larger. This reduces intermediate strin
 allocation without narrowing candidates, changing evidence, or reusing snapshots
 across financial writes. It does not establish a total Worker memory bound.
 
+Spending discovery hydrates complete Purchase graphs in batches of 128. Its
+page cache retains the fields used for capacity and category decisions plus
+canonical JSON of every original graph field, including member attributions
+and payment-account evidence. Snapshot hashing reinserts that JSON into the
+same canonical graph positions, preserving existing fingerprint bytes without
+cloning the whole candidate population again. Stored graph text is emitted in
+32,768-character fragments that preserve surrogate pairs. Commit re-reads its
+evidence; the cache never crosses a money write. Candidate counts, canonical
+text and individual graph sizes still grow with evidence, so the batch size
+does not establish a total Worker memory bound.
+Full payment-evidence rows for eligible candidates are read together, ordered
+by their existing IDs and reserved in the same page cache before concurrent
+previews can repeat the read. Review-only candidates still load no payment rows.
+
 `Statement generation phase` logs enter selection, preparation, publication,
 and each charge's regeneration and application before awaiting that work.
 Publication reports aggregate observation and candidate counts, without source

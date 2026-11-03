@@ -75,8 +75,14 @@ Expenses, attributions, allocations or vendor category history. Refund category 
 already-booked checks still read their necessary graphs. Page preparation
 batches read-only candidate facts and coalesces in-flight receipt-graph reads
 for concurrent previews. Cached page evidence never reaches a booking commit.
-Ready plans and commit-time validation retain the complete
-graph and current ownership checks.
+Eligible candidates' complete payment-evidence rows are fetched together with
+their existing per-Purchase ordering; review-only candidates remain excluded.
+The graph reader retains compact decision fields and canonical JSON of the
+complete graph after each bounded hydration batch. Snapshot hashing streams
+that JSON back into its original positions with identical fingerprint bytes;
+attributions, notes and payment-account facts remain evidence dependencies.
+Ready plans and commit-time validation recheck those complete dependencies
+and current ownership. Persisted booking-lineage fingerprints are unchanged.
 Matched transactions with live allocations create no new statement booking
 work; an existing pending booking is revisited so completion can retire it.
 Expense edits use generic field Suggestions, and allocation reconciliation uses
