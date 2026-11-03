@@ -2772,6 +2772,10 @@ async function publishStatementGenerationPage(
   let labelsReused = 0;
   let unchanged = 0;
   const accountIds = scope?.accountIds;
+  log.info("Statement generation phase", {
+    phase: "preparation",
+    charges: charges.length,
+  });
   const built = await prepareStatementGenerationPage(db, charges, failed);
   const preparedAt = performance.now();
   const proposals = accountIds?.length
@@ -2780,6 +2784,23 @@ async function publishStatementGenerationPage(
       )
     : built;
   const outOfScope = built.length - proposals.length;
+  log.info("Statement generation phase", {
+    phase: "publication",
+    proposals: proposals.length,
+    observations: proposals.reduce(
+      (total, proposal) => total + proposal.observations.length,
+      0,
+    ),
+    transactionCandidates: proposals.reduce(
+      (total, proposal) => total + proposal.judgment.candidates.length,
+      0,
+    ),
+    purchaseCandidates: proposals.reduce(
+      (total, proposal) =>
+        total + (proposal.judgment.spending?.candidates.length ?? 0),
+      0,
+    ),
+  });
   // Publish independent charges first; import applications then recheck the
   // current ledger sequentially, including reused labels on unchanged imports.
   const producer = ruleProducer(runId);
@@ -2852,6 +2873,10 @@ export async function generateStatementSuggestionPage(
     ),
   );
   const startedAt = performance.now();
+  log.info("Statement generation phase", {
+    phase: "selection",
+    limit,
+  });
   const charges = input.retryCharges
     ? [...input.retryCharges]
     : await nextUnmatchedCharges(db, {
@@ -2879,11 +2904,21 @@ export async function generateStatementSuggestionPage(
   if (input.scope?.importId) {
     const { applyAutomaticRulesForCharge } =
       await import("~/server/generic/assessment/repo/automatic-rule-runtime");
-    for (const charge of proposalCharges) {
+    for (const [chargeIndex, charge] of proposalCharges.entries()) {
       const ref = `charge:${chargeId(charge)}`;
       if (failed.some((failure) => failure.ref === ref)) continue;
       try {
+        log.info("Statement generation phase", {
+          phase: "regeneration",
+          chargeIndex,
+          charges: proposalCharges.length,
+        });
         await regenerateCharges(db, [charge], input.scope);
+        log.info("Statement generation phase", {
+          phase: "application",
+          chargeIndex,
+          charges: proposalCharges.length,
+        });
         await applyAutomaticRulesForCharge(db, charge, true, input.scope);
       } catch (error) {
         if (isWorkflowInterrupted(error)) throw error;
