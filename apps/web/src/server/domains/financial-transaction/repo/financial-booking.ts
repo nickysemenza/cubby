@@ -45,6 +45,7 @@ import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { jsonSnapshot, writeCanonicalJson } from "~/server/lib/canonical-json";
 
 import { updateFinancialTransaction } from "./financial-transaction";
 
@@ -56,6 +57,24 @@ export const digestValue = <T extends object>(value: T) => {
       .update(serialized ?? "")
       .digest("hex"),
   );
+};
+/** Preserve the persisted {evidence: canonicalJson(...)} hash without its large strings. */
+export const digestCanonicalEvidence = <T extends object>(value: T) => {
+  const normalized = jsonSnapshot.parse(value);
+  const hash = createHash("sha256");
+  let buffered = '{"evidence":"';
+  writeCanonicalJson(normalized, (fragment) => {
+    // Escape each complete token as part of the outer JSON string. Token
+    // boundaries never split a surrogate pair between UTF-8 hash updates.
+    const escaped = JSON.stringify(fragment).slice(1, -1);
+    if (buffered.length + escaped.length > 32_768) {
+      hash.update(buffered);
+      buffered = escaped;
+    } else buffered += escaped;
+  });
+  hash.update(buffered);
+  hash.update('"}');
+  return Promise.resolve(hash.digest("hex"));
 };
 const fail = (message: string): never => {
   throw createAppError("CONSTRAINT_VIOLATION", message);

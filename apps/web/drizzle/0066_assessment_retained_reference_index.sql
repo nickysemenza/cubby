@@ -1,0 +1,1 @@
+CREATE INDEX "Assessment_reference_records_idx" ON "Assessment" USING gin (("evidence"->'records')) WHERE "Assessment"."served";

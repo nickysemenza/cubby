@@ -34,12 +34,17 @@ import {
   touchingAssessmentIds,
 } from "~/server/generic/assessment/repo/review-families";
 import { suggestionFamilies } from "~/server/generic/assessment/repo/suggestion-families";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { publishFieldAssessment } from "./assessment";
+import {
+  automaticApplicationRule,
+  publishFieldAssessment,
+  recordFeedback,
+} from "./assessment";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
@@ -414,8 +419,8 @@ describe("cross-family Suggestion list", () => {
     expect(fieldsOnly.meta.cleanCount).toBe(0);
   });
 
-  // Failure mode: a connection lists only under the endpoint that requested
-  // discovery, so the other record's view misses it.
+  // Reference pruning must retain both endpoints and mixed scopes without
+  // admitting a connection under an unrelated record kind.
   it("lists a connection under both of its endpoints", async () => {
     const { item, charge, proposal } = await connection(ctx);
     for (const recordId of [item.id, charge.output.id]) {
@@ -437,6 +442,28 @@ describe("cross-family Suggestion list", () => {
         ],
       });
     }
+    const category = await createRepoEntity(ctx, "productCategory", {
+      name: "Synthetic unrelated category",
+    });
+    const task = await createRepoEntity(ctx, "task", { trade: "other" });
+    for (const recordId of [category.output.id, task.output.id]) {
+      expect(
+        (
+          await listSuggestionPage(ctx.db, {
+            recordIds: [recordId],
+            family: "recommendation",
+          })
+        ).items,
+      ).toEqual([]);
+    }
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          recordIds: [category.output.id, charge.output.id],
+          family: "recommendation",
+        })
+      ).items.map((row) => row.id),
+    ).toEqual([proposal.review.assessmentId]);
     // Excluding either value in a multi-valued column removes the row.
     for (const entityKind of ["product", "expense"]) {
       expect(
@@ -456,6 +483,11 @@ describe("cross-family Suggestion list", () => {
         })
       ).items.map((row) => row.id),
     ).toEqual([proposal.review.assessmentId]);
+    const [originalReference] = await getDb(ctx.db)
+      .select({ subject: assessment.subject, evidence: assessment.evidence })
+      .from(assessment)
+      .where(eq(assessment.id, proposal.review.assessmentId));
+    if (!originalReference) throw new Error("Synthetic recommendation missing");
 
     const retained = await createProductFixture(
       ctx.db,
@@ -499,6 +531,113 @@ describe("cross-family Suggestion list", () => {
       expect(await touchesRetained()).toEqual(
         new Set([proposal.review.assessmentId]),
       );
+    }
+    await getDb(ctx.db)
+      .update(assessment)
+      .set(originalReference)
+      .where(eq(assessment.id, proposal.review.assessmentId));
+    const taskUuid = await resolveOrThrow(ctx.db, "task", task.output.id);
+    const taskConnection = await publishEntityConnection(ctx.db, {
+      relation: "task-subject-product",
+      source: { entityKind: "task", entityId: task.output.id },
+      target: { entityKind: "product", entityId: item.id },
+      label: "Synthetic Task subject",
+      evidence: { reasons: [], contradictions: [], unknowns: [] },
+    });
+    for (const recordId of [task.output.id, item.id]) {
+      expect(
+        (
+          await listSuggestionPage(ctx.db, {
+            recordIds: [recordId],
+            family: "recommendation",
+          })
+        ).items.map((row) => row.id),
+      ).toContain(taskConnection.review.assessmentId);
+    }
+
+    // Retained current state can differ from the immutable candidate source.
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ entity: "task", recordId: taskUuid })
+      .where(eq(assessmentState.id, proposal.review.assessmentId));
+    const productUuid = await resolveOrThrow(ctx.db, "product", item.id);
+    const expenseUuid = await resolveOrThrow(
+      ctx.db,
+      "expense",
+      charge.output.id,
+    );
+    // Model a retained unknown connection scope with a UUID-form source ref.
+    await getDb(ctx.db)
+      .update(assessment)
+      .set({
+        subject: sql`jsonb_set(${assessment.subject}, '{scope}', to_jsonb('connection.legacy-synthetic'::text))`,
+        evidence: sql`jsonb_set(${assessment.evidence}, '{candidate,source,entityId}', to_jsonb(${productUuid}::text))`,
+      })
+      .where(eq(assessment.id, proposal.review.assessmentId));
+    const eligibility = {
+      kind: "suggestions" as const,
+      families: [assessmentFamily.enum.recommendation],
+      status: "pending" as const,
+    };
+    const records = [
+      { entity: "product", id: productUuid, code: item.id },
+      { entity: "expense", id: expenseUuid, code: charge.output.id },
+      { entity: "task", id: taskUuid, code: task.output.id },
+    ];
+    for (const record of records) {
+      expect(
+        await touchingAssessmentIds(ctx.db, { records: [record], eligibility }),
+      ).toContain(proposal.review.assessmentId);
+    }
+
+    // Automatic history still follows both original endpoints after retirement.
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ status: "superseded", active: false })
+      .where(eq(assessmentState.id, proposal.review.assessmentId));
+    await recordFeedback(ctx.db, {
+      assessmentId: proposal.review.assessmentId,
+      operationId: "synthetic.connection-history",
+      verdict: "ungraded",
+      authority: "automatic",
+      intent: "apply",
+      actorUserId: ctx.actor.userId,
+      metadata: {
+        kind: "assessment_application",
+        rule: { key: "synthetic-retained-rule", revision: 1 },
+      },
+      receipt: { synthetic: true },
+    });
+    const automatic = {
+      kind: "automatic" as const,
+      appliedRule: automaticApplicationRule,
+    };
+    for (const record of records) {
+      expect(
+        await touchingAssessmentIds(ctx.db, {
+          records: [record],
+          eligibility: automatic,
+        }),
+      ).toContain(proposal.review.assessmentId);
+    }
+
+    // A retained null scope uses explicit evidence records, not candidate refs.
+    await getDb(ctx.db)
+      .update(assessment)
+      .set({
+        subject: sql`jsonb_set(${assessment.subject}, '{scope}', 'null'::jsonb)`,
+        evidence: sql`jsonb_set(${assessment.evidence}, '{records}', ${JSON.stringify([{ entity: "product", id: item.id }])}::jsonb)`,
+      })
+      .where(eq(assessment.id, proposal.review.assessmentId));
+    for (const record of records) {
+      expect(
+        (
+          await touchingAssessmentIds(ctx.db, {
+            records: [record],
+            eligibility: automatic,
+          })
+        )?.has(proposal.review.assessmentId),
+      ).toBe(record.entity !== "expense");
     }
   });
 

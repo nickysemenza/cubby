@@ -120,7 +120,9 @@ it("preserves retained publications and input identities across precise fanout m
     const history = await client.query(
       `SELECT to_jsonb(a) value FROM "Assessment" a ORDER BY id`,
     );
-    await migrateDatabase(db, { through: "0065_assessment_reference_indexes" });
+    await migrateDatabase(db, {
+      through: "0066_assessment_retained_reference_index",
+    });
     expect(await preserved()).toEqual(beforeIndexes);
     expect(
       (
@@ -131,7 +133,7 @@ it("preserves retained publications and input identities across precise fanout m
     ).toEqual(history.rows);
     const indexes = await client.query(
       `SELECT count(*)::int AS count FROM pg_indexes WHERE schemaname='public'
-       AND indexname IN ('Assessment_reference_source_idx','Assessment_reference_target_idx','Assessment_reference_records_idx')`,
+       AND indexname IN ('Assessment_connection_source_ref_idx','Assessment_connection_target_ref_idx','Assessment_reference_records_idx')`,
     );
     expect(indexes.rows[0]?.count).toBe(3);
   });

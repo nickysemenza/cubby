@@ -11,16 +11,15 @@ import {
   ROOT_CONVERSATION_ID,
   type EntryRecord,
 } from "@earendil-works/pi-durable";
-import { CURRENT_SQLITE_SCHEMA_VERSION } from "@earendil-works/pi-durable/storage/sqlite";
 import { z } from "zod";
 
 import { projectConversation } from "~/server/domains/purchase-agent/service/conversation";
 import { readPiModelUsage } from "~/server/domains/purchase-agent/service/model-usage";
+import { assertReadablePiSqliteSchema } from "~/server/domains/purchase-agent/service/pi-sqlite-read";
 
 // The installed Agents adapter prefixes pi's portable SQLite tables with pi_.
 // Keep this read adapter version-fenced; never open/migrate storage or construct
 // the execution Agent to inspect it. PiHarness.open resumes pending tasks.
-const SUPPORTED_PI_SQLITE_SCHEMA_VERSION = 1;
 const storedEntryFields = z.object({
   id: z.number().int().positive(),
   conversationId: z.number().int().positive(),
@@ -59,13 +58,7 @@ export function readStoredAgentConversation(sql: SqlStorage) {
       "SELECT version FROM pi_durable_schema WHERE singleton = 1",
     )
     .toArray();
-  if (
-    CURRENT_SQLITE_SCHEMA_VERSION !== SUPPORTED_PI_SQLITE_SCHEMA_VERSION ||
-    schema?.version !== SUPPORTED_PI_SQLITE_SCHEMA_VERSION
-  )
-    throw new Error(
-      `Retained pi SQLite schema ${schema?.version}, installed schema ${CURRENT_SQLITE_SCHEMA_VERSION}; transcript adapter supports ${SUPPORTED_PI_SQLITE_SCHEMA_VERSION}`,
-    );
+  assertReadablePiSqliteSchema(schema?.version);
   const present =
     sql
       .exec("SELECT 1 FROM pi_conversations WHERE id = ?", ROOT_CONVERSATION_ID)

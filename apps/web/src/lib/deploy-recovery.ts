@@ -16,7 +16,14 @@ export interface PreloadRecoveryRuntime {
 }
 
 export interface PreloadRecovery {
-  handlePreloadError: (event: Pick<Event, "preventDefault">) => boolean;
+  handlePreloadError: () =>
+    | "scheduled"
+    | "pending"
+    | "leaving"
+    | "offline"
+    | "cooldown"
+    | "storage_unavailable"
+    | "schedule_failed";
   handleDocumentLeaving: () => void;
 }
 
@@ -48,15 +55,12 @@ export function createPreloadRecovery(
   };
 
   return {
-    handlePreloadError(event) {
-      if (documentLeaving) return false;
+    handlePreloadError() {
+      if (documentLeaving) return "leaving";
 
-      if (pending) {
-        event.preventDefault();
-        return true;
-      }
+      if (pending) return "pending";
 
-      if (!runtime.isOnline()) return false;
+      if (!runtime.isOnline()) return "offline";
 
       const currentTime = runtime.now();
       attemptSequence += 1;
@@ -70,14 +74,13 @@ export function createPreloadRecovery(
           previous > 0 &&
           currentTime - previous < PRELOAD_RELOAD_COOLDOWN_MS
         ) {
-          return false;
+          return "cooldown";
         }
-        // Write before suppressing the error. If storage is unavailable
-        // (notably some private modes), surface the original error instead of
-        // risking an unbounded reload loop.
+        // Record the attempt before scheduling so unavailable storage cannot
+        // turn repeated failures into an unbounded reload loop.
         runtime.storage.setItem(PRELOAD_RELOAD_KEY, marker);
       } catch {
-        return false;
+        return "storage_unavailable";
       }
 
       const attempt: ReloadAttempt = {
@@ -91,12 +94,11 @@ export function createPreloadRecovery(
         }, PRELOAD_RECOVERY_DELAY_MS);
       } catch {
         removeOwnedMarker(marker);
-        return false;
+        return "schedule_failed";
       }
 
       pending = attempt;
-      event.preventDefault();
-      return true;
+      return "scheduled";
     },
 
     handleDocumentLeaving() {
@@ -113,21 +115,33 @@ export function createPreloadRecovery(
 
 let preloadRecoveryInstalled = false;
 
-export function installPreloadErrorRecovery(): void {
+export function installPreloadErrorRecovery(
+  recordDecision: (
+    decision: ReturnType<PreloadRecovery["handlePreloadError"]>,
+  ) => void,
+): void {
   if (preloadRecoveryInstalled) return;
   preloadRecoveryInstalled = true;
 
   const recovery = createPreloadRecovery({
     isOnline: () => navigator.onLine,
-    storage: window.sessionStorage,
+    // Access itself can throw, before getItem/setItem. Keep it inside the
+    // controller's storage guard so denied storage cannot break router setup.
+    storage: {
+      getItem: (key) => window.sessionStorage.getItem(key),
+      setItem: (key, value) => window.sessionStorage.setItem(key, value),
+      removeItem: (key) => window.sessionStorage.removeItem(key),
+    },
     reload: () => window.location.reload(),
     now: Date.now,
     schedule: (callback, delay) => window.setTimeout(callback, delay),
     cancel: (handle) => window.clearTimeout(handle),
   });
 
-  window.addEventListener("vite:preloadError", (event) => {
-    recovery.handlePreloadError(event);
+  window.addEventListener("vite:preloadError", () => {
+    // Preventing Vite's event makes a rejected import fulfill with undefined,
+    // which breaks lazy module consumers before the delayed reload.
+    recordDecision(recovery.handlePreloadError());
   });
   window.addEventListener("beforeunload", recovery.handleDocumentLeaving);
   window.addEventListener("pagehide", recovery.handleDocumentLeaving);

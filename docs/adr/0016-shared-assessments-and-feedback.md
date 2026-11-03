@@ -127,6 +127,13 @@ counts reuse their resolved scope, and count-only reads omit ordering-only
 correction lookups. Existing identity/family/status and Feedback assessment
 indexes serve these reads; no second eligibility cache is introduced.
 
+Connection endpoints use separate source and target branches with partial
+expression indexes on the immutable candidate references. Literal JSON paths and
+scope predicates preserve index eligibility under generic plans. Current primary
+references remain independent. UUID and shortcode endpoints, unknown historical
+connection scopes, and retained null-scope evidence records keep their matches.
+Presentation still enumerates the complete original references.
+
 ## Cutover preservation
 
 One owner controls the production cutover. An early expansion/copy is not the

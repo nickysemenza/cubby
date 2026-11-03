@@ -351,16 +351,6 @@ export const reviewFamilyDeclarations = {
       THEN jsonb_build_array(${endpoint("source")}, ${endpoint("target")})
       ELSE COALESCE(a.evidence->'records', '[]'::jsonb) END`,
     matchesRelatedRecords: (scope: AssessmentRecordScope) => {
-      const connection = or(
-        ...(["source", "target"] as const).flatMap((end) => {
-          const match = relatedRecordMatch(
-            scope,
-            sql`a.evidence->'candidate'->${end}->>'entityKind'`,
-            sql<string>`a.evidence->'candidate'->${end}->>'entityId'`,
-          );
-          return match ? [match] : [];
-        }),
-      );
       const retained = scope.records
         ? or(
             ...scope.records.flatMap((record) =>
@@ -372,14 +362,9 @@ export const reviewFamilyDeclarations = {
           )
         : sql`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(a.evidence->'records', '[]'::jsonb)) r
             WHERE ${relatedRecordMatch(scope, sql`r->>'entity'`, sql<string>`r->>'id'`)})`;
-      return or(
-        connection
-          ? and(recommendationScopes.connection, connection)
-          : undefined,
-        retained
-          ? and(sql`(${recommendationScopes.connection}) IS NOT TRUE`, retained)
-          : undefined,
-      );
+      return retained
+        ? and(sql`(${recommendationScopes.connection}) IS NOT TRUE`, retained)
+        : undefined;
     },
     actionable: sql`(${sql.join(Object.values(recommendationScopes), sql` OR `)})`,
   },
@@ -790,6 +775,25 @@ function assessmentRecordMatches(scope: AssessmentRecordScope): SQL[] {
     : undefined;
   const recordExists = (refs: SQL) =>
     sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${refs}) r WHERE ${and(isNotNull(sql`r->>'id'`), scope.entity ? eq(sql<string>`r->>'entity'`, scope.entity) : undefined, recordMatch)})`;
+  // Fixed JSON paths and the literal predicate also match generic-plan indexes.
+  // Immutable endpoints remain independent of the mutable primary reference.
+  const connectionMatches = [
+    {
+      entity: sql<string>`a.evidence #>> '{candidate,source,entityKind}'`,
+      id: sql<string>`a.evidence #>> '{candidate,source,entityId}'`,
+    },
+    {
+      entity: sql<string>`a.evidence #>> '{candidate,target,entityKind}'`,
+      id: sql<string>`a.evidence #>> '{candidate,target,entityId}'`,
+    },
+  ].map(
+    ({ entity, id }) =>
+      sql`${and(
+        eq(reviewState.family, assessmentFamily.enum.recommendation),
+        recommendationScopes.connection,
+        relatedRecordMatch(scope, entity, id),
+      )}`,
+  );
   const secondary = Object.entries(reviewFamilyDeclarations).flatMap(
     ([family, spec]) => {
       if ("primaryOnly" in spec) return [];
@@ -809,6 +813,7 @@ function assessmentRecordMatches(scope: AssessmentRecordScope): SQL[] {
   // Assessment and spilled the pending-state join during ordinary list reads.
   return [
     sql`${primaryMatch}`,
+    ...connectionMatches,
     ...secondary.map(
       ({ family, match }) => sql`${and(eq(reviewState.family, family), match)}`,
     ),

@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -40,7 +42,6 @@ function createAttempt({
     cancel: (handle) => clearTimeout(handle),
   };
   return {
-    event: { preventDefault: vi.fn() },
     recovery: createPreloadRecovery(runtime),
     reload,
     storage,
@@ -54,8 +55,7 @@ describe("preload deployment recovery", () => {
   it("defers the first online failure and reloads exactly once", () => {
     const attempt = createAttempt();
 
-    expect(attempt.recovery.handlePreloadError(attempt.event)).toBe(true);
-    expect(attempt.event.preventDefault).toHaveBeenCalledOnce();
+    expect(attempt.recovery.handlePreloadError()).toBe("scheduled");
     expect(attempt.storage.value()).toBe("100000:1");
 
     vi.advanceTimersByTime(PRELOAD_RECOVERY_DELAY_MS - 1);
@@ -68,12 +68,10 @@ describe("preload deployment recovery", () => {
 
   it("coalesces repeated failures while recovery is pending", () => {
     const attempt = createAttempt();
-    const repeated = { preventDefault: vi.fn() };
 
-    expect(attempt.recovery.handlePreloadError(attempt.event)).toBe(true);
-    expect(attempt.recovery.handlePreloadError(repeated)).toBe(true);
+    expect(attempt.recovery.handlePreloadError()).toBe("scheduled");
+    expect(attempt.recovery.handlePreloadError()).toBe("pending");
 
-    expect(repeated.preventDefault).toHaveBeenCalledOnce();
     expect(attempt.storage.setItem).toHaveBeenCalledOnce();
     vi.advanceTimersByTime(PRELOAD_RECOVERY_DELAY_MS);
     expect(attempt.reload).toHaveBeenCalledOnce();
@@ -83,9 +81,10 @@ describe("preload deployment recovery", () => {
     "cancels pending recovery when %s starts the document leaving",
     () => {
       const attempt = createAttempt();
-      attempt.recovery.handlePreloadError(attempt.event);
+      attempt.recovery.handlePreloadError();
 
       attempt.recovery.handleDocumentLeaving();
+      expect(attempt.recovery.handlePreloadError()).toBe("leaving");
       vi.advanceTimersByTime(PRELOAD_RECOVERY_DELAY_MS);
 
       expect(attempt.reload).not.toHaveBeenCalled();
@@ -98,7 +97,7 @@ describe("preload deployment recovery", () => {
 
   it("does not remove a cooldown marker it no longer owns", () => {
     const attempt = createAttempt();
-    attempt.recovery.handlePreloadError(attempt.event);
+    attempt.recovery.handlePreloadError();
     attempt.storage.setItem("cubby:preload-reload-at", "200000:other");
 
     attempt.recovery.handleDocumentLeaving();
@@ -110,15 +109,14 @@ describe("preload deployment recovery", () => {
   it("enforces the cooldown after an actual reload", () => {
     const storage = createStorage();
     const first = createAttempt({ storage, now: 100_000 });
-    first.recovery.handlePreloadError(first.event);
+    first.recovery.handlePreloadError();
     vi.advanceTimersByTime(PRELOAD_RECOVERY_DELAY_MS);
 
     const repeated = createAttempt({
       storage,
       now: 100_000 + PRELOAD_RELOAD_COOLDOWN_MS - 1,
     });
-    expect(repeated.recovery.handlePreloadError(repeated.event)).toBe(false);
-    expect(repeated.event.preventDefault).not.toHaveBeenCalled();
+    expect(repeated.recovery.handlePreloadError()).toBe("cooldown");
     expect(repeated.reload).not.toHaveBeenCalled();
   });
 
@@ -128,20 +126,19 @@ describe("preload deployment recovery", () => {
       now: 100_000 + PRELOAD_RELOAD_COOLDOWN_MS,
     });
 
-    expect(attempt.recovery.handlePreloadError(attempt.event)).toBe(true);
+    expect(attempt.recovery.handlePreloadError()).toBe("scheduled");
   });
 
   it("does nothing while offline", () => {
     const attempt = createAttempt({ online: false });
 
-    expect(attempt.recovery.handlePreloadError(attempt.event)).toBe(false);
+    expect(attempt.recovery.handlePreloadError()).toBe("offline");
     expect(attempt.storage.getItem).not.toHaveBeenCalled();
-    expect(attempt.event.preventDefault).not.toHaveBeenCalled();
     expect(attempt.reload).not.toHaveBeenCalled();
   });
 
   it.each(["get", "set"])(
-    "does not suppress when storage %s fails",
+    "does not reload when storage %s fails",
     (operation) => {
       const storage = createStorage();
       storage[operation === "get" ? "getItem" : "setItem"].mockImplementation(
@@ -151,9 +148,44 @@ describe("preload deployment recovery", () => {
       );
       const attempt = createAttempt({ storage });
 
-      expect(attempt.recovery.handlePreloadError(attempt.event)).toBe(false);
-      expect(attempt.event.preventDefault).not.toHaveBeenCalled();
+      expect(attempt.recovery.handlePreloadError()).toBe("storage_unavailable");
       expect(attempt.reload).not.toHaveBeenCalled();
     },
   );
+
+  it("installs recovery when the browser denies session-storage access", () => {
+    // The installer owns process-wide listeners; isolate its globals and
+    // one-time installation flag from Vitest's shared module registry.
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `import assert from "node:assert/strict";
+         import { installPreloadErrorRecovery } from ${JSON.stringify(new URL("./deploy-recovery.ts", import.meta.url).href)};
+         const target = new EventTarget();
+         let scheduled = 0;
+         Object.defineProperties(target, {
+           sessionStorage: { get() { throw new DOMException("Synthetic storage denied", "SecurityError"); } },
+           setTimeout: { value() { scheduled++; return 1; } },
+           clearTimeout: { value() {} },
+           location: { value: { reload() { throw new Error("Unexpected reload"); } } },
+         });
+         globalThis.window = target;
+         Object.defineProperty(globalThis, "navigator", { configurable: true, value: { onLine: true } });
+         const decisions = [];
+         installPreloadErrorRecovery((decision) => decisions.push(decision));
+         const event = new Event("vite:preloadError", { cancelable: true });
+         target.dispatchEvent(event);
+         assert.deepEqual(decisions, ["storage_unavailable"]);
+         assert.equal(event.defaultPrevented, false);
+         assert.equal(scheduled, 0);`,
+      ],
+      { encoding: "utf8" },
+    );
+    expect({ status: result.status, stderr: result.stderr }).toEqual({
+      status: 0,
+      stderr: "",
+    });
+  });
 });

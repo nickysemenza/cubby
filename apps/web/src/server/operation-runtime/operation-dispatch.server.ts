@@ -229,14 +229,15 @@ export function createOperationDispatch(
     const requestId = getRequestId(request.headers) ?? crypto.randomUUID();
     let operation = "dispatch";
     let authenticated = false;
+    let stage: OperationStage = "context";
     const refusal = <TError>(
       error: TError,
-      stage: OperationStage,
+      failureStage: OperationStage,
       status?: number,
       extraHeaders?: HeadersInit,
     ) =>
       errorResponse(
-        normalizeOperationError(error, stage, requestId, {
+        normalizeOperationError(error, failureStage, requestId, {
           operation,
           authenticated,
           headers: request.headers,
@@ -266,6 +267,7 @@ export function createOperationDispatch(
       authenticated = true;
       const authHeaders = principal.responseHeaders;
       const call = { headers: request.headers, signal: request.signal };
+      stage = "input";
       const body: unknown = await request.json();
       const pathname = new URL(request.url).pathname;
 
@@ -274,6 +276,7 @@ export function createOperationDispatch(
         const operations = batch.map((item) => item.operation);
         operation = operations.join(", ");
         z.literal(browserOperationPath(operations)).parse(pathname);
+        stage = "dispatch";
         const { readable, writable } = new TransformStream<BatchLine>();
         const writer = writable.getWriter();
         void settleBatch(
@@ -301,6 +304,7 @@ export function createOperationDispatch(
       const envelope = envelopeSchema.parse(body);
       operation = envelope.operation;
       z.literal(browserOperationPath(envelope.operation)).parse(pathname);
+      stage = "dispatch";
       const dispatched = await dispatchOperation(principal, {
         ...call,
         operation: envelope.operation,
@@ -315,7 +319,8 @@ export function createOperationDispatch(
       });
     } catch (error) {
       if (request.signal.aborted) throw error;
-      return refusal(error, "input");
+      // Authentication can fail before the body is read; it is not invalid input.
+      return refusal(error, stage);
     }
   }
 

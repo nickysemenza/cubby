@@ -231,8 +231,13 @@ retains recorded attempts for replay.
 
 The resident worker and iOS background windows both claim with a 60 s lease and renew each
 running command every 15 s through `imageProcessing.renew`; the executor's deadline moves with each renewal, and a refusal
-(`lease_lost`, `job_obsolete`) stops that command without recording or releasing it. Every claim
-the device stops working on before recording a result is released best-effort (bounded at 3 s):
+(`lease_lost`, `job_obsolete`) stops that command without recording or releasing it.
+A server 500 while renewing keeps execution under its existing deadline; it
+does not mean the lease was refused. The durable checkpoint is a completed result
+recorded in the outbox before delivery. Failed delivery keeps that result for
+replay without repeating image execution.
+
+Every claim the device stops working on before recording a result is released best-effort (bounded at 3 s):
 stop, sign-out, quit (macOS settles a pull in flight, bounded at 3 s, then waits for the
 releases), iOS backgrounding outside a granted system window, participation off, macOS
 system sleep, a remote pause, and a command this build cannot parse — after which the drain backs
