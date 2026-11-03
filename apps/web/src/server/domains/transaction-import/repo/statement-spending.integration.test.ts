@@ -1359,9 +1359,9 @@ describe("statement spending review and re-import", () => {
     ).toEqual([]);
     expect(await total()).toBe(42.5);
   });
-  // Creating one Vendor must not invalidate the other independent clean
-  // charges on the page or strand paid advice outside the label queue.
-  it("books every independent new Vendor on an import page and reuses unchanged advice", async () => {
+  // Creating one Vendor must not invalidate other independent clean charges
+  // or strand paid advice outside the label queue across import pages.
+  it("books independent new Vendors across import pages and reuses unchanged advice", async () => {
     const { input, advice } = await fixture();
     const names = [
       "Juniper Books",
@@ -1386,11 +1386,20 @@ describe("statement spending review and re-import", () => {
       batch,
       ctx.actor,
     );
-    await generateStatementSuggestionPage(ctx.db, {
-      after: null,
-      runId: null,
-      scope: { importId: saved.batchId! },
-    });
+    const generateImport = async () => {
+      let after: Parameters<
+        typeof generateStatementSuggestionPage
+      >[1]["after"] = null;
+      do {
+        const page = await generateStatementSuggestionPage(ctx.db, {
+          after,
+          runId: null,
+          scope: { importId: saved.batchId! },
+        });
+        after = page.next;
+      } while (after);
+    };
+    await generateImport();
     const labelled = await labelStatementSuggestions(ctx.db, {
       port: answering({ kind: "purchase", counterparty: "business" }),
       spendingAdvice: async ({ judgment }) => ({
@@ -1413,11 +1422,7 @@ describe("statement spending review and re-import", () => {
     expect(
       (await recordSourceTransactionRecords(ctx.db, batch, ctx.actor)).inserted,
     ).toBe(0);
-    await generateStatementSuggestionPage(ctx.db, {
-      after: null,
-      runId: null,
-      scope: { importId: saved.batchId! },
-    });
+    await generateImport();
     expect(await total()).toBe(165);
   });
 });
