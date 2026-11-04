@@ -30,9 +30,11 @@ Counts and view counts cover known work only while any admitted source is
 incomplete. Publication makes the ordinary read complete without a read repair.
 
 Automatic work distinguishes remaining refreshes, observed execution states and
-current publications by age. Internal sources keep their labels beside stored
+current publications by age. When supplied by the backend, internal sources keep their labels beside stored
 entity fields. Queue shrinkage is not a completion count or an ETA; publication
 age is not an execution-event rate. Missing execution observations stay unknown.
+Assessment source observations remain pending the separately owned producer
+cutover; this UI contract does not imply that registration has shipped.
 
 The Work queue derives work from records, gaps, findings, execution, review
 state and Problems detectors. Each domain declares its Work sources (reasons,

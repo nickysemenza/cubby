@@ -586,11 +586,13 @@ fields shared by the most types lead, `·` marks a value the type does not
 declare, idle declared cells read a muted 0, and counts take the shared heat
 scale with row and column totals. Queued work matching no declaration is
 counted below the matrix rather than dropped.
-Internal refresh sources, including Assessment reviews, retain their own labels,
+When the backend supplies internal refresh sources, the UI retains their labels,
 observed execution states, triggers and retry deadlines beside the field matrix.
 Remaining counts do not establish completed outcomes, a workload total or an ETA.
 Current publications are shown by source and age window, without interpreting
 their age distribution as an execution-event rate.
+The Assessment producer and its internal-source observations are a separate
+publication cutover; the additive DTO alone does not enable them.
 
 Progress uses `ui/primitives/progress.tsx`, following ReUI's Base UI pattern with
 `ProgressLabel`, `ProgressValue`, and a 6px token-colored track. Labels and

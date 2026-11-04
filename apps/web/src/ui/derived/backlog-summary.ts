@@ -4,6 +4,11 @@ import { humanize } from "@cubby/shared";
 
 import { formatCount } from "~/lib/number-format";
 
+export const refreshStateSummary = (
+  states: NonNullable<DerivedBacklog["kinds"][number]["states"]>,
+) =>
+  `${formatCount(states.queued)} queued · ${formatCount(states.running)} running · ${formatCount(states.waiting)} waiting · ${formatCount(states.failed)} failed`;
+
 /** Internal publications share execution observations, not public Entity fields. */
 export function backlogRefreshes(backlog: DerivedBacklog) {
   return [

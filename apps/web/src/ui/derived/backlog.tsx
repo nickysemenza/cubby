@@ -19,7 +19,11 @@ import { totalCell } from "~/ui/matrix/matrix-chrome";
 import { Button } from "~/ui/primitives/button";
 
 import { type BacklogMatrix, pivotDerivedBacklog } from "./backlog-matrix";
-import { backlogRefreshes, backlogStates } from "./backlog-summary";
+import {
+  backlogRefreshes,
+  backlogStates,
+  refreshStateSummary,
+} from "./backlog-summary";
 
 /** The shell status slot's derived backlog: shown only while values are updating. */
 export function DerivedBacklogStatus({
@@ -54,7 +58,10 @@ export function DerivedBacklogOverview() {
     ...derived.backlog.queryOptions({}),
   });
   const matrix = result.data?.kinds.some((kind) => kind.count > 0)
-    ? pivotDerivedBacklog(result.data)
+    ? pivotDerivedBacklog({
+        ...result.data,
+        total: result.data.kinds.reduce((sum, kind) => sum + kind.count, 0),
+      })
     : null;
   return (
     <div className="flex flex-col gap-3">
@@ -76,7 +83,11 @@ export function DerivedBacklogOverview() {
         {result.data && result.data.total > 0 && (
           <RecordRow
             primary={`${countLabel(result.data.total, "refresh")} pending`}
-            secondary="Outstanding work can grow or shrink as inputs change."
+            secondary={
+              result.data.oldestWaitingSeconds === null
+                ? undefined
+                : `Oldest wait: ${formatCount(result.data.oldestWaitingSeconds)} seconds`
+            }
           />
         )}
       </RecordList>
@@ -90,11 +101,6 @@ export function DerivedBacklogOverview() {
     </div>
   );
 }
-
-export const refreshStateSummary = (
-  states: NonNullable<DerivedBacklog["kinds"][number]["states"]>,
-) =>
-  `${formatCount(states.queued)} queued · ${formatCount(states.running)} running · ${formatCount(states.waiting)} waiting · ${formatCount(states.failed)} failed`;
 
 function DerivedRefreshStates({
   backlog,
@@ -113,8 +119,8 @@ function DerivedRefreshStates({
       </p>
       {total.unknown > 0 && (
         <p>
-          Execution state unavailable for {countLabel(total.unknown, "refresh")}
-          .
+          Execution state not reported for{" "}
+          {countLabel(total.unknown, "refresh")}.
         </p>
       )}
       <p className="text-muted-foreground">

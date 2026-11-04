@@ -15,10 +15,10 @@ import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
-import { refreshStateSummary } from "~/ui/derived/backlog";
 import {
   backlogStates,
   describeRecentPublications,
+  refreshStateSummary,
 } from "~/ui/derived/backlog-summary";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Section } from "~/ui/layout";
@@ -228,7 +228,13 @@ export function WorkFeed({
         ? "working"
         : (derivedExecution?.failed ?? 0) > 0
           ? "failed"
-          : "waiting";
+          : derivedExecution &&
+              derivedExecution.queued > 0 &&
+              derivedExecution.waiting === 0 &&
+              derivedExecution.unknown === 0 &&
+              (backlog.data?.oldestWaitingSeconds ?? 0) >= 600
+            ? "stuck"
+            : "waiting";
   const working =
     (!activity.isError && views.some((view) => view.status === "working")) ||
     (!backlog.isError && derivedStatus === "working");
@@ -252,6 +258,7 @@ export function WorkFeed({
   const showDerived =
     !attentionOnly ||
     (derivedExecution?.failed ?? 0) > 0 ||
+    derivedStatus === "stuck" ||
     derivedStatus === "stale";
   return (
     <Section

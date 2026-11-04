@@ -355,6 +355,7 @@ async function queryWorkQueue(
     incomplete AS (
       SELECT * FROM routed work WHERE input_incomplete
       ${incompletePopulation ? sql`AND (${incompletePopulation})` : sql``}
+      ${selectedView ? sql`AND (${selectedView})` : sql``}
     ),
     eligible AS (
       SELECT * FROM filtered ${selectedView ? sql`WHERE ${selectedView}` : sql``}

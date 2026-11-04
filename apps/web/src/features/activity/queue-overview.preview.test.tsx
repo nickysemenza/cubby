@@ -11,6 +11,7 @@ import { z } from "zod";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
+import { derived } from "~/integrations/tanstack-query/generated/domains/derived.gen";
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { mock } from "~/lib/test/mock-schema";
 import { getEntityDetailOutputSchema } from "~/server/generated/entity-details.server.gen";
@@ -423,7 +424,7 @@ it("shows field and internal refresh observations without inventing missing exec
     ),
   ).toBeVisible();
   expect(
-    screen.getByText("Execution state unavailable for 1 refresh."),
+    screen.getByText("Execution state not reported for 1 refresh."),
   ).toBeVisible();
   expect(
     screen.getByText(
@@ -446,6 +447,28 @@ it("shows field and internal refresh observations without inventing missing exec
   expect(triggers.getByText("Trigger not recorded")).toBeVisible();
   expect(triggers.getByText("3")).toBeVisible();
   expect(screen.getByText(/Next attempt/)).toBeVisible();
+  await act(async () => {
+    harness.queryClient.setQueryData(derived.backlog.queryKey({}), {
+      total: 2,
+      kinds: [
+        {
+          entity: "product",
+          field: "price",
+          count: 2,
+          states: { queued: 2, running: 0, waiting: 0, failed: 0 },
+        },
+      ],
+      oldestWaitingSeconds: 900,
+      recent: { windowMinutes: 15, perMinute: [50] },
+    });
+  });
+  await waitFor(() =>
+    expect(
+      within(screen.getByTestId("work-stream-derived")).getByLabelText(
+        "Not moving",
+      ),
+    ).toBeVisible(),
+  );
 });
 
 it("retries the current filter without widening to other lanes", async () => {

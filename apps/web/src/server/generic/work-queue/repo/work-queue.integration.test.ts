@@ -661,6 +661,28 @@ describe("composed Work queue engine", () => {
         count: 1,
       },
     ]);
+    const human = await readComposedQueue(ctx.db, {
+      input: {
+        view: "human",
+        reason: "product_category",
+        query: "Synthetic source gap widget",
+      },
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(human.meta.incompleteSources).toEqual([]);
+    const agent = await readComposedQueue(ctx.db, {
+      input: {
+        view: "agent",
+        reason: "product_category",
+        query: "Synthetic source gap widget",
+      },
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(agent.meta.incompleteSources).toEqual(
+      unpublished.meta.incompleteSources,
+    );
     await publishAllQualityFixtures(ctx.db);
     const queue = await readComposedQueue(ctx.db, {
       input: {
