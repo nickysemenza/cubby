@@ -1,4 +1,4 @@
-import type { ShipmentId } from "@cubby/schemas/identifiers";
+import type { ShipmentId, ShortcodeFor } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { MailReadContent } from "@cubby/schemas/mailbox-research";
 import type {
@@ -6,7 +6,7 @@ import type {
   ShipmentCarrierClaim,
 } from "@cubby/schemas/shipment-evidence";
 import { SHIPMENT_IDENTITY_PERIOD_DAYS } from "@cubby/schemas/shipment-fields";
-import { and, or, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
@@ -117,6 +117,72 @@ type CarrierSourceEvidence = Pick<MailReadContent, "links"> & {
   texts: readonly string[];
 };
 
+const deliveryLabel =
+  /(?<![\p{L}\p{N}_-])(?:Delivery|DELIVERY|delivery)\s*:\s*([A-Z0-9]{2,6})/u
+    .source;
+const deliveryField = new RegExp(
+  `${deliveryLabel}(?=\\s*(?:$|[;,.|·]))`,
+  "gmu",
+);
+// Compaction can collapse lines, so a field already found elsewhere may run into later text.
+const deliveryMention = new RegExp(
+  `${deliveryLabel}(?![\\p{L}\\p{N}_-])`,
+  "gu",
+);
+
+/** Codes a source prints only as a "Delivery:" field value. A merchant can print one
+ * code beside parcels of different carriers, so it names no carrier and must never
+ * be aliased to one. Any other mention leaves the code to ordinary attribution.
+ */
+export function deliveryFieldCodes(
+  source: Pick<CarrierSourceEvidence, "texts">,
+): ReadonlySet<string> {
+  const prose = source.texts.map((text) =>
+    text.replace(/https?:\/\/\S+/gi, " "),
+  );
+  const remainder = prose.map((text) => text.replace(deliveryMention, " "));
+  return new Set(
+    prose
+      .flatMap((text) =>
+        [...text.matchAll(deliveryField)].flatMap(([, code]) =>
+          code ? [code] : [],
+        ),
+      )
+      .filter(
+        (code) =>
+          !remainder.some((text) =>
+            new RegExp(
+              `(?<![\\p{L}\\p{N}_-])${code}(?![\\p{L}\\p{N}_-])`,
+              "iu",
+            ).test(text),
+          ),
+      ),
+  );
+}
+
+/** Clear an extracted carrier hint, including a stale Vendor reference, when it only
+ * restates a delivery-field code. Unrelated hints and unknown literals stay as submitted.
+ */
+export async function withoutDeliveryFieldCarrier<
+  H extends {
+    carrierId: ShortcodeFor<"vendor"> | null;
+    carrierName: string | null;
+  },
+>(db: Database, hint: H, codes: ReadonlySet<string>): Promise<H> {
+  if (!codes.size) return hint;
+  const [named] = hint.carrierId
+    ? await getDb(db)
+        .select({ name: vendor.name, aliases: vendor.aliases })
+        .from(vendor)
+        .where(eq(vendor.shortcode, hint.carrierId))
+    : [];
+  return [hint.carrierName, named?.name, ...(named?.aliases ?? [])].some(
+    (name) => name && codes.has(name.trim().toUpperCase()),
+  )
+    ? { ...hint, carrierId: null, carrierName: null }
+    : hint;
+}
+
 export async function assessCarrierPacket(
   db: Database,
   packet: Pick<
@@ -134,6 +200,7 @@ export async function assessCarrierPacket(
       .map(normalizeCarrierReference),
   );
   const hints = packet.carrierClaims ?? [];
+  const deliveryCodes = deliveryFieldCodes(source);
   const claims = [
     ...hints,
     ...sourceCarrierClaims(source, [...references]).filter(
@@ -152,7 +219,9 @@ export async function assessCarrierPacket(
   for (const claim of claims) {
     if (
       claim.role !== "carrier" ||
-      !references.has(normalizeCarrierReference(claim.trackingNumber))
+      !references.has(normalizeCarrierReference(claim.trackingNumber)) ||
+      (claim.evidence.kind !== "link" &&
+        deliveryCodes.has(claim.carrierName.trim().toUpperCase()))
     )
       continue;
     const carrier = await resolveCarrierName(db, claim.carrierName);

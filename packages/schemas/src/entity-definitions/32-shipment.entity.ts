@@ -222,7 +222,7 @@ export const { definition, readSchemas } = defineEntityModel({
         validation: {
           read: shipmentExtraTrackingNumbers,
           create: null,
-          update: null,
+          update: shipmentExtraTrackingNumbers.optional(),
         },
       },
       {
@@ -433,6 +433,11 @@ export const { definition, readSchemas } = defineEntityModel({
           },
         ],
       },
+    },
+    intents: {
+      fields: { full: ["purpose", "carrierId"] },
+      create: [],
+      update: ["full"],
     },
     sort: {
       fields: [

@@ -72,6 +72,8 @@ import {
   carrierClaimsConflict,
   resolveCarrierName,
   carrierFormatEvidence,
+  deliveryFieldCodes,
+  withoutDeliveryFieldCarrier,
 } from "~/server/domains/shipment/repo/carrier-evidence";
 import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
 import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
@@ -748,14 +750,31 @@ async function writeShipmentEvidence(
       input.source.kind !== "email"
         ? new Date(input.source.capturedAt)
         : new Date();
-    for (const packet of input.shipments) {
+    const sourceEvidence = carrierCaptureEvidence(capture);
+    const deliveryCodes = deliveryFieldCodes(sourceEvidence);
+    for (const submitted of input.shipments) {
+      // Keys, fingerprints and observation identities keep the submitted hints, so
+      // retained extractions replay onto their existing bindings and revisions.
+      const extraHints: typeof submitted.extraTrackingNumbers = [];
+      for (const extra of submitted.extraTrackingNumbers)
+        extraHints.push(
+          await withoutDeliveryFieldCarrier(tdb, extra, deliveryCodes),
+        );
+      const packet = {
+        ...submitted,
+        ...(await withoutDeliveryFieldCarrier(
+          tdb,
+          {
+            carrierId: submitted.carrierId,
+            carrierName: submitted.carrierName,
+          },
+          deliveryCodes,
+        )),
+        extraTrackingNumbers: extraHints,
+      };
       if (packet.carrierId)
         await carrierReference(tdb, packet.carrierId, packet.carrierName);
-      const assessment = await assessCarrierPacket(
-        tdb,
-        packet,
-        carrierCaptureEvidence(capture),
-      );
+      const assessment = await assessCarrierPacket(tdb, packet, sourceEvidence);
       // Explicit source attribution wins over extraction; normal extracted Vendor names
       // still populate a new/missing carrier without a separate proof ledger.
       let carrier = assessment.primary.carrier
@@ -774,7 +793,7 @@ async function writeShipmentEvidence(
       const packageKey =
         packet.sourceShipmentKey ??
         packet.shipmentId ??
-        `${packet.carrierId ?? packet.carrierName ?? "unknown"}:${number}`;
+        `${submitted.carrierId ?? submitted.carrierName ?? "unknown"}:${number}`;
       let row = packet.shipmentId
         ? await canonicalShipment(tdb, packet.shipmentId)
         : undefined;
@@ -1234,7 +1253,7 @@ async function writeShipmentEvidence(
             summary: `${ambiguity}${advisory}`,
             proposedFix: null,
             evidenceFingerprint: await sha256Hex(
-              canonical({ sourceKey, packageKey, packet }),
+              canonical({ sourceKey, packageKey, packet: submitted }),
             ),
           });
         continue;
@@ -1326,12 +1345,24 @@ async function writeShipmentEvidence(
       shipmentIds.push(parseShortcodeFor("shipment", row.shortcode));
       const occurrences = new Map<string, number>();
       for (const observation of packet.observations) {
+        const eventHint = await withoutDeliveryFieldCarrier(
+          tdb,
+          {
+            carrierId: observation.carrierId,
+            carrierName: observation.carrierName,
+          },
+          deliveryCodes,
+        );
         const eventCarrier = await carrierReference(
           tdb,
-          observation.carrierId,
-          observation.carrierName,
+          eventHint.carrierId,
+          eventHint.carrierName,
         );
-        const event = { ...observation, carrierId: eventCarrier.code };
+        const event = {
+          ...observation,
+          ...eventHint,
+          carrierId: eventCarrier.code,
+        };
         // Provenance was absent in historical JSON. Keep its occurrence identity and
         // fingerprint intact when the same literal scan is replayed with provenance.
         const { fingerprint, literalFingerprint, occurrenceKey } =
@@ -1831,36 +1862,58 @@ export async function reassignShipmentEvidence(
   });
 }
 
-/** Ordinary carrier editing shares the Shipment identity writer and audit history. */
-export async function editShipmentCarrier(
+/** Ordinary carrier and extra-reference edits share the Shipment identity writer and audit history. */
+export async function editShipmentReferences(
   db: Database,
   input: {
     shipmentId: ShortcodeFor<"shipment">;
-    carrierId: ShortcodeFor<"vendor"> | null;
+    carrierId?: ShortcodeFor<"vendor"> | null;
+    extraTrackingNumbers?: (typeof shipment.$inferSelect)["extraTrackingNumbers"];
   },
   actor: ActorContext,
 ) {
   if (actor.runId || actor.channel === "system")
     return refuse(
-      "Carrier edits require an interactive member request; automated changes use source intake.",
+      "Carrier and tracking reference edits require an interactive member request; automated changes use source intake.",
     );
   return withTransactionDatabase(db, async (tdb) => {
     await lockShipmentWrites(tdb);
     const row = await canonicalShipment(tdb, input.shipmentId);
-    const carrier = await carrierReference(tdb, input.carrierId, null);
+    const carrierId =
+      input.carrierId === undefined
+        ? row.carrierId
+        : (await carrierReference(tdb, input.carrierId, null)).id;
+    const referenceKey = (ref: {
+      trackingNumber: string;
+      carrierId: unknown;
+    }) => JSON.stringify([normalizeNumber(ref.trackingNumber), ref.carrierId]);
+    const submitted = new Set(
+      (input.extraTrackingNumbers ?? row.extraTrackingNumbers).map(
+        referenceKey,
+      ),
+    );
+    // Removal is a member decision; only source intake can establish a new reference
+    // and its identity checks. A carrier edit alone removes no distinct reference.
+    const current = new Set(row.extraTrackingNumbers.map(referenceKey));
+    if ([...submitted].some((key) => !current.has(key)))
+      return refuse(
+        "This edit can only remove extra tracking references; new references come from source intake.",
+      );
     // A reference the new primary covers is no longer a separate handoff, and the
     // replaced carrier is not retained as one.
     const extraTrackingNumbers = await deduplicateShipmentTrackingReferences(
       tdb,
       {
         trackingNumber: row.trackingNumber,
-        carrierId: carrier.id,
-        extraTrackingNumbers: row.extraTrackingNumbers,
+        carrierId,
+        extraTrackingNumbers: row.extraTrackingNumbers.filter((ref) =>
+          submitted.has(referenceKey(ref)),
+        ),
       },
     );
     await getDb(tdb)
       .update(shipment)
-      .set({ carrierId: carrier.id, extraTrackingNumbers })
+      .set({ carrierId, extraTrackingNumbers })
       .where(eq(shipment.id, row.id));
     await logAuditEntries(tdb, actor, [
       {
@@ -1868,7 +1921,9 @@ export async function editShipmentCarrier(
         entityId: row.id,
         action: "update",
         changes: {
-          carrierId: { from: row.carrierId, to: carrier.id },
+          ...(input.carrierId === undefined
+            ? {}
+            : { carrierId: { from: row.carrierId, to: carrierId } }),
           ...(canonical(extraTrackingNumbers) ===
           canonical(row.extraTrackingNumbers)
             ? {}

@@ -224,6 +224,14 @@ aliases. Service wording stays in the source evidence rather than creating anoth
 Vendor. Never create a Vendor from a tracking-number
 prefix or mistake a merchant, broker or label platform for the delivery carrier.
 Unknown names remain useful source evidence without inventing a carrier identity.
+A merchant `Delivery:` field holding a short uppercase code names no carrier: one
+code can appear beside parcels of different carriers, so never alias it to one.
+When that field is the code's only mention in the retained source, intake clears
+matching carrier hints, including a stale Vendor reference, on the package, extra
+references and new observation events. Source keys, fingerprints and the capture
+keep the submitted wording. Another mention in the source leaves the code to the
+ordinary rules, so a labeled carrier claim survives; a `Delivery: UPS` notice with
+no other UPS mention stays unknown until other source evidence names the carrier.
 
 The extractor's normal carrier fields populate a new or missing assignment.
 Optional `carrierClaims` carry exact reference/name/service/role hints and retained
@@ -239,7 +247,11 @@ its guarded bulk writer, commit alongside other submitted fields, and appear in
 normal audit history. They do not create a permanent automation lock; setting null
 leaves a missing carrier that later source evidence may fill. An edit also drops
 extra references the new primary covers, and the replaced carrier does not become
-a handoff. Carrier resolution has no machine/member ownership classification,
+a handoff. A member can also remove a false extra reference by submitting the
+remaining `extraTrackingNumbers` through `entity.update`. That edit adds no
+reference, keeps the same lock and audit history, and is refused for automation.
+Source evidence that explicitly establishes a removed reference can restore it.
+Carrier resolution has no machine/member ownership classification,
 assignment receipts or audit markers. Automated source correction still uses the owning Shipment writer rather
 than submitting unverified carrier edits through generic CRUD.
 
