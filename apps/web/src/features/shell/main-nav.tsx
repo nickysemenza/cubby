@@ -35,7 +35,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         <Row align="center" gap="sm">
           <img src={LOGO_SRC} alt="" className="size-6 sm:h-7 sm:w-7" />
           <span className="self-center font-heading text-lg font-bold tracking-tight whitespace-nowrap text-foreground sm:text-xl">
-            cubby
+            Cubby
           </span>
         </Row>
       </Link>

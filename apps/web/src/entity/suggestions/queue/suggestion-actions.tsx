@@ -226,6 +226,7 @@ export function SuggestionActions({
       {offers(suggestion, "accept") ? (
         <Button
           size="xs"
+          variant="outline"
           disabled={busy}
           aria-description={
             acceptOwnerOnly ? "Only the record's owner can confirm" : undefined

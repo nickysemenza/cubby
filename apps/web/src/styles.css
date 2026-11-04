@@ -103,7 +103,7 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  input:focus,
+  input:focus:not([cmdk-input]),
   textarea:focus,
   [data-slot="combobox-trigger"]:focus {
     /* Crisp ink focus without glow or layout shift. */

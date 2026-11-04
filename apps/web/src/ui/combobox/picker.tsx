@@ -1428,7 +1428,7 @@ function ChoosePicker<TId extends string>({
             ref={inputRef}
             aria-label={ariaLabel}
             aria-describedby={ariaDescribedBy}
-            className="flex h-full min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none"
+            className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none"
           >
             <SelectedLead value={value} />
             <span

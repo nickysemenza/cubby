@@ -840,7 +840,7 @@ function QuickActionItems({
   onGoToPage: GoToPage;
 }) {
   return (
-    <CommandGroup heading="Quick Actions">
+    <CommandGroup heading="Quick actions">
       {actions.map((action) => (
         <CommandItem
           key={action.id}

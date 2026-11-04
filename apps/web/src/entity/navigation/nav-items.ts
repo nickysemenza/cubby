@@ -157,7 +157,7 @@ export function navItemLinkProps(item: NavItem, active: boolean) {
   };
 }
 export const bottomNavItems: NavItem[] = [
-  { to: "/", label: "Today", icon: HouseIcon },
+  { to: "/", label: "Home", icon: HouseIcon },
   {
     to: "/inventory",
     entity: "inventory",

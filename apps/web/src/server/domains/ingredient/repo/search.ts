@@ -535,14 +535,20 @@ export const ingredientScaffold = listScaffold("ingredient", ingredient, {
         // A record read carries each product's USDA food and the nutrition
         // basis chosen from them.
         foods.fields(
-          rawIngredientDetail.pick({ product: true, nutritionProduct: true }),
-          (row, loaded) => {
-            const withFood = loaded.get(row.id) ?? [];
-            return {
-              product: withFood,
-              nutritionProduct: buildIngredientNutritionProduct(withFood),
-            };
-          },
+          rawIngredientDetail.pick({ product: true }),
+          (row, loaded) => ({ product: loaded.get(row.id) ?? [] }),
+          { scope: "detail" },
+        ),
+        // Separate from the `product` override above: a page read drops that
+        // binding whole, and a selected list read (graph previews, MCP) may
+        // still name the nutrition basis.
+        foods.fields(
+          rawIngredientDetail.pick({ nutritionProduct: true }),
+          (row, loaded) => ({
+            nutritionProduct: buildIngredientNutritionProduct(
+              loaded.get(row.id) ?? [],
+            ),
+          }),
           { scope: "detail" },
         ),
         usages.fields(
