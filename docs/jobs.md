@@ -583,7 +583,7 @@ failure count alone does not establish uninterrupted execution.
   minutes. The completion sample excludes normalization, failed attempts and stale
   image sources. Without a successful completion sample the ETA is unknown.
 
-Web Activity’s Now view presents the device backlog banner, compact lane/reason
+Work’s Automatic work view presents the device backlog banner, compact lane/reason
 counts, Runs needing attention, then Jobs. Needs you also exposes Run and Job
 attention alongside the Work queue’s Decisions and Problems groups. Navigable counts use the Job entity
 population, hiding internal work with the table. Every supplied retry
@@ -895,14 +895,18 @@ the minimum only for unsafe writes; see
 
 ## Member-facing work explanations
 
-Activity is the web entry point for Needs you, Now, History and Advanced
-maintenance (`tab=needs-you|now|history|maintenance`). Legacy Activity links
-with queue filters open Now; audit filters open History. Needs you reuses the
-canonical Work queue and Run/Job attention predicates. It does not add an
-alert engine or change retry policy. Normal retries, waits and dependencies
-remain in Now. Field refresh explanations and the shell backlog link explicitly
-select Now before targeting its Derived values section. Existing Work queue views
-remain usable.
+Work is the web entry point at `/activity`, with Needs you, Automatic work,
+Improvements and History. Advanced maintenance remains available.
+`tab=now` keeps its compatible URL and now labels the Automatic work view;
+legacy queue filters select it and audit filters select History. Needs you
+reuses the canonical Work queue and Run/Job attention predicates, separating
+financial proposals and concrete blockers from optional enrichment. Improvements
+retains optional suggestions, agent research and declared missing-fact views.
+Normal retries, dependencies and external waits remain in Automatic work;
+external waits are explicitly labelled. These views add no alert engine,
+scheduler or stored lanes and do not change retry policy. Field refresh and
+shell backlog links retain `tab=now` and the Derived values anchor. Existing
+Work queue filters, Suggestions, automatic rules and audit remain usable.
 
 `RUN_KINDS` owns Run purpose, triggers, effects and declared steps.
 `JOB_KIND_POLICY` in `packages/schemas/src/job.ts` co-locates each Job kind’s
@@ -948,7 +952,7 @@ Deployment's first request bootstraps existing work and AI activation once per W
 version; deployment probes initiate this explicitly. App-open coalesces recovery
 and mail discovery. Gmail provider push is not implemented here.
 
-Activity → Now shows Running, Next wake, Waiting and Last recovery enrollment, known deadlines
+Work → Automatic work shows Running, Next wake, Waiting and Last recovery enrollment, known deadlines
 linked to Jobs and disclosed wake/delivery/recovery history. Observation timestamps
 are explicit. No known deadline does not establish that Neon is suspended. An
 observed wake delivery or still-armed alarm over five minutes overdue appears in

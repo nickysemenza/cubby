@@ -36,7 +36,11 @@ it("renders an unknown purchaser from the nullable ready-plan wire shape", () =>
           purchaseId: null,
           snapshot: "synthetic-spending",
           candidates: [],
-          request: { advice: null, rejectedPurchaseIds: [] },
+          request: {
+            advice: null,
+            rejectedPurchaseIds: [],
+            costType: "services",
+          },
         },
       },
     },
@@ -51,4 +55,5 @@ it("renders an unknown purchaser from the nullable ready-plan wire shape", () =>
     screen.getByText("Household card does not identify an individual"),
   ).toBeVisible();
   expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
+  expect(screen.getByText("Services")).toBeVisible();
 });

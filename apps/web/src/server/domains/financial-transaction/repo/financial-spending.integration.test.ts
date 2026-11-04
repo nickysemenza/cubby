@@ -610,6 +610,19 @@ describe("shared spending booking", () => {
         effect: "link_existing",
         purchaserId: null,
       });
+      const classified = await previewFinancialSpending(ctx.db, {
+        ...plan.request,
+        costType: "services",
+      });
+      expect(classified).toMatchObject({
+        status: "review_required",
+        reason: expect.stringMatching(
+          /Cost type applies only to a new aggregate/,
+        ),
+      });
+      await expect(
+        commitFinancialSpending(ctx.db, classified, ctx.actor),
+      ).rejects.toThrow(/Cost type applies only to a new aggregate/);
       const direct = await previewFinancialBooking(
         ctx.db,
         financialBookingInput.parse({
@@ -1035,33 +1048,61 @@ describe("shared spending booking", () => {
         .orderBy(expense.cost),
     ).toEqual([{ cost: 20 }, { cost: 42.5 }]);
   });
-  it("books one categorized Expense and the account owner, then replays without extra spend", async () => {
-    const { owner, transaction, advice, category } = await fixture();
-    const plan = await previewFinancialSpending(ctx.db, {
-      transactionId: transaction.output.id,
-      advice,
-    });
-    expect(plan.status).toBe("ready");
-    await commitFinancialSpending(ctx.db, plan, ctx.actor);
-    const replay = await previewFinancialSpending(ctx.db, {
-      transactionId: transaction.output.id,
-      advice,
-    });
-    expect(replay.status).toBe("already_booked");
-    await commitFinancialSpending(ctx.db, replay, ctx.actor);
-    const result = await getDb(ctx.db).execute<{
-      cost: number;
-      category: string;
-      owner: string;
-    }>(sql`SELECT e.cost, c.shortcode AS category, lp.shortcode AS owner
+  it.each([undefined, "services"] as const)(
+    "books one categorized Expense with cost type %s and replays without extra spend",
+    async (costType) => {
+      const { owner, transaction, advice, category } = await fixture();
+      const plan = await previewFinancialSpending(ctx.db, {
+        transactionId: transaction.output.id,
+        advice,
+        ...(costType === undefined ? {} : { costType }),
+      });
+      expect(plan.status).toBe("ready");
+      expect(Object.hasOwn(plan.request, "costType")).toBe(
+        costType !== undefined,
+      );
+      expect(
+        financialSpendingPlan.parse(JSON.parse(JSON.stringify(plan))),
+      ).toEqual(plan);
+      await expect(
+        commitFinancialSpending(
+          ctx.db,
+          { ...plan, request: { ...plan.request, costType: "tools" } },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/Spending evidence changed/);
+      await commitFinancialSpending(ctx.db, plan, ctx.actor);
+      expect(
+        await commitFinancialSpending(ctx.db, plan, ctx.actor),
+      ).toMatchObject({ replayed: true });
+      const replay = await previewFinancialSpending(ctx.db, {
+        transactionId: transaction.output.id,
+        advice,
+      });
+      expect(replay.status).toBe("already_booked");
+      await commitFinancialSpending(ctx.db, replay, ctx.actor);
+      const result = await getDb(ctx.db).execute<{
+        cost: number;
+        costType: string;
+        category: string;
+        owner: string;
+      }>(sql`SELECT e.cost, e."costType", c.shortcode AS category, lp.shortcode AS owner
       FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId"
       JOIN "SpendingCategory" c ON c.id = e."spendingCategoryId"
       JOIN "LedgerParty" lp ON lp.id = p."purchaserOverrideId"
       WHERE e."deletedAt" IS NULL`);
-    expect(
-      result.rows.map((row) => ({ ...row, cost: Number(row.cost) })),
-    ).toEqual([{ cost: 42.5, category: category.id, owner: owner.output.id }]);
-  });
+      expect(
+        result.rows.map((row) => ({ ...row, cost: Number(row.cost) })),
+      ).toEqual([
+        {
+          cost: 42.5,
+          costType: costType ?? "materials",
+          category: category.id,
+          owner: owner.output.id,
+        },
+      ]);
+    },
+  );
   it.each(["owner", "vendor"])(
     "refuses an accepted plan replay after its %s identity changes",
     async (changed) => {

@@ -668,16 +668,19 @@ describe("statement spending review and re-import", () => {
         (state) => state.id,
       ),
     );
+    const application = statementTransactionApplication.parse({
+      kind: "statement_transaction",
+      action: "create",
+      booking: { costType: "services" },
+    });
     const command = {
       assessmentId: suggestion!.assessmentId,
       expectedFingerprint: suggestion!.fingerprint,
       operationId: "synthetic-canonical-provider-replay",
-      verdict: "correct" as const,
+      verdict: "wrong" as const,
+      correction: { present: true as const, value: application },
       intent: "apply" as const,
-      application: statementTransactionApplication.parse({
-        kind: "statement_transaction",
-        action: "create",
-      }),
+      application,
     };
     const receipt = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
     await providerCollision();
@@ -685,6 +688,9 @@ describe("statement spending review and re-import", () => {
       receipt,
     );
     expect(await total()).toBe(42.5);
+    expect(await getDb(ctx.db).query.expense.findMany()).toMatchObject([
+      { costType: "services", cost: 42.5 },
+    ]);
     expect(
       await getDb(ctx.db).query.financialTransaction.findMany(),
     ).toHaveLength(1);
@@ -917,6 +923,7 @@ describe("statement spending review and re-import", () => {
         booking: {
           spendingCategoryId: advice.spendingCategoryId,
           reviewedVendorName: "Synthetic Orchard",
+          costType: "services",
         },
       },
     };
@@ -924,7 +931,11 @@ describe("statement spending review and re-import", () => {
     expect(result).toMatchObject({
       action: "create",
       kind: "purchase",
-      spending: { status: "ready", effect: "create_aggregate" },
+      spending: {
+        status: "ready",
+        effect: "create_aggregate",
+        request: { costType: "services" },
+      },
     });
     const transfer = await previewStatementSuggestion(ctx.db, {
       ...input,

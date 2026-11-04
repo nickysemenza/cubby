@@ -146,7 +146,7 @@ function SettingsPage() {
                     search={{ tab: "maintenance" }}
                     className="text-link hover:underline"
                   >
-                    Open Advanced maintenance in Activity
+                    Open Advanced maintenance in Work
                   </Link>
                 ),
               },

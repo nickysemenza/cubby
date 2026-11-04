@@ -148,7 +148,7 @@ export function WorkspaceNavigator({
           sidebarSections.map((section) => (
             <section
               key={section.id}
-              aria-label={section.label || "Home and activity"}
+              aria-label={section.label || "Home and work"}
               className="mt-2.5"
             >
               {section.label && (

@@ -1,5 +1,27 @@
 # One view of the work
 
+Work is the household's operational entry point at `/activity`. Its four main
+views share the existing queue and execution evidence:
+
+- **Needs you** holds decisions, financial proposals and concrete Problems.
+- **Automatic work** shows actual execution, retries and dependencies, with
+  external waits labelled separately. Waiting never implies failure.
+- **Improvements** holds optional field, connection and image-description
+  proposals, agent research and declared missing-fact views. Missing optional
+  enrichment is not an error.
+- **History** retains Run outcomes and recorded changes.
+
+Advanced maintenance stays available beside those views. All work and filters
+opens the existing `/work-queue` workbench with its executor, family, owner and
+reason facets. Both legacy URLs and `tab=now` remain usable, including native
+handoffs. Suggestions, automatic decisions and rules remain accessible from
+Improvements, and list counts, detail and inspector suggestion review stay in place.
+These views do not persist lanes, assignments or another work ledger. A record
+can appear in more than one view when it has different actionable work.
+Home and Work disclose the same incomplete Project or diagnostic publications.
+Home leaves its total unavailable while those checks are incomplete and labels
+an empty known roster without claiming that nothing needs attention.
+
 The Work queue derives work from records, gaps, findings, execution, review
 state and Problems detectors. Each domain declares its Work sources (reasons,
 Work family, Executor, link, actions and a candidate query); the queue composes
@@ -226,14 +248,14 @@ Resolved work leaves actionable views. Its evidence, decisions, receipts and
 outcomes remain in the owning record and Run history, without introducing a
 second completed-task ledger.
 
-### Activity entry point
+### Work entry point
 
-Activity’s Needs you view embeds the existing human-review and Problems
-queues with their canonical queries, group actions and affected-record
-navigation. Its Now view retains automatic recovery and ordinary waits;
+Work’s Needs you view embeds the existing decision, financial-proposal and
+Problems queues with their canonical queries, group actions and affected-record
+navigation. Automatic work retains automatic recovery and ordinary waits;
 persistent Run stalls and Job failure attention follow existing policies.
 All Work queue executor views remain available at `/work-queue`.
-Activity History opens retained Runs and audit changes; it is not a second
+Work History opens retained Runs and audit changes; it is not a second
 completed-task ledger. Advanced maintenance holds the nightly pass and
 one-off repairs formerly in Settings. Recipe re-parsing previews a bounded
 Current/Proposed sample before application; the server recomputes eligibility

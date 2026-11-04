@@ -72,6 +72,21 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     path: testInfo.outputPath("activity-needs-you-desktop.png"),
     fullPage: true,
   });
+  await page.getByRole("tab", { name: "Improvements", exact: true }).click();
+  await expect(page).toHaveURL(/tab=improvements/);
+  await expect(
+    page.getByRole("heading", { name: "Proposals", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: "Research and missing facts",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("work-improvements-desktop.png"),
+    fullPage: true,
+  });
 
   await page
     .getByRole("tab", { name: "Advanced maintenance", exact: true })
@@ -111,7 +126,7 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
   });
 
   // Moving between views must preserve an inspected preview and its action state.
-  await page.getByRole("tab", { name: "Now", exact: true }).click();
+  await page.getByRole("tab", { name: "Automatic work", exact: true }).click();
   await expect(page).toHaveURL(/tab=now/);
   await page
     .getByRole("tab", { name: "Advanced maintenance", exact: true })
@@ -172,6 +187,23 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
   });
   await page.getByRole("tab", { name: "History", exact: true }).click();
   await expect(page).toHaveURL(/tab=history/);
+  await page.getByRole("tab", { name: "Improvements", exact: true }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Research and missing facts",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath("work-improvements-phone.png"),
+    fullPage: true,
+  });
+  await page.goBack();
   await expect(
     page.getByRole("heading", { name: "Run history", exact: true }),
   ).toBeVisible();

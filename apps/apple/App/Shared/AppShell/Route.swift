@@ -81,7 +81,7 @@ enum AppSection: String, CaseIterable, Identifiable, Codable {
     var title: String {
         switch self {
         case .today: "Today"
-        case .activity: "Activity"
+        case .activity: "Work"
         case .capture: "Capture"
         case .photos: "Photos"
         case .browse: "Browse"

@@ -56,6 +56,8 @@ export const financialSpendingRequest = z.object({
   vendorId: vendorShortcode.optional(),
   reviewedVendorName: z.string().trim().min(1).optional(),
   spendingCategoryId: spendingCategoryShortcode.optional(),
+  /** Reviewed classification for a newly created aggregate; absence keeps source defaults. */
+  costType: z.enum(["materials", "tools", "services"]).optional(),
   categoryHistoryReviewed: z.boolean().optional(),
   rejectedPurchaseIds: z.array(purchaseShortcode).default([]),
 });
@@ -134,6 +136,14 @@ export const financialBookingResult = z.object({
 });
 export type FinancialBookingInput = z.infer<typeof financialBookingInput>;
 export type FinancialBookingPreview = z.infer<typeof financialBookingPreview>;
+
+/** The reviewed choice wins; otherwise fees and purchases keep their source defaults. */
+export function financialSpendingCostType(
+  kind: z.infer<typeof financialTransactionKind> | null,
+  reviewed?: FinancialBookingInput["costType"],
+): FinancialBookingInput["costType"] {
+  return reviewed ?? (kind === "fee" ? "services" : "materials");
+}
 
 export const financialConvergenceInput = z.strictObject({
   transactionId: financialTransactionShortcode,

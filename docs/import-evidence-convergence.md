@@ -1222,8 +1222,11 @@ refuse both preview and acceptance before projecting financial effects.
 It writes no aliases or records. The preview identifies transaction changes,
 vendor reuse/creation and alias effects, Purchase/Expense
 and settlement effects, purchaser basis and the explicit vendor-account state.
-Changing a draft refreshes the result; acceptance still replans inside its write
-boundary. Explicit MCP review supplying `booking` or `kindOverride`, or choosing
+Changing a web draft refreshes the reviewed result; acceptance still replans
+inside its write boundary. Agents may call the preview to inspect uncertain
+effects; a separate `finance_read.preview_suggestion` call is optional, never
+acceptance authority or a prerequisite to a supported `suggestions.review`.
+The write always validates the current Assessment, application and spending. Explicit MCP review supplying `booking` or `kindOverride`, or choosing
 a nonrecommended action, uses `verdict: "wrong"` with
 `correction: { present: true, value: application }` and the same `application`.
 This includes a Create draft that retains the recommended action but supplies
@@ -1235,7 +1238,106 @@ not a Cubby spending-category assignment:
 retain each provider/category observation, joining other provider charges only
 through authoritative settlement references to the same transaction.
 
+Statement attachment also converges spending. A spending result requiring review
+blocks attachment even when no transaction fields are selected. For an already
+accepted transaction with a separately authorized explicit booking, inspect
+existing spending, book through the supported command, then refresh the proposal
+against that booking. Preserve the accepted transaction, source references and
+allocations. A lineage refusal remains unresolved; never restore Expense values
+or member attribution to force attachment. An authorized identity-only repair
+must merge the current reference set atomically through the existing writer;
+replacing a client-side snapshot can remove concurrent attachments.
+
+### Working the statement backlog
+
+Recording rows starts a routine Sweep that turns each unmatched charge into
+one Transaction suggestion (`suggestions_read.list` with `family:
+"statement_transaction"`; `groups: "account_month"` adds per account × month
+sections with clean counts); `run.sweep {families: [{family:
+"statement_transaction"}]}` reruns it after hand edits to transactions or
+accounts, and `run_read.work_snapshot` follows its Steps. Burn the backlog group by group,
+filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}`:
+
+1. Accept `clean: true` suggestions in batches of up to 100 with
+   `suggestions.review_batch`: verdict `correct`, intent `apply`,
+   `expectedFingerprint` (the row's `fingerprint`), and `application {kind:
+   "statement_transaction", action: <recommended>}`; an attach also names
+   `transactionId`, the first candidate. For transfer/card-payment creates use
+   the opposite-leg rule in step 5. Other creates are clean only when at least
+   two of `create.votes` (category `rule`, model `label`, merchant `history`)
+   name its kind and none disagrees, and `create.counterparty` is a business
+   (on a stored-value account such as a payment app, history must say so). A
+   card benefit, statement credit or issuer promotion is an `adjustment`, not a
+   `refund` (a merchant giving money back for returned goods), even when it
+   names the merchant of the purchase it offsets; merchant history is kept per
+   direction, so a couple of corrected credits teach it.
+2. Read every other suggestion before choosing. An attach candidate's model
+   `label` is advisory — confirm the descriptors yourself, and below about $20
+   read both. Attach to a different candidate, tick `fields`, override the
+   kind, or create anyway (`rejectedCandidateIds` listing every candidate) as
+   verdict `wrong` with `correction {present: true, value: <the same
+   application>}`.
+3. A charge with `siblings` has a same-amount charge from another export: the
+   pair may be one charge whose descriptor firmed up. Supersede the thinner row
+   (generic `entity.update` on `sourceTransactionRecord`, setting
+   `supersededByRowId` to the reviewed successor record ID) before creating
+   either. A `claimed` candidate already settles another charge from the same
+   source, so it is never clean: attach only when this row is that charge
+   re-exported under a new descriptor; two visits for the same amount are two
+   creates.
+4. A person counterparty is never clean. An outgoing payment to a person is
+   your share of a shared cost: create it as `purchase` and set the merchant.
+   An incoming one is a repayment: create it, then book it with
+   `finance.book_transaction` as `economicRole: "reimbursement"`.
+5. A `transfer` names the member's own balance account a cash-out or funding
+   descriptor points at (Venmo-style and payout balances are `stored_value`;
+   PayPal is read like a card). Review the `transfer_pair` family on the global
+   Suggestions page or through `suggestions_read.list`; find pairs with
+   `run.sweep {families: [{family: "transfer_pair"}]}`. Accept using verdict
+   `correct`, intent `apply`, `expectedFingerprint` and `application {kind:
+   "transfer_pair"}`. It creates missing statement-backed legs and accepts the
+   pair atomically. The family and statement creates share the
+   [opposite-leg clean policy](adr/0016-shared-assessments-and-feedback.md#transfer-pair-suggestions-2026-10-19).
+   Cross-owner pairs always need review and record a LedgerTransfer.
+   An ATM withdrawal moves money into the `cash` account of the bank
+   account's owner (a household checking's cash is the household's), so it is
+   an internal move. Cash has no statement: review the proposal to create its
+   full-amount leg on the owner's unique cash account, or enter the leg by hand.
+   A proposed cash leg is never clean. Record the known ATM fee separately as a
+   `fee` on cash; never infer a fee amount. Settle cash spending from that
+   account against its Purchase.
+   A cash account never reconciles: cash spent and not remembered stays as an
+   unexplained balance on purpose. Never invent spending to close it, and never
+   settle a Purchase from cash without evidence that the cash paid it.
+   Review unresolved overlapping exports before creating a leg; confirmed
+   observations must share one FinancialTransaction. Amount and nearby dates
+   alone cannot establish charge identity.
+6. Dismiss charges that should never become transactions with verdict
+   `dismissed` and suppression `{scope: "statement_transaction", candidateKey:
+   "<source>:<chargeKey>", fingerprint}`; prefer `disposition: "ignored"` with a
+   reason when the whole row must never become a transaction, because that also
+   settles every observation. Every real charge is in scope, consumer spend
+   included: ignore only duplicates of another export's row, pre-Cubby rows and
+   mis-parsed lines, never `not_modeled`.
+
+A refusal (evidence changed, a live candidate, a stale hold, an attach with
+several candidates and no named `transactionId`) writes nothing. Labelling
+republishes a suggestion under a new assessment id, so a stale-Assessment
+error means re-list the group and review the replacement. Explicit pending-to-posted evidence can support a reviewed supersession.
+Disappearance requires the complete scope and explicit source confirmation in
+[financial-evidence-import](../.agents/skills/financial-evidence-import/SKILL.md#withdrawals).
+Age or absence from a later export alone does not authorize voiding a hold.
+
 ### Retained review holds and preservation
+
+For temporary review holds, retain prior judgments and a unique marker, keep the
+cases visible in the member review, and count them as unresolved. If holding
+depends on current booking eligibility, check that eligibility and apply the
+hold atomically with the relevant source and transaction locks. Intake copies
+judgments into later revisions: reopening must discover original rows and
+marked descendants within the proven source identity. Restore only exact
+temporary-hold matches and preserve every newer member decision; restoring a
+fixed list of old row IDs can leave newer observations held.
 
 Before resuming a retained booking case, read the existing member review and
 saved case plans for the exact source, transaction and Purchase identities.
@@ -1269,14 +1371,41 @@ the `replayed: true` flag used by direct `finance.commit_booking`; that writer h
 its own replay and current-lineage checks.
 
 Source aggregate creation defaults ordinary purchases to `materials` and fees
-to `services`. Its application booking choices do not expose `costType`. For a
-separately authorized service classification correction, first independently
-verify the new booking graph, then update only that Expense's `costType` to
-`services` through the Expense writer. Preserve money, dates, category, Products,
-quantities, stock, attribution, source facts and both stored booking fingerprints.
+to `services`. Optional `booking.costType` in statement review chooses
+`materials`, `tools` or `services` for a new aggregate Expense; its draft control
+and preview show the choice before application. An absent choice preserves the
+existing defaults and retained request fingerprints. An explicit cost type is
+refused when linking or settling existing spending; those actions preserve the
+existing Expenses. Direct `finance.book_transaction` also accepts `costType`.
+Choose it in the original booking rather than editing the resulting Expense.
 
-The correction changes the full Expense lineage. Subsequent fresh spending
-convergence requires review while the corrected Expense remains present; exact
-replay of the original generic command still returns its stored outcome. Preserve
-that distinction and leave the lineage review unresolved. Never reset fingerprints
-or undo a member classification to force convergence.
+For an authorized explicit booking, check existing Purchases, Expenses and
+settlement allocations before creating aggregate spending. Refresh that check
+when resuming a retained proposal; a fresh booking preview checks the selected
+transaction's state, not the completeness of a prior duplicate search.
+
+Choose cost type from what was purchased: a membership service uses `services`,
+even when the Vendor usually sells goods. Vendor-default spending categories
+are suggestions, not evidence of the purchase's purpose. Resolve category IDs
+against live records before previewing; a merged category's successor need not
+fit the purchase. When category is uncertain, preserve supported booking under
+the member's uncategorized-booking policy rather than inventing a category.
+
+Keep issuer benefit credits separate from purchase charges. Equal amounts,
+nearby dates and a membership benefit do not alone prove a credit allocation or
+net household cost. Review their meaning and settlement independently. After
+commit, read back the Purchase, Expense, allocation and attribution graph;
+check effective category and beneficiary defaults rather than assuming empty
+overrides mean uncategorized or Household. Preserve explicit member decisions
+about who benefits independently of who funded the payment. Report booked gross
+spending separately from unresolved credits.
+
+Historical classification edits remain member decisions. The retained booking
+fingerprint hashes full Expense lineage, including names, notes, URLs and joined
+attribution/source-claim rows. Even a descriptive edit can therefore require
+review during fresh convergence. The old digest retains no original projected
+monetary proof against which a narrower comparison could safely run; a projected
+current hash cannot be compared to the stored full-row hash. This guard also
+protects automatic financial evidence corrections and remains unchanged. Exact
+statement command replay still returns its committed receipt. Never reset
+fingerprints or undo member edits to force convergence.
