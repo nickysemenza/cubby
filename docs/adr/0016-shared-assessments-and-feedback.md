@@ -283,6 +283,11 @@ fence. Selector completeness, including newly reachable peers, remains required.
 The internal target and foreground cutover require complete invalidation and
 publication coverage before these tables become the read authority. The storage
 and canonical preparation seam alone establish neither coverage nor latency.
+The publication assembler serializes keys and declared filter operands from the
+canonical admission result; it does not recompute family eligibility. It emits
+an evaluated-empty revision for closed records, releasing their memberships.
+An open record with no input observations fails its component preparation and
+retains the previous publication; an absent read set is never an empty result.
 Background admission preparation returns canonical rows and exact scope/ref
 memberships together. Family freshness reads and membership input observations
 merge into one deduplicated dependency set per Assessment; preparing a shared

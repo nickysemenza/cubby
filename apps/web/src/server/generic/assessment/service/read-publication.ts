@@ -1,6 +1,7 @@
 import {
   ASSESSMENT_READ_RULES_VERSION,
   ASSESSMENT_READ_TARGET,
+  assessmentReadResult,
 } from "@cubby/schemas/assessment-read-publication";
 import {
   connectionEdgeFromKey,
@@ -23,6 +24,10 @@ import {
   type AssessmentReadStagePlan,
   type AssessmentReadStageWrite,
 } from "~/server/generic/assessment/repo/read-publication";
+import {
+  prepareSuggestionAdmission,
+  suggestionKeyFacts,
+} from "~/server/generic/assessment/repo/suggestion-list";
 import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
 import {
@@ -195,6 +200,13 @@ async function prepareAssessmentReadComponent<Prepared>(
   });
 }
 
+type AssessmentReadPreparation<Prepared> = {
+  components: { plan: AssessmentReadPreparationPlan; prepared: Prepared }[];
+  failures: ReadonlyMap<string, unknown>;
+  /** Claimed inputs outside the shared preparation budget stay owed. */
+  retained: readonly string[];
+};
+
 /** Unrelated claimed records never share activation or preparation-failure fate. */
 export async function prepareAssessmentReadPublication<Prepared>(
   db: Database,
@@ -204,12 +216,7 @@ export async function prepareAssessmentReadPublication<Prepared>(
     plan: AssessmentReadPreparationPlan,
   ) => Promise<Prepared>,
   readSourceScope?: ReadSourceScope,
-): Promise<{
-  components: { plan: AssessmentReadPreparationPlan; prepared: Prepared }[];
-  failures: ReadonlyMap<string, unknown>;
-  /** Claimed inputs left outside this page's shared preparation budget stay owed. */
-  retained: readonly string[];
-}> {
+): Promise<AssessmentReadPreparation<Prepared>> {
   const remaining = new Set(ids);
   const components: {
     plan: AssessmentReadPreparationPlan;
@@ -247,4 +254,67 @@ export async function prepareAssessmentReadPublication<Prepared>(
     }
   }
   return { components, failures, retained: [...remaining] };
+}
+
+/** Canonical preparation owns facts; this owner only assembles their staged publication. */
+export async function prepareCanonicalAssessmentReadPublication(
+  db: Database,
+  ids: readonly string[],
+  readSourceScope: ReadSourceScope,
+): Promise<AssessmentReadPreparation<AssessmentReadStageWrite>> {
+  return prepareAssessmentReadPublication(
+    db,
+    ids,
+    async (snapshot, plan): Promise<AssessmentReadStageWrite> => {
+      const openIds = await readOpenAssessmentReadIds(
+        snapshot,
+        plan.idsToPrepare,
+      );
+      const admitted = await prepareSuggestionAdmission(snapshot, openIds);
+      const open = new Set(openIds);
+      const results = plan.idsToPrepare.map((assessmentId) => {
+        const groupKey = plan.currentGroups.get(assessmentId);
+        if (!groupKey)
+          throw new Error(
+            "Assessment publication has no canonical competitor group",
+          );
+        const dependencies = admitted.dependencies.get(assessmentId);
+        // A closed record may publish empty and release its old memberships.
+        // An unobserved open record must retain its last publication instead.
+        // Present observations still require complete declared source capture.
+        if (open.has(assessmentId) && !dependencies)
+          throw new Error(
+            "Assessment canonical input observations are unavailable",
+          );
+        const facts = admitted.keys
+          .filter((key) => key.assessmentId === assessmentId)
+          .map((key) => {
+            const row = admitted.rows.get(assessmentId);
+            if (!row)
+              throw new Error(
+                "Admitted Assessment has no canonical review row",
+              );
+            return {
+              key: { ...key, createdAt: key.createdAt.toISOString() },
+              filters: suggestionKeyFacts(key),
+              row,
+            };
+          });
+        return assessmentReadResult.parse({
+          assessmentId,
+          groupKey,
+          facts,
+          memberships: admitted.memberships.get(assessmentId) ?? [],
+          dependencies: open.has(assessmentId) ? dependencies : [],
+        });
+      });
+      return {
+        stage: plan.stage,
+        previousStageIds: plan.previousStageIds,
+        sourceScope: plan.sourceScope,
+        results,
+      };
+    },
+    readSourceScope,
+  );
 }

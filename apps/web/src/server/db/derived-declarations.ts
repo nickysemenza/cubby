@@ -291,7 +291,7 @@ const internalRecordSpec = z.object({
     .optional(),
 });
 
-export type InternalRecordSpec = z.input<typeof internalRecordSpec>;
+type InternalRecordSpec = z.input<typeof internalRecordSpec>;
 
 /**
  * Registered internal records. Append only: triggers and the drain read this

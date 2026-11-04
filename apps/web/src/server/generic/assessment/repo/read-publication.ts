@@ -320,7 +320,7 @@ async function removeInactiveRevisions(
 }
 
 /** Exact peer and source generations, observed before canonical preparation. */
-export function assessmentReadStageBlocked(
+function assessmentReadStageBlocked(
   stage: AssessmentReadStagePlan,
   sourceScope: AssessmentReadStageWrite["sourceScope"],
 ): SQL {

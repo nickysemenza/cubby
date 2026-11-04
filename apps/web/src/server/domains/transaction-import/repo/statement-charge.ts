@@ -117,14 +117,3 @@ export const pendingSuggestion = (alias = "s") =>
           AND (r."deletedAt" IS NOT NULL OR r.disposition=${sourceTransactionRecordDisposition.enum.ignored} OR r."supersededByRowId" IS NOT NULL)
       )`}
     )`;
-
-/** Narrow on the indexed account key before inspecting statement evidence.
- * Queue readers need existence per requested account, never a population-wide
- * decoded projection. Settlement eligibility still reads current source rows. */
-export const pendingStatementStateSql = (accountId: SQL): SQL => sql`
-  SELECT s.family, s.active, s.status, s.data
-  FROM "AssessmentState" s
-  WHERE s.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.statement_transaction)}
-    AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
-    AND s.data->>'accountId' = ${accountId}
-`;

@@ -119,7 +119,7 @@ function reviewableRow(
   ];
 }
 /** Only served Assessments are member review candidates. */
-export const reviewableSuggestionSql = sql`EXISTS (SELECT 1 FROM "Assessment" prediction WHERE prediction.id=${suggestionTable.id} AND prediction.served)`;
+const reviewableSuggestionSql = sql`EXISTS (SELECT 1 FROM "Assessment" prediction WHERE prediction.id=${suggestionTable.id} AND prediction.served)`;
 
 /** Pending review queue, or reviewed history by `status` (the label set a
  * decision eval replays). Every filter composes, including a list page's

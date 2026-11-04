@@ -59,7 +59,10 @@ import {
   touchingAssessmentIds,
 } from "~/server/generic/assessment/repo/review-families";
 import { suggestionFamilies } from "~/server/generic/assessment/repo/suggestion-families";
-import { prepareAssessmentReadPublication } from "~/server/generic/assessment/service/read-publication";
+import {
+  prepareAssessmentReadPublication,
+  prepareCanonicalAssessmentReadPublication,
+} from "~/server/generic/assessment/service/read-publication";
 import {
   DERIVED_DRAIN,
   derivedFanoutSourceScope,
@@ -282,29 +285,50 @@ describe("cross-family Suggestion list", () => {
         await fieldSuggestion(ctx, source, "model", 0.9, new Date()),
       );
     }
-    const bounded = await prepareAssessmentReadPublication(
+    const bounded = await prepareCanonicalAssessmentReadPublication(
       ctx.db,
       claimed,
-      (snapshot, plan) =>
-        prepareSuggestionAdmission(snapshot, plan.idsToPrepare),
+      async () => () => sql`true`,
     );
     expect(bounded.components.flatMap(({ plan }) => plan.idsToPrepare)).toEqual(
       claimed.slice(0, 20),
     );
     expect(bounded.retained).toEqual(claimed.slice(20));
     expect(bounded.failures.size).toBe(0);
-    const resumed = await prepareAssessmentReadPublication(
+    const resumed = await prepareCanonicalAssessmentReadPublication(
       ctx.db,
       bounded.retained,
-      (snapshot, plan) =>
-        prepareSuggestionAdmission(snapshot, plan.idsToPrepare),
+      async () => () => sql`true`,
     );
     expect(
       resumed.components.flatMap(({ prepared }) =>
-        prepared.keys.map((key) => key.assessmentId),
+        prepared.results.flatMap((result) =>
+          result.facts.map((fact) => fact.key.assessmentId),
+        ),
       ),
     ).toEqual(claimed.slice(20));
     expect(resumed.retained).toEqual([]);
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ active: false, status: "superseded" })
+      .where(eq(assessmentState.id, id));
+    const closed = await prepareCanonicalAssessmentReadPublication(
+      ctx.db,
+      [id],
+      async () => () => sql`true`,
+    );
+    expect(closed.failures.size).toBe(0);
+    expect(
+      closed.components.flatMap(({ prepared }) => prepared.results),
+    ).toEqual([
+      {
+        assessmentId: id,
+        groupKey: `assessment:${id}`,
+        facts: [],
+        memberships: [],
+        dependencies: [],
+      },
+    ]);
   });
 
   // Reference proposals touch both the old and proposed records, even when

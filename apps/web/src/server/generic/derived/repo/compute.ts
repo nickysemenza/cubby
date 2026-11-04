@@ -115,7 +115,7 @@ export const sharedDerivedPreparation =
     );
 
 /** One sink publication's reader notification, committed with its transaction. */
-export interface DerivedSinkPublication {
+interface DerivedSinkPublication {
   /** Exact held tickets; staged output must belong to this invalidation generation. */
   readonly tickets: ReadonlyMap<string, number>;
   /**
@@ -127,7 +127,7 @@ export interface DerivedSinkPublication {
 }
 
 /** Staging may commit while its original source work stays owed without an attempt. */
-export interface DerivedSinkContinuation {
+interface DerivedSinkContinuation {
   readonly changed: readonly string[];
   readonly retain: readonly string[];
   /** Exact peer generations whose identical effect committed with this publication. */
