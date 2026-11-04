@@ -178,7 +178,7 @@ function SummaryCell({
         compact ? "flex-[1_1_9rem] px-2" : "flex-[1_1_14rem] px-3",
       )}
     >
-      <h2 className="mb-1 text-xs font-medium text-muted-foreground md:mb-0.5">
+      <h2 className="mb-1 text-xs font-medium text-muted-foreground has-[>h2:only-child]:hidden md:mb-0.5">
         {title}
       </h2>
       <div data-summary-body>{children}</div>
