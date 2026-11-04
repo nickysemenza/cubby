@@ -1387,6 +1387,15 @@ verify unchanged source, ledger and attribution graphs. This API does not return
 the `replayed: true` flag used by direct `finance.commit_booking`; that writer has
 its own replay and current-lineage checks.
 
+Direct booking previews expose two category fields. `spendingCategoryId` is the
+resolved candidate category, while `categoryOverride` is the category input
+persisted on a newly created Expense. Preserve both fields in the commit request.
+A null override stores no Expense category override; bare Purchase creation also
+leaves its category null. The Expense's effective category may inherit from its
+context or remain Uncategorized, so the preview's candidate label does not prove
+the resulting classification. Verify it through the owning category resolution
+after booking. `link_existing` does not rewrite existing categories.
+
 Source aggregate creation defaults ordinary purchases to `materials` and fees
 to `services`. Optional `booking.costType` in statement review chooses
 `materials`, `tools` or `services` for a new aggregate Expense; its draft control
