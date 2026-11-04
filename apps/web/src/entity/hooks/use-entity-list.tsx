@@ -15,6 +15,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { browserEntityDefinition, entities } from "~/entity/entities";
+import {
+  type GroupDrillContext,
+  type GroupSummaryModel,
+  groupPathFilters,
+  groupRootField,
+  withGroupFilters,
+} from "~/entity/entity-list/group-drill-down";
 import type { ListReadProjection } from "~/entity/entity-list/list-read-demand";
 import {
   getEntityFilters,
@@ -23,8 +30,6 @@ import {
 } from "~/entity/filter-manifest";
 import {
   buildFiltersFromManifest,
-  FILTER_EXACT,
-  FILTER_NONE,
   filterGetterFromColumnFilters,
   hideSectionValues,
   summarizeListState,
@@ -222,6 +227,8 @@ export interface UseEntityListOptions<
    * grouping fixed by the caller.
    */
   onGroupByChange?: (key: string | null) => void;
+  /** Read only counts and group summaries (page size 0), for Pivot. */
+  summaryOnly?: boolean;
   tree?: EntityListTreeConfig<TData, TRow>;
   /**
    * Nest under the entity's declared `list.tree` on the server: page the
@@ -262,6 +269,8 @@ export interface UseEntityListReturn<
   sums: Record<string, number> | undefined;
   totalLabels: Record<string, string> | undefined;
   inspection: ReturnType<typeof useEntityPreview>;
+  /** Present once a grouped read lands. */
+  groupSummary: GroupSummaryModel | undefined;
 }
 
 type FlatEntityListOptions<
@@ -317,17 +326,27 @@ function GroupMetricValue({
   metric: { label: string; format: string };
   value: NonNullable<ListGroupSummary["metrics"]>[string];
 }) {
+  const money =
+    metric.format === "currency" || metric.format === "signedCurrency";
+  const amount = (number: number) =>
+    money ? (
+      <CurrencyValue value={number} interactive={false} tone={false} />
+    ) : (
+      formatCount(number)
+    );
+  // The mean over records with a value; absent values are not zeros.
+  const average =
+    value.sum !== null && value.presentCount > 1
+      ? value.sum / value.presentCount
+      : null;
   return (
     <span
       className="inline-flex items-center gap-1"
       title={`${metric.label}: ${value.presentCount} of ${value.totalCount} records have a value`}
     >
-      {value.sum === null ? (
-        "–"
-      ) : metric.format === "currency" || metric.format === "signedCurrency" ? (
-        <CurrencyValue value={value.sum} interactive={false} tone={false} />
-      ) : (
-        formatCount(value.sum)
+      {value.sum === null ? "–" : amount(value.sum)}
+      {average !== null && (
+        <span className="text-muted-foreground">avg {amount(average)}</span>
       )}
       {value.coverage !== null && value.coverage < 1 && (
         <span className="text-muted-foreground">partial</span>
@@ -401,6 +420,7 @@ export function useEntityList<
   hiddenFilterColumns,
   groupBy,
   onGroupByChange,
+  summaryOnly,
   tree,
   serverTree = false,
   nestToggle,
@@ -597,10 +617,12 @@ export function useEntityList<
     groupBy,
     nesting: serverTree ? ROOTS_SCOPE : undefined,
     resultMembership,
+    summaryOnly,
     // A counted page reports its unresolved membership, and only a result filter
     // has any. Counting filtered lists makes the footer's state exact: a number
     // when one applies, nothing otherwise. Unfiltered pages still defer the scan.
-    includeCount: Boolean(subject || scopeFilters || hasActiveFilter),
+    includeCount:
+      summaryOnly || Boolean(subject || scopeFilters || hasActiveFilter),
   });
 
   const {
@@ -619,29 +641,14 @@ export function useEntityList<
   );
   const groupConfig = useMemo((): GroupConfig | undefined => {
     if (!groupChoice || !groups) return undefined;
-    const fields = getEntityFilters(queryClient, entity);
-    const sectionFilter = (
-      group: ListGroupSummary,
-      depth = group.path.length - 1,
-    ) => {
-      const dimension = groupBy?.[depth];
-      const choice = metadata.listFields.grouping.find(
-        (entry) => entry.key === dimension?.key,
-      );
-      const filter = dimension?.bucket ? null : choice?.filter;
-      const spec = filter
-        ? fields.find((entry) => entry.columnId === filter.columnId)
-        : undefined;
-      const key = group.path[depth];
-      return filter &&
-        spec &&
-        key !== undefined &&
-        (key !== FILTER_NONE || filter.noValue)
-        ? { filter, spec, key }
-        : undefined;
+    const drill: GroupDrillContext = {
+      groupBy,
+      grouping: metadata.listFields.grouping,
+      fields: getEntityFilters(queryClient, entity),
+      groups,
     };
     const canFilter = (group: ListGroupSummary) =>
-      group.path.every((_, depth) => sectionFilter(group, depth) !== undefined);
+      groupPathFilters(drill, group.path) !== undefined;
     return {
       choice: groupChoice,
       groups,
@@ -663,35 +670,16 @@ export function useEntityList<
         }),
       canFilter,
       onFilter: (group) => {
-        if (!canFilter(group)) return;
-        setColumnFilters((previous) => {
-          let next = previous;
-          group.path.forEach((_, depth) => {
-            const field = sectionFilter(group, depth);
-            if (!field) return;
-            const summary = groups.find(
-              (entry) =>
-                entry.key === JSON.stringify(group.path.slice(0, depth + 1)),
-            );
-            next = [
-              ...next.filter(({ id }) => id !== field.filter.columnId),
-              {
-                id: field.filter.columnId,
-                value:
-                  field.spec.subtree && !summary?.subtree
-                    ? [field.key, FILTER_EXACT]
-                    : [field.key],
-              },
-            ];
-          });
-          return next;
-        });
+        const drilled = groupPathFilters(drill, group.path);
+        if (!drilled) return;
+        setColumnFilters((previous) => withGroupFilters(previous, drilled));
       },
       // Flat Exclude filters cannot hide just one nested path without also
       // hiding its value under other parents. Keep Hide at the root scope.
       hide: (group) => {
-        if (group.path.length !== 1) return undefined;
-        const field = sectionFilter(group);
+        if (group.path.length !== 1 || group.path[0] === undefined)
+          return undefined;
+        const field = groupRootField(drill, group.path[0]);
         if (!field) return undefined;
         const valueGroup = { ...group, key: field.key };
         if (hideSectionValues(field.spec, valueGroup, []) === undefined)
@@ -751,6 +739,37 @@ export function useEntityList<
     infiniteResult.memberships,
     queryClient,
     metadata,
+  ]);
+
+  const groupSummary = useMemo((): GroupSummaryModel | undefined => {
+    if (!groupBy?.length || !groups) return undefined;
+    const drill: GroupDrillContext = {
+      groupBy,
+      grouping: metadata.listFields.grouping,
+      fields: getEntityFilters(queryClient, entity),
+      groups,
+    };
+    return {
+      groupBy,
+      groups,
+      margins: infiniteResult.margins ?? [],
+      totalCount,
+      drillFilters: (path) => groupPathFilters(drill, path),
+      drill: (path) => {
+        const drilled = groupPathFilters(drill, path);
+        if (drilled)
+          setColumnFilters((previous) => withGroupFilters(previous, drilled));
+      },
+    };
+  }, [
+    entity,
+    groupBy,
+    groups,
+    infiniteResult.margins,
+    metadata,
+    queryClient,
+    setColumnFilters,
+    totalCount,
   ]);
 
   const serverTotals = useMemo(
@@ -1128,5 +1147,6 @@ export function useEntityList<
     resultMembership,
     setResultMembership,
     inspection,
+    groupSummary,
   };
 }

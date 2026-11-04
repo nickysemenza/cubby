@@ -11,6 +11,7 @@ import {
   buildPaginatedResponse,
   DEFAULT_PAGE_SIZE,
   listGroupSummarySchema,
+  listGroupMarginSchema,
   listGroupMembershipSchema,
   type ListGroupSummary,
   type ListGroupBy,
@@ -527,6 +528,13 @@ const buildEntityOperations = <
                         .parse(mediaPage.incompleteSums)
                     : undefined,
                 ),
+                margins:
+                  "margins" in mediaPage
+                    ? z
+                        .array(listGroupMarginSchema)
+                        .optional()
+                        .parse(mediaPage.margins)
+                    : undefined,
                 memberships:
                   "memberships" in mediaPage
                     ? z

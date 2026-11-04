@@ -89,9 +89,12 @@ const listFields = {
       pageSize: z
         .number()
         .int()
-        .min(1)
+        .min(0)
         .max(MAX_PAGE_SIZE)
-        .default(DEFAULT_PAGE_SIZE),
+        .default(DEFAULT_PAGE_SIZE)
+        .describe(
+          "Rows per page; 0 with groupBy returns only counts and group summaries",
+        ),
     })
     .optional(),
   groupBy: listGroupByDimensionsSchema.optional(),
@@ -107,12 +110,14 @@ const listFields = {
 const resultDetail = mcpResultDetail;
 const resultDetailFields = z.object(mcpResultDetailFields);
 const mcpListPagination = z
-  .object(
-    mcpPaginationFields({
+  .object({
+    ...mcpPaginationFields({
       defaultPageSize: DEFAULT_PAGE_SIZE,
       maxPageSize: MAX_PAGE_SIZE,
     }),
-  )
+    // The entity list shares the kernel's summary-only page size 0.
+    pageSize: listFields.pagination.unwrap().shape.pageSize,
+  })
   .default({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE });
 
 const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(

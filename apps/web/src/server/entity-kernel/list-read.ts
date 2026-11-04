@@ -155,6 +155,7 @@ export function defineListOperations<
             result.incompleteSums,
           ),
           groups: result.groups,
+          margins: result.margins,
           memberships: result.memberships,
           membershipCount: result.membershipCount,
         }),

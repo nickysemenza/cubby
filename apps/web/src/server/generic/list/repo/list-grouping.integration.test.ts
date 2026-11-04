@@ -628,6 +628,29 @@ describe("expanded grouped list memberships", () => {
       { id: first.id, path: ["durable", "B"] },
       { id: second.id, path: ["durable", FILTER_NONE] },
     ]);
+    // A summary-only read (page size 0) keeps grouping and returns no rows.
+    // With the multi-valued dimension first, the column margin counts the
+    // record holding A and B once, where summing the column's cells gives 3.
+    const summary = await executeEntity(kernel(), {
+      action: "list",
+      entity: "product",
+      filters: { ids: [first.id, second.id] },
+      groupBy: [{ key: "tags" }, { key: "kind" }],
+      pagination: { pageIndex: 0, pageSize: 0 },
+    });
+    if (summary.action !== "list") throw new Error("expected list");
+    expect(summary.items).toEqual([]);
+    expect(summary.meta).toMatchObject({
+      pageSize: 0,
+      hasNextPage: false,
+      totalCount: 2,
+    });
+    expect(
+      summary.meta.groups?.filter(({ path }) => path.length === 2),
+    ).toHaveLength(3);
+    expect(summary.meta.margins).toEqual([
+      { dimensions: [1], path: ["durable"], count: 2 },
+    ]);
   });
 
   it("expands multiple references in SQL and preserves unassigned records", async () => {

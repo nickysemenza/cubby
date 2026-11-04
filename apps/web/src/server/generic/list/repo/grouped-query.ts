@@ -1,5 +1,6 @@
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import {
+  listGroupMarginSchema,
   listGroupMembershipSchema,
   listGroupSummarySchema,
 } from "@cubby/schemas/pagination";
@@ -18,7 +19,12 @@ const resultSchema = z.object({
   membershipCount: z.number().int().nonnegative(),
   memberships: z.array(listGroupMembershipSchema),
   groups: z.array(listGroupSummarySchema),
+  margins: z.array(listGroupMarginSchema),
 });
+
+/** The non-prefix dimension combinations a pivot's totals read. */
+const marginDimensions = (depth: number): number[][] =>
+  depth === 3 ? [[1], [0, 2]] : depth === 2 ? [[1]] : [];
 
 /** Page expanded SQL memberships, then hydrate each selected canonical root once. */
 export async function readGroupedQuery(input: {
@@ -110,6 +116,21 @@ export async function readGroupedQuery(input: {
     }),
     sql` UNION ALL `,
   );
+  // Distinct roots per combination, like prefixes: a record holding several
+  // values in another dimension still counts once in its column total.
+  const marginSets = marginDimensions(groups.length);
+  const margins = marginSets.length
+    ? sql.join(
+        marginSets.map((dimensions) => {
+          const parts = dimensions.map(
+            (dimension) => sql`path[${sql.raw(String(dimension + 1))}]`,
+          );
+          const key = sql`ARRAY[${sql.join(parts, sql`, `)}]::text[]`;
+          return sql`SELECT ${sql.raw(`'${JSON.stringify(dimensions)}'`)}::jsonb AS dimensions, ${key} AS path, count(DISTINCT id)::int AS count FROM memberships GROUP BY ${key}`;
+        }),
+        sql` UNION ALL `,
+      )
+    : sql`SELECT NULL::jsonb AS dimensions, NULL::text[] AS path, 0 AS count WHERE false`;
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON keys name the grouping response contract.
   const relation = sql`(
     WITH expanded(id, code, path, labels, subtrees, ordinal${extraColumns}) AS (${expanded}),
@@ -128,6 +149,7 @@ export async function readGroupedQuery(input: {
         bool_or(subtree) AS subtree, min(ordinal) AS ordinal, ${metricObject} AS metrics
       FROM prefixes GROUP BY path, labels[cardinality(path)]
     ),
+    margins AS (${margins}),
     population AS (SELECT count(DISTINCT id)::int AS count, count(*)::int AS membership_count FROM memberships),
     page AS (SELECT * FROM memberships ORDER BY ordinal LIMIT ${input.limit} OFFSET ${input.offset})
     SELECT jsonb_build_object(
@@ -141,7 +163,8 @@ export async function readGroupedQuery(input: {
         'fraction', s.count::double precision / nullif(coalesce(parent.count, population.count), 0),
         'overlapping', (SELECT sum(sibling.count) FROM summaries sibling WHERE sibling.path[1:cardinality(sibling.path)-1] = s.path[1:cardinality(s.path)-1] AND cardinality(sibling.path) = cardinality(s.path)) > coalesce(parent.count, population.count),
         'subtree', s.subtree, 'metrics', s.metrics
-      ) ORDER BY s.ordinal, cardinality(s.path)) FROM summaries s LEFT JOIN summaries parent ON parent.path = s.path[1:cardinality(s.path)-1]), '[]'::jsonb)
+      ) ORDER BY s.ordinal, cardinality(s.path)) FROM summaries s LEFT JOIN summaries parent ON parent.path = s.path[1:cardinality(s.path)-1]), '[]'::jsonb),
+      'margins', coalesce((SELECT jsonb_agg(jsonb_build_object('dimensions', m.dimensions, 'path', m.path, 'count', m.count)) FROM margins m), '[]'::jsonb)
     ) AS payload FROM population
   ) grouped_query`;
   const [row] = await unwrapDb(db)

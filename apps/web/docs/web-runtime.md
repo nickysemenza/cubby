@@ -401,6 +401,10 @@ Lexical search still omits the ordinary default sort so relevance remains author
 
 Every entity page reads complete rows, counts with membership completeness,
 full-filter totals and canonical `fields` envelopes in one `entity.list` request.
+The Pivot view sends that same request with page size 0 and its `groupBy`,
+reading counts, `meta.groups` and `meta.margins` without rows; it adds no
+summary operation. Its placeholder from earlier filters or dimensions renders
+as loading, never as the current matrix.
 When `meta.unresolvedCount` is positive, the displayed count covers known matches;
 the list status strip explains the incomplete count and offers the unresolved
 records under the same filters. Changing `resultMembership` changes the query

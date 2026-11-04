@@ -174,6 +174,7 @@ function applyView(
   const listSearch = {
     ...(view.view ? { view: view.view } : {}),
     ...(view.groupBy ? { groupBy: view.groupBy } : {}),
+    ...(view.share ? { share: view.share } : {}),
   };
   if (Object.keys(listSearch).length > 0) onApplyListSearch?.(listSearch);
   onResetPage?.();

@@ -82,6 +82,8 @@ export interface ViewDefinition {
   view?: string;
   /** The `model.grouping` choice (`?groupBy=`) the saved view opens with. */
   groupBy?: ListGroupBy[];
+  /** The Pivot cell share (`?share=`) the saved view opens with. */
+  share?: "count" | "row" | "column" | "total";
   /** A shortcut on another surface (the home "Your views" row). */
   pin?: { surface: "home"; order: number };
 }
@@ -127,6 +129,7 @@ export const toViewDefinition = (view: DeclaredView): ViewDefinition => {
   if (view.view) definition.view = view.view;
   if (view.groupBy)
     definition.groupBy = view.groupBy.map((group) => ({ ...group }));
+  if ("share" in view && view.share) definition.share = view.share;
   if (view.pin) definition.pin = { ...view.pin };
   return definition;
 };

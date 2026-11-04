@@ -128,9 +128,16 @@ export const renderSearchArtifacts = (
           entity.inspector.detail.sections.some(
             (section) => section.kind === "timeline",
           ));
+      // Pivot is built in, not declared: any list with two groupable
+      // choices offers it beside its declared views (PIVOT_VIEW_ID).
+      const groupKeys = entity.listFields.grouping
+        .filter(({ reason }) => reason === null)
+        .map(({ key }) => key);
+      const pivot = groupKeys.length >= 2;
+      const viewChoices = [...viewIds, ...(pivot ? ["pivot"] : [])];
       const viewField =
-        viewIds.length > 1
-          ? `view:z.enum(${JSON.stringify([...viewIds, ...viewAliases])}).optional().catch(undefined),\n`
+        viewChoices.length > 1
+          ? `view:z.enum(${JSON.stringify([...viewChoices, ...viewAliases])}).optional().catch(undefined),\n`
           : "";
       const slotFields = slotKeys
         .map((key) => `${JSON.stringify(key)}:urlStringParam,`)
@@ -141,9 +148,6 @@ export const renderSearchArtifacts = (
       // The nested/flat switch and the Group by choice are URL state, so a
       // reload or shared link keeps the presentation; absent is the default.
       const nestToggle = entity.inspector.list.tree?.toggle === true;
-      const groupKeys = entity.listFields.grouping
-        .filter(({ reason }) => reason === null)
-        .map(({ key }) => key);
       const grouped = groupKeys.length > 0;
       const presentationFields = [
         ...(nestToggle
@@ -152,6 +156,11 @@ export const renderSearchArtifacts = (
         ...(grouped
           ? [
               `groupBy:z.array(z.object({key:z.enum(${JSON.stringify(groupKeys)}),level:z.number().int().positive().optional(),bucket:z.enum(["day","week","month","quarter","year"]).optional()})).max(3).optional().catch(undefined),`,
+            ]
+          : []),
+        ...(pivot
+          ? [
+              'share:z.enum(["count","row","column","total"]).optional().catch(undefined),',
             ]
           : []),
       ].join("\n");
@@ -163,11 +172,12 @@ export const renderSearchArtifacts = (
         ),
         ...tableKeys,
         ...(dialog ? ["create"] : []),
-        ...(viewIds.length > 1 ? ["view"] : []),
+        ...(viewChoices.length > 1 ? ["view"] : []),
         ...slotKeys,
         ...(timeline ? timelineKeys : []),
         ...(nestToggle ? ["nest"] : []),
         ...(grouped ? ["groupBy"] : []),
+        ...(pivot ? ["share"] : []),
       ];
       if (new Set(keys).size !== keys.length)
         throw new EntityDeclarationError(

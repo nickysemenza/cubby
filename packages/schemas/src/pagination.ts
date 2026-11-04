@@ -312,6 +312,24 @@ export const listGroupSummarySchema = z
 export type ListGroupSummary = z.infer<typeof listGroupSummarySchema>;
 
 /**
+ * A distinct canonical count over a non-prefix combination of group
+ * dimensions: each column value alone (`[1]`) and, with three dimensions,
+ * each row and sub-row pair (`[0, 2]`). Prefix summaries cannot supply these
+ * when a dimension holds several values per record, because summing cells
+ * then counts a record once per cell.
+ */
+export const listGroupMarginSchema = z
+  .object({
+    /** Zero-based group dimensions, in request order. */
+    dimensions: z.array(z.number().int().min(0).max(2)).min(1).max(2),
+    /** One group key per dimension, encoded like `ListGroupSummary.path`. */
+    path: z.array(z.string()).min(1).max(2),
+    count: z.number().int().positive(),
+  })
+  .meta({ id: "ListGroupMargin" });
+export type ListGroupMargin = z.infer<typeof listGroupMarginSchema>;
+
+/**
  * A tree list's scope (`list.tree`), applied after the filters: every
  * matching row (`flat`, the default), the roots — rows whose parent is null
  * or does not itself match — or one parent's matching children. Rows in the
@@ -351,6 +369,7 @@ export function buildPaginatedResponse<T>(
     /** The declared list totals as server-worded text, keyed by total id. */
     totalLabels?: Record<string, string>;
     groups?: ListGroupSummary[];
+    margins?: ListGroupMargin[];
     memberships?: ListGroupMembership[];
     membershipCount?: number;
   } = {},
@@ -364,6 +383,8 @@ export function buildPaginatedResponse<T>(
       (pagination.pageIndex + 1) * pagination.pageSize <
       (aggregates.membershipCount ?? count);
   }
+  // A zero-size page never advances its offset, so it has no continuation.
+  if (pagination.pageSize === 0) hasNextPage = false;
   const meta: PaginatedMeta = {
     pageIndex: pagination.pageIndex,
     pageSize: pagination.pageSize,
@@ -382,6 +403,7 @@ export function buildPaginatedResponse<T>(
     meta.unresolvedCount = aggregates.unresolvedCount;
   if (aggregates.totalLabels) meta.totalLabels = aggregates.totalLabels;
   if (aggregates.groups) meta.groups = aggregates.groups;
+  if (aggregates.margins) meta.margins = aggregates.margins;
   if (aggregates.memberships) meta.memberships = aggregates.memberships;
   if (aggregates.membershipCount !== undefined)
     meta.membershipCount = aggregates.membershipCount;
@@ -395,7 +417,8 @@ export function buildPaginatedResponse<T>(
 export const paginatedMetaSchema = z
   .object({
     pageIndex: z.number().int().nonnegative(),
-    pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
+    /** Zero for a summary-only grouped read: counts and groups, no rows. */
+    pageSize: z.number().int().nonnegative().max(MAX_PAGE_SIZE),
     totalCount: z.number().int().nonnegative().optional(),
     hasNextPage: z.boolean(),
     unresolvedCount: z.number().int().nonnegative().optional(),
@@ -403,6 +426,7 @@ export const paginatedMetaSchema = z
     sums: z.record(z.string(), z.number()).optional(),
     totalLabels: z.record(z.string(), z.string()).optional(),
     groups: z.array(listGroupSummarySchema).optional(),
+    margins: z.array(listGroupMarginSchema).optional(),
     memberships: z.array(listGroupMembershipSchema).optional(),
     membershipCount: z.number().int().nonnegative().optional(),
   })
