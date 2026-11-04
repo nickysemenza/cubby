@@ -157,7 +157,10 @@ it("changes card density without storing it in navigation and resets on remount"
   const grid = await screen.findByTestId("entity-card-grid");
   const card = await screen.findByRole("link", { name: productName });
   const standardWidth = card.getBoundingClientRect().width;
-  fireEvent.click(screen.getByRole("button", { name: /Products view:/i }));
+  fireEvent.click(screen.getByRole("button", { name: "Display" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: /Products view:/i }),
+  );
   fireEvent.click(
     await screen.findByRole("menuitem", { name: "Compact view" }),
   );
@@ -208,7 +211,8 @@ it("fits populated declared money, count, date and identifier columns", async ()
   await waitFor(() => {
     expect(width("expenseCount")).toBeLessThanOrEqual(40);
     expect(width("cost")).toBeLessThanOrEqual(80);
-    expect(width("purchaseDate")).toBeLessThanOrEqual(88);
+    // One line at 24px rows: "Sep 3 · ’25 · 1y ago".
+    expect(width("purchaseDate")).toBeLessThanOrEqual(120);
     expect(width("primaryGtin")).toBeLessThanOrEqual(88);
   });
   const dateLines = row?.querySelectorAll(
@@ -236,6 +240,12 @@ it("keeps quality beside identity and emits its server sort", async () => {
   await page.viewport(1440, 900);
   const state = await mount("/products?view=table");
   await screen.findByRole("link", { name: productName });
+  // The fixture has no scores, so Quality starts among the "+N empty" columns.
+  fireEvent.click(
+    await screen.findByRole("button", { name: /empty columns hidden/ }),
+  );
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Quality" }));
+  await screen.findByRole("button", { name: "Sort by Quality" });
   const ids = Array.from(
     document.querySelectorAll("thead th[data-column-id]"),
     (header) => header.getAttribute("data-column-id"),

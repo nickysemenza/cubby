@@ -890,6 +890,7 @@ export function MobileCardView<TItem extends RowData>({
               onHide={gItem.section.onHide}
               actions={gItem.section.actions}
               aside={gItem.section.aside}
+              labelledTotals={gItem.section.columnTotals}
             />
           </VirtualRow>
         );

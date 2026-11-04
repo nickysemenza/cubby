@@ -1472,7 +1472,7 @@ function FilterSearchField({
     <div
       className={cn(
         "relative flex items-center",
-        dense ? "h-7.5 min-w-40 flex-1" : "h-9 flex-1",
+        dense ? "h-(--input-height) min-w-40 flex-1" : "h-9 flex-1",
       )}
     >
       <MagnifyingGlassIcon
@@ -1492,7 +1492,9 @@ function FilterSearchField({
         aria-label={label}
         aria-keyshortcuts={dense ? "/" : undefined}
         className={
-          dense ? "h-7.5 pr-7 pl-7 text-sm md:text-sm" : "h-9 pr-3 pl-8"
+          dense
+            ? "h-(--input-height) pr-7 pl-7 text-sm md:text-sm"
+            : "h-9 pr-3 pl-8"
         }
       />
       {value && onClear ? (
@@ -1610,7 +1612,7 @@ export function FilterBar({
                 variant="outline"
                 size="sm"
                 aria-label="Filters"
-                className="h-7.5 shrink-0 gap-1.5 text-sm"
+                className="h-(--input-height) shrink-0 gap-1.5 text-sm"
               />
             }
           >

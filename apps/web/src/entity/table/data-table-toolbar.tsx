@@ -4,20 +4,20 @@ import { BookmarkIcon } from "@phosphor-icons/react/dist/csr/Bookmark";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
-import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import { RowsIcon } from "@phosphor-icons/react/dist/csr/Rows";
 import { SortAscendingIcon } from "@phosphor-icons/react/dist/csr/SortAscending";
 import { SortDescendingIcon } from "@phosphor-icons/react/dist/csr/SortDescending";
 import { useQueryClient } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { usePageWorkbenchTarget } from "~/entity/page/page";
+import { defaultSortFor } from "~/entity/sortable-fields";
 import { cn } from "~/lib/utils";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Toolbar } from "~/ui/layout";
-import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -40,7 +40,9 @@ import type { CubbyTable as Table } from "../../ui/data-table/table-features";
 import TableLayoutCustomizer from "../../ui/data-table/table-layout-customizer";
 import { mobileColumnLabel } from "../../ui/data-table/table-meta";
 import { SavedViewTabs, TableSavedViewsMenuItems } from "./data-table-views";
+import { DisplayMenu, DisplayRow } from "./display-menu";
 import { LedgerFilters } from "./ledger-filters";
+import { useListQuery } from "./list-query-context";
 import { ProblemWorklistStatus } from "./problem-worklist";
 
 interface DataTableToolbarProps<TData extends RowData> {
@@ -107,77 +109,49 @@ function SavedViewsSubmenu<TData extends RowData>({
 }
 
 /**
- * The page-mode workbench's `Actions ▾`: table-layout customization and
- * saved views, plus whatever the table owner (`RTable`) folds in through
- * `extra` (inspector/grouped toggles and the list's bulk verbs, disabled at
- * rest). The live selection bar floats below the table, leaving query tools
- * available while rows are selected.
+ * The page-mode workbench's `Actions ▾`: saved views and list commands, plus
+ * whatever the table owner (`RTable`) folds in through `extra` (inspector/grouped
+ * toggles and the list's bulk verbs, disabled at rest). The live selection bar
+ * floats below the table, leaving query tools available while rows are selected.
  */
 function ActionsMenu<TData extends RowData>({
   table,
   entity,
-  showColumns,
+  commands,
   extra,
 }: {
   table: Table<TData>;
   entity?: Entity;
-  showColumns: boolean;
+  commands?: ReactNode;
   extra?: ReactNode;
 }) {
-  const [columnsOpen, setColumnsOpen] = useState(false);
-  const isCustomized = isTableLayoutCustomized(
-    table.state,
-    table.options.meta?.defaultLayout,
-  );
   const hasViews = viewsForEntity(useQueryClient(), entity).length > 0;
-
+  if (!hasViews && !commands && !extra) return null;
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="sm"
-              className="relative h-7.5 shrink-0 text-sm"
-            />
-          }
-        >
-          Actions
-          <CaretDownIcon />
-          {isCustomized && (
-            <span
-              aria-hidden
-              className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary"
-            />
-          )}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          {showColumns && (
-            <DropdownMenuItem onClick={() => setColumnsOpen(true)}>
-              <GearSixIcon />
-              Columns…
-            </DropdownMenuItem>
-          )}
-          {hasViews && <SavedViewsSubmenu table={table} entity={entity} />}
-          {extra && (
-            <>
-              <DropdownMenuSeparator />
-              {extra}
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {showColumns && (
-        <Overlay
-          open={columnsOpen}
-          onOpenChange={setColumnsOpen}
-          title="Columns"
-        >
-          <TableLayoutCustomizer table={table} />
-        </Overlay>
-      )}
-    </>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-(--input-height) shrink-0 text-sm"
+          />
+        }
+      >
+        Actions
+        <CaretDownIcon />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        {hasViews && <SavedViewsSubmenu table={table} entity={entity} />}
+        {commands}
+        {extra && (
+          <>
+            {(hasViews || commands) && <DropdownMenuSeparator />}
+            {extra}
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -202,7 +176,7 @@ function SortMenu<TData extends RowData>({ table }: { table: Table<TData> }) {
             variant="outline"
             size="sm"
             aria-label={`Sort: ${label}${active ? (active.desc ? ", descending" : ", ascending") : ""}`}
-            className="h-7.5 shrink-0 text-sm"
+            className="h-(--input-height) max-w-48 shrink-0 text-sm"
           />
         }
       >
@@ -298,7 +272,7 @@ export function GroupMenu<TData extends RowData>({
           <Button
             variant="outline"
             size="sm"
-            className="h-7.5 text-sm"
+            className="h-(--input-height) text-sm"
             aria-label={`Group: ${active?.label ?? "None"}`}
           />
         }
@@ -371,6 +345,35 @@ function QueryTierFieldset<TData extends RowData>({
 }) {
   const actionsTarget = usePageWorkbenchTarget("actions");
   const tabsTarget = usePageWorkbenchTarget("tabs", isPage);
+  const listQuery = useListQuery(entity);
+  const queryClient = useQueryClient();
+  const defaultSort = entity ? defaultSortFor(queryClient, entity) : undefined;
+  const customized =
+    isTableLayoutCustomized(table.state, table.options.meta?.defaultLayout) ||
+    table.state.sorting.some((sort) => sort.id !== defaultSort) ||
+    Boolean(table.options.meta?.grouping?.active);
+  const hasSort = sortableColumns(table).length > 0;
+  // A phone's Filter sheet already carries sort and columns; Display keeps layout
+  // and grouping there, and is absent when the list offers neither.
+  const display = !isPage ? null : isMobileFilterTier ? (
+    listQuery?.displaySections ? (
+      <DisplayMenu>{listQuery.displaySections}</DisplayMenu>
+    ) : null
+  ) : (
+    <DisplayMenu
+      customized={customized}
+      columns={
+        showViewOptions ? <TableLayoutCustomizer table={table} /> : undefined
+      }
+    >
+      {listQuery?.displaySections}
+      {hasSort && (
+        <DisplayRow label="Sort">
+          <SortMenu table={table} />
+        </DisplayRow>
+      )}
+    </DisplayMenu>
+  );
   const menu =
     isPage && !isMobileFilterTier ? (
       <fieldset
@@ -380,7 +383,7 @@ function QueryTierFieldset<TData extends RowData>({
         <ActionsMenu
           table={table}
           entity={entity}
-          showColumns={showViewOptions}
+          commands={listQuery?.actionsMenuItems}
           extra={actionsMenuExtra}
         />
       </fieldset>
@@ -410,7 +413,7 @@ function QueryTierFieldset<TData extends RowData>({
             switches={isMobileFilterTier ? switches : undefined}
           />
         </div>
-        {isPage && !isMobileFilterTier && <SortMenu table={table} />}
+        {display}
         {!isPage && !isMobileFilterTier && <GroupMenu table={table} />}
         {isPage && !isMobileFilterTier && tabsTarget
           ? createPortal(
@@ -442,6 +445,7 @@ export function DataTableToolbar<TData extends RowData>({
   switches,
 }: DataTableToolbarProps<TData>) {
   const workbenchTarget = usePageWorkbenchTarget();
+  const hydrated = useHydrated();
   const isPage = variant === "page";
   const shouldPortal = portalWorkbenchUtilities && workbenchTarget !== null;
 
@@ -479,6 +483,10 @@ export function DataTableToolbar<TData extends RowData>({
       switches={switches}
     />
   );
+
+  // Before hydration the band's slots cannot be found. Rendering the toolbar in
+  // place then moving it pushed the table down by a row and back on every load.
+  if (portalWorkbenchUtilities && !hydrated) return null;
 
   if (shouldPortal) {
     const utilityClass =

@@ -8,12 +8,13 @@ import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import { useEntityMetadata } from "~/entity/metadata";
-import { ExpenseSummaryStrip } from "~/features/expense/expense-summary-strip";
 import {
   expenseOrderIdColumn,
   expenseVendorColumn,
 } from "~/features/project/shared";
 import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
+import { formatCurrency } from "~/lib/number-format";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -80,25 +81,37 @@ function useExpenseFacetHints(filters: ExpenseFilters) {
 
 /**
  * `currentFilters` is the ledger query's own filter object — including the
- * URL-only scopes that never enter the table's column filters — so the totals
- * row reports on exactly the rows below it.
+ * URL-only scopes that never enter the table's column filters — so the footer
+ * line reports on exactly the rows above it. Prior values stay, dimmed by the
+ * footer, while the next summary loads; a failed read says so.
  */
 function ExpenseLedgerSummary({ filters }: { filters: ExpenseFilters }) {
   const summaryQuery = useQuery({
     ...expense.spendSummary.queryOptions(filters),
     placeholderData: keepPreviousData,
   });
+  const summary = summaryQuery.data;
+  const prefix =
+    filters.projectId || filters.projectPresenceFilter ? "Allocated " : "";
+  const money = (value: number | undefined) =>
+    value !== undefined
+      ? formatCurrency(value)
+      : summaryQuery.isError
+        ? "Unavailable"
+        : "…";
   return (
-    <ExpenseSummaryStrip
-      basis={
-        filters.projectId || filters.projectPresenceFilter
-          ? "allocation"
-          : "ledger"
-      }
-      loading={summaryQuery.isPending || summaryQuery.isPlaceholderData}
-      summary={summaryQuery.isPlaceholderData ? undefined : summaryQuery.data}
-      className="mb-4"
-    />
+    <div className="whitespace-nowrap [&_dl]:flex-nowrap [&_dl]:text-xs">
+      <KeyNumbers
+        layout="inline"
+        label="Spend summary"
+        items={[
+          { label: `${prefix}Actual`, value: money(summary?.actual) },
+          { label: `${prefix}Committed`, value: money(summary?.committed) },
+          { label: `${prefix}Credits`, value: money(summary?.credits) },
+          { label: `${prefix}Net`, value: money(summary?.net) },
+        ]}
+      />
+    </div>
   );
 }
 
@@ -163,7 +176,7 @@ export const expenseListOverride = defineListOverride<
     return {
       overrides,
       list,
-      above: ({ currentFilters }) => (
+      footerTotals: ({ currentFilters }) => (
         <ExpenseLedgerSummary filters={currentFilters} />
       ),
       useWorkbench: ({ currentFilters }) => ({

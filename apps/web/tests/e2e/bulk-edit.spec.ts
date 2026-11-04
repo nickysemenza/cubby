@@ -13,7 +13,11 @@ import {
   seedUnlinkedExpensePrerequisite,
 } from "./fixtures/catalog";
 import { createEntityFixture, createEntityFixtures } from "./fixtures/core";
-import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  uniqueName,
+  clickBulkAction,
+} from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 /**
@@ -53,10 +57,7 @@ test("task board multi-select bulk-edits status without touching other fields", 
   await session.send("Emulation.setCPUThrottlingRate", { rate: 6 });
   const dialog = page.getByRole("dialog", { name: /^Bulk edit \d+ / });
   try {
-    await page
-      .locator("[data-bulk-action-bar]")
-      .getByRole("button", { name: "Bulk edit...", exact: true })
-      .click();
+    await clickBulkAction(page, "Bulk edit...");
     await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
     await page.getByRole("option", { name: "Done", exact: true }).click();
   } finally {
@@ -111,10 +112,7 @@ test("plantings list bulk-edits status finished plus a date in one write", async
     .getByRole("checkbox", { name: "Select row" })
     .click();
 
-  await page
-    .locator("[data-bulk-action-bar]")
-    .getByRole("button", { name: "Bulk edit...", exact: true })
-    .click();
+  await clickBulkAction(page, "Bulk edit...");
 
   const dialog = page.getByRole("dialog", { name: /^Bulk edit \d+ / });
   await expect(dialog.getByText("Bulk edit 1 Planting?")).toBeVisible();
@@ -163,10 +161,7 @@ async function openBulkEdit(page: Page, rowNames: string[]) {
       .getByRole("checkbox", { name: "Select row" })
       .check();
   }
-  await page
-    .locator("[data-bulk-action-bar]")
-    .getByRole("button", { name: "Bulk edit...", exact: true })
-    .click();
+  await clickBulkAction(page, "Bulk edit...");
   return page.getByRole("dialog", { name: /^Bulk edit \d+ / });
 }
 

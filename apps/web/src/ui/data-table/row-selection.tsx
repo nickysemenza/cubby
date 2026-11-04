@@ -26,6 +26,9 @@ export function reconcileRowSelection(
   return changed ? next : current;
 }
 
+/** 14px at 24px rows; the primitive's `after:` inset keeps the hit target. */
+const TABLE_CHECKBOX_CLASS = "size-3.5 [&_svg]:size-3!";
+
 function SelectColumnHeader<T extends RowData>({
   table,
 }: Pick<CubbyCellContext<T>, "table">) {
@@ -39,6 +42,7 @@ function SelectColumnHeader<T extends RowData>({
         }
         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
         aria-label="Select all"
+        className={TABLE_CHECKBOX_CLASS}
       />
     </div>
   );
@@ -63,6 +67,7 @@ function SelectColumnCell<T extends RowData>({
             })
           }
           aria-label="Select row"
+          className={TABLE_CHECKBOX_CLASS}
         />
       </div>
     )

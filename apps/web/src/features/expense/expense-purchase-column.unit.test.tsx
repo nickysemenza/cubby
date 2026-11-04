@@ -222,6 +222,11 @@ describe("expenses Purchase column", () => {
       },
     });
 
+    // Every loaded row is empty here, so the column starts under "+N empty".
+    fireEvent.click(
+      await screen.findByRole("button", { name: /empty columns hidden/ }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Purchase" }));
     const empty = await screen.findByText("(none)");
     fireEvent.pointerOver(empty, { pointerType: "mouse" });
     expect(screen.queryByRole("link")).toBeNull();

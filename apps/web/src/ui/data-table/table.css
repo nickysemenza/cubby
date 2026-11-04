@@ -32,7 +32,7 @@
   );
 }
 
-/* A painted hairline preserves the fixed cell frame's 32px height. */
+/* A painted hairline preserves the fixed cell frame's height. */
 [data-slot="table"] tr[data-cell-row] > td {
   background-image: linear-gradient(var(--hairline-soft), var(--hairline-soft));
   background-size: 100% 1px;
@@ -50,4 +50,79 @@
   > td[data-cell-selected]:has([data-overdue]) {
   outline: 1px solid var(--ring);
   outline-offset: -1px;
+}
+
+/*
+  The dense grid: 24px rows on a fine-pointer desktop. Everything here matches the
+  density block in styles.css, so 32px surfaces (coarse pointers, hosted native
+  workspaces) and phone cards keep their shipped geometry.
+*/
+@media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
+  :root:not([data-native-workspace]) {
+    /* One line: "Oct 13 · 3mo ago". The fit measures this same form. */
+    [data-stacked-value] {
+      display: flex;
+      align-items: baseline;
+      gap: 0.25rem;
+      white-space: nowrap;
+    }
+    [data-stacked-value] [data-stacked-line] {
+      display: inline;
+      line-height: 1rem;
+      flex: none;
+    }
+    [data-stacked-value] [data-stacked-line] + [data-stacked-line]::before {
+      content: "· ";
+    }
+  }
+}
+
+/*
+  Normal enum values read as a 6px dot and text; only exception tones keep a
+  filled pill, so tint means exception. Phone cards and hosted native workspaces
+  render outside this rule and keep their chips.
+*/
+@media (min-width: 48rem) {
+  :root:not([data-native-workspace]) {
+    [data-slot="table"] [data-enum-tone="quiet"] {
+      height: auto;
+      gap: 0.3125rem;
+      padding: 0;
+      border-width: 0;
+      background: transparent !important;
+      color: var(--foreground);
+      font-weight: 400;
+      overflow: visible;
+    }
+    [data-slot="table"] [data-enum-tone="quiet"]::before {
+      content: "";
+      flex: none;
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--enum-color);
+    }
+    [data-slot="table"] [data-enum-tone="quiet"] [data-enum-lead] {
+      display: none;
+    }
+  }
+}
+
+/*
+  Pinned boundaries appear only while something scrolls beneath them, and the
+  edge shadow is the scroller's cue that more columns sit that way. The pane sets
+  these attributes from its own scroll position (`useScrollEdges`).
+*/
+[data-scroll-edge-start] .table-pinned-boundary-start {
+  border-inline-end: 1px solid var(--brand-hairline);
+  box-shadow: 4px 0 8px -8px rgb(23 26 33 / 0.32);
+}
+[data-scroll-edge-end] .table-pinned-boundary-end {
+  border-inline-start: 1px solid var(--brand-hairline);
+  box-shadow: -4px 0 8px -8px rgb(23 26 33 / 0.32);
+}
+
+/* A transition keeps the prior rows and totals, dimmed, until the next arrive. */
+[data-table-pending] {
+  opacity: 0.55;
 }

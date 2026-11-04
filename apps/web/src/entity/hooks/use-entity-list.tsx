@@ -35,6 +35,7 @@ import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-r
 import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
 import { useEntityMetadata } from "~/entity/metadata";
 import { useProblemContinuation } from "~/entity/problems/problem-continuation";
+import { defaultSortFor } from "~/entity/sortable-fields";
 import type { RowLinkResolver } from "~/entity/table/column-helpers";
 import type { ServerListWorkbenchModel } from "~/entity/table/list-workbench";
 import { problemWorklistState } from "~/entity/table/problem-worklist";
@@ -308,6 +309,33 @@ function worklistColumnPresentation(
   };
 }
 
+/** One section total: a sum, with "partial" when some records have no value. */
+function GroupMetricValue({
+  metric,
+  value,
+}: {
+  metric: { label: string; format: string };
+  value: NonNullable<ListGroupSummary["metrics"]>[string];
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-1"
+      title={`${metric.label}: ${value.presentCount} of ${value.totalCount} records have a value`}
+    >
+      {value.sum === null ? (
+        "–"
+      ) : metric.format === "currency" || metric.format === "signedCurrency" ? (
+        <CurrencyValue value={value.sum} interactive={false} tone={false} />
+      ) : (
+        formatCount(value.sum)
+      )}
+      {value.coverage !== null && value.coverage < 1 && (
+        <span className="text-muted-foreground">partial</span>
+      )}
+    </span>
+  );
+}
+
 function buildMappingsMap<TRow extends BaseListRow>(
   data: TRow[],
   getMappings: ((item: TRow) => UnitMapping[]) | undefined,
@@ -405,9 +433,18 @@ export function useEntityList<
             : [],
         ),
         active: groupChoice?.key ?? null,
+        // A bucketed or levelled section summarizes its column; the rows still
+        // differ within it, so that column stays.
+        groupedColumnIds: (groupBy ?? []).flatMap((dimension) => {
+          if (dimension.bucket || dimension.level) return [];
+          const choice = metadata.listFields.grouping.find(
+            ({ key }) => key === dimension.key,
+          );
+          return choice?.filter ? [choice.filter.columnId] : [];
+        }),
         onChange: onGroupByChange,
       },
-    [metadata, groupChoice?.key, onGroupByChange],
+    [metadata, groupChoice?.key, groupBy, onGroupByChange],
   );
   const inspection = useEntityPreview(
     fixedPreviewEntity(entity, previewOptions),
@@ -510,9 +547,33 @@ export function useEntityList<
     initialColumnVisibility,
     ...worklistColumns,
   });
+  // Audit dates stay off the default roster, but a column someone chose to sort
+  // by must be on screen. The entity's own default order does not count: most
+  // lists open newest-first, which would put the date back on every one of them.
+  const entityDefaultSort = defaultSortFor(queryClient, entity);
+  const sortedAudit = tableState.sorting
+    .map(({ id }) => id)
+    .filter(
+      (id) =>
+        (id === "createdAt" || id === "updatedAt") &&
+        !(tableState.sorting.length === 1 && id === entityDefaultSort),
+    )
+    .join(",");
+  const columnVisibilityWithSort = useMemo(
+    () =>
+      sortedAudit
+        ? {
+            ...visibility.columnVisibility,
+            ...Object.fromEntries(
+              sortedAudit.split(",").map((id) => [id, true]),
+            ),
+          }
+        : visibility.columnVisibility,
+    [sortedAudit, visibility.columnVisibility],
+  );
   const requestedFields = useMemo(
-    () => readProjection?.(queryClient, entity, visibility.columnVisibility),
-    [entity, queryClient, readProjection, visibility.columnVisibility],
+    () => readProjection?.(queryClient, entity, columnVisibilityWithSort),
+    [entity, queryClient, readProjection, columnVisibilityWithSort],
   );
   const pageQueryOptions = useMemo(
     (): ListQueryOptionsFn<TFilters, TRow> =>
@@ -524,6 +585,10 @@ export function useEntityList<
   );
   const [resultMembership, setResultMembership] =
     useState<ListResultMembership>("known");
+  const primarySearchKey = metadata.summary.primarySearch?.key;
+  const hasActiveFilter = tableState.columnFilters.some(
+    (filter) => filter.id !== primarySearchKey,
+  );
   const infiniteResult = useInfiniteTableList<TFilters, TRow>({
     queryOptions: pageQueryOptions,
     requiredFields: requestedFields,
@@ -532,7 +597,10 @@ export function useEntityList<
     groupBy,
     nesting: serverTree ? ROOTS_SCOPE : undefined,
     resultMembership,
-    includeCount: Boolean(subject || scopeFilters),
+    // A counted page reports its unresolved membership, and only a result filter
+    // has any. Counting filtered lists makes the footer's state exact: a number
+    // when one applies, nothing otherwise. Unfiltered pages still defer the scan.
+    includeCount: Boolean(subject || scopeFilters || hasActiveFilter),
   });
 
   const {
@@ -657,44 +725,20 @@ export function useEntityList<
                 Overlapping
               </span>
             )}
-            {group.fraction !== null && (
-              <span
-                className="text-xs text-muted-foreground"
-                title={`${group.count} of ${group.parentCount} records ${group.path.length > 1 ? "in the parent group" : "matching the filters"}`}
-              >
-                {Math.round(group.fraction * 100)}% of records
-              </span>
-            )}
-            {metadata.listFields.metrics.map((metric) => {
-              const value = group.metrics?.[metric.key];
-              if (!value) return null;
-              return (
-                <span
-                  key={metric.key}
-                  className="inline-flex items-center gap-1 text-xs"
-                  title={`${metric.label}: ${value.presentCount} of ${value.totalCount} records have a value`}
-                >
-                  <span className="text-muted-foreground">{metric.label}</span>
-                  {value.sum === null ? (
-                    "–"
-                  ) : metric.format === "currency" ||
-                    metric.format === "signedCurrency" ? (
-                    <CurrencyValue
-                      value={value.sum}
-                      interactive={false}
-                      tone={false}
-                    />
-                  ) : (
-                    formatCount(value.sum)
-                  )}
-                  {value.coverage !== null && value.coverage < 1 && (
-                    <span className="text-muted-foreground">partial</span>
-                  )}
-                </span>
-              );
-            })}
           </>
         ),
+        columnTotals: metadata.listFields.metrics.flatMap((metric) => {
+          const value = group.metrics?.[metric.key];
+          return value
+            ? [
+                {
+                  columnId: metric.key,
+                  label: metric.label,
+                  node: <GroupMetricValue metric={metric} value={value} />,
+                },
+              ]
+            : [];
+        }),
       }),
     };
   }, [
@@ -760,12 +804,7 @@ export function useEntityList<
     subject: subject ? stableSubject : undefined,
     rowActionGuard: rowActionsGuard,
   });
-  const {
-    allColumns,
-    columnVisibility,
-    setColumnVisibility,
-    rowContentVersion,
-  } = presentation;
+  const { allColumns, setColumnVisibility, rowContentVersion } = presentation;
 
   // A declared filter no column hosts (a relation scope such as expenses'
   // `productId`) still gets a Filters-menu field. A scope the caller fixes
@@ -919,7 +958,10 @@ export function useEntityList<
     rowSelection: presentationState.listBulkActions.rowSelection,
     onRowSelectionChange:
       presentationState.listBulkActions.onRowSelectionChange,
-    columnVisibility,
+    // The declared roster is the default layout: a column hidden by default is
+    // not a customization, and Restore default returns to it.
+    initialColumnVisibility: visibility.initialColumnVisibility,
+    columnVisibility: columnVisibilityWithSort,
     onColumnVisibilityChange: setColumnVisibility,
     scrollRestorationId: entity,
     serverTotals,

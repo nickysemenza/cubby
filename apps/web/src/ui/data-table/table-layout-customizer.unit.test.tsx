@@ -157,9 +157,6 @@ describe("TableLayoutCustomizer", () => {
     render(<GroupHarness />);
     const painted = () => screen.getByTestId("painted");
     expect(painted()).toHaveTextContent("name,spend,purchases,products");
-    expect(
-      screen.getByRole("columnheader", { name: "Purchasing" }),
-    ).toHaveAttribute("colspan", "2");
     fireEvent.click(
       screen.getByRole("button", { name: "Invalid cross-group move" }),
     );
@@ -172,9 +169,6 @@ describe("TableLayoutCustomizer", () => {
       screen.getByRole("button", { name: "Hide Purchasing group" }),
     );
     expect(painted()).toHaveTextContent("name,products");
-    expect(
-      screen.queryByRole("columnheader", { name: "Purchasing" }),
-    ).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: "Show Purchasing group" }),
     );

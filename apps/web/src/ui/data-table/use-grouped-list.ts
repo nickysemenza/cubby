@@ -29,7 +29,16 @@ export interface GroupConfig {
   header?: (group: ListGroupSummary) => {
     aside?: ReactNode;
     actions?: ReactNode;
+    /** Totals the desktop band prints under their own columns. */
+    columnTotals?: readonly GroupColumnTotal[];
   };
+}
+
+/** One section total; a surface without that column prints it with its label. */
+export interface GroupColumnTotal {
+  columnId: string;
+  label: string;
+  node: ReactNode;
 }
 
 export interface GroupSection<T> {
@@ -47,6 +56,7 @@ export interface GroupSection<T> {
   onHide?: () => void;
   aside?: ReactNode;
   actions?: ReactNode;
+  columnTotals?: readonly GroupColumnTotal[];
 }
 
 /**

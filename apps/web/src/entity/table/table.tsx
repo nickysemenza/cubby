@@ -51,14 +51,16 @@ import { CellSelectionContext } from "../../ui/data-table/cell-selection-context
 import {
   columnOffsetValue,
   columnWidthValue,
-  spacerWidthValue,
 } from "../../ui/data-table/column-layout";
 import { DataTablePagination } from "../../ui/data-table/data-table-pagination";
 import {
   createRowActivityStore,
   RowActivityStoreContext,
 } from "../../ui/data-table/row-activity";
-import { SectionHeader } from "../../ui/data-table/section-header";
+import {
+  SectionHeader,
+  type SectionColumnTotal,
+} from "../../ui/data-table/section-header";
 import { collectTableEntityMediaRefs } from "../../ui/data-table/table-entity-media";
 import type {
   CubbyTable as ITable,
@@ -67,7 +69,10 @@ import type {
 import { isUnpaged } from "../../ui/data-table/table-features";
 import { TreeStatusRow } from "../../ui/data-table/tree-status-row";
 import { useDataTableController } from "../../ui/data-table/use-data-table-controller";
-import type { GroupConfig } from "../../ui/data-table/use-grouped-list";
+import type {
+  GroupColumnTotal,
+  GroupConfig,
+} from "../../ui/data-table/use-grouped-list";
 import { serverTreeStatusOf } from "../../ui/hooks/use-server-tree-children";
 import {
   SidePanelLayout,
@@ -84,7 +89,10 @@ import { DataTableToolbar } from "./data-table-toolbar";
 import { DesktopDataRow as DataRow } from "./desktop-data-row";
 import { TableEmptyState } from "./entity-empty-states";
 import { HeaderFilterEditor } from "./ledger-filters";
+import { useListQuery } from "./list-query-context";
 import { MobileListScreen } from "./mobile-list-screen";
+import { useRowContextMenu } from "./row-context-menu";
+import { TableFooterBar } from "./table-footer-bar";
 import TableHeaderLayout from "./table-header-layout";
 
 type DesktopPaneStyle = React.CSSProperties & {
@@ -109,12 +117,10 @@ function showMobileViewOptions({
 function desktopPaneStyle({
   embedded,
   paneMaxHeight,
-  desktopInspector,
   entity,
 }: {
   embedded: boolean;
   paneMaxHeight: number | null;
-  desktopInspector?: ReactNode;
   entity?: Entity;
 }): DesktopPaneStyle {
   const style: DesktopPaneStyle = {};
@@ -123,7 +129,9 @@ function desktopPaneStyle({
   } else if (paneMaxHeight != null) {
     style.maxHeight = `${paneMaxHeight}px`;
   }
-  if (desktopInspector && !embedded && paneMaxHeight != null) {
+  // A page list fills its pane, so the footer holds the viewport's bottom edge
+  // however few rows there are.
+  if (!embedded && paneMaxHeight != null) {
     style.height = `${paneMaxHeight}px`;
   }
   if (entity && isBrowserRoutedEntity(entity)) {
@@ -198,6 +206,8 @@ export interface RTableProps<TItem extends RowData> {
   onRowHover?: (row: Row<TItem>) => void;
   /** Cancels an uncommitted row-preview intent. */
   onRowHoverEnd?: (row: Row<TItem>) => void;
+  /** A page list's totals and status, in the always-visible footer. */
+  footerContent?: ReactNode;
   /** Bulk action bar (rendered in toolbar when rows are selected) */
   bulkActionBar?: ReactNode;
   /**
@@ -553,9 +563,11 @@ function PresentationToggleMenuItem({
 function PinnedTableFooter<TItem extends RowData>({
   table,
   hasRows,
+  unpaintedColumns,
 }: {
   table: ITable<TItem>;
   hasRows: boolean;
+  unpaintedColumns: ReadonlySet<string>;
 }) {
   if (
     !hasRows ||
@@ -581,8 +593,10 @@ function PinnedTableFooter<TItem extends RowData>({
       leading: [
         ...(startGroups[index]?.headers ?? []),
         ...(centerGroups[index]?.headers ?? []),
-      ],
-      trailing: endGroups[index]?.headers ?? [],
+      ].filter((header) => !unpaintedColumns.has(header.column.id)),
+      trailing: (endGroups[index]?.headers ?? []).filter(
+        (header) => !unpaintedColumns.has(header.column.id),
+      ),
     }),
   );
   return (
@@ -670,7 +684,7 @@ function PinnedFooterCell<TItem extends RowData>({
       data-column-id={header.column.id}
       colSpan={header.colSpan}
       className={cn(
-        "h-8 border-t border-hairline-strong px-1 py-0",
+        "h-(--table-row-height) border-t border-hairline-strong px-1 py-0",
         header.column.columnDef.meta?.className,
         pinned && "sticky z-20 bg-card",
         boundaryClass,
@@ -731,7 +745,9 @@ function VirtualSelectionRow<TItem extends RowData>({
   cellClassName,
   columnsKey,
   rowContentVersion,
+  unpaintedColumns,
 }: {
+  unpaintedColumns: ReadonlySet<string>;
   table: ITable<TItem>;
   rows: readonly Row<TItem>[];
   row: Row<TItem>;
@@ -777,6 +793,7 @@ function VirtualSelectionRow<TItem extends RowData>({
                 rowClassName={classes}
                 cellClassName={cellClassName}
                 columnsKey={columnsKey}
+                unpaintedColumns={unpaintedColumns}
                 rowContentVersion={rowContentVersion}
                 selectionVersion={selection.version}
                 height={height}
@@ -965,6 +982,8 @@ function DesktopTableView<TItem extends RowData>({
   statusContent,
   hasStatusContent,
   tableBody,
+  footerContent,
+  rowContextMenu,
 }: Pick<
   RTableProps<TItem>,
   | "table"
@@ -976,7 +995,9 @@ function DesktopTableView<TItem extends RowData>({
   | "showCellSelectionStats"
   | "timing"
   | "ariaLabel"
+  | "footerContent"
 > & {
+  rowContextMenu: ReturnType<typeof useRowContextMenu<TItem>>;
   controller: ReturnType<typeof useDataTableController<TItem>>;
   externalToolbar: boolean;
   desktopToolbar: ReactNode;
@@ -990,7 +1011,9 @@ function DesktopTableView<TItem extends RowData>({
 }) {
   const {
     cellSelectionContainerProps,
-    collapsedColumns,
+    emptyColumns,
+    revealEmptyColumns,
+    unpaintedColumns,
     columnSizeVars,
     isDebugEnabled,
     isTransitioning,
@@ -1002,16 +1025,26 @@ function DesktopTableView<TItem extends RowData>({
     styles,
     tableContainerRef,
   } = controller;
+  const declaresTotals = useListQuery(entity)?.declaresTotals ?? false;
   if (isMobile) return null;
 
   const paneStyle = desktopPaneStyle({
     embedded,
     paneMaxHeight,
-    desktopInspector,
     entity,
   });
+  const showPager = !infiniteScroll && showPagination;
+  // A page list always carries its footer; an embedded table only when it has
+  // something to say, so a short relation table spends no row on chrome.
   const showFooter =
-    (!infiniteScroll && showPagination) || showCellSelectionStats;
+    !embedded || showPager || showCellSelectionStats || emptyColumns.length > 0;
+  const noun =
+    entity && isBrowserRoutedEntity(entity)
+      ? {
+          singular: entities[entity].label.toLowerCase(),
+          plural: entities[entity].pluralLabel.toLowerCase(),
+        }
+      : { singular: "record", plural: "records" };
 
   return (
     <>
@@ -1044,6 +1077,7 @@ function DesktopTableView<TItem extends RowData>({
             aria-label={`${ariaLabel} keyboard navigation`}
             className="min-h-0 flex-1 overflow-auto bg-card outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-[cell-dragging]:select-none"
             {...cellSelectionContainerProps}
+            onContextMenu={rowContextMenu.onContextMenu}
             onKeyDown={(event) => {
               // An open inspector owns Escape; resetting a selected grid cell
               // here would prevent the shared panel's close handler from seeing it.
@@ -1058,35 +1092,10 @@ function DesktopTableView<TItem extends RowData>({
               containerClassName="overflow-visible"
               style={columnSizeVars}
             >
-              {/* A spanning first header row otherwise makes fixed-table layout
-                  divide each band's width equally among its leaf columns. */}
-              {table
-                .getVisibleLeafColumns()
-                .some((column) => column.columnDef.meta?.columnGroup) && (
-                <colgroup>
-                  {[
-                    ...table.getStartVisibleLeafColumns(),
-                    ...table.getCenterVisibleLeafColumns(),
-                  ].map((column) => (
-                    <col
-                      key={column.id}
-                      style={{ width: columnWidthValue(column.id) }}
-                    />
-                  ))}
-                  <col style={{ width: spacerWidthValue }} />
-                  {table.getEndVisibleLeafColumns().map((column) => (
-                    <col
-                      key={column.id}
-                      style={{ width: columnWidthValue(column.id) }}
-                    />
-                  ))}
-                  {isDebugEnabled && <col />}
-                </colgroup>
-              )}
               <TableHeader className="sticky top-0 z-30 border-b border-border bg-card [&_th]:bg-card [&_tr]:border-b-0">
                 <TableHeaderLayout
                   table={table}
-                  collapsedColumns={collapsedColumns}
+                  unpaintedColumns={unpaintedColumns}
                   styles={styles}
                   isDebugEnabled={isDebugEnabled}
                 />
@@ -1097,7 +1106,13 @@ function DesktopTableView<TItem extends RowData>({
               >
                 {tableBody}
               </TableBody>
-              <PinnedTableFooter table={table} hasRows={rows.length > 0} />
+              {embedded && (
+                <PinnedTableFooter
+                  table={table}
+                  hasRows={rows.length > 0}
+                  unpaintedColumns={unpaintedColumns}
+                />
+              )}
             </Table>
             {hasStatusContent ? (
               <div className="sticky left-0 flex min-h-24 w-full items-center justify-center overflow-hidden px-2 py-4">
@@ -1106,16 +1121,32 @@ function DesktopTableView<TItem extends RowData>({
             ) : null}
           </section>
           {showFooter ? (
-            <div className="shrink-0 border-t border-[var(--border)] bg-background px-2 py-1">
-              <DataTablePagination
-                table={table}
-                timing={timing}
-                showPaginationControls={!infiniteScroll && showPagination}
-                showCellSelectionStats={showCellSelectionStats}
-                variant={tableChromeVariant(embedded)}
-              />
-            </div>
+            <TableFooterBar
+              table={table}
+              loadedRows={rows.length}
+              hasMore={infiniteScroll?.hasNextPage ?? false}
+              noun={noun}
+              pending={isTransitioning}
+              loading={Boolean(isLoading)}
+              declaresTotals={declaresTotals}
+              emptyColumns={emptyColumns}
+              onRevealEmpty={revealEmptyColumns}
+              pagination={
+                showPager || showCellSelectionStats ? (
+                  <DataTablePagination
+                    table={table}
+                    timing={timing}
+                    showPaginationControls={showPager}
+                    showCellSelectionStats={showCellSelectionStats}
+                    variant={tableChromeVariant(embedded)}
+                  />
+                ) : undefined
+              }
+            >
+              {footerContent}
+            </TableFooterBar>
           ) : null}
+          {rowContextMenu.menu}
           {desktopInspector && !embedded ? (
             <div
               className="absolute inset-y-0 right-0 hidden w-(--side-panel-width) overflow-y-auto border-l border-border bg-card xl:block"
@@ -1227,6 +1258,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     desktopInspector,
     inspector,
     filterOptionHints,
+    footerContent,
   } = props;
   const controller = useDataTableController({
     table,
@@ -1238,7 +1270,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   });
   const pageIdentity = usePageIdentity();
   const workbenchTarget = usePageWorkbenchTarget();
-  const statusTarget = usePageWorkbenchTarget("status", !embedded);
+  const statusTarget = useListQuery(entity)?.statusTarget ?? null;
   const {
     colSpan,
     columnsKey,
@@ -1257,9 +1289,34 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     tableContainerRef,
     tableContainerWidth,
     totalSize,
+    unpaintedColumns,
     virtualRows,
     scrollToFlatRow,
   } = controller;
+  const rowContextMenu = useRowContextMenu(table, rows);
+  const paintedColumns = table
+    .getVisibleLeafColumns()
+    .filter((column) => !unpaintedColumns.has(column.id));
+  // Inset from the table's start edge, the same sum the sticky offsets use.
+  const sectionColumnTotals = (
+    totals: readonly GroupColumnTotal[] | undefined,
+  ): SectionColumnTotal[] =>
+    (totals ?? []).flatMap((total) => {
+      const index = paintedColumns.findIndex(
+        (column) => column.id === total.columnId,
+      );
+      const column = paintedColumns[index];
+      if (!column) return [];
+      return [
+        {
+          columnId: total.columnId,
+          node: total.node,
+          numeric: column.columnDef.meta?.numeric ?? false,
+          width: columnWidthValue(column.id),
+          start: columnOffsetValue(paintedColumns, column.id, "start"),
+        },
+      ];
+    });
   const stepRow = useCallback(
     (direction: -1 | 1) => {
       const index = rows.findIndex((row) => row.id === currentRowId);
@@ -1372,12 +1429,12 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
             <TableRow
               key={`skeleton-${index}`}
               aria-hidden
-              className="h-8 hover:bg-transparent"
+              className="h-(--table-row-height) hover:bg-transparent"
             >
-              {table.getVisibleLeafColumns().map((column) => (
+              {paintedColumns.map((column) => (
                 <TableCell
                   key={column.id}
-                  className="h-8 border-b border-hairline-soft px-1 py-0"
+                  className="h-(--table-row-height) border-b border-hairline-soft px-1 py-0"
                   style={{
                     width: columnWidthValue(column.id),
                     maxWidth: columnWidthValue(column.id),
@@ -1462,6 +1519,13 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
                 onHide={item.onHide}
                 aside={item.aside}
                 actions={item.actions}
+                columnTotals={sectionColumnTotals(item.columnTotals)}
+                labelledTotals={item.columnTotals?.filter(
+                  (total) =>
+                    !paintedColumns.some(
+                      (column) => column.id === total.columnId,
+                    ),
+                )}
               />
             </TableCell>
           </TableRow>
@@ -1529,6 +1593,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           rowClassName={(candidate) =>
             cn(styles.row, getRowClassName?.(candidate))
           }
+          unpaintedColumns={unpaintedColumns}
           cellClassName={styles.cell}
           columnsKey={columnsKey}
           rowContentVersion={rowContentVersion}
@@ -1645,6 +1710,8 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
                 statusContent={statusContent}
                 hasStatusContent={hasStatusContent}
                 tableBody={renderTableBody()}
+                footerContent={footerContent}
+                rowContextMenu={rowContextMenu}
               />
 
               {/* Mobile List View. Also rendered pre-hydration (see the desktop

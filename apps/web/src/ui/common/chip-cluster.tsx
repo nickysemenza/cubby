@@ -7,12 +7,13 @@ import {
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
 
+const CLUSTER_MAX_HEIGHT = "max-h-[min(1.75rem,var(--table-row-height))]";
+
 export type ChipClusterItem = { key: string; label: string; node: ReactNode };
 
 /** Two 12px chip lines and their 2px gap fit inside a 32px table row. */
 const MAX_LINES = 2;
-/** The cluster's height budget (`max-h-7`) and its line gap (`gap-y-0.5`). */
-const BUDGET_PX = 28;
+/** The cluster's line gap (`gap-y-0.5`). */
 const LINE_GAP_PX = 2;
 
 /**
@@ -20,12 +21,12 @@ const LINE_GAP_PX = 2;
  * to a second line that the 32px cell clipped through the middle, because
  * only 12px chips fit two lines.
  */
-const chipLinesThatFit = (chipHeight: number, lines: number) =>
+const chipLinesThatFit = (chipHeight: number, lines: number, budget: number) =>
   Math.max(
     1,
     Math.min(
       lines,
-      Math.floor((BUDGET_PX + LINE_GAP_PX) / (chipHeight + LINE_GAP_PX)),
+      Math.floor((budget + LINE_GAP_PX) / (chipHeight + LINE_GAP_PX)),
     ),
   );
 
@@ -109,7 +110,8 @@ export function ChipCluster({
         .filter((part) => part.hasAttribute("data-chip"))
         .map((part) => part.offsetHeight),
     );
-    const allowed = chipLinesThatFit(chipHeight, lines);
+    // The painted budget (`CLUSTER_MAX_HEIGHT`): one line at 24px rows, two at 32px.
+    const allowed = chipLinesThatFit(chipHeight, lines, element.clientHeight);
     const overflows =
       element.scrollHeight > element.clientHeight + 1 ||
       (allowed === 1 && element.scrollWidth > element.clientWidth + 1);
@@ -132,7 +134,8 @@ export function ChipCluster({
         count === 0 ? items.map((item) => item.label).join(", ") : undefined
       }
       className={cn(
-        "flex max-h-7 min-w-0 flex-wrap content-center items-center gap-x-1 gap-y-0.5 overflow-hidden leading-3 whitespace-normal",
+        CLUSTER_MAX_HEIGHT,
+        "flex min-w-0 flex-wrap content-center items-center gap-x-1 gap-y-0.5 overflow-hidden leading-3 whitespace-normal",
         (shown === 1 || lines === 1) && "flex-nowrap",
         className,
       )}
@@ -149,7 +152,7 @@ export function ChipCluster({
           title={count > 0 ? item.label : undefined}
           className={cn(
             "flex max-w-full min-w-0",
-            shown === 1 && "max-h-7 overflow-hidden",
+            shown === 1 && cn(CLUSTER_MAX_HEIGHT, "overflow-hidden"),
           )}
         >
           {item.node}

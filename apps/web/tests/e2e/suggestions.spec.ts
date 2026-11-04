@@ -1004,8 +1004,8 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
     page,
     `/products?searchQuery=${encodeURIComponent(name)}`,
   );
-  await page.getByRole("button", { name: "Actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Columns…", exact: true }).click();
+  await page.getByRole("button", { name: "Display", exact: true }).click();
+  await page.getByRole("button", { name: "Columns…", exact: true }).click();
   await page.getByRole("button", { name: "Show Tags", exact: true }).click();
   await page.keyboard.press("Escape");
   const row = page

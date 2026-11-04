@@ -27,8 +27,8 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
+import { DropdownMenuItem } from "~/ui/primitives/dropdown-menu";
 import { Input } from "~/ui/primitives/input";
 
 type Family = SweepStartInput["families"][number]["family"];
@@ -133,53 +133,52 @@ function FamilyRow({
  * An entity list's way into a Sweep of its own decision fields, scoped to
  * the list's current filters; the started Sweep is followed on Suggestions.
  */
-export function FindSuggestionsAction({
+/**
+ * A list's sweep over its current filters, as an `Actions` menu item. The dialog
+ * is separate because it must outlive the menu that opened it.
+ */
+export function useFindSuggestionsAction({
   entity,
   filters,
-  inline = false,
 }: {
-  entity: ShortcodeEntity;
+  entity: ShortcodeEntity | null;
   filters: object;
-  /** A compact action in the list's totals and suggestion status line. */
-  inline?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  if (!suggestionEntities.some((candidate) => candidate === entity))
-    return null;
-  return (
-    <>
-      <Button
-        size="sm"
-        variant="ghost"
-        className={
-          inline
-            ? "h-5 px-0 text-xs font-normal text-muted-foreground"
-            : undefined
-        }
-        onClick={() => setOpen(true)}
-      >
+  if (
+    entity === null ||
+    !suggestionEntities.some((candidate) => candidate === entity)
+  )
+    return { menuItem: null, dialog: null };
+  return {
+    menuItem: (
+      <DropdownMenuItem onClick={() => setOpen(true)}>
         Find suggestions…
-      </Button>
-      {open ? (
-        <FindSuggestionsDialog
-          open
-          onOpenChange={setOpen}
-          preset={{
-            families: ["field"],
-            // The list's filter patch as the Sweep's JSON target filters.
-            field: { entity, filters: jsonFilters.parse(filters) },
-          }}
-          onStarted={(runId) =>
-            void navigate({
-              to: "/suggestions",
-              search: { family: "field", sweep: runId },
-            })
-          }
-        />
-      ) : null}
-    </>
-  );
+      </DropdownMenuItem>
+    ),
+    dialog: (
+      <>
+        {open ? (
+          <FindSuggestionsDialog
+            open
+            onOpenChange={setOpen}
+            preset={{
+              families: ["field"],
+              // The list's filter patch as the Sweep's JSON target filters.
+              field: { entity, filters: jsonFilters.parse(filters) },
+            }}
+            onStarted={(runId) =>
+              void navigate({
+                to: "/suggestions",
+                search: { family: "field", sweep: runId },
+              })
+            }
+          />
+        ) : null}
+      </>
+    ),
+  };
 }
 
 /**

@@ -129,7 +129,10 @@ describe("DataTableToolbar query tier", () => {
   it("sorts by a column, then flips its order, from the Sort menu", async () => {
     render(<ToolbarHarness sortable />, { wrapper: queryWrapper });
 
-    fireEvent.click(screen.getByRole("button", { name: "Sort: Default" }));
+    fireEvent.click(screen.getByRole("button", { name: "Display" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Sort: Default" }),
+    );
     fireEvent.click(await screen.findByRole("menuitem", { name: "Name" }));
     const trigger = await screen.findByRole("button", {
       name: /^Sort: Name, /,

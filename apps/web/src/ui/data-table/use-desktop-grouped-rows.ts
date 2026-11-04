@@ -3,7 +3,11 @@ import { useMemo, type ReactNode } from "react";
 
 import { groupRecordIdentity } from "./group-record-identity";
 import type { CubbyRow as Row } from "./table-features";
-import { type GroupConfig, groupSections } from "./use-grouped-list";
+import {
+  type GroupColumnTotal,
+  type GroupConfig,
+  groupSections,
+} from "./use-grouped-list";
 
 type DesktopGroupItem =
   | {
@@ -18,6 +22,7 @@ type DesktopGroupItem =
       onHide?: () => void;
       aside?: ReactNode;
       actions?: ReactNode;
+      columnTotals?: readonly GroupColumnTotal[];
     }
   /** groupRowIndex: position within the row's group, so zebra striping can
    *  restart at each section header instead of running through it. */
@@ -63,6 +68,7 @@ export function useDesktopGroupedRows<TItem extends RowData>(
             onHide: section.onHide,
             aside: section.aside,
             actions: section.actions,
+            columnTotals: section.columnTotals,
           },
           ...section.items.map(({ rowIndex }, groupRowIndex) => ({
             kind: "row" as const,

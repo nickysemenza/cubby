@@ -24,4 +24,13 @@ describe("ListTotalSummary", () => {
       screen.getByText("Price range").nextElementSibling,
     ).toHaveTextContent("Unavailable");
   });
+
+  it("reads as pending until a page answers, and unavailable only on failure", () => {
+    const view = render(<ListTotalSummary totals={totals} />);
+    expect(screen.getByText("Spend").nextElementSibling).toHaveTextContent("…");
+    view.rerender(<ListTotalSummary totals={totals} failed />);
+    expect(screen.getByText("Spend").nextElementSibling).toHaveTextContent(
+      "Unavailable",
+    );
+  });
 });
