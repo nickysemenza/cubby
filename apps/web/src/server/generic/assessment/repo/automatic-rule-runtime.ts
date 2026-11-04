@@ -15,7 +15,10 @@ import { createLogger } from "@cubby/worker-tracing";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { scrubErrorMessage } from "~/lib/error-diagnostics";
+import {
+  describeErrorCauses,
+  scrubErrorMessage,
+} from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -426,7 +429,7 @@ export async function applyAutomaticRules(
       // A refusal leaves the suggestion pending for review, which is the
       // rule's safe outcome; the raw reason is returned and logged.
       const message = scrubErrorMessage(
-        error instanceof Error ? error.message : String(error),
+        JSON.stringify(describeErrorCauses(error)),
       );
       outcome.refused.push({ assessmentId: row.id, message });
       options.onFailure?.(row.id, message);
