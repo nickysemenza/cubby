@@ -668,7 +668,7 @@ export function IndexedSections({
       target.scrollIntoView({ behavior: "instant", block: "start" });
       target.focus({ preventScroll: true });
       // The instant jump needs a landmark: its destination fades from the info tint.
-      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+      if (!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
         target.animate?.(
           [
             { backgroundColor: "var(--brand-info-surface)" },

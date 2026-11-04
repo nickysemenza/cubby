@@ -113,7 +113,7 @@ function ArrivalFade({ site }: { site: RefObject<FallbackSite | null> }) {
     site.current = null;
     if (
       !arrived ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
     )
       return;
     for (const child of arrived.parent.children)

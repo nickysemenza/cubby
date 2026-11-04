@@ -66,7 +66,7 @@ const hasValue = (value: unknown) =>
  * cell beside it with "Not recorded". A refused classification keeps its named
  * state. A cell with no shown fields disappears.
  */
-export function summaryFieldsShown<E extends GenericDetailEntity>(
+function summaryFieldsShown<E extends GenericDetailEntity>(
   queryClient: QueryClient,
   entity: E,
   record: DetailRecordOf<E>,

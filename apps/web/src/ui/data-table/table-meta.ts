@@ -171,7 +171,7 @@ export function attachCubbyColumnMeta<TData extends RowData>(
 }
 
 /** A column's value kind, shown as a muted glyph before its header label. */
-export type ColumnValueKind =
+type ColumnValueKind =
   | "text"
   | "enum"
   | "date"

@@ -22,8 +22,8 @@ function rowHeight() {
   measuredRowHeight = parsed > 0 ? parsed : SSR_ROW_HEIGHT;
   // A window can cross the density breakpoint; the next read measures again.
   window
-    .matchMedia("(min-width: 48rem) and (hover: hover) and (pointer: fine)")
-    .addEventListener(
+    .matchMedia?.("(min-width: 48rem) and (hover: hover) and (pointer: fine)")
+    ?.addEventListener(
       "change",
       () => {
         measuredRowHeight = undefined;
