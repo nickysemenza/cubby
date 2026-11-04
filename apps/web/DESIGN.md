@@ -544,8 +544,9 @@ no false completion mark and does not block approval.
 Inherited values have a muted leading ↳ in a 12px slot. Auto suggestions reuse
 the dashed ochre suggestion pill with a small “auto” label. Refresh marks remain
 visible independently of hover: queued, waiting and stale-unscheduled values
-have a static info-tone dot with their distinct status label. Only an observed
-executing ticket with an unexpired Job lease pulses; reduced motion keeps it
+have a static info-tone dot with their distinct status label. A related refresh
+pending has that same static dot and never reads as queued for this value. Only
+an observed executing ticket with an unexpired Job lease pulses; reduced motion keeps it
 static. A local timer expires that observation without fetching and labels its
 status as potentially out of date. Failed values expose the raw
 diagnostic on hover and keyboard focus. Missing values retain Not assessed or
@@ -554,6 +555,8 @@ An owed refresh's explanation shows its recorded trigger as a labelled fact;
 older work without that metadata says Not recorded. Activity's existing
 per-value disclosure lists the same trigger descriptions and their counts,
 including the unknown bucket. Trigger text carries no record names or values.
+A related refresh says it may not affect this value and its trigger reads Not
+attributed to this value; it never names a precise record cause.
 
 Why this value is one viewport-bounded popover: a vertical chain in declared
 precedence order, with a filled deciding level and muted skipped levels. Set,
@@ -570,8 +573,13 @@ result without a scalar value reads Allocated rather than Not set; its shares
 remain the source of project amounts. Quality checks and their exception controls share this
 explanation. Quality cards keep the explanation trigger available beside missing or failed results. Interpretations retain their readable result, caveats and next steps.
 The footer compares stored and live values and shows the last computation,
-observed execution start and known retry deadline. It links to Activity's
-derived-work view; unknown invalidation causes or finish times remain unknown.
+observed execution start and known retry deadline: Next retry while it is ahead,
+Retry was due once it has passed, and no claim when it is unknown. An owed
+refresh offers View in Activity, which opens the same value in Now. The link
+names the value's subject, field, surface and scope, never an attempt, so
+re-marked work stays the same link. Unknown invalidation causes or finish times
+remain unknown. Progress here is the phase and observed start time; no value has
+a percentage, remaining count, ETA or queue position.
 `ui/derived` is the app-aware generic composition boundary:
 it may reuse entity links, evidence and existing mutation actions.
 
@@ -648,6 +656,14 @@ The sidebar has one Work entry; All work and filters opens the retained
 from Improvements; list counts and detail/inspector review stay available.
 No view persists another lane or ledger; distinct actions on one record remain
 visible across their applicable views.
+
+A View in Activity link leads Now with one Value refresh row, independently of
+the one-minute backlog threshold. It keeps the retained value and repeats the
+explanation's status lines, adding Up to date when nothing is owed and Not
+published yet for a missing value. The only counts are the kind's aggregate,
+labelled as all work including related refreshes. It reads on open and on
+Refresh status, without polling or recomputing. A failed read keeps the last
+observation beside the raw error and Retry; Clear removes the row.
 Inactive panels unmount so hidden operational views cannot keep polling. Maintenance
 retains inspected previews between tabs with its queries and status polling disabled
 while hidden. URL

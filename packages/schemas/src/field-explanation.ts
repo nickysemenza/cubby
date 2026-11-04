@@ -39,6 +39,19 @@ export const fieldExplanationInput = entityRefSchema.extend({
   surface: z.enum(["list", "detail", "summary"]).default("detail"),
 });
 
+/**
+ * Names an owed value slot, not an attempt, so re-marked work stays the same
+ * link. It never carries a ticket, lease, displayed result or diagnostic.
+ */
+export const fieldRefreshLocator = fieldExplanationInput.pick({
+  entityKind: true,
+  entityId: true,
+  field: true,
+  surface: true,
+  scope: true,
+});
+export type FieldRefreshLocator = z.output<typeof fieldRefreshLocator>;
+
 export const qualityBreakdown = z.object({
   /** Null when not assessed; otherwise the weighted score after caps. */
   score: z.number().nullable(),

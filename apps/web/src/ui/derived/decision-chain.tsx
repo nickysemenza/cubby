@@ -4,7 +4,10 @@ import {
   fieldEmptyLabel,
   fieldNoneLabel,
 } from "@cubby/schemas/field-envelope-presentation";
-import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
+import type {
+  FieldExplanationOutput,
+  FieldRefreshLocator,
+} from "@cubby/schemas/field-explanation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -18,9 +21,14 @@ import { compactFieldText } from "~/entity/fields/field-text";
 import { useEntityMetadata } from "~/entity/metadata";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Facts } from "~/ui/common/facts";
+import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Button } from "~/ui/primitives/button";
 
-import { UpdatingDot, useFieldExecutionCurrent } from "./value-mark";
+import {
+  pendingWorkLabel,
+  UpdatingDot,
+  useFieldExecutionCurrent,
+} from "./value-mark";
 import { ExplanationEntityLink, ReadableExplanationValue } from "./why-value";
 
 export function DecisionValue({
@@ -63,7 +71,7 @@ function EntityDecisionValue({
   );
 }
 
-function DecisionResult({
+export function DecisionResult({
   result,
   work,
   entity,
@@ -231,117 +239,110 @@ export function DecisionChain({
   );
 }
 
-export function DerivedFreshness({
-  envelope,
-  context: _context,
+/** Observed deadlines age on the display clock; a past one is not a future claim. */
+function WorkDeadline({
+  at,
+  future,
+  past,
 }: {
-  envelope: FieldExplanationOutput["envelope"];
-  context?: Pick<FieldExplanationOutput, "subject" | "field">;
+  at: string;
+  future: string;
+  past: string;
 }) {
-  return _context ? (
-    <ContextualDerivedFreshness envelope={envelope} context={_context} />
-  ) : (
-    <Freshness envelope={envelope} />
+  const now = useDisplayNow();
+  return (
+    <>
+      {" "}
+      · {now !== undefined && Date.parse(at) <= now ? past : future}{" "}
+      <DateDisplay timestamp={at} />
+    </>
   );
 }
 
-function ContextualDerivedFreshness({
-  envelope,
+/** The popup and Activity share these states; only `locator` differs. */
+export function DerivedFreshness({
+  envelope: { result, work },
   context,
+  locator,
 }: {
   envelope: FieldExplanationOutput["envelope"];
   context: Pick<FieldExplanationOutput, "subject" | "field">;
+  /** The popup's Activity link. Without it, Activity reports a current value. */
+  locator?: FieldRefreshLocator;
 }) {
   const metadata = useEntityMetadata(context.subject.entityKind);
   const field = metadata.fields.fields.find(
     (candidate) => candidate.key === context.field,
   );
-  return (
-    <Freshness
-      envelope={envelope}
-      contextual={Boolean(
-        field && "storedProjection" in field && field.storedProjection,
-      )}
-    />
-  );
-}
-
-function Freshness({
-  envelope,
-  contextual = false,
-}: {
-  envelope: FieldExplanationOutput["envelope"];
-  contextual?: boolean;
-}) {
-  const result = envelope.result;
-  const execution =
-    envelope.work.kind === "pending" ? envelope.work.execution : undefined;
+  const contextual =
+    field && "storedProjection" in field && field.storedProjection;
+  const execution = work.kind === "pending" ? work.execution : undefined;
   const running = useFieldExecutionCurrent(execution);
-  const refreshOwed =
-    envelope.work.kind !== "idle" ||
-    (result.kind === "cached" && result.freshness === "stale");
+  const pendingLabel =
+    work.kind === "pending" ? pendingWorkLabel(work, running) : null;
+  const related = work.kind === "pending" && work.attribution === "related";
+  const stale = result.kind === "cached" && result.freshness === "stale";
+  const refreshOwed = work.kind !== "idle" || stale;
   return (
     <div className="grid gap-1 text-xs text-muted-foreground">
       {result.kind === "cached" ? (
         <p>
           {contextual
-            ? result.freshness === "stale"
+            ? stale
               ? "Stale facts"
               : "Cached facts"
-            : result.freshness === "stale"
+            : stale
               ? "Stale result"
               : "Cached result"}{" "}
           · Last computed <DateDisplay timestamp={result.computedAt} />
         </p>
       ) : null}
-      {envelope.work.kind === "pending" ? (
+      {result.kind === "missing" ? <p>Not published yet</p> : null}
+      {pendingLabel ? (
         <p>
-          <UpdatingDot
-            active={running}
-            label={
-              execution
-                ? running
-                  ? "Updating"
-                  : "Refresh status may be out of date"
-                : "Queued for refresh"
-            }
-          />{" "}
+          <UpdatingDot active={running} label={pendingLabel} /> {pendingLabel}
           {execution ? (
             <>
-              {running ? "Updating" : "Refresh status may be out of date"} ·
-              Started <DateDisplay timestamp={execution.startedAt} />
+              {" "}
+              · Started <DateDisplay timestamp={execution.startedAt} />
             </>
-          ) : (
-            "Queued for refresh"
-          )}
+          ) : related ? (
+            " · may not affect this value"
+          ) : null}
         </p>
       ) : null}
-      {envelope.work.kind === "waiting" ? (
+      {work.kind === "waiting" ? (
         <p>
-          {envelope.work.reason}
-          {envelope.work.retryAt ? (
-            <>
-              {" "}
-              · Next attempt <DateDisplay timestamp={envelope.work.retryAt} />
-            </>
+          {work.reason}
+          {work.retryAt ? (
+            <WorkDeadline
+              at={work.retryAt}
+              future="Next attempt"
+              past="Attempt was due"
+            />
           ) : null}
         </p>
       ) : null}
-      {envelope.work.kind === "failed" ? (
+      {work.kind === "failed" ? (
         <p role="alert" className="break-words text-destructive">
-          {envelope.work.error}
-          {envelope.work.retryAt ? (
-            <>
-              {" "}
-              · Next retry <DateDisplay timestamp={envelope.work.retryAt} />
-            </>
+          {work.error}
+          {work.retryAt ? (
+            <WorkDeadline
+              at={work.retryAt}
+              future="Next retry"
+              past="Retry was due"
+            />
           ) : null}
         </p>
       ) : null}
-      {envelope.work.kind === "idle" &&
-      result.kind === "cached" &&
-      result.freshness === "stale" ? (
+      {work.kind === "idle" && (stale || result.kind === "missing") ? (
         <p>No refresh is currently queued.</p>
+      ) : null}
+      {!locator &&
+      work.kind === "idle" &&
+      !stale &&
+      result.kind !== "missing" ? (
+        <p>Up to date</p>
       ) : null}
       {refreshOwed ? (
         <Facts
@@ -349,19 +350,20 @@ function Freshness({
           facts={[
             {
               label: "Refresh trigger",
-              value: envelope.work.refreshReason ?? "Not recorded",
+              value: related
+                ? "Not attributed to this value"
+                : (work.refreshReason ?? "Not recorded"),
             },
           ]}
         />
       ) : null}
-      {refreshOwed ? (
+      {refreshOwed && locator ? (
         <Link
           to="/activity"
-          search={{ tab: "now" }}
-          hash="derived-values"
+          search={{ tab: "now", refresh: locator }}
           className="underline underline-offset-2"
         >
-          Open Activity
+          View in Activity
         </Link>
       ) : null}
     </div>

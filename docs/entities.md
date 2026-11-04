@@ -2967,9 +2967,19 @@ Activity's per-value trigger counts read those same observations. A missing
 description stays unknown; it never means no work or a zero result. Clock expiry
 can identify a daily refresh even before scheduling. Before fanout expansion,
 the conservative target-wide pending flag shows only a generic related refresh;
-it cannot attribute a source ticket's cause to an individual record. Reasons are diagnostic
+it cannot attribute a source ticket's cause to an individual record. Its pending
+work carries `attribution: "related"`: a read fact that this value has no ticket
+of its own, so clients branch on it and never on reason text. Reasons are diagnostic
 metadata and do not participate in calculation fingerprints or publication
 authority.
+
+A value's refresh status is a read of its explanation, not a second status
+store. `fieldRefreshLocator` names the owed slot by subject, field, surface and
+scope, so a re-mark or replacement stays the same link. It excludes tickets,
+leases, displayed results and diagnostics; only an explicit `diagnostic` input
+recomputes a value. Per-value progress is phase and observed start time. Drain
+processed and total counts stay in spans, and `derived.backlog` counts are
+aggregates that include fanout items.
 
 Stored-value page reads declare requested keys with a typed `VALUES` relation.
 Its actual cardinality lets PostgreSQL choose indexed publication and work

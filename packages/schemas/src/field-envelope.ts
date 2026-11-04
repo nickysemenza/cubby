@@ -133,12 +133,16 @@ export const fieldResult = shareSchema(<V extends z.ZodType>(value: V) =>
   ]),
 );
 
+/** A conservative target-wide flag: this value has no ticket of its own. */
+export const fieldWorkAttribution = z.literal("related");
+
 /** A failed or waiting refresh does not imply whether a usable result exists. */
 export const fieldWork = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("idle"), refreshReason: z.string().optional() }),
   z.object({
     kind: z.literal("pending"),
     refreshReason: z.string().optional(),
+    attribution: fieldWorkAttribution.optional(),
     execution: z
       .object({
         startedAt: z.iso.datetime(),

@@ -10,6 +10,7 @@ import { page, userEvent } from "vitest/browser";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { mock } from "~/lib/test/mock-schema";
+import { DerivedRefreshFocus } from "~/ui/derived/refresh-focus";
 import { WhyValue } from "~/ui/derived/why-value";
 
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
@@ -227,6 +228,7 @@ it("compares the displayed publication with current inputs only after an explici
       field="price"
       label="Price"
       surface="list"
+      scope={{ entityKind: "vendor", entityId: vendorId }}
       resolution={envelope}
     />,
     { wrapper: harness.wrapper },
@@ -249,4 +251,115 @@ it("compares the displayed publication with current inputs only after an explici
   expect(fieldExplanationInput.parse(calls.at(-1)).diagnostic).toBe(true);
   expect(screen.getByRole("dialog")).toHaveTextContent("Stored 18 → live 24");
   expect(screen.getByLabelText("Queued for refresh")).toBeVisible();
+  const activity = new URL(
+    screen
+      .getByRole("link", { name: "View in Activity" })
+      .getAttribute("href") ?? "",
+    window.location.origin,
+  );
+  expect(activity.hash).toBe("");
+  expect(activity.searchParams.get("tab")).toBe("now");
+  // The displayed result and diagnostic above must not leak into the locator.
+  expect(JSON.parse(activity.searchParams.get("refresh") ?? "null")).toEqual({
+    entityKind: "product",
+    entityId: productId,
+    field: "price",
+    surface: "list",
+    scope: { entityKind: "vendor", entityId: vendorId },
+  });
+});
+
+const focus = {
+  entityKind: "product",
+  entityId: productId,
+  field: "price",
+  surface: "list",
+} as const;
+const cachedResult = {
+  kind: "cached",
+  decision: {
+    outcome: { kind: "value", value: 18 },
+    provenance: { kind: "computed" },
+  },
+  computedAt: "2026-10-25T12:00:00Z",
+  freshness: "stale",
+};
+const focusObservation = (result: unknown, work: unknown) => ({
+  ...explanation,
+  field: "price",
+  label: "Price",
+  qualityBreakdown: undefined,
+  sources: [],
+  envelope: fieldExplanationOutput.shape.envelope.parse({
+    ...explanation.envelope,
+    result,
+    work,
+  }),
+});
+const focusBacklog = {
+  total: 4,
+  kinds: [
+    {
+      entity: "product",
+      field: "price",
+      count: 4,
+      states: { queued: 3, running: 1, waiting: 0, failed: 0 },
+    },
+  ],
+  oldestWaitingSeconds: null,
+  recent: { windowMinutes: 15, perMinute: [] },
+};
+
+it("reads a focused value on demand and retains it through a failed read", async () => {
+  harness = createBrowserTestHarness();
+  const calls: unknown[] = [];
+  let failing = false;
+  let cleared = 0;
+  restoreTransport = overrideOperationDispatch(async (operation, input) => {
+    if (operation === "derived.backlog")
+      return { ok: true, data: focusBacklog };
+    if (operation !== "fieldExplanation.explain")
+      throw new Error(`Synthetic ${operation} read unavailable`);
+    calls.push(input);
+    if (failing) throw new Error("Synthetic explanation read failure");
+    return {
+      ok: true,
+      data: focusObservation(cachedResult, {
+        kind: "pending",
+        attribution: "related",
+        refreshReason: "Related refresh pending",
+      }),
+    };
+  });
+  const { container } = render(
+    <DerivedRefreshFocus
+      locator={focus}
+      onClear={() => {
+        cleared += 1;
+      }}
+    />,
+    { wrapper: harness.wrapper },
+  );
+  const refresh = await screen.findByRole("button", { name: "Refresh status" });
+  await waitFor(() => expect(container).toHaveTextContent("18"));
+  await waitFor(() => expect(refresh).toBeEnabled());
+  // Exact input: never a displayed result or diagnostic that could recompute.
+  expect(calls).toEqual([focus]);
+  failing = true;
+  await userEvent.click(refresh);
+  await screen.findByText("Synthetic explanation read failure");
+  expect(container).toHaveTextContent("18");
+  expect(container).toHaveTextContent("Related refresh pending");
+  expect(container).not.toHaveTextContent("Queued for refresh");
+  expect(container).toHaveTextContent("Not attributed to this value");
+  failing = false;
+  await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await waitFor(() =>
+    expect(
+      screen.queryByText("Synthetic explanation read failure"),
+    ).not.toBeInTheDocument(),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Clear" }));
+  expect(cleared).toBe(1);
+  expect(calls).toEqual([focus, focus, focus]);
 });

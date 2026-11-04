@@ -87,6 +87,7 @@ export async function withPageFields<Row>(
               identity.raw[source.freshAt] == null),
           pending: work?.pending ?? false,
           refreshReason: work?.refreshReason,
+          ...(work?.attribution ? { attribution: work.attribution } : {}),
           waiting: work?.waiting ?? false,
           waitCause: work?.waitCause ?? null,
           ...(work?.execution ? { execution: work.execution } : {}),

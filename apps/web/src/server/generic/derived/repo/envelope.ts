@@ -490,7 +490,12 @@ export function buildFieldEnvelopeRow<S extends z.ZodObject>({
                   ...(read.retryAt ? { retryAt: read.retryAt } : {}),
                 }
               : (read?.pending ?? read?.stale)
-                ? { kind: "pending" }
+                ? {
+                    kind: "pending",
+                    ...(read?.attribution
+                      ? { attribution: read.attribution }
+                      : {}),
+                  }
                 : { kind: "idle" }),
       },
     };

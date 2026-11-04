@@ -745,6 +745,7 @@ describe("stored derived values", () => {
       refreshReason: null,
       pending: true,
     });
+    expect((await valuation(entry))?.attribution).toBeUndefined();
   });
 
   it("marks both endpoints when a row moves to another record", async () => {
@@ -931,6 +932,7 @@ describe("stored derived values", () => {
     expect(await valuation(entry)).toMatchObject({
       pending: true,
       refreshReason: "Related refresh pending",
+      attribution: "related",
     });
     const held = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();

@@ -13,13 +13,19 @@ import {
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
 
+type PendingWork = Extract<ReadableFieldEnvelope["work"], { kind: "pending" }>;
+
+/** Branch on the wire attribution; refresh reasons are display text. */
+export function pendingWorkLabel(work: PendingWork, running: boolean) {
+  if (work.execution)
+    return running ? "Updating" : "Refresh status may be out of date";
+  return work.attribution === "related"
+    ? "Related refresh pending"
+    : "Queued for refresh";
+}
+
 /** Expire the observation locally; a timer never asserts that replacement work is queued. */
-export function useFieldExecutionCurrent(
-  execution: Extract<
-    ReadableFieldEnvelope["work"],
-    { kind: "pending" }
-  >["execution"],
-) {
+export function useFieldExecutionCurrent(execution: PendingWork["execution"]) {
   const now = useDisplayNow();
   const [expiredLease, setExpiredLease] = useState<string>();
   const expiresAt = execution?.leaseExpiresAt;
@@ -96,15 +102,12 @@ export function FieldValueMark({
   const execution =
     envelope?.work.kind === "pending" ? envelope.work.execution : undefined;
   const running = useFieldExecutionCurrent(execution);
-  const refreshLabel = running
-    ? "Updating"
-    : execution
-      ? "Refresh status may be out of date"
-      : envelope?.work.kind === "pending"
-        ? "Queued for refresh"
-        : envelope?.work.kind === "waiting"
-          ? "Waiting to refresh"
-          : "Stale result";
+  const refreshLabel =
+    envelope?.work.kind === "pending"
+      ? pendingWorkLabel(envelope.work, running)
+      : envelope?.work.kind === "waiting"
+        ? "Waiting to refresh"
+        : "Stale result";
   const missing = envelope?.result.kind === "missing";
   return (
     <span

@@ -1,5 +1,6 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import { auditChannelSchema } from "@cubby/schemas/context";
+import { fieldRefreshLocator } from "@cubby/schemas/field-explanation";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import { jobLane, jobState, jobWaitingOnReason } from "@cubby/schemas/job";
 import { RUN_KINDS } from "@cubby/schemas/run-fields";
@@ -23,6 +24,7 @@ import { WorkQueue } from "~/features/work-queue/work-queue-page";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { auditLog } from "~/integrations/tanstack-query/generated/domains/auditLog.gen";
 import { pageTitle } from "~/lib/page-title";
+import { DerivedRefreshFocus } from "~/ui/derived/refresh-focus";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
@@ -46,6 +48,7 @@ const searchSchema = z.object({
   runId: runShortcode.optional().catch(undefined),
   attention: z.boolean().optional().catch(undefined),
   page: z.int().nonnegative().optional().catch(undefined),
+  refresh: fieldRefreshLocator.optional().catch(undefined),
 });
 const views = [
   { key: "needs-you", label: "Needs you" },
@@ -253,6 +256,20 @@ function ActivityBody() {
                   </Stack>
                 ) : view.key === "now" ? (
                   <Stack gap="lg">
+                    {search.refresh ? (
+                      <DerivedRefreshFocus
+                        locator={search.refresh}
+                        onClear={() =>
+                          void navigate({
+                            search: (previous) => ({
+                              ...previous,
+                              refresh: undefined,
+                            }),
+                            replace: true,
+                          })
+                        }
+                      />
+                    ) : null}
                     <QueueOverview
                       search={search}
                       onSearchChange={(next) =>

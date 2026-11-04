@@ -22,6 +22,10 @@ export interface StoredDerivedRead {
   /** Actual queued work; expiry alone does not imply a worker is pending. */
   readonly pending?: boolean;
   readonly refreshReason?: string | null;
+  readonly attribution?: Extract<
+    z.output<typeof fieldWork>,
+    { kind: "pending" }
+  >["attribution"];
   readonly waiting?: boolean;
   readonly waitCause?: WorkWaitCause | null;
   readonly execution?: Extract<
