@@ -219,17 +219,25 @@ references.
 
 ## Assessment read publication storage
 
-An Assessment read publication keeps its active revision separate from staged
-facts, memberships and dependency capture. A successful ineligible result has a
-header and no admitted facts; an absent header is unavailable. Staging a later
+An Assessment read publication keeps active and staged family results in one
+revisioned relation, with normalized query operands separate from the display
+payload. A successful ineligible revision has one explicit empty-result row;
+no active row is unavailable. Staging a later
 revision must not hide the last successful one. Activation must replace complete
 competitor groups atomically, with exact observed tickets rather than a maximum
 sequence watermark.
 
+Four relations own publication results, exact memberships, reverse dependencies
+and component recovery. The small stage retains unfinished old scopes even if
+its WorkItem is cancelled or re-marked; it grants no lease or scheduling
+authority. Keeping that recovery map in WorkItem continuation would lose it on
+cancellation before a first publication. DerivedValue remains entity-only;
+Assessment does not acquire a public Entity identity to reuse that table.
+
 The staged writer accepts only the next exact identity prefix. A newer peer or
 source-fanout ticket prevents activation; replacing an invalidated continuation
 removes only inactive staged revisions. Completing a component switches its
-changed headers, complete facts, memberships and dependencies in one transaction.
+changed active results, complete memberships and dependencies in one transaction.
 Unchanged results keep their active revision and publication age, with no
 dependency rewrite. Notifications include old and new references and declared
 entity dependencies. This storage writer runs inside the existing drain's

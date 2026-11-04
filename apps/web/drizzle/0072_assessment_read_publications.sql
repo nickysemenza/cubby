@@ -4,15 +4,6 @@ CREATE TABLE "AssessmentReadDependency" (
 	"sourceId" uuid NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "AssessmentReadFact" (
-	"assessmentId" uuid NOT NULL,
-	"revision" uuid NOT NULL,
-	"family" text NOT NULL,
-	"key" jsonb NOT NULL,
-	"filters" jsonb NOT NULL,
-	"row" jsonb NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "AssessmentReadMembership" (
 	"assessmentId" uuid NOT NULL,
 	"revision" uuid NOT NULL,
@@ -27,13 +18,20 @@ CREATE TABLE "AssessmentReadMembership" (
 );
 --> statement-breakpoint
 CREATE TABLE "AssessmentReadPublication" (
-	"assessmentId" uuid PRIMARY KEY NOT NULL,
+	"assessmentId" uuid NOT NULL,
 	"revision" uuid NOT NULL,
+	"family" text,
+	"active" boolean DEFAULT false NOT NULL,
 	"rulesVersion" integer NOT NULL,
 	"contentHash" text NOT NULL,
 	"groupKey" text NOT NULL,
 	"admitted" boolean NOT NULL,
-	"computedAt" timestamp NOT NULL
+	"computedAt" timestamp NOT NULL,
+	"key" jsonb,
+	"filters" jsonb,
+	"row" jsonb,
+	"dependencies" jsonb NOT NULL,
+	CONSTRAINT "AssessmentReadPublication_result_check" CHECK (("AssessmentReadPublication"."admitted" AND "AssessmentReadPublication"."family" IS NOT NULL AND "AssessmentReadPublication"."key" IS NOT NULL AND "AssessmentReadPublication"."filters" IS NOT NULL AND "AssessmentReadPublication"."row" IS NOT NULL) OR (NOT "AssessmentReadPublication"."admitted" AND "AssessmentReadPublication"."family" IS NULL AND "AssessmentReadPublication"."key" IS NULL AND "AssessmentReadPublication"."filters" IS NULL AND "AssessmentReadPublication"."row" IS NULL))
 );
 --> statement-breakpoint
 CREATE TABLE "AssessmentReadStage" (
@@ -49,34 +47,22 @@ CREATE TABLE "AssessmentReadStage" (
 	CONSTRAINT "AssessmentReadStage_progress_check" CHECK (cardinality("AssessmentReadStage"."assessmentIds") > 0 AND "AssessmentReadStage"."nextIndex" >= 0 AND "AssessmentReadStage"."nextIndex" <= cardinality("AssessmentReadStage"."assessmentIds"))
 );
 --> statement-breakpoint
-CREATE TABLE "AssessmentReadStageResult" (
-	"stageId" uuid NOT NULL,
-	"assessmentId" uuid NOT NULL,
-	"groupKey" text NOT NULL,
-	"contentHash" text NOT NULL,
-	"admitted" boolean NOT NULL,
-	"dependencies" jsonb NOT NULL
-);
---> statement-breakpoint
 ALTER TABLE "WorkItem" ADD COLUMN "fanoutAfter" uuid;--> statement-breakpoint
 ALTER TABLE "AssessmentReadDependency" ADD CONSTRAINT "AssessmentReadDependency_assessmentId_Assessment_id_fk" FOREIGN KEY ("assessmentId") REFERENCES "public"."Assessment"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "AssessmentReadFact" ADD CONSTRAINT "AssessmentReadFact_assessmentId_Assessment_id_fk" FOREIGN KEY ("assessmentId") REFERENCES "public"."Assessment"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "AssessmentReadMembership" ADD CONSTRAINT "AssessmentReadMembership_assessmentId_Assessment_id_fk" FOREIGN KEY ("assessmentId") REFERENCES "public"."Assessment"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "AssessmentReadPublication" ADD CONSTRAINT "AssessmentReadPublication_assessmentId_Assessment_id_fk" FOREIGN KEY ("assessmentId") REFERENCES "public"."Assessment"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "AssessmentReadStageResult" ADD CONSTRAINT "AssessmentReadStageResult_stageId_AssessmentReadStage_id_fk" FOREIGN KEY ("stageId") REFERENCES "public"."AssessmentReadStage"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "AssessmentReadStageResult" ADD CONSTRAINT "AssessmentReadStageResult_assessmentId_Assessment_id_fk" FOREIGN KEY ("assessmentId") REFERENCES "public"."Assessment"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "AssessmentReadDependency_source_key" ON "AssessmentReadDependency" USING btree ("assessmentId","sourceKind","sourceId");--> statement-breakpoint
 CREATE INDEX "AssessmentReadDependency_reverse_idx" ON "AssessmentReadDependency" USING btree ("sourceId","sourceKind","assessmentId");--> statement-breakpoint
-CREATE UNIQUE INDEX "AssessmentReadFact_revision_family_key" ON "AssessmentReadFact" USING btree ("assessmentId","revision","family");--> statement-breakpoint
-CREATE INDEX "AssessmentReadFact_family_idx" ON "AssessmentReadFact" USING btree ("family","assessmentId","revision");--> statement-breakpoint
 CREATE UNIQUE INDEX "AssessmentReadMembership_revision_ordinal_key" ON "AssessmentReadMembership" USING btree ("assessmentId","revision","kind","ordinal");--> statement-breakpoint
 CREATE INDEX "AssessmentReadMembership_entity_idx" ON "AssessmentReadMembership" USING btree ("kind","entity","assessmentId","revision");--> statement-breakpoint
 CREATE INDEX "AssessmentReadMembership_value_idx" ON "AssessmentReadMembership" USING btree ("kind",md5("value"),"assessmentId","revision");--> statement-breakpoint
-CREATE INDEX "AssessmentReadPublication_group_idx" ON "AssessmentReadPublication" USING btree ("groupKey");--> statement-breakpoint
-CREATE INDEX "AssessmentReadPublication_rules_idx" ON "AssessmentReadPublication" USING btree ("rulesVersion");--> statement-breakpoint
+CREATE UNIQUE INDEX "AssessmentReadPublication_revision_family_key" ON "AssessmentReadPublication" USING btree ("assessmentId","revision",coalesce("family", ''));--> statement-breakpoint
+CREATE UNIQUE INDEX "AssessmentReadPublication_active_family_key" ON "AssessmentReadPublication" USING btree ("assessmentId",coalesce("family", '')) WHERE "AssessmentReadPublication"."active";--> statement-breakpoint
+CREATE INDEX "AssessmentReadPublication_family_idx" ON "AssessmentReadPublication" USING btree ("family","assessmentId") WHERE "AssessmentReadPublication"."active";--> statement-breakpoint
+CREATE INDEX "AssessmentReadPublication_group_idx" ON "AssessmentReadPublication" USING btree ("groupKey","assessmentId") WHERE "AssessmentReadPublication"."active";--> statement-breakpoint
+CREATE INDEX "AssessmentReadPublication_rules_idx" ON "AssessmentReadPublication" USING btree ("rulesVersion") WHERE "AssessmentReadPublication"."active";--> statement-breakpoint
 CREATE UNIQUE INDEX "AssessmentReadStage_component_key" ON "AssessmentReadStage" USING btree ("componentKey");--> statement-breakpoint
 CREATE UNIQUE INDEX "AssessmentReadStage_revision_key" ON "AssessmentReadStage" USING btree ("revision");--> statement-breakpoint
-CREATE UNIQUE INDEX "AssessmentReadStageResult_member_key" ON "AssessmentReadStageResult" USING btree ("stageId","assessmentId");--> statement-breakpoint
 CREATE INDEX "AssessmentState_active_suppression_idx" ON "AssessmentState" USING btree ("entity","recordId") WHERE "AssessmentState"."active" AND "AssessmentState"."suppression" IS NOT NULL;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION derived_mark(p_target text, p_refs uuid[], p_reason text DEFAULT 'Refresh requested') RETURNS void

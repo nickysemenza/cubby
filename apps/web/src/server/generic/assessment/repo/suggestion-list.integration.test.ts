@@ -24,7 +24,6 @@ import {
   assessment,
   assessmentState,
   assessmentReadPublication,
-  assessmentReadFact,
   assessmentReadDependency,
   financialTransactionAllocation,
   sourceTransactionRecord,
@@ -707,7 +706,10 @@ describe("cross-family Suggestion list", () => {
         ),
       );
     const headers = () =>
-      getDb(ctx.db).select().from(assessmentReadPublication);
+      getDb(ctx.db)
+        .select()
+        .from(assessmentReadPublication)
+        .where(eq(assessmentReadPublication.active, true));
     const middle = Math.ceil(ids.length / 2);
     const left = {
       ...stage,
@@ -771,9 +773,9 @@ describe("cross-family Suggestion list", () => {
     expect(await getDb(ctx.db).select().from(assessmentReadDependency)).toEqual(
       [],
     );
-    expect(await getDb(ctx.db).select().from(assessmentReadFact)).toHaveLength(
-      together.keys.length,
-    );
+    expect(
+      await getDb(ctx.db).select().from(assessmentReadPublication),
+    ).toHaveLength(together.keys.length);
     expect(notified.size).toBeGreaterThan(0);
     // Another component's newly owed direct work does not invalidate this one.
     await markWork(ctx.db, DERIVED_DRAIN, [
@@ -789,9 +791,32 @@ describe("cross-family Suggestion list", () => {
       changed: [],
     });
     expect(await headers()).toEqual(active);
-    expect(await getDb(ctx.db).select().from(assessmentReadFact)).toHaveLength(
-      together.keys.length,
-    );
+    expect(
+      await getDb(ctx.db).select().from(assessmentReadPublication),
+    ).toHaveLength(together.keys.length);
+    const empty = {
+      ...unchanged,
+      id: crypto.randomUUID(),
+      revision: crypto.randomUUID(),
+    };
+    expect(
+      await write(
+        empty,
+        results.map((result) => ({ ...result, facts: [], memberships: [] })),
+        [unchanged.id],
+      ),
+    ).toMatchObject({ kind: "activated" });
+    const emptyPublications = await headers();
+    expect(emptyPublications).toHaveLength(ids.length);
+    expect(
+      emptyPublications.every(
+        (row) =>
+          !row.admitted &&
+          row.family === null &&
+          row.key === null &&
+          row.row === null,
+      ),
+    ).toBe(true);
     await deleteWorkItems(ctx.db, { target: ASSESSMENT_READ_TARGET });
     expect(ids.indexOf(confident)).toBeLessThan(ids.indexOf(unsure));
     const connectionRow = page.items.find(

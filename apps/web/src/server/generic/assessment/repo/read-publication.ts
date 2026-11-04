@@ -17,11 +17,9 @@ import {
 } from "~/server/db/repository-access.boundary";
 import {
   assessmentReadDependency,
-  assessmentReadFact,
   assessmentReadMembership,
   assessmentReadPublication,
   assessmentReadStage,
-  assessmentReadStageResult,
   assessmentState,
   entityIdentity,
 } from "~/server/db/retained-tables";
@@ -93,7 +91,7 @@ export async function readAssessmentReadFrame(
   groups: readonly string[],
 ): Promise<AssessmentReadFrame> {
   const headers = await repositoryQueries(db)
-    .select({
+    .selectDistinct({
       id: assessmentReadPublication.assessmentId,
       groupKey: assessmentReadPublication.groupKey,
     })
@@ -104,6 +102,7 @@ export async function readAssessmentReadFrame(
     )
     .where(
       and(
+        assessmentReadPublication.active,
         or(
           sql`${assessmentReadPublication.assessmentId} = ANY(${uuidArrayParam(ids)})`,
           inArray(assessmentReadPublication.groupKey, [...groups]),
@@ -142,7 +141,7 @@ async function removeInactiveRevisions(
   ids: readonly string[],
   revisions: readonly string[],
 ) {
-  for (const table of [assessmentReadFact, assessmentReadMembership])
+  for (const table of [assessmentReadPublication, assessmentReadMembership])
     await repositoryQueries(db)
       .delete(table)
       .where(
@@ -152,6 +151,7 @@ async function removeInactiveRevisions(
           not(
             related(assessmentReadPublication, (header) =>
               and(
+                header.active,
                 eq(header.assessmentId, outer(table.assessmentId)),
                 eq(header.revision, outer(table.revision)),
               )!,
@@ -273,16 +273,6 @@ export async function writeAssessmentReadStage(
     return { kind: "activated", changed: [] };
   if (!results.length)
     throw new Error("An incomplete Assessment stage must advance");
-  const facts = results.flatMap((result) =>
-    result.facts.map((fact) => ({
-      assessmentId: result.assessmentId,
-      revision: stage.revision,
-      family: fact.key.family,
-      key: fact.key,
-      filters: fact.filters,
-      row: fact.row,
-    })),
-  );
   const memberships = results.flatMap((result) =>
     result.memberships.map((membership, ordinal) => ({
       assessmentId: result.assessmentId,
@@ -291,20 +281,43 @@ export async function writeAssessmentReadStage(
       ...membership,
     })),
   );
-  if (facts.length) await tx.insert(assessmentReadFact).values(facts);
   if (memberships.length)
     await tx.insert(assessmentReadMembership).values(memberships);
   const staged = await Promise.all(
-    results.map(async (result) => ({
-      stageId: stage.id,
-      assessmentId: result.assessmentId,
-      groupKey: result.groupKey,
-      contentHash: await sha256CanonicalJson(result),
-      admitted: result.facts.length > 0,
-      dependencies: result.dependencies,
-    })),
+    results.map(async (result) => {
+      const metadata = {
+        assessmentId: result.assessmentId,
+        revision: stage.revision,
+        active: false,
+        rulesVersion: stage.rulesVersion,
+        groupKey: result.groupKey,
+        contentHash: await sha256CanonicalJson(result),
+        computedAt: sql<Date>`now()`,
+        dependencies: result.dependencies,
+      };
+      // An explicit empty result is a successful revision; absent rows remain missing.
+      if (!result.facts.length)
+        return [
+          {
+            ...metadata,
+            admitted: false,
+            family: null,
+            key: null,
+            filters: null,
+            row: null,
+          },
+        ];
+      return result.facts.map((fact) => ({
+        ...metadata,
+        admitted: true,
+        family: fact.key.family,
+        key: fact.key,
+        filters: fact.filters,
+        row: fact.row,
+      }));
+    }),
   );
-  await tx.insert(assessmentReadStageResult).values(staged);
+  await tx.insert(assessmentReadPublication).values(staged.flat());
   // Source fanouts share this drain's lease, so they cannot expand until this
   // transaction commits. Enroll newly read references now: a later fanout must
   // find them even while this component's active revision is still unchanged.
@@ -328,51 +341,81 @@ export async function writeAssessmentReadStage(
     return { kind: "retained", changed: [] };
   if (await stageInvalidated(db, stage))
     return { kind: "retained", changed: [] };
+  const completed = await tx
+    .selectDistinct({ id: assessmentReadPublication.assessmentId })
+    .from(assessmentReadPublication)
+    .where(eq(assessmentReadPublication.revision, stage.revision));
+  if (
+    JSON.stringify(completed.map(({ id }) => id).sort()) !==
+    JSON.stringify([...stage.assessmentIds].sort())
+  )
+    throw new Error(
+      "Assessment activation requires its complete staged member set",
+    );
   const old = await tx
-    .select({
+    .selectDistinct({
       id: assessmentReadPublication.assessmentId,
       revision: assessmentReadPublication.revision,
     })
     .from(assessmentReadPublication)
     .where(
-      sql`${assessmentReadPublication.assessmentId} = ANY(${uuidArrayParam(stage.assessmentIds)})`,
+      and(
+        assessmentReadPublication.active,
+        sql`${assessmentReadPublication.assessmentId} = ANY(${uuidArrayParam(stage.assessmentIds)})`,
+      ),
     );
   const previousRevisions = [
     ...new Set([stage.revision, ...old.map((row) => row.revision)]),
   ];
   const changed = await tx
-    .insert(assessmentReadPublication)
-    .select(
-      tx
-        .select({
-          assessmentId: assessmentReadStageResult.assessmentId,
-          revision: sql<string>`${stage.revision}::uuid`.as("revision"),
-          rulesVersion: sql<number>`${stage.rulesVersion}::int`.as(
-            "rulesVersion",
-          ),
-          contentHash: assessmentReadStageResult.contentHash,
-          groupKey: assessmentReadStageResult.groupKey,
-          admitted: assessmentReadStageResult.admitted,
-          computedAt: sql<Date>`now()`.as("computedAt"),
-        })
-        .from(assessmentReadStageResult)
-        .where(eq(assessmentReadStageResult.stageId, stage.id)),
-    )
-    .onConflictDoUpdate({
-      target: assessmentReadPublication.assessmentId,
-      set: {
-        revision: sql`excluded.revision`,
-        rulesVersion: sql`excluded."rulesVersion"`,
-        contentHash: sql`excluded."contentHash"`,
-        groupKey: sql`excluded."groupKey"`,
-        admitted: sql`excluded.admitted`,
-        computedAt: sql`excluded."computedAt"`,
-      },
-      setWhere: sql`${assessmentReadPublication.contentHash} IS DISTINCT FROM excluded."contentHash"
-      OR ${assessmentReadPublication.rulesVersion} IS DISTINCT FROM excluded."rulesVersion"`,
-    })
-    .returning({ id: assessmentReadPublication.assessmentId });
+    .selectDistinct({ id: assessmentReadPublication.assessmentId })
+    .from(assessmentReadPublication)
+    .where(
+      and(
+        eq(assessmentReadPublication.revision, stage.revision),
+        not(
+          related(assessmentReadPublication, (active) =>
+            and(
+              active.active,
+              eq(
+                active.assessmentId,
+                outer(assessmentReadPublication.assessmentId),
+              ),
+              eq(
+                active.contentHash,
+                outer(assessmentReadPublication.contentHash),
+              ),
+              eq(
+                active.rulesVersion,
+                outer(assessmentReadPublication.rulesVersion),
+              ),
+            )!,
+          ).exists(),
+        ),
+      ),
+    );
   const changedIds = changed.map((row) => row.id);
+  if (changedIds.length) {
+    // Every peer switches inside this transaction; no read observes half a winner group.
+    await tx
+      .update(assessmentReadPublication)
+      .set({ active: false })
+      .where(
+        and(
+          assessmentReadPublication.active,
+          sql`${assessmentReadPublication.assessmentId} = ANY(${uuidArrayParam(changedIds)})`,
+        ),
+      );
+    await tx
+      .update(assessmentReadPublication)
+      .set({ active: true, computedAt: sql`now()` })
+      .where(
+        and(
+          eq(assessmentReadPublication.revision, stage.revision),
+          sql`${assessmentReadPublication.assessmentId} = ANY(${uuidArrayParam(changedIds)})`,
+        ),
+      );
+  }
   const dependencyRecords = () =>
     tx
       .selectDistinct({ entity: entityIdentity.kind, id: entityIdentity.id })
@@ -397,9 +440,9 @@ export async function writeAssessmentReadStage(
     and(
       sql`${assessmentReadDependency.assessmentId} = ANY(${uuidArrayParam(stage.assessmentIds)})`,
       not(
-        related(assessmentReadStageResult, (result) =>
+        related(assessmentReadPublication, (result) =>
           and(
-            eq(result.stageId, stage.id),
+            eq(result.revision, stage.revision),
             eq(
               result.assessmentId,
               outer(assessmentReadDependency.assessmentId),
@@ -455,8 +498,5 @@ export async function writeAssessmentReadStage(
       publication.notify(record.entity, [record.id]);
   }
   await removeInactiveRevisions(db, stage.assessmentIds, previousRevisions);
-  await tx
-    .delete(assessmentReadStageResult)
-    .where(eq(assessmentReadStageResult.stageId, stage.id));
   return { kind: "activated", changed: changedIds };
 }

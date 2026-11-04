@@ -92,8 +92,13 @@ whose journal already contains an undeployed contract.
 
 ## Assessment read publication storage (0072)
 
-`0072_assessment_read_publications` adds the publication, fact, membership,
-dependency and staging tables, plus a nullable `WorkItem.fanoutAfter` cursor.
+`0072_assessment_read_publications` adds four tables: revisioned publication
+results, exact memberships, reverse dependencies and a small recovery stage.
+Active and staged results share the publication relation; an explicit empty
+result differs from an Assessment with no active publication. The stage retains
+unfinished old scopes independently of WorkItem cancellation, using the existing
+drain's ticket and lease for execution authority. It adds no scheduler or queue.
+The migration also adds a nullable `WorkItem.fanoutAfter` cursor.
 Existing unfinished work starts without a cursor; tickets, attempts, deadlines,
 waits and retained errors are unchanged. The updated `derived_mark` clears the
 cursor when a new source ticket is captured. No existing rows are rewritten or

@@ -1,5 +1,5 @@
 {
-  "id": "7d10fb4d-e86e-4c5c-8c48-95e71c5b121b",
+  "id": "d1de923e-a09d-4f94-aab3-d0dbc498a9ae",
   "prevId": "622b8ad5-1546-461e-a0f7-8c50cb6bba6e",
   "version": "7",
   "dialect": "postgresql",
@@ -6077,124 +6077,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.AssessmentReadFact": {
-      "name": "AssessmentReadFact",
-      "schema": "",
-      "columns": {
-        "assessmentId": {
-          "name": "assessmentId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revision": {
-          "name": "revision",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "family": {
-          "name": "family",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "key": {
-          "name": "key",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "filters": {
-          "name": "filters",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "row": {
-          "name": "row",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "AssessmentReadFact_revision_family_key": {
-          "name": "AssessmentReadFact_revision_family_key",
-          "columns": [
-            {
-              "expression": "assessmentId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "revision",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "family",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "AssessmentReadFact_family_idx": {
-          "name": "AssessmentReadFact_family_idx",
-          "columns": [
-            {
-              "expression": "family",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "assessmentId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "revision",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "AssessmentReadFact_assessmentId_Assessment_id_fk": {
-          "name": "AssessmentReadFact_assessmentId_Assessment_id_fk",
-          "tableFrom": "AssessmentReadFact",
-          "tableTo": "Assessment",
-          "columnsFrom": [
-            "assessmentId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.AssessmentReadMembership": {
       "name": "AssessmentReadMembership",
       "schema": "",
@@ -6386,7 +6268,7 @@
         "assessmentId": {
           "name": "assessmentId",
           "type": "uuid",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "revision": {
@@ -6394,6 +6276,19 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "family": {
+          "name": "family",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "rulesVersion": {
           "name": "rulesVersion",
@@ -6424,9 +6319,104 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "filters": {
+          "name": "filters",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "row": {
+          "name": "row",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dependencies": {
+          "name": "dependencies",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {
+        "AssessmentReadPublication_revision_family_key": {
+          "name": "AssessmentReadPublication_revision_family_key",
+          "columns": [
+            {
+              "expression": "assessmentId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "revision",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "coalesce(\"family\", '')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "AssessmentReadPublication_active_family_key": {
+          "name": "AssessmentReadPublication_active_family_key",
+          "columns": [
+            {
+              "expression": "assessmentId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "coalesce(\"family\", '')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"AssessmentReadPublication\".\"active\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "AssessmentReadPublication_family_idx": {
+          "name": "AssessmentReadPublication_family_idx",
+          "columns": [
+            {
+              "expression": "family",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "assessmentId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"AssessmentReadPublication\".\"active\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "AssessmentReadPublication_group_idx": {
           "name": "AssessmentReadPublication_group_idx",
           "columns": [
@@ -6435,9 +6425,16 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "assessmentId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": false,
+          "where": "\"AssessmentReadPublication\".\"active\"",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -6453,6 +6450,7 @@
             }
           ],
           "isUnique": false,
+          "where": "\"AssessmentReadPublication\".\"active\"",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -6476,7 +6474,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "AssessmentReadPublication_result_check": {
+          "name": "AssessmentReadPublication_result_check",
+          "value": "(\"AssessmentReadPublication\".\"admitted\" AND \"AssessmentReadPublication\".\"family\" IS NOT NULL AND \"AssessmentReadPublication\".\"key\" IS NOT NULL AND \"AssessmentReadPublication\".\"filters\" IS NOT NULL AND \"AssessmentReadPublication\".\"row\" IS NOT NULL) OR (NOT \"AssessmentReadPublication\".\"admitted\" AND \"AssessmentReadPublication\".\"family\" IS NULL AND \"AssessmentReadPublication\".\"key\" IS NULL AND \"AssessmentReadPublication\".\"filters\" IS NULL AND \"AssessmentReadPublication\".\"row\" IS NULL)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.AssessmentReadStage": {
@@ -6583,104 +6586,6 @@
           "value": "cardinality(\"AssessmentReadStage\".\"assessmentIds\") > 0 AND \"AssessmentReadStage\".\"nextIndex\" >= 0 AND \"AssessmentReadStage\".\"nextIndex\" <= cardinality(\"AssessmentReadStage\".\"assessmentIds\")"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.AssessmentReadStageResult": {
-      "name": "AssessmentReadStageResult",
-      "schema": "",
-      "columns": {
-        "stageId": {
-          "name": "stageId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "assessmentId": {
-          "name": "assessmentId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "groupKey": {
-          "name": "groupKey",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "contentHash": {
-          "name": "contentHash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "admitted": {
-          "name": "admitted",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "dependencies": {
-          "name": "dependencies",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "AssessmentReadStageResult_member_key": {
-          "name": "AssessmentReadStageResult_member_key",
-          "columns": [
-            {
-              "expression": "stageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "assessmentId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "AssessmentReadStageResult_stageId_AssessmentReadStage_id_fk": {
-          "name": "AssessmentReadStageResult_stageId_AssessmentReadStage_id_fk",
-          "tableFrom": "AssessmentReadStageResult",
-          "tableTo": "AssessmentReadStage",
-          "columnsFrom": [
-            "stageId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "AssessmentReadStageResult_assessmentId_Assessment_id_fk": {
-          "name": "AssessmentReadStageResult_assessmentId_Assessment_id_fk",
-          "tableFrom": "AssessmentReadStageResult",
-          "tableTo": "Assessment",
-          "columnsFrom": [
-            "assessmentId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.AssessmentState": {

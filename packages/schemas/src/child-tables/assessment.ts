@@ -382,6 +382,7 @@ export const assessmentChildren = [
       },
     ],
   }),
+  // Staged and active revisions share one relation; only active rows serve reads.
   defineChildTable({
     name: "AssessmentReadPublication",
     exportName: "assessmentReadPublication",
@@ -389,51 +390,35 @@ export const assessmentChildren = [
       {
         key: "assessmentId",
         kind: "uuid",
-        primaryKey: true,
+        notNull: true,
         reference: { table: "assessment", column: "id" },
       },
       { key: "revision", kind: "uuid", notNull: true },
+      { key: "family", kind: "text", type: "SuggestionListFamily" },
+      { key: "active", kind: "boolean", notNull: true, default: false },
       { key: "rulesVersion", kind: "integer", notNull: true },
       { key: "contentHash", kind: "text", notNull: true },
       { key: "groupKey", kind: "text", notNull: true },
       { key: "admitted", kind: "boolean", notNull: true },
       { key: "computedAt", kind: "timestamp", notNull: true },
-    ],
-    indexes: [
-      { name: "AssessmentReadPublication_group_idx", on: ["groupKey"] },
-      { name: "AssessmentReadPublication_rules_idx", on: ["rulesVersion"] },
-    ],
-  }),
-  defineChildTable({
-    name: "AssessmentReadFact",
-    exportName: "assessmentReadFact",
-    columns: [
+      { key: "key", kind: "jsonb", type: "AssessmentReadKey" },
+      { key: "filters", kind: "jsonb", type: "AssessmentReadFilterFacts" },
+      { key: "row", kind: "jsonb", type: "SuggestionListRow" },
       {
-        key: "assessmentId",
-        kind: "uuid",
-        notNull: true,
-        reference: { table: "assessment", column: "id" },
-      },
-      { key: "revision", kind: "uuid", notNull: true },
-      {
-        key: "family",
-        kind: "text",
-        notNull: true,
-        type: "SuggestionListFamily",
-      },
-      { key: "key", kind: "jsonb", notNull: true, type: "AssessmentReadKey" },
-      {
-        key: "filters",
+        key: "dependencies",
         kind: "jsonb",
         notNull: true,
-        type: "AssessmentReadFilterFacts",
+        type: "AssessmentReadDependency[]",
       },
-      { key: "row", kind: "jsonb", notNull: true, type: "SuggestionListRow" },
     ],
     types: [
       {
         module: "@cubby/schemas/assessment-read-publication",
-        exports: ["AssessmentReadKey", "AssessmentReadFilterFacts"],
+        exports: [
+          "AssessmentReadKey",
+          "AssessmentReadFilterFacts",
+          "AssessmentReadDependency",
+        ],
       },
       {
         module: "@cubby/schemas/suggestion-list",
@@ -442,13 +427,36 @@ export const assessmentChildren = [
     ],
     indexes: [
       {
-        name: "AssessmentReadFact_revision_family_key",
+        name: "AssessmentReadPublication_revision_family_key",
         unique: true,
-        on: ["assessmentId", "revision", "family"],
+        on: ["assessmentId", "revision", { sql: "coalesce({family}, '')" }],
       },
       {
-        name: "AssessmentReadFact_family_idx",
-        on: ["family", "assessmentId", "revision"],
+        name: "AssessmentReadPublication_active_family_key",
+        unique: true,
+        on: ["assessmentId", { sql: "coalesce({family}, '')" }],
+        where: "{active}",
+      },
+      {
+        name: "AssessmentReadPublication_family_idx",
+        on: ["family", "assessmentId"],
+        where: "{active}",
+      },
+      {
+        name: "AssessmentReadPublication_group_idx",
+        on: ["groupKey", "assessmentId"],
+        where: "{active}",
+      },
+      {
+        name: "AssessmentReadPublication_rules_idx",
+        on: ["rulesVersion"],
+        where: "{active}",
+      },
+    ],
+    checks: [
+      {
+        name: "AssessmentReadPublication_result_check",
+        sql: "({admitted} AND {family} IS NOT NULL AND {key} IS NOT NULL AND {filters} IS NOT NULL AND {row} IS NOT NULL) OR (NOT {admitted} AND {family} IS NULL AND {key} IS NULL AND {filters} IS NULL AND {row} IS NULL)",
       },
     ],
   }),
@@ -584,50 +592,6 @@ export const assessmentChildren = [
       {
         name: "AssessmentReadStage_progress_check",
         sql: "cardinality({assessmentIds}) > 0 AND {nextIndex} >= 0 AND {nextIndex} <= cardinality({assessmentIds})",
-      },
-    ],
-  }),
-  defineChildTable({
-    name: "AssessmentReadStageResult",
-    exportName: "assessmentReadStageResult",
-    columns: [
-      {
-        key: "stageId",
-        kind: "uuid",
-        notNull: true,
-        reference: {
-          table: "assessmentReadStage",
-          column: "id",
-          onDelete: "cascade",
-        },
-      },
-      {
-        key: "assessmentId",
-        kind: "uuid",
-        notNull: true,
-        reference: { table: "assessment", column: "id" },
-      },
-      { key: "groupKey", kind: "text", notNull: true },
-      { key: "contentHash", kind: "text", notNull: true },
-      { key: "admitted", kind: "boolean", notNull: true },
-      {
-        key: "dependencies",
-        kind: "jsonb",
-        notNull: true,
-        type: "AssessmentReadDependency[]",
-      },
-    ],
-    types: [
-      {
-        module: "@cubby/schemas/assessment-read-publication",
-        exports: ["AssessmentReadDependency"],
-      },
-    ],
-    indexes: [
-      {
-        name: "AssessmentReadStageResult_member_key",
-        unique: true,
-        on: ["stageId", "assessmentId"],
       },
     ],
   }),
