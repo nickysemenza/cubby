@@ -895,16 +895,31 @@ describe("cross-family Suggestion list", () => {
     }
     const together = await prepareSuggestionAdmission(ctx.db, ids);
     expect(together.memberships).toEqual(memberships);
-    expect([...together.dependencies.keys()].sort()).toEqual(
-      page.items
-        .filter((row) => row.family !== "recommendation")
-        .map((row) => row.id)
-        .sort(),
-    );
+    expect([...together.dependencies.keys()].sort()).toEqual([...ids].sort());
     expect(together.dependencies.get(confident)).toEqual(
       expect.arrayContaining([
         { sourceKind: "product", sourceId: product.entityId },
         { sourceKind: "assessment.fieldWrite", sourceId: product.entityId },
+      ]),
+    );
+    expect(together.dependencies.get(proposal.review.assessmentId)).toEqual(
+      expect.arrayContaining([
+        {
+          sourceKind: "product",
+          sourceId: await resolveOrThrow(
+            ctx.db,
+            "product",
+            proposal.source.entityId,
+          ),
+        },
+        {
+          sourceKind: "expense",
+          sourceId: await resolveOrThrow(
+            ctx.db,
+            "expense",
+            proposal.target.entityId,
+          ),
+        },
       ]),
     );
     const separately = [];
@@ -927,23 +942,29 @@ describe("cross-family Suggestion list", () => {
     expect(factsById(separately.flatMap((batch) => batch.keys))).toEqual(
       factsById(together.keys),
     );
-    const results: AssessmentReadResult[] = ids.map((id) => ({
-      assessmentId: id,
-      groupKey: `synthetic-admission-${id}`,
-      dependencies: [],
-      memberships: memberships.get(id) ?? [],
-      facts: together.keys
-        .filter((key) => key.assessmentId === id)
-        .map((key) => {
-          const row = together.rows.get(id);
-          if (!row) throw new Error("Synthetic admitted row missing");
-          return {
-            key: { ...key, createdAt: key.createdAt.toISOString() },
-            filters: suggestionKeyFacts(key),
-            row,
-          };
-        }),
-    }));
+    const canonical = await prepareCanonicalAssessmentReadPublication(
+      ctx.db,
+      ids,
+      async () => () => sql`true`,
+    );
+    expect(canonical.failures.size).toBe(0);
+    const canonicalResults = new Map(
+      canonical.components.flatMap(({ prepared }) =>
+        prepared.results.map(
+          (result) => [result.assessmentId, result] as const,
+        ),
+      ),
+    );
+    const results: AssessmentReadResult[] = ids.map((id) => {
+      const result = canonicalResults.get(id);
+      if (!result) throw new Error("Synthetic canonical publication missing");
+      // The recovery journey below supplies separate provisional dependencies.
+      return {
+        ...result,
+        groupKey: `synthetic-admission-${id}`,
+        dependencies: [],
+      };
+    });
     const stage: AssessmentReadStagePlan = {
       id: crypto.randomUUID(),
       componentKey: "synthetic-shared-admission",
@@ -1398,12 +1419,47 @@ describe("cross-family Suggestion list", () => {
       ),
     ).toEqual([proposal.review.assessmentId]);
     expect(await batchCounts([item.id])).toEqual([{ id: item.id, pending: 1 }]);
+    const divergentInputs: AssessmentReadDependency[] = [];
     const divergent =
       (
-        await readAssessmentReadMemberships(ctx.db, [
-          proposal.review.assessmentId,
-        ])
+        await readAssessmentReadMemberships(
+          ctx.db,
+          [proposal.review.assessmentId],
+          (_id, inputs) => divergentInputs.push(...inputs),
+        )
       ).get(proposal.review.assessmentId) ?? [];
+    expect(divergentInputs).toEqual(
+      expect.arrayContaining([
+        { sourceKind: "image", sourceId: item.entityId },
+        { sourceKind: "product", sourceId: item.entityId },
+        {
+          sourceKind: "expense",
+          sourceId: await resolveOrThrow(ctx.db, "expense", charge.output.id),
+        },
+      ]),
+    );
+    await getDb(ctx.db)
+      .update(assessment)
+      .set({
+        evidence: sql`jsonb_set(${assessment.evidence}, '{candidate,target,entityId}', to_jsonb(${"  " + charge.output.id.toLowerCase() + "  "}::text))`,
+      })
+      .where(eq(assessment.id, proposal.review.assessmentId));
+    const normalizedInputs: AssessmentReadDependency[] = [];
+    await readAssessmentReadMemberships(
+      ctx.db,
+      [proposal.review.assessmentId],
+      (_id, inputs) => normalizedInputs.push(...inputs),
+    );
+    expect(normalizedInputs).toContainEqual({
+      sourceKind: "expense",
+      sourceId: await resolveOrThrow(ctx.db, "expense", charge.output.id),
+    });
+    await getDb(ctx.db)
+      .update(assessment)
+      .set({
+        evidence: sql`jsonb_set(${assessment.evidence}, '{candidate,target,entityId}', to_jsonb(${charge.output.id}::text))`,
+      })
+      .where(eq(assessment.id, proposal.review.assessmentId));
     expect(divergent.filter((row) => row.kind === "scope")).toEqual([
       expect.objectContaining({
         entity: "product",

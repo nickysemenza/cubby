@@ -328,6 +328,13 @@ can report each basis it actually visits before comparing fingerprints, includin
 stale candidates, so publication can collect inputs without a second capture.
 Skipped competitors produce no observation; this is not proof of a complete
 component dependency set.
+Membership preparation also retains immutable and mutable connection endpoints,
+including missing-code markers, before admission. Input enrollment uses the shared
+shortcode parser and one batched identity lookup; normalization does not change
+exact-text scope membership. Differing immutable and State
+families contribute their input sets independently. Endpoint observations cover
+simple record-only bases; relation-specific pools, rosters and history still need
+their own source capture before producer registration.
 Tag propagation retains hashed source and donor Product shortcodes before its
 freshness filter. Its capture must observe `updatedAt` as well as tags, deletion
 and shortcode changes, because the canonical donor revision includes that stamp.
