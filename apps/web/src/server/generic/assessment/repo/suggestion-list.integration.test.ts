@@ -721,6 +721,10 @@ describe("cross-family Suggestion list", () => {
       together.keys.length,
     );
     expect(notified.size).toBeGreaterThan(0);
+    // Another component's newly owed direct work does not invalidate this one.
+    await markWork(ctx.db, DERIVED_DRAIN, [
+      { target: ASSESSMENT_READ_TARGET, ref: crypto.randomUUID() },
+    ]);
     const unchanged = {
       ...restarted,
       id: crypto.randomUUID(),
