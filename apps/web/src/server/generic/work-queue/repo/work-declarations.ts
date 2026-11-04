@@ -14,7 +14,7 @@ import {
   type WorkSourceActionId,
 } from "@cubby/schemas/work-queue";
 import { workQueueGapChecks } from "@cubby/schemas/work-queue-policy";
-import { or, sql, type SQL } from "drizzle-orm";
+import { isNull, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import {
@@ -51,6 +51,7 @@ export const gapDeclaration = (entity: GapEntity) => ({
   entity,
   link: { kind: "record" as const },
   carriesGaps: true,
+  inputLabel: `${entitySummary[entity].singular} quality checks`,
   reasons: workQueueGapChecks(gapView(entity)).map((check) => ({
     key: check,
     label: dataCheckMessage[check],
@@ -150,6 +151,17 @@ export const gapPublicationRead = ({
       key: "dataQuality",
     }),
     columns: gapColumns(scope, entity, publishedGap),
+    // Missing values cannot decide gap membership. Keep their routing and
+    // possible reason text available for the queue's scoped completeness read.
+    missingInputs: scope.record?.quality
+      ? sql`false`
+      : isNull(publication.value),
+    missingColumns: {
+      reason: workQueueGapChecks(gapView(entity))
+        .map((check) => dataCheckMessage[check])
+        .join(" "),
+      reasonKeys: workQueueGapChecks(gapView(entity)),
+    },
     admission: admittedChecks.length
       ? or(
           ...admittedChecks.map((check) =>

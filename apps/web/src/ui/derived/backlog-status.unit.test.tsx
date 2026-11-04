@@ -7,7 +7,7 @@ import { BackgroundRefreshStatus } from "~/ui/feedback/background-refresh-status
 
 import { DerivedBacklogStatus } from "./backlog";
 
-it("preserves the sidebar high-water mark across a slow background refresh", async () => {
+it("keeps remaining refreshes distinct from client synchronization", async () => {
   const now = Date.now();
   const harness = createBrowserTestHarness({ clock: { now } });
   const key = derived.backlog.queryKey({});
@@ -29,10 +29,8 @@ it("preserves the sidebar high-water mark across a slow background refresh", asy
       harness.queryClient.setQueryData(key, backlog(800));
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(screen.getByRole("progressbar")).toHaveAttribute(
-      "aria-valuenow",
-      "200",
-    );
+    expect(screen.getByText("800 refreshes pending")).toBeVisible();
+    expect(screen.queryByRole("progressbar")).toBeNull();
     harness.queryClient.setQueryData(["synthetic-refresh"], "before");
     const held = new Promise<string>((resolve) => {
       release = () => resolve("after");
@@ -55,14 +53,8 @@ it("preserves the sidebar high-water mark across a slow background refresh", asy
       await fetch;
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(screen.getByRole("progressbar")).toHaveAttribute(
-      "aria-valuenow",
-      "400",
-    );
-    expect(screen.getByRole("progressbar")).toHaveAttribute(
-      "aria-valuemax",
-      "1000",
-    );
+    expect(screen.getByText("600 refreshes pending")).toBeVisible();
+    expect(screen.queryByRole("progressbar")).toBeNull();
   } finally {
     release();
     view.unmount();

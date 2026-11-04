@@ -1,6 +1,7 @@
 import type { DerivedBacklog } from "@cubby/schemas/derived-backlog";
 import { entityRoster } from "@cubby/schemas/entity-roster";
 import { humanize } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -16,19 +17,13 @@ import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
 import { HEAT_CLASSES, heatBucket } from "~/ui/matrix/heat-scale";
 import { totalCell } from "~/ui/matrix/matrix-chrome";
 import { Button } from "~/ui/primitives/button";
-import {
-  Progress,
-  ProgressLabel,
-  ProgressValue,
-} from "~/ui/primitives/progress";
 
 import { type BacklogMatrix, pivotDerivedBacklog } from "./backlog-matrix";
 import {
-  backlogEstimate,
-  type BacklogSample,
-  sampleBacklog,
-} from "./backlog-progress";
-import { useBacklogProgress } from "./use-backlog-progress";
+  backlogRefreshes,
+  backlogStates,
+  refreshStateSummary,
+} from "./backlog-summary";
 
 /** The shell status slot's derived backlog: shown only while values are updating. */
 export function DerivedBacklogStatus({
@@ -36,12 +31,11 @@ export function DerivedBacklogStatus({
 }: {
   compact?: boolean;
 }) {
-  const { data, dataUpdatedAt } = useQuery({
+  const { data } = useQuery({
     ...derived.backlog.queryOptions({}),
   });
-  const progress = useBacklogProgress(data?.total, dataUpdatedAt);
   if (!data?.total) return null;
-  const label = `Updating ${formatCount(data.total)} values`;
+  const label = `${countLabel(data.total, "refresh")} pending`;
   return (
     <Link
       to="/activity"
@@ -52,15 +46,6 @@ export function DerivedBacklogStatus({
     >
       {compact ? (
         <span aria-hidden="true" className="size-1.5 rounded-full bg-info" />
-      ) : progress.peak >= 100 ? (
-        <Progress
-          value={progress.drained}
-          max={progress.peak}
-          aria-valuetext={`${label}; ${formatCount(progress.drained)} fewer since opened`}
-        >
-          <ProgressLabel>{label}</ProgressLabel>
-          <ProgressValue />
-        </Progress>
       ) : (
         <span>{label}</span>
       )}
@@ -72,35 +57,12 @@ export function DerivedBacklogOverview() {
   const result = useQuery({
     ...derived.backlog.queryOptions({}),
   });
-  const [observed, setObserved] = useState(0);
-  const [samples, setSamples] = useState<readonly BacklogSample[]>([]);
-  if (result.isSuccess && result.dataUpdatedAt !== observed) {
-    setObserved(result.dataUpdatedAt);
-    setSamples(
-      sampleBacklog(samples, {
-        at: result.dataUpdatedAt,
-        total: result.data.total,
-      }),
-    );
-  }
-  const estimate = backlogEstimate(samples);
-  const firstSample = samples[0];
-  const lastSample = samples.at(-1);
-  const hasWindow =
-    firstSample && lastSample && lastSample.at - firstSample.at >= 60_000;
-  const minutes = estimate
-    ? Math.max(1, Math.ceil(estimate.seconds / 60))
+  const matrix = result.data?.kinds.some((kind) => kind.count > 0)
+    ? pivotDerivedBacklog({
+        ...result.data,
+        total: result.data.kinds.reduce((sum, kind) => sum + kind.count, 0),
+      })
     : null;
-  const duration =
-    minutes === null
-      ? null
-      : minutes < 60
-        ? `${minutes} min`
-        : `${Math.ceil(minutes / 60)} h`;
-  const matrix =
-    result.data && result.data.total > 0
-      ? pivotDerivedBacklog(result.data)
-      : null;
   return (
     <div className="flex flex-col gap-3">
       <RecordList
@@ -120,29 +82,18 @@ export function DerivedBacklogOverview() {
       >
         {result.data && result.data.total > 0 && (
           <RecordRow
-            primary={`${formatCount(result.data.total)} values remaining`}
-            trailing={
-              result.isError
-                ? "Estimate unavailable"
-                : duration
-                  ? `About ${duration} remaining`
-                  : hasWindow
-                    ? "No ETA yet"
-                    : "Estimating…"
-            }
+            primary={`${countLabel(result.data.total, "refresh")} pending`}
             secondary={
-              estimate && !result.isError
-                ? `${formatCount(Math.round(estimate.perMinute))} fewer/min while this page is open. New work can change the estimate.`
-                : hasWindow
-                  ? "The backlog is not decreasing over recent samples."
-                  : "Needs at least a minute of decreasing backlog while this page is open."
+              result.data.oldestWaitingSeconds === null
+                ? undefined
+                : `Oldest wait: ${formatCount(result.data.oldestWaitingSeconds)} seconds`
             }
           />
         )}
       </RecordList>
       {result.data && result.data.total > 0 ? (
         <DerivedRefreshStates
-          kinds={result.data.kinds}
+          backlog={result.data}
           observedAt={result.dataUpdatedAt}
         />
       ) : null}
@@ -151,48 +102,45 @@ export function DerivedBacklogOverview() {
   );
 }
 
-const refreshStateSummary = (
-  states: NonNullable<DerivedBacklog["kinds"][number]["states"]>,
-) =>
-  `${formatCount(states.queued)} queued · ${formatCount(states.running)} running · ${formatCount(states.waiting)} waiting · ${formatCount(states.failed)} failed`;
-
 function DerivedRefreshStates({
-  kinds,
+  backlog,
   observedAt,
 }: {
-  kinds: DerivedBacklog["kinds"];
+  backlog: DerivedBacklog;
   observedAt: number;
 }) {
-  const known = kinds.flatMap((kind) =>
-    kind.states && kind.count > 0 ? [{ ...kind, states: kind.states }] : [],
-  );
-  if (!known.length) return null;
-  const total = known.reduce(
-    (sum, kind) => ({
-      queued: sum.queued + kind.states.queued,
-      running: sum.running + kind.states.running,
-      waiting: sum.waiting + kind.states.waiting,
-      failed: sum.failed + kind.states.failed,
-    }),
-    { queued: 0, running: 0, waiting: 0, failed: 0 },
-  );
+  const rows = backlogRefreshes(backlog);
+  const total = backlogStates(backlog);
   return (
     <div className="grid gap-1 text-xs">
-      <p>{refreshStateSummary(total)}</p>
-      <p className="text-muted-foreground">
-        Declared values · Observed <DateDisplay timestamp={observedAt} />
+      <p>
+        {total.unknown > 0 ? "Known states: " : ""}
+        {refreshStateSummary(total)}
       </p>
-      <Disclosure summary="Refresh states by value">
-        <RecordList empty="No declared values waiting.">
-          {known.map((kind) => (
+      {total.unknown > 0 && (
+        <p>
+          Execution state not reported for{" "}
+          {countLabel(total.unknown, "refresh")}.
+        </p>
+      )}
+      <p className="text-muted-foreground">
+        Refresh work · Observed <DateDisplay timestamp={observedAt} />
+      </p>
+      <Disclosure summary="Refresh states by source">
+        <RecordList empty="No refreshes waiting.">
+          {rows.map((kind) => (
             <RecordRow
-              key={`${kind.entity}.${kind.field}`}
-              primary={`${entityRoster[kind.entity].singular} · ${humanize(kind.field)}`}
-              secondary={refreshStateSummary(kind.states)}
+              key={kind.key}
+              primary={kind.label}
+              secondary={
+                kind.states
+                  ? refreshStateSummary(kind.states)
+                  : "Execution state not reported"
+              }
               detail={
                 kind.refreshReasons?.length ? (
                   <fieldset
-                    aria-label={`${entityRoster[kind.entity].singular} ${humanize(kind.field).toLowerCase()} refresh triggers`}
+                    aria-label={`${kind.triggerLabel} refresh triggers`}
                   >
                     <Facts
                       layout="inline"

@@ -11,6 +11,7 @@ import { z } from "zod";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
+import { derived } from "~/integrations/tanstack-query/generated/domains/derived.gen";
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { mock } from "~/lib/test/mock-schema";
 import { getEntityDetailOutputSchema } from "~/server/generated/entity-details.server.gen";
@@ -124,7 +125,7 @@ beforeEach(async () => {
       return {
         ok: true,
         data: {
-          total: backlogStates ? 10 : 0,
+          total: backlogStates ? 14 : 0,
           kinds: backlogStates
             ? [
                 {
@@ -140,8 +141,39 @@ beforeEach(async () => {
                 },
               ]
             : [],
+          internal: backlogStates
+            ? [
+                {
+                  target: "assessment.reviewFacts",
+                  label: "Assessment reviews",
+                  count: 3,
+                  states: { queued: 1, running: 0, waiting: 1, failed: 1 },
+                  refreshReasons: [
+                    { reason: "Assessment inputs changed", count: 3 },
+                  ],
+                },
+                {
+                  target: "synthetic.unreported",
+                  label: "Unreported refresh source",
+                  count: 1,
+                },
+              ]
+            : [],
           oldestWaitingSeconds: backlogStates ? 90 : null,
-          recent: { windowMinutes: 15, perMinute: [] },
+          recent: {
+            windowMinutes: 15,
+            perMinute: backlogStates ? [3] : [],
+            sources: backlogStates
+              ? [
+                  { target: null, label: "Stored values", perMinute: [2] },
+                  {
+                    target: "assessment.reviewFacts",
+                    label: "Assessment reviews",
+                    perMinute: [1],
+                  },
+                ]
+              : [],
+          },
         },
       };
     }
@@ -383,16 +415,30 @@ it("embeds bounded attention and Job tables, scopes chips, and expands the selec
   );
 });
 
-it("shows observed per-value refresh states and the next known attempt", async () => {
+it("shows field and internal refresh observations without inventing missing execution state", async () => {
   backlogStates = true;
   render(<Overview />, { wrapper: harness.wrapper });
   expect(
-    await screen.findByText("4 queued · 2 running · 3 waiting · 1 failed"),
+    await screen.findByText(
+      "Known states: 5 queued · 2 running · 4 waiting · 2 failed",
+    ),
+  ).toBeVisible();
+  expect(
+    screen.getByText("Execution state not reported for 1 refresh."),
+  ).toBeVisible();
+  expect(
+    screen.getByText(
+      /Current publications from the last 15 min · Stored values: 2 · Assessment reviews: 1/,
+    ),
   ).toBeVisible();
   await userEvent.click(
-    screen.getByRole("button", { name: "Refresh states by value" }),
+    screen.getByRole("button", { name: "Refresh states by source" }),
   );
-  expect(await screen.findByText("Product · Price")).toBeVisible();
+  await waitFor(() =>
+    expect(screen.getByText("Product · Price")).toBeVisible(),
+  );
+  expect(screen.getByText("Assessment reviews")).toBeVisible();
+  expect(screen.getByText("Execution state not reported")).toBeVisible();
   const triggers = within(
     screen.getByRole("group", { name: "Product price refresh triggers" }),
   );
@@ -401,6 +447,28 @@ it("shows observed per-value refresh states and the next known attempt", async (
   expect(triggers.getByText("Trigger not recorded")).toBeVisible();
   expect(triggers.getByText("3")).toBeVisible();
   expect(screen.getByText(/Next attempt/)).toBeVisible();
+  await act(async () => {
+    harness.queryClient.setQueryData(derived.backlog.queryKey({}), {
+      total: 2,
+      kinds: [
+        {
+          entity: "product",
+          field: "price",
+          count: 2,
+          states: { queued: 2, running: 0, waiting: 0, failed: 0 },
+        },
+      ],
+      oldestWaitingSeconds: 900,
+      recent: { windowMinutes: 15, perMinute: [50] },
+    });
+  });
+  await waitFor(() =>
+    expect(
+      within(screen.getByTestId("work-stream-derived")).getByLabelText(
+        "Not moving",
+      ),
+    ).toBeVisible(),
+  );
 });
 
 it("retries the current filter without widening to other lanes", async () => {
@@ -481,6 +549,7 @@ it("requests navigable chip counts from the Job table population", async () => {
 
 it("keeps phone commands below readable stream identity and facts", async () => {
   await page.viewport(390, 1100);
+  backlogStates = true;
   render(<Overview />, { wrapper: harness.wrapper });
   const row = (await screen.findAllByTestId("work-stream"))[0];
   if (!row) throw new Error("Missing synthetic work stream");
@@ -491,12 +560,14 @@ it("keeps phone commands below readable stream identity and facts", async () => 
     label.getBoundingClientRect().bottom,
   );
   expect(row.getBoundingClientRect().right).toBeLessThanOrEqual(390);
+  const derived = await screen.findByTestId("work-stream-derived");
+  expect(derived.getBoundingClientRect().right).toBeLessThanOrEqual(390);
 });
 
 it("reads All quiet without a live indicator when no work is outstanding", async () => {
   quiet = true;
   render(<Overview />, { wrapper: harness.wrapper });
-  expect(await screen.findByText(/All quiet · 0 finished/)).toBeVisible();
+  expect(await screen.findByText(/All quiet · 0 Jobs finished/)).toBeVisible();
   expect(screen.queryByText("Work is moving")).toBeNull();
   expect(screen.queryByTestId("work-stream")).toBeNull();
 });
@@ -535,7 +606,7 @@ it("shows derived read errors and Retry even without an aged backlog, never All 
   const retry = screen.getAllByRole("button", { name: /Retry/ })[0];
   if (!retry) throw new Error("Missing derived Retry action");
   await userEvent.click(retry);
-  expect(await screen.findByText(/All quiet · 0 finished/)).toBeVisible();
+  expect(await screen.findByText(/All quiet · 0 Jobs finished/)).toBeVisible();
 });
 
 it("keeps the derived loading section visible while reads are paused offline", async () => {

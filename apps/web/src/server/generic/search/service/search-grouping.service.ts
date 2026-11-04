@@ -575,10 +575,10 @@ export async function findRelatedSearchGroups(
     undefined,
     50,
   );
-  if (related.status === "unavailable")
-    return { status: "unavailable" as const, groups: [] };
+  const { results, ...coverage } = related;
+  if (related.status === "unavailable") return { ...coverage, groups: [] };
   return {
-    status: "ready" as const,
-    groups: await composeSearchGroups(db, related.results, input),
+    ...coverage,
+    groups: await composeSearchGroups(db, results, input),
   };
 }

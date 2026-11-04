@@ -271,7 +271,7 @@ describe("composed Work queue engine", () => {
       kind: "member",
       userId: otherUser,
     });
-    const source = fakeSource("owners", [
+    const base = fakeSource("owners", [
       {
         key: "mine",
         reasons: ["a"],
@@ -299,9 +299,20 @@ describe("composed Work queue engine", () => {
       },
       { key: "missing", reasons: ["a"] },
     ]);
+    const source: WorkSource = {
+      ...base,
+      inputLabel: "Synthetic source checks",
+      candidates: async (db, scope) => {
+        const candidates = await base.candidates(db, scope);
+        return candidates && { ...candidates, missingInputs: candidates.query };
+      },
+    };
     const composition = { sources: [source], deferrals: [] };
     const household = await read([source]);
     expect(household.meta.totalCount).toBe(6);
+    expect(household.meta.incompleteSources).toEqual([
+      { source: "owners", label: "Synthetic source checks", count: 6 },
+    ]);
     expect(
       household.items
         .find((row) => row.key === "shared")
@@ -323,6 +334,7 @@ describe("composed Work queue engine", () => {
       memberOnly: false,
     });
     expect(own.items.map((row) => row.key)).toEqual(["both", "mine", "shared"]);
+    expect(own.meta.incompleteSources?.[0]?.count).toBe(3);
     const noValue = await read([source], {
       owner: first.shortcode,
       ownerPresence: "none",
@@ -359,12 +371,14 @@ describe("composed Work queue engine", () => {
       memberOnly: true,
     });
     expect(fenced.items.map((row) => row.key)).toEqual(["mine", "shared"]);
+    expect(fenced.meta.incompleteSources?.[0]?.count).toBe(2);
     const unlinked = await readWorkQueueWith(ctx.db, composition, {
       input: {},
       memberPartyId: null,
       memberOnly: true,
     });
     expect(unlinked.items.map((row) => row.key)).toEqual(["shared"]);
+    expect(unlinked.meta.incompleteSources?.[0]?.count).toBe(1);
     const withoutMe = await read([source], { ownerExclude: first.shortcode });
     expect(withoutMe.items.map((row) => row.key)).toEqual([
       "missing",
@@ -629,6 +643,46 @@ describe("composed Work queue engine", () => {
       }),
       ctx.actor,
     );
+    const readResearch = () =>
+      readComposedQueue(ctx.db, {
+        input: {
+          reason: "product_category",
+          query: "Synthetic source gap widget",
+        },
+        memberPartyId: null,
+        memberOnly: false,
+      });
+    const unpublished = await readResearch();
+    expect(unpublished.meta.totalCount).toBe(0);
+    expect(unpublished.meta.incompleteSources).toEqual([
+      {
+        source: "research:product",
+        label: "Product quality checks",
+        count: 1,
+      },
+    ]);
+    const human = await readComposedQueue(ctx.db, {
+      input: {
+        view: "human",
+        reason: "product_category",
+        query: "Synthetic source gap widget",
+      },
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(human.meta.incompleteSources).toEqual([]);
+    const agent = await readComposedQueue(ctx.db, {
+      input: {
+        view: "agent",
+        reason: "product_category",
+        query: "Synthetic source gap widget",
+      },
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(agent.meta.incompleteSources).toEqual(
+      unpublished.meta.incompleteSources,
+    );
     await publishAllQualityFixtures(ctx.db);
     const queue = await readComposedQueue(ctx.db, {
       input: {
@@ -649,6 +703,7 @@ describe("composed Work queue engine", () => {
     expect(queue.items[0]?.gaps.map((gap) => gap.check)).toContain(
       "product_category",
     );
+    expect(queue.meta.incompleteSources).toEqual([]);
     const excluded = await readComposedQueue(ctx.db, {
       input: { reason: "product_category", reasonExclude: "product_category" },
       memberPartyId: null,

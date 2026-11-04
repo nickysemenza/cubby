@@ -21,6 +21,20 @@ can appear in more than one view when it has different actionable work.
 Home and Work disclose the same incomplete Project or diagnostic publications.
 Home leaves its total unavailable while those checks are incomplete and labels
 an empty known roster without claiming that nothing needs attention.
+Gap sources also report records whose quality inputs have not been published.
+Those records contribute completeness metadata, never guessed gaps or actionable
+rows. The same candidate filters, routing, member fence and planned-Purchase
+deferral apply; negative reason filters cannot establish that unknown records
+are excluded. Search uses the source's possible reason labels until facts exist.
+Counts and view counts cover known work only while any admitted source is
+incomplete. Publication makes the ordinary read complete without a read repair.
+
+Automatic work distinguishes remaining refreshes, observed execution states and
+current publications by age. When supplied by the backend, internal sources keep their labels beside stored
+entity fields. Queue shrinkage is not a completion count or an ETA; publication
+age is not an execution-event rate. Missing execution observations stay unknown.
+Assessment source observations remain pending the separately owned producer
+cutover; this UI contract does not imply that registration has shipped.
 
 The Work queue derives work from records, gaps, findings, execution, review
 state and Problems detectors. Each domain declares its Work sources (reasons,
@@ -254,6 +268,9 @@ Work’s Needs you view embeds the existing decision, financial-proposal and
 Problems queues with their canonical queries, group actions and affected-record
 navigation. Automatic work retains automatic recovery and ordinary waits;
 persistent Run stalls and Job failure attention follow existing policies.
+The feed keeps measured completion pace separate from finish estimates.
+Scheduled work, retry backoff and member pauses leave time remaining unknown; a recent pace
+does not predict when those waits will end.
 All Work queue executor views remain available at `/work-queue`.
 Work History opens retained Runs and audit changes; it is not a second
 completed-task ledger. Advanced maintenance holds the nightly pass and

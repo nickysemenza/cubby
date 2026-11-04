@@ -39,7 +39,7 @@ describe("work streams", () => {
     );
   });
 
-  it("reads a moving queue as working and estimates time left from its pace", () => {
+  it("estimates moving work only when no scheduled or retry waits remain", () => {
     const view = workStreamView(
       stream({ running: 2, due: 98, completedPerMinute: 20 }),
       NOW,
@@ -47,6 +47,24 @@ describe("work streams", () => {
     expect(view.status).toBe("working");
     expect(view.remaining).toBe(100);
     expect(view.minutesLeft).toBe(5);
+    expect(
+      workStreamView(
+        stream({ running: 2, scheduled: 98, completedPerMinute: 20 }),
+        NOW,
+      ).minutesLeft,
+    ).toBeNull();
+    expect(
+      workStreamView(
+        stream({ running: 2, backingOff: 98, completedPerMinute: 20 }),
+        NOW,
+      ).minutesLeft,
+    ).toBeNull();
+    expect(
+      workStreamView(
+        stream({ running: 2, paused: 98, completedPerMinute: 20 }),
+        NOW,
+      ).minutesLeft,
+    ).toBeNull();
   });
 
   it("separates waiting from not moving by the oldest due age and pace", () => {

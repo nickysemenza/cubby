@@ -20,8 +20,12 @@ export const emailWorkSources: WorkSource[] = [
     candidates: async (db, scope) => {
       const readGap = gapPublicationRead({ scope, entity: "email" });
       if (!readGap) return null;
-      return {
-        query: selectWorkCandidates(db, declaration, {
+      const baseWhere = await emailScaffold.prepareWhere(
+        db,
+        emailFiltersSchema.parse(readGap.filters),
+      );
+      const candidates = (missingInputs: boolean) =>
+        selectWorkCandidates(db, declaration, {
           entity: "email",
           id: sql`${email.shortcode}`,
           name: sql`coalesce("Email".subject, 'Email')`,
@@ -29,20 +33,18 @@ export const emailWorkSources: WorkSource[] = [
           exclusiveOwner: sql`"Email"."ledgerPartyId"`,
           date: householdDaySql(sql`"Email"."receivedAt"`),
           ...readGap.columns,
+          ...(missingInputs ? readGap.missingColumns : {}),
         })
           .from(email)
           .leftJoin(readGap.publication, readGap.match)
           .where(
             and(
-              await emailScaffold.prepareWhere(
-                db,
-                emailFiltersSchema.parse(readGap.filters),
-              ),
-              readGap.admission,
+              baseWhere,
+              missingInputs ? readGap.missingInputs : readGap.admission,
               recordScope(scope, sql`${email.shortcode}`),
             ),
-          ),
-      };
+          );
+      return { query: candidates(false), missingInputs: candidates(true) };
     },
   },
 ];

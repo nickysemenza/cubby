@@ -31,7 +31,7 @@ export type WorkStreamView = {
   status: WorkStreamStatus;
   /** Work that is not finished: running, due, backing off or scheduled. */
   remaining: number;
-  /** Minutes to finish `remaining` at the measured pace; null without pace. */
+  /** Minutes at the measured pace; unknown without pace or while future waits remain. */
   minutesLeft: number | null;
   /** Seconds the oldest due item has waited; null when nothing is due. */
   oldestWaitSeconds: number | null;
@@ -70,7 +70,11 @@ export function workStreamView(
     status,
     remaining,
     minutesLeft:
-      remaining > 0 && stream.completedPerMinute > 0
+      remaining > 0 &&
+      stream.completedPerMinute > 0 &&
+      stream.backingOff === 0 &&
+      stream.scheduled === 0 &&
+      stream.paused === 0
         ? remaining / stream.completedPerMinute
         : null,
     oldestWaitSeconds,

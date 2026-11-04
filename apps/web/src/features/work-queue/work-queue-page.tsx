@@ -49,7 +49,10 @@ import {
 } from "~/entity/table/use-table-state";
 import { WorkActions } from "~/entity/work-queue/work-actions";
 import { ownerLabel, OwnerPill } from "~/entity/work-queue/work-queue-display";
-import { WorkInputStatus } from "~/features/work-queue/work-input-status";
+import {
+  hasIncompleteWorkInputs,
+  WorkInputStatus,
+} from "~/features/work-queue/work-input-status";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { copyShortcodes } from "~/lib/clipboard";
 import { formatCount } from "~/lib/number-format";
@@ -815,7 +818,11 @@ export function WorkQueue({
               ) : undefined
             }
           >
-            {hasFilters ? "No work matches these filters." : "Nothing here."}
+            {hasIncompleteWorkInputs(firstPage?.meta)
+              ? "No known work while inputs are incomplete."
+              : hasFilters
+                ? "No work matches these filters."
+                : "Nothing here."}
           </EmptyState>
         }
       />

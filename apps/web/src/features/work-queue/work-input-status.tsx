@@ -5,13 +5,14 @@ import { AttentionInputStatus } from "~/features/project/attention-input-status"
 
 type WorkInputMeta = Pick<
   WorkQueueOut["meta"],
-  "incompleteProjectIds" | "incompleteDiagnosticSources"
+  "incompleteProjectIds" | "incompleteDiagnosticSources" | "incompleteSources"
 >;
 
 export function hasIncompleteWorkInputs(meta: WorkInputMeta | undefined) {
   return Boolean(
     meta?.incompleteProjectIds?.length ||
-    meta?.incompleteDiagnosticSources?.length,
+    meta?.incompleteDiagnosticSources?.length ||
+    meta?.incompleteSources?.length,
   );
 }
 
@@ -22,6 +23,12 @@ export function WorkInputStatus({ meta }: { meta: WorkInputMeta | undefined }) {
   return (
     <>
       <AttentionInputStatus count={meta?.incompleteProjectIds?.length ?? 0} />
+      {meta?.incompleteSources?.map((source) => (
+        <p key={source.source} className="text-sm text-muted-foreground">
+          {source.label} have not been published for{" "}
+          {countLabel(source.count, "record")}. Counts include known work only.
+        </p>
+      ))}
       {!!sources?.length && (
         <p className="text-sm text-muted-foreground">
           Diagnostic counts are unavailable or out of date for{" "}

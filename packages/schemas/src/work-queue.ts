@@ -295,6 +295,16 @@ export const workQueueOutSchema = z.object({
       .array(incompleteWorkDiagnosticSource)
       .max(64)
       .optional(),
+    /** Potential records excluded because their source inputs are not published. */
+    incompleteSources: z
+      .array(
+        z.object({
+          source: z.string().min(1),
+          label: z.string().min(1),
+          count,
+        }),
+      )
+      .optional(),
     totalCount: count,
     viewCounts: z.record(z.string(), count),
     /** The grouped read's sections of the whole filtered set, in page order. */
