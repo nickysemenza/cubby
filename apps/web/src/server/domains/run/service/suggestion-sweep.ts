@@ -56,6 +56,7 @@ import {
 import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { JobTargetError } from "~/server/generic/jobs/errors";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
@@ -484,7 +485,7 @@ export async function executeSuggestionSweepTarget(
     ) &&
     (!targetEnvelope || targetEnvelope.result.kind === "missing")
   )
-    throw new Error("Suggestion target field result is unavailable");
+    throw new JobTargetError("Suggestion target field result is unavailable");
   const basis = Object.fromEntries(
     basisKeys.map((key) => [key, basisValueOf(valueOf(key))]),
   );

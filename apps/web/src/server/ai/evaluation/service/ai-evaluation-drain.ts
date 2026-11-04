@@ -76,8 +76,11 @@ export type AiEvaluationExecution = {
 
 /** Features whose evaluations share one page preparation and decision wave. */
 const PAGE_FEATURES = new Set(["product-identity", "entity-connections"]);
-/** Items per page for features that run each item's own transactions. */
-const ITEM_PAGE_LIMIT = 8;
+/**
+ * Items per Job page. A paged feature prepares and evaluates them as one wave,
+ * so the rest stay owed and rejoin fair selection after this page's checkpoint.
+ */
+const PAGE_LIMIT = 8;
 const ITEM_CONCURRENCY = 2;
 /** Consecutive failures before an item settles its evaluation `failed`. */
 const AI_EVALUATION_MAX_ATTEMPTS = 3;
@@ -203,7 +206,7 @@ function aiEvaluationDrainSpec(
   paged: boolean,
 ) {
   return defineDrain<Prepared>({
-    limit: paged ? 100 : ITEM_PAGE_LIMIT,
+    limit: PAGE_LIMIT,
     isolationLevel: "serializable",
     maxAttempts: AI_EVALUATION_MAX_ATTEMPTS,
     weight: (item, prepared) => prepared.page?.ready.get(item.ref)?.weight ?? 1,

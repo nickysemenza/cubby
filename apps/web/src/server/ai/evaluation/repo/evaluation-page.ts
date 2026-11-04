@@ -70,8 +70,7 @@ export interface EvaluationPageAdapter<P, O> {
   weight?(outcome: EvaluationPageOutcome<O>): number;
 }
 
-/** Admission bounds retained evidence; a wave limits unadmitted canonical reads. */
-const PREPARATION_WAVE = 8;
+/** Admission bounds the evidence one drain page retains. */
 const PAGE_EVIDENCE_BYTES = 4 * 1024 * 1024;
 
 type PreparedEvaluationEvidence<P> = {
@@ -82,7 +81,7 @@ type PreparedEvaluationEvidence<P> = {
   preparedBytes: number;
 };
 
-/** Preserve the ordered byte prefix without capturing every unadmitted source. */
+/** Prepare one drain page's wave, retaining its ordered evidence byte prefix. */
 export async function prepareEvaluationEvidence<P>(
   db: Database,
   targets: readonly EvaluationPageTarget[],
@@ -94,51 +93,40 @@ export async function prepareEvaluationEvidence<P>(
   const overflow: string[] = [];
   let preparedBytes = 0;
   let full = false;
-  for (let start = 0; start < targets.length; start += PREPARATION_WAVE) {
-    const wave = targets.slice(start, start + PREPARATION_WAVE);
-    const prepared = await adapter.prepare(db, wave);
-    const expected = new Set(wave.map((entry) => entry.evaluation.id));
-    if (
-      prepared.length !== wave.length ||
-      new Set(prepared.map((entry) => entry.target.evaluation.id)).size !==
-        wave.length ||
-      prepared.some((entry) => !expected.has(entry.target.evaluation.id))
-    )
-      throw new Error("AI page adapter returned an unexpected preparation set");
-    for (const entry of prepared) {
-      if (entry.kind === "failed") {
-        failures.set(entry.target.evaluation.id, entry.error);
-        continue;
-      }
-      const bytes = new TextEncoder().encode(
-        JSON.stringify(
-          [entry.prepared, entry.target.evaluation.snapshot],
-          (_key, value) => (value instanceof Map ? [...value] : value),
-        ),
-      ).byteLength;
-      if (bytes > PAGE_EVIDENCE_BYTES) {
-        oversized.set(
-          entry.target.evaluation.id,
-          "AI evaluation evidence exceeds the 4 MiB page bound",
-        );
-        continue;
-      }
-      full ||= preparedBytes + bytes > PAGE_EVIDENCE_BYTES;
-      if (full) {
-        overflow.push(entry.target.evaluation.id);
-        continue;
-      }
-      preparedBytes += bytes;
-      ready.push(entry);
+  const prepared = await adapter.prepare(db, targets);
+  const expected = new Set(targets.map((entry) => entry.evaluation.id));
+  if (
+    prepared.length !== targets.length ||
+    new Set(prepared.map((entry) => entry.target.evaluation.id)).size !==
+      targets.length ||
+    prepared.some((entry) => !expected.has(entry.target.evaluation.id))
+  )
+    throw new Error("AI page adapter returned an unexpected preparation set");
+  for (const entry of prepared) {
+    if (entry.kind === "failed") {
+      failures.set(entry.target.evaluation.id, entry.error);
+      continue;
     }
-    if (full) {
-      overflow.push(
-        ...targets
-          .slice(start + wave.length)
-          .map((entry) => entry.evaluation.id),
+    const bytes = new TextEncoder().encode(
+      JSON.stringify(
+        [entry.prepared, entry.target.evaluation.snapshot],
+        (_key, value) => (value instanceof Map ? [...value] : value),
+      ),
+    ).byteLength;
+    if (bytes > PAGE_EVIDENCE_BYTES) {
+      oversized.set(
+        entry.target.evaluation.id,
+        "AI evaluation evidence exceeds the 4 MiB page bound",
       );
-      break;
+      continue;
     }
+    full ||= preparedBytes + bytes > PAGE_EVIDENCE_BYTES;
+    if (full) {
+      overflow.push(entry.target.evaluation.id);
+      continue;
+    }
+    preparedBytes += bytes;
+    ready.push(entry);
   }
   return { ready, failures, oversized, overflow, preparedBytes };
 }

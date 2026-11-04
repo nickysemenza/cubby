@@ -177,7 +177,9 @@ describe("connection evaluation pages", () => {
     const all = await schedule(created.map((entry) => entry.message));
     const page = all.filter((id) => !single.includes(id));
     expect(page).toHaveLength(20);
-    expect(await runPage(page)).toBe("succeeded");
+    expect(new Set(await drainAiEvaluations(ctx.db, page))).toEqual(
+      new Set(["succeeded"]),
+    );
     expect(new Set(await states(page))).toEqual(new Set(["completed"]));
   });
 
@@ -239,7 +241,9 @@ describe("connection evaluation pages", () => {
         captured.set(id, structuredClone(value));
       return result;
     });
-    expect(await runPage(ids)).toBe("succeeded");
+    expect(new Set(await drainAiEvaluations(ctx.db, ids))).toEqual(
+      new Set(["succeeded"]),
+    );
     expect(captured).toEqual(expected);
     expect(new Set(await states(ids))).toEqual(new Set(["completed"]));
     for (const source of [...singleSources, ...sources]) {

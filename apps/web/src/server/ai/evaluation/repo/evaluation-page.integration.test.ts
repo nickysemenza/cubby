@@ -128,7 +128,7 @@ describe("AI evaluation drain publication", () => {
           async prepare(_db, wave) {
             if (!captured.length) {
               // A producer can replace an observed suffix ticket during capture.
-              await markAiEvaluationWork(db, [seeded.rows.at(-1)!.id]);
+              await markAiEvaluationWork(db, [wave.at(-1)!.evaluation.id]);
               before = await workRows(seeded.rows.map((row) => row.id));
             }
             return wave.map((target) => {
@@ -178,11 +178,13 @@ describe("AI evaluation drain publication", () => {
     expect(await advanceJob(ctx.db, execution.id, handlers)).toBe("succeeded");
     expect(captured.length).toBeLessThan(seeded.rows.length);
     expect(captured).not.toContain(seeded.rows.at(-1)!.id);
-    expect(overflow).toHaveLength(9);
+    // Unadmitted and unobserved items alike keep their tickets and attempts.
+    const owed = seeded.rows.slice(3).map((row) => row.id);
+    expect(overflow).toContain(owed[0]);
     expect(before).not.toEqual(original);
-    expect(await workRows(overflow)).toEqual(
+    expect(await workRows(owed)).toEqual(
       before.filter(({ value }) =>
-        overflow.includes((value as { ref: string }).ref),
+        owed.includes((value as { ref: string }).ref),
       ),
     );
     expect(
@@ -192,7 +194,7 @@ describe("AI evaluation drain publication", () => {
     ).toHaveLength(2);
     for (
       let page = 0;
-      page < seeded.rows.length && (await workRows(overflow)).length;
+      page < seeded.rows.length && (await workRows(owed)).length;
       page++
     )
       expect(await advanceJob(ctx.db, execution.id, handlers)).toBe(

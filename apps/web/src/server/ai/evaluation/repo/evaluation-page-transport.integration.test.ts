@@ -99,7 +99,7 @@ afterEach(() => {
 
 describe("Product page transport packing", () => {
   const ctx = withTestDb();
-  it.each([1, 100])(
+  it.each([1, 9])(
     "packs %i real pair slots through cache/transport",
     async (slotCount) => {
       const activation = await activateAiRefresh(
@@ -178,9 +178,8 @@ describe("Product page transport packing", () => {
         ctx.db,
         enrolled.map((row) => row.id),
         { productIdentityPorts: { model: "typesafe/jev" } },
-        { pages: 1 },
       );
-      expect(execution).toEqual(["succeeded"]);
+      expect(new Set(execution)).toEqual(new Set(["succeeded"]));
       expect(requests.length).toBeGreaterThan(slotCount === 1 ? 0 : 1);
       expect(requests.length).toBeLessThanOrEqual(slotCount);
       const sizes = requests.map(
@@ -195,14 +194,14 @@ describe("Product page transport packing", () => {
         expect(
           new TextEncoder().encode(JSON.stringify(input)).byteLength,
         ).toBeLessThanOrEqual(DECISION_CONTEXT_BYTE_LIMIT);
+        const questions = Object.values(input.questions);
+        const alone = questions.length === 1;
         expect(input.state).toContain(
-          slotCount === 1
-            ? "Synthetic distinct pair product"
-            : "Independent decisions",
+          alone ? "Synthetic distinct pair product" : "Independent decisions",
         );
-        for (const question of Object.values(input.questions))
+        for (const question of questions)
           expect(
-            (slotCount === 1 ? input.state : question.instructions).match(
+            (alone ? input.state : question.instructions).match(
               /Synthetic distinct pair product/g,
             ),
           ).toHaveLength(2);

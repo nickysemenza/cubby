@@ -25,6 +25,7 @@ import {
   fenceFieldInputsAtCommit,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { JobTargetError } from "~/server/generic/jobs/errors";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 export type SuggestionValue =
@@ -171,8 +172,12 @@ export async function saveSweepSuggestions(
         input.field,
       );
       const envelope = fieldEnvelopeFor(record, input.field);
+      // Unavailable evidence is neither empty nor obsolete. It fails this target
+      // alone, so a shared publication chunk splits and its siblings still commit.
       if (governed && (!envelope || envelope.result.kind === "missing"))
-        throw new Error("Suggestion target field result is unavailable");
+        throw new JobTargetError(
+          "Suggestion target field result is unavailable",
+        );
       const currentValue = governed
         ? envelope && fieldValueOf(envelope)
         : record[input.field];
