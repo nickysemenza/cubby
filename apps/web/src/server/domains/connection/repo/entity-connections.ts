@@ -75,6 +75,8 @@ const keyFor = (candidate: ConnectionCandidate) =>
     sourceKey(candidate.source),
     sourceKey(candidate.target),
   ]);
+const edgeKey = (edge: ConnectionCandidate) =>
+  `${edge.relation}:${sourceKey(edge.source)}:${sourceKey(edge.target)}`;
 
 /** Fresh retrieval may be retried; it must never exhaust an execution attempt. */
 export class ConnectionEvidenceInvalidatedError extends Error {}
@@ -399,15 +401,30 @@ export async function readEntityConnectionsBatch(
         )
     : [];
   const liveKeys = new Set(live.map((row) => `${row.kind}:${row.code}`));
-  const fresh: ConnectionProposal[] = [];
   const liveProposals = parsed.filter(
     (proposal) =>
       liveKeys.has(sourceKey(proposal.source)) &&
       liveKeys.has(sourceKey(proposal.target)),
   );
+  const selectedExisting = selectedEdgeIds
+    ? await readExistingConnectionAssessments(db, sources)
+    : undefined;
+  // A selected read proves each edge's winner, not every candidate's freshness:
+  // an existing proposal replaces the edge's recommendations, otherwise the newest
+  // fresh one wins. Same-edge proposals share their groups, so one set decides
+  // every group, and a stale candidate decides nothing. An edge's position can then
+  // follow its winner rather than its oldest fresh candidate, which only a full
+  // check could find; the selected caller, Recommendation.rows, reads rows by ID.
+  const decidedEdges = selectedExisting
+    ? new Set(selectedExisting.flat().map(edgeKey))
+    : undefined;
+  const admitted = new Set<ConnectionProposal>();
   await forEachConnectionBasis(
     db,
-    liveProposals.map((candidate) => ({ candidate })),
+    (decidedEdges
+      ? liveProposals.filter((p) => !decidedEdges.has(edgeKey(p))).reverse()
+      : liveProposals
+    ).map((candidate) => ({ candidate })),
     async ({ candidate: proposal }, basis) => {
       if (
         (await sha256CanonicalJson({
@@ -415,11 +432,18 @@ export async function readEntityConnectionsBatch(
           candidate: connectionCandidate.parse(proposal),
           basis,
         })) === proposal.fingerprint
-      )
-        fresh.push(proposal);
+      ) {
+        admitted.add(proposal);
+        decidedEdges?.add(edgeKey(proposal));
+      }
     },
+    undefined,
+    decidedEdges && (({ candidate }) => decidedEdges.has(edgeKey(candidate))),
   );
-  const existing = await readExistingConnectionAssessments(db, sources);
+  const fresh = liveProposals.filter((proposal) => admitted.has(proposal));
+  // Unbounded callers retain the original freshness-before-existing read order.
+  const existing =
+    selectedExisting ?? (await readExistingConnectionAssessments(db, sources));
   const grouped = sources.map((source, index) => [
     ...fresh.filter(
       (p) =>
@@ -432,10 +456,7 @@ export async function readEntityConnectionsBatch(
   ]);
   const unique = grouped.map((proposals) => [
     ...new Map(
-      proposals.map((proposal) => [
-        `${proposal.relation}:${sourceKey(proposal.source)}:${sourceKey(proposal.target)}`,
-        proposal,
-      ]),
+      proposals.map((proposal) => [edgeKey(proposal), proposal]),
     ).values(),
   ]);
   const refs = await resolveShortcodes(db, [

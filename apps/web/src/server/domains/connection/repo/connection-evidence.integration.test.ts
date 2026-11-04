@@ -250,6 +250,32 @@ describe("prepared connection bases", () => {
       },
     );
     expect(visited.map(({ entry }) => entry)).toEqual(interleaved);
+    // A skipped visit still counts toward its source's last visit: the one frozen
+    // snapshot survives to a real visit in a later capture batch.
+    const retained = new Map<string, unknown>();
+    const capturedIndexes: number[] = [];
+    await forEachConnectionBasis(
+      ctx.db,
+      interleaved.map((entry, index) => ({ candidate: entry, index })),
+      async ({ candidate: entry, index }, batched) => {
+        capturedIndexes.push(index);
+        expect(JSON.stringify(batched)).toBe(
+          JSON.stringify(await captureConnectionBasis(ctx.db, entry)),
+        );
+        const { dependencies } = z
+          .object({ dependencies: z.unknown() })
+          .parse(batched);
+        expect(dependencies).toBe(
+          retained.get(entry.source.entityId) ?? dependencies,
+        );
+        retained.set(entry.source.entityId, dependencies);
+      },
+      undefined,
+      ({ index }) => index % 2 === 0,
+    );
+    expect(capturedIndexes).toEqual(
+      interleaved.flatMap((_, index) => (index % 2 === 0 ? [] : [index])),
+    );
     await withTransactionDatabase(ctx.db, async (tx) => {
       const locked = await prepareConnectionBases(
         tx,

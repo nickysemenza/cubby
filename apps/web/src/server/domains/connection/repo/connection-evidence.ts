@@ -206,7 +206,16 @@ export async function connectionBasisIsCurrent(
   return Boolean(match);
 }
 
-/** A source roster can fan out to many proposals; bound the prepared bases themselves. */
+const expenseProjectSourceId = ({ relation, source }: ConnectionCandidate) =>
+  relation === "expense-project"
+    ? parseShortcodeFor("expense", source.entityId)
+    : null;
+
+/**
+ * A source roster can fan out to many proposals; bound the prepared bases
+ * themselves. `skip` is rechecked before every capture, so one visit can settle
+ * entries that follow it. A skipped entry is never captured or visited.
+ */
 export async function forEachConnectionBasis<
   T extends { candidate: ConnectionCandidate },
 >(
@@ -219,12 +228,12 @@ export async function forEachConnectionBasis<
   expenseProjects?: Awaited<
     ReturnType<typeof prepareExpenseProjectRecommendationContexts>
   >,
+  skip?: (entry: T) => boolean,
 ) {
-  const expenseIds = entries.flatMap(({ candidate }) =>
-    candidate.relation === "expense-project"
-      ? [parseShortcodeFor("expense", candidate.source.entityId)]
-      : [],
-  );
+  const expenseIds = entries.flatMap(({ candidate }) => {
+    const id = expenseProjectSourceId(candidate);
+    return id ? [id] : [];
+  });
   const preparedExpenseProjects =
     expenseProjects ??
     (expenseIds.length
@@ -248,9 +257,24 @@ export async function forEachConnectionBasis<
   const visitsLeft = new Map<string, number>();
   for (const id of expenseIds)
     visitsLeft.set(id, (visitsLeft.get(id) ?? 0) + 1);
+  // Every entry settles exactly once, visited or skipped, so a source's snapshot
+  // survives to its last real visit and no longer.
+  const settle = (id: ExpenseShortcode | null) => {
+    if (!id) return;
+    const left = visitsLeft.get(id)! - 1;
+    visitsLeft.set(id, left);
+    if (left === 0) expenseProjectEvidence.delete(id);
+  };
   const batchSize = 16;
-  for (let offset = 0; offset < entries.length; offset += batchSize) {
-    const batch = entries.slice(offset, offset + batchSize);
+  let next = 0;
+  while (next < entries.length) {
+    const batch: T[] = [];
+    while (next < entries.length && batch.length < batchSize) {
+      const entry = entries[next++]!;
+      if (skip?.(entry)) settle(expenseProjectSourceId(entry.candidate));
+      else batch.push(entry);
+    }
+    if (!batch.length) break;
     const prepared = await readConnectionBases(
       db,
       batch.map((entry) => entry.candidate),
@@ -259,10 +283,11 @@ export async function forEachConnectionBasis<
     );
     prepared.expenseProjectEvidence = expenseProjectEvidence;
     for (const entry of batch) {
-      const id =
-        entry.candidate.relation === "expense-project"
-          ? parseShortcodeFor("expense", entry.candidate.source.entityId)
-          : null;
+      const id = expenseProjectSourceId(entry.candidate);
+      if (skip?.(entry)) {
+        settle(id);
+        continue;
+      }
       if (id && !expenseProjectEvidence.has(id)) {
         const context = preparedExpenseProjects?.([id], sharedHistoryRow).get(
           id,
@@ -292,10 +317,7 @@ export async function forEachConnectionBasis<
         prepared,
       );
       await visit(entry, basis);
-      if (!id) continue;
-      const left = visitsLeft.get(id)! - 1;
-      visitsLeft.set(id, left);
-      if (left === 0) expenseProjectEvidence.delete(id);
+      settle(id);
     }
   }
 }

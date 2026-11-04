@@ -1,4 +1,9 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
+import {
+  ASSESSMENT_READ_RULES_VERSION,
+  ASSESSMENT_READ_TARGET,
+  type AssessmentReadResult,
+} from "@cubby/schemas/assessment-read-publication";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import {
   recordSourceTransactionRecordsInput,
@@ -18,6 +23,8 @@ import { getDb } from "~/server/db/helpers";
 import {
   assessment,
   assessmentState,
+  assessmentReadPublication,
+  assessmentReadFact,
   financialTransactionAllocation,
   sourceTransactionRecord,
   transactionImport,
@@ -31,11 +38,21 @@ import { generateStatementSuggestionPage } from "~/server/domains/transaction-im
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { executeEntity } from "~/server/entity-kernel";
 import {
+  writeAssessmentReadStage,
+  type AssessmentReadStagePlan,
+} from "~/server/generic/assessment/repo/read-publication";
+import {
   readAssessmentRecordRefs,
   readAssessmentReadMemberships,
   touchingAssessmentIds,
 } from "~/server/generic/assessment/repo/review-families";
 import { suggestionFamilies } from "~/server/generic/assessment/repo/suggestion-families";
+import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
+import {
+  readWorkItems,
+  deleteWorkItems,
+} from "~/server/generic/jobs/jobs.fixtures";
+import { markWork } from "~/server/generic/jobs/repo/work-items";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   createProductFixture,
@@ -593,6 +610,16 @@ describe("cross-family Suggestion list", () => {
       ).toBe(true);
     }
     const ids = page.items.map((row) => row.id);
+    await markWork(
+      ctx.db,
+      DERIVED_DRAIN,
+      ids.map((ref) => ({ target: ASSESSMENT_READ_TARGET, ref })),
+    );
+    const observe = async () =>
+      (await readWorkItems(ctx.db, { target: ASSESSMENT_READ_TARGET })).map(
+        ({ target, ref, ticket }) => ({ target, ref, ticket }),
+      );
+    const observed = await observe();
     const memberships = await readAssessmentReadMemberships(ctx.db, ids);
     const references = await readAssessmentRecordRefs(ctx.db, ids);
     for (const id of ids) {
@@ -619,6 +646,95 @@ describe("cross-family Suggestion list", () => {
     expect(factsById(separately.flatMap((batch) => batch.keys))).toEqual(
       factsById(together.keys),
     );
+    const results: AssessmentReadResult[] = ids.map((id) => ({
+      assessmentId: id,
+      groupKey: `synthetic-admission-${id}`,
+      dependencies: [],
+      memberships: memberships.get(id) ?? [],
+      facts: together.keys
+        .filter((key) => key.assessmentId === id)
+        .map((key) => {
+          const row = together.rows.get(id);
+          if (!row) throw new Error("Synthetic admitted row missing");
+          return {
+            key: { ...key, createdAt: key.createdAt.toISOString() },
+            filters: suggestionKeyFacts(key),
+            row,
+          };
+        }),
+    }));
+    const stage: AssessmentReadStagePlan = {
+      id: crypto.randomUUID(),
+      componentKey: "synthetic-shared-admission",
+      groups: results.map((row) => row.groupKey),
+      assessmentIds: ids,
+      tickets: observed,
+      revision: crypto.randomUUID(),
+      nextIndex: 0,
+      rulesVersion: ASSESSMENT_READ_RULES_VERSION,
+    };
+    const notified = new Set<string>();
+    const publication: Parameters<typeof writeAssessmentReadStage>[2] = {
+      notify: (entity, refs) =>
+        refs.forEach((ref) => notified.add(`${entity}:${ref}`)),
+    };
+    const write = (
+      plan: AssessmentReadStagePlan,
+      prefix: AssessmentReadResult[],
+      previousStageId: string | null = null,
+    ) =>
+      getDb(ctx.db).transaction((tx) =>
+        writeAssessmentReadStage(
+          tx,
+          { stage: plan, previousStageId, results: prefix },
+          publication,
+        ),
+      );
+    const headers = () =>
+      getDb(ctx.db).select().from(assessmentReadPublication);
+    expect(await write(stage, results.slice(0, 1))).toMatchObject({
+      kind: "retained",
+    });
+    expect(await headers()).toEqual([]);
+    // New source work cannot activate an older complete staged snapshot.
+    await markWork(ctx.db, DERIVED_DRAIN, [
+      { target: ASSESSMENT_READ_TARGET, ref: ids[0]! },
+    ]);
+    expect(
+      await write({ ...stage, nextIndex: 1 }, results.slice(1)),
+    ).toMatchObject({ kind: "retained" });
+    expect(await headers()).toEqual([]);
+    const restarted = {
+      ...stage,
+      id: crypto.randomUUID(),
+      revision: crypto.randomUUID(),
+      tickets: await observe(),
+    };
+    expect(await write(restarted, results, stage.id)).toMatchObject({
+      kind: "activated",
+    });
+    const active = await headers();
+    expect(active.map((row) => row.assessmentId).sort()).toEqual(
+      [...ids].sort(),
+    );
+    expect(await getDb(ctx.db).select().from(assessmentReadFact)).toHaveLength(
+      together.keys.length,
+    );
+    expect(notified.size).toBeGreaterThan(0);
+    const unchanged = {
+      ...restarted,
+      id: crypto.randomUUID(),
+      revision: crypto.randomUUID(),
+    };
+    expect(await write(unchanged, results, restarted.id)).toEqual({
+      kind: "activated",
+      changed: [],
+    });
+    expect(await headers()).toEqual(active);
+    expect(await getDb(ctx.db).select().from(assessmentReadFact)).toHaveLength(
+      together.keys.length,
+    );
+    await deleteWorkItems(ctx.db, { target: ASSESSMENT_READ_TARGET });
     expect(ids.indexOf(confident)).toBeLessThan(ids.indexOf(unsure));
     const connectionRow = page.items.find(
       (row) => row.id === proposal.review.assessmentId,

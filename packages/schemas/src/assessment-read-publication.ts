@@ -14,6 +14,7 @@ import {
 
 /** Bump when canonical preparation or the persisted filter operands change. */
 export const ASSESSMENT_READ_RULES_VERSION = 1;
+export const ASSESSMENT_READ_TARGET = "assessment.reviewFacts";
 
 /** Serializable form of the canonical family's admitted key, before filtering. */
 export const assessmentReadKey = z.object({

@@ -8,6 +8,7 @@
 import { jobState, type WorkWaitCause } from "@cubby/schemas/job";
 import { and, asc, eq, inArray, lte, sql, type SQL } from "drizzle-orm";
 
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   repositoryQueries,
   type RepositoryQueryInput,
@@ -512,9 +513,12 @@ export async function workTicketsWhere(
 export const unobservedWork = (
   target: (column: SQL) => SQL,
   observed: readonly number[],
+  /** Narrow one exact target's refs while retaining the other matched targets. */
+  scope?: { target: string; refs: readonly string[] },
 ) =>
   // One jsonb parameter: a busy fanout can observe thousands of tickets.
   sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${target(sql`${workItem.target}`)}
+    ${scope ? sql`AND (${workItem.target} <> ${scope.target} OR ${workItem.ref} = ANY(${uuidArrayParam(scope.refs)}))` : sql``}
     AND ${workItem.ticket} NOT IN (
       SELECT jsonb_array_elements_text(${JSON.stringify(observed)}::jsonb)::bigint))`;
 
