@@ -252,9 +252,7 @@ it("compares the displayed publication with current inputs only after an explici
   expect(screen.getByRole("dialog")).toHaveTextContent("Stored 18 → live 24");
   expect(screen.getByLabelText("Queued for refresh")).toBeVisible();
   const activity = new URL(
-    screen
-      .getByRole("link", { name: "View in Activity" })
-      .getAttribute("href") ?? "",
+    screen.getByRole("link", { name: "Open Work" }).getAttribute("href") ?? "",
     window.location.origin,
   );
   expect(activity.hash).toBe("");

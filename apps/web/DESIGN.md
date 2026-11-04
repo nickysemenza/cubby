@@ -575,7 +575,7 @@ explanation. Quality cards keep the explanation trigger available beside missing
 The footer compares stored and live values and shows the last computation,
 observed execution start and known retry deadline: Next retry while it is ahead,
 Retry was due once it has passed, and no claim when it is unknown. An owed
-refresh offers View in Activity, which opens the same value in Now. The link
+refresh offers Open Work, which opens the same value in Automatic work. The link
 names the value's subject, field, surface and scope, never an attempt, so
 re-marked work stays the same link. Unknown invalidation causes or finish times
 remain unknown. Progress here is the phase and observed start time; no value has
@@ -657,7 +657,7 @@ from Improvements; list counts and detail/inspector review stay available.
 No view persists another lane or ledger; distinct actions on one record remain
 visible across their applicable views.
 
-A View in Activity link leads Now with one Value refresh row, independently of
+An Open Work link leads Automatic work with one Value refresh row, independently of
 the one-minute backlog threshold. It keeps the retained value and repeats the
 explanation's status lines, adding Up to date when nothing is owed and Not
 published yet for a missing value. The only counts are the kind's aggregate,

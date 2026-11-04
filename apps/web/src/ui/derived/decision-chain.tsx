@@ -270,7 +270,7 @@ export function DerivedFreshness({
 }: {
   envelope: FieldExplanationOutput["envelope"];
   context: Pick<FieldExplanationOutput, "subject" | "field">;
-  /** The popup's Activity link. Without it, Activity reports a current value. */
+  /** The popup's Work link. Without it, the focused view reports a current value. */
   locator?: FieldRefreshLocator;
 }) {
   const metadata = useEntityMetadata(context.subject.entityKind);
@@ -366,7 +366,7 @@ export function DerivedFreshness({
           search={{ tab: "now", refresh: locator }}
           className="underline underline-offset-2"
         >
-          View in Activity
+          Open Work
         </Link>
       ) : null}
     </div>
