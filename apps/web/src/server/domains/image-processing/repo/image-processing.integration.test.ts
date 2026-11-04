@@ -40,7 +40,12 @@ import {
 import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import {
+  publishAssessment,
+  recordFeedback,
+} from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
@@ -734,7 +739,35 @@ describe("durable image representations", () => {
       imageId,
       sortOrder: 0,
     });
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+    const unrelated = await publishAssessment(ctx.db, {
+      publicationKey: "synthetic:image-search-capture:unrelated",
+      family: "recommendation",
+      subject: {
+        kind: "recommendation",
+        entity: "product",
+        recordId: owner.entityId,
+        scope: "product.related",
+        candidateKey: "unrelated",
+      },
+      judgment: { candidateKey: "unrelated" },
+      fingerprint: "synthetic-unrelated",
+      producer: null,
+      evidence: null,
+    });
+    await transitionAssessmentState(
+      ctx.db,
+      unrelated.id,
+      { status: "resolved" },
+      { kind: "synthetic-unrelated" },
+    );
+    await recordFeedback(ctx.db, {
+      assessmentId: unrelated.id,
+      operationId: crypto.randomUUID(),
+      verdict: "ungraded",
+      authority: "automatic",
+      actorUserId: null,
+    });
+    const review = await reviewAssessment(ctx.db, kernelCtx(ctx), {
       standalone: { kind: "image_description", id: row.shortcode },
       operationId: crypto.randomUUID(),
       verdict: "correct",
@@ -744,6 +777,15 @@ describe("durable image representations", () => {
       },
       intent: "apply",
     });
+    // Unrelated writes and member Feedback add no search marks; this member
+    // correction reaches the owner below through its State transition alone.
+    const captured = await getDb(ctx.db).execute(sql`
+      SELECT target FROM "WorkItem"
+      WHERE (target = 'image.searchDocument' AND ref = ${owner.entityId}::uuid)
+        OR (target LIKE '%.searchDocument@6'
+          AND ref IN (${unrelated.id}::uuid, ${review.assessmentId}::uuid))
+    `);
+    expect(captured.rows).toEqual([]);
 
     await drainDerivedRefreshFrontier(ctx.db);
     const before = await getDb(ctx.db)

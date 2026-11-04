@@ -1,4 +1,17 @@
+import { SYSTEM_USER_ID } from "../identifier-fields";
 import type { DerivedStoredInput } from "./definition";
+
+/**
+ * Only an automatic correction receipt can change selected description text.
+ * `currentImageDescriptionConfirmation` and `indexCorrectionReceipts` require
+ * these literals; change them together. Member and projection Feedback reach
+ * search through their AssessmentState transition.
+ */
+export const imageDescriptionReceiptWhere = {
+  authority: "automatic",
+  intent: "history",
+  actorUserId: SYSTEM_USER_ID,
+};
 
 /** Search indexes selected descriptions on direct attachments, including corrections. */
 export const imageDescriptionInputs = (
@@ -35,6 +48,7 @@ export const imageDescriptionInputs = (
     {
       table: "Feedback",
       match: { assessmentId: "id" },
+      where: imageDescriptionReceiptWhere,
       path: [
         { table: "AssessmentState", from: "id", to: "recordId" },
         ...owners,

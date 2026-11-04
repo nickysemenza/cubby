@@ -318,6 +318,10 @@ application. The smaller shared page limit bounds retained preparation and
 repeated ledger reads between durable checkpoints; interrupted pages replay
 their existing publications and effects through the same guards. It does not
 increase attempts, provider budgets or Worker limits.
+Automatic-rule refusals return and log the shared scrubbed causal diagnostics,
+including nested database messages and SQLSTATE codes. A refused application
+leaves its suggestion pending; diagnostic capture does not accept, retry or
+change the financial operation.
 
 Generation preparation and publication finish in a separate function that
 returns only charge references, counters and timing values. The initial

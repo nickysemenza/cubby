@@ -126,16 +126,29 @@ describe("stored connection evidence", () => {
         (entry) => entry.review.assessmentId,
       ),
     ).toEqual([last?.review.assessmentId]);
+    const unrelated = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic unrelated connection charge",
+      cost: 7,
+      trade: "electrical",
+      costType: "tools",
+    });
+    await publishEntityConnection(ctx.db, {
+      ...candidate,
+      target: { entityKind: "expense", entityId: unrelated.output.id },
+    });
     // Selecting an older review still loads the edge's current competitor;
     // narrowing to the old ID alone would change the reader's winner.
     const bounded = await readEntityConnectionsBatch(
       ctx.db,
       [candidate.source],
-      [proposal.review.assessmentId],
+      [proposal.review.assessmentId, proposal.review.assessmentId],
     );
     expect(bounded[0]?.map((entry) => entry.review.assessmentId)).toEqual([
       last?.review.assessmentId,
     ]);
+    expect(
+      await readEntityConnectionsBatch(ctx.db, [candidate.source], []),
+    ).toEqual([[]]);
   });
 
   // Stored basis snapshots can dwarf the candidate. Transferring them before

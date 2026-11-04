@@ -3222,6 +3222,12 @@ Fixed-target inputs preserve non-null source references so independent writers
 do not contend on one work ticket. A null source UUID uses a constant fallback:
 it must not silently suppress invalidation. Only the drain selects target rows.
 
+Image description search inputs admit only rows the selected-description reader
+can use: Feedback holding the automatic correction-receipt literals, and
+`image_description` State. Member and projection Feedback reach search through
+their State transition. A change to the reader's receipt literals changes the
+declaration with it. The drain expands retained marks through `path`, not `where`.
+
 Inputs follow the precision and relationships of the compute. Exact valuations
 watch raw pricing inputs rather than a rounded stored price. Kit-link and
 acquisition changes mark every sibling component even when the kit's published
