@@ -66,6 +66,7 @@ export const { definition, readSchemas } = defineEntityModel({
           "The Candidate alternatives section edits candidates in place with its own renderer.",
       },
       hero: { extraActions: ["markPurchased"] },
+      lead: ["overview"],
       sections: [
         {
           kind: "fields",

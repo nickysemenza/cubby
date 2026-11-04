@@ -19,6 +19,7 @@ import {
   type EntityDetailParams,
   type EntityDetailRoute,
 } from "~/entity/entities";
+import { useIsInspected } from "~/entity/preview/inspected-record";
 import {
   hoverPreviewEntities,
   type HoverPreviewEntity,
@@ -103,8 +104,10 @@ export function PreviewRefLink({
   const newTab = openInNewTab
     ? ({ target: "_blank", rel: "noopener noreferrer" } as const)
     : {};
+  const inspected = useIsInspected(entity, id);
   return (
-    <PreviewCard>
+    // Controlled closed, not unmounted, so the link keeps its focus and place.
+    <PreviewCard {...(inspected ? { open: false } : {})}>
       <PreviewCardTrigger
         // Open a touch faster than the 600ms default; close promptly.
         delay={300}

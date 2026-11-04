@@ -41,7 +41,7 @@ export function fieldEmptyLabel(
     case "unset":
       return decision.provenance?.kind === "allocated"
         ? "Allocated"
-        : (labels?.unresolved ?? "Not set");
+        : (labels?.unresolved ?? "Not recorded");
     case "blocked":
       return "Blocked";
     case "mixed":

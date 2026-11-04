@@ -62,7 +62,13 @@ import { formatCurrency } from "~/lib/number-format";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { DateDisplay } from "~/ui/common/date-display";
-import { AddFactValue, type Fact, Facts, useFactsAdd } from "~/ui/common/facts";
+import {
+  AddFactValue,
+  type Fact,
+  Facts,
+  NotRecordedValue,
+  useFactsAdd,
+} from "~/ui/common/facts";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import {
   NumberValue,
@@ -148,7 +154,7 @@ const isProseField = (key: string, control: DisplayField["control"]) =>
 function renderProseValue(value: ScalarDisplayValue, surface: DisplaySurface) {
   if (value.kind !== "text") return renderScalarValue(value, surface);
   if (!value.label)
-    return surface === "detail" ? "Not recorded" : <NoneValue />;
+    return surface === "detail" ? <NotRecordedValue /> : <NoneValue />;
   return surface === "list" ? (
     <span className="block truncate" title={value.label}>
       <ShortcodeProse>{value.label}</ShortcodeProse>
@@ -290,9 +296,11 @@ function renderFormattedScalar(
   if (value.kind === "empty")
     return (
       context?.field.display.emptyLabel ??
-      (surface === "detail"
-        ? "Not recorded"
-        : renderScalarValue(value, surface))
+      (surface === "detail" ? (
+        <NotRecordedValue />
+      ) : (
+        renderScalarValue(value, surface)
+      ))
     );
   switch (format) {
     // Known counts read literally: `0` is a fact, never a dash.
@@ -749,7 +757,7 @@ export function renderDetailFieldValue<TRecord extends object>(
       readPathValue(record, field.display.itemsPath),
     );
     const items = parsed.success ? (parsed.data ?? []) : [];
-    if (items.length === 0) return "Not recorded";
+    if (items.length === 0) return <NotRecordedValue />;
     return (
       <RecordList>
         {items.map((item) => (
@@ -1277,6 +1285,7 @@ export function EntityBasicInfo<TRecord extends object>({
   afterFields = {},
   fields: fieldKeys,
   cohortLinks = true,
+  sectionTitle,
   actions,
   header,
   footer,
@@ -1291,6 +1300,7 @@ export function EntityBasicInfo<TRecord extends object>({
   /** Computed facts retain their domain renderer beside the declared field
    * they enrich. They do not become persisted entity fields. */
   afterFields?: Readonly<Record<string, readonly Fact[]>>;
+  sectionTitle?: string;
   actions?: ReactNode;
   header?: ReactNode;
   footer?: ReactNode;
@@ -1368,16 +1378,20 @@ export function EntityBasicInfo<TRecord extends object>({
         const decoratedValue = field.control?.suggest ? (
           <span className="inline-flex max-w-full min-w-0 items-center gap-1">
             <RecordFieldSuggestion record={record} field={field.key}>
-              {rendered.value ?? "Not recorded"}
+              {rendered.value ?? <NotRecordedValue />}
             </RecordFieldSuggestion>
           </span>
         ) : (
-          (rendered.value ?? "Not recorded")
+          (rendered.value ?? <NotRecordedValue />)
         );
         return [
           {
             label: field.label,
             fullWidth: isProseField(field.key, field.control),
+            labelHidden:
+              fields.length === 1 &&
+              field.label === sectionTitle &&
+              isProseField(field.key, field.control),
             ...rendered,
             value: (
               <FieldRecordValue record={record} field={field.key}>
@@ -1389,7 +1403,7 @@ export function EntityBasicInfo<TRecord extends object>({
               : undefined,
             quality:
               checks.length > 0 ? (
-                <span className="flex flex-col items-start gap-1">
+                <span className="flex flex-wrap items-start gap-x-2">
                   {checks.map((check) => (
                     <QualityResult key={check.check} check={check} />
                   ))}

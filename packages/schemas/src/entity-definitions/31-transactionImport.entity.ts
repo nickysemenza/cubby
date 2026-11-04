@@ -71,6 +71,7 @@ export const { definition, readSchemas } = defineEntityModel({
         firstRecords: { descriptor: "batchId" },
         withdrawnRecords: { descriptor: "withdrawalImportId" },
       },
+      lead: ["overview"],
       sections: [
         {
           kind: "fields",

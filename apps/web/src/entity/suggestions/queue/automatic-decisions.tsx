@@ -13,6 +13,7 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { Picker } from "~/ui/combobox/picker";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Stack, Row } from "~/ui/layout";
@@ -58,6 +59,15 @@ export function AutomaticDecisions({
     }),
   );
   const loading = useHydratedLoading(query.isLoading);
+  // A record's unfiltered, empty history folds; a filter that matched nothing
+  // keeps its controls, and loading or failed reads never report empty.
+  useSectionEmpty(
+    id !== undefined &&
+      family === initialFamily &&
+      reviewStatus === "all" &&
+      query.isSuccess &&
+      query.data.totalCount === 0,
+  );
   usePageCount(id || query.isLoading ? undefined : query.data?.totalCount);
   return (
     <section aria-label="Automation history">

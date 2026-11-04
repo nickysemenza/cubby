@@ -54,28 +54,76 @@ import { MonthlySpendChart } from "./spend-chart";
 
 type Field = EntityFieldModel["fields"][number];
 
+const hasValue = (value: unknown) =>
+  value != null &&
+  value !== "" &&
+  !(Array.isArray(value) && value.length === 0);
+
 /**
- * A one-field cell with no value. The summary omits it, so the field stays in
- * the record's field sections where the member can still fill it in.
+ * The fields of a summary cell worth a glance. An absent value is not: the row
+ * is omitted so the field stays in the record's field sections, where the
+ * member can still fill it in, and the glance never contradicts a populated
+ * cell beside it with "Not recorded". A refused classification keeps its named
+ * state. A cell with no shown fields disappears.
  */
-export function isEmptySummaryCell<E extends GenericDetailEntity>(
+export function summaryFieldsShown<E extends GenericDetailEntity>(
   queryClient: QueryClient,
   entity: E,
   record: DetailRecordOf<E>,
   slot: DetailSummarySlot,
-): boolean {
-  if (slot.kind !== "fields" || slot.fields.length !== 1) return false;
+): readonly string[] {
+  if (slot.kind !== "fields") return [];
   const fields: readonly Field[] = entityMetadata(queryClient, entity).fields
     .fields;
-  const field = fields.find((field) => field.key === slot.fields[0]);
-  return (
-    field !== undefined &&
-    (fieldResolutionFor(record, field.key)
-      ? fieldDecisionOf(fieldResolutionFor(record, field.key)!)?.provenance
-          ?.kind
-      : undefined) !== "allocated" &&
-    field.readKey !== null &&
-    readPathValue(record, field.display.readPath ?? field.readKey) == null
+  return slot.fields.filter((key) => {
+    const field = fields.find((candidate) => candidate.key === key);
+    if (!field) return false;
+    const resolution = fieldResolutionFor(record, field.key);
+    if (
+      (resolution
+        ? fieldDecisionOf(resolution)?.provenance?.kind
+        : undefined) === "allocated" ||
+      classificationFieldRefusal(entity, record, field.key) !== null
+    )
+      return true;
+    // A list field reads its display items; without any it prints absence, even
+    // though a populated cell beside it may list the same records.
+    if (field.display.itemsPath)
+      return hasValue(readPathValue(record, field.display.itemsPath));
+    return (
+      field.readKey === null ||
+      hasValue(readPathValue(record, field.display.readPath ?? field.readKey))
+    );
+  });
+}
+
+/**
+ * The section fields a record surface still shows: a field a summary cell shows
+ * is not repeated, and a Name row only repeats the title above it (the header's
+ * Edit keeps it editable).
+ */
+export function detailSectionFields<E extends GenericDetailEntity>(
+  queryClient: QueryClient,
+  entity: E,
+  record: DetailRecordOf<E>,
+  keys: readonly string[],
+  options: { omitTitle: boolean },
+) {
+  const { detail, titleField } = entityMetadata(queryClient, entity).summary;
+  const declared: readonly DetailSummarySlot[] = detail.summary;
+  const summarized = new Set(
+    declared.flatMap((slot) =>
+      onDetailSurface(slot, "web")
+        ? summaryFieldsShown(queryClient, entity, record, slot)
+        : [],
+    ),
+  );
+  const titled =
+    options.omitTitle &&
+    typeof readPathValue(record, titleField) === "string" &&
+    readPathValue(record, titleField) !== "";
+  return keys.filter(
+    (key) => !summarized.has(key) && !(titled && key === titleField),
   );
 }
 
@@ -111,21 +159,29 @@ function SummaryCell({
   title,
   children,
   hidden = false,
+  compact = false,
 }: {
   title: string;
   children: ReactNode;
   hidden?: boolean;
+  compact?: boolean;
 }) {
+  // A report or record list that resolves to nothing leaves its body empty, and
+  // the whole cell goes with it rather than printing an orphan heading.
   return (
     <section
       aria-label={title}
       hidden={hidden}
-      className="min-w-0 border-b border-border px-3 py-2 text-xs [&_[data-entity-pill]>span:last-child]:truncate"
+      data-summary-cell
+      className={cn(
+        "min-w-0 border-r border-b border-border py-2 text-xs has-[>[data-summary-body]:empty]:hidden md:py-1.5 [&_[data-entity-pill]>span:last-child]:truncate",
+        compact ? "flex-[1_1_9rem] px-2" : "flex-[1_1_14rem] px-3",
+      )}
     >
-      <h2 className="mb-1 text-xs font-medium text-muted-foreground">
+      <h2 className="mb-1 text-xs font-medium text-muted-foreground md:mb-0.5">
         {title}
       </h2>
-      {children}
+      <div data-summary-body>{children}</div>
     </section>
   );
 }
@@ -296,7 +352,8 @@ export function CompactSummaryReport({
         {more ? (
           <Button
             variant="ghost"
-            size="sm"
+            size="xs"
+            className="-ml-2"
             aria-expanded={expanded}
             disabled={!hydrated}
             onClick={() => setExpanded((value) => !value)}
@@ -408,146 +465,163 @@ export function DetailSummary<E extends GenericDetailEntity>({
   return (
     <EntityDisplayImagesProvider refs={imageRefs}>
       <div
-        aria-label="Record summary"
+        // A full page's header rule sits above the strip.
         className={cn(
-          "grid grid-cols-1 border-y border-border sm:grid-cols-2 sm:[&>section:nth-child(odd)]:border-r",
-          !compact &&
-            "xl:grid-cols-4 xl:[&>section]:border-r xl:[&>section:nth-child(4n)]:border-r-0",
+          "overflow-hidden border-border",
+          compact ? "border-t" : "border-b",
         )}
       >
-        {slots.map((slot) => {
-          let content: ReactNode;
-          if (slot.kind === "fields") {
-            if (isEmptySummaryCell(queryClient, entity, record, slot))
-              return null;
-            content = (
-              <dl className="space-y-1">
-                {slot.fields.map((key) => {
-                  const field = fields.find((field) => field.key === key);
-                  if (!field) return null;
-                  const override =
-                    classificationFieldDisplayRefusal(
-                      entity,
-                      record,
-                      field.key,
-                    ) === null
-                      ? overrides[field.key]?.(record, queryClient)?.value
-                      : undefined;
-                  const allocated =
-                    (fieldResolutionFor(record, field.key)
-                      ? fieldDecisionOf(fieldResolutionFor(record, field.key)!)
-                          ?.provenance?.kind
-                      : undefined) === "allocated";
-                  const absent =
-                    field.readKey !== null &&
-                    field.display.readPath === null &&
-                    !(field.readKey in record);
-                  const value =
-                    field.readKey === null
-                      ? undefined
-                      : readPathValue(
-                          record,
-                          field.display.readPath ?? field.readKey,
-                        );
-                  return (
-                    <div
-                      key={key}
-                      className="flex min-w-0 items-baseline gap-2"
-                    >
-                      <dt
-                        className={
-                          slot.fields.length === 1 && slot.title === field.label
-                            ? "sr-only"
-                            : "shrink-0 text-muted-foreground"
-                        }
-                      >
-                        {field.label}
-                      </dt>
-                      <dd className="min-w-0 break-words">
-                        {override ??
-                          ((absent || value === null) &&
-                          !allocated &&
-                          classificationFieldRefusal(
-                            entity,
+        <div
+          aria-label="Record summary"
+          // Cells grow to share each row, so a cell that disappears leaves no
+          // hole; the -1px margins hide the rules on each row's trailing edge.
+          className="-mr-px -mb-px flex flex-wrap items-stretch"
+        >
+          {slots.map((slot) => {
+            let content: ReactNode;
+            if (slot.kind === "fields") {
+              const shown = summaryFieldsShown(
+                queryClient,
+                entity,
+                record,
+                slot,
+              );
+              if (shown.length === 0) return null;
+              content = (
+                <dl className="flex flex-wrap gap-x-3 gap-y-0.5">
+                  {shown.map((key) => {
+                    const field = fields.find((field) => field.key === key);
+                    if (!field) return null;
+                    const override =
+                      classificationFieldDisplayRefusal(
+                        entity,
+                        record,
+                        field.key,
+                      ) === null
+                        ? overrides[field.key]?.(record, queryClient)?.value
+                        : undefined;
+                    const allocated =
+                      (fieldResolutionFor(record, field.key)
+                        ? fieldDecisionOf(
+                            fieldResolutionFor(record, field.key)!,
+                          )?.provenance?.kind
+                        : undefined) === "allocated";
+                    const absent =
+                      field.readKey !== null &&
+                      field.display.readPath === null &&
+                      !(field.readKey in record);
+                    const value =
+                      field.readKey === null
+                        ? undefined
+                        : readPathValue(
                             record,
-                            field.key,
-                          ) === null
-                            ? "Not recorded"
-                            : renderDetailFieldValue(
+                            field.display.readPath ?? field.readKey,
+                          );
+                    return (
+                      <div
+                        key={key}
+                        className="flex min-w-0 items-baseline gap-1.5"
+                      >
+                        <dt
+                          className={
+                            shown.length === 1 && slot.title === field.label
+                              ? "sr-only"
+                              : "shrink-0 text-muted-foreground"
+                          }
+                        >
+                          {field.label}
+                        </dt>
+                        <dd className="min-w-0 break-words">
+                          {override ??
+                            ((absent || value === null) &&
+                            !allocated &&
+                            classificationFieldRefusal(
+                              entity,
+                              record,
+                              field.key,
+                            ) === null ? (
+                              <span className="text-muted-foreground">
+                                Not recorded
+                              </span>
+                            ) : (
+                              renderDetailFieldValue(
                                 queryClient,
                                 entity,
                                 record,
                                 field,
-                              ))}
-                      </dd>
-                    </div>
-                  );
-                })}
-              </dl>
-            );
-          } else if (slot.kind === "chart")
-            content = (
-              <QuerySection
+                              )
+                            ))}
+                        </dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+              );
+            } else if (slot.kind === "chart")
+              content = (
+                <QuerySection
+                  title={slot.title}
+                  resetKey={`${id}:${slot.id}`}
+                  fallback={<Skeleton className="h-12 w-full" />}
+                >
+                  <MonthlySpendChart
+                    entity={entity}
+                    id={id}
+                    viewKey={slot.viewKey}
+                    compact
+                  />
+                </QuerySection>
+              );
+            else if (slot.kind === "report") {
+              content = (
+                <QuerySection
+                  title={slot.title}
+                  resetKey={`${id}:${slot.id}`}
+                  fallback={<Skeleton className="h-12 w-full" />}
+                >
+                  <SummaryReport
+                    id={id}
+                    slot={slot}
+                    slots={reports.map((report) => report.slot)}
+                  />
+                </QuerySection>
+              );
+            } else {
+              content = (
+                <QuerySection
+                  title={slot.title}
+                  resetKey={`${id}:${slot.id}`}
+                  fallback={<Skeleton className="h-12 w-full" />}
+                >
+                  <SummaryRecords entity={entity} id={id} slot={slot} />
+                </QuerySection>
+              );
+            }
+            return (
+              <SummaryCell
+                key={slot.id}
                 title={slot.title}
-                resetKey={`${id}:${slot.id}`}
-                fallback={<Skeleton className="h-12 w-full" />}
+                compact={compact}
+                hidden={secondary.has(slot.id) && !showContext}
               >
-                <MonthlySpendChart
-                  entity={entity}
-                  id={id}
-                  viewKey={slot.viewKey}
-                  compact
-                />
-              </QuerySection>
+                {secondary.has(slot.id) && !showContext ? null : content}
+              </SummaryCell>
             );
-          else if (slot.kind === "report") {
-            content = (
-              <QuerySection
-                title={slot.title}
-                resetKey={`${id}:${slot.id}`}
-                fallback={<Skeleton className="h-12 w-full" />}
+          })}
+          {secondary.size > 0 ? (
+            <div className="flex flex-none items-center border-r border-b border-border px-2 py-1">
+              <Button
+                variant="ghost"
+                size="xs"
+                aria-expanded={showContext}
+                disabled={!hydrated}
+                onClick={() => setShowContext((value) => !value)}
               >
-                <SummaryReport
-                  id={id}
-                  slot={slot}
-                  slots={reports.map((report) => report.slot)}
-                />
-              </QuerySection>
-            );
-          } else {
-            content = (
-              <QuerySection
-                title={slot.title}
-                resetKey={`${id}:${slot.id}`}
-                fallback={<Skeleton className="h-12 w-full" />}
-              >
-                <SummaryRecords entity={entity} id={id} slot={slot} />
-              </QuerySection>
-            );
-          }
-          return (
-            <SummaryCell
-              key={slot.id}
-              title={slot.title}
-              hidden={secondary.has(slot.id) && !showContext}
-            >
-              {secondary.has(slot.id) && !showContext ? null : content}
-            </SummaryCell>
-          );
-        })}
-        {secondary.size > 0 ? (
-          <div className="col-span-full border-b border-border px-3 py-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-expanded={showContext}
-              disabled={!hydrated}
-              onClick={() => setShowContext((value) => !value)}
-            >
-              {showContext ? "Less context" : "More context"}
-            </Button>
-          </div>
-        ) : null}
+                {showContext ? "Less context" : "More context"}
+              </Button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </EntityDisplayImagesProvider>
   );

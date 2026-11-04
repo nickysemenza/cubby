@@ -179,6 +179,8 @@ export const { definition, readSchemas } = defineEntityModel({
         breadcrumb: "vendorAccountId",
       },
       // The summary carries purpose/results; raw record facts must not precede review.
+      lead: ["overview", "runtime"],
+      pairs: [["overview", "runtime"]],
       sections: [
         {
           kind: "fields",

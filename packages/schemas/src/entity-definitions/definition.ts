@@ -1759,6 +1759,21 @@ const buildMetadataSchemas = () => {
             .optional()
             .default(null),
           /**
+           * Sections that answer the record's job, leading the web page ahead
+           * of Needs you and Activity. Native keeps `sections` order and never
+           * reads this.
+           */
+          lead: z.array(sectionId).optional().default([]),
+          /**
+           * Two sections the web page sets side by side where width allows,
+           * stacking below about 1000px. Relation tables stay full width, and
+           * declared `sections` order is unchanged.
+           */
+          pairs: z
+            .array(z.tuple([sectionId, sectionId]))
+            .optional()
+            .default([]),
+          /**
            * The detail page's authored reading order. Edit sections group a
            * form; these group a record for reading, so neither derives from
            * the other. Undeclared `many` relations append derived sections.
@@ -1804,6 +1819,8 @@ const buildMetadataSchemas = () => {
             summary,
             activityRelations,
             overviewSections,
+            lead,
+            pairs,
             relationFilterOverrides,
             variantOverride,
             hero,
@@ -1817,6 +1834,8 @@ const buildMetadataSchemas = () => {
             sections,
             activityRelations,
             overviewSections,
+            lead,
+            pairs,
             relationFilterOverrides,
             omitRelations,
           }),

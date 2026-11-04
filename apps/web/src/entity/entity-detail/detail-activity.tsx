@@ -126,13 +126,13 @@ function DetailActivityContent({ entity, id }: { entity: Entity; id: string }) {
               : [],
           )}
         >
-          <div className="space-y-2.5" aria-label="Recent changes and spend">
+          <div className="space-y-1.5" aria-label="Recent changes and spend">
             {groups.map(({ day, events: dayEvents }) => (
               <div
                 key={day}
-                className="grid grid-cols-[8rem_minmax(0,1fr)] items-start max-sm:grid-cols-1"
+                className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-start max-sm:grid-cols-1"
               >
-                <div>
+                <div className="flex flex-wrap items-baseline gap-x-1.5 pt-0.5">
                   <time
                     dateTime={day}
                     className="text-xs/4 font-medium text-foreground-strong tabular-nums"
@@ -236,7 +236,7 @@ function DetailActivityContent({ entity, id }: { entity: Entity; id: string }) {
               </div>
             ))}
             {activity.hasNextPage ? (
-              <div className="grid grid-cols-[8rem_minmax(0,1fr)] max-sm:grid-cols-1">
+              <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] max-sm:grid-cols-1">
                 <span aria-hidden />
                 <RecordList aria-label="Older activity">
                   <RecordMore
@@ -270,7 +270,7 @@ function ChangeDetails({
   const [open, setOpen] = useState(false);
   return (
     <details
-      className="mt-2 text-sm"
+      className="mt-1 text-sm"
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary className="w-fit cursor-pointer rounded-sm text-xs text-muted-foreground outline-none hover:text-foreground-strong focus-visible:ring-2 focus-visible:ring-ring">

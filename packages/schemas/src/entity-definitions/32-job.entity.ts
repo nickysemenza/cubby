@@ -92,6 +92,7 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     detail: {
+      lead: ["overview"],
       sections: [
         {
           kind: "fields",

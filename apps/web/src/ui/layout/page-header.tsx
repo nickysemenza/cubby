@@ -103,29 +103,25 @@ export function PageHeader({
       data-testid={testId}
       className={cn("min-w-0", className)}
     >
-      <div className="flex min-w-0 items-start gap-3">
-        {media != null && <div className="shrink-0">{media}</div>}
-        <div className="min-w-0 flex-1">
-          {breadcrumb != null && (
-            <div className="mb-1 text-xs/4.5 text-muted-foreground">
-              {breadcrumb}
-            </div>
-          )}
-          {/* Identity has a minimum basis so actions wrap before the title. */}
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <div className="flex min-w-0 flex-[1_1_20rem] flex-wrap items-center gap-x-2 gap-y-1">
-              {heading}
-              {status}
-            </div>
-            {actionGroup && (
-              <div className="max-sm:basis-full">{actionGroup}</div>
-            )}
+      <div className="min-w-0">
+        {breadcrumb != null && (
+          <div className="text-xs/4 text-muted-foreground">{breadcrumb}</div>
+        )}
+        {/* Identity has a minimum basis so actions wrap before the title. */}
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="flex min-w-0 flex-[1_1_20rem] flex-wrap items-center gap-x-2 gap-y-1">
+            {media != null && <div className="shrink-0">{media}</div>}
+            {heading}
+            {status}
           </div>
-          {factLine && <div className="mt-0.5">{factLine}</div>}
-          {description != null && (
-            <p className="text-sm/4.5 text-muted-foreground">{description}</p>
+          {actionGroup && (
+            <div className="max-sm:basis-full">{actionGroup}</div>
           )}
         </div>
+        {factLine && <div className="mt-0.5">{factLine}</div>}
+        {description != null && (
+          <p className="text-sm/4.5 text-muted-foreground">{description}</p>
+        )}
       </div>
       {below}
     </header>

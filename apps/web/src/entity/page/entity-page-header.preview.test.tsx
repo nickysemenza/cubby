@@ -49,9 +49,9 @@ for (const width of [402, 900, 1280]) {
     );
     const thumbnail = screen
       .getByTestId("detail-spec-plate")
-      .querySelector(":scope > div > .shrink-0");
-    expect(thumbnail?.getBoundingClientRect().width).toBe(48);
-    expect(thumbnail?.getBoundingClientRect().height).toBe(48);
+      .querySelector(".shrink-0");
+    expect(thumbnail?.getBoundingClientRect().width).toBe(28);
+    expect(thumbnail?.getBoundingClientRect().height).toBe(28);
     const title = screen.getByRole("heading").getBoundingClientRect();
     const edit = screen
       .getByRole("button", { name: "Edit" })
@@ -59,16 +59,11 @@ for (const width of [402, 900, 1280]) {
     const plate = screen
       .getByTestId("detail-spec-plate")
       .getBoundingClientRect();
-    // The key-numbers strip below the identity has its own reflow budget.
-    const strip = screen
-      .getByTestId("detail-key-numbers")
-      .getBoundingClientRect();
     const centersMatch =
       Math.abs(title.top + title.height / 2 - edit.top - edit.height / 2) <= 2;
     expect(centersMatch).toBe(width >= 640);
-    expect(plate.height - strip.height).toBeLessThanOrEqual(
-      width < 640 ? 164 : 120,
-    );
+    // About 56px on a desktop; the strip sits outside this sticky header.
+    expect(plate.height).toBeLessThanOrEqual(width < 640 ? 164 : 64);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     expect(screen.getByText("Value $48.00")).toBeVisible();
   });
@@ -79,19 +74,19 @@ it.each([
     name: "a declared timestamp leads and the ingest time follows",
     entity: "email" as const,
     rawData: { receivedAt: "2026-08-13T17:41:19Z" },
-    expected: /^Received Aug 13, 2026.*· added Oct 14, 2026/,
+    expected: /Received Aug 13, 2026.*added Oct 14, 2026/,
   },
   {
     name: "a declared date stays on its calendar day",
     entity: "purchase" as const,
     rawData: { date: "2026-08-13" },
-    expected: /^Ordered Aug 13, 2026.*· added Oct 14, 2026/,
+    expected: /Ordered Aug 13, 2026.*added Oct 14, 2026/,
   },
   {
     name: "an empty declared time falls back to the ingest time",
     entity: "email" as const,
     rawData: { receivedAt: null },
-    expected: /^Added Oct 14, 2026/,
+    expected: /Added Oct 14, 2026/,
   },
 ])("hero time: $name", ({ entity, rawData, expected }) => {
   render(
@@ -102,7 +97,7 @@ it.each([
     />,
     { wrapper: harness.wrapper },
   );
-  const meta = screen.getByText(/added/i).closest("p");
+  const meta = screen.getByText(/added/i).parentElement;
   expect(meta?.textContent?.replace(/\s+/g, " ").trim()).toMatch(expected);
 });
 

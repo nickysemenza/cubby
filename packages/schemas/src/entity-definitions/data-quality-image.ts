@@ -8,7 +8,7 @@ export const displayImageQualityCheck = (entity: string) => ({
   scoreCap: 99,
   exceptions: "forbidden" as const,
   satisfiedLabel: "Display image available",
-  placement: null,
+  placement: { section: "images" },
   label: "No display image",
   message:
     "No displayable image is available, directly or through related records.",

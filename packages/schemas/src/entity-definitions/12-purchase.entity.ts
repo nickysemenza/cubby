@@ -143,6 +143,11 @@ export const { definition, readSchemas } = defineEntityModel({
       hero: {
         when: { field: "date", label: "Ordered" },
       },
+      lead: ["overview", "order"],
+      pairs: [
+        ["overview", "order"],
+        ["financial-settlement", "reconciliation"],
+      ],
       sections: [
         {
           kind: "relation",

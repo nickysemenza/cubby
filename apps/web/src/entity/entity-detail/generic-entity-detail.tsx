@@ -14,7 +14,11 @@ import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { PuzzlePieceIcon } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { type ComponentProps, lazy, Suspense, useState } from "react";
 import { z } from "zod";
 
@@ -40,6 +44,7 @@ import type { DetailHeroActions } from "~/entity/page/entity-page-header";
 import { Page } from "~/entity/page/page";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
+import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
 import { FactsAddProvider } from "~/ui/common/facts";
 import {
@@ -47,11 +52,15 @@ import {
   type ImageChainQueryOptions,
 } from "~/ui/derived/image-chain";
 import { WhyValue } from "~/ui/derived/why-value";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { VisibleContent } from "~/ui/hooks/visible-content";
-import { Section } from "~/ui/layout";
 import { DetailEditAction } from "~/ui/primitives/detail-edit-action";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
+import {
+  SectionPair,
+  SectionStack,
+} from "../../ui/data-table/indexed-sections";
 import { DocumentViewerList } from "../../ui/document-viewer-list";
 import {
   actionVerbs,
@@ -60,6 +69,7 @@ import {
 } from "../actions/action-verbs";
 import { EntityActionButtons } from "../actions/entity-actions";
 import EntityImageList from "../components/entity-image-list";
+import { supportsEntityGraph } from "../relationships/entity-relations";
 import { type DetailSection, DetailSections } from "../table/detail-page";
 import {
   EntityTimeline,
@@ -71,16 +81,22 @@ import { DetailActivity } from "./detail-activity";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { detailSlotsFor } from "./detail-slots";
-import { DetailSummary, isEmptySummaryCell } from "./detail-summary";
+import { DetailSummary, detailSectionFields } from "./detail-summary";
 import { EntityRecordFields } from "./entity-record-fields";
 import {
   EntityRelationTable,
   type EntityRelationTableOperations,
   planRelationSection,
   RelationSectionActions,
+  RelationStaticSkeleton,
+  relationSkeletonRows,
 } from "./entity-relation-table";
 import { NeedsYou, NeedsYouProvider, useNeedsYouTarget } from "./needs-you";
-import { RecordQualityProvider, QualitySectionChecks } from "./record-quality";
+import {
+  QualitySectionChecks,
+  RecordQualityProvider,
+  useQualityCheckSections,
+} from "./record-quality";
 
 const RecordProposals = lazy(() =>
   import("~/entity/suggestions/queue/record-proposals").then((module) => ({
@@ -171,6 +187,7 @@ interface GenericEntityDetailOperations {
   timeline?: EntityTimelineOperations;
   displayImages?: EntityDisplayImagesQueryOptions;
   imageChain?: ImageChainQueryOptions;
+  graph?: Pick<typeof entityGraph, "graph">;
 }
 
 function declaredSections<E extends GenericDetailEntity>(
@@ -179,21 +196,17 @@ function declaredSections<E extends GenericDetailEntity>(
   record: DetailRecordOf<E>,
   bag: DetailRecordBag,
   operations: GenericEntityDetailOperations,
+  placement: {
+    omitTitle: boolean;
+    /** Lead sections mount immediately: they are the first thing on the page. */
+    eager?: ReadonlySet<string>;
+    relationCount?: (relation: string) => number | undefined;
+  } = { omitTitle: false },
 ): DetailSection[] {
   const { detail, singular } = presentationOf(queryClient, entity);
   const slots = detailSlotsFor(entity);
-  // A field a summary slot shows is not repeated by a later section.
-  const summarized = new Set(
-    detail.summary.flatMap((slot) =>
-      slot.kind === "fields" &&
-      onDetailSurface(slot, "web") &&
-      !isEmptySummaryCell(queryClient, entity, record, slot)
-        ? slot.fields
-        : [],
-    ),
-  );
   const unsummarized = (keys: readonly string[]) =>
-    keys.filter((key) => !summarized.has(key));
+    detailSectionFields(queryClient, entity, record, keys, placement);
   const sections = detail.sections.filter((section) =>
     onDetailSurface(section, "web"),
   );
@@ -224,6 +237,7 @@ function declaredSections<E extends GenericDetailEntity>(
                 entity={entity}
                 record={record}
                 fields={fields}
+                sectionTitle={section.title}
               />
             ),
           },
@@ -264,6 +278,7 @@ function declaredSections<E extends GenericDetailEntity>(
                   plan={plan}
                   recordId={bag.id}
                   title={section.title}
+                  expectedRows={placement.relationCount?.(section.relation)}
                   operations={operations.list}
                   emptyLabel={
                     section.empty ??
@@ -301,12 +316,13 @@ function declaredSections<E extends GenericDetailEntity>(
         if (slot === undefined || slot.applies?.(record as never) === false)
           return [];
         const Slot = slot.component;
-        const title = section.title ?? singular;
+        const title = section.title ?? slot.indexTitle ?? singular;
         // SAFETY: the slot is this entity's own (see above).
         return [
           {
             ...base,
             title,
+            bare: section.title === null,
             collapsed: slot.collapsed,
             headerAction: section.explanationField ? (
               <WhyValue
@@ -332,7 +348,8 @@ function declaredSections<E extends GenericDetailEntity>(
   let streamedRelation = false;
   return ordered.map((section) => {
     const declared = sections.find((candidate) => candidate.id === section.id);
-    if (declared?.kind === "fields") return section;
+    if (declared?.kind === "fields" || placement.eager?.has(section.id))
+      return section;
     // Work slots own review actions and deep links into their record content.
     // Their targets must mount before the browser can scroll to them.
     if (declared?.kind === "slot" && section.workspace === "work")
@@ -341,15 +358,71 @@ function declaredSections<E extends GenericDetailEntity>(
       streamedRelation = true;
       return section;
     }
+    const expected =
+      declared?.kind === "relation"
+        ? placement.relationCount?.(declared.relation)
+        : undefined;
     return {
       ...section,
       content: (
-        <VisibleContent fallback={<SlotFallback />}>
+        <VisibleContent
+          fallback={
+            // The skeleton reserves the table's known height, so resolving it
+            // does not move the page.
+            expected !== undefined && declared?.kind === "relation" ? (
+              <RelationStaticSkeleton
+                rows={relationSkeletonRows(
+                  planRelationSection(queryClient, entity, declared),
+                  expected,
+                )}
+              />
+            ) : (
+              <SlotFallback />
+            )
+          }
+        >
           {section.content}
         </VisibleContent>
       ),
     };
   });
+}
+
+/**
+ * Rows per declared relation from one batched graph read, so empty relations
+ * can fold without mounting a table each. Only a loaded branch is a count: an
+ * unanswered key or a failed read stays unknown and its table renders.
+ */
+function useRelationCounts(
+  entity: GenericDetailEntity,
+  id: string,
+  relations: readonly string[],
+  operations: Pick<typeof entityGraph, "graph"> = entityGraph,
+) {
+  const hydrated = useHydrated();
+  const enabled =
+    hydrated && relations.length > 0 && supportsEntityGraph(entity);
+  const query = useQuery({
+    ...operations.graph.queryOptions({
+      roots: [{ entityKind: entity, entityId: id }],
+      relationshipKeys: [...relations],
+      limit: 1,
+    }),
+    enabled,
+  });
+  const counts = new Map(
+    query.data?.branches.map((branch) => [
+      branch.relationshipKey,
+      branch.totalCount,
+    ]),
+  );
+  return {
+    count: (relation: string) => counts.get(relation),
+    pending:
+      relations.length > 0 &&
+      supportsEntityGraph(entity) &&
+      (!hydrated || query.isPending),
+  };
 }
 
 /**
@@ -490,6 +563,25 @@ function RunEvidenceDetail<E extends GenericDetailEntity>({
   );
 }
 
+/**
+ * A section owning a quality result never folds: every applicable check keeps
+ * one visible result beside its evidence.
+ */
+function DetailBody({
+  sections,
+  ...props
+}: ComponentProps<typeof DetailSections>) {
+  const owning = new Set<string>(useQualityCheckSections());
+  return (
+    <DetailSections
+      {...props}
+      sections={sections.map((section) =>
+        owning.has(section.id) ? { ...section, foldWhenEmpty: false } : section,
+      )}
+    />
+  );
+}
+
 /** Suggestion status lands in the page's Needs-you block. */
 function DetailSuggestions(
   props: Omit<ComponentProps<typeof RecordSuggestionsProvider>, "statusTarget">,
@@ -538,21 +630,30 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const emoji = z
     .looseObject({ emoji: z.string().nullish() })
     .parse(record).emoji;
+  const declaredRelations = detail.sections.flatMap((section) =>
+    section.kind === "relation" && onDetailSurface(section, "web")
+      ? [section.relation]
+      : [],
+  );
+  const relationCounts = useRelationCounts(
+    entity,
+    bag.id,
+    declaredRelations,
+    operations.graph,
+  );
+  const leadIds = new Set<string>(detail.lead);
   const sections = declaredSections(
     queryClient,
     entity,
     record,
     bag,
     operations,
+    {
+      omitTitle: true,
+      eager: leadIds,
+      relationCount: relationCounts.count,
+    },
   );
-  // The first fields section left after the summary is the record's headline
-  // facts, leading the content column ahead of Needs you and Activity.
-  const fieldSectionIds = new Set(
-    detail.sections.flatMap((section) =>
-      section.kind === "fields" ? [section.id] : [],
-    ),
-  );
-  const facts = sections.find((section) => fieldSectionIds.has(section.id));
   // Change history plus declared dated relations, merged into one timeline.
   const timeline =
     entityMetadata(queryClient, entity).descriptor.auditable ||
@@ -648,6 +749,65 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         <DocumentViewerList documents={documents} />
       ) : null,
   });
+  const relationOf = new Map(
+    detail.sections.flatMap((section) =>
+      section.kind === "relation" ? [[section.id, section.relation]] : [],
+    ),
+  );
+  // The first relation streams with the page, so only later ones wait on counts.
+  const firstRelation = sections.find((section) => relationOf.has(section.id));
+  const partnerOf = new Map<string, string>(detail.pairs);
+  const placed = sections.map((section): DetailSection => {
+    const relation = relationOf.get(section.id);
+    const count = relation && relationCounts.count(relation);
+    const lead = leadIds.has(section.id);
+    return {
+      ...section,
+      pairWith: partnerOf.get(section.id),
+      foldWhenEmpty: !lead,
+      knownCount: typeof count === "number" ? count : undefined,
+      knownEmpty: count === 0,
+      countPending:
+        relation !== undefined &&
+        section !== firstRelation &&
+        relationCounts.pending,
+      ...(lead ? { headingAs: "h2" as const, overflowVisible: true } : {}),
+    };
+  });
+  const renderedFields = detail.sections.flatMap((section) => {
+    if (!onDetailSurface(section, "web")) return [];
+    if (section.kind === "fields" || section.kind === "relation")
+      return detailSectionFields(
+        queryClient,
+        entity,
+        record,
+        section.kind === "fields" ? section.fields : section.contextFields,
+        { omitTitle: true },
+      );
+    return [];
+  });
+  const withQualityChecks = (section: DetailSection): DetailSection => ({
+    ...section,
+    content: (
+      <>
+        <QualitySectionChecks section={section.id} />
+        {/* Retained review actions must be available without first scrolling
+            their lower detail section. */}
+        {section.id === "suggestions" ||
+        detail.sections.some((declared) => declared.id === section.id) ? (
+          section.content
+        ) : (
+          <VisibleContent fallback={<SlotFallback />}>
+            {section.content}
+          </VisibleContent>
+        )}
+      </>
+    ),
+  });
+  // Declared lead order, not section order, reads first.
+  const leadSections = detail.lead.flatMap((id) =>
+    placed.filter((section) => section.id === id).map(withQualityChecks),
+  );
   // `edit` is the page's own affordance (the hero button); every other
   // declared verb is offered from the registry, on the plate.
   const declaredVerbs = heroActions.filter(
@@ -689,7 +849,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         entity={entity}
         wayfinding={detailWayfinding(entity, record)}
         title={
-          <span className="flex min-w-0 items-start gap-2">
+          <span className="flex min-w-0 items-center gap-2">
             {((!heroImages?.length && !heroDisplayImage) || emoji) && (
               <RecordEmoji
                 entity={entity}
@@ -721,58 +881,33 @@ function FullEntityDetail<E extends GenericDetailEntity>({
               <RecordQualityProvider
                 entity={entity}
                 id={bag.id}
-                renderedSections={sections.map((section) => section.id)}
+                renderedSections={placed.map((section) => section.id)}
+                visibleFields={renderedFields}
               >
-                <DetailSections
-                  sections={sections
-                    .filter((section) => section !== facts)
-                    .map((section) => ({
-                      ...section,
-                      content: (
-                        <>
-                          <QualitySectionChecks section={section.id} />
-                          {/* Retained review actions must be available without
-                              first scrolling their lower detail section. */}
-                          {section.id === "suggestions" ||
-                          detail.sections.some(
-                            (declared) => declared.id === section.id,
-                          ) ? (
-                            section.content
-                          ) : (
-                            <VisibleContent fallback={<SlotFallback />}>
-                              {section.content}
-                            </VisibleContent>
-                          )}
-                        </>
-                      ),
-                    }))}
+                <DetailBody
+                  sections={placed
+                    .filter((section) => !leadIds.has(section.id))
+                    .map(withQualityChecks)}
                   rawData={record}
                   omitActivity={timeline}
                   leadIndex={[
-                    ...(facts ? [{ id: facts.id, title: facts.title }] : []),
+                    ...leadSections.map((section) => ({
+                      id: section.id,
+                      title: section.title,
+                    })),
                     ...(timeline ? [{ id: "history", title: "Activity" }] : []),
                   ]}
                   lead={
                     <>
-                      {facts ? (
-                        <Section
-                          id={facts.id}
-                          title={facts.title}
-                          headingAs="h2"
-                          data-detail-group
-                          tabIndex={-1}
-                          className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                        >
-                          <QualitySectionChecks section={facts.id} />
-                          {facts.content}
-                        </Section>
-                      ) : null}
-                      <NeedsYou>
-                        <RecordWorkQueue id={bag.id} variant="rows" />
-                      </NeedsYou>
-                      {timeline ? (
-                        <DetailActivity entity={entity} id={bag.id} />
-                      ) : null}
+                      <SectionStack sections={leadSections} />
+                      <SectionPair>
+                        <NeedsYou>
+                          <RecordWorkQueue id={bag.id} variant="rows" />
+                        </NeedsYou>
+                        {timeline ? (
+                          <DetailActivity entity={entity} id={bag.id} />
+                        ) : null}
+                      </SectionPair>
                     </>
                   }
                 />
