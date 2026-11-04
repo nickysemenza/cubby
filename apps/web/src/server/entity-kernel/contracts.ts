@@ -110,12 +110,14 @@ const listFields = {
 const resultDetail = mcpResultDetail;
 const resultDetailFields = z.object(mcpResultDetailFields);
 const mcpListPagination = z
-  .object(
-    mcpPaginationFields({
+  .object({
+    ...mcpPaginationFields({
       defaultPageSize: DEFAULT_PAGE_SIZE,
       maxPageSize: MAX_PAGE_SIZE,
     }),
-  )
+    // The entity list shares the kernel's summary-only page size 0.
+    pageSize: listFields.pagination.unwrap().shape.pageSize,
+  })
   .default({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE });
 
 const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(

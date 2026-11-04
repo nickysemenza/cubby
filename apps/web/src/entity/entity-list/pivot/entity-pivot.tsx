@@ -150,6 +150,10 @@ export function EntityPivot({
       ])
     : [];
   const maxCell = model ? pivotMaxCell(model) : 0;
+  // Filters can shrink the matrix under the remembered cell; clamp it so one
+  // cell always keeps the tab stop.
+  const activeRow = Math.min(active[0], Math.max(entries.length - 1, 0));
+  const activeColumn = Math.min(active[1], Math.max(columns.length - 1, 0));
 
   const toggleSort = (column: string) =>
     setSort((previous) =>
@@ -193,11 +197,10 @@ export function EntityPivot({
               ? [0, 1]
               : null;
     if (!move) return;
-    const [rowIndex, columnIndex] = active;
     const [down = 0, right = 0] = move;
     const next: [number, number] = [
-      Math.min(Math.max(rowIndex + down, 0), entries.length - 1),
-      Math.min(Math.max(columnIndex + right, 0), columns.length - 1),
+      Math.min(Math.max(activeRow + down, 0), entries.length - 1),
+      Math.min(Math.max(activeColumn + right, 0), columns.length - 1),
     ];
     const target = cellAt(...next);
     if (!target) return;
@@ -215,7 +218,7 @@ export function EntityPivot({
     const rowIndex = entries.indexOf(entry);
     const columnIndex = columns.indexOf(column);
     const position = `${rowIndex}:${columnIndex}`;
-    const isActive = active[0] === rowIndex && active[1] === columnIndex;
+    const isActive = activeRow === rowIndex && activeColumn === columnIndex;
     const other = column.key === OTHER_COLUMN;
     const path = pivotCellPath(row, column.key, parent);
     const drillable = !other && count > 0 && summary?.drillFilters(path);

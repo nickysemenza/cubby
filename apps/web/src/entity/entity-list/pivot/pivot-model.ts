@@ -120,7 +120,7 @@ export function buildPivot(input: {
   const fold =
     canFoldColumns &&
     !input.expandColumns &&
-    allColumns.length > PIVOT_VISIBLE_COLUMNS + 1;
+    allColumns.length > PIVOT_VISIBLE_COLUMNS;
   const columns = fold
     ? allColumns.slice(0, PIVOT_VISIBLE_COLUMNS)
     : allColumns;

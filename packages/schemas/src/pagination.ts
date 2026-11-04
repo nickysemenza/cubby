@@ -380,10 +380,11 @@ export function buildPaginatedResponse<T>(
     if (count === undefined)
       throw new Error("An uncounted page must supply hasNextPage");
     hasNextPage =
-      pagination.pageSize > 0 &&
       (pagination.pageIndex + 1) * pagination.pageSize <
-        (aggregates.membershipCount ?? count);
+      (aggregates.membershipCount ?? count);
   }
+  // A zero-size page never advances its offset, so it has no continuation.
+  if (pagination.pageSize === 0) hasNextPage = false;
   const meta: PaginatedMeta = {
     pageIndex: pagination.pageIndex,
     pageSize: pagination.pageSize,
