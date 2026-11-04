@@ -1,7 +1,13 @@
 import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
 
 import { formatInstant } from "~/lib/date-format";
+
+// Theme sizes outside the t-shirt scale must be declared, or tailwind-merge reads
+// them as text colors and drops the element's real color.
+const twMerge = extendTailwindMerge({
+  extend: { theme: { text: ["11", "control"] } },
+});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
