@@ -596,7 +596,19 @@ async function applyPublishedStatementLabels(
         targetIndex += settled - 1;
         continue;
       }
-      if (importId) await regenerateCharges(db, [target.charge], scope);
+      if (importId) {
+        log.info("Statement label application phase", {
+          phase: "regeneration",
+          chargeIndex: targetIndex,
+          charges: targets.length,
+        });
+        await regenerateCharges(db, [target.charge], scope);
+      }
+      log.info("Statement label application phase", {
+        phase: "rules",
+        chargeIndex: targetIndex,
+        charges: targets.length,
+      });
       const outcome = await applyAutomaticRulesForCharge(
         db,
         target.charge,
@@ -604,6 +616,11 @@ async function applyPublishedStatementLabels(
         scope,
       );
       if (outcome.refused.length) {
+        log.info("Statement label application phase", {
+          phase: "refusal_check",
+          chargeIndex: targetIndex,
+          charges: targets.length,
+        });
         const [fresh] = await buildChargeProposals(db, [target.charge]);
         if (fresh && fresh.evidenceFingerprint !== published.get(key)) {
           // An earlier application can consume this charge's candidate.
@@ -628,6 +645,10 @@ async function applyPublishedStatementLabels(
       applicationBlocked = true;
     }
   }
+  log.info("Statement label application phase", {
+    phase: "completion",
+    charges: settlementTargets.length,
+  });
   const settled = new Set(
     await completeStatementApplications(
       db,

@@ -339,6 +339,13 @@ identities or content. These entry events complement the completed-page timings
 when an invocation exits before it can publish a page summary; they do not
 measure heap usage or establish a memory bound.
 
+`Statement label application phase` logs enter each charge's regeneration,
+automatic rules and refused-rule evidence check, then the page's receipt
+completion. Payloads contain only phase names, charge indices and counts.
+These entry events distinguish interrupted application work without retaining
+proposal graphs or logging source content. They do not attribute invocation CPU
+to one Job: maintenance and evaluation pages can run in the same invocation.
+
 A handler has one shape: `prepare(db, claim, input, ctx)` reads and calls
 providers outside a transaction and returns an outcome with an optional
 `publish(tx)`. The executor (`generic/jobs/service/jobs.ts`, private) owns
