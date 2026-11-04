@@ -164,9 +164,7 @@ provenance, and `work` reports background activity independently. Inherit, expli
 value and explicit None are separate intents. A successful empty outcome is not
 a missing computation. A missing result renders Updating… (or Unavailable with its raw failure); it never renders the successful empty state. Automatic ownership comes from current receipts and audit
 evidence, never a cached `automaticFields` value; edits and same-value confirmation
-end that ownership immediately. Member field review and deterministic source
-assignment share the existing field-correction gate before record writes, including
-reviews that leave the stored value unchanged.
+end that ownership immediately.
 
 `packages/schemas/src/field-envelope-presentation.ts` and CubbyKit's
 `FieldEnvelopePresentation.swift` are the client twin owners of empty and missing

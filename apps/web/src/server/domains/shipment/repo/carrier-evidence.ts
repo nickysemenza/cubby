@@ -6,7 +6,7 @@ import type {
   ShipmentCarrierClaim,
 } from "@cubby/schemas/shipment-evidence";
 import { SHIPMENT_IDENTITY_PERIOD_DAYS } from "@cubby/schemas/shipment-fields";
-import { and, eq, isNull, or, sql, type SQLWrapper } from "drizzle-orm";
+import { and, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
@@ -14,20 +14,23 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   vendor,
-  email,
   shipmentSourceCapture,
   shipmentSourcePackage,
+  shipmentObservation,
+  shipmentObservationCapture,
 } from "~/server/db/retained-tables";
-import { shipmentCarrierEvidence } from "~/server/domains/shipment/repo/carrier-packets";
 import { vendorNamedSql } from "~/server/domains/vendor/repo/vendor-name-match";
 import { wasm } from "~/server/wasm";
 
-export const normalizeCarrierReference = (value: string) =>
+const normalizeCarrierReference = (value: string) =>
   value.replaceAll(/\s/g, "").toUpperCase();
 
-/** Exact existing identities only: carrier evidence must never create a brand Vendor. */
+const intermediaryName =
+  /^(?:mail boxes etc|mbe|shippo|shipstation|aftership)(?:\b|[.,])/i;
+
+/** Existing names and aliases own identity; service wording never creates another Vendor. */
 export async function resolveCarrierName(db: Database, name: string | null) {
-  if (!name?.trim()) return null;
+  if (!name?.trim() || intermediaryName.test(name.trim())) return null;
   const rows = await getDb(db)
     .select({
       id: vendor.id,
@@ -110,7 +113,10 @@ type CarrierSourceEvidence = Pick<MailReadContent, "links"> & {
 
 export async function assessCarrierPacket(
   db: Database,
-  packet: RetainedShipmentEvidence,
+  packet: Pick<
+    RetainedShipmentEvidence,
+    "trackingNumber" | "extraTrackingNumbers" | "carrierClaims"
+  >,
   source: CarrierSourceEvidence,
 ) {
   const references = new Set(
@@ -121,7 +127,18 @@ export async function assessCarrierPacket(
       .filter((number) => number !== null)
       .map(normalizeCarrierReference),
   );
-  const claims = packet.carrierClaims ?? [];
+  const hints = packet.carrierClaims ?? [];
+  const claims = [
+    ...hints,
+    ...sourceCarrierClaims(source, [...references]).filter(
+      (claim) =>
+        !hints.some(
+          (hint) =>
+            hint.role === "intermediary" &&
+            hint.carrierName.toLowerCase() === claim.carrierName.toLowerCase(),
+        ),
+    ),
+  ];
   const explicit: {
     claim: ShipmentCarrierClaim;
     carrier: Awaited<ReturnType<typeof resolveCarrierName>>;
@@ -170,15 +187,12 @@ export async function assessCarrierPacket(
         normalizeCarrierReference(claim.trackingNumber) ===
           normalizeCarrierReference(number),
     );
-    const ids = new Set(
-      matches.map(
-        ({ carrier, claim }) =>
-          carrier?.id ?? `unresolved:${claim.carrierName.trim().toLowerCase()}`,
-      ),
-    );
+    const conflict = carrierClaimsConflict(matches);
     return {
-      carrier: ids.size === 1 ? (matches[0]?.carrier ?? null) : null,
-      conflict: ids.size > 1,
+      carrier: conflict
+        ? null
+        : (matches.find((match) => match.carrier)?.carrier ?? null),
+      conflict,
     };
   };
   return {
@@ -231,16 +245,6 @@ export function carrierFormatEvidence(
   };
 }
 
-/** Package-level references remain available even when individual events omit them. */
-export const carrierPacketReferenceSql = (
-  packet: SQLWrapper,
-  number: string,
-) => sql`(
-  upper(regexp_replace(${packet}->>'trackingNumber', '[[:space:]]', '', 'g')) = ${normalizeCarrierReference(number)}
-  OR EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(${packet}->'extraTrackingNumbers', '[]'::jsonb)) ref
-    WHERE upper(regexp_replace(ref->>'trackingNumber', '[[:space:]]', '', 'g')) = ${normalizeCarrierReference(number)})
-)`;
-
 /** Unresolved literal names are evidence too; lack of a Vendor must not hide a conflict. */
 export function carrierClaimsConflict(
   claims: Awaited<ReturnType<typeof assessCarrierPacket>>["explicit"],
@@ -249,8 +253,21 @@ export function carrierClaimsConflict(
   for (const { claim, carrier } of claims) {
     const number = normalizeCarrierReference(claim.trackingNumber);
     const identities = byReference.get(number) ?? new Set<string>();
+    const serviceClaim = !carrier
+      ? claims.find(
+          (other) =>
+            other.carrier &&
+            other.claim.service &&
+            normalizeCarrierReference(other.claim.trackingNumber) === number &&
+            `${other.claim.carrierName} ${other.claim.service}`
+              .trim()
+              .toLowerCase() === claim.carrierName.trim().toLowerCase(),
+        )
+      : undefined;
     identities.add(
-      carrier?.id ?? `unresolved:${claim.carrierName.trim().toLowerCase()}`,
+      carrier?.id ??
+        serviceClaim?.carrier?.id ??
+        `unresolved:${claim.carrierName.trim().toLowerCase()}`,
     );
     byReference.set(number, identities);
   }
@@ -328,7 +345,62 @@ const carrierHistoryWindow = z.object({
   last: z.string().nullable(),
 });
 
-/** Include retained unresolved claims for the same reference/period, not only admitted bindings. */
+/** Derive bounded carrier statements from the original source, without mirroring packets into another ledger. */
+function sourceCarrierClaims(
+  source: CarrierSourceEvidence,
+  references: readonly string[],
+): ShipmentCarrierClaim[] {
+  const claims: ShipmentCarrierClaim[] = [];
+  for (const number of references) {
+    for (const text of source.texts) {
+      const lines = text.split("\n");
+      for (let index = 0; index < lines.length; index++) {
+        for (let length = 1; length <= 4; length++) {
+          const quote = lines.slice(index, index + length).join("\n");
+          if (
+            quote.length > 500 ||
+            !new RegExp(referencePattern(number), "i").test(quote)
+          )
+            continue;
+          const name = quote.match(
+            new RegExp(
+              `^\\s*(?:(?:shipping\\s+)?carrier\\s*:\\s*|(?:shipped|shipping|delivered|delivery|sent|dispatched)\\s+(?:via|with|by)\\s+)?(.+?)[\\s;,.·:—-]+(?:tracking(?:\\s*(?:number|no\\.?|id))?\\s*[:#]?|trk\\s*#)\\s*${referencePattern(number)}`,
+              "i",
+            ),
+          )?.[1];
+          if (
+            !name ||
+            /^(?:broker|merchant|seller|label provider)\s*:/i.test(name) ||
+            intermediaryName.test(name)
+          )
+            continue;
+          const claim: ShipmentCarrierClaim = {
+            trackingNumber: number,
+            carrierName: name.trim(),
+            role: "carrier",
+            service: null,
+            evidence: { kind: "statement", quote },
+          };
+          if (retainedCarrierClaim(claim, text)) claims.push(claim);
+        }
+      }
+    }
+    for (const link of source.links) {
+      const name = carrierTrackingLink(link.href, number);
+      if (name)
+        claims.push({
+          trackingNumber: number,
+          carrierName: name,
+          role: "carrier",
+          service: null,
+          evidence: { kind: "link", href: link.href },
+        });
+    }
+  }
+  return claims;
+}
+
+/** Read existing captures and their source-event periods; held captures participate before first admission. */
 export async function loadCarrierHistory(
   db: Database,
   scope: { references: readonly string[] } & (
@@ -346,85 +418,89 @@ export async function loadCarrierHistory(
   const window = carrierHistoryWindow
     .omit({ id: true })
     .parse("window" in scope ? scope.window : current?.rows[0]);
+  const bound = sql<boolean>`EXISTS (SELECT 1 FROM ${shipmentSourcePackage} p WHERE p."sourceKey" = ${shipmentSourceCapture}."sourceKey" AND p."shipmentId" = ${shipmentId}::uuid)`;
+  // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- content is a retained source JSON key.
+  const text = sql`upper(regexp_replace(concat_ws(' ', ${shipmentSourceCapture.originalContent}->>'bodyText', ${shipmentSourceCapture.originalContent}->>'bodyHtml', ${shipmentSourceCapture.source}->>'content', ${shipmentSourceCapture.source}->>'url'), '[[:space:]]', '', 'g'))`;
   const rows = await database
     .select({
-      id: shipmentCarrierEvidence.id,
-      packet: shipmentCarrierEvidence.packet,
+      id: shipmentSourceCapture.id,
       source: shipmentSourceCapture.source,
       originalContent: shipmentSourceCapture.originalContent,
-      boundShipmentId: shipmentSourcePackage.shipmentId,
-      receivedAt: email.receivedAt,
+      bound,
+      events: sql<unknown>`coalesce((SELECT jsonb_agg(o.event) FROM ${shipmentObservationCapture} oc JOIN ${shipmentObservation} o ON o.id = oc."observationId" WHERE oc."captureId" = ${shipmentSourceCapture}."id" AND o."supersededById" IS NULL), '[]'::jsonb)`,
     })
-    .from(shipmentCarrierEvidence)
-    .innerJoin(
-      shipmentSourceCapture,
-      eq(shipmentSourceCapture.id, shipmentCarrierEvidence.captureId),
-    )
-    .leftJoin(
-      shipmentSourcePackage,
-      and(
-        eq(shipmentSourcePackage.sourceKey, shipmentSourceCapture.sourceKey),
-        eq(
-          shipmentSourcePackage.packageKey,
-          shipmentCarrierEvidence.packageKey,
-        ),
-      ),
-    )
-    .leftJoin(email, eq(email.id, shipmentSourceCapture.emailId))
+    .from(shipmentSourceCapture)
     .where(
       or(
-        shipmentId
-          ? eq(shipmentSourcePackage.shipmentId, shipmentId)
-          : undefined,
-        and(
-          isNull(shipmentSourcePackage.id),
-          or(
-            ...scope.references.map((number) =>
-              carrierPacketReferenceSql(shipmentCarrierEvidence.packet, number),
-            ),
-          ),
+        bound,
+        ...scope.references.map(
+          (number) =>
+            sql`position(${normalizeCarrierReference(number)} in ${text}) > 0`,
         ),
       ),
     )
     .limit(2001);
   const selected = rows.slice(0, 2000);
-  // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- time and fallback are keys in the bounded source-event JSON payload, not enum values.
-  const windows = await database.execute(sql`SELECT p->>'id' AS id,
-    coalesce(min(shipment_event_day(event)), shipment_event_day(jsonb_build_object('time', p->'fallback')))::text AS first,
-    coalesce(max(shipment_event_day(event)), shipment_event_day(jsonb_build_object('time', p->'fallback')))::text AS last
+  // A capture can contain an admitted package and another held package. Only
+  // current events naming this reference can date its claims; otherwise keep them conservatively.
+  const windows = await database.execute(
+    // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- reference, events and trackingNumber are JSON keys.
+    sql`SELECT p->>'id' AS id, p->>'reference' AS reference,
+    CASE WHEN count(event) = 0 OR count(*) FILTER (WHERE shipment_event_day(event) IS NULL) > 0 THEN NULL ELSE min(shipment_event_day(event))::text END AS first,
+    CASE WHEN count(event) = 0 OR count(*) FILTER (WHERE shipment_event_day(event) IS NULL) > 0 THEN NULL ELSE max(shipment_event_day(event))::text END AS last
     FROM jsonb_array_elements(${JSON.stringify(
-      selected.map((row) => ({
-        id: row.id,
-        events: row.packet.observations,
-        fallback:
-          row.source.kind === "email" && row.receivedAt
-            ? { kind: "instant", value: row.receivedAt.toISOString() }
-            : row.source.kind === "sms_export"
-              ? row.source.sentAt
-              : { kind: "unknown" },
-      })),
-    )}::jsonb) p CROSS JOIN LATERAL jsonb_array_elements(p->'events') event GROUP BY p`);
-  const periods = z.array(carrierHistoryWindow).parse(windows.rows);
-  const packets = selected.filter((row) => {
-    if (shipmentId && row.boundShipmentId === shipmentId) return true;
-    const period = periods.find((period) => period.id === row.id);
-    if (!period?.first || !period.last || !window.first || !window.last)
-      return true;
-    const days = [period.first, period.last, window.first, window.last].map(
-      (day) => Date.parse(day),
-    );
-    return (
-      Math.max(...days) - Math.min(...days) <=
-      SHIPMENT_IDENTITY_PERIOD_DAYS * 86400000
-    );
-  });
+      selected.flatMap((row) =>
+        scope.references.map((reference) => ({
+          id: row.id,
+          reference: normalizeCarrierReference(reference),
+          events: row.events,
+        })),
+      ),
+    )}::jsonb) p LEFT JOIN LATERAL jsonb_array_elements(p->'events') event
+    ON upper(regexp_replace(event->>'trackingNumber', '[[:space:]]', '', 'g')) = p->>'reference'
+    GROUP BY p`,
+  );
+  const periods = z
+    .array(carrierHistoryWindow.extend({ reference: z.string() }))
+    .parse(windows.rows);
   const claims: Awaited<ReturnType<typeof assessCarrierPacket>>["explicit"] =
     [];
-  for (const row of packets)
-    claims.push(
-      ...(
-        await assessCarrierPacket(db, row.packet, carrierCaptureEvidence(row))
-      ).explicit,
-    );
+  for (const row of selected) {
+    for (const reference of scope.references) {
+      const period = periods.find(
+        (period) =>
+          period.id === row.id &&
+          period.reference === normalizeCarrierReference(reference),
+      );
+      if (
+        !row.bound &&
+        period?.first &&
+        period.last &&
+        window.first &&
+        window.last
+      ) {
+        const days = [period.first, period.last, window.first, window.last].map(
+          (day) => Date.parse(day),
+        );
+        if (
+          Math.max(...days) - Math.min(...days) >
+          SHIPMENT_IDENTITY_PERIOD_DAYS * 86400000
+        )
+          continue;
+      }
+      claims.push(
+        ...(
+          await assessCarrierPacket(
+            db,
+            {
+              trackingNumber: reference,
+              extraTrackingNumbers: [],
+            },
+            carrierCaptureEvidence(row),
+          )
+        ).explicit,
+      );
+    }
+  }
   return { claims, truncated: rows.length > 2000, window };
 }
