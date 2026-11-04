@@ -4,7 +4,6 @@ import {
   assessmentJudgments,
   assessmentProducer,
   feedbackAuthority,
-  feedbackVerdict,
   type AssessmentFamily,
 } from "@cubby/schemas/assessment";
 import {
@@ -35,7 +34,6 @@ import {
   eq,
   inArray,
   isNotNull,
-  isNull,
   ne,
   exists,
   notExists,
@@ -63,7 +61,12 @@ import {
   EMAIL_OBSERVATION_RECEIPT,
 } from "~/server/generic/assessment/repo/assessment-email";
 import { correctionOutcomeExists } from "~/server/generic/assessment/repo/correction-receipt";
+import {
+  recommendationScopes,
+  type AssessmentRecordSelection,
+} from "~/server/generic/assessment/repo/pending-admission";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
+export { pendingRecommendationEligibility } from "~/server/generic/assessment/repo/pending-admission";
 
 const reviewAssessment = alias(assessment, "a");
 const reviewState = alias(assessmentState, "s");
@@ -263,11 +266,6 @@ const leg = (end: "outflow" | "inflow") => sql`jsonb_build_array(
   ${ref(sql`${entities.financialAccount}`, sql`a.judgment->${end}->>'accountId'`)},
   ${ref(sql`${entities.financialTransaction}`, sql`a.judgment->${end}->>'transactionId'`)},
   ${ref(sql`${entities.ledgerParty}`, sql`a.judgment->${end}->'owner'->>'id'`)})`;
-
-const recommendationScopes = {
-  connection: sql`a.subject->>'scope' LIKE 'connection.%'`,
-  tagPropagation: sql`a.subject->>'scope' = 'product.tag-propagation'`,
-};
 
 const statementSettlementRelation = sql`"EntityExternalId" evidence
   JOIN "FinancialTransaction" settled ON settled.id=evidence."entityId" AND ${notDeleted("settled")}
@@ -885,9 +883,7 @@ type AssessmentEligibility =
       appliedRule: (assessmentId: SQL) => SQL;
     };
 
-export type AssessmentRecordScope = {
-  entity?: string;
-  records?: readonly { code: string; entity: string; id: string }[];
+export type AssessmentRecordScope = AssessmentRecordSelection & {
   eligibility: AssessmentEligibility;
 };
 
@@ -927,50 +923,6 @@ function assessmentStateAdmission(
             .where(eq(run.shortcode, eligibility.runCode)),
         )
       : undefined,
-  );
-}
-
-/** Member rejection and current suppression independently remove pending connections. */
-export function pendingRecommendationEligibility() {
-  const suppressed = alias(assessmentState, "suppressed");
-  const suppressionValue = (key: "scope" | "candidateKey" | "fingerprint") =>
-    sql<string>`${suppressed.suppression}->>${key}`;
-  return and(
-    notExists(
-      feedbackForAssessment(
-        and(
-          eq(receipt.authority, feedbackAuthority.enum.member),
-          inArray(receipt.verdict, [
-            feedbackVerdict.enum.wrong,
-            feedbackVerdict.enum.dismissed,
-          ]),
-        ),
-      ),
-    ),
-    notExists(
-      reviewQueryBuilder
-        .select({ id: suppressed.id })
-        .from(suppressed)
-        .where(
-          and(
-            suppressed.active,
-            eq(suppressed.entity, reviewState.entity),
-            eq(suppressed.recordId, reviewState.recordId),
-            eq(
-              suppressionValue("scope"),
-              sql<string>`${reviewAssessment.subject}->>'scope'`,
-            ),
-            eq(
-              suppressionValue("candidateKey"),
-              sql<string>`${reviewAssessment.subject}->>'candidateKey'`,
-            ),
-            or(
-              isNull(suppressionValue("fingerprint")),
-              eq(suppressionValue("fingerprint"), reviewAssessment.fingerprint),
-            ),
-          ),
-        ),
-    ),
   );
 }
 

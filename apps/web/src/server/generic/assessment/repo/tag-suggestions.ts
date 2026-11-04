@@ -14,7 +14,10 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { executeEntity } from "~/server/entity-kernel/execute";
 import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
-import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/review-families";
+import {
+  pendingRecommendationEligibility,
+  reviewFamilyDeclarations,
+} from "~/server/generic/assessment/repo/review-families";
 
 import {
   keyBase,
@@ -153,9 +156,7 @@ async function tagRows(db: Database, ids?: readonly string[]) {
     FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id JOIN "Product" p ON p.id = s."recordId" AND ${notDeleted("p")}
     WHERE a.family = ${assessmentFamily.enum.recommendation} AND ${reviewFamilyDeclarations.recommendation.scopes.tagPropagation} AND a.served AND s.active AND s.status = ${suggestionStatus.enum.pending}
       AND s.suppression IS NULL AND p."updatedAt" <= a."createdAt" AND NOT (a.evidence->>'tag' = ANY(p.tags))
-      AND NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active AND suppressed.entity = s.entity AND suppressed."recordId" = s."recordId"
-        AND suppressed.suppression->>'scope' = a.subject->>'scope' AND suppressed.suppression->>'candidateKey' = a.subject->>'candidateKey'
-        AND (suppressed.suppression->>'fingerprint' IS NULL OR suppressed.suppression->>'fingerprint' = a.fingerprint))
+      AND ${pendingRecommendationEligibility({ memberFeedback: false })}
       ${ids ? sql`AND a.id = ANY(${uuidArrayParam(ids)})` : sql``}`);
   const parsedRows = rows.flatMap((row) => {
     const parsed = proposalSchema.safeParse(row.evidence);

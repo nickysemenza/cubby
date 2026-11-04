@@ -34,6 +34,7 @@ export const repositoryOwners = [
   "src/server/generic/data-quality/repo/presentation.ts",
   "src/server/generic/assessment/repo/automatic-fields.ts",
   "src/server/generic/assessment/repo/read-publication.ts",
+  "src/server/generic/assessment/repo/pending-admission.ts",
   "src/server/generic/derived/repo/read.ts",
   "src/server/generic/shortcode/repo/shortcode-resolver.ts",
   "src/server/domains/product/repo/field-envelope.ts",

@@ -2,6 +2,8 @@ import { assessmentFamily } from "@cubby/schemas/assessment";
 import {
   ASSESSMENT_READ_RULES_VERSION,
   ASSESSMENT_READ_TARGET,
+  assessmentReadCoverage,
+  assessmentReadFact,
   type AssessmentReadResult,
 } from "@cubby/schemas/assessment-read-publication";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
@@ -39,6 +41,9 @@ import { labelStatementSuggestions } from "~/server/domains/transaction-import/s
 import { executeEntity } from "~/server/entity-kernel";
 import {
   writeAssessmentReadStage,
+  publishedAssessmentAdmissionSql,
+  publishedAssessmentCoverageSql,
+  publishedAssessmentRecordRefsSql,
   type AssessmentReadStagePlan,
   type AssessmentReadStageWrite,
 } from "~/server/generic/assessment/repo/read-publication";
@@ -53,6 +58,7 @@ import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import {
   readWorkItems,
   deleteWorkItems,
+  updateWorkItems,
 } from "~/server/generic/jobs/jobs.fixtures";
 import { markWork } from "~/server/generic/jobs/repo/work-items";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -66,6 +72,7 @@ import {
   publishFieldAssessment,
   recordFeedback,
 } from "./assessment";
+import { reviewAssessment } from "./assessment-review";
 import { listAutomaticDecisions } from "./automatic-decisions";
 import {
   acceptCleanSuggestions,
@@ -656,6 +663,26 @@ describe("cross-family Suggestion list", () => {
         ({ target, ref, ticket }) => ({ target, ref, ticket }),
       );
     const observed = await observe();
+    const publishedFacts = async (
+      scope?: Parameters<typeof publishedAssessmentAdmissionSql>[0],
+    ) =>
+      assessmentReadFact
+        .array()
+        .parse(
+          (await getDb(ctx.db).execute(publishedAssessmentAdmissionSql(scope)))
+            .rows,
+        );
+    const coverage = async () =>
+      assessmentReadCoverage.parse(
+        (await getDb(ctx.db).execute(publishedAssessmentCoverageSql())).rows[0],
+      );
+    expect(await publishedFacts()).toEqual([]);
+    expect(await coverage()).toEqual({
+      missing: true,
+      stale: false,
+      unresolved: true,
+      failed: false,
+    });
     const isolated = await prepareAssessmentReadPublication(
       ctx.db,
       [confident, unsure],
@@ -803,6 +830,20 @@ describe("cross-family Suggestion list", () => {
       kind: "activated",
     });
     const active = await headers();
+    expect(
+      new Map(
+        (await publishedFacts()).map((fact) => [
+          fact.key.assessmentId,
+          fact.row,
+        ]),
+      ),
+    ).toEqual(together.rows);
+    expect(await coverage()).toEqual({
+      missing: false,
+      stale: true,
+      unresolved: true,
+      failed: false,
+    });
     expect(active.map((row) => row.assessmentId).sort()).toEqual(
       [...ids].sort(),
     );
@@ -847,6 +888,8 @@ describe("cross-family Suggestion list", () => {
       ),
     ).toMatchObject({ kind: "activated" });
     const emptyPublications = await headers();
+    expect(await publishedFacts()).toEqual([]);
+    expect((await coverage()).missing).toBe(false);
     expect(emptyPublications).toHaveLength(ids.length);
     expect(
       emptyPublications.every(
@@ -887,8 +930,20 @@ describe("cross-family Suggestion list", () => {
       changed: [],
     });
     expect(await headers()).toEqual(beforeSourceEdit);
+    await updateWorkItems(
+      ctx.db,
+      { target: ASSESSMENT_READ_TARGET, refs: [confident] },
+      { lastError: "Synthetic publication failure", attempts: 1 },
+    );
+    expect((await coverage()).failed).toBe(true);
     await deleteWorkItems(ctx.db, { target: `${ASSESSMENT_READ_TARGET}@0` });
     await deleteWorkItems(ctx.db, { target: ASSESSMENT_READ_TARGET });
+    expect(await coverage()).toEqual({
+      missing: false,
+      stale: false,
+      unresolved: false,
+      failed: false,
+    });
     expect(ids.indexOf(confident)).toBeLessThan(ids.indexOf(unsure));
     const connectionRow = page.items.find(
       (row) => row.id === proposal.review.assessmentId,
@@ -920,6 +975,37 @@ describe("cross-family Suggestion list", () => {
     const fieldsOnly = await listSuggestionPage(ctx.db, { family: "field" });
     expect(fieldsOnly.meta.totalCount).toBe(2);
     expect(fieldsOnly.meta.cleanCount).toBe(0);
+    const productId = await resolveOrThrow(ctx.db, "product", product.id);
+    const productScope = {
+      records: [{ entity: "product", code: product.id, id: productId }],
+    };
+    const publishedCounts = await getDb(ctx.db)
+      .execute(sql`SELECT "recordCode", count(*)::int AS count
+      FROM (${publishedAssessmentRecordRefsSql(productScope)}) records
+      WHERE "recordCode" = ${product.id} GROUP BY "recordCode"`);
+    expect(publishedCounts.rows).toEqual([
+      { recordCode: product.id, count: 2 },
+    ]);
+    expect(
+      (await publishedFacts(productScope))
+        .map((fact) => fact.key.assessmentId)
+        .sort(),
+    ).toEqual([confident, unsure].sort());
+    expect(await publishedFacts({ records: [] })).toEqual([]);
+    expect(await publishedFacts({ families: [] })).toEqual([]);
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: confident,
+      operationId: "synthetic-published-reader-reject",
+      verdict: "wrong",
+      intent: "history",
+    });
+    expect(
+      (await publishedFacts()).map((fact) => fact.key.assessmentId),
+    ).not.toContain(confident);
+    // The retained revision is still stored; the committed member decision hid it.
+    expect(
+      (await headers()).some((row) => row.assessmentId === confident),
+    ).toBe(true);
   });
 
   // Reference pruning must retain both endpoints and mixed scopes without

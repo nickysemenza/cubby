@@ -258,6 +258,20 @@ record-scope behavior when `recordEntity` differs. Raw tokens are never shortene
 or canonicalized; their index uses a bounded hash with an exact text recheck.
 Ordinal uniqueness avoids treating a hash collision as identical membership.
 
+`publishedAssessmentAdmissionSql` is the shared pending-result relation for
+Suggestions and passive consumers such as Work. It exposes stored keys, filter
+operands and page payloads; consumers apply filters and count before loading page
+payloads. Scoped discovery and reference counting retain their separate membership
+views and the batch-wide State-family intersection. The family owner applies only
+current authority gates here: pending/active State, served publication where the
+family requires it, current member decisions and suppression, and primary-record
+liveness. It never recaptures canonical evidence on a browse read.
+`publishedAssessmentCoverageSql` accompanies that relation. Missing publications,
+old rules, owed work and failed refreshes remain explicit; successful empty
+revisions establish coverage. Until source expansion resolves new memberships,
+coverage is conservative across record scopes and reports no fabricated missing
+count. Consumers must not turn an empty incomplete relation into a complete zero.
+
 The internal target and foreground cutover require complete invalidation and
 publication coverage before these tables become the read authority. The storage
 and canonical preparation seam alone establish neither coverage nor latency.

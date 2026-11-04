@@ -1,9 +1,16 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import {
   ASSESSMENT_READ_TARGET,
+  ASSESSMENT_READ_RULES_VERSION,
   assessmentReadResult,
   type AssessmentReadResult,
 } from "@cubby/schemas/assessment-read-publication";
 import type { Entity } from "@cubby/schemas/entity";
+import {
+  suggestionListFamily,
+  type SuggestionListFamily,
+} from "@cubby/schemas/suggestion-list";
 import {
   and,
   arrayOverlaps,
@@ -29,12 +36,133 @@ import {
   assessmentReadMembership,
   assessmentReadPublication,
   assessmentReadStage,
+  assessment,
   assessmentState,
   entityIdentity,
 } from "~/server/db/retained-tables";
+import { automaticApplicationRule } from "~/server/generic/assessment/repo/assessment";
+import {
+  publishedSuggestionLiveEligibility,
+  type AssessmentRecordSelection,
+} from "~/server/generic/assessment/repo/pending-admission";
 import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
-import { unobservedWork } from "~/server/generic/jobs/repo/work-items";
+import {
+  pendingWorkStatusSql,
+  unobservedWork,
+} from "~/server/generic/jobs/repo/work-items";
 import { sha256CanonicalJson } from "~/server/lib/canonical-json";
+
+export type AssessmentPublishedScope = Pick<
+  AssessmentRecordSelection,
+  "entity" | "records"
+> & {
+  families?: readonly SuggestionListFamily[];
+};
+
+/**
+ * Shared relational admission for pending browse consumers. It reads normalized
+ * publications and current authority only; no evidence capture or enrollment.
+ */
+export function publishedAssessmentAdmissionSql(
+  scope: AssessmentPublishedScope = {},
+): SQL {
+  const families = scope.families ?? suggestionListFamily.options;
+  const selectedFamilies = families.length
+    ? sql`IN (${sql.join(
+        families.map((family) => sql`${family}`),
+        sql`, `,
+      )})`
+    : sql`IN (NULL)`;
+  const scoped = scope.entity !== undefined || scope.records !== undefined;
+  // Scope records drive fenced hash-assisted point probes. Exact text remains
+  // authoritative, including malformed and non-canonical historical tokens.
+  const membershipFrom =
+    scope.records !== undefined
+      ? sql`jsonb_to_recordset(${JSON.stringify(scope.records)}::jsonb)
+        AS requested(entity text, id text, code text)
+      CROSS JOIN LATERAL (
+        SELECT indexed."assessmentId", indexed.revision, indexed."stateFamily", indexed.retained, indexed.entity
+        FROM ${assessmentReadMembership} indexed
+        WHERE indexed.kind = 'scope' AND indexed.entity = requested.entity
+          AND md5(indexed.value) IN (md5(requested.id), md5(requested.code))
+          AND indexed.value IN (requested.id, requested.code)
+        OFFSET 0
+      ) m`
+      : sql`${assessmentReadMembership} m`;
+  const discovery = sql`SELECT DISTINCT m."assessmentId", m."stateFamily"
+    FROM ${membershipFrom}
+    JOIN ${assessmentReadPublication} membership_publication
+      ON membership_publication."assessmentId" = m."assessmentId"
+      AND membership_publication.revision = m.revision AND membership_publication.active
+    JOIN ${assessment} discovery_assessment ON discovery_assessment.id = m."assessmentId" AND discovery_assessment.served
+    JOIN ${assessmentState} discovery_state ON discovery_state.id = m."assessmentId"
+      AND discovery_state.active AND discovery_state.status = ${suggestionStatus.enum.pending}
+    WHERE ${scope.records !== undefined ? sql`true` : sql`m.kind = 'scope'`} AND m."stateFamily" ${selectedFamilies}
+      ${scope.entity === undefined ? sql`` : sql`AND (m.retained OR m.entity = ${scope.entity})`}`;
+  return sql`${scoped ? sql`WITH discovered AS MATERIALIZED (${discovery})` : sql``}
+    SELECT p."assessmentId", p.revision, p.family, p.key, p.filters, p.row, p."computedAt", p."rulesVersion"
+    FROM ${assessmentReadPublication} p
+    JOIN ${assessment} a ON a.id = p."assessmentId"
+    JOIN ${assessmentState} s ON s.id = p."assessmentId"
+    WHERE p.active AND p.admitted AND p.family ${selectedFamilies}
+      AND ${publishedSuggestionLiveEligibility(sql`p.family`)}
+      AND CASE WHEN p.family IN (${assessmentFamily.enum.field}, ${assessmentFamily.enum.statement_transaction})
+        THEN ${automaticApplicationRule(sql`a.id`)} IS NULL ELSE true END
+      ${
+        scoped
+          ? sql`AND p."assessmentId" IN (SELECT "assessmentId" FROM discovered)
+        AND p.family IN (SELECT "stateFamily" FROM discovered)`
+          : sql``
+      }`;
+}
+
+/**
+ * Count references once per Assessment, even when family authorities diverge.
+ * Ordinal retains duplicate references; families remains available to Work.
+ */
+export function publishedAssessmentRecordRefsSql(
+  scope: AssessmentPublishedScope = {},
+): SQL {
+  return sql`SELECT admitted."assessmentId", admitted.families, m.entity,
+      m.value AS "recordCode", m.ordinal
+    FROM (SELECT "assessmentId", revision, array_agg(DISTINCT family) AS families
+      FROM (${publishedAssessmentAdmissionSql(scope)}) facts
+      GROUP BY "assessmentId", revision) admitted
+    JOIN ${assessmentReadMembership} m ON m."assessmentId" = admitted."assessmentId"
+      AND m.revision = admitted.revision AND m.kind = 'ref'`;
+}
+
+/**
+ * Before expansion, new memberships are unknown. Coverage therefore stays
+ * conservative across scopes instead of claiming that an empty scoped read is
+ * complete. Empty successful revisions do establish coverage for their source.
+ */
+export function publishedAssessmentCoverageSql(): SQL {
+  const families = sql.join(
+    suggestionListFamily.options.map((family) => sql`${family}`),
+    sql`, `,
+  );
+  const population = sql`SELECT s.id FROM ${assessmentState} s
+    JOIN ${assessment} a ON a.id = s.id
+    WHERE s.active AND s.status = ${suggestionStatus.enum.pending}
+      AND (s.family IN (${families}) OR a.family IN (${families}))
+      AND (a.served OR s.family IN (${assessmentFamily.enum.statement_transaction}, ${assessmentFamily.enum.transfer_pair}))`;
+  return sql`SELECT
+    EXISTS (SELECT 1 FROM (${population}) open
+      WHERE NOT EXISTS (SELECT 1 FROM ${assessmentReadPublication} p
+        WHERE p."assessmentId" = open.id AND p.active)) AS missing,
+    (EXISTS (SELECT 1 FROM (${population}) open
+      JOIN ${assessmentReadPublication} p ON p."assessmentId" = open.id AND p.active
+      WHERE p."rulesVersion" <> ${ASSESSMENT_READ_RULES_VERSION})
+      OR (work.count > 0 AND EXISTS (SELECT 1 FROM ${assessmentReadPublication} p WHERE p.active))) AS stale,
+    work.count > 0 AS unresolved, work.failed > 0 AS failed
+    FROM ${pendingWorkStatusSql((target) =>
+      or(
+        eq(target, ASSESSMENT_READ_TARGET),
+        fanoutTargetMatches(target, sql`${ASSESSMENT_READ_TARGET}::text`),
+      )!,
+    )} work`;
+}
 
 export type AssessmentReadStagePlan = Omit<
   typeof assessmentReadStage.$inferSelect,
