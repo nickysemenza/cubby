@@ -234,7 +234,7 @@ export function DetailPageHeader({
         )}
         breadcrumb={
           wayfinding !== false ? (
-            <span className="flex min-w-0 flex-wrap items-center gap-x-1 md:h-(--record-crumb-height) md:flex-nowrap md:overflow-hidden md:whitespace-nowrap">
+            <span className="flex min-w-0 flex-wrap items-center gap-x-1 md:mb-1 md:h-(--record-crumb-height) md:flex-nowrap md:overflow-hidden md:whitespace-nowrap">
               <DetailBreadcrumb
                 entity={entity}
                 heroNo={heroNo}
@@ -246,7 +246,7 @@ export function DetailPageHeader({
               {crumbFacts}
             </span>
           ) : (
-            <span className="flex min-w-0 flex-wrap items-center gap-x-1 md:h-(--record-crumb-height)">
+            <span className="flex min-w-0 flex-wrap items-center gap-x-1 md:mb-1 md:h-(--record-crumb-height)">
               {crumbFacts}
             </span>
           )
