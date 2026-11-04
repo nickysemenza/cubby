@@ -3,10 +3,7 @@ import { and, eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { assessment, assessmentState } from "~/server/db/schema";
-import {
-  lockCorrectionKey,
-  lockFieldCorrectionScope,
-} from "~/server/generic/assessment/repo/correction-lock";
+import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
 import {
   fieldCorrectionIdentityReader,
   resolveFieldCorrectionIdentities,
@@ -46,6 +43,15 @@ export async function lockFieldCorrectionKeysForField(
     input,
     [...keys].filter((key) => key !== null),
   );
+}
+
+/** The field gate stabilizes alias discovery, including proof committed on another record. */
+export async function lockFieldCorrectionScope(
+  db: Database,
+  entity: string,
+  field: string,
+) {
+  await lockCorrectionKey(db, `field-correction-scope:${entity}:${field}`);
 }
 
 /** One lock identity contract for member confirmation and every automatic consequence. */

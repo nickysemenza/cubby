@@ -1,7 +1,3 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   RecordShipmentEvidenceInput,
@@ -12,7 +8,6 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
-import { writeShipmentCarrierAudit } from "tooling/shipment-carrier-audit";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -24,7 +19,6 @@ import {
   shipmentSourcePackage,
   vendor,
   assessmentState,
-  feedback,
   expense,
   inventoryEntry,
   email,
@@ -34,18 +28,8 @@ import {
   memberImportWorld,
   retainedMailFixture,
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
-import { shipmentCarrierEvidence } from "~/server/domains/shipment/repo/carrier-packets";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
-import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
-import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
-import {
-  loadReceiptFieldAuthority,
-  recordFieldAssignmentReceipt,
-} from "~/server/generic/assessment/repo/automatic-fields";
-import { listSuggestions } from "~/server/generic/assessment/repo/suggestion-review";
-import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
-import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { shipmentTrackingReport } from "~/server/generic/entity-report/repo/shipment";
@@ -53,7 +37,6 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
-import { auditShipmentCarriers } from "./carrier-audit";
 import {
   carrierFormatEvidence,
   retainedCarrierClaim,
@@ -124,70 +107,24 @@ const carrierClaim = (
 describe("Shipment retained evidence", () => {
   const ctx = withTestDb();
 
-  const authorityOf = async (code: string) => {
-    const [row] = await getDb(ctx.db)
-      .select()
-      .from(shipment)
-      .where(eq(shipment.shortcode, code));
-    return loadReceiptFieldAuthority(
-      ctx.db,
-      "shipment",
-      row!.id,
-      "carrierId",
-      row!.carrierId,
-    );
-  };
-  const seedAuthority = async (
+  const setCarrierFixture = async (
     code: string,
     carrierId: (typeof shipment.$inferSelect)["carrierId"],
-    authority: "automatic" | "unknown",
   ) => {
-    const [row] = await getDb(ctx.db)
-      .select()
-      .from(shipment)
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({ carrierId })
       .where(eq(shipment.shortcode, code));
-    const { auditIds } = await withAuditReceipts(async () => {
-      await getDb(ctx.db)
-        .update(shipment)
-        .set({ carrierId })
-        .where(eq(shipment.id, row!.id));
-      await logAuditEntries(ctx.db, ctx.actor, [
-        {
-          entityKind: "shipment",
-          entityId: row!.id,
-          action: "update",
-          changes: { carrierId: { from: row!.carrierId, to: carrierId } },
-        },
-      ]);
-    });
-    if (authority === "automatic") {
-      const [carrier] = carrierId
-        ? await getDb(ctx.db)
-            .select()
-            .from(vendor)
-            .where(eq(vendor.id, carrierId))
-        : [];
-      await recordFieldAssignmentReceipt(ctx.db, {
-        entity: "shipment",
-        recordId: row!.id,
-        field: "carrierId",
-        rawValue: carrierId,
-        value: carrier?.shortcode ?? null,
-        authority,
-        actor: ctx.actor,
-        auditIds,
-      });
-    }
   };
 
-  it("corrects only machine-owned carrier assignments and protects member intent and replay", async () => {
+  it("corrects source contradictions and preserves replay without assignment receipts", async () => {
     await memberImportWorld(ctx.db, ctx.actor);
     const wrong = await createRepoIdentity(ctx, "vendor", {
       name: "Synthetic Courier Alpha",
     });
     const correct = await createRepoIdentity(ctx, "vendor", {
       name: "Synthetic Courier Beta",
-      aliases: ["Synthetic Beta Ground"],
+      aliases: ["Synthetic Beta Ground", "Synthetic Tracking Carrier"],
     });
     const original = capture("authority", [
       {
@@ -202,10 +139,8 @@ describe("Shipment retained evidence", () => {
       .select()
       .from(shipment)
       .where(eq(shipment.shortcode, code));
-    expect(initial).toMatchObject({
-      carrierId: null,
-    });
-    // Seed a positively machine-owned historical mistake; legacy default authority is tested separately.
+    expect(initial?.carrierId).not.toBeNull();
+    // A stored carrier guess needs no separate ownership classification.
     const wrongId = (
       await getDb(ctx.db)
         .select()
@@ -218,23 +153,14 @@ describe("Shipment retained evidence", () => {
         .from(vendor)
         .where(eq(vendor.shortcode, correct.output.id))
     )[0]!.id;
-    await seedAuthority(code, wrongId, "automatic");
-    const quote = "Synthetic Beta Ground tracking 123456789012";
+    await setCarrierFixture(code, wrongId);
+    const quote = "Synthetic Tracking Carrier tracking 123456789012";
     const proof = capture(
       "authority-proof",
       [
         {
           ...packet("123456789012"),
           carrierName: "Synthetic Beta Ground",
-          carrierClaims: [
-            {
-              trackingNumber: "123456789012",
-              carrierName: "Synthetic Beta Ground",
-              role: "carrier",
-              service: "Ground",
-              evidence: { kind: "statement", quote },
-            },
-          ],
         },
       ],
       "2026-06-07T09:00:00Z",
@@ -276,8 +202,6 @@ describe("Shipment retained evidence", () => {
           .where(eq(shipment.shortcode, code))
       )[0],
     ).toMatchObject({ carrierId: correctId, extraTrackingNumbers: [] });
-    const automaticOwner = await authorityOf(code);
-    expect(automaticOwner.kind).toBe("automatic");
     const kernel = buildKernelContext(ctx.db, ctx.actor.userId);
     const automated = {
       ...kernel,
@@ -294,7 +218,6 @@ describe("Shipment retained evidence", () => {
         data: { carrierId: correct.output.id },
       }),
     ).rejects.toThrow(/interactive member/);
-    expect((await authorityOf(code)).kind).toBe("automatic");
     await expect(
       executeEntity(
         {
@@ -315,55 +238,20 @@ describe("Shipment retained evidence", () => {
       id: code,
       data: { purpose: "incoming" },
     });
-    expect((await authorityOf(code)).kind).toBe("automatic");
-    expect(
-      (await listAutomaticDecisions(ctx.db, { recordIds: [code] })).items,
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          family: "field",
-          applicationVerified: true,
-          automaticRule: "retained-source@1",
-        }),
-      ]),
-    );
-    expect(
-      await listSuggestions(ctx.db, {
-        entity: "shipment",
-        recordIds: [code],
-        status: "pending",
-      }),
-    ).toEqual([]);
-    if (automaticOwner.kind === "unknown")
-      throw new Error("Synthetic automatic receipt missing");
-    const [application] = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .where(eq(feedback.id, automaticOwner.receiptId));
-    await recordFeedback(ctx.db, {
-      assessmentId: application!.assessmentId,
-      operationId: "synthetic-carrier-confirmation",
-      verdict: "correct",
-      authority: "member",
-      actorUserId: ctx.actor.userId,
-      intent: "history",
-    });
-    expect((await authorityOf(code)).kind).toBe("unknown");
     await executeEntity(buildKernelContext(ctx.db, ctx.actor.userId), {
       action: "update",
       entity: "shipment",
       id: code,
       data: { carrierId: correct.output.id },
     });
-    expect((await authorityOf(code)).kind).toBe("member");
     await executeEntity(buildKernelContext(ctx.db, ctx.actor.userId), {
       action: "bulkUpdate",
       entity: "shipment",
       ids: [code],
       data: { carrierId: null, purpose: "outgoing" },
     });
-    const held = await recordShipmentEvidence(ctx.db, proof, ctx.actor);
-    expect(held.unresolvedPackages).toHaveLength(1);
+    const refreshed = await recordShipmentEvidence(ctx.db, proof, ctx.actor);
+    expect(refreshed.unresolvedPackages).toEqual([]);
     expect(
       (
         await getDb(ctx.db)
@@ -371,43 +259,7 @@ describe("Shipment retained evidence", () => {
           .from(shipment)
           .where(eq(shipment.shortcode, code))
       )[0],
-    ).toMatchObject({ carrierId: null, purpose: "outgoing" });
-    const before = await getDb(ctx.db).select().from(assessmentState);
-    const retained = await getDb(ctx.db).select().from(shipmentCarrierEvidence);
-    const audit = await auditShipmentCarriers(ctx.db, {});
-    expect(
-      audit.candidates.some(
-        (candidate) => candidate.category === "member_decision",
-      ),
-    ).toBe(true);
-    expect(await getDb(ctx.db).select().from(assessmentState)).toEqual(before);
-    expect(await getDb(ctx.db).select().from(shipmentCarrierEvidence)).toEqual(
-      retained,
-    );
-    const directory = await mkdtemp(join(tmpdir(), "synthetic-carrier-audit-"));
-    try {
-      const output = join(directory, "private.json");
-      const runAudit = (file: string, databaseUrl = ctx.databaseUrl) =>
-        writeShipmentCarrierAudit({ databaseUrl, output: file });
-      await runAudit(output);
-      expect(JSON.parse(await readFile(output, "utf8"))).toEqual(audit);
-      expect((await stat(output)).mode & 0o777).toBe(0o600);
-      const existing = join(directory, "existing.json");
-      await writeFile(existing, "Synthetic existing report", { mode: 0o644 });
-      await expect(runAudit(existing)).rejects.toMatchObject({
-        code: "EEXIST",
-      });
-      expect(await readFile(existing, "utf8")).toBe(
-        "Synthetic existing report",
-      );
-      const url = new URL(ctx.databaseUrl);
-      url.searchParams.set("options", "-c statement_timeout=30000");
-      await expect(
-        runAudit(join(directory, "options.json"), url.toString()),
-      ).rejects.toThrow("Connection URL options are not accepted");
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
+    ).toMatchObject({ carrierId: correctId, purpose: "outgoing" });
     expect(carrierFormatEvidence("123456789012")).toMatchObject({
       outcome: "ambiguous_match",
       carriers: ["UPS", "FedEx"],
@@ -420,7 +272,7 @@ describe("Shipment retained evidence", () => {
     ).toMatchObject({ outcome: "unsupported_format", carriers: [] });
   });
 
-  it("holds unknown authority, conflicting source claims and identity collisions without speculative packages", async () => {
+  it("corrects historical carrier values while holding source conflicts and identity collisions", async () => {
     await memberImportWorld(ctx.db, ctx.actor);
     const alpha = await createRepoIdentity(ctx, "vendor", {
       name: "Synthetic Alpha Carrier",
@@ -469,7 +321,7 @@ describe("Shipment retained evidence", () => {
     expect(
       (await recordShipmentEvidence(ctx.db, proof, ctx.actor))
         .unresolvedPackages,
-    ).toHaveLength(1);
+    ).toEqual([]);
     expect(
       (
         await getDb(ctx.db)
@@ -477,16 +329,13 @@ describe("Shipment retained evidence", () => {
           .from(shipment)
           .where(eq(shipment.shortcode, code))
       )[0],
-    ).toMatchObject({ carrierId: alphaId });
+    ).toMatchObject({ carrierId: betaId });
     const findings = await getDb(ctx.db).select().from(assessmentState);
     await recordShipmentEvidence(ctx.db, proof, ctx.actor);
     expect(await getDb(ctx.db).select().from(assessmentState)).toEqual(
       findings,
     );
-    expect(
-      (await auditShipmentCarriers(ctx.db, { scope: "unresolved" })).candidates,
-    ).toHaveLength(1);
-    await seedAuthority(code, alphaId, "automatic");
+    await setCarrierFixture(code, alphaId);
     const other = await recordShipmentEvidence(
       ctx.db,
       capture("collision-peer", [packet("EXAMPLE-PEER")]),
@@ -522,7 +371,6 @@ describe("Shipment retained evidence", () => {
         message: expect.stringMatching(/Shipment tracking identity conflicts/),
       },
     });
-    expect((await authorityOf(code)).kind).toBe("automatic");
     expect(
       (
         await getDb(ctx.db)
@@ -580,11 +428,6 @@ describe("Shipment retained evidence", () => {
     expect(laterSingleClaim.shipmentIds).toEqual([]);
     expect(laterSingleClaim.unresolvedPackages).toHaveLength(1);
     expect(await getDb(ctx.db).select().from(shipment)).toHaveLength(2);
-    expect(
-      (
-        await auditShipmentCarriers(ctx.db, { scope: "unresolved" })
-      ).candidates.some((row) => row.category === "conflicting_or_handoff"),
-    ).toBe(true);
     const constructed = capture(
       "constructed",
       [packet("EXAMPLE-URL")],
@@ -645,7 +488,7 @@ describe("Shipment retained evidence", () => {
     ).toBe(true);
   });
 
-  it("review regression: additional-only identity cannot bypass historical carrier authority", async () => {
+  it("resolves an additional-only identity from explicit source evidence", async () => {
     await createRepoIdentity(ctx, "vendor", { name: "Synthetic Beta Carrier" });
     const number = "EXAMPLE-LEGACY-EXTRA";
     const initial = await recordShipmentEvidence(
@@ -664,7 +507,6 @@ describe("Shipment retained evidence", () => {
         ],
       })
       .where(eq(shipment.shortcode, code));
-    await seedAuthority(code, null, "unknown");
     const claim = carrierClaim(number, "Synthetic Beta Carrier");
     const result = await recordShipmentEvidence(
       ctx.db,
@@ -678,7 +520,7 @@ describe("Shipment retained evidence", () => {
       ),
       ctx.actor,
     );
-    expect(result.unresolvedPackages).toHaveLength(1);
+    expect(result.unresolvedPackages).toEqual([]);
     expect(
       (
         await getDb(ctx.db)
@@ -687,8 +529,8 @@ describe("Shipment retained evidence", () => {
           .where(eq(shipment.shortcode, code))
       )[0],
     ).toMatchObject({
-      trackingNumber: null,
-      carrierId: null,
+      trackingNumber: number,
+      carrierId: expect.any(String),
     });
   });
 
@@ -900,8 +742,8 @@ describe("Shipment retained evidence", () => {
           },
           independent,
         )
-      ).primary.carrier,
-    ).toBeNull();
+      ).primary.carrier?.code,
+    ).toBe(fedex.output.id);
     const fabricatedPage = capture("constructed-link", [parcel]);
     expect(
       (
