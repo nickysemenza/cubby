@@ -58,12 +58,15 @@ function useScrollEdges(
 
 export function useDataTableController<TItem extends RowData>({
   table,
+  foldColumns = true,
   infiniteScroll,
   groupConfig,
   detailRowIds,
   verticalAlign,
   onRowClick,
 }: {
+  /** Page lists fold all-empty and grouped columns away; a record's own tables keep them for reading and inline edits. */
+  foldColumns?: boolean;
   table: ITable<TItem>;
   infiniteScroll?: InfiniteScrollControls;
   groupConfig?: GroupConfig;
@@ -104,9 +107,10 @@ export function useDataTableController<TItem extends RowData>({
     () => new Set(),
   );
   const measuredEmptyColumns = useMemo(
-    () => emptyColumnIds(table, rows),
+    () => (foldColumns ? emptyColumnIds(table, rows) : new Set<string>()),
     // oxlint-disable-next-line react/exhaustive-deps -- fitScope and the content version stand in for the table and row state emptiness reads
     [
+      foldColumns,
       table,
       rows,
       fitScope,
@@ -136,8 +140,11 @@ export function useDataTableController<TItem extends RowData>({
   // Painted nowhere: the empty columns, and those section headers already state.
   const unpaintedColumns = useMemo<ReadonlySet<string>>(
     () =>
-      new Set([...emptyColumns, ...(groupedKey ? groupedKey.split(",") : [])]),
-    [emptyColumns, groupedKey],
+      new Set([
+        ...emptyColumns,
+        ...(foldColumns && groupedKey ? groupedKey.split(",") : []),
+      ]),
+    [emptyColumns, foldColumns, groupedKey],
   );
   const revealEmptyColumns = useCallback((columnIds: readonly string[]) => {
     setRevealedEmpty((previous) => new Set([...previous, ...columnIds]));

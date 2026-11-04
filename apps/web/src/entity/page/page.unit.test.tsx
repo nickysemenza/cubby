@@ -66,7 +66,7 @@ describe("Page workbench", () => {
 
     expect(screen.getByText("Product shelf").parentElement).toHaveClass(
       "px-2",
-      "md:px-6",
+      "md:px-4",
     );
   });
 

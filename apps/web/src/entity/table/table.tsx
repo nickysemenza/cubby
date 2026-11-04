@@ -1270,6 +1270,9 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   } = props;
   const controller = useDataTableController({
     table,
+    // A record's own tables can print meaning for a null bucket ("Unassigned",
+    // "No purchase/vendor") and edit in place, which hiding the column would erase.
+    foldColumns: !embedded,
     infiniteScroll,
     groupConfig,
     detailRowIds: rowDetail?.openIds,
