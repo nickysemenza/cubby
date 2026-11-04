@@ -1585,9 +1585,9 @@ type ConnectionPageOutcome = {
 };
 
 /**
- * Connection sources evaluated at once. A Worker invocation holds five strong
- * connections, so more database-bound sources only queue; the margin overlaps
- * provider waits such as query embeddings.
+ * Connection sources evaluated at once to overlap provider waits such as query
+ * embeddings. Their database statements share the invocation's three strong
+ * connections; source concurrency does not reserve database capacity.
  */
 const CONNECTION_PAGE_CONCURRENCY = 8;
 

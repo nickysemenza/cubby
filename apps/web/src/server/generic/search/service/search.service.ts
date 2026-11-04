@@ -399,18 +399,18 @@ export async function findRelatedSearchHits(
 }
 
 /**
- * Hydrate already-ranked private refs through the same compact document and
- * thumbnail projection used by global search. This is intentionally internal
- * to server services: callers must strip `entityId` before crossing an API
- * boundary.
+ * Resolve already-ranked private refs to their live search documents, in ref
+ * order, without display reads. A ref with no live document is absent. This is
+ * intentionally internal to server services: callers must strip `entityId`
+ * before crossing an API boundary.
  */
-export async function hydrateSearchHitRefs(
+export async function readSearchHitRefs(
   db: Database,
   refs: ReadonlyArray<{
     entityKind: SearchableEntity;
     entityId: string;
   }>,
-): Promise<InternalSearchHit[]> {
+): Promise<InternalSearchCandidate[]> {
   if (refs.length === 0) return [];
   const values = sql.join(
     refs.map(
@@ -419,7 +419,7 @@ export async function hydrateSearchHitRefs(
     ),
     sql`, `,
   );
-  const rows = await executeSearchDocumentSql(
+  return executeSearchDocumentSql(
     db,
     candidateSchema,
     sql`
@@ -437,5 +437,15 @@ export async function hydrateSearchHitRefs(
       ORDER BY refs.ordinal
     `,
   );
-  return hydrateHits(db, rows);
+}
+
+/**
+ * `readSearchHitRefs` plus the display fields global search shows. The same
+ * `entityId` boundary rule applies.
+ */
+export async function hydrateSearchHitRefs(
+  db: Database,
+  refs: Parameters<typeof readSearchHitRefs>[1],
+): Promise<InternalSearchHit[]> {
+  return hydrateHits(db, await readSearchHitRefs(db, refs));
 }

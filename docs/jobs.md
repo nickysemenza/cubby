@@ -772,8 +772,9 @@ Staging runs once after admission. Retained evaluation snapshots still load for
 the observed page before preparation; neither the serialized evidence bound nor
 the target count is a total Worker heap bound.
 
-Connection pages evaluate 8 sources at once (a Worker invocation holds five
-strong connections). Expense Project recommendation inputs and
+Connection pages evaluate 8 sources at once. A Worker invocation holds three
+strong connections, a ceiling shared with everything else in that invocation
+rather than reserved for the page. Expense Project recommendation inputs and
 FinancialTransaction settlement/transfer retrieval load for the page before
 provider work. Evidence capture shares each preparation wave's reads and the validated frozen
 JSON of repeated recommendation contexts within that capture pass, instead of
@@ -785,7 +786,10 @@ per source and returns that
 source's failure without rejecting healthy sources. Nearby purchases retain their per-transaction top ten and each
 Purchase retains its original ranked settlement limit before allocation and
 conflict filtering. Acquisition search still captures each newly retrieved
-candidate before subsequent provider waits. Compatible Product identity and
+candidate before subsequent provider waits. Its semantic scan resolves ranked
+refs through the live search-document projection and reads only candidate
+identity and similarity, so it issues no emoji, image, path or placement reads.
+Compatible Product identity and
 field questions share operation-specific usage objects and the page's decision
 wave; nested pair evaluation joins that wave instead of dispatching per source.
 Distinct Runs, features, models and operations remain separate accounting groups.
@@ -853,7 +857,8 @@ An incomplete semantic scan names its gap on the typed coverage result, and
   budget, so pending wins within one scan.
 - `budget_exceeded`: the settled corpus left the fixed ANN budget short of valid
   matches. Waiting cannot change that, so it wins across a source's searches.
-- No gap: a provider or configuration failure.
+- No gap: a provider or configuration failure, or a failed search-document read.
+  A display read cannot cause one, because the acquisition scan issues none.
 
 A connection source stops immediately after its acquisition scan on either typed
 gap, before the tag, Product identity and field stages. Its candidates do not
