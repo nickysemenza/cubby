@@ -47,7 +47,8 @@ export const listReadPlan = {
   pagination: z
     .object({
       pageIndex: z.number().int().min(0),
-      pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE),
+      // 0 with groupBy reads only counts and group summaries (Pivot).
+      pageSize: z.number().int().min(0).max(MAX_PAGE_SIZE),
     })
     .optional(),
   groupBy: listGroupByDimensionsSchema.optional(),

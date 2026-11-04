@@ -59,7 +59,8 @@ interface Entry {
 export interface EntityPivotProps {
   /** Dimension labels in groupBy order. */
   labels: readonly string[];
-  recordLabel: string;
+  /** Lowercase record nouns, for counts and announcements. */
+  recordLabel: { one: string; other: string };
   summary: GroupSummaryModel | undefined;
   isLoading: boolean;
   /** A placeholder from the previous filters or dimensions is not this scope. */
@@ -117,6 +118,8 @@ export function EntityPivot({
         onRetry,
       });
   const [rowLabel = "Rows", columnLabel = "Columns", subLabel] = labels;
+  const records = (count: number) =>
+    `${formatCount(count)} ${count === 1 ? recordLabel.one : recordLabel.other}`;
 
   const columns: CrossTabColumn<PivotAxisValue>[] = model
     ? [
@@ -226,7 +229,7 @@ export function EntityPivot({
     const heat = other || count === 0 ? 0 : heatBucket(count, basis);
     const percent =
       share !== "count" && basis > 0 ? formatPercent(count / basis) : null;
-    const label = `${row.label}${parent ? ` (${parent.label})` : ""}, ${column.data.label}: ${formatCount(count)} ${recordLabel}${percent ? `, ${percent}` : ""}`;
+    const label = `${row.label}${parent ? ` (${parent.label})` : ""}, ${column.data.label}: ${records(count)}${percent ? `, ${percent}` : ""}`;
     const content =
       count === 0 ? (
         <span className={emptyCell}>{EMPTY_MARK}</span>
@@ -237,7 +240,12 @@ export function EntityPivot({
             <span
               className={cn(
                 "ml-1.5 text-2xs",
-                heat >= 4 ? "text-background/80" : "text-muted-foreground",
+                // Muted ink disappears on mid-ramp fills; follow the cell ink.
+                heat >= 4
+                  ? "text-background/80"
+                  : heat >= 2
+                    ? "text-foreground/75"
+                    : "text-muted-foreground",
               )}
             >
               {percent}
@@ -283,7 +291,7 @@ export function EntityPivot({
   };
 
   const description = model
-    ? `${rowLabel} by ${columnLabel}${subLabel ? `, then ${subLabel}` : ""}: ${formatCount(model.grandTotal)} ${recordLabel} across ${model.rows.length} ${rowLabel.toLowerCase()} values and ${model.columns.length + model.hidden.length} ${columnLabel.toLowerCase()} values.`
+    ? `${rowLabel} by ${columnLabel}${subLabel ? `, then ${subLabel}` : ""}: ${records(model.grandTotal)} across ${model.rows.length} ${rowLabel.toLowerCase()} values and ${model.columns.length + model.hidden.length} ${columnLabel.toLowerCase()} values.`
     : undefined;
 
   return (
@@ -311,7 +319,7 @@ export function EntityPivot({
         message={
           needsDimensions
             ? "Group by two fields to pivot: the first makes rows, the second columns."
-            : `No ${recordLabel} match these filters.`
+            : `No ${recordLabel.other} match these filters.`
         }
       >
         {model && (
@@ -426,8 +434,8 @@ export function EntityPivot({
       </Visualization>
       {model?.overlapping && (
         <p className="text-xs text-muted-foreground">
-          Some {recordLabel} hold more than one value in a dimension, so they
-          appear in several cells. Totals count each record once.
+          Some {recordLabel.other} hold more than one value in a dimension, so
+          they appear in several cells. Totals count each record once.
         </p>
       )}
     </div>

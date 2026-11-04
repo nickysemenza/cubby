@@ -1903,8 +1903,28 @@ A record contributes once per prefix even when several leaves share it.
 Overlapping sibling counts can exceed their parent's count. Use
 `path[depth - 1]` to address a dimension's filter value.
 
+With two or three dimensions, `meta.margins` adds distinct counts for the
+combinations prefixes cannot express: each column value alone (`dimensions:
+[1]`) and, with three, each row and sub-row pair (`[0, 2]`). Summing cells
+double-counts a record that holds several values, so totals read margins.
+`pagination.pageSize: 0` with `groupBy` keeps grouping and returns counts,
+summaries and margins without rows (`hasNextPage` is false); the count-only
+intent still drops grouping.
+
+**Pivot.** Every list with at least two groupable choices offers a built-in
+Pivot view (`?view=pivot`) beside its declared views; it is never declared per
+entity. Dimension 1 is rows, 2 columns and 3 collapsible sub-rows, read through
+the page-size-0 request. `?share=` picks Count, Row %, Col % or All % (Row %
+when absent). A saved view opens in it with `view: "pivot"`, at least two
+usable `groupBy` dimensions and an optional `share`; the compiler rejects
+fewer. A cell drills into the table through the same eligibility rule as a
+section's "Filter to this" (`entity-list/group-drill-down.ts`): bucketed dates,
+unmapped choices and unsupported no-value cells stay unclickable. Apple ignores
+the Pivot view id and keeps the grouped list.
+
 A `presentation.list.totals` entry with `group: true` also sums its key
-per group; there is no separate metrics list. The compiler emits labels and display formats and rejects unsupported or mixed-unit
+per group, and section headers show the mean over records with a value
+(`sum / presentCount`) beside the sum; there is no separate metrics list. The compiler emits labels and display formats and rejects unsupported or mixed-unit
 sources. Monetary values retain authoritative `SUM(Expense.cost)` provenance;
 field names never imply currency. Per-prefix metrics distinguish unknown sums
 from zero and include present/total counts and coverage. Date grouping with a

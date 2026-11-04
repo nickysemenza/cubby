@@ -759,7 +759,10 @@ function ServerListBody({
                     (choice) => choice.key === dimension.key,
                   )?.label ?? dimension.key,
               )}
-              recordLabel={entities[entity].pluralLabel.toLowerCase()}
+              recordLabel={{
+                one: entities[entity].label.toLowerCase(),
+                other: entities[entity].pluralLabel.toLowerCase(),
+              }}
               summary={list.groupSummary}
               isLoading={list.workbench.isLoading}
               isTransitioning={

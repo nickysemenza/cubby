@@ -326,17 +326,27 @@ function GroupMetricValue({
   metric: { label: string; format: string };
   value: NonNullable<ListGroupSummary["metrics"]>[string];
 }) {
+  const money =
+    metric.format === "currency" || metric.format === "signedCurrency";
+  const amount = (number: number) =>
+    money ? (
+      <CurrencyValue value={number} interactive={false} tone={false} />
+    ) : (
+      formatCount(number)
+    );
+  // The mean over records with a value; absent values are not zeros.
+  const average =
+    value.sum !== null && value.presentCount > 1
+      ? value.sum / value.presentCount
+      : null;
   return (
     <span
       className="inline-flex items-center gap-1"
       title={`${metric.label}: ${value.presentCount} of ${value.totalCount} records have a value`}
     >
-      {value.sum === null ? (
-        "–"
-      ) : metric.format === "currency" || metric.format === "signedCurrency" ? (
-        <CurrencyValue value={value.sum} interactive={false} tone={false} />
-      ) : (
-        formatCount(value.sum)
+      {value.sum === null ? "–" : amount(value.sum)}
+      {average !== null && (
+        <span className="text-muted-foreground">avg {amount(average)}</span>
       )}
       {value.coverage !== null && value.coverage < 1 && (
         <span className="text-muted-foreground">partial</span>

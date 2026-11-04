@@ -163,7 +163,7 @@ describe("listPage", () => {
       within(switcher)
         .getAllByRole("menuitem")
         .map((option) => option.getAttribute("aria-label")),
-    ).toEqual(["List view", "Cards view", "Compact view"]);
+    ).toEqual(["List view", "Cards view", "Compact view", "Pivot view"]);
     fireEvent.keyDown(switcher, { key: "Escape" });
     // Group by is its own row beside the view menu.
     fireEvent.click(await displayControl("Group by"));
@@ -199,19 +199,21 @@ describe("listPage", () => {
     const switcher = await screen.findByRole("menu");
     const options = within(switcher).getAllByRole("menuitem");
     expect(options.map((option) => option.getAttribute("aria-label"))).toEqual(
-      entitySummary.task.list.views.flatMap((view) => {
-        const label =
-          typeof view === "object"
-            ? view.label
-            : view === "table"
-              ? "List"
-              : view === "shelf"
-                ? "Cards"
-                : "Timeline";
-        return view === "shelf"
-          ? [`${label} view`, "Compact view"]
-          : [`${label} view`];
-      }),
+      entitySummary.task.list.views
+        .flatMap((view) => {
+          const label =
+            typeof view === "object"
+              ? view.label
+              : view === "table"
+                ? "List"
+                : view === "shelf"
+                  ? "Cards"
+                  : "Timeline";
+          return view === "shelf"
+            ? [`${label} view`, "Compact view"]
+            : [`${label} view`];
+        })
+        .concat("Pivot view"),
     );
     expect(
       within(switcher).getByRole("menuitem", { name: "Timeline view" }),

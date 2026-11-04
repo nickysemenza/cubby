@@ -9,7 +9,7 @@ export const PIVOT_SHARES = ["count", "row", "column", "total"] as const;
 export type PivotShare = (typeof PIVOT_SHARES)[number];
 
 /** Columns beyond this fold into Other while the column field is single-valued. */
-export const PIVOT_VISIBLE_COLUMNS = 12;
+const PIVOT_VISIBLE_COLUMNS = 12;
 
 export const OTHER_COLUMN = "__other__";
 export const TOTAL_COLUMN = "__total__";
