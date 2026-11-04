@@ -23,6 +23,7 @@ import {
   uuidArrayParam,
   withTransactionDatabase,
 } from "~/server/db/helpers";
+import { outer, related } from "~/server/db/helpers/related";
 import {
   assessment,
   assessmentState,
@@ -292,18 +293,22 @@ export async function readEntityConnectionsBatch(
         // Retain every competitor on a selected edge: filtering by review ID
         // alone could resurrect a proposal replaced by the reader's deduplication.
         reviewIds
-          ? sql`EXISTS (SELECT 1 FROM "Assessment" selected
-              WHERE selected.id = ANY(${uuidArrayParam(reviewIds)})
-              AND (${assessment.evidence}#>>'{candidate,relation}',
-                ${assessment.evidence}#>>'{candidate,source,entityKind}',
-                ${assessment.evidence}#>>'{candidate,source,entityId}',
-                ${assessment.evidence}#>>'{candidate,target,entityKind}',
-                ${assessment.evidence}#>>'{candidate,target,entityId}') =
-              (selected.evidence#>>'{candidate,relation}',
-                selected.evidence#>>'{candidate,source,entityKind}',
-                selected.evidence#>>'{candidate,source,entityId}',
-                selected.evidence#>>'{candidate,target,entityKind}',
-                selected.evidence#>>'{candidate,target,entityId}'))`
+          ? related(
+              assessment,
+              (
+                selected,
+              ) => sql`${selected.id} = ANY(${uuidArrayParam(reviewIds)})
+                AND (${outer(assessment.evidence)}#>>'{candidate,relation}',
+                  ${outer(assessment.evidence)}#>>'{candidate,source,entityKind}',
+                  ${outer(assessment.evidence)}#>>'{candidate,source,entityId}',
+                  ${outer(assessment.evidence)}#>>'{candidate,target,entityKind}',
+                  ${outer(assessment.evidence)}#>>'{candidate,target,entityId}') =
+                (${selected.evidence}#>>'{candidate,relation}',
+                  ${selected.evidence}#>>'{candidate,source,entityKind}',
+                  ${selected.evidence}#>>'{candidate,source,entityId}',
+                  ${selected.evidence}#>>'{candidate,target,entityKind}',
+                  ${selected.evidence}#>>'{candidate,target,entityId}')`,
+            ).exists()
           : undefined,
         sql`(${inArray(sql`(${assessment.evidence}->'candidate'->${"source"}->>'entityKind') || ':' || (${assessment.evidence}->'candidate'->${"source"}->>'entityId')`, keys)} OR ${inArray(sql`(${assessment.evidence}->'candidate'->${"target"}->>'entityKind') || ':' || (${assessment.evidence}->'candidate'->${"target"}->>'entityId')`, keys)})`,
         notExists(
