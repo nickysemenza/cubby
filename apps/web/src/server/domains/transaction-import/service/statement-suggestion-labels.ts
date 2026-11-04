@@ -719,7 +719,10 @@ async function runStatementLabelBatch(
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled && !input.port) return { ...empty, active: false };
   const limit = Math.min(
-    input.limit ?? STATEMENT_LABEL_BATCH,
+    input.limit ??
+      (input.scope?.importId
+        ? JOB_PAGE_LIMITS.statementApplicationsPerPage
+        : STATEMENT_LABEL_BATCH),
     JOB_PAGE_LIMITS.suggestionsPerPage,
   );
   const prepareDeadline = Date.now() + 20_000;

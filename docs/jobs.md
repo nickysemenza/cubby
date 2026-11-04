@@ -278,6 +278,13 @@ transaction and counts nothing.
 ## Execution
 
 Import-scoped statement generation processes at most four charges per page.
+Import-scoped labeling defaults to the same four-charge application limit;
+unscoped labeling keeps its 32-charge default, and explicit label limits remain
+available. Retained label receipts still need ordered, fresh-evidence automatic
+application, even when the page asks no model questions. Smaller pages commit
+completion and the remaining cursor before those repeated reads accumulate
+across 32 charges. This bounds work between checkpoints, not total invocation
+CPU: a drain can execute other pages within its existing wall-time budget.
 Each charge still regenerates current evidence before serial automatic-rule
 application. The smaller shared page limit bounds retained preparation and
 repeated ledger reads between durable checkpoints; interrupted pages replay

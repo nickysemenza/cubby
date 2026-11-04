@@ -1400,15 +1400,21 @@ describe("statement spending review and re-import", () => {
       } while (after);
     };
     await generateImport();
-    const labelled = await labelStatementSuggestions(ctx.db, {
-      port: answering({ kind: "purchase", counterparty: "business" }),
-      spendingAdvice: async ({ judgment }) => ({
-        ...advice,
-        vendorName: judgment.create!.merchant,
-      }),
-      scope: { importId: saved.batchId! },
-    });
-    expect(labelled.failed).toEqual([]);
+    let after: Awaited<ReturnType<typeof labelStatementSuggestions>>["next"] =
+      null;
+    do {
+      const labelled = await labelStatementSuggestions(ctx.db, {
+        after,
+        port: answering({ kind: "purchase", counterparty: "business" }),
+        spendingAdvice: async ({ judgment }) => ({
+          ...advice,
+          vendorName: judgment.create!.merchant,
+        }),
+        scope: { importId: saved.batchId! },
+      });
+      expect(labelled.failed).toEqual([]);
+      after = labelled.next;
+    } while (after);
     expect(await total()).toBe(165);
     const audit = await listAutomaticDecisions(ctx.db, {
       family: "statement_transaction",
