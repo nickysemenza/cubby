@@ -22,9 +22,20 @@ import {
 import {
   shipmentPurpose,
   SHIPMENT_IDENTITY_PERIOD_DAYS,
+  type ShipmentExtraTrackingNumberRemovals,
+  type ShipmentPurpose,
 } from "@cubby/schemas/shipment-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
@@ -62,6 +73,8 @@ import {
   carrierClaimsConflict,
   resolveCarrierName,
   carrierFormatEvidence,
+  deliveryFieldCodes,
+  withoutDeliveryFieldCarrier,
 } from "~/server/domains/shipment/repo/carrier-evidence";
 import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
 import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
@@ -73,7 +86,10 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
-import { deduplicateShipmentTrackingReferences } from "./carrier-references";
+import {
+  deduplicateShipmentTrackingReferences,
+  shipmentTrackingReferenceKey,
+} from "./carrier-references";
 
 const refuse = (message: string): never => {
   throw createAppError("CONSTRAINT_VIOLATION", message);
@@ -81,6 +97,73 @@ const refuse = (message: string): never => {
 const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
 const normalizeNumber = (value: string) =>
   value.replaceAll(/\s/g, "").toUpperCase();
+// Re-extraction can respell one source's key. Only that same source may match it:
+// generic labels such as an origin state recur across unrelated orders.
+const sourcePackageSpelling = (key: string) =>
+  key.toLowerCase().replaceAll(/[^\p{L}\p{N}]/gu, "") || key;
+const shipmentPurposesDisagree = (
+  first: ShipmentPurpose,
+  second: ShipmentPurpose,
+) => first !== "unknown" && second !== "unknown" && first !== second;
+
+const amazonLink = (href: string) => {
+  const url = URL.canParse(href) ? new URL(href) : null;
+  return url?.protocol === "https:" &&
+    !url.username &&
+    !url.password &&
+    !url.port &&
+    /^(?:www\.)?amazon\.com$/.test(url.hostname)
+    ? url
+    : null;
+};
+
+/** The one bounded vendor route known to name a parcel: Amazon's package tracker
+ * identifies it by order, shipment and package index, directly or through its own
+ * redirect. An Amazon shipment can span parcels, so the index is required.
+ */
+function vendorPackageLink(href: string) {
+  const link = amazonLink(href);
+  const redirect =
+    link?.pathname === "/gp/r.html" ? link.searchParams.getAll("U") : [];
+  const url = redirect[0] && !redirect[1] ? amazonLink(redirect[0]) : link;
+  if (!url || !/^\/progress-tracker\/package(?:\/|$)/.test(url.pathname))
+    return null;
+  const [order, shipmentId, index] = [
+    "orderId",
+    "shipmentId",
+    "packageIndex",
+  ].map((name) => {
+    const values = url.searchParams.getAll(name);
+    return values.length === 1 ? values[0] : undefined;
+  });
+  return order && shipmentId && index && /^\d+$/.test(index)
+    ? { order, shipmentId, index }
+    : null;
+}
+
+/** Parcels the retained original links that this source key names. The key is extractor
+ * text and cannot prove anything alone: counters, labels and order ids can share its
+ * spelling. Without a retained link (tracking pages, SMS) a package stays source-local.
+ */
+function retainedPackages(
+  capture: Parameters<typeof carrierCaptureEvidence>[0],
+  packageKey: string,
+) {
+  const tokens = packageKey.toLowerCase().split(/[^\p{L}\p{N}]+/u);
+  const packages = new Set<string>();
+  for (const { href } of carrierCaptureEvidence(capture).links) {
+    const linked = vendorPackageLink(href);
+    if (!linked) continue;
+    const at = tokens.indexOf(linked.shipmentId.toLowerCase());
+    // Index follows the shipment id, with or without one label: `id=X:index=0`.
+    if (
+      at >= 0 &&
+      (tokens[at + 1] === linked.index || tokens[at + 2] === linked.index)
+    )
+      packages.add(canonical(linked));
+  }
+  return packages;
+}
 
 // Pending preparations retain their literal provenance. This private Email ingress
 // still requires dated observations and shares all source/identity/write enforcement.
@@ -183,6 +266,100 @@ const withinIdentityPeriod = (days: readonly (string | null)[]) => {
       SHIPMENT_IDENTITY_PERIOD_DAYS * 86400000
   );
 };
+
+/** The live Shipment another retained source links to the same parcel. Each candidate
+ * must fit this packet before it counts: a parcel id reused in a separate period is no
+ * rival. None fits: a separate Shipment. Several fit: "ambiguous", never a guess.
+ */
+async function retainedPackageShipment(
+  db: Database,
+  input: {
+    capture: typeof shipmentSourceCapture.$inferSelect;
+    ownerId: string | null;
+    packageKey: string;
+    purpose: ShipmentPurpose;
+    purchaseId: Awaited<ReturnType<typeof purchaseReference>>;
+    window: z.infer<typeof identityWindowSchema>;
+  },
+) {
+  const packages = retainedPackages(input.capture, input.packageKey);
+  if (!packages.size) return undefined;
+  const bound = await getDb(db)
+    .select({
+      id: shipment.id,
+      shortcode: shipment.shortcode,
+      purchaseId: shipment.purchaseId,
+      purpose: shipment.purpose,
+      packageKey: shipmentSourcePackage.packageKey,
+      source: shipmentSourceCapture.source,
+      originalContent: shipmentSourceCapture.originalContent,
+    })
+    .from(shipmentSourcePackage)
+    .innerJoin(shipment, eq(shipment.id, shipmentSourcePackage.shipmentId))
+    .innerJoin(
+      shipmentSourceCapture,
+      eq(shipmentSourceCapture.sourceKey, shipmentSourcePackage.sourceKey),
+    )
+    .where(
+      and(
+        notDeleted(shipment),
+        ne(shipmentSourcePackage.sourceKey, input.capture.sourceKey),
+        sql`lower(regexp_replace(${shipmentSourcePackage.packageKey}, '[^[:alnum:]]', '', 'g')) = ${sourcePackageSpelling(input.packageKey)}`,
+      ),
+    );
+  const proven = new Map(
+    bound
+      .filter((row) =>
+        [...retainedPackages(row, row.packageKey)].some((linked) =>
+          packages.has(linked),
+        ),
+      )
+      .map((row) => [row.id, row]),
+  );
+  const fits = async (candidate: (typeof bound)[number]) => {
+    if (
+      shipmentPurposesDisagree(input.purpose, candidate.purpose) ||
+      (input.purchaseId &&
+        candidate.purchaseId &&
+        candidate.purchaseId !== input.purchaseId)
+    )
+      return false;
+    const purchaseOwner = candidate.purchaseId
+      ? await purchaseSourceOwner(db, candidate.purchaseId)
+      : null;
+    if (
+      (candidate.purchaseId && !purchaseOwner) ||
+      (purchaseOwner?.ownerId && purchaseOwner.ownerId !== input.ownerId) ||
+      (await shipmentSourceOwners(db, candidate.id)).some(
+        (ownerId) => ownerId !== input.ownerId,
+      )
+    )
+      return false;
+    const period = identityWindowSchema.parse(
+      (
+        await getDb(db).execute(
+          sql`SELECT first_day::text AS first, last_day::text AS last FROM shipment_identity_window(${candidate.id}::uuid)`,
+        )
+      ).rows[0],
+    );
+    return Boolean(
+      period.first &&
+      input.window.first &&
+      withinIdentityPeriod([
+        input.window.first,
+        input.window.last,
+        period.first,
+        period.last,
+      ]),
+    );
+  };
+  const fitting = [];
+  for (const candidate of proven.values())
+    if (await fits(candidate)) fitting.push(candidate);
+  const [match, rival] = fitting;
+  if (rival) return "ambiguous" as const;
+  return match ? canonicalShipment(db, match.shortcode) : undefined;
+}
 
 // Intake and explicit corrections share this transaction lock: replay cannot race a package merge.
 async function lockShipmentWrites(db: Database) {
@@ -461,30 +638,30 @@ async function sourceCapture(
   return { capture, sourceKey, ownerId, notificationDate };
 }
 
-async function assertPurchaseSourceOwner(
-  db: Database,
-  id: PurchaseId | null,
-  ownerId: string | null,
-) {
-  // Ownership is checked on the Purchase's purchasing account, never inferred from who paid.
-  if (!id || !ownerId) return;
+// Ownership is checked on the Purchase's purchasing account, never inferred from who paid.
+async function purchaseSourceOwner(db: Database, id: PurchaseId) {
   const [row] = await getDb(db)
     .select({ ownerId: vendorAccount.ledgerPartyId })
     .from(purchase)
     .leftJoin(vendorAccount, eq(vendorAccount.id, purchase.vendorAccountId))
     .where(and(eq(purchase.id, id), notDeleted(purchase)))
     .for("share", { of: purchase });
+  return row;
+}
+
+async function assertPurchaseSourceOwner(
+  db: Database,
+  id: PurchaseId | null,
+  ownerId: string | null,
+) {
+  if (!id || !ownerId) return;
+  const row = await purchaseSourceOwner(db, id);
   if (!row) return refuse("The Shipment's Purchase is no longer live.");
   if (row?.ownerId && row.ownerId !== ownerId)
     refuse("The shipment Email and Purchase belong to different members.");
 }
 
-async function assertShipmentAssociation(
-  db: Database,
-  shipmentId: string,
-  purchaseId: PurchaseId | null,
-) {
-  if (!purchaseId) return;
+async function shipmentSourceOwners(db: Database, shipmentId: string) {
   const sources = await getDb(db)
     .select({ ownerId: email.ledgerPartyId })
     .from(shipmentObservation)
@@ -496,7 +673,16 @@ async function assertShipmentAssociation(
     .where(
       eq(shipmentObservation.shipmentId, parseEntityId("shipment", shipmentId)),
     );
-  for (const ownerId of new Set(sources.map((source) => source.ownerId)))
+  return [...new Set(sources.map((source) => source.ownerId))];
+}
+
+async function assertShipmentAssociation(
+  db: Database,
+  shipmentId: string,
+  purchaseId: PurchaseId | null,
+) {
+  if (!purchaseId) return;
+  for (const ownerId of await shipmentSourceOwners(db, shipmentId))
     await assertPurchaseSourceOwner(db, purchaseId, ownerId);
 }
 
@@ -543,18 +729,18 @@ async function writeShipmentEvidence(
     const database = getDb(tdb);
     const { capture, sourceKey, ownerId, notificationDate } =
       await sourceCapture(tdb, input, actor);
-    if (input.source.kind !== "tracking_page")
-      for (const packet of input.shipments)
-        for (const observation of packet.observations)
-          if (
-            observation.timeBasis === "notification_received" &&
-            (notificationDate === null ||
-              observation.time.kind !== "date" ||
-              observation.time.value !== notificationDate)
-          )
-            refuse(
-              "Notification fallback must use the source notification's Los Angeles calendar date.",
-            );
+    for (const packet of input.shipments)
+      for (const observation of packet.observations)
+        if (
+          observation.timeBasis === "notification_received" &&
+          (input.source.kind === "tracking_page" ||
+            notificationDate === null ||
+            observation.time.kind !== "date" ||
+            observation.time.value !== notificationDate)
+        )
+          refuse(
+            "Notification fallback must use the source notification's Los Angeles calendar date.",
+          );
     const purchaseId = await purchaseReference(tdb, input.purchaseId);
     await assertPurchaseSourceOwner(tdb, purchaseId, ownerId);
     const shipmentIds = [];
@@ -568,14 +754,31 @@ async function writeShipmentEvidence(
       input.source.kind !== "email"
         ? new Date(input.source.capturedAt)
         : new Date();
-    for (const packet of input.shipments) {
+    const sourceEvidence = carrierCaptureEvidence(capture);
+    const deliveryCodes = deliveryFieldCodes(sourceEvidence);
+    for (const submitted of input.shipments) {
+      // Keys, fingerprints and observation identities keep the submitted hints, so
+      // retained extractions replay onto their existing bindings and revisions.
+      const extraHints: typeof submitted.extraTrackingNumbers = [];
+      for (const extra of submitted.extraTrackingNumbers)
+        extraHints.push(
+          await withoutDeliveryFieldCarrier(tdb, extra, deliveryCodes),
+        );
+      const packet = {
+        ...submitted,
+        ...(await withoutDeliveryFieldCarrier(
+          tdb,
+          {
+            carrierId: submitted.carrierId,
+            carrierName: submitted.carrierName,
+          },
+          deliveryCodes,
+        )),
+        extraTrackingNumbers: extraHints,
+      };
       if (packet.carrierId)
         await carrierReference(tdb, packet.carrierId, packet.carrierName);
-      const assessment = await assessCarrierPacket(
-        tdb,
-        packet,
-        carrierCaptureEvidence(capture),
-      );
+      const assessment = await assessCarrierPacket(tdb, packet, sourceEvidence);
       // Explicit source attribution wins over extraction; normal extracted Vendor names
       // still populate a new/missing carrier without a separate proof ledger.
       let carrier = assessment.primary.carrier
@@ -594,21 +797,23 @@ async function writeShipmentEvidence(
       const packageKey =
         packet.sourceShipmentKey ??
         packet.shipmentId ??
-        `${packet.carrierId ?? packet.carrierName ?? "unknown"}:${number}`;
+        `${submitted.carrierId ?? submitted.carrierName ?? "unknown"}:${number}`;
       let row = packet.shipmentId
         ? await canonicalShipment(tdb, packet.shipmentId)
         : undefined;
-      let [binding] = await database
+      const sourcePackages = await database
         .select()
         .from(shipmentSourcePackage)
-        .where(
-          and(
-            eq(shipmentSourcePackage.sourceKey, sourceKey),
-            eq(shipmentSourcePackage.packageKey, packageKey),
-          ),
-        )
-        .limit(1);
-      let sourceBindingAmbiguous = false;
+        .where(eq(shipmentSourcePackage.sourceKey, sourceKey));
+      const respelled = sourcePackages.filter(
+        (known) =>
+          sourcePackageSpelling(known.packageKey) ===
+          sourcePackageSpelling(packageKey),
+      );
+      let binding =
+        sourcePackages.find((known) => known.packageKey === packageKey) ??
+        (respelled.length === 1 ? respelled[0] : undefined);
+      let sourceBindingAmbiguous = !binding && respelled.length > 1;
       if (!binding && !packet.sourceShipmentKey && number) {
         const priorBindings = await database
           .select({ binding: shipmentSourcePackage })
@@ -649,7 +854,32 @@ async function writeShipmentEvidence(
           ).values(),
         ];
         if (uniqueBindings.length === 1) binding = uniqueBindings[0];
-        sourceBindingAmbiguous = uniqueBindings.length > 1;
+        sourceBindingAmbiguous ||= uniqueBindings.length > 1;
+      }
+      // Re-extraction can rename a retired template to any key. Tracked siblings still
+      // apply; an unbound trackingless packet in this source stays visible instead.
+      if (!binding && !row && !number && sourcePackages.length) {
+        const [retired] = await database
+          .select({ id: shipment.id })
+          .from(shipment)
+          .where(
+            and(
+              inArray(
+                shipment.id,
+                sourcePackages.map((known) => known.shipmentId),
+              ),
+              isNotNull(shipment.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (retired) {
+          unresolvedPackages.push({
+            sourceShipmentKey: packet.sourceShipmentKey,
+            reason:
+              "This source has a retired package; review this trackingless packet before creating another Shipment.",
+          });
+          continue;
+        }
       }
       if (binding) {
         const [bound] = await database
@@ -657,6 +887,16 @@ async function writeShipmentEvidence(
           .from(shipment)
           .where(eq(shipment.id, binding.shipmentId));
         if (!bound) return refuse("The source package reference is missing.");
+        // Merges and reassignment move bindings, so a deleted target is a member's
+        // retirement. The capture stays; sibling packets in this source still apply.
+        if (bound.deletedAt && !row) {
+          unresolvedPackages.push({
+            sourceShipmentKey: packet.sourceShipmentKey,
+            reason:
+              "This source package was retired; its original source remains retained and no Shipment was restored.",
+          });
+          continue;
+        }
         const resolved = await canonicalShipment(tdb, bound.shortcode);
         if (row && row.id !== resolved.id)
           return refuse(
@@ -800,6 +1040,19 @@ async function writeShipmentEvidence(
         )
           row = proposed;
       }
+      let retainedPackageAmbiguous = false;
+      if (!row && !number && packet.sourceShipmentKey) {
+        const retained = await retainedPackageShipment(tdb, {
+          capture,
+          ownerId,
+          packageKey: packet.sourceShipmentKey,
+          purpose: packet.purpose,
+          purchaseId,
+          window: identity.window,
+        });
+        retainedPackageAmbiguous = retained === "ambiguous";
+        if (retained !== "ambiguous") row = retained;
+      }
       const existingDates = row
         ? identityWindowSchema.parse(
             (
@@ -901,7 +1154,11 @@ async function writeShipmentEvidence(
           candidate.id !== row?.id && (!row || !candidate.carrier_conflict),
       );
       const candidate = !row && possible.length === 1 ? possible[0] : undefined;
-      let ambiguity: string | null = carrierIssue;
+      let ambiguity: string | null =
+        carrierIssue ??
+        (retainedPackageAmbiguous
+          ? "Multiple nearby Shipments fit this linked parcel; review the retained sources before associating it."
+          : null);
       if (
         !row &&
         possible.length > 0 &&
@@ -1000,7 +1257,7 @@ async function writeShipmentEvidence(
             summary: `${ambiguity}${advisory}`,
             proposedFix: null,
             evidenceFingerprint: await sha256Hex(
-              canonical({ sourceKey, packageKey, packet }),
+              canonical({ sourceKey, packageKey, packet: submitted }),
             ),
           });
         continue;
@@ -1092,12 +1349,24 @@ async function writeShipmentEvidence(
       shipmentIds.push(parseShortcodeFor("shipment", row.shortcode));
       const occurrences = new Map<string, number>();
       for (const observation of packet.observations) {
+        const eventHint = await withoutDeliveryFieldCarrier(
+          tdb,
+          {
+            carrierId: observation.carrierId,
+            carrierName: observation.carrierName,
+          },
+          deliveryCodes,
+        );
         const eventCarrier = await carrierReference(
           tdb,
-          observation.carrierId,
-          observation.carrierName,
+          eventHint.carrierId,
+          eventHint.carrierName,
         );
-        const event = { ...observation, carrierId: eventCarrier.code };
+        const event = {
+          ...observation,
+          ...eventHint,
+          carrierId: eventCarrier.code,
+        };
         // Provenance was absent in historical JSON. Keep its occurrence identity and
         // fingerprint intact when the same literal scan is replayed with provenance.
         const { fingerprint, literalFingerprint, occurrenceKey } =
@@ -1274,6 +1543,11 @@ export async function editShipmentObservation(
     });
     if (
       event.timeBasis === "notification_received" &&
+      capture.source.kind === "tracking_page"
+    )
+      return refuse("Tracking pages do not have a notification receipt date.");
+    if (
+      event.timeBasis === "notification_received" &&
       event.time.kind !== "date"
     )
       return refuse(
@@ -1400,11 +1674,7 @@ export async function mergeShipment(
     const target = await canonicalShipment(tdb, input.targetId);
     if (source.id === target.id)
       return { shipmentId: parseShortcodeFor("shipment", target.shortcode) };
-    if (
-      source.purpose !== "unknown" &&
-      target.purpose !== "unknown" &&
-      source.purpose !== target.purpose
-    )
+    if (shipmentPurposesDisagree(source.purpose, target.purpose))
       return refuse(
         "Shipment directions disagree; explicitly correct the direction before merging.",
       );
@@ -1596,38 +1866,83 @@ export async function reassignShipmentEvidence(
   });
 }
 
-/** Ordinary carrier editing shares the Shipment identity writer and audit history. */
-export async function editShipmentCarrier(
+/** Ordinary carrier and extra-reference edits share the Shipment identity writer and audit history. */
+export async function editShipmentReferences(
   db: Database,
   input: {
     shipmentId: ShortcodeFor<"shipment">;
-    carrierId: ShortcodeFor<"vendor"> | null;
+    carrierId?: ShortcodeFor<"vendor"> | null;
+    extraTrackingNumbers?: ShipmentExtraTrackingNumberRemovals;
   },
   actor: ActorContext,
 ) {
   if (actor.runId || actor.channel === "system")
     return refuse(
-      "Carrier edits require an interactive member request; automated changes use source intake.",
+      "Carrier and tracking reference edits require an interactive member request; automated changes use source intake.",
     );
   return withTransactionDatabase(db, async (tdb) => {
     await lockShipmentWrites(tdb);
     const row = await canonicalShipment(tdb, input.shipmentId);
-    const carrier = await carrierReference(tdb, input.carrierId, null);
+    const carrierId =
+      input.carrierId === undefined
+        ? row.carrierId
+        : (await carrierReference(tdb, input.carrierId, null)).id;
+    // Removal is a member decision; only source intake can establish a new reference
+    // and its identity checks. A carrier edit alone removes no distinct reference.
+    const current = new Set(
+      row.extraTrackingNumbers.map(shipmentTrackingReferenceKey),
+    );
+    const removed = new Set<string>();
+    for (const { key } of input.extraTrackingNumbers ?? []) {
+      const identity = shipmentTrackingReferenceKey(key);
+      if (!current.has(identity))
+        throw createAppError(
+          "COLLECTION_PATCH_PRECONDITION_FAILED",
+          `Shipment extraTrackingNumbers has no "${key.trackingNumber}" under carrier ${key.carrierId ?? "unknown"} to remove; nothing changed.`,
+        );
+      removed.add(identity);
+    }
+    // A reference the new primary covers is no longer a separate handoff, and the
+    // replaced carrier is not retained as one.
+    const extraTrackingNumbers = await deduplicateShipmentTrackingReferences(
+      tdb,
+      {
+        trackingNumber: row.trackingNumber,
+        carrierId,
+        extraTrackingNumbers: row.extraTrackingNumbers.filter(
+          (ref) => !removed.has(shipmentTrackingReferenceKey(ref)),
+        ),
+      },
+    );
+    const changes = {
+      ...(carrierId === row.carrierId
+        ? {}
+        : { carrierId: { from: row.carrierId, to: carrierId } }),
+      ...(canonical(extraTrackingNumbers) ===
+      canonical(row.extraTrackingNumbers)
+        ? {}
+        : {
+            extraTrackingNumbers: {
+              from: row.extraTrackingNumbers,
+              to: extraTrackingNumbers,
+            },
+          }),
+    };
+    const shipmentId = parseShortcodeFor("shipment", row.shortcode);
+    if (!Object.keys(changes).length) return { shipmentId };
     await getDb(tdb)
       .update(shipment)
-      .set({ carrierId: carrier.id })
+      .set({ carrierId, extraTrackingNumbers })
       .where(eq(shipment.id, row.id));
     await logAuditEntries(tdb, actor, [
       {
         entityKind: "shipment",
         entityId: row.id,
         action: "update",
-        changes: {
-          carrierId: { from: row.carrierId, to: carrier.id },
-        },
+        changes,
       },
     ]);
     await recordChange(tdb, { kind: "source", categories: ["shipment"] });
-    return { shipmentId: parseShortcodeFor("shipment", row.shortcode) };
+    return { shipmentId };
   });
 }

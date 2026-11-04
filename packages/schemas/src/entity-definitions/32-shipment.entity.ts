@@ -6,6 +6,7 @@ import { shipmentChildren } from "../child-tables/shipment";
 import { shortcodeSchema } from "../identifier-fields";
 import {
   type ShipmentPurpose,
+  shipmentExtraTrackingNumberRemovals,
   shipmentExtraTrackingNumbers,
   shipmentPurpose,
   shipmentEventSummarySchema,
@@ -214,6 +215,9 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         audit: true,
         key: "extraTrackingNumbers",
+        // Package identity: bulk resolution would submit a stale full list.
+        semanticRole: "externalIdentifier",
+        collection: { key: ["trackingNumber", "carrierId"] },
         kind: "json",
         display: {
           list: false,
@@ -222,7 +226,7 @@ export const { definition, readSchemas } = defineEntityModel({
         validation: {
           read: shipmentExtraTrackingNumbers,
           create: null,
-          update: null,
+          update: shipmentExtraTrackingNumberRemovals.optional(),
         },
       },
       {
@@ -434,6 +438,11 @@ export const { definition, readSchemas } = defineEntityModel({
         ],
       },
     },
+    intents: {
+      fields: { full: ["purpose", "carrierId"] },
+      create: [],
+      update: ["full"],
+    },
     sort: {
       fields: [
         "name",
@@ -526,7 +535,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
       ],
     },
-    delete: null,
+    delete: { mode: "soft", bulk: false },
     merge: false,
     lifecycle: "mutable",
     timeline: "default",

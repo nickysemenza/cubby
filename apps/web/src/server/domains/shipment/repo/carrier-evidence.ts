@@ -1,4 +1,4 @@
-import type { ShipmentId } from "@cubby/schemas/identifiers";
+import type { ShipmentId, ShortcodeFor } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { MailReadContent } from "@cubby/schemas/mailbox-research";
 import type {
@@ -6,7 +6,7 @@ import type {
   ShipmentCarrierClaim,
 } from "@cubby/schemas/shipment-evidence";
 import { SHIPMENT_IDENTITY_PERIOD_DAYS } from "@cubby/schemas/shipment-fields";
-import { and, or, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
@@ -45,6 +45,12 @@ export async function resolveCarrierName(db: Database, name: string | null) {
     ? { ...row, code: parseShortcodeFor("vendor", row.shortcode) }
     : null;
 }
+
+// An unresolved literal name stays conflict evidence, but dates, greetings and links
+// laid out above a "Tracking" label are not a package attribution.
+const readsAsCarrierName = (name: string) =>
+  /^\p{L}[\p{L}&.'®\s-]*$/u.test(name.trim()) &&
+  name.trim().split(/\s+/).length <= 4;
 
 const escapePattern = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -111,6 +117,75 @@ type CarrierSourceEvidence = Pick<MailReadContent, "links"> & {
   texts: readonly string[];
 };
 
+const deliveryLabel =
+  /(?<![\p{L}\p{N}_-])(?:Delivery|DELIVERY|delivery)\s*:\s*([A-Z0-9]{2,6})/u
+    .source;
+// Compaction can collapse lines, so a field already found elsewhere may run into later text.
+const deliveryMention = new RegExp(
+  `${deliveryLabel}(?![\\p{L}\\p{N}_-])`,
+  "gu",
+);
+// The value ends at its line, a separator, a table column or the next labeled field.
+// Any other trailing word, as in "ZQX Ground", may be carrier wording.
+const deliveryFieldEnd =
+  /^(?:[^\S\n]*(?:\n|$|[;,.|·\t])|\s+(?:(?:tracking|order)(?:\s*(?:number|no\.?|id))?\s*[:#]|trk\s*#|(?:carrier|status)\s*:))/i;
+
+/** Codes a source prints only as a "Delivery:" field value. A merchant can print one
+ * code beside parcels of different carriers, so it names no carrier and must never
+ * be aliased to one. Any other mention leaves the code to ordinary attribution.
+ */
+export function deliveryFieldCodes(
+  source: Pick<CarrierSourceEvidence, "texts">,
+): ReadonlySet<string> {
+  const prose = source.texts.map((text) =>
+    text.replace(/https?:\/\/\S+/gi, " "),
+  );
+  const remainder = prose.map((text) => text.replace(deliveryMention, " "));
+  return new Set(
+    prose
+      .flatMap((text) =>
+        [...text.matchAll(deliveryMention)].flatMap((match) =>
+          match[1] &&
+          deliveryFieldEnd.test(text.slice(match.index + match[0].length))
+            ? [match[1]]
+            : [],
+        ),
+      )
+      .filter(
+        (code) =>
+          !remainder.some((text) =>
+            new RegExp(
+              `(?<![\\p{L}\\p{N}_-])${code}(?![\\p{L}\\p{N}_-])`,
+              "iu",
+            ).test(text),
+          ),
+      ),
+  );
+}
+
+/** Clear an extracted carrier hint, including a stale Vendor reference, when it only
+ * restates a delivery-field code. Unrelated hints and unknown literals stay as submitted.
+ */
+export async function withoutDeliveryFieldCarrier<
+  H extends {
+    carrierId: ShortcodeFor<"vendor"> | null;
+    carrierName: string | null;
+  },
+>(db: Database, hint: H, codes: ReadonlySet<string>): Promise<H> {
+  if (!codes.size) return hint;
+  const [named] = hint.carrierId
+    ? await getDb(db)
+        .select({ name: vendor.name, aliases: vendor.aliases })
+        .from(vendor)
+        .where(eq(vendor.shortcode, hint.carrierId))
+    : [];
+  return [hint.carrierName, named?.name, ...(named?.aliases ?? [])].some(
+    (name) => name && codes.has(name.trim().toUpperCase()),
+  )
+    ? { ...hint, carrierId: null, carrierName: null }
+    : hint;
+}
+
 export async function assessCarrierPacket(
   db: Database,
   packet: Pick<
@@ -128,6 +203,7 @@ export async function assessCarrierPacket(
       .map(normalizeCarrierReference),
   );
   const hints = packet.carrierClaims ?? [];
+  const deliveryCodes = deliveryFieldCodes(source);
   const claims = [
     ...hints,
     ...sourceCarrierClaims(source, [...references]).filter(
@@ -146,7 +222,9 @@ export async function assessCarrierPacket(
   for (const claim of claims) {
     if (
       claim.role !== "carrier" ||
-      !references.has(normalizeCarrierReference(claim.trackingNumber))
+      !references.has(normalizeCarrierReference(claim.trackingNumber)) ||
+      (claim.evidence.kind !== "link" &&
+        deliveryCodes.has(claim.carrierName.trim().toUpperCase()))
     )
       continue;
     const carrier = await resolveCarrierName(db, claim.carrierName);
@@ -362,14 +440,16 @@ function sourceCarrierClaims(
             !new RegExp(referencePattern(number), "i").test(quote)
           )
             continue;
-          const name = quote.match(
+          const attribution = quote.match(
             new RegExp(
-              `^\\s*(?:(?:shipping\\s+)?carrier\\s*:\\s*|(?:shipped|shipping|delivered|delivery|sent|dispatched)\\s+(?:via|with|by)\\s+)?(.+?)[\\s;,.·:—-]+(?:tracking(?:\\s*(?:number|no\\.?|id))?\\s*[:#]?|trk\\s*#)\\s*${referencePattern(number)}`,
+              `^\\s*((?:shipping\\s+)?carrier\\s*:\\s*|(?:shipped|shipping|delivered|delivery|sent|dispatched)\\s+(?:via|with|by)\\s+)?(.+?)[\\s;,.·:—-]+(?:tracking(?:\\s*(?:number|no\\.?|id))?\\s*[:#]?|trk\\s*#)\\s*${referencePattern(number)}`,
               "i",
             ),
-          )?.[1];
+          );
+          const name = attribution?.[2];
           if (
             !name ||
+            (!attribution?.[1] && !readsAsCarrierName(name)) ||
             /^(?:broker|merchant|seller|label provider)\s*:/i.test(name) ||
             intermediaryName.test(name)
           )

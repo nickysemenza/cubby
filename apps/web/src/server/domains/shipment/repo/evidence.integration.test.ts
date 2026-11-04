@@ -1,8 +1,10 @@
+import type { ShipmentUpdateData } from "@cubby/schemas/entities/shipment";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   RecordShipmentEvidenceInput,
   ShipmentEvidence,
 } from "@cubby/schemas/shipment-evidence";
+import type { ShipmentExtraTrackingNumberRemovals } from "@cubby/schemas/shipment-fields";
 import { testUserId } from "@cubby/schemas/testing";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
@@ -13,6 +15,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
+  auditLog,
   shipment,
   shipmentObservation,
   shipmentSourceCapture,
@@ -22,6 +25,8 @@ import {
   expense,
   inventoryEntry,
   email,
+  ledgerParty,
+  purchase,
   user,
 } from "~/server/db/schema";
 import {
@@ -42,6 +47,7 @@ import {
   retainedCarrierClaim,
   assessCarrierPacket,
   carrierCaptureEvidence,
+  deliveryFieldCodes,
 } from "./carrier-evidence";
 import {
   recordShipmentEvidence,
@@ -49,6 +55,7 @@ import {
   mergeShipment,
   reassignShipmentEvidence,
   editShipmentObservation,
+  editShipmentReferences,
 } from "./evidence";
 import { readShipmentTimeline } from "./timeline";
 
@@ -510,6 +517,38 @@ describe("Shipment retained evidence", () => {
     ).toBe(true);
   });
 
+  it("review regression: source layout above a tracking label is not a carrier claim", async () => {
+    const number = "EXAMPLE-LAYOUT";
+    for (const line of [
+      "Sun, Jul 21",
+      "Hi Example, your order is being shipped!",
+      "Estimated delivery: Fri. Jul. 20 - Fri. Jul. 27",
+      "Tracking info should be available within 1-2 days",
+    ]) {
+      const { explicit } = await assessCarrierPacket(
+        ctx.db,
+        { trackingNumber: number, extraTrackingNumbers: [] },
+        { texts: [`${line}\nTracking ID:\n${number}`], links: [] },
+      );
+      expect(explicit).toEqual([]);
+    }
+    for (const name of [
+      "Synthetic Unknown Carrier",
+      "Synthetic Carrier (Ground)",
+      "Synthetic Alpha/Beta",
+      "Synthetic Carrier 2",
+    ]) {
+      const { explicit } = await assessCarrierPacket(
+        ctx.db,
+        { trackingNumber: number, extraTrackingNumbers: [] },
+        { texts: [`Carrier: ${name}\nTracking ID: ${number}`], links: [] },
+      );
+      expect(new Set(explicit.map(({ claim }) => claim.carrierName))).toEqual(
+        new Set([name]),
+      );
+    }
+  });
+
   it("resolves an additional-only identity from explicit source evidence", async () => {
     await createRepoIdentity(ctx, "vendor", { name: "Synthetic Beta Carrier" });
     const number = "EXAMPLE-LEGACY-EXTRA";
@@ -946,9 +985,23 @@ describe("Shipment retained evidence", () => {
         time: { kind: "date", value: "2026-06-07" },
       },
     ];
+    await expect(
+      recordShipmentEvidence(ctx.db, capture("forecast", [parcel]), ctx.actor),
+    ).rejects.toThrow(/source notification/);
     const result = await recordShipmentEvidence(
       ctx.db,
-      capture("forecast", [parcel]),
+      {
+        ...capture("forecast", [parcel]),
+        source: {
+          kind: "sms_export",
+          externalKey: "forecast",
+          fileName: "synthetic-messages.txt",
+          sender: "Synthetic Carrier",
+          sentAt: { kind: "instant", value: "2026-06-03T09:00:00Z" },
+          capturedAt: "2026-06-06T09:00:00Z",
+          content: "Synthetic pickup and delivery forecast",
+        },
+      },
       ctx.actor,
     );
     const code = result.shipmentIds[0]!;
@@ -2056,6 +2109,996 @@ describe("Shipment retained evidence", () => {
         row.source.kind === "tracking_page" ? row.source.content : null,
       ),
     ).toContain("  Synthetic snapshot\n");
+  });
+
+  it("retires a template package without blocking sibling replay or recreating it", async () => {
+    const parcel = packet("EXAMPLE-BOX-1");
+    const template: ShipmentEvidence = {
+      ...packet(),
+      sourceShipmentKey: "Box #3",
+      distinctPackageEvidence: "Synthetic notice lists an empty third box",
+      carrierName: null,
+      trackingNumber: null,
+      observations: [
+        {
+          ...packet().observations[0]!,
+          sourceEventKey: "box-3-shipped",
+          kind: "vendor_shipped",
+          carrierName: null,
+          trackingNumber: null,
+          rawStatus: "Box #3 has no shipping method or tracking number.",
+        },
+      ],
+    };
+    const source = capture("template-source", [parcel, template]);
+    const first = await recordShipmentEvidence(ctx.db, source, ctx.actor);
+    const [parcelCode, templateCode] = first.shipmentIds;
+    const original = await readShipmentTimeline(ctx.db, templateCode!);
+    const kernel = buildKernelContext(ctx.db, ctx.actor.userId);
+    await expect(
+      executeEntity(
+        {
+          ...kernel,
+          actorContext: {
+            ...kernel.actorContext,
+            runId: parseEntityId("run", crypto.randomUUID()),
+          },
+        },
+        { action: "delete", entity: "shipment", ids: [templateCode!] },
+      ),
+    ).rejects.toThrow(/interactive member/);
+    await executeEntity(kernel, {
+      action: "delete",
+      entity: "shipment",
+      ids: [templateCode!],
+    });
+
+    const respelled: ShipmentEvidence = {
+      ...template,
+      sourceShipmentKey: "box-3",
+    };
+    const renamed: ShipmentEvidence = {
+      ...template,
+      sourceShipmentKey: "third-parcel",
+    };
+    for (const shipments of [
+      [parcel, template],
+      [parcel, respelled],
+      [parcel, renamed],
+    ]) {
+      const replay = await recordShipmentEvidence(
+        ctx.db,
+        { ...source, shipments },
+        ctx.actor,
+      );
+      expect(replay.shipmentIds).toEqual([parcelCode]);
+      expect(replay.insertedObservations).toBe(0);
+      expect(replay.unresolvedPackages).toHaveLength(1);
+    }
+    // A tracked sibling first seen after the retirement still applies beside the hold.
+    const admitted = await recordShipmentEvidence(
+      ctx.db,
+      { ...source, shipments: [parcel, renamed, packet("EXAMPLE-BOX-2")] },
+      ctx.actor,
+    );
+    expect(admitted.shipmentIds).toHaveLength(2);
+    expect(admitted.shipmentIds).toContain(parcelCode);
+    expect(admitted.shipmentIds).not.toContain(templateCode);
+    expect(admitted.insertedObservations).toBe(1);
+    expect(admitted.unresolvedPackages).toHaveLength(1);
+    const [retained] = await getDb(ctx.db)
+      .select({ id: shipment.id, deletedAt: shipment.deletedAt })
+      .from(shipment)
+      .where(eq(shipment.shortcode, templateCode!));
+    expect(retained?.deletedAt).not.toBeNull();
+    const evidence = await getDb(ctx.db)
+      .select({
+        id: shipmentObservation.id,
+        fingerprint: shipmentObservation.fingerprint,
+        sourcePackageId: shipmentObservation.sourcePackageId,
+      })
+      .from(shipmentObservation)
+      .where(eq(shipmentObservation.shipmentId, retained!.id));
+    expect(evidence).toEqual(
+      original.observations.map((observation) => ({
+        id: observation.observationId,
+        fingerprint: expect.any(String),
+        sourcePackageId: observation.sourcePackageId,
+      })),
+    );
+    // Only one source owns a respelling: the same label from another source stays distinct.
+    const other = await recordShipmentEvidence(
+      ctx.db,
+      capture("another-order", [template]),
+      ctx.actor,
+    );
+    expect(other.shipmentIds).toHaveLength(1);
+    expect(other.shipmentIds).not.toContain(templateCode);
+  });
+
+  it("joins lifecycle sources only when retained links name the same parcel", async () => {
+    const world = await memberImportWorld(ctx.db, ctx.actor);
+    const tracker = (
+      shipmentId: string,
+      index = 0,
+      order = "000-0000001-0000001",
+    ) =>
+      `https://www.amazon.com/progress-tracker/package?_encoding=UTF8&orderId=${order}&packageIndex=${index}&shipmentId=${shipmentId}`;
+    const redirected = (href: string) =>
+      `https://www.amazon.com/gp/r.html?C=SYNTHETIC&U=${encodeURIComponent(href)}&H=SYNTHETIC`;
+    const key = (shipmentId: string, index = 0) =>
+      `amazon:000-0000001-0000001:shipmentId=${shipmentId}:packageIndex=${index}`;
+    const trackingless = (
+      sourceShipmentKey: string,
+      overrides: Partial<ShipmentEvidence> = {},
+      value = "2026-06-03",
+    ): ShipmentEvidence => ({
+      ...packet(),
+      sourceShipmentKey,
+      distinctPackageEvidence: "Synthetic vendor notice for one package",
+      carrierName: null,
+      trackingNumber: null,
+      observations: [
+        {
+          ...packet().observations[0]!,
+          sourceEventKey: `${value}-delivered`,
+          kind: "delivered",
+          time: { kind: "date", value },
+          carrierName: null,
+          trackingNumber: null,
+          rawStatus: "Synthetic delivered notice",
+        },
+      ],
+      ...overrides,
+    });
+    let messages = 0;
+    const mail = async (hrefs: readonly string[]) => {
+      const messageId = `synthetic-lifecycle-${++messages}`;
+      const checksum = await sha256Hex(messageId);
+      await retainedMailFixture(ctx.db, {
+        ledgerPartyId: world.party.id,
+        messageId,
+        checksum,
+        content: {
+          snippet: null,
+          bodyText: null,
+          bodyHtml: `<p>Synthetic parcel notice</p>${hrefs
+            .map(
+              (href) =>
+                `<a href="${href.replaceAll("&", "&amp;")}">Track package</a>`,
+            )
+            .join("")}`,
+        },
+      });
+      const [message] = await getDb(ctx.db)
+        .select()
+        .from(email)
+        .where(eq(email.messageId, messageId));
+      return {
+        source: {
+          kind: "email",
+          emailId: parseShortcodeFor("email", message!.shortcode),
+          checksum,
+        },
+        message: message!,
+      } satisfies {
+        source: RecordShipmentEvidenceInput["source"];
+        message: typeof email.$inferSelect;
+      };
+    };
+    const record = async (
+      hrefs: readonly string[],
+      parcel: ShipmentEvidence,
+      siblings: ShipmentEvidence[] = [],
+    ) =>
+      recordShipmentEvidence(
+        ctx.db,
+        {
+          source: (await mail(hrefs)).source,
+          purchaseId: null,
+          shipments: [parcel, ...siblings],
+        },
+        ctx.actor,
+      );
+    const notice = async (hrefs: readonly string[], parcel: ShipmentEvidence) =>
+      (await record(hrefs, parcel)).shipmentIds[0];
+
+    const id = "Ab3dEf7Gh";
+    const shipped = await notice(
+      [redirected(tracker(id))],
+      trackingless(key(id)),
+    );
+    // A grouped notice names its other parcel too; the respelled key selects this one.
+    await expect(
+      notice(
+        [tracker(id), tracker(id, 1)],
+        trackingless(
+          `amazon:000-0000001-0000001:shipmentId:${id}:packageIndex:0`,
+          {},
+          "2026-06-05",
+        ),
+      ),
+    ).resolves.toBe(shipped);
+    // The same parcel after a separate shipping period is not this Shipment.
+    const reused = await notice(
+      [tracker(id)],
+      trackingless(key(id), {}, "2026-10-03"),
+    );
+    expect(reused).not.toBe(shipped);
+    // June's Shipment no longer fits, so it is no rival to October's.
+    await expect(
+      notice([tracker(id)], trackingless(key(id), {}, "2026-10-05")),
+    ).resolves.toBe(reused);
+    // A split parcel, a key naming a parcel its source does not link, and another order.
+    await expect(
+      notice([tracker(id, 1)], trackingless(key(id, 1))),
+    ).resolves.not.toBe(shipped);
+    await expect(
+      notice([tracker(id, 1)], trackingless(key(id))),
+    ).resolves.not.toBe(shipped);
+    const orderless = `shipmentId=Zz9yXw8Vu:packageIndex=0`;
+    const firstOrder = await notice(
+      [tracker("Zz9yXw8Vu")],
+      trackingless(orderless),
+    );
+    await expect(
+      notice(
+        [tracker("Zz9yXw8Vu", 0, "000-0000002-0000002")],
+        trackingless(orderless),
+      ),
+    ).resolves.not.toBe(firstOrder);
+
+    // Counters, labels and order ids stay separate however they are spelled, including
+    // when both sources retain the same tracker link the key does not name.
+    for (const [stored, incoming] of [
+      ["Shipment 1", "Shipment1"],
+      ["Package1", "Package 1"],
+      ["Delivery2", "delivery-2"],
+      ["Parcel12", "Parcel12"],
+      ["W123456789", "W123456789"],
+      ["ORD-ABC12345", "ORD-ABC12345"],
+      ["Order#A1B2C3D4", "order a1b2c3d4"],
+      ["Shipment from Example", "Shipment from Example"],
+      ["10000001-Example", "10000001-Example"],
+    ] as const) {
+      for (const hrefs of [[], [tracker("Kn4pQr7St")]]) {
+        const first = await notice(hrefs, trackingless(stored));
+        await expect(notice(hrefs, trackingless(incoming))).resolves.not.toBe(
+          first,
+        );
+      }
+    }
+    // A tracking page retains no independent link in either direction.
+    const paged = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture("page-package", [trackingless(key("Pg5hJk2Lm"))]),
+        ctx.actor,
+      )
+    ).shipmentIds[0];
+    await expect(
+      notice([tracker("Pg5hJk2Lm")], trackingless(key("Pg5hJk2Lm"))),
+    ).resolves.not.toBe(paged);
+    const pageAfterMail = await recordShipmentEvidence(
+      ctx.db,
+      capture("mail-package", [trackingless(key(id))]),
+      ctx.actor,
+    );
+    expect(pageAfterMail.shipmentIds).not.toContain(shipped);
+
+    // An unknown direction can join; a disagreeing direction stays separate.
+    const inbound = await notice(
+      [tracker("Rt6vBn3Cx")],
+      trackingless(key("Rt6vBn3Cx")),
+    );
+    await expect(
+      notice(
+        [tracker("Rt6vBn3Cx")],
+        trackingless(key("Rt6vBn3Cx"), { purpose: "unknown" }),
+      ),
+    ).resolves.toBe(inbound);
+    const outgoing = trackingless(key("Rt6vBn3Cx"), { purpose: "outgoing" });
+    const outbound = await notice([tracker("Rt6vBn3Cx")], outgoing);
+    expect(outbound).not.toBe(inbound);
+    await expect(notice([tracker("Rt6vBn3Cx")], outgoing)).resolves.toBe(
+      outbound,
+    );
+    // An unknown direction now fits both: hold it, and still apply the tracked sibling.
+    const held = await record(
+      [tracker("Rt6vBn3Cx")],
+      trackingless(key("Rt6vBn3Cx"), { purpose: "unknown" }),
+      [packet("EXAMPLE-UNKNOWN-DIRECTION-SIBLING")],
+    );
+    expect(held.shipmentIds).toHaveLength(1);
+    expect(held.shipmentIds).not.toContain(inbound);
+    expect(held.shipmentIds).not.toContain(outbound);
+    expect(held.unresolvedPackages).toEqual([
+      {
+        sourceShipmentKey: key("Rt6vBn3Cx"),
+        reason: expect.stringContaining("Multiple nearby Shipments"),
+      },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.family, "run_finding")),
+    ).toHaveLength(1);
+
+    // Another member's package is not a candidate, and never refuses the tracked sibling.
+    const seller = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Package Seller",
+    });
+    const otherMember = await createRepoIdentity(ctx, "ledgerParty", {
+      name: "Synthetic other member",
+      kind: "member",
+    });
+    const account = await createRepoIdentity(ctx, "vendorAccount", {
+      vendorId: seller.output.id,
+      ledgerPartyId: otherMember.output.id,
+    });
+    const foreignOrder = await createRepoIdentity(ctx, "purchase", {
+      vendorId: seller.output.id,
+      vendorAccountId: account.output.id,
+    });
+    const householdOrder = await createRepoIdentity(ctx, "purchase", {
+      vendorId: seller.output.id,
+    });
+    const purchaseRow = async (shortcode: string) => {
+      const [order] = await getDb(ctx.db)
+        .select({ purchaseId: shipment.purchaseId })
+        .from(shipment)
+        .where(
+          eq(shipment.shortcode, parseShortcodeFor("shipment", shortcode)),
+        );
+      return order!.purchaseId;
+    };
+    const unownedPackage = await notice(
+      [tracker("Un8cMw4Dy")],
+      trackingless(key("Un8cMw4Dy")),
+    );
+    await associateShipment(
+      ctx.db,
+      { shipmentId: unownedPackage, purchaseId: householdOrder.output.id },
+      ctx.actor,
+    );
+    const householdPurchase = await purchaseRow(unownedPackage!);
+    await expect(
+      notice([tracker("Un8cMw4Dy")], trackingless(key("Un8cMw4Dy"))),
+    ).resolves.toBe(unownedPackage);
+    await expect(purchaseRow(unownedPackage!)).resolves.toBe(householdPurchase);
+    // Another Purchase stays separate, and its Shipment then has no rival for that Purchase.
+    const otherOrder = await createRepoIdentity(ctx, "purchase", {
+      vendorId: seller.output.id,
+    });
+    const underOtherOrder = async () =>
+      recordShipmentEvidence(
+        ctx.db,
+        {
+          source: (await mail([tracker("Un8cMw4Dy")])).source,
+          purchaseId: otherOrder.output.id,
+          shipments: [trackingless(key("Un8cMw4Dy"))],
+        },
+        ctx.actor,
+      );
+    const separateOrder = (await underOtherOrder()).shipmentIds[0];
+    expect(separateOrder).not.toBe(unownedPackage);
+    expect((await underOtherOrder()).shipmentIds).toEqual([separateOrder]);
+
+    const foreignShipment = await notice(
+      [tracker("Fg7xVb5Ez")],
+      trackingless(key("Fg7xVb5Ez")),
+    );
+    const [foreignPurchase] = await getDb(ctx.db)
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(eq(purchase.shortcode, foreignOrder.output.id));
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({ purchaseId: foreignPurchase!.id })
+      .where(eq(shipment.shortcode, foreignShipment!));
+    const sibling = packet("EXAMPLE-OWNERSHIP-SIBLING");
+    const withSibling = await record(
+      [tracker("Fg7xVb5Ez")],
+      trackingless(key("Fg7xVb5Ez")),
+      [sibling],
+    );
+    expect(withSibling.shipmentIds).toHaveLength(2);
+    expect(withSibling.shipmentIds).not.toContain(foreignShipment);
+    expect(withSibling.unresolvedPackages).toEqual([]);
+    // The foreign Shipment is no rival to the member's own package for this parcel.
+    await expect(
+      notice([tracker("Fg7xVb5Ez")], trackingless(key("Fg7xVb5Ez"))),
+    ).resolves.toBe(withSibling.shipmentIds[0]);
+
+    const foreignSource = await mail([tracker("Hj2yNq6Gw")]);
+    const foreignSourced = (
+      await recordShipmentEvidence(
+        ctx.db,
+        {
+          source: foreignSource.source,
+          purchaseId: null,
+          shipments: [trackingless(key("Hj2yNq6Gw"))],
+        },
+        ctx.actor,
+      )
+    ).shipmentIds[0];
+    const [otherParty] = await getDb(ctx.db)
+      .select({ id: ledgerParty.id })
+      .from(ledgerParty)
+      .where(eq(ledgerParty.shortcode, otherMember.output.id));
+    await getDb(ctx.db)
+      .update(email)
+      .set({ ledgerPartyId: otherParty!.id })
+      .where(eq(email.id, foreignSource.message.id));
+    await expect(
+      notice([tracker("Hj2yNq6Gw")], trackingless(key("Hj2yNq6Gw"))),
+    ).resolves.not.toBe(foreignSourced);
+  });
+
+  it("keeps a member carrier correction through replay without an extra handoff", async () => {
+    await memberImportWorld(ctx.db, ctx.actor);
+    const number = "EXAMPLE-MEMBER-CARRIER";
+    const guess = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Delivery Code",
+    });
+    const actual = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Actual Carrier",
+    });
+    const notice = (name: string, key: string) =>
+      capture(key, [
+        { ...packet(number), sourceShipmentKey: null, carrierName: name },
+      ]);
+    const guessed = notice("Synthetic Delivery Code", "delivery-code");
+    const code = (await recordShipmentEvidence(ctx.db, guessed, ctx.actor))
+      .shipmentIds[0]!;
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({
+        extraTrackingNumbers: [
+          {
+            carrierId: actual.output.id,
+            carrierName: "Synthetic Actual Carrier",
+            trackingNumber: number,
+          },
+        ],
+      })
+      .where(eq(shipment.shortcode, code));
+
+    await executeEntity(buildKernelContext(ctx.db, ctx.actor.userId), {
+      action: "update",
+      entity: "shipment",
+      id: code,
+      data: { carrierId: actual.output.id },
+    });
+    const replay = await recordShipmentEvidence(ctx.db, guessed, ctx.actor);
+
+    expect(replay.shipmentIds).toEqual([code]);
+    expect(replay.unresolvedPackages).toEqual([]);
+    const [row] = await getDb(ctx.db)
+      .select({
+        carrier: vendor.shortcode,
+        extras: shipment.extraTrackingNumbers,
+      })
+      .from(shipment)
+      .innerJoin(vendor, eq(vendor.id, shipment.carrierId))
+      .where(eq(shipment.shortcode, code));
+    expect(row).toEqual({ carrier: actual.output.id, extras: [] });
+    expect(guess.output.id).not.toBe(actual.output.id);
+  });
+
+  it("keeps a delivery-field code from establishing a carrier while labeled claims and handoffs survive", async () => {
+    await memberImportWorld(ctx.db, ctx.actor);
+    const code = await createRepoIdentity(ctx, "vendor", { name: "ZQX" });
+    const actual = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Actual Carrier",
+    });
+    const notice = (number: string) =>
+      `Tracking ID: ${number}\nDelivery: ZQX\nSynthetic item`;
+    const hinted = (
+      number: string,
+      hint: Pick<ShipmentEvidence, "carrierId" | "carrierName">,
+    ): ShipmentEvidence => {
+      const base = packet(number);
+      return {
+        ...base,
+        ...hint,
+        sourceShipmentKey: null,
+        observations: base.observations.map((observation) => ({
+          ...observation,
+          ...hint,
+        })),
+      };
+    };
+    const carrierOf = async (shipmentCode: string) => {
+      const [row] = await getDb(ctx.db)
+        .select({
+          carrierId: shipment.carrierId,
+          extras: shipment.extraTrackingNumbers,
+        })
+        .from(shipment)
+        .where(eq(shipment.shortcode, shipmentCode));
+      return row;
+    };
+
+    // Name, stale Vendor reference and reference-only hints all restate the field.
+    for (const [key, hint] of [
+      ["name", { carrierId: null, carrierName: "ZQX" }],
+      ["stale", { carrierId: code.output.id, carrierName: "ZQX" }],
+      ["reference", { carrierId: code.output.id, carrierName: null }],
+      ["mismatch", { carrierId: actual.output.id, carrierName: "ZQX" }],
+    ] as const) {
+      const number = `EXAMPLE-CODE-${key.toUpperCase()}`;
+      const input = capture(
+        `delivery-${key}`,
+        [hinted(number, hint)],
+        undefined,
+        notice(number),
+      );
+      const first = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+      const shipmentCode = first.shipmentIds[0]!;
+      expect(await carrierOf(shipmentCode)).toEqual({
+        carrierId: null,
+        extras: [],
+      });
+      const timeline = await readShipmentTimeline(ctx.db, shipmentCode);
+      expect(timeline.observations[0]).toMatchObject({
+        carrierId: null,
+        carrierName: null,
+      });
+      const replay = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+      expect(replay).toMatchObject({
+        shipmentIds: [shipmentCode],
+        insertedObservations: 0,
+        repeatedObservations: 1,
+        unresolvedPackages: [],
+      });
+    }
+
+    // A later notice for a package under a real carrier adds no false handoff.
+    const known = await recordShipmentEvidence(
+      ctx.db,
+      capture("delivery-known", [
+        hinted("EXAMPLE-CODE-KNOWN", {
+          carrierId: null,
+          carrierName: "Synthetic Actual Carrier",
+        }),
+      ]),
+      ctx.actor,
+    );
+    const later = capture(
+      "delivery-later",
+      [
+        {
+          ...hinted("EXAMPLE-CODE-KNOWN", {
+            carrierId: null,
+            carrierName: "ZQX",
+          }),
+          extraTrackingNumbers: [
+            {
+              carrierId: null,
+              carrierName: "ZQX",
+              trackingNumber: "EXAMPLE-CODE-KNOWN",
+            },
+            {
+              carrierId: actual.output.id,
+              carrierName: "Synthetic Actual Carrier",
+              trackingNumber: "EXAMPLE-CODE-HANDOFF",
+            },
+          ],
+        },
+      ],
+      undefined,
+      notice("EXAMPLE-CODE-KNOWN"),
+    );
+    expect(
+      (await recordShipmentEvidence(ctx.db, later, ctx.actor)).shipmentIds,
+    ).toEqual(known.shipmentIds);
+    const [knownRow] = await getDb(ctx.db)
+      .select({
+        carrier: vendor.shortcode,
+        extras: shipment.extraTrackingNumbers,
+      })
+      .from(shipment)
+      .innerJoin(vendor, eq(vendor.id, shipment.carrierId))
+      .where(eq(shipment.shortcode, known.shipmentIds[0]!));
+    expect(knownRow).toEqual({
+      carrier: actual.output.id,
+      extras: [
+        {
+          carrierId: actual.output.id,
+          carrierName: "Synthetic Actual Carrier",
+          trackingNumber: "EXAMPLE-CODE-HANDOFF",
+        },
+      ],
+    });
+
+    // Genuine labels and other hints beside the field are unaffected.
+    const labeled = "EXAMPLE-CODE-LABELED";
+    const labeledCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture(
+          "delivery-labeled",
+          [hinted(labeled, { carrierId: null, carrierName: "ZQX" })],
+          undefined,
+          `Carrier: ZQX\nTracking ID: ${labeled}\nDelivery: ZQX`,
+        ),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    const [labeledRow] = await getDb(ctx.db)
+      .select({ carrier: vendor.shortcode })
+      .from(shipment)
+      .innerJoin(vendor, eq(vendor.id, shipment.carrierId))
+      .where(eq(shipment.shortcode, labeledCode));
+    expect(labeledRow).toEqual({ carrier: code.output.id });
+    const beside = "EXAMPLE-CODE-BESIDE";
+    const besideCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture(
+          "delivery-beside",
+          [
+            hinted(beside, {
+              carrierId: null,
+              carrierName: "Synthetic Actual Carrier",
+            }),
+          ],
+          undefined,
+          notice(beside),
+        ),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    expect((await carrierOf(besideCode))?.carrierId).not.toBeNull();
+    const { explicit } = await assessCarrierPacket(
+      ctx.db,
+      { trackingNumber: "EXAMPLE-SPLIT", extraTrackingNumbers: [] },
+      { texts: ["Delivery:\nZQX\nTracking ID: EXAMPLE-SPLIT"], links: [] },
+    );
+    expect(explicit).toEqual([]);
+    for (const text of [
+      "Delivery: Synthetic Carrier",
+      "Delivery: ZQX Ground",
+      "Delivery: FREE\nFREE returns",
+      "Estimated delivery Sun, Jul 21",
+      "Delivery: ZQX Tracking",
+      "Delivery: ZQX Tracking ID: 1\nCarrier: ZQX Tracking ID: 1",
+    ])
+      expect(deliveryFieldCodes({ texts: [text] })).toEqual(new Set());
+    for (const text of [
+      "Delivery: ZQX; https://example.test/zqx/track",
+      "Delivery:\tZQX\tTracking",
+      "Delivery: ZQX Tracking ID: 1",
+      "Delivery: ZQX tracking #1",
+      "Delivery: ZQX Trk # 1",
+      "Delivery: ZQX Carrier: Synthetic Actual Carrier",
+      "Delivery: ZQX Order #1",
+      "Delivery: ZQX Status: Shipped",
+    ])
+      expect(deliveryFieldCodes({ texts: [text] })).toEqual(new Set(["ZQX"]));
+
+    // A field ended by the next label or column clears the hint, not a handoff.
+    const tabbed = "EXAMPLE-CODE-TABBED";
+    const tabbedCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture(
+          "delivery-tabbed",
+          [
+            {
+              ...hinted(tabbed, { carrierId: null, carrierName: "ZQX" }),
+              extraTrackingNumbers: [
+                {
+                  carrierId: actual.output.id,
+                  carrierName: "Synthetic Actual Carrier",
+                  trackingNumber: "EXAMPLE-CODE-TABBED-HANDOFF",
+                },
+              ],
+            },
+          ],
+          undefined,
+          `Delivery:\tZQX\tTracking ID: ${tabbed}`,
+        ),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    expect(await carrierOf(tabbedCode)).toEqual({
+      carrierId: null,
+      extras: [
+        {
+          carrierId: actual.output.id,
+          carrierName: "Synthetic Actual Carrier",
+          trackingNumber: "EXAMPLE-CODE-TABBED-HANDOFF",
+        },
+      ],
+    });
+    const inline = "EXAMPLE-CODE-INLINE";
+    const inlineCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture(
+          "delivery-inline",
+          [hinted(inline, { carrierId: null, carrierName: "ZQX" })],
+          undefined,
+          `Delivery: ZQX Tracking ID: ${inline}`,
+        ),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    expect((await carrierOf(inlineCode))?.carrierId).toBeNull();
+    const inlineLabeled = "EXAMPLE-CODE-INLINE-LABELED";
+    const inlineLabeledCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture(
+          "delivery-inline-labeled",
+          [hinted(inlineLabeled, { carrierId: null, carrierName: "ZQX" })],
+          undefined,
+          `Carrier: ZQX Tracking ID: ${inlineLabeled}\nDelivery: ZQX Tracking ID: ${inlineLabeled}`,
+        ),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    expect((await carrierOf(inlineLabeledCode))?.carrierId).not.toBeNull();
+
+    // A known carrier's name alone in the field stays unknown until a label names it.
+    await createRepoIdentity(ctx, "vendor", { name: "UPS" });
+    const named = "EXAMPLE-CODE-NAMED";
+    const namedCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture(
+          "delivery-named",
+          [hinted(named, { carrierId: null, carrierName: "UPS" })],
+          undefined,
+          `Tracking ID: ${named}\nDelivery: UPS`,
+        ),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    expect((await carrierOf(namedCode))?.carrierId).toBeNull();
+
+    // Re-extraction dropping the hint changes the fallback key, not the binding.
+    for (const [key, sourceEventKey] of [
+      ["keyed", "scan-one"],
+      ["keyless", null],
+    ] as const) {
+      const fresh = `EXAMPLE-CODE-FRESH-${key.toUpperCase()}`;
+      const extraction = (
+        hint: Pick<ShipmentEvidence, "carrierId" | "carrierName">,
+      ) => {
+        const base = hinted(fresh, hint);
+        return capture(
+          `delivery-fresh-${key}`,
+          [
+            {
+              ...base,
+              observations: base.observations.map((observation) => ({
+                ...observation,
+                sourceEventKey,
+              })),
+            },
+          ],
+          undefined,
+          `Tracking ID: ${fresh}\nDelivery: ZQX`,
+        );
+      };
+      const first = await recordShipmentEvidence(
+        ctx.db,
+        extraction({ carrierId: null, carrierName: "ZQX" }),
+        ctx.actor,
+      );
+      const redone = await recordShipmentEvidence(
+        ctx.db,
+        extraction({ carrierId: null, carrierName: null }),
+        ctx.actor,
+      );
+      const [bound] = await getDb(ctx.db)
+        .select({ id: shipment.id })
+        .from(shipment)
+        .where(eq(shipment.shortcode, first.shipmentIds[0]!));
+      const bindings = await getDb(ctx.db)
+        .select({ packageKey: shipmentSourcePackage.packageKey })
+        .from(shipmentSourcePackage)
+        .where(eq(shipmentSourcePackage.shipmentId, bound!.id));
+      expect(redone).toMatchObject({
+        shipmentIds: first.shipmentIds,
+        unresolvedPackages: [],
+      });
+      expect(bindings).toEqual([{ packageKey: `ZQX:${fresh}` }]);
+      expect(
+        (await readShipmentTimeline(ctx.db, first.shipmentIds[0]!)).timeline,
+      ).toHaveLength(1);
+    }
+  });
+
+  it("removes an extra reference only through an audited, keyed member correction", async () => {
+    await memberImportWorld(ctx.db, ctx.actor);
+    const number = "EXAMPLE-EXTRA-EDIT";
+    const falseCarrier = await createRepoIdentity(ctx, "vendor", {
+      name: "SHP",
+    });
+    const handoff = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Handoff Carrier",
+    });
+    const hinted = (carrierName: string | null): ShipmentEvidence => {
+      const base = packet(number);
+      return {
+        ...base,
+        carrierName,
+        sourceShipmentKey: null,
+        observations: base.observations.map((observation) => ({
+          ...observation,
+          carrierName,
+        })),
+      };
+    };
+    const delivery = `Tracking ID: ${number}\nDelivery: SHP`;
+    const source = capture("extra-edit", [hinted("SHP")], undefined, delivery);
+    const code = (await recordShipmentEvidence(ctx.db, source, ctx.actor))
+      .shipmentIds[0]!;
+    const falseExtra = {
+      carrierId: falseCarrier.output.id,
+      carrierName: null,
+      trackingNumber: number,
+    };
+    const genuine = {
+      carrierId: handoff.output.id,
+      carrierName: "Synthetic Handoff Carrier",
+      trackingNumber: "EXAMPLE-EXTRA-HANDOFF",
+    };
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({ extraTrackingNumbers: [falseExtra, genuine] })
+      .where(eq(shipment.shortcode, code));
+    const read = async () => {
+      const [row] = await getDb(ctx.db)
+        .select({
+          id: shipment.id,
+          carrierId: shipment.carrierId,
+          purpose: shipment.purpose,
+          extras: shipment.extraTrackingNumbers,
+        })
+        .from(shipment)
+        .where(eq(shipment.shortcode, code));
+      const entries = await getDb(ctx.db)
+        .select({ changes: auditLog.changes })
+        .from(auditLog)
+        .where(eq(auditLog.entityId, row!.id));
+      return { ...row!, changes: entries.map(({ changes }) => changes) };
+    };
+    const update = (data: ShipmentUpdateData) =>
+      executeEntity(buildKernelContext(ctx.db, ctx.actor.userId), {
+        action: "update",
+        entity: "shipment",
+        id: code,
+        data,
+      });
+    const remove = (
+      ...keys: ShipmentExtraTrackingNumberRemovals[number]["key"][]
+    ) => keys.map((key) => ({ op: "remove" as const, key }));
+    const falseKey = {
+      trackingNumber: falseExtra.trackingNumber,
+      carrierId: falseExtra.carrierId,
+    };
+
+    // Source intake establishes this handoff after the member's client read the list.
+    const added = {
+      carrierId: handoff.output.id,
+      carrierName: "Synthetic Handoff Carrier",
+      trackingNumber: "EXAMPLE-EXTRA-ADDED",
+    };
+    await recordShipmentEvidence(
+      ctx.db,
+      capture(
+        "extra-added",
+        [{ ...hinted(null), extraTrackingNumbers: [added] }],
+        undefined,
+        `Tracking ID: ${number}`,
+      ),
+      ctx.actor,
+    );
+    const concurrent = await read();
+    expect(concurrent.extras).toEqual([falseExtra, genuine, added]);
+
+    // Replacement lists, additions and the bulk resolver cannot reach the writer.
+    for (const extraTrackingNumbers of [
+      [genuine],
+      [{ op: "add", key: falseKey }],
+      [{ op: "replace", key: falseKey, value: {} }],
+      [],
+    ])
+      await expect(
+        // @ts-expect-error The update contract accepts only keyed removals.
+        update({ extraTrackingNumbers }),
+      ).rejects.toThrow("extraTrackingNumbers");
+    await expect(
+      executeEntity(buildKernelContext(ctx.db, ctx.actor.userId), {
+        action: "bulkUpdate",
+        entity: "shipment",
+        ids: [code],
+        // @ts-expect-error The bulk contract omits this field.
+        data: { extraTrackingNumbers: remove(falseKey) },
+      }),
+    ).rejects.toThrow("extraTrackingNumbers");
+
+    for (const actor of [
+      { ...ctx.actor, channel: "system" as const },
+      { ...ctx.actor, runId: parseEntityId("run", crypto.randomUUID()) },
+    ])
+      await expect(
+        editShipmentReferences(
+          ctx.db,
+          {
+            shipmentId: parseShortcodeFor("shipment", code),
+            extraTrackingNumbers: [
+              {
+                op: "remove",
+                key: {
+                  trackingNumber: number,
+                  carrierId: falseCarrier.output.id,
+                },
+              },
+            ],
+          },
+          actor,
+        ),
+      ).rejects.toThrow("interactive member request");
+
+    // A missing key refuses the whole update, with its carrier and purpose edits.
+    for (const missing of [
+      { trackingNumber: "EXAMPLE-EXTRA-GONE", carrierId: null },
+      { trackingNumber: number, carrierId: handoff.output.id },
+    ])
+      await expect(
+        update({
+          purpose: "outgoing",
+          carrierId: handoff.output.id,
+          extraTrackingNumbers: remove(falseKey, missing),
+        }),
+      ).rejects.toThrow("nothing changed");
+    expect(await read()).toEqual(concurrent);
+
+    // A carrier edit that changes nothing leaves no audit row.
+    await update({ carrierId: null });
+    expect(await read()).toEqual(concurrent);
+
+    await update({
+      extraTrackingNumbers: remove({
+        ...falseKey,
+        trackingNumber: number.toLowerCase(),
+      }),
+    });
+    const corrected = [genuine, added];
+    const removal = await read();
+    expect(removal.extras).toEqual(corrected);
+    expect(removal.changes).toEqual([
+      ...concurrent.changes,
+      {
+        extraTrackingNumbers: {
+          from: [falseExtra, genuine, added],
+          to: corrected,
+        },
+      },
+    ]);
+
+    // Neither retained nor fresh extraction of the Delivery field restores it.
+    await recordShipmentEvidence(ctx.db, source, ctx.actor);
+    await recordShipmentEvidence(
+      ctx.db,
+      capture("extra-edit", [hinted(null)], undefined, delivery),
+      ctx.actor,
+    );
+    expect(await read()).toMatchObject({
+      carrierId: null,
+      extras: corrected,
+      changes: removal.changes,
+    });
+    await expect(
+      update({ extraTrackingNumbers: remove(falseKey) }),
+    ).rejects.toThrow("nothing changed");
   });
 
   it("keeps explicit source package reassignment through subsequent replay", async () => {

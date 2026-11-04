@@ -2,15 +2,17 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { type ShipmentUpdateData } from "@cubby/schemas/entities/shipment";
 import { shipmentRawOut as rawShipmentOut } from "@cubby/schemas/entity-contracts/shipment";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { shipment } from "~/server/db/schema";
-import { editShipmentCarrier } from "~/server/domains/shipment/repo/evidence";
+import { editShipmentReferences } from "~/server/domains/shipment/repo/evidence";
 import { shipmentSearch } from "~/server/domains/shipment/repo/search-read-shipment";
 import {
   createEntityCrud,
@@ -19,8 +21,9 @@ import {
   defineMutationWriter,
   type MutationReceipt,
 } from "~/server/entity-kernel/repo/repository";
-import { ENTITY_STORED_WRITES } from "~/server/generated/entity-write-bindings.gen";
+import { createAppError } from "~/server/errors/app-error";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 export const shipmentScaffold = listScaffold("shipment", shipment, {
   read: {
@@ -52,7 +55,11 @@ const reader = createEntityCrud({
 });
 
 const update = reader.updateWriter(
-  ENTITY_STORED_WRITES.shipment.update,
+  async (
+    db: DrizzleTransaction,
+    code: ShortcodeFor<"shipment">,
+    data: Pick<ShipmentUpdateData, "purpose">,
+  ) => ({ id: await resolveOrThrow(db, "shipment", code), data }),
   (output, entityId) => ({ output, entityId }),
 );
 
@@ -76,16 +83,50 @@ const updateShipment = defineMutationWriter({
     actor: ActorContext,
   ) =>
     withTransactionDatabase(db, async (tx) => {
-      const { carrierId, ...otherFields } = data;
+      const { carrierId, extraTrackingNumbers, ...otherFields } = data;
       // Use the Shipment identity writer before ordinary CRUD locks the record.
-      if (carrierId !== undefined)
-        await editShipmentCarrier(tx, { shipmentId: code, carrierId }, actor);
+      if (carrierId !== undefined || extraTrackingNumbers !== undefined)
+        await editShipmentReferences(
+          tx,
+          { shipmentId: code, carrierId, extraTrackingNumbers },
+          actor,
+        );
       return update.withOutput(readOutput, tx, code, otherFields, actor);
     }),
 });
 
+const SHIPMENT_DELETE_EDGE_POLICY = {
+  "ShipmentObservation.shipmentId": {
+    code: "preserve-tracking-observations",
+    effect: "preserve",
+    description:
+      "A retired package keeps its retained observations and capture memberships.",
+  },
+  "ShipmentSourcePackage.shipmentId": {
+    code: "preserve-source-package-binding",
+    effect: "preserve",
+    description:
+      "A retired package keeps its source binding, so replay cannot recreate it.",
+  },
+} as const satisfies IncomingEdgePolicy<"shipment", OperationDisposition>;
+
 export const shipmentRepository = defineRepository("shipment", {
+  lifecycle: { delete: SHIPMENT_DELETE_EDGE_POLICY },
   scaffold: shipmentScaffold,
+  delete: async (ctx, ids) => {
+    if (ctx.actorContext.runId || ctx.actorContext.channel === "system")
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Retiring a Shipment requires an interactive member decision.",
+      );
+    const { policyDelete } =
+      await import("~/server/generic/removal/repo/dispositions");
+    return policyDelete("shipment", SHIPMENT_DELETE_EDGE_POLICY)(
+      ctx.db,
+      ids,
+      ctx.actorContext,
+    );
+  },
   update: asActor(updateShipment),
   updatePolicy: { recordFields: ["carrierId"] },
 });
