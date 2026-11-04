@@ -50,6 +50,7 @@ import { labelStatementSuggestions as runStatementLabels } from "~/server/domain
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import * as assessmentReviewRepo from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { loadCurrentFieldOwnership } from "~/server/generic/assessment/repo/automatic-fields";
 import {
@@ -885,6 +886,40 @@ describe("Automatic rules", () => {
     ).toMatchObject({
       matchState: "unmatched",
     });
+
+    // A driver refusal must remain diagnosable without accepting the suggestion.
+    const driver = Object.assign(
+      new Error(
+        "Synthetic connection admission refused password=synthetic-driver-secret",
+      ),
+      { code: "53300" },
+    );
+    const review = vi
+      .spyOn(assessmentReviewRepo, "reviewAssessment")
+      .mockRejectedValueOnce(
+        new Error(
+          "Failed query: insert into synthetic_purchase; Authorization: Bearer synthetic-token",
+          { cause: driver },
+        ),
+      );
+    try {
+      const failure = await applyAutomaticRules(ctx.db, [suggestion.id]);
+      expect(failure.applied).toEqual([]);
+      expect(failure.refused).toHaveLength(1);
+      expect(failure.refused[0]!.message).toContain("53300");
+      expect(failure.refused[0]!.message).toContain(
+        "Synthetic connection admission refused",
+      );
+      expect(failure.refused[0]!.message).toContain("Failed query");
+      expect(failure.refused[0]!.message).not.toContain("synthetic-token");
+      expect(failure.refused[0]!.message).not.toContain(
+        "synthetic-driver-secret",
+      );
+      expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
+      expect(await feedbackFor(ctx, suggestion.id)).toEqual([]);
+    } finally {
+      review.mockRestore();
+    }
   });
 });
 
