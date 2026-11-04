@@ -514,8 +514,15 @@ export function WorkQueue({
             // The section owns these predicates; never offer a filter it would ignore.
             enableColumnFilter:
               embedded &&
-              (column.id === "family" ||
-                (fixedScope?.view === "human" && column.id === "executor"))
+              (((fixedScope?.family !== undefined ||
+                fixedScope?.view === "problems") &&
+                column.id === "family") ||
+                (fixedScope?.reason !== undefined && column.id === "reason") ||
+                (fixedScope?.view !== undefined &&
+                  ["human", "agent", "automatic", "external"].includes(
+                    fixedScope.view,
+                  ) &&
+                  column.id === "executor"))
                 ? false
                 : column.enableColumnFilter,
           }),

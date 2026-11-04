@@ -174,72 +174,12 @@ read-only outside intake. Provider facts and memberships change only through
 recording source evidence. The [evidence lifecycle](../../../docs/import-evidence-convergence.md#financial-evidence-entities)
 owns create/merge restrictions and deletion guards.
 
-For temporary review holds, retain prior judgments and a unique marker, keep the
-cases visible in the member review, and count them as unresolved. If holding
-depends on current booking eligibility, check that eligibility and apply the
-hold atomically with the relevant source and transaction locks. Intake copies
-judgments into later revisions: reopening must discover original rows and
-marked descendants within the proven source identity. Restore only exact
-temporary-hold matches and preserve every newer member decision; restoring a
-fixed list of old row IDs can leave newer observations held.
-
-Before reviewing a statement Suggestion, use `finance_read.preview_suggestion`
-with its listed assessment ID, expected fingerprint and declared application.
-Inspect the current financial, Purchase/Expense, vendor and settlement effects.
-A stale refusal requires fresh evidence and review; listing or stored clean
-status does not grant acceptance authority. Preview writes nothing, and explicit
-Suggestions review validates the application again.
-
-Supplying `booking` or `kindOverride`, or choosing a nonrecommended action,
-requires `suggestions.review` with `verdict: "wrong"` and
-`correction: { present: true, value: application }`, using the same
-`application`. This includes a Create draft whose action stays unchanged but
-whose booking choices are supplied. Preview checks financial effects; apply
-also enforces this review-input contract.
-
-Statement attachment also converges spending. A successful preview whose
-spending result requires review is not ready to apply, even with no transaction
-fields selected. Resolve that spending review first. For an already accepted
-transaction with a separately authorized explicit booking, use the reviewed
-classification below, then refresh the statement proposal and preview its
-attachment against the completed booking. Preserve the accepted transaction
-and inspect the resulting source references and allocations. A booking-lineage
-refusal remains unresolved; never restore old Expense values or member
-attributions to force attachment. A separately authorized identity-only repair
-must merge the current reference set inside one transaction through the existing
-writer; replacing a client-side snapshot can remove concurrent attachments.
-
-### Booking classification and read-back
-
-For statement-review receipt lookup, exact replay and authorized service
-classification corrections, read
+When resolving statement Suggestions, read
+[Reviewing statement outcomes](../../../docs/import-evidence-convergence.md#reviewing-statement-outcomes)
+for optional inspection, current write validation and corrections. When resuming
+held cases or replaying a committed booking, follow its retained-hold and receipt
+sections. For explicit booking classification and graph read-back, use
 [Statement review receipts and classification](../../../docs/import-evidence-convergence.md#statement-review-receipts-and-classification).
-Exact command replay and fresh spending convergence have separate contracts.
-
-Before resuming a retained case, follow
-[Retained review holds and preservation](../../../docs/import-evidence-convergence.md#retained-review-holds-and-preservation):
-carry prior objections into review and identify target overlap in protected snapshots.
-
-For an authorized explicit booking, check existing Purchases, Expenses and
-settlement allocations before creating aggregate spending. Refresh that check
-when resuming a retained proposal; a fresh booking preview checks the selected
-transaction's state, not the completeness of a prior duplicate search.
-
-Choose cost type from what was purchased: a membership service uses `services`,
-even when the Vendor usually sells goods. Vendor-default spending categories
-are suggestions, not evidence of the purchase's purpose. Resolve category IDs
-against live records before previewing; a merged category's successor need not
-fit the purchase. When category is uncertain, preserve supported booking under
-the member's uncategorized-booking policy rather than inventing a category.
-
-Keep issuer benefit credits separate from purchase charges. Equal amounts,
-nearby dates and a membership benefit do not alone prove a credit allocation or
-net household cost. Review their meaning and settlement independently. After
-commit, read back the Purchase, Expense, allocation and attribution graph;
-check effective category and beneficiary defaults rather than assuming empty
-overrides mean uncategorized or Household. Preserve explicit member decisions
-about who benefits independently of who funded the payment. Report booked gross
-spending separately from unresolved credits.
 
 ## Completion
 

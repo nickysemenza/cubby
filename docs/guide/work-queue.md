@@ -1,5 +1,24 @@
 # One view of the work
 
+Work is the household's operational entry point at `/activity`. Its four main
+views share the existing queue and execution evidence:
+
+- **Needs you** holds decisions, financial proposals and concrete Problems.
+- **Automatic work** shows actual execution, retries and dependencies, with
+  external waits labelled separately. Waiting never implies failure.
+- **Improvements** holds optional field, connection and image-description
+  proposals, agent research and declared missing-fact views. Missing optional
+  enrichment is not an error.
+- **History** retains Run outcomes and recorded changes.
+
+Advanced maintenance stays available beside those views. All work and filters
+opens the existing `/work-queue` workbench with its executor, family, owner and
+reason facets. Both legacy URLs and `tab=now` remain usable, including native
+handoffs. Suggestions, automatic decisions and rules remain accessible from
+Improvements, and list counts, detail and inspector suggestion review stay in place.
+These views do not persist lanes, assignments or another work ledger. A record
+can appear in more than one view when it has different actionable work.
+
 The Work queue derives work from records, gaps, findings, execution, review
 state and Problems detectors. Each domain declares its Work sources (reasons,
 Work family, Executor, link, actions and a candidate query); the queue composes

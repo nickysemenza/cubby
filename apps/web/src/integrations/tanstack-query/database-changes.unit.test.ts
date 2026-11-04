@@ -187,13 +187,25 @@ describe("household change invalidation", () => {
     expect(invalidate).toHaveBeenCalledTimes(4);
     await vi.advanceTimersByTimeAsync(5000);
     expect(invalidate).toHaveBeenCalledTimes(4);
-    Socket.current.ring({ imageJob: ["IPR-A3F2"] });
+    // A committed change whose notification was lost is recovered on use;
+    // an idle tab makes no requests even after the recovery age expires.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(invalidate).toHaveBeenCalledTimes(4);
+    window.dispatchEvent(new Event("pointerdown"));
     await vi.advanceTimersByTimeAsync(0);
     expect(invalidate).toHaveBeenCalledTimes(5);
+    expect(queryA.state.isInvalidated).toBe(true);
+    expect(queryB.state.isInvalidated).toBe(true);
+    window.dispatchEvent(new Event("keydown"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(invalidate).toHaveBeenCalledTimes(5);
+    Socket.current.ring({ imageJob: ["IPR-A3F2"] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(invalidate).toHaveBeenCalledTimes(6);
     Socket.current.ring({ imageJob: ["IPR-B4G3"] });
     stop();
     await vi.advanceTimersByTimeAsync(5000);
-    expect(invalidate).toHaveBeenCalledTimes(5);
+    expect(invalidate).toHaveBeenCalledTimes(6);
     client.clear();
   });
 });

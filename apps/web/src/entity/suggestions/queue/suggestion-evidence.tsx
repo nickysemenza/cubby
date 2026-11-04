@@ -1,4 +1,8 @@
 import { formatConfidence } from "@cubby/schemas/ai";
+import {
+  COST_TYPE_LABELS,
+  costTypeValues,
+} from "@cubby/schemas/expense-fields";
 import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type {
@@ -62,16 +66,41 @@ import {
   providerCategories,
 } from "./suggestion-values";
 
+const COST_TYPE_OPTIONS = [
+  { value: "default", label: "Use source default" },
+  ...costTypeValues.map((value) => ({ value, label: COST_TYPE_LABELS[value] })),
+];
+
+function showsCostTypeChoice(
+  plan: FinancialSpendingPlan | null | undefined,
+  costType: FinancialSpendingPlan["request"]["costType"],
+) {
+  return (
+    plan?.status !== "ready" ||
+    plan.effect === "create_aggregate" ||
+    costType !== undefined
+  );
+}
+
+function retainedStatementKind(row: SourceTransactionRecord) {
+  const parsed = financialTransactionKind.safeParse(
+    row.evidence.create?.kind ?? row.columns.kind,
+  );
+  return parsed.success ? parsed.data : null;
+}
+
 function SpendingResultFacts({
   row,
   plan,
   amount,
   merchant,
+  kind,
 }: {
   row: SourceTransactionRecord;
   plan: Extract<FinancialSpendingPlan, { status: "ready" }>;
   amount: number;
   merchant: string | null;
+  kind: StatementSuggestionPreviewOut["kind"];
 }) {
   return (
     <EvidenceFacts
@@ -126,6 +155,15 @@ function SpendingResultFacts({
             : "No additional Expense",
         ],
         [
+          "Cost type",
+          plan.effect === "create_aggregate"
+            ? COST_TYPE_LABELS[
+                plan.request.costType ??
+                  (kind === "fee" ? "services" : "materials")
+              ]
+            : "Keep existing Expense classification",
+        ],
+        [
           "Spending category",
           <FieldValue
             key="category"
@@ -175,12 +213,14 @@ function SpendingEvidence({
   plan,
   amount,
   merchant,
+  kind,
   previewState,
 }: {
   row: SourceTransactionRecord;
   plan: FinancialSpendingPlan | null;
   amount: number;
   merchant: string | null;
+  kind: StatementSuggestionPreviewOut["kind"];
   previewState: "pending" | "error" | "ready";
 }) {
   const { draft, setDraft, outcome } = useSuggestionReview();
@@ -231,6 +271,7 @@ function SpendingEvidence({
           plan={plan}
           amount={amount}
           merchant={merchant}
+          kind={kind}
         />
       ) : null}
       {(controls?.candidates ?? []).length ? (
@@ -313,6 +354,21 @@ function SpendingEvidence({
                 });
               }}
             />
+            {showsCostTypeChoice(controls, current.booking?.costType) ? (
+              <RecordPicker
+                mode="choose"
+                label="Cost type for new Expense"
+                options={COST_TYPE_OPTIONS}
+                value={current.booking?.costType ?? "default"}
+                disabled={busy}
+                onValueChange={(next) => {
+                  const costType = costTypeValues.find(
+                    (value) => value === next,
+                  );
+                  setDraft(row.id, { booking: { ...booking, costType } });
+                }}
+              />
+            ) : null}
             <WithVendorShortcodeSearch>
               {(search) => (
                 <RecordPicker
@@ -829,6 +885,7 @@ function StatementEvidence({ row }: { row: SourceTransactionRecord }) {
               : (preview.data?.spending ?? null)
           }
           amount={preview.data?.amount ?? charge.amount}
+          kind={preview.data?.kind ?? retainedStatementKind(row)}
           merchant={
             preview.data?.merchant?.trim() ||
             preview.data?.rawDescription?.trim() ||

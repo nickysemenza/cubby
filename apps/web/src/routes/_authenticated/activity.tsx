@@ -3,7 +3,7 @@ import { auditChannelSchema } from "@cubby/schemas/context";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import { jobLane, jobState, jobWaitingOnReason } from "@cubby/schemas/job";
 import { RUN_KINDS } from "@cubby/schemas/run-fields";
-import { workFamily } from "@cubby/schemas/work-queue";
+import { workFamily, workQueueInput } from "@cubby/schemas/work-queue";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
@@ -24,7 +24,13 @@ import { Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
-const activityTab = z.enum(["needs-you", "now", "history", "maintenance"]);
+const activityTab = z.enum([
+  "needs-you",
+  "now",
+  "improvements",
+  "history",
+  "maintenance",
+]);
 const searchSchema = z.object({
   tab: activityTab.optional().catch(undefined),
   entityKind: auditEntitySchema.optional().catch(undefined),
@@ -39,15 +45,37 @@ const searchSchema = z.object({
 });
 const views = [
   { key: "needs-you", label: "Needs you" },
-  { key: "now", label: "Now" },
+  { key: "now", label: "Automatic work" },
+  { key: "improvements", label: "Improvements" },
   { key: "history", label: "History" },
   { key: "maintenance", label: "Advanced maintenance" },
 ] as const;
 const decisionScope = {
   view: "human",
-  family: workFamily.options.filter((family) => family !== "problem"),
+  family: workFamily.options.filter(
+    (family) => !["problem", "suggestion", "research"].includes(family),
+  ),
 } as const;
 const problemScope = { view: "problems" } as const;
+const financialProposalScope = workQueueInput
+  .pick({ view: true, family: true, reason: true })
+  .parse({
+    view: "human",
+    family: "suggestion",
+    reason: ["suggestions:statement_transaction", "suggestions:transfer_pair"],
+  });
+const optionalProposalScope = workQueueInput
+  .pick({ view: true, family: true, reason: true })
+  .parse({
+    family: "suggestion",
+    reason: [
+      "suggestions:field",
+      "suggestions:recommendation",
+      "suggestions:image_description",
+    ],
+  });
+const researchScope = { family: "research" } as const;
+const externalScope = { view: "external" } as const;
 
 export const Route = createFileRoute("/_authenticated/activity")({
   validateSearch: searchSchema,
@@ -66,9 +94,9 @@ export const Route = createFileRoute("/_authenticated/activity")({
         }),
       );
   },
-  head: () => ({ meta: [{ title: pageTitle("Activity") }] }),
+  head: () => ({ meta: [{ title: pageTitle("Work") }] }),
   component: () => (
-    <Page variant="list" title="Activity" layout="full" bodyGutter="standard">
+    <Page variant="list" title="Work" layout="full" bodyGutter="standard">
       <ActivityBody />
     </Page>
   ),
@@ -105,7 +133,7 @@ function ActivityBody() {
           What does each Run do?
         </Link>
         <Link to="/work-queue" className="text-link hover:underline">
-          All Work queue views
+          All work and filters
         </Link>
         <Link to="/runs" className="text-link hover:underline">
           Runs
@@ -128,7 +156,7 @@ function ActivityBody() {
         <TabsList
           variant="line"
           className="max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto"
-          aria-label="Activity views"
+          aria-label="Work views"
         >
           {views.map((view) => (
             <TabsTrigger
@@ -153,12 +181,18 @@ function ActivityBody() {
                 {view.key === "needs-you" ? (
                   <Stack gap="lg">
                     <p className="max-w-prose text-sm text-muted-foreground">
-                      Decisions awaiting review and problems that need
-                      intervention. Normal retries and ordinary waits stay in
-                      Now.
+                      Decisions and concrete blockers needing your intervention.
+                      Optional enrichment stays in Improvements; retries and
+                      waits stay in Automatic work.
                     </p>
                     <Section headingAs="h2" title="Decisions">
                       <WorkQueue scope={decisionScope} label="Decisions" />
+                    </Section>
+                    <Section headingAs="h2" title="Financial proposals">
+                      <WorkQueue
+                        scope={financialProposalScope}
+                        label="Financial proposals"
+                      />
                     </Section>
                     <Section headingAs="h2" title="Problems">
                       <WorkQueue
@@ -181,21 +215,59 @@ function ActivityBody() {
                       }
                     />
                   </Stack>
+                ) : view.key === "improvements" ? (
+                  <Stack gap="lg">
+                    <p className="max-w-prose text-sm text-muted-foreground">
+                      Optional proposals and missing facts that can improve your
+                      records. Review here or continue with an agent; these are
+                      not errors.
+                    </p>
+                    <Row gap="md" wrap>
+                      <Link
+                        to="/suggestions"
+                        className="text-link hover:underline"
+                      >
+                        Suggestions, automatic decisions and rules
+                      </Link>
+                    </Row>
+                    <Section headingAs="h2" title="Proposals">
+                      <WorkQueue
+                        scope={optionalProposalScope}
+                        label="Proposals"
+                      />
+                    </Section>
+                    <Section headingAs="h2" title="Research and missing facts">
+                      <WorkQueue
+                        scope={researchScope}
+                        groupBy="reason"
+                        label="Research and missing facts"
+                      />
+                    </Section>
+                  </Stack>
                 ) : view.key === "now" ? (
-                  <QueueOverview
-                    search={search}
-                    onSearchChange={(next) =>
-                      void navigate({
-                        search: (previous) => ({
-                          ...previous,
-                          ...next,
-                          tab: "now",
-                        }),
-                        hash: "queue-jobs",
-                        replace: true,
-                      })
-                    }
-                  />
+                  <Stack gap="lg">
+                    <QueueOverview
+                      search={search}
+                      onSearchChange={(next) =>
+                        void navigate({
+                          search: (previous) => ({
+                            ...previous,
+                            ...next,
+                            tab: "now",
+                          }),
+                          hash: "queue-jobs",
+                          replace: true,
+                        })
+                      }
+                    />
+                    <Section
+                      headingAs="h2"
+                      title="Waiting outside Cubby"
+                      caption="Posting windows, paused Runs and other declared waits. Waiting does not mean failed."
+                    >
+                      <WorkQueue scope={externalScope} label="External waits" />
+                    </Section>
+                  </Stack>
                 ) : view.key === "history" ? (
                   <Stack gap="lg">
                     <Section

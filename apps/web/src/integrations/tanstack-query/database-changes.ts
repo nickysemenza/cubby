@@ -26,6 +26,7 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
   let pending: DatabaseChanges = {};
   let scheduled: ReturnType<typeof setTimeout> | undefined;
   let lastRingRefresh: number | undefined;
+  let lastRecovery = Date.now();
 
   async function refresh() {
     if (refreshing || stopped) return;
@@ -54,8 +55,10 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
     lastRingRefresh = recovery ? undefined : Date.now();
     refreshing = true;
     try {
-      if (full) await resyncOperationQueries(client);
-      else await invalidateDatabaseChanges(client, changes);
+      if (full) {
+        await resyncOperationQueries(client);
+        lastRecovery = Date.now();
+      } else await invalidateDatabaseChanges(client, changes);
     } finally {
       refreshing = false;
       if (!stopped && (resync || fullRing || Object.keys(pending).length))
@@ -117,8 +120,24 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
       requestRefresh();
     } else connect();
   }
+  function catchUp() {
+    // A commit can lose its hint. Recover on actual use, never by idle polling;
+    // scoped rings cannot establish that other loaded records are current.
+    if (
+      refreshing ||
+      document.visibilityState !== "visible" ||
+      navigator.onLine === false ||
+      Date.now() - lastRecovery < 60_000
+    )
+      return;
+    resync = true;
+    requestRefresh();
+  }
   connect();
   window.addEventListener("online", resume);
+  window.addEventListener("pointerdown", catchUp, { passive: true });
+  window.addEventListener("keydown", catchUp);
+  window.addEventListener("scroll", catchUp, { passive: true, capture: true });
   document.addEventListener("visibilitychange", resume);
   return () => {
     stopped = true;
@@ -126,6 +145,9 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
     if (scheduled !== undefined) clearTimeout(scheduled);
     socket?.close();
     window.removeEventListener("online", resume);
+    window.removeEventListener("pointerdown", catchUp);
+    window.removeEventListener("keydown", catchUp);
+    window.removeEventListener("scroll", catchUp, true);
     document.removeEventListener("visibilitychange", resume);
   };
 }

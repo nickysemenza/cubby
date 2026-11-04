@@ -56,6 +56,8 @@ export const financialSpendingRequest = z.object({
   vendorId: vendorShortcode.optional(),
   reviewedVendorName: z.string().trim().min(1).optional(),
   spendingCategoryId: spendingCategoryShortcode.optional(),
+  /** Reviewed classification for a newly created aggregate; absence keeps source defaults. */
+  costType: z.enum(["materials", "tools", "services"]).optional(),
   categoryHistoryReviewed: z.boolean().optional(),
   rejectedPurchaseIds: z.array(purchaseShortcode).default([]),
 });

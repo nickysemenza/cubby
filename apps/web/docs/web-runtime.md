@@ -354,9 +354,14 @@ while the browser tab is hidden.
 
 This replaces fixed post-mutation refresh timers. Delivery is best-effort: a Worker
 can die after commit but before publishing, or a change can precede subscription.
-A continuously open page may then remain stale indefinitely; this is accepted
-display behavior. There are no durable change counters or periodic recovery
-checks. Notifications that clear pending or failed work still matter even when
+A visible page catches up on the next pointer, keyboard or scroll interaction
+once a minute has elapsed since its last full synchronization. Scoped rings do
+not postpone that catch-up, because they cannot account for unrelated lost hints.
+Reconnect and app resume still synchronize immediately. An idle page issues no
+recovery reads and can retain an older display until use resumes; there are no
+durable change counters or periodic database checks. These are client-cache
+synchronizations, not proof that background computation has completed or that
+a published result is fresh. Notifications that clear pending or failed work still matter even when
 the displayed value is unchanged. Notification failures are logged separately
 and never make an accepted save fail. Existing workflow progress polling remains
 owned by its workflow. Strong reads observe the latest publication; they never

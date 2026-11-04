@@ -1231,6 +1231,7 @@ async function discoverSpendingEvidence(
     reviewedSelection: {
       vendorId: request.vendorId,
       categoryHistoryReviewed: request.categoryHistoryReviewed,
+      ...(request.costType === undefined ? {} : { costType: request.costType }),
       purchaseId: request.purchaseId,
       rejectedPurchaseIds: [...request.rejectedPurchaseIds].sort(),
     },
@@ -1608,6 +1609,10 @@ async function prepareReadySpending(
       }
     }
   }
+  if (basis.request.costType !== undefined && effect !== "create_aggregate")
+    return review(
+      "Cost type applies only to a new aggregate Expense; preserve existing spending classification.",
+    );
   return financialSpendingPlan.parse({
     ...basis,
     status: "ready",
@@ -1787,7 +1792,9 @@ export async function commitFinancialSpending(
           vendorId: resolved.row.shortcode,
           spendingCategoryId: fresh.spendingCategoryId,
           purchaserId: fresh.purchaserId,
-          costType: facts.source.kind === "fee" ? "services" : "materials",
+          costType:
+            fresh.request.costType ??
+            (facts.source.kind === "fee" ? "services" : "materials"),
         }),
         actor,
       );

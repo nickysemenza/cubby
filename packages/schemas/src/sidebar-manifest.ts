@@ -32,14 +32,9 @@ export const SIDEBAR_SECTIONS = [
         sfSymbol: "house",
       },
       {
-        label: "Activity",
+        label: "Work",
         route: "/activity",
         sfSymbol: "waveform.path.ecg",
-      },
-      {
-        label: "Work queue",
-        route: "/work-queue",
-        sfSymbol: "checklist",
       },
     ],
   },
