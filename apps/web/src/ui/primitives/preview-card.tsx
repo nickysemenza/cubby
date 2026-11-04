@@ -43,7 +43,7 @@ function PreviewCardContent({
         <PreviewCardPrimitive.Popup
           data-slot="preview-card-content"
           className={cn(
-            "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-[0.98] data-open:zoom-in-[0.98] origin-(--transform-origin) ease-cozy duration-(--brand-motion-standard) data-closed:duration-(--brand-motion-exit) data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-80 origin-(--transform-origin) rounded-none border border-[var(--border)] bg-popover p-3 text-popover-foreground text-xs outline-hidden duration-100",
+            "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-[0.98] data-open:zoom-in-[0.98] origin-(--transform-origin) ease-cozy duration-(--brand-motion-standard) data-closed:duration-(--brand-motion-exit) data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-80 origin-(--transform-origin) rounded-none border border-[var(--border)] bg-popover p-3 text-popover-foreground text-xs outline-hidden",
             className,
           )}
           {...props}

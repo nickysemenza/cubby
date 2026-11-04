@@ -4,7 +4,7 @@ import { cn } from "~/lib/utils";
 import { popoverElevationClassName } from "~/ui/primitives/popover-elevation";
 
 const menuPopupClass = cn(
-  "origin-(--transform-origin) duration-(--brand-motion-standard) ease-cozy data-closed:duration-(--brand-motion-exit) data-open:zoom-in-[0.98] data-closed:zoom-out-[0.98] data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1 border-[var(--border)] bg-popover text-popover-foreground z-50 max-h-(--available-height) w-(--anchor-width) min-w-32 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg border p-1 duration-150 outline-none data-closed:overflow-hidden",
+  "origin-(--transform-origin) duration-(--brand-motion-standard) ease-cozy data-closed:duration-(--brand-motion-exit) data-open:zoom-in-[0.98] data-closed:zoom-out-[0.98] data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1 border-[var(--border)] bg-popover text-popover-foreground z-50 max-h-(--available-height) w-(--anchor-width) min-w-32 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg border p-1 outline-none data-closed:overflow-hidden",
   popoverElevationClassName,
 );
 const menuItemClass =
