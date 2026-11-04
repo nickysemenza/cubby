@@ -348,8 +348,12 @@ function DevtoolsWrapper() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  // Hosted Apple workspaces keep their shipped look and density (styles.css).
+  const nativeWorkspace = Route.useSearch({
+    select: (search) => search.nativeWorkspace,
+  });
   return (
-    <html lang="en">
+    <html lang="en" data-native-workspace={nativeWorkspace}>
       <head>
         <HeadContent />
       </head>

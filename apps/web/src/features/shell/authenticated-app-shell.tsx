@@ -256,7 +256,7 @@ function WorkspaceSidebar({
           <img src={LOGO_SRC} alt="" className="size-5 shrink-0" />
           {expanded && (
             <span className="hidden truncate font-heading text-base font-semibold tracking-tight lg:block">
-              cubby
+              Cubby
             </span>
           )}
         </Link>
@@ -511,7 +511,7 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
     <Link
       {...navItemLinkProps(item, active)}
       className={cn(
-        "flex h-7 min-w-0 items-center gap-2 rounded-lg px-2 text-sm transition-colors hover:bg-black/[0.04] hover:text-foreground-strong",
+        "flex h-(--nav-row-height) min-w-0 items-center gap-2 rounded-lg px-2 text-sm transition-colors hover:bg-black/[0.04] hover:text-foreground-strong",
         active && ["font-medium text-foreground-strong", navActiveClass(item)],
       )}
     >

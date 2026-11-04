@@ -676,7 +676,10 @@ export function IndexedSections({
             onSelect={selectSection}
             onFocusTarget={focusTarget}
           />
-          <div ref={bodyRef} className="min-w-0 flex-1 space-y-5 text-sm">
+          <div
+            ref={bodyRef}
+            className="min-w-0 flex-1 space-y-(--section-gap) text-sm"
+          >
             {lead}
             {groups.map((group) => (
               <div
@@ -689,7 +692,7 @@ export function IndexedSections({
                 <h2 className="text-xs font-medium text-muted-foreground">
                   {group.title}
                 </h2>
-                <div className="space-y-5">
+                <div className="space-y-(--section-gap)">
                   <SectionStack sections={group.sections} />
                 </div>
               </div>

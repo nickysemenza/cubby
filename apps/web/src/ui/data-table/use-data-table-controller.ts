@@ -146,9 +146,9 @@ export function useDataTableController<TItem extends RowData>({
   });
 
   const styles = {
-    table: "border-separate border-spacing-0 text-sm leading-5 tabular-nums",
+    table: "border-separate border-spacing-0 text-sm leading-4 tabular-nums",
     header:
-      "h-8 overflow-hidden border-hairline-strong border-b bg-card px-2 py-0 font-medium text-xs text-muted-foreground",
+      "h-(--table-header-height) overflow-hidden border-hairline-strong border-b bg-card px-2 py-0 font-medium text-xs text-muted-foreground",
     cell: cn(
       dConfig.cellClass,
       // text-ellipsis gives every plain-text cell a real "…" instead of a
