@@ -297,6 +297,10 @@ can report each basis it actually visits before comparing fingerprints, includin
 stale candidates, so publication can collect inputs without a second capture.
 Skipped competitors produce no observation; this is not proof of a complete
 component dependency set.
+Tag propagation retains hashed source and donor Product shortcodes before its
+freshness filter. Its capture must observe `updatedAt` as well as tags, deletion
+and shortcode changes, because the canonical donor revision includes that stamp.
+The normal updatedAt-only capture suppression cannot be used for this input.
 
 ## Cutover preservation
 

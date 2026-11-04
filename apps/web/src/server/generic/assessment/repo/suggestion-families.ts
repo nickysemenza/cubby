@@ -646,7 +646,7 @@ const connectionActions = (proposal: ConnectionProposal): Action[] => {
 const READ_BATCH = 250;
 
 const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
-  keys: async (db, query) => {
+  keys: async (db, query, observeInputs) => {
     const { filters, records } = query;
     if (filters.status !== "pending") return [];
     if (records?.length === 0) return [];
@@ -711,7 +711,10 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         },
       ];
     });
-    return [...connectionKeys, ...(await tagSuggestionKeys(db, query))];
+    return [
+      ...connectionKeys,
+      ...(await tagSuggestionKeys(db, query, observeInputs)),
+    ];
   },
   rows: async (db, keys) => {
     if (!keys.length) return new Map();

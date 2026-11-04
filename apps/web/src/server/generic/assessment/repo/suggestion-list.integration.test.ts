@@ -32,6 +32,7 @@ import {
   assessmentReadDependency,
   financialTransactionAllocation,
   financialTransaction,
+  product as productTable,
   sourceTransactionRecord,
   transactionImport,
 } from "~/server/db/schema";
@@ -91,6 +92,10 @@ import {
   suggestionRecordCounts,
   suggestionCountsByFamily,
 } from "./suggestion-list";
+import {
+  prepareTagSuggestionPublication,
+  tagSourceRevision,
+} from "./tag-suggestions";
 
 type Ctx = ReturnType<typeof withTestDb>;
 
@@ -1126,6 +1131,55 @@ describe("cross-family Suggestion list", () => {
     expect(
       (await headers()).some((row) => row.assessmentId === confident),
     ).toBe(true);
+    const donors = [];
+    for (let index = 0; index < 3; index++)
+      donors.push(
+        await createProductFixture(
+          ctx.db,
+          makeProductInput({
+            name: `Synthetic tag donor ${index}`,
+            tags: ["synthetic-shared"],
+          }),
+          ctx.actor,
+        ),
+      );
+    const revision = await tagSourceRevision(ctx.db, product.id);
+    if (!revision) throw new Error("Synthetic tag source missing");
+    const publishTag = await prepareTagSuggestionPublication(
+      ctx.db,
+      product.id,
+      {
+        tag: "synthetic-shared",
+        supportingProductCount: 3,
+        supportingProductIds: donors.map((donor) => donor.id),
+      },
+      revision,
+    );
+    if (!publishTag) throw new Error("Synthetic tag preparation missing");
+    const tag = await publishTag(ctx.db);
+    if (!tag) throw new Error("Synthetic tag publication missing");
+    const beforeTagEdit = await prepareSuggestionAdmission(ctx.db, [
+      tag.assessmentId,
+    ]);
+    expect(beforeTagEdit.keys).toHaveLength(1);
+    expect(beforeTagEdit.dependencies.get(tag.assessmentId)).toHaveLength(4);
+    expect(
+      beforeTagEdit.dependencies
+        .get(tag.assessmentId)
+        ?.every(
+          (input) =>
+            input.sourceKind === assessmentReadScopedSourceKind.enum.tagProduct,
+        ),
+    ).toBe(true);
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ updatedAt: sql`${productTable.updatedAt} + interval '1 second'` })
+      .where(eq(productTable.id, donors[0]!.entityId));
+    const afterTagEdit = await prepareSuggestionAdmission(ctx.db, [
+      tag.assessmentId,
+    ]);
+    expect(afterTagEdit.keys).toEqual([]);
+    expect(afterTagEdit.dependencies).toEqual(beforeTagEdit.dependencies);
   });
 
   // Reference pruning must retain both endpoints and mixed scopes without

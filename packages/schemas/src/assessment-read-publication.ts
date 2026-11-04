@@ -99,6 +99,7 @@ export const assessmentReadScopedSourceKind = z.enum({
   statementCharge: "assessment.statementCharge",
   statementRef: "assessment.statementRef",
   referenceCode: "assessment.referenceCode",
+  tagProduct: "assessment.tagProduct",
 });
 
 /** An exact observed ticket, not a sequence-number watermark or an authority. */
