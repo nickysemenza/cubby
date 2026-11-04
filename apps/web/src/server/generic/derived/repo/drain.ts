@@ -788,15 +788,21 @@ export async function publishDerivedChunk(
         );
       const ids = row?.blocked ? [] : group.map((item) => item.ref);
       // Sinks reuse repository writers, which take the Database handle.
-      changedIds = ids.length
+      const outcome = ids.length
         ? await sink.sink.publish(db, ids, sink.prepared, {
+            tickets: new Map(group.map((item) => [item.ref, item.ticket])),
             notify: (entity, refs) => {
               // An empty set would still ring the entity's whole category.
               if (refs.length) touched.add(entity, refs);
             },
           })
         : [];
-      publishedIds = new Set(ids);
+      const retainedIds = new Set("retain" in outcome ? outcome.retain : []);
+      const heldIds = new Set(ids);
+      if ([...retainedIds].some((id) => !heldIds.has(id)))
+        throw new Error("Derived sink retained an unclaimed source");
+      changedIds = "changed" in outcome ? outcome.changed : outcome;
+      publishedIds = new Set(ids.filter((id) => !retainedIds.has(id)));
     } else {
       changedIds = values.changed.get(target) ?? [];
       publishedIds = new Set(values.published.get(target) ?? []);

@@ -3031,6 +3031,12 @@ An internal record's refs are source IDs, not entity IDs, so
 publication. The sink calls
 `publication.notify(entity, ids)` for each old and new entity its publication
 changed. Those refs join the chunk's bounded ring and commit with its transaction.
+A sink can return `{ changed, retain }` to commit staged output while leaving
+the named held sources owed. Retention preserves their tickets and attempts;
+it does not create another queue. `publication.tickets` identifies the exact
+held invalidation generations for staging. It grants no authority beyond the
+existing source, ticket, fanout and Job-lease fences. Staged rows must remain
+invisible until their complete publication can activate atomically.
 
 Product reads use the stored `readFacts` publication for pricing, quantity ledger,
 placement and ownership evidence, and `food` for food summaries. Their field

@@ -115,12 +115,20 @@ export const sharedDerivedPreparation =
 
 /** One sink publication's reader notification, committed with its transaction. */
 export interface DerivedSinkPublication {
+  /** Exact held tickets; staged output must belong to this invalidation generation. */
+  readonly tickets: ReadonlyMap<string, number>;
   /**
    * Ring these entity records through the drain's bounded publication. An
    * internal record's refs are not entity ids, so its sink names the old and
    * new entities each change affected.
    */
   notify(entity: Entity, ids: readonly string[]): void;
+}
+
+/** Staging may commit while its original source work stays owed without an attempt. */
+export interface DerivedSinkContinuation {
+  readonly changed: readonly string[];
+  readonly retain: readonly string[];
 }
 
 /**
@@ -139,7 +147,7 @@ export interface DerivedSink<Prepared = unknown> {
     ids: readonly string[],
     prepared: Prepared,
     publication: DerivedSinkPublication,
-  ): Promise<readonly string[]>;
+  ): Promise<readonly string[] | DerivedSinkContinuation>;
 }
 
 export type DerivedAdapter = DerivedCompute | DerivedSink;

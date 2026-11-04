@@ -493,7 +493,7 @@ describe("stored derived values", () => {
     }
   });
 
-  it("publishes a record-writing sink without waiting on a member's open save", async () => {
+  it("retains a record-writing sink across locked saves and staged publication", async () => {
     const dish = await seedEntity(ctx.db, "recipe", {
       name: "Synthetic locked dish",
     });
@@ -539,6 +539,38 @@ describe("stored derived values", () => {
     release();
     await memberSave;
     await drain();
+    expect(await marks("recipe.totals")).toEqual([]);
+
+    await getDb(ctx.db).execute(
+      sql`SELECT derived_mark('recipe.totals', ARRAY[${recipeId}::uuid])`,
+    );
+    const [before] = await workItemStates(ctx.db, "recipe.totals", [recipeId]);
+    if (!before) throw new Error("Synthetic sink mark missing");
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target === "recipe.totals",
+      computes: {
+        ...derivedComputes,
+        "recipe.totals": derivedSink({
+          prepare: async () => null,
+          publish: async (_tx, ids, _prepared, publication) => {
+            expect(publication.tickets.get(recipeId)).toBe(before.ticket);
+            return { changed: [], retain: ids };
+          },
+        }),
+      },
+    });
+    const [retained] = await workItemStates(ctx.db, "recipe.totals", [
+      recipeId,
+    ]);
+    expect(retained).toMatchObject({
+      ticket: before.ticket,
+      attempts: before.attempts,
+      priority: before.priority,
+    });
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target === "recipe.totals",
+      computes: rowWriting,
+    });
     expect(await marks("recipe.totals")).toEqual([]);
   });
 
