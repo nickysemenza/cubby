@@ -51,7 +51,12 @@ export type RunWorkProgress = z.infer<typeof runWorkProgress>;
 /** An observed range, not a statistical confidence interval or completion promise. */
 export function runWorkEstimate(sample: RunWorkSample) {
   const intervals = sample.intervals ?? [];
-  if (intervals.length < 3 || sample.total === null || sample.finished)
+  if (
+    intervals.length < 3 ||
+    sample.total === null ||
+    sample.processed >= sample.total ||
+    sample.finished
+  )
     return null;
   const secondsPerItem = intervals.map(
     ({ processed, elapsedMs }) => elapsedMs / processed / 1000,

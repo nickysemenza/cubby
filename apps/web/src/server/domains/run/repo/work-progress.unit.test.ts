@@ -90,7 +90,14 @@ describe("Run ETA observations", () => {
       30,
       3000,
     );
-    expect(runWorkEstimate({ ...third.current, total: null })).toBeNull();
+    for (const total of [null, 30, 29]) {
+      const unknown = { ...third.current, total };
+      expect(runWorkEstimate(unknown)).toBeNull();
+      expect(
+        readRunWorkPhase(unknown, "running", new Date(start.getTime() + 3000))
+          .etaSeconds,
+      ).toBeNull();
+    }
     expect(
       sampleRunWork(
         third,

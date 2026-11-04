@@ -897,7 +897,11 @@ more than threefold variation, otherwise moderate; this is an observed range,
 not a statistical confidence interval. A cheap latest page cannot replace the
 other observed durations. Phase changes and retry resets clear observations;
 old samples without interval history, unknown input totals, stale progress,
-pauses and capacity waits do not produce a current ETA. Later steps without
+pauses and capacity waits do not produce a current ETA.
+An unfinished phase whose processed count reaches or exceeds its initial total
+also has no remaining-work estimate. Preserve its recorded counts and require
+the phase's completion signal; an exhausted estimate does not prove completion.
+Later steps without
 estimates keep the overall ETA unknown rather than inheriting the current
 step's pace. No blended overall percentage is inferred from different inputs.
 
