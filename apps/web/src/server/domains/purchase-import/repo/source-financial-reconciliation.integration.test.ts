@@ -5,6 +5,7 @@ import {
   type ExtractedOrderCandidate,
 } from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -17,6 +18,7 @@ import {
   importSourceClaim,
   importSourceOrder,
   importSourceProduct,
+  inventoryEntry,
   purchase,
   purchasePaymentEvidence,
   sourceOrderObservation,
@@ -1308,7 +1310,7 @@ describe("accepted source financial reconciliation", () => {
     );
   });
 
-  it("reuses an unlinked item Expense after explicit review without adding spending", async () => {
+  it("reviews orphan spending and preserves disposals when importing a later purchase", async () => {
     const { database } = await world();
     const good = await createProductIdentityFixture(
       ctx.db,
@@ -1393,6 +1395,86 @@ describe("accepted source financial reconciliation", () => {
       productId: good.entityId,
       purchaseId: finding!.entityId,
     });
+
+    const { output: disposal } = await createRepoEntity(ctx, "expense", {
+      name: "Discarded synthetic pass",
+      notes: "Member recorded the old item as discarded.",
+      cost: 0,
+      costType: "materials",
+      date: "2026-09-15",
+      productId: good.id,
+      productQuantity: -1,
+      lineKind: "principal",
+      lineBasis: "item_line",
+      trade: "other",
+    });
+    const [disposalBefore] = await database
+      .select()
+      .from(expense)
+      .where(eq(expense.shortcode, disposal.id));
+    const inventoryBefore = await database.select().from(inventoryEntry);
+    const { output: header } = await createRepoEntity(ctx, "purchase", {
+      vendorId: seller.shortcode,
+      orderId: "SYNTHETIC-PASS-3",
+      date: "2026-10-01",
+      statedTotal: 40,
+      notes: "Synthetic retained header note",
+      defaultTrade: "other",
+    });
+    const repurchase = await memberImport(ctx.db, ctx.actor, {
+      key: "unlinked-pass-repurchase",
+      orders: [
+        {
+          stableOrderId: "unlinked-pass-repurchase",
+          vendorId: seller.shortcode,
+          targetPurchaseId: header.id,
+          source: {
+            kind: "vendor_export",
+            externalKey: "synthetic:unlinked:pass:repurchase",
+            checksum: "9".repeat(64),
+          },
+          extraction: {
+            status: "ready",
+            candidate: {
+              ...candidate,
+              orderId: "SYNTHETIC-PASS-3",
+              orderedAt: "2026-10-01",
+              payments: [],
+            },
+          },
+          resolutions: [{ kind: "existing", productId: good.id }],
+        },
+      ],
+    });
+    expect(repurchase.committed.items[0]).toMatchObject({
+      outcome: "updated",
+      purchaseId: header.id,
+      findingCount: 0,
+    });
+    const [laterPurchase] = await database
+      .select()
+      .from(purchase)
+      .where(eq(purchase.shortcode, header.id));
+    expect(laterPurchase).toMatchObject({
+      date: "2026-10-01",
+      statedTotal: 40,
+      notes: "Synthetic retained header note",
+    });
+    expect(
+      await database
+        .select()
+        .from(expense)
+        .where(eq(expense.purchaseId, laterPurchase!.id)),
+    ).toMatchObject([{ cost: 40, productId: good.entityId }]);
+    expect(
+      await database
+        .select()
+        .from(expense)
+        .where(eq(expense.shortcode, disposal.id)),
+    ).toEqual([disposalBefore]);
+    expect(await database.select().from(inventoryEntry)).toEqual(
+      inventoryBefore,
+    );
   });
 
   it("replays the original accepted checksum after a refused refresh", async () => {

@@ -1009,6 +1009,16 @@ Historical descriptor spelling and reference strings remain retained. New
 normalization must preserve complete masks; a changed descriptor is not grounds
 to rewrite accepted transaction identity or an old observation.
 
+### Unlinked spending and ownership exits
+
+An unlinked principal vendor Expense for a selected Product requires explicit
+source reconciliation before new itemization. A zero-cost entry with negative
+Product quantity records an ownership exit rather than an acquisition; it does
+not by itself block a later purchase. Preserve that disposal's quantity, date,
+notes and unlinked state while importing the new order's own spending. Unknown
+cost or quantity and all other unlinked entries retain the review guard. Neither
+this distinction nor receipt import receives stock or reuses the disposal.
+
 ### Foreign receipt itemization with USD accounting
 
 A complete non-USD purchase retains its literal currency, descriptions, amounts,

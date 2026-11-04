@@ -60,6 +60,7 @@ import {
   type ExternalIdPair,
 } from "~/server/domains/product/repo/find-by-external-ids";
 import { upsertAgentProductMatch } from "~/server/domains/product/repo/match/product-match-candidate";
+import { zeroCostOwnershipExitExpensePredicate } from "~/server/domains/product/repo/ownership";
 import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
 import {
   findExactProductNameMatches,
@@ -1731,6 +1732,8 @@ export async function importVendorOrder(
               inArray(expense.productId, knownProducts),
               eq(expense.lineKind, "principal"),
               eq(expense.economicRole, "vendor"),
+              // Unknown values still require review; only a proven discard is excluded.
+              sql`${zeroCostOwnershipExitExpensePredicate()} IS NOT TRUE`,
               notDeleted(expense),
             ),
           )

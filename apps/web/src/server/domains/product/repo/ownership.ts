@@ -53,6 +53,10 @@ export const disposalPurchaseIds = () =>
     .groupBy(expense.purchaseId)
     .having(sql`sum(${expense.cost}) < 0`);
 
+/** A zero-cost negative quantity records an ownership exit, not an acquisition. */
+export const zeroCostOwnershipExitExpensePredicate = (): SQL =>
+  and(eq(expense.cost, 0), lt(expense.productQuantity, 0))!;
+
 /**
  * Expenses that close ownership for the stale-stock detector.
  *
@@ -68,7 +72,7 @@ export const ownershipExitExpensePredicate = (): SQL =>
       lt(expense.cost, 0),
       inArray(expense.purchaseId, disposalPurchaseIds()),
     ),
-    and(eq(expense.cost, 0), lt(expense.productQuantity, 0)),
+    zeroCostOwnershipExitExpensePredicate(),
   )!;
 
 type OwnershipLoadOptions = {
