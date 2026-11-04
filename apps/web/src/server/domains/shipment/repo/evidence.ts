@@ -22,6 +22,7 @@ import {
 import {
   shipmentPurpose,
   SHIPMENT_IDENTITY_PERIOD_DAYS,
+  type ShipmentExtraTrackingNumberRemovals,
   type ShipmentPurpose,
 } from "@cubby/schemas/shipment-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -85,7 +86,10 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
-import { deduplicateShipmentTrackingReferences } from "./carrier-references";
+import {
+  deduplicateShipmentTrackingReferences,
+  shipmentTrackingReferenceKey,
+} from "./carrier-references";
 
 const refuse = (message: string): never => {
   throw createAppError("CONSTRAINT_VIOLATION", message);
@@ -1868,7 +1872,7 @@ export async function editShipmentReferences(
   input: {
     shipmentId: ShortcodeFor<"shipment">;
     carrierId?: ShortcodeFor<"vendor"> | null;
-    extraTrackingNumbers?: (typeof shipment.$inferSelect)["extraTrackingNumbers"];
+    extraTrackingNumbers?: ShipmentExtraTrackingNumberRemovals;
   },
   actor: ActorContext,
 ) {
@@ -1883,22 +1887,21 @@ export async function editShipmentReferences(
       input.carrierId === undefined
         ? row.carrierId
         : (await carrierReference(tdb, input.carrierId, null)).id;
-    const referenceKey = (ref: {
-      trackingNumber: string;
-      carrierId: unknown;
-    }) => JSON.stringify([normalizeNumber(ref.trackingNumber), ref.carrierId]);
-    const submitted = new Set(
-      (input.extraTrackingNumbers ?? row.extraTrackingNumbers).map(
-        referenceKey,
-      ),
-    );
     // Removal is a member decision; only source intake can establish a new reference
     // and its identity checks. A carrier edit alone removes no distinct reference.
-    const current = new Set(row.extraTrackingNumbers.map(referenceKey));
-    if ([...submitted].some((key) => !current.has(key)))
-      return refuse(
-        "This edit can only remove extra tracking references; new references come from source intake.",
-      );
+    const current = new Set(
+      row.extraTrackingNumbers.map(shipmentTrackingReferenceKey),
+    );
+    const removed = new Set<string>();
+    for (const { key } of input.extraTrackingNumbers ?? []) {
+      const identity = shipmentTrackingReferenceKey(key);
+      if (!current.has(identity))
+        throw createAppError(
+          "COLLECTION_PATCH_PRECONDITION_FAILED",
+          `Shipment extraTrackingNumbers has no "${key.trackingNumber}" under carrier ${key.carrierId ?? "unknown"} to remove; nothing changed.`,
+        );
+      removed.add(identity);
+    }
     // A reference the new primary covers is no longer a separate handoff, and the
     // replaced carrier is not retained as one.
     const extraTrackingNumbers = await deduplicateShipmentTrackingReferences(
@@ -1906,11 +1909,27 @@ export async function editShipmentReferences(
       {
         trackingNumber: row.trackingNumber,
         carrierId,
-        extraTrackingNumbers: row.extraTrackingNumbers.filter((ref) =>
-          submitted.has(referenceKey(ref)),
+        extraTrackingNumbers: row.extraTrackingNumbers.filter(
+          (ref) => !removed.has(shipmentTrackingReferenceKey(ref)),
         ),
       },
     );
+    const changes = {
+      ...(carrierId === row.carrierId
+        ? {}
+        : { carrierId: { from: row.carrierId, to: carrierId } }),
+      ...(canonical(extraTrackingNumbers) ===
+      canonical(row.extraTrackingNumbers)
+        ? {}
+        : {
+            extraTrackingNumbers: {
+              from: row.extraTrackingNumbers,
+              to: extraTrackingNumbers,
+            },
+          }),
+    };
+    const shipmentId = parseShortcodeFor("shipment", row.shortcode);
+    if (!Object.keys(changes).length) return { shipmentId };
     await getDb(tdb)
       .update(shipment)
       .set({ carrierId, extraTrackingNumbers })
@@ -1920,23 +1939,10 @@ export async function editShipmentReferences(
         entityKind: "shipment",
         entityId: row.id,
         action: "update",
-        changes: {
-          ...(input.carrierId === undefined
-            ? {}
-            : { carrierId: { from: row.carrierId, to: carrierId } }),
-          ...(canonical(extraTrackingNumbers) ===
-          canonical(row.extraTrackingNumbers)
-            ? {}
-            : {
-                extraTrackingNumbers: {
-                  from: row.extraTrackingNumbers,
-                  to: extraTrackingNumbers,
-                },
-              }),
-        },
+        changes,
       },
     ]);
     await recordChange(tdb, { kind: "source", categories: ["shipment"] });
-    return { shipmentId: parseShortcodeFor("shipment", row.shortcode) };
+    return { shipmentId };
   });
 }

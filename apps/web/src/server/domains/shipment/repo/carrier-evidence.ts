@@ -120,15 +120,15 @@ type CarrierSourceEvidence = Pick<MailReadContent, "links"> & {
 const deliveryLabel =
   /(?<![\p{L}\p{N}_-])(?:Delivery|DELIVERY|delivery)\s*:\s*([A-Z0-9]{2,6})/u
     .source;
-const deliveryField = new RegExp(
-  `${deliveryLabel}(?=\\s*(?:$|[;,.|·]))`,
-  "gmu",
-);
 // Compaction can collapse lines, so a field already found elsewhere may run into later text.
 const deliveryMention = new RegExp(
   `${deliveryLabel}(?![\\p{L}\\p{N}_-])`,
   "gu",
 );
+// The value ends at its line, a separator, a table column or the next labeled field.
+// Any other trailing word, as in "ZQX Ground", may be carrier wording.
+const deliveryFieldEnd =
+  /^(?:[^\S\n]*(?:\n|$|[;,.|·\t])|\s+(?:(?:tracking|order)(?:\s*(?:number|no\.?|id))?\s*[:#]|trk\s*#|(?:carrier|status)\s*:))/i;
 
 /** Codes a source prints only as a "Delivery:" field value. A merchant can print one
  * code beside parcels of different carriers, so it names no carrier and must never
@@ -144,8 +144,11 @@ export function deliveryFieldCodes(
   return new Set(
     prose
       .flatMap((text) =>
-        [...text.matchAll(deliveryField)].flatMap(([, code]) =>
-          code ? [code] : [],
+        [...text.matchAll(deliveryMention)].flatMap((match) =>
+          match[1] &&
+          deliveryFieldEnd.test(text.slice(match.index + match[0].length))
+            ? [match[1]]
+            : [],
         ),
       )
       .filter(

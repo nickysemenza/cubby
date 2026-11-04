@@ -115,9 +115,9 @@ to correct contradictions. Missing or ambiguous identity stays unknown. Manual e
 are ordinary values; there is no separate assignment-ownership or receipt layer.
 Merchant, broker and label-service names belong to intermediary claims unless
 the source identifies them as the actual carrier. Preserve explicit handoffs.
-A short code in a merchant `Delivery:` field, such as `Delivery: XYZ`, is delivery
-wording, not a carrier: leave `carrierName` and `carrierId` null unless the source
-separately names the carrier.
+A short code in a merchant `Delivery:` field, such as `Delivery: XYZ` or
+`Delivery: XYZ Tracking ID: 123`, is delivery wording, not a carrier: leave
+`carrierName` and `carrierId` null unless the source separately names the carrier.
 UPS supports 12-digit numbers; shape alone never establishes or excludes a
 carrier. Supply
 an explicit carrier reference only when the literal name matches that Vendor or

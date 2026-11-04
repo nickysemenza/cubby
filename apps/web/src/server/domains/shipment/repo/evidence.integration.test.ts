@@ -1,8 +1,10 @@
+import type { ShipmentUpdateData } from "@cubby/schemas/entities/shipment";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   RecordShipmentEvidenceInput,
   ShipmentEvidence,
 } from "@cubby/schemas/shipment-evidence";
+import type { ShipmentExtraTrackingNumberRemovals } from "@cubby/schemas/shipment-fields";
 import { testUserId } from "@cubby/schemas/testing";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
@@ -2761,36 +2763,180 @@ describe("Shipment retained evidence", () => {
       "Delivery: ZQX Ground",
       "Delivery: FREE\nFREE returns",
       "Estimated delivery Sun, Jul 21",
+      "Delivery: ZQX Tracking",
+      "Delivery: ZQX Tracking ID: 1\nCarrier: ZQX Tracking ID: 1",
     ])
       expect(deliveryFieldCodes({ texts: [text] })).toEqual(new Set());
-    expect(
-      deliveryFieldCodes({
-        texts: ["Delivery: ZQX; https://example.test/zqx/track"],
-      }),
-    ).toEqual(new Set(["ZQX"]));
+    for (const text of [
+      "Delivery: ZQX; https://example.test/zqx/track",
+      "Delivery:\tZQX\tTracking",
+      "Delivery: ZQX Tracking ID: 1",
+      "Delivery: ZQX tracking #1",
+      "Delivery: ZQX Trk # 1",
+      "Delivery: ZQX Carrier: Synthetic Actual Carrier",
+      "Delivery: ZQX Order #1",
+      "Delivery: ZQX Status: Shipped",
+    ])
+      expect(deliveryFieldCodes({ texts: [text] })).toEqual(new Set(["ZQX"]));
+
+    // A field ended by the next label or column clears the hint, not a handoff.
+    const tabbed = "EXAMPLE-CODE-TABBED";
+    const tabbedCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture(
+          "delivery-tabbed",
+          [
+            {
+              ...hinted(tabbed, { carrierId: null, carrierName: "ZQX" }),
+              extraTrackingNumbers: [
+                {
+                  carrierId: actual.output.id,
+                  carrierName: "Synthetic Actual Carrier",
+                  trackingNumber: "EXAMPLE-CODE-TABBED-HANDOFF",
+                },
+              ],
+            },
+          ],
+          undefined,
+          `Delivery:\tZQX\tTracking ID: ${tabbed}`,
+        ),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    expect(await carrierOf(tabbedCode)).toEqual({
+      carrierId: null,
+      extras: [
+        {
+          carrierId: actual.output.id,
+          carrierName: "Synthetic Actual Carrier",
+          trackingNumber: "EXAMPLE-CODE-TABBED-HANDOFF",
+        },
+      ],
+    });
+    const inline = "EXAMPLE-CODE-INLINE";
+    const inlineCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture(
+          "delivery-inline",
+          [hinted(inline, { carrierId: null, carrierName: "ZQX" })],
+          undefined,
+          `Delivery: ZQX Tracking ID: ${inline}`,
+        ),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    expect((await carrierOf(inlineCode))?.carrierId).toBeNull();
+    const inlineLabeled = "EXAMPLE-CODE-INLINE-LABELED";
+    const inlineLabeledCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture(
+          "delivery-inline-labeled",
+          [hinted(inlineLabeled, { carrierId: null, carrierName: "ZQX" })],
+          undefined,
+          `Carrier: ZQX Tracking ID: ${inlineLabeled}\nDelivery: ZQX Tracking ID: ${inlineLabeled}`,
+        ),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    expect((await carrierOf(inlineLabeledCode))?.carrierId).not.toBeNull();
+
+    // A known carrier's name alone in the field stays unknown until a label names it.
+    await createRepoIdentity(ctx, "vendor", { name: "UPS" });
+    const named = "EXAMPLE-CODE-NAMED";
+    const namedCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture(
+          "delivery-named",
+          [hinted(named, { carrierId: null, carrierName: "UPS" })],
+          undefined,
+          `Tracking ID: ${named}\nDelivery: UPS`,
+        ),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    expect((await carrierOf(namedCode))?.carrierId).toBeNull();
+
+    // Re-extraction dropping the hint changes the fallback key, not the binding.
+    for (const [key, sourceEventKey] of [
+      ["keyed", "scan-one"],
+      ["keyless", null],
+    ] as const) {
+      const fresh = `EXAMPLE-CODE-FRESH-${key.toUpperCase()}`;
+      const extraction = (
+        hint: Pick<ShipmentEvidence, "carrierId" | "carrierName">,
+      ) => {
+        const base = hinted(fresh, hint);
+        return capture(
+          `delivery-fresh-${key}`,
+          [
+            {
+              ...base,
+              observations: base.observations.map((observation) => ({
+                ...observation,
+                sourceEventKey,
+              })),
+            },
+          ],
+          undefined,
+          `Tracking ID: ${fresh}\nDelivery: ZQX`,
+        );
+      };
+      const first = await recordShipmentEvidence(
+        ctx.db,
+        extraction({ carrierId: null, carrierName: "ZQX" }),
+        ctx.actor,
+      );
+      const redone = await recordShipmentEvidence(
+        ctx.db,
+        extraction({ carrierId: null, carrierName: null }),
+        ctx.actor,
+      );
+      const [bound] = await getDb(ctx.db)
+        .select({ id: shipment.id })
+        .from(shipment)
+        .where(eq(shipment.shortcode, first.shipmentIds[0]!));
+      const bindings = await getDb(ctx.db)
+        .select({ packageKey: shipmentSourcePackage.packageKey })
+        .from(shipmentSourcePackage)
+        .where(eq(shipmentSourcePackage.shipmentId, bound!.id));
+      expect(redone).toMatchObject({
+        shipmentIds: first.shipmentIds,
+        unresolvedPackages: [],
+      });
+      expect(bindings).toEqual([{ packageKey: `ZQX:${fresh}` }]);
+      expect(
+        (await readShipmentTimeline(ctx.db, first.shipmentIds[0]!)).timeline,
+      ).toHaveLength(1);
+    }
   });
 
-  it("removes an extra reference only through an audited member correction", async () => {
+  it("removes an extra reference only through an audited, keyed member correction", async () => {
     await memberImportWorld(ctx.db, ctx.actor);
     const number = "EXAMPLE-EXTRA-EDIT";
     const falseCarrier = await createRepoIdentity(ctx, "vendor", {
-      name: "ZQY",
+      name: "SHP",
     });
     const handoff = await createRepoIdentity(ctx, "vendor", {
       name: "Synthetic Handoff Carrier",
     });
-    const source = capture(
-      "extra-edit",
-      [
-        {
-          ...packet(number),
-          sourceShipmentKey: null,
-          carrierName: "ZQY",
-        },
-      ],
-      undefined,
-      `Tracking ID: ${number}\nDelivery: ZQY`,
-    );
+    const hinted = (carrierName: string | null): ShipmentEvidence => {
+      const base = packet(number);
+      return {
+        ...base,
+        carrierName,
+        sourceShipmentKey: null,
+        observations: base.observations.map((observation) => ({
+          ...observation,
+          carrierName,
+        })),
+      };
+    };
+    const delivery = `Tracking ID: ${number}\nDelivery: SHP`;
+    const source = capture("extra-edit", [hinted("SHP")], undefined, delivery);
     const code = (await recordShipmentEvidence(ctx.db, source, ctx.actor))
       .shipmentIds[0]!;
     const falseExtra = {
@@ -2807,54 +2953,152 @@ describe("Shipment retained evidence", () => {
       .update(shipment)
       .set({ extraTrackingNumbers: [falseExtra, genuine] })
       .where(eq(shipment.shortcode, code));
-    const update = (
-      extraTrackingNumbers: (typeof genuine | typeof falseExtra)[],
-    ) =>
+    const read = async () => {
+      const [row] = await getDb(ctx.db)
+        .select({
+          id: shipment.id,
+          carrierId: shipment.carrierId,
+          purpose: shipment.purpose,
+          extras: shipment.extraTrackingNumbers,
+        })
+        .from(shipment)
+        .where(eq(shipment.shortcode, code));
+      const entries = await getDb(ctx.db)
+        .select({ changes: auditLog.changes })
+        .from(auditLog)
+        .where(eq(auditLog.entityId, row!.id));
+      return { ...row!, changes: entries.map(({ changes }) => changes) };
+    };
+    const update = (data: ShipmentUpdateData) =>
       executeEntity(buildKernelContext(ctx.db, ctx.actor.userId), {
         action: "update",
         entity: "shipment",
         id: code,
-        data: { extraTrackingNumbers },
+        data,
       });
+    const remove = (
+      ...keys: ShipmentExtraTrackingNumberRemovals[number]["key"][]
+    ) => keys.map((key) => ({ op: "remove" as const, key }));
+    const falseKey = {
+      trackingNumber: falseExtra.trackingNumber,
+      carrierId: falseExtra.carrierId,
+    };
 
-    await expect(
-      update([
-        genuine,
-        { ...genuine, trackingNumber: "EXAMPLE-EXTRA-INVENTED" },
-      ]),
-    ).rejects.toThrow("only remove extra tracking references");
-    await expect(
-      editShipmentReferences(
-        ctx.db,
-        {
-          shipmentId: parseShortcodeFor("shipment", code),
-          extraTrackingNumbers: [genuine],
-        },
-        { ...ctx.actor, channel: "system" },
+    // Source intake establishes this handoff after the member's client read the list.
+    const added = {
+      carrierId: handoff.output.id,
+      carrierName: "Synthetic Handoff Carrier",
+      trackingNumber: "EXAMPLE-EXTRA-ADDED",
+    };
+    await recordShipmentEvidence(
+      ctx.db,
+      capture(
+        "extra-added",
+        [{ ...hinted(null), extraTrackingNumbers: [added] }],
+        undefined,
+        `Tracking ID: ${number}`,
       ),
-    ).rejects.toThrow("interactive member request");
+      ctx.actor,
+    );
+    const concurrent = await read();
+    expect(concurrent.extras).toEqual([falseExtra, genuine, added]);
 
-    await update([genuine]);
-    await recordShipmentEvidence(ctx.db, source, ctx.actor);
-    const [row] = await getDb(ctx.db)
-      .select({
-        id: shipment.id,
-        carrierId: shipment.carrierId,
-        extras: shipment.extraTrackingNumbers,
-      })
-      .from(shipment)
-      .where(eq(shipment.shortcode, code));
-    expect(row).toMatchObject({ carrierId: null, extras: [genuine] });
-    const entries = await getDb(ctx.db)
-      .select({ changes: auditLog.changes })
-      .from(auditLog)
-      .where(eq(auditLog.entityId, row!.id));
-    expect(entries.map(({ changes }) => changes)).toContainEqual({
-      extraTrackingNumbers: {
-        from: [falseExtra, genuine],
-        to: [genuine],
-      },
+    // Replacement lists, additions and the bulk resolver cannot reach the writer.
+    for (const extraTrackingNumbers of [
+      [genuine],
+      [{ op: "add", key: falseKey }],
+      [{ op: "replace", key: falseKey, value: {} }],
+      [],
+    ])
+      await expect(
+        // @ts-expect-error The update contract accepts only keyed removals.
+        update({ extraTrackingNumbers }),
+      ).rejects.toThrow("extraTrackingNumbers");
+    await expect(
+      executeEntity(buildKernelContext(ctx.db, ctx.actor.userId), {
+        action: "bulkUpdate",
+        entity: "shipment",
+        ids: [code],
+        // @ts-expect-error The bulk contract omits this field.
+        data: { extraTrackingNumbers: remove(falseKey) },
+      }),
+    ).rejects.toThrow("extraTrackingNumbers");
+
+    for (const actor of [
+      { ...ctx.actor, channel: "system" as const },
+      { ...ctx.actor, runId: parseEntityId("run", crypto.randomUUID()) },
+    ])
+      await expect(
+        editShipmentReferences(
+          ctx.db,
+          {
+            shipmentId: parseShortcodeFor("shipment", code),
+            extraTrackingNumbers: [
+              {
+                op: "remove",
+                key: {
+                  trackingNumber: number,
+                  carrierId: falseCarrier.output.id,
+                },
+              },
+            ],
+          },
+          actor,
+        ),
+      ).rejects.toThrow("interactive member request");
+
+    // A missing key refuses the whole update, with its carrier and purpose edits.
+    for (const missing of [
+      { trackingNumber: "EXAMPLE-EXTRA-GONE", carrierId: null },
+      { trackingNumber: number, carrierId: handoff.output.id },
+    ])
+      await expect(
+        update({
+          purpose: "outgoing",
+          carrierId: handoff.output.id,
+          extraTrackingNumbers: remove(falseKey, missing),
+        }),
+      ).rejects.toThrow("nothing changed");
+    expect(await read()).toEqual(concurrent);
+
+    // A carrier edit that changes nothing leaves no audit row.
+    await update({ carrierId: null });
+    expect(await read()).toEqual(concurrent);
+
+    await update({
+      extraTrackingNumbers: remove({
+        ...falseKey,
+        trackingNumber: number.toLowerCase(),
+      }),
     });
+    const corrected = [genuine, added];
+    const removal = await read();
+    expect(removal.extras).toEqual(corrected);
+    expect(removal.changes).toEqual([
+      ...concurrent.changes,
+      {
+        extraTrackingNumbers: {
+          from: [falseExtra, genuine, added],
+          to: corrected,
+        },
+      },
+    ]);
+
+    // Neither retained nor fresh extraction of the Delivery field restores it.
+    await recordShipmentEvidence(ctx.db, source, ctx.actor);
+    await recordShipmentEvidence(
+      ctx.db,
+      capture("extra-edit", [hinted(null)], undefined, delivery),
+      ctx.actor,
+    );
+    expect(await read()).toMatchObject({
+      carrierId: null,
+      extras: corrected,
+      changes: removal.changes,
+    });
+    await expect(
+      update({ extraTrackingNumbers: remove(falseKey) }),
+    ).rejects.toThrow("nothing changed");
   });
 
   it("keeps explicit source package reassignment through subsequent replay", async () => {
