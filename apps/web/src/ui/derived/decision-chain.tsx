@@ -86,7 +86,10 @@ export function DecisionResult({
   useEntityMetadata(entity);
   const decision = fieldDecisionOf({ result });
   const labels = resolutionPolicyFor(queryClient, entity, field)?.labels;
-  const emptyLabel = fieldEmptyLabel({ result, work }, labels);
+  const emptyLabel =
+    result.kind === "missing" && work.kind !== "failed"
+      ? "Not published yet"
+      : fieldEmptyLabel({ result, work }, labels);
   if (emptyLabel !== null)
     return <span className="text-xs text-muted-foreground">{emptyLabel}</span>;
   if (!decision || decision.outcome.kind !== "value") return null;

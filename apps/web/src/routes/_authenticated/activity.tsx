@@ -120,7 +120,8 @@ function ActivityBody() {
   // Older diagnostic links supplied filters before Activity had named views.
   const active =
     search.tab ??
-    (search.lane ||
+    (search.refresh ||
+    search.lane ||
     search.reason ||
     search.state ||
     search.kind ||
