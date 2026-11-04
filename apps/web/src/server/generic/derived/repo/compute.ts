@@ -140,7 +140,19 @@ export interface DerivedSinkContinuation {
 export interface DerivedSink<Prepared = unknown> {
   readonly kind: "sink";
   readonly preparationBatchSize?: number;
+  /**
+   * An internal record's whole fanout selector: given source refs as one `id`
+   * column, its query returns current and retained target ids as `id`.
+   */
+  readonly fanoutSelections?: Readonly<Record<string, DerivedFanoutSelection>>;
   prepare(db: Database, ids: readonly string[]): Promise<Prepared>;
+  /**
+   * Refs `prepare` could not prepare, with their errors. Each settles like a
+   * failed target's item while its siblings publish. A ref outside the claimed
+   * page fails the whole target. A missing input is an error here, never an
+   * empty output.
+   */
+  preparationFailures?(prepared: Prepared): ReadonlyMap<string, unknown>;
   /** `tx` is the publication transaction's repository handle. */
   publish(
     tx: Database,
@@ -158,9 +170,13 @@ export const derivedSink = <Prepared>(
 ): DerivedSink => ({
   kind: "sink",
   preparationBatchSize: sink.preparationBatchSize,
+  fanoutSelections: sink.fanoutSelections,
   prepare: sink.prepare,
-  // SAFETY: the drain hands `publish` exactly the value this sink's own
-  // `prepare` returned for the same page.
+  // SAFETY: the drain hands `preparationFailures` and `publish` exactly the
+  // value this sink's own `prepare` returned for the same page.
+  preparationFailures: (prepared) =>
+    sink.preparationFailures?.(prepared as Prepared) ?? new Map(),
+  // SAFETY: publish receives this sink's own preparation result for the same page.
   publish: (tx, ids, prepared, publication) =>
     sink.publish(tx, ids, prepared as Prepared, publication),
 });

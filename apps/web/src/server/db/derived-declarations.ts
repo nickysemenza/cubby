@@ -14,6 +14,12 @@ export interface DerivedInput {
   readonly table: string;
   readonly tableColumn: string;
   readonly entityColumn: string;
+  /**
+   * `textHash`: refs are the hash of a non-UUID `tableColumn` from
+   * `textHashRefSqlText`, reaching targets only through `selection` or `path`.
+   * Absent: the column value is the UUID ref. Internal records only.
+   */
+  readonly captureKey?: "textHash";
   /** False suppresses source triggers, never pending fanout interpretation. */
   readonly capture?: false;
   /** Columns whose change matters; null = any column except `updatedAt`. */
@@ -29,7 +35,8 @@ export interface DerivedInput {
   readonly selection?: {
     readonly key: string;
     readonly path?: readonly DerivedPathStep[];
-    readonly retained: {
+    /** Entity values only: prior refs in the `DerivedValue`. An internal record's callback returns its own. */
+    readonly retained?: {
       readonly array: readonly string[];
       readonly key: string;
     };
@@ -120,6 +127,11 @@ export interface InternalStoredDerivedDeclaration extends StoredDerivedWork {
   readonly kind: "internalRecord";
   readonly publishes: "ownTable";
   readonly notifications: "sinkOwned";
+  /** Rows the daily pass marks, sharing `table`'s UUID `id`; null marks every row. */
+  readonly reconcile: {
+    readonly table: string;
+    readonly where: Readonly<Record<string, string | null>>;
+  } | null;
 }
 
 export type StoredDerivedDeclaration =
@@ -214,10 +226,48 @@ const storedEntry = z.object({
 });
 
 /**
+ * An internal record's input: the manifest shape, except `selection` has no
+ * `retained` `DerivedValue` to read, so its callback returns current and retained
+ * dependents alike, and a non-UUID source column can capture through `captureKey`.
+ * These authoring mistakes would otherwise expand to the wrong records silently.
+ */
+const internalInput = storedInput
+  .omit({ selection: true })
+  .extend({
+    selection: z
+      .strictObject({
+        key: z.string(),
+        path: z.array(pathStep).optional(),
+      })
+      .optional(),
+    captureKey: z.literal("textHash").optional(),
+  })
+  .refine(
+    (input) =>
+      !input.selection || (!input.path && !input.paths && !input.targetWhere),
+    "selection replaces path, paths and targetWhere; map sources with selection.path",
+  )
+  .refine(
+    (input) => !input.captureKey || (!input.json && !input.targetWhere),
+    "captureKey hashes one plain column, so it cannot be combined with json or targetWhere",
+  )
+  .refine(
+    (input) =>
+      !input.captureKey || input.selection || input.path || input.paths,
+    "A captureKey hash is not a target id; reach targets through selection, path or paths",
+  )
+  .refine(
+    (input) =>
+      (!input.selection && !input.captureKey) ||
+      Object.values(input.match).every((column) => column === "id"),
+    "selection and captureKey expansion ignore the target column; match it to id",
+  );
+
+/**
  * One internal record publication. `target` is `<owner>.<key>`, where the owner
- * is not an entity, so it cannot shadow a manifest target. Inputs and
- * dependencies are the same authoring shapes a manifest declares; `selection`
- * is omitted because it reads a retained `DerivedValue` result.
+ * is not an entity, so it cannot shadow a manifest target. Dependencies are the
+ * same authoring shapes a manifest declares. `reconcile` narrows the daily pass
+ * to rows that can still be owed, for a source table with a closed history.
  */
 const internalRecordSpec = z.object({
   target: z
@@ -227,8 +277,16 @@ const internalRecordSpec = z.object({
   table: z.string(),
   compute: z.string(),
   notifications: z.literal("sinkOwned"),
-  inputs: z.array(storedInput.omit({ selection: true })),
+  inputs: z.array(internalInput),
   dependsOn: z.array(storedDependency).optional(),
+  reconcile: z
+    .object({
+      table: z.string(),
+      where: z
+        .record(z.string(), z.string().nullable())
+        .refine((where) => Object.keys(where).length > 0),
+    })
+    .optional(),
 });
 
 export type InternalRecordSpec = z.input<typeof internalRecordSpec>;
@@ -257,12 +315,17 @@ const sortTypeOf = (type: string | undefined): DerivedSortType =>
         ? "text"
         : null;
 
-const declaredInput = (input: z.output<typeof storedInput>): DerivedInput => {
+const declaredInput = (
+  input: z.output<typeof storedInput> | z.output<typeof internalInput>,
+): DerivedInput => {
   const [tableColumn, entityColumn] = onePair(input.match);
   return {
     table: input.table,
     tableColumn,
     entityColumn,
+    ...("captureKey" in input && input.captureKey
+      ? { captureKey: input.captureKey }
+      : {}),
     ...(input.capture === false ? { capture: false as const } : {}),
     columns: input.columns ?? null,
     where: input.where ?? null,
@@ -342,6 +405,7 @@ const internalRecordDeclarations = (): InternalStoredDerivedDeclaration[] => {
     kind: "internalRecord",
     publishes: "ownTable",
     notifications: spec.notifications,
+    reconcile: spec.reconcile ?? null,
     target: spec.target,
     table: spec.table,
     compute: spec.compute,
@@ -386,6 +450,7 @@ function storedDerivedByTarget(
 /** Whether a changed input row marks records directly or through the drain. */
 export const isFanoutInput = (input: DerivedInput) =>
   input.entityColumn !== "id" ||
+  input.selection !== undefined ||
   input.path !== null ||
   input.paths !== undefined ||
   input.json !== null ||

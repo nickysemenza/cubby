@@ -180,9 +180,25 @@ const declaredTargetsMatch = (targets: readonly string[]) => (column: SQL) =>
     ),
   ) ?? sql`false`;
 
+/** A sink's own failures, resolved before any of them settles. */
+const claimedSinkFailures = (
+  target: string,
+  items: readonly WorkItem[],
+  failures: ReadonlyMap<string, unknown>,
+) => {
+  const claimed = new Map(items.map((item) => [item.ref, item]));
+  return [...failures].map(([ref, error]) => {
+    const item = claimed.get(ref);
+    if (!item)
+      throw new Error(`${target} reported a failure for unclaimed ref ${ref}`);
+    return [item, error] as const;
+  });
+};
+
 /**
  * Compute every direct mark's value outside the publication transaction. A
- * target whose compute fails fails each of its items; the rest publish.
+ * target whose compute fails fails each of its items; a sink can instead fail
+ * individual refs. The rest publish.
  */
 export async function prepareDerivedPage(
   db: Database,
@@ -215,13 +231,18 @@ export async function prepareDerivedPage(
     const selection = parsed?.fanoutInput?.selection;
     if (!parsed || !selection) continue;
     const adapter = computes[parsed.declaration.compute];
-    const select =
-      adapter && !isDerivedSink(adapter)
-        ? adapter.fanoutSelections?.[selection.key]
-        : undefined;
-    if (!select || parsed.declaration.publishes !== "derivedValue")
+    const select = adapter?.fanoutSelections?.[selection.key];
+    // A value selection also reads its retained `DerivedValue`, so a value
+    // adapter must own it. An internal record's refs reach only its sink.
+    const owned =
+      adapter &&
+      (parsed.declaration.kind === "internalRecord"
+        ? isDerivedSink(adapter)
+        : !isDerivedSink(adapter) &&
+          parsed.declaration.publishes === "derivedValue");
+    if (!select || !owned)
       throw new Error(
-        `No value fanout selection ${parsed.declaration.target}.${selection.key}`,
+        `No fanout selection ${parsed.declaration.target}.${selection.key}`,
       );
     fanoutSelections.set(target, select);
   }
@@ -263,10 +284,14 @@ export async function prepareDerivedPage(
         throw new Error(`No compute adapter ${parsed.declaration.compute}`);
       const ids = group.map((item) => item.ref);
       if (isDerivedSink(compute)) {
-        sinks.set(target, {
-          sink: compute,
-          prepared: await compute.prepare(db, ids),
-        });
+        const prepared = await compute.prepare(db, ids);
+        const failures = claimedSinkFailures(
+          target,
+          group,
+          compute.preparationFailures?.(prepared) ?? new Map(),
+        );
+        sinks.set(target, { sink: compute, prepared });
+        for (const [item, error] of failures) failed.set(item, error);
         continue;
       }
       if (parsed.declaration.kind !== "entity")
@@ -333,9 +358,14 @@ function selectedTargetRows(
   select: DerivedFanoutSelection,
 ): SQL {
   const selection = input.selection;
-  if (!selection || !input.targetWhere || declaration.kind !== "entity")
+  if (!selection)
     throw new Error(`Invalid fanout selection for ${declaration.target}`);
   const sourceRefs = selection.path ? pathSql(selection.path, refs) : refs;
+  if (declaration.kind === "internalRecord")
+    return sql`WITH derived_fanout_refs(id) AS MATERIALIZED (${sourceRefs})
+      SELECT current_targets.id FROM (${select(sql`SELECT id FROM derived_fanout_refs`)}) current_targets`;
+  if (!input.targetWhere || !selection.retained)
+    throw new Error(`Invalid fanout selection for ${declaration.target}`);
   const retainedArray = sql`v.value #> ARRAY[${sql.join(
     selection.retained.array.map((key) => sql`${key}`),
     sql`, `,
@@ -838,7 +868,11 @@ export async function publishDerivedChunk(
   };
 }
 
-/** Mark every stored value at reconcile priority; publication reports drift. */
+/**
+ * Mark every stored value at reconcile priority; publication reports drift. A
+ * declared reconcile population replaces the source table's rows, keeping the
+ * same id slice; a record outside it converges through its own marks only.
+ */
 export async function markAllStoredDerived(
   db: RepositoryQueryInput,
   include: (declaration: StoredDerivedDeclaration) => boolean = () => true,
@@ -847,11 +881,16 @@ export async function markAllStoredDerived(
 ): Promise<number> {
   let marked = 0;
   for (const declaration of storedDerivedDeclarations().filter(include)) {
+    const reconcile =
+      declaration.kind === "internalRecord" ? declaration.reconcile : null;
+    const population = reconcile
+      ? fixedTargetRows(reconcile.table, reconcile.where)
+      : sql`SELECT id FROM ${ident(declaration.table)}`;
     const rows = await markWorkFrom(
       db,
       DERIVED_DRAIN,
       sql`SELECT ${declaration.target}::text, t.id, ${RECONCILE_PRIORITY}::int, 'Scheduled consistency check'::text
-        FROM ${ident(declaration.table)} t
+        FROM (${population}) t
         ${slice ? sql`WHERE mod(abs(hashtext(t.id::text)), ${slice.count}) = ${slice.index}` : sql``}`,
       { existing: "keep" },
     );

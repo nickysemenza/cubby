@@ -572,6 +572,64 @@ describe("stored derived values", () => {
       computes: rowWriting,
     });
     expect(await marks("recipe.totals")).toEqual([]);
+
+    // One poisoned source settles alone; its sibling publishes. A failure the
+    // page never claimed is a defect in the sink, so nothing publishes.
+    const sibling = await seedEntity(ctx.db, "recipe", {
+      name: "Synthetic sibling dish",
+    });
+    const siblingId = await resolveLiveShortcode(ctx.db, sibling.id, "recipe");
+    if (!siblingId) throw new Error("Synthetic recipe missing");
+    await drain();
+    const markBoth = () =>
+      getDb(ctx.db).execute(
+        sql`SELECT derived_mark('recipe.totals', ARRAY[${recipeId}::uuid, ${siblingId}::uuid])`,
+      );
+    const failing = (failures: ReadonlyMap<string, unknown>) => {
+      const published: string[] = [];
+      return {
+        published,
+        computes: {
+          ...derivedComputes,
+          "recipe.totals": derivedSink({
+            prepare: async () => failures,
+            preparationFailures: (prepared) => prepared,
+            publish: async (_tx, ids) => {
+              published.push(...ids);
+              return [];
+            },
+          }),
+        },
+      };
+    };
+    await markBoth();
+    const poisoned = failing(
+      new Map([[recipeId, new Error("Synthetic malformed source")]]),
+    );
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target === "recipe.totals",
+      computes: poisoned.computes,
+    });
+    expect(poisoned.published).toEqual([siblingId]);
+    expect(await marks("recipe.totals")).toEqual([recipeId]);
+    expect(await failure("recipe.totals", recipeId)).toMatchObject({
+      attempts: 1,
+      lastError: expect.stringContaining("Synthetic malformed source"),
+    });
+    await markBoth();
+    const unclaimedRef = "00000000-0000-4000-8000-000000000001";
+    const defective = failing(
+      new Map([[unclaimedRef, new Error("Synthetic")]]),
+    );
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target === "recipe.totals",
+      computes: defective.computes,
+    });
+    expect(defective.published).toEqual([]);
+    expect(await failure("recipe.totals", siblingId)).toMatchObject({
+      attempts: 1,
+      lastError: expect.stringContaining("unclaimed ref"),
+    });
   });
 
   it("publishes available value marks and removals while a writer holds another mark", async () => {

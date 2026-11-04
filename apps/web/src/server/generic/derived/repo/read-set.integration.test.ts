@@ -20,6 +20,7 @@ import {
   storedDerivedDeclarations,
 } from "~/server/db/derived-declarations";
 import { getDb } from "~/server/db/helpers";
+import { textHashRefSql } from "~/server/db/helpers/query";
 import {
   entityAttachment,
   image,
@@ -280,16 +281,18 @@ describe("stored derived read sets", () => {
           : adapter(ctx.db, ids));
         for (const input of declaration.inputs) {
           if (!input.selection) continue;
-          const select = !isDerivedSink(adapter)
-            ? adapter.fanoutSelections?.[input.selection.key]
-            : undefined;
+          const select = adapter.fanoutSelections?.[input.selection.key];
           if (!select)
             throw new Error(
               `Unregistered fanout selection ${input.selection.key}`,
             );
           // Compile the real selector even when this source currently has no matches.
           await getDb(ctx.db).execute(
-            select(sql`SELECT ${sql.identifier(input.tableColumn)} AS id
+            select(sql`SELECT ${
+              input.captureKey === "textHash"
+                ? textHashRefSql(sql`${sql.identifier(input.tableColumn)}`)
+                : sql.identifier(input.tableColumn)
+            } AS id
             FROM ${sql.identifier(input.table)} LIMIT 25`),
           );
         }

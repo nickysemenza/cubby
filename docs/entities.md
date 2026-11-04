@@ -3018,11 +3018,32 @@ A publication about non-entity records registers in `internalRecordSpecs` in
 existing registry, triggers, drain, source locking, fanout fences, retries and
 reconciliation, so `markAllStoredDerived` can seed its source IDs with a target
 filter. Append entries and keep input positions, because pending fanouts name an
-input by position. It has no `key`, `clock`, `recordSource`, `selection` or
-`DerivedValue` envelope; its adapter must be a `derivedSink`, and any other
-adapter fails its items visibly. A later rules change converges through the
-sink's own table and reconciliation. Its dependencies may read entity values;
-no stored value can depend on it, so it never propagates.
+input by position. It has no `key`, `clock`, `recordSource` or `DerivedValue`
+envelope; its adapter must be a `derivedSink`, and any other adapter fails its
+items visibly. A later rules change converges through the sink's own table and
+reconciliation. Its dependencies may read entity values; no stored value can
+depend on it, so it never propagates.
+An internal input's `selection: { key, path? }` names one of its sink's
+`fanoutSelections`. That callback is the whole selector: it reads a one-column
+`id` relation of source refs and returns current and retained target ids as `id`,
+because no `DerivedValue` holds prior output. Expansion stays set-based and clears
+its source ticket in the same transaction, as a path's does. The spec parser
+rejects `selection` with `path`, `paths`, `targetWhere` or a `retained` block, and
+one whose `match` target column is not `id`, because expansion would ignore them.
+An entity `selection` still requires `targetWhere` and `retained`.
+A plain input's trigger casts its matched column to UUID, so a matched column
+holding other text declares `captureKey: "textHash"`. Its OLD and NEW values
+capture as `textHashRefSqlText` in `db/helpers/query.ts` builds them, and a selector
+or dependency writer compares with `textHashRefSql`, the same SQL expression. It
+needs no parent lookup in the trigger. NULL marks nothing, stored text is hashed
+unnormalized, and a collision only adds a recompute. A hash is not a target id, so
+`captureKey` requires `selection`, `path` or `paths`, and it refuses `json` and
+`targetWhere`. Manifest inputs cannot declare it.
+`reconcile: { table, where }` narrows the daily pass to rows that can still be
+owed, for a source whose history is closed. `table` shares the source's UUID `id`,
+`where` holds literal column values bound as parameters, and the existing id
+slice still applies. A row outside the population converges only through its own
+marks, so its closing transition must mark it. Absent, every source row is marked.
 `entityStoredDerivedDeclarations()` and `storedDerived()` are the entity-only
 roster for reads, explanations, clock expiry and backlog `kinds`. Internal
 tickets count in the backlog `total` and oldest wait without a `kinds` row.
@@ -3031,6 +3052,12 @@ An internal record's refs are source IDs, not entity IDs, so
 publication. The sink calls
 `publication.notify(entity, ids)` for each old and new entity its publication
 changed. Those refs join the chunk's bounded ring and commit with its transaction.
+A sink's `preparationFailures(prepared)` names refs that `prepare` could not
+prepare, with their errors. They join the page's failed items and settle with
+the ordinary retries, while unaffected refs publish; a stop-page error in that
+map still stops the page. A ref the page did not claim is a sink defect, so it
+fails the whole target visibly. The sink must report a failed read as a failure,
+not as an empty or ineligible output. It adds no second failure queue.
 A sink can return `{ changed, retain }` to commit staged output while leaving
 the named held sources owed. Retention preserves their tickets and attempts;
 it does not create another queue. `publication.tickets` identifies the exact

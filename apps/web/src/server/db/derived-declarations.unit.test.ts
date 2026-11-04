@@ -71,14 +71,38 @@ describe("stored derived declarations", () => {
       !is(columnsByTable.get(declaration.table)?.get("id"), PgUUID)
         ? [`${declaration.table}.id (internal record UUID)`]
         : []),
+      // The reconcile population's ids become the same refs.
+      ...(declaration.kind === "internalRecord" && declaration.reconcile
+        ? [
+            ...missing(declaration.reconcile.table, [
+              "id",
+              ...Object.keys(declaration.reconcile.where),
+            ]),
+            ...(is(
+              columnsByTable.get(declaration.reconcile.table)?.get("id"),
+              PgUUID,
+            )
+              ? []
+              : [`${declaration.reconcile.table}.id (reconcile UUID)`]),
+          ]
+        : []),
       ...declaration.inputs.flatMap((input) => [
         ...[
           ...(input.path ? [input.path] : []),
           ...(input.paths ?? []),
           ...(input.selection?.path ? [input.selection.path] : []),
         ].flatMap(missingPath),
-        ...(input.selection && declaration.publishes !== "derivedValue"
+        ...(input.selection &&
+        declaration.kind === "entity" &&
+        declaration.publishes !== "derivedValue"
           ? [`${declaration.target} (selection requires a value publication)`]
+          : []),
+        // A trigger casts a plain matched column to UUID: other text fails its saves.
+        ...(declaration.kind === "internalRecord" &&
+        !input.captureKey &&
+        !input.json &&
+        !is(columnsByTable.get(input.table)?.get(input.tableColumn), PgUUID)
+          ? [`${input.table}.${input.tableColumn} (UUID or captureKey)`]
           : []),
         ...missing(input.table, [
           input.tableColumn,
