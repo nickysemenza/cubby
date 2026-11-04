@@ -8,8 +8,8 @@ export const JOB_DRAIN = {
   pageLimit: 256,
   timeBudgetMs: 20_000,
   batch: 25,
-  // Each Worker request holds five strong database sockets; three pages
-  // leave room for a page that briefly holds two (a transaction plus a read).
+  // Concurrent pages share the invocation's three strong database sockets.
+  // This bounds pages, not each page's internal query fanout.
   concurrency: 3,
 } satisfies Record<string, number>;
 
