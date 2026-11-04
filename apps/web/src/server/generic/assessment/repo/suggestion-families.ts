@@ -3,7 +3,10 @@ import {
   assessmentFamily,
   type assessmentReviewInput,
 } from "@cubby/schemas/assessment";
-import type { AssessmentReadKey } from "@cubby/schemas/assessment-read-publication";
+import type {
+  AssessmentReadKey,
+  AssessmentReadDependency,
+} from "@cubby/schemas/assessment-read-publication";
 import {
   type DataCheck,
   dataCheckKind,
@@ -120,6 +123,12 @@ type RowOf<F extends SuggestionListFamily> = Extract<
   { family: F }
 >;
 
+/** Canonical input observations for background publication; absence is not a complete read set. */
+export type SuggestionReadObserver = (
+  id: string,
+  sources: readonly AssessmentReadDependency[],
+) => void;
+
 type SuggestionOutcomes = {
   applied: number;
   rejected: number;
@@ -137,6 +146,7 @@ export type SuggestionFamilyPresentation<F extends SuggestionListFamily> = {
   keys: (
     db: Database,
     query: SuggestionFamilyQuery,
+    observeInputs?: SuggestionReadObserver,
   ) => Promise<SuggestionKey[]>;
   /** Optional count projection for scopes without column filters. */
   pendingCounts?: (
@@ -147,6 +157,7 @@ export type SuggestionFamilyPresentation<F extends SuggestionListFamily> = {
   rows: (
     db: Database,
     keys: readonly SuggestionKey[],
+    observeInputs?: SuggestionReadObserver,
   ) => Promise<Map<string, RowOf<F>>>;
   outcomes: (
     db: Database,
@@ -268,10 +279,11 @@ const field: SuggestionFamilyPresentation<"field"> = {
       };
     });
   },
-  rows: async (db, keys) => {
+  rows: async (db, keys, observeInputs) => {
     const rows = await readFieldSuggestions(
       db,
       keys.map((key) => key.assessmentId),
+      observeInputs && ((id, read) => observeInputs(id, read.dependencies)),
     );
     const byId = new Map(keys.map((key) => [key.assessmentId, key]));
     const corrections = await readCorrectionOutcomes(

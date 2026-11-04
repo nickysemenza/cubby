@@ -275,6 +275,14 @@ count. Consumers must not turn an empty incomplete relation into a complete zero
 The internal target and foreground cutover require complete invalidation and
 publication coverage before these tables become the read authority. The storage
 and canonical preparation seam alone establish neither coverage nor latency.
+Canonical preparation reports observed dependencies by Assessment id as it reads
+them, including advice hidden by changed inputs. A missing observation is not an
+empty or complete read set. Ordinary field advice reuses the fingerprint owner's
+read and reference/backing-column policy. Its forward selector reaches current
+primary and related records before a first dependency publication commits;
+retained reverse dependencies must still cover the old association. Field-write
+and classification markers remain explicit source kinds, with their own capture
+obligations.
 
 ## Cutover preservation
 

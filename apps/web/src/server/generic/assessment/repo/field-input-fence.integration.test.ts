@@ -17,6 +17,7 @@ import {
   fieldInputFingerprintIfLive,
   fieldInputFingerprintsIfLive,
   readFieldInputs,
+  fieldInputAssessmentIdsSql,
   type FieldInputRead,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import {
@@ -86,8 +87,13 @@ describe("current field suggestion inputs", () => {
       suggestedValue: "room",
       kind: "correction",
     });
+    const observed = new Map<string, FieldInputRead>();
     expect(
-      (await readFieldSuggestions(ctx.db, [pending.id, other.id]))
+      (
+        await readFieldSuggestions(ctx.db, [pending.id, other.id], (id, read) =>
+          observed.set(id, read),
+        )
+      )
         .map((row) => row.id)
         .sort(),
     ).toEqual([pending.id, other.id].sort());
@@ -105,6 +111,22 @@ describe("current field suggestion inputs", () => {
       { entity: "product", recordId: missingProduct, field: "categoryId" },
     ];
     const reads = await readFieldInputs(ctx.db, subjects);
+    expect(observed.get(pending.id)).toEqual(reads[0]);
+    expect(observed.get(other.id)).toEqual(reads[1]);
+    const affected = async (kind: string, id: string) =>
+      (
+        await getDb(ctx.db).execute(
+          fieldInputAssessmentIdsSql(kind, sql`SELECT ${id}::uuid AS id`),
+        )
+      ).rows
+        .map((row) => row.id)
+        .sort();
+    // Forward selection works before any retained dependency has been written.
+    expect(await affected("location", parent.entityId)).toEqual([pending.id]);
+    expect(await affected("location", otherParent.entityId)).toEqual([
+      other.id,
+    ]);
+    expect(await affected(fieldWrite, child.entityId)).toEqual([pending.id]);
     expect(reads.map((read) => read.fingerprint)).toEqual(
       await fieldInputFingerprintsIfLive(ctx.db, subjects),
     );
@@ -148,6 +170,11 @@ describe("current field suggestion inputs", () => {
       expect.objectContaining({ id: other.id }),
     ]);
     expect(await suggestionStatus(ctx.db, pending.id)).toBe("pending");
+    const hidden = new Map<string, FieldInputRead>();
+    await readFieldSuggestions(ctx.db, [pending.id], (id, read) =>
+      hidden.set(id, read),
+    );
+    expect(dependencies(hidden.get(pending.id))).toEqual(childDependencies);
 
     // Restoring either deleted row must be able to revive an ineligible proposal.
     await getDb(ctx.db).execute(
@@ -202,6 +229,18 @@ describe("current field suggestion inputs", () => {
       id: child.id,
       data: { parentTaskId: second.id },
     });
+    const affected = async (id: string) =>
+      (
+        await getDb(ctx.db).execute(
+          fieldInputAssessmentIdsSql("task", sql`SELECT ${id}::uuid AS id`),
+        )
+      ).rows.map((row) => row.id);
+    expect(
+      await affected(await resolveOrThrow(ctx.db, "task", second.id)),
+    ).toEqual([pending.id]);
+    expect(
+      await affected(await resolveOrThrow(ctx.db, "task", first.id)),
+    ).toEqual([]);
     const [reparented] = await readFieldInputs(ctx.db, [
       {
         entity: "task",

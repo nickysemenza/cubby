@@ -58,7 +58,8 @@ import { transitionAssessmentState } from "~/server/generic/assessment/repo/asse
 import {
   fieldInputFingerprint,
   fieldInputFingerprintIfLive,
-  fieldInputFingerprintsIfLive,
+  readFieldInputs,
+  type FieldInputRead,
   fenceFieldInputsAtCommit,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
@@ -189,7 +190,11 @@ type StoredFieldRow = {
 };
 
 /** Public queue rows: records and receipt Runs named by shortcode. */
-async function presentFieldRows(db: Database, rows: StoredFieldRow[]) {
+async function presentFieldRows(
+  db: Database,
+  rows: StoredFieldRow[],
+  observeInputs?: (id: string, inputs: FieldInputRead) => void,
+) {
   const ordinary = rows.filter(({ suggestion }) => {
     if (suggestion.status !== "pending") return false;
     const data = z.record(z.string(), z.json()).parse(suggestion.data);
@@ -198,7 +203,7 @@ async function presentFieldRows(db: Database, rows: StoredFieldRow[]) {
       typeof data.liveInputFingerprint === "string"
     );
   });
-  const current = await fieldInputFingerprintsIfLive(
+  const current = await readFieldInputs(
     db,
     ordinary.map(({ suggestion }) => ({
       entity: suggestion.entity,
@@ -206,8 +211,15 @@ async function presentFieldRows(db: Database, rows: StoredFieldRow[]) {
       field: suggestion.field,
     })),
   );
+  for (const [index, row] of ordinary.entries()) {
+    const read = current[index];
+    if (read) observeInputs?.(row.suggestion.id, read);
+  }
   const fingerprints = new Map(
-    ordinary.map(({ suggestion }, index) => [suggestion.id, current[index]]),
+    ordinary.map(({ suggestion }, index) => [
+      suggestion.id,
+      current[index]?.fingerprint,
+    ]),
   );
   const currentRows: StoredFieldRow[] = [];
   for (const row of rows) {
@@ -290,6 +302,7 @@ async function presentFieldRows(db: Database, rows: StoredFieldRow[]) {
 export async function readFieldSuggestions(
   db: Database,
   ids: readonly string[],
+  observeInputs?: (id: string, inputs: FieldInputRead) => void,
 ) {
   if (!ids.length) return [];
   const rows = await getDb(db)
@@ -303,7 +316,7 @@ export async function readFieldSuggestions(
         reviewableSuggestionSql,
       ),
     );
-  return presentFieldRows(db, rows);
+  return presentFieldRows(db, rows, observeInputs);
 }
 
 /** The list facts of every reviewable field suggestion for a roster, entity or Run. */

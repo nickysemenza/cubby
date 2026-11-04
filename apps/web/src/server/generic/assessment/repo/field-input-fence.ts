@@ -1,3 +1,5 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import {
   assessmentReadScopedSourceKind,
   type AssessmentReadDependency,
@@ -7,7 +9,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { fieldSuggestionContextKeys } from "@cubby/schemas/field-suggestion";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { sql } from "drizzle-orm";
+import { getTableColumns, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -21,6 +23,7 @@ import {
   repositoryBeforeCommit,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
+import { assessmentState } from "~/server/db/retained-tables";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import {
   fieldWriteRevision,
@@ -48,22 +51,19 @@ const sourceTable = (entity: string) => {
   return table;
 };
 
-function inputSpec(subject: FieldSubject) {
-  const kind = entitySchema.parse(subject.entity);
+function fieldInputPolicy(entity: string, field: string) {
+  const kind = entitySchema.parse(entity);
   const model = entityFieldModels[kind].fields.find(
-    (candidate) => candidate.key === subject.field,
+    (candidate) => candidate.key === field,
   );
-  if (!model)
-    throw new Error(
-      `Unknown assessment field: ${subject.entity}.${subject.field}`,
-    );
+  if (!model) throw new Error(`Unknown assessment field: ${entity}.${field}`);
   const policy = model.control?.suggest;
   const backings =
     policy && "backedBy" in policy ? (policy.backedBy ?? []) : [];
   const keys = [
     ...new Set(
       fieldSuggestionContextKeys(kind, [
-        subject.field,
+        field,
         ...(policy?.basis ?? []),
         ...backings.map((backing) =>
           "via" in backing ? backing.via : backing.column,
@@ -72,12 +72,15 @@ function inputSpec(subject: FieldSubject) {
     ),
   ].sort();
   return {
-    ...subject,
     kind,
-    table: sourceTable(subject.entity),
+    table: sourceTable(entity),
     backings,
     keys,
   };
+}
+
+function inputSpec(subject: FieldSubject) {
+  return { ...subject, ...fieldInputPolicy(subject.entity, subject.field) };
 }
 
 type InputSpec = ReturnType<typeof inputSpec>;
@@ -128,28 +131,124 @@ async function readSources(
 }
 
 /** The direct reference and backing rows one live source row reads, live or not. */
+function referenceInputs(spec: ReturnType<typeof fieldInputPolicy>) {
+  return [
+    ...spec.backings.flatMap((backing) =>
+      "entity" in backing
+        ? [
+            {
+              kind: "backing" as const,
+              entity: backing.entity,
+              column: backing.via,
+            },
+          ]
+        : [],
+    ),
+    ...spec.keys.flatMap((key) => {
+      const reference = entityFieldModels[spec.kind].fields.find(
+        (candidate) => candidate.key === key,
+      )?.reference;
+      if (
+        !reference ||
+        !Object.keys(SHORTCODE_TABLE).includes(reference.entity)
+      )
+        return [];
+      return [
+        { kind: "reference" as const, entity: reference.entity, column: key },
+      ];
+    }),
+  ];
+}
+
+/** The direct reference and backing rows one live source row reads, live or not. */
 function directReferences(spec: InputSpec, row: SourceRow) {
   const references: SourceRef[] = [];
-  for (const backing of spec.backings) {
-    if (!("entity" in backing)) continue;
-    const id = row[backing.via];
-    if (typeof id === "string")
-      references.push({ entity: backing.entity, recordId: id });
-  }
-  for (const key of spec.keys) {
-    const reference = entityFieldModels[spec.kind].fields.find(
-      (candidate) => candidate.key === key,
-    )?.reference;
-    if (!reference || !Object.keys(SHORTCODE_TABLE).includes(reference.entity))
+  for (const input of referenceInputs(spec)) {
+    const raw = row[input.column];
+    if (input.kind === "backing") {
+      if (typeof raw === "string")
+        references.push({ entity: input.entity, recordId: raw });
       continue;
-    const raw = row[key];
+    }
     const ids = z
       .array(z.uuid())
       .parse(raw == null ? [] : Array.isArray(raw) ? raw : [raw]);
     for (const id of ids)
-      references.push({ entity: reference.entity, recordId: id });
+      references.push({ entity: input.entity, recordId: id });
   }
   return references;
+}
+
+/**
+ * Current forward references cover an input edited before its first dependency
+ * publication commits. Retained reverse dependencies cover the old association.
+ * Source refs are a one-column UUID relation; this selector never fingerprints.
+ */
+export function fieldInputAssessmentIdsSql(sourceKind: string, refs: SQL): SQL {
+  const state = sql`${assessmentState} s`;
+  const pending = sql`s.family = ${assessmentFamily.enum.field} AND s.active AND s.status = ${suggestionStatus.enum.pending}`;
+  const primary = sql`SELECT s.id FROM ${state} WHERE ${pending}
+    AND s."recordId" IN (SELECT id FROM field_input_refs)`;
+  if (sourceKind === assessmentReadScopedSourceKind.enum.fieldWrite)
+    return sql`WITH field_input_refs AS MATERIALIZED (${refs}) ${primary}`;
+  if (
+    sourceKind === assessmentReadScopedSourceKind.enum.productClassification
+  ) {
+    const fields = entityFieldModels.product.fields
+      .filter((field) =>
+        fieldInputPolicy("product", field.key).keys.includes(
+          "classificationEvidence",
+        ),
+      )
+      .map((field) => field.key);
+    return sql`WITH field_input_refs AS MATERIALIZED (${refs}) ${primary}
+      AND s.entity = ${entitySchema.enum.product}
+      AND ${
+        fields.length
+          ? sql`s.field IN (${sql.join(
+              fields.map((field) => sql`${field}`),
+              sql`, `,
+            )})`
+          : sql`false`
+      }`;
+  }
+  const related = Object.entries(SHORTCODE_TABLE).flatMap(([entity, table]) => {
+    const kind = entitySchema.parse(entity);
+    const columns = new Set(
+      Object.values(getTableColumns(table)).map((column) => column.name),
+    );
+    const matches = entityFieldModels[kind].fields.flatMap((field) => {
+      const inputs = referenceInputs(
+        fieldInputPolicy(entity, field.key),
+      ).filter(
+        (input) => input.entity === sourceKind && columns.has(input.column),
+      );
+      if (!inputs.length) return [];
+      const clauses = inputs.map((input) => {
+        const value = sql`to_jsonb(field_source.${sql.identifier(input.column)})`;
+        return input.kind === "backing"
+          ? sql`${value} #>> '{}' IN (SELECT id::text FROM field_input_refs)`
+          : sql`EXISTS (SELECT 1 FROM jsonb_array_elements_text(
+              CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE jsonb_build_array(${value}) END
+            ) field_reference(value) WHERE field_reference.value IN (SELECT id::text FROM field_input_refs))`;
+      });
+      return [
+        sql`(s.field = ${field.key} AND (${sql.join(clauses, sql` OR `)}))`,
+      ];
+    });
+    return matches.length
+      ? [
+          sql`SELECT s.id FROM ${state}
+      JOIN ${table} field_source ON field_source.id = s."recordId" AND ${notDeleted("field_source")}
+      WHERE ${pending} AND s.entity = ${entity} AND (${sql.join(matches, sql` OR `)})`,
+        ]
+      : [];
+  });
+  return sql`WITH field_input_refs AS MATERIALIZED (${refs})
+    SELECT DISTINCT affected.id FROM (
+      ${primary} AND s.entity = ${sourceKind}
+      ${related.length ? sql`UNION ALL ${sql.join(related, sql` UNION ALL `)}` : sql``}
+    ) affected`;
 }
 
 /**

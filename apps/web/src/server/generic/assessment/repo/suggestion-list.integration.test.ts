@@ -709,6 +709,15 @@ describe("cross-family Suggestion list", () => {
       );
     }
     const together = await prepareSuggestionAdmission(ctx.db, ids);
+    expect([...together.dependencies.keys()].sort()).toEqual(
+      [confident, unsure].sort(),
+    );
+    expect(together.dependencies.get(confident)).toEqual(
+      expect.arrayContaining([
+        { sourceKind: "product", sourceId: product.entityId },
+        { sourceKind: "assessment.fieldWrite", sourceId: product.entityId },
+      ]),
+    );
     const separately = [];
     for (const id of ids)
       separately.push(await prepareSuggestionAdmission(ctx.db, [id]));

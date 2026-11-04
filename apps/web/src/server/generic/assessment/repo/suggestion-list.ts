@@ -1,4 +1,7 @@
-import type { AssessmentReadFilterFacts } from "@cubby/schemas/assessment-read-publication";
+import type {
+  AssessmentReadFilterFacts,
+  AssessmentReadDependency,
+} from "@cubby/schemas/assessment-read-publication";
 import {
   suggestionRecordCountsInput,
   suggestionRecordCountsOut,
@@ -44,6 +47,7 @@ import { reviewAssessmentBatch } from "~/server/generic/assessment/repo/assessme
 import {
   type SuggestionFamilyQuery,
   type SuggestionKey,
+  type SuggestionReadObserver,
   emptyPendingCounts,
   suggestionFamilies,
 } from "~/server/generic/assessment/repo/suggestion-families";
@@ -309,6 +313,7 @@ async function currentCandidates(
   db: Database,
   filters: SuggestionListFilters,
   prepared?: Awaited<ReturnType<typeof scopedFamilyQuery>>,
+  observeInputs?: SuggestionReadObserver,
 ) {
   const { families, touching, matchedFamilies, familyScope } =
     prepared ?? (await scopedFamilyQuery(db, filters));
@@ -318,7 +323,9 @@ async function currentCandidates(
     await Promise.all(
       families
         .filter((family) => !matchedFamilies || matchedFamilies.has(family))
-        .map((family) => suggestionFamilies[family].keys(db, familyScope)),
+        .map((family) =>
+          suggestionFamilies[family].keys(db, familyScope, observeInputs),
+        ),
     )
   )
     .flat()
@@ -329,7 +336,7 @@ async function currentCandidates(
     );
   // Admission must precede both counting and paging. Family hydration owns
   // freshness checks that cannot be inferred from a stored pending status.
-  const rows = await hydrate(db, keys);
+  const rows = await hydrate(db, keys, observeInputs);
   const current = keys.filter((key) => rows.has(key.assessmentId));
   return { families, keys: current, rows };
 }
@@ -341,19 +348,45 @@ export async function prepareSuggestionAdmission(
 ): Promise<{
   keys: SuggestionKey[];
   rows: Map<string, SuggestionListRow>;
+  /** Only observed read sets are present; a missing entry must not be treated as complete. */
+  dependencies: Map<string, AssessmentReadDependency[]>;
 }> {
   const filters = suggestionListFilters.parse({});
   const identities = [...new Set(assessmentIds)];
-  const admitted = await currentCandidates(db, filters, {
-    families: familiesOf(filters),
-    touching: new Set(identities),
-    matchedFamilies: null,
-    familyScope: {
-      filters: { ...filters, recordEntity: undefined, recordIds: undefined },
-      assessmentIds: identities,
+  const dependencies = new Map<string, AssessmentReadDependency[]>();
+  const admitted = await currentCandidates(
+    db,
+    filters,
+    {
+      families: familiesOf(filters),
+      touching: new Set(identities),
+      matchedFamilies: null,
+      familyScope: {
+        filters: { ...filters, recordEntity: undefined, recordIds: undefined },
+        assessmentIds: identities,
+      },
     },
-  });
-  return { keys: admitted.keys, rows: admitted.rows };
+    (id, sources) => {
+      const unique = new Map(
+        (dependencies.get(id) ?? []).map((source) => [
+          JSON.stringify([source.sourceKind, source.sourceId]),
+          source,
+        ]),
+      );
+      for (const source of sources)
+        unique.set(
+          JSON.stringify([source.sourceKind, source.sourceId]),
+          source,
+        );
+      dependencies.set(
+        id,
+        [...unique]
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([, source]) => source),
+      );
+    },
+  );
+  return { keys: admitted.keys, rows: admitted.rows, dependencies };
 }
 
 async function scopedKeys(
@@ -404,13 +437,14 @@ export async function suggestionRecordCounts(
 async function hydrate(
   db: Database,
   keys: readonly SuggestionKey[],
+  observeInputs?: SuggestionReadObserver,
 ): Promise<Map<string, SuggestionListRow>> {
   const byFamily = new Map<SuggestionListFamily, SuggestionKey[]>();
   for (const key of keys)
     byFamily.set(key.family, [...(byFamily.get(key.family) ?? []), key]);
   const maps: Map<string, SuggestionListRow>[] = await Promise.all(
     [...byFamily].map(([family, familyKeys]) =>
-      suggestionFamilies[family].rows(db, familyKeys),
+      suggestionFamilies[family].rows(db, familyKeys, observeInputs),
     ),
   );
   return new Map(maps.flatMap((map) => [...map]));
