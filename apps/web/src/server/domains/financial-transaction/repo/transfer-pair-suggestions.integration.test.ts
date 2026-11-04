@@ -1,5 +1,9 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily } from "@cubby/schemas/assessment";
+import {
+  assessmentReadScopedSourceKind,
+  type AssessmentReadDependency,
+} from "@cubby/schemas/assessment-read-publication";
 import type { FinancialAccountIdentity } from "@cubby/schemas/financial-account-fields";
 import {
   parseShortcodeFor,
@@ -41,6 +45,7 @@ import { previewStatementSuggestion } from "~/server/domains/transaction-import/
 import { readStatementSuggestions } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { readAssessmentReadMemberships } from "~/server/generic/assessment/repo/review-families";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { currentJobExecution } from "~/server/generic/jobs/context";
@@ -1170,6 +1175,47 @@ describe("transfer-pair suggestions", () => {
       inflow: { movement: "weak" },
     });
     expect(check!.judgment.blockers).toContain("weak_movement");
+    const transferIds = await unwrapDb(ctx.db)
+      .select({ id: assessmentState.id })
+      .from(assessmentState)
+      .where(eq(assessmentState.family, assessmentFamily.enum.transfer_pair));
+    const observed: AssessmentReadDependency[] = [];
+    await readAssessmentReadMemberships(
+      ctx.db,
+      transferIds.map(({ id }) => id),
+      (_id, inputs) => observed.push(...inputs),
+    );
+    const expectedAccounts = await unwrapDb(ctx.db)
+      .select({
+        id: financialAccount.id,
+        owner: financialAccount.ledgerPartyId,
+      })
+      .from(financialAccount);
+    for (const account of expectedAccounts) {
+      expect(observed).toContainEqual({
+        sourceKind: "financialAccount",
+        sourceId: account.id,
+      });
+      expect(observed).toContainEqual({
+        sourceKind: "ledgerParty",
+        sourceId: account.owner,
+      });
+    }
+    expect(
+      observed.some(({ sourceKind }) => sourceKind === "financialTransaction"),
+    ).toBe(true);
+    expect(
+      observed.some(
+        ({ sourceKind }) =>
+          sourceKind === assessmentReadScopedSourceKind.enum.statementCharge,
+      ),
+    ).toBe(true);
+    expect(
+      observed.some(
+        ({ sourceKind }) =>
+          sourceKind === assessmentReadScopedSourceKind.enum.referenceCode,
+      ),
+    ).toBe(true);
     await expect(apply(check!)).rejects.toThrow(/review/i);
     expect(await transfers()).toEqual([]);
     expect(await liveTransactions()).toHaveLength(1);

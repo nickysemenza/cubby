@@ -385,6 +385,42 @@ function statementInputRefs() {
       ) lookup_code WHERE lookup_code.value IS NOT NULL), '[]'::jsonb)`;
 }
 
+/** Retained legs include competitors and overlaps that are not browse memberships. */
+function transferInputRefs() {
+  const { outflow, inflow } = assessmentJudgments.transfer_pair.keyof().enum;
+  const { statementCharge, statementRef, referenceCode } =
+    assessmentReadScopedSourceKind.enum;
+  return sql`(WITH legs AS MATERIALIZED (
+    SELECT a.judgment->${outflow} AS value
+    UNION ALL SELECT a.judgment->${inflow}
+    UNION ALL SELECT competitor->'leg'
+      FROM jsonb_array_elements(COALESCE(a.judgment->'competitors', '[]'::jsonb)) competitor
+  ), records AS MATERIALIZED (
+    SELECT value FROM legs
+    UNION ALL SELECT overlap.value FROM legs
+      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(legs.value->'overlaps', '[]'::jsonb)) overlap(value)
+  ), codes AS MATERIALIZED (
+    SELECT ${entities.financialAccount}::text AS entity, value->>'accountId' AS code FROM records
+    UNION SELECT ${entities.financialTransaction}, value->>'transactionId' FROM records
+    UNION SELECT ${entities.ledgerParty}, value #>> '{owner,id}' FROM records
+  ), inputs AS (
+    SELECT ${ref(sql`${referenceCode}`, sql`${textHashRefSql(sql`codes.code`)}::text`)} AS value
+      FROM codes WHERE code IS NOT NULL
+    UNION ALL SELECT ${ref(sql`${entities.financialAccount}`, sql`account.id::text`)}
+      FROM codes JOIN "FinancialAccount" account ON codes.entity = ${entities.financialAccount} AND account.shortcode = codes.code
+    UNION ALL SELECT ${ref(sql`${entities.ledgerParty}`, sql`account."ledgerPartyId"::text`)}
+      FROM codes JOIN "FinancialAccount" account ON codes.entity = ${entities.financialAccount} AND account.shortcode = codes.code
+    UNION ALL SELECT ${ref(sql`${entities.financialTransaction}`, sql`transaction.id::text`)}
+      FROM codes JOIN "FinancialTransaction" transaction ON codes.entity = ${entities.financialTransaction} AND transaction.shortcode = codes.code
+    UNION ALL SELECT ${ref(sql`${entities.ledgerParty}`, sql`party.id::text`)}
+      FROM codes JOIN "LedgerParty" party ON codes.entity = ${entities.ledgerParty} AND party.shortcode = codes.code
+    UNION ALL SELECT ${ref(sql`${statementCharge}`, sql`${textHashRefSql(sql`value #>> '{charge,chargeKey}'`)}::text`)}
+      FROM records WHERE value #>> '{charge,chargeKey}' IS NOT NULL
+    UNION ALL SELECT ${ref(sql`${statementRef}`, sql`${textHashRefSql(sql`source_ref.value->>'externalId'`)}::text`)}
+      FROM records CROSS JOIN LATERAL jsonb_array_elements(COALESCE(records.value->'refs', '[]'::jsonb)) source_ref(value)
+  ) SELECT COALESCE(jsonb_agg(value), '[]'::jsonb) FROM inputs)`;
+}
+
 function recordRefsMatch(scope: AssessmentRecordScope, refs: SQL) {
   return sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${refs}) r
     WHERE ${relatedRecordMatch(scope, sql`r->>'entity'`, sql<string>`r->>'id'`)})`;
@@ -821,6 +857,9 @@ export async function readAssessmentReadMemberships(
       inputRefs: (observeInputs
         ? sql`CASE WHEN ${reviewState.family} = ${assessmentFamily.enum.statement_transaction}
           THEN ${statementInputRefs()}
+          WHEN ${reviewAssessment.family} = ${assessmentFamily.enum.transfer_pair}
+            OR ${reviewState.family} = ${assessmentFamily.enum.transfer_pair}
+          THEN ${transferInputRefs()}
           WHEN ${reviewAssessment.family} = ${assessmentFamily.enum.image_description}
           THEN jsonb_build_array(${ref(sql`${entities.image}`, sql`s."recordId"::text`)})
           WHEN ${reviewAssessment.family} = ${assessmentFamily.enum.product_pair}

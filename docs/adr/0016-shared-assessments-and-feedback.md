@@ -291,6 +291,12 @@ Those markers require OLD and NEW key capture; hash collisions or an omitted
 provider/kind discriminator may cause extra preparation but never change canonical
 identity or admission. A missing lookup therefore retains a route for a later
 source insertion instead of becoming a permanent complete zero.
+Transfer-pair observations retain leg, competitor and overlap accounts,
+transactions, owners, charge keys and external references, including unresolved
+shortcode markers. Current account ownership is observed separately from retained
+judgment ownership. These observations do not cover newly arriving competitors:
+amount/date/account candidate selectors and current pool observations remain
+required before this family can publish complete eligibility.
 Image-description input observations retain the Image identity; the existing
 Assessment/Feedback capture owns receipt changes. Connection freshness traversal
 can report each basis it actually visits before comparing fingerprints, including
