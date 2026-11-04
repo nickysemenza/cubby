@@ -640,6 +640,39 @@ const checkSections = (
 };
 
 /**
+ * `detail.lead` and `detail.pairs` place declared sections on the web page.
+ * Relation tables keep the full width their columns need.
+ */
+const checkSectionPlacement = (
+  context: string,
+  detail: { lead: readonly string[]; pairs: ReadonlyArray<readonly string[]> },
+  sections: ReadonlyArray<{ id: string; kind: string }>,
+): void => {
+  const kinds = new Map(sections.map((section) => [section.id, section.kind]));
+  for (const id of detail.lead)
+    if (!kinds.has(id))
+      throw new EntityDeclarationError(
+        `${context}.detail.lead names ${id}, which is not a declared section.`,
+      );
+  const paired = new Set<string>();
+  for (const id of detail.pairs.flat()) {
+    if (!kinds.has(id))
+      throw new EntityDeclarationError(
+        `${context}.detail.pairs names ${id}, which is not a declared section.`,
+      );
+    if (kinds.get(id) === "relation")
+      throw new EntityDeclarationError(
+        `${context}.detail.pairs names the relation section ${id}; relation tables stay full width.`,
+      );
+    if (paired.has(id))
+      throw new EntityDeclarationError(
+        `${context}.detail.pairs repeats ${id}.`,
+      );
+    paired.add(id);
+  }
+};
+
+/**
  * The generic list verbs an entity's capabilities imply. Workflow-owned
  * deletes and merges and read-only kernels get none: their verbs live with the
  * workflow that owns them.
@@ -972,6 +1005,7 @@ export const compilePresentation = (
         `${context}.searchFacts: "${key}" must be a readable list field.`,
       );
   }
+  checkSectionPlacement(context, detail, sections);
   const timelineSection = checkSections(
     sections,
     detail.summary,
@@ -1031,6 +1065,8 @@ export const compilePresentation = (
       })),
       activityRelations: detail.activityRelations,
       overviewSections: detail.overviewSections,
+      lead: detail.lead,
+      pairs: detail.pairs,
       preview,
       omitRelations: detail.omitRelations,
       relationFilterOverrides: detail.relationFilterOverrides,

@@ -84,7 +84,6 @@ export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
       <DetailAction>
         <RecipeActions record={recipe} />
       </DetailAction>
-      <EntityReportSlot slot="recipe.availability" id={recipe.id} />
       <RecipeDetail
         recipe={recipe}
         openCostingGap={openCostingGap}
@@ -98,6 +97,8 @@ export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
         flowLayout={flowLayout}
         onFlowLayoutChange={setFlowLayout}
       />
+      {/* Cooking reads first; the glance already answers "can I make this?". */}
+      <EntityReportSlot slot="recipe.availability" id={recipe.id} />
     </Stack>
   );
 };

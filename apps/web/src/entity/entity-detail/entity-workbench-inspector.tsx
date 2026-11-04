@@ -2,7 +2,7 @@ import { displayImagesField } from "@cubby/schemas/display-images";
 import type { Entity } from "@cubby/schemas/entity";
 import { isAuditableEntity } from "@cubby/schemas/entity-roster";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
-import { type ReactNode, useCallback, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 
 import {
   EntityActionButtons,
@@ -14,6 +14,7 @@ import {
   detailEntities,
   type DetailEntity,
 } from "~/entity/generated/entity-details.gen";
+import { setInspectedRecord } from "~/entity/preview/inspected-record";
 import { CellSelectionContext } from "~/ui/data-table/cell-selection-context";
 import { QuerySection } from "~/ui/feedback/query-section";
 
@@ -31,6 +32,8 @@ type EntityWorkbenchInspectorProps = {
   id: string;
   onClose?: () => void;
   overviewSupplement?: ReactNode;
+  /** The name the list row already holds, shown until the record loads. */
+  seedName?: string;
 };
 
 const recordEntities = new Set<Entity>(detailEntities);
@@ -49,7 +52,9 @@ export function EntityWorkbenchInspector({
   id,
   onClose,
   overviewSupplement,
+  seedName,
 }: EntityWorkbenchInspectorProps) {
+  useEffect(() => setInspectedRecord(entity, id), [entity, id]);
   return (
     <CellSelectionContext value={false}>
       <QuerySection
@@ -63,6 +68,7 @@ export function EntityWorkbenchInspector({
           id={id}
           onClose={onClose}
           overviewSupplement={overviewSupplement}
+          seedName={seedName}
         />
       </QuerySection>
     </CellSelectionContext>
@@ -74,9 +80,12 @@ function EntityWorkbenchInspectorContent({
   id,
   onClose,
   overviewSupplement,
+  seedName,
 }: EntityWorkbenchInspectorProps) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
   const [resolvedName, setResolvedName] = useState<string | undefined>();
+  const [settled, setSettled] = useState(false);
+  const [editSlot, setEditSlot] = useState<HTMLElement | null>(null);
   const [resolvedRecord, setResolvedRecord] = useState<
     EntityActionRow | undefined
   >();
@@ -96,7 +105,20 @@ function EntityWorkbenchInspectorContent({
     <EntityInspectorFrame
       entity={entity}
       id={id}
-      name={resolvedName}
+      name={resolvedName ?? seedName}
+      resolving={!settled && resolvedName === undefined}
+      headerActions={
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 empty:hidden">
+          {resolvedRecord ? (
+            <EntityActionButtons
+              entity={entity}
+              record={resolvedRecord}
+              surface="inspector"
+            />
+          ) : null}
+          <div ref={setEditSlot} className="contents" />
+        </div>
+      }
       leading={
         <EntityCover
           entity={entity}
@@ -112,11 +134,13 @@ function EntityWorkbenchInspectorContent({
       overview={
         <div>
           {overviewSupplement}
-          <div className="px-4 py-3">
+          <div className="px-4 py-2">
             {isDetailEntity(entity) ? (
               <InspectorRecord
                 entity={entity}
                 id={id}
+                editSlot={editSlot}
+                onSettled={() => setSettled(true)}
                 onNameResolved={handleNameResolved}
                 onRecordResolved={handleRecordResolved}
               />
@@ -132,19 +156,12 @@ function EntityWorkbenchInspectorContent({
             ) : null}
           </div>
           {hasRelations ? (
-            <EntityRelationshipPreview
-              entity={entity}
-              sourceId={id}
-              name={resolvedName}
-              onViewAll={() => setActiveTab("relations")}
-            />
-          ) : null}
-          {resolvedRecord ? (
-            <div className="flex flex-wrap gap-2 px-4 pb-3">
-              <EntityActionButtons
+            <div className="px-4">
+              <EntityRelationshipPreview
                 entity={entity}
-                record={resolvedRecord}
-                surface="inspector"
+                sourceId={id}
+                name={resolvedName}
+                onViewAll={() => setActiveTab("relations")}
               />
             </div>
           ) : null}

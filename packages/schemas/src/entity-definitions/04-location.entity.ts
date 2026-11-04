@@ -116,6 +116,7 @@ export const { definition, readSchemas } = defineEntityModel(
         hero: {
           breadcrumb: "parentId",
         },
+        lead: ["overview"],
         sections: [
           {
             kind: "fields",

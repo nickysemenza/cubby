@@ -134,6 +134,8 @@ export const { definition, readSchemas } = defineEntityModel({
         extraActions: ["complete", "bulkEdit", "delete"],
       },
       quickActions: ["complete"],
+      lead: ["overview"],
+      pairs: [["schedule", "dependencies"]],
       sections: [
         {
           kind: "fields",

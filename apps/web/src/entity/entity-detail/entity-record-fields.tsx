@@ -124,10 +124,13 @@ export function EntityRecordFields<E extends GenericDetailEntity>({
   entity,
   record,
   fields,
+  sectionTitle,
 }: {
   entity: E;
   record: DetailRecordOf<E>;
   fields: readonly string[];
+  /** The heading above: a lone prose field needn't say its name twice. */
+  sectionTitle?: string;
 }) {
   const overrides = useDetailFieldOverrides(entity, record, fields);
   return (
@@ -136,6 +139,7 @@ export function EntityRecordFields<E extends GenericDetailEntity>({
       fields={fields}
       record={record}
       overrides={overrides}
+      sectionTitle={sectionTitle}
     />
   );
 }

@@ -1,13 +1,12 @@
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
-  useMemo,
+  type ComponentProps,
   type ElementType,
   type ReactNode,
   useCallback,
   useContext,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -58,6 +57,25 @@ export interface IndexedSection {
   count?: number;
   /** Execution evidence may start folded without removing its anchor. */
   collapsed?: boolean;
+  /** Count from a batched read, shown until the mounted list reports its own. */
+  knownCount?: number;
+  /**
+   * Record details only: resolved emptiness folds this section into its group's
+   * one quiet line and out of the index. `undefined` keeps today's behaviour:
+   * Settings and analytics show every section. Unknown or failed reads never
+   * report empty, so they stay expanded.
+   */
+  foldWhenEmpty?: boolean;
+  /** A batched read already proved no rows, so the body need not mount. */
+  knownEmpty?: boolean;
+  /** Set this section beside a later one in the same list where width allows. */
+  pairWith?: string;
+  /** Still waiting on the batched read: neither mounted nor reported empty. */
+  countPending?: boolean;
+  /** A section leading a page has no group heading above it. */
+  headingAs?: "h2";
+  /** The declared section has no title of its own: it renders no heading. */
+  bare?: boolean;
 }
 
 /** A group heading and its sections. Ids use `detail-group-<key>`, so `#<key>` reaches it. */
@@ -71,12 +89,38 @@ export function normalizedHash(hash: string) {
   return hash.startsWith("#") ? hash.slice(1) : hash;
 }
 
+/**
+ * Two sections side by side at 1000px of available workspace, else stacked.
+ * Auto-placed columns let the survivor take the full width when its partner is
+ * hidden (an empty Needs you, a folded section), with no reflow code.
+ */
+export function SectionPair({ children }: { children: ReactNode }) {
+  return (
+    <div
+      data-section-pair
+      className="grid min-w-0 grid-cols-1 gap-(--section-gap) @min-[1000px]/record:auto-cols-[minmax(0,1fr)] @min-[1000px]/record:grid-flow-col @min-[1000px]/record:grid-cols-none"
+    >
+      {children}
+    </div>
+  );
+}
+
+const sectionIsFolded = (
+  section: IndexedSection,
+  state: SectionIndexState | undefined,
+) =>
+  section.foldWhenEmpty === true &&
+  (section.knownEmpty === true || state?.empty === true);
+
 function SectionCard({
   section,
   className,
+  unfolded = false,
 }: {
   section: IndexedSection;
   className?: string;
+  /** The member asked for this folded section by name or by link. */
+  unfolded?: boolean;
 }) {
   const hash = useLocation({ select: (location) => location.hash });
   const [open, setOpen] = useState(
@@ -89,17 +133,28 @@ function SectionCard({
   const [reportedEmpty, setEmpty] = useState(false);
   const register = useContext(SectionIndexRegistryContext);
   const continuous = useContext(ContinuousDetailContext);
-  const count = section.count ?? reportedCount;
+  const count = section.count ?? reportedCount ?? section.knownCount;
   const empty =
     section.empty === true ||
     reportedEmpty ||
+    section.knownEmpty === true ||
     count === 0 ||
     section.content == null;
+  const folded = !unfolded && section.foldWhenEmpty === true && empty;
   useEffect(() => {
     register?.(section.id, { empty, count });
     return () => register?.(section.id, undefined);
   }, [register, section.id, empty, count]);
-  const Heading = continuous ? "h3" : "h2";
+  const heading: ComponentProps<typeof Section> = section.bare
+    ? {}
+    : {
+        headingAs: section.headingAs ?? (continuous ? "h3" : "h2"),
+        title: section.title,
+      };
+  // A proven-empty relation mounts nothing: no skeleton and no later collapse.
+  // A section that reported empty itself stays mounted so it can report again.
+  if ((folded && section.knownEmpty) || (section.countPending && !unfolded))
+    return <span id={section.id} tabIndex={-1} hidden data-detail-section />;
   return (
     <SectionEmptyContext.Provider value={setEmpty}>
       <SectionCountContext.Provider value={setCount}>
@@ -112,6 +167,7 @@ function SectionCard({
           }}
           data-empty={empty || undefined}
           data-detail-section
+          hidden={folded}
           className={cn(
             "scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
             section.overflowVisible
@@ -119,17 +175,19 @@ function SectionCard({
               : "[contain-intrinsic-size:auto_320px] [content-visibility:auto]",
             className,
           )}
-          headingAs={Heading}
-          title={section.title}
+          aria-label={section.bare ? section.title : undefined}
+          {...heading}
           disclosure={
             section.collapsed ? { open, onOpenChange: setOpen } : undefined
           }
           empty={empty}
           count={
-            <SectionIndexMarker
-              id={`${section.id}-marker`}
-              state={{ empty, count }}
-            />
+            section.bare ? undefined : (
+              <SectionIndexMarker
+                id={`${section.id}-marker`}
+                state={{ empty, count }}
+              />
+            )
           }
           caption={section.description}
           actions={section.headerAction}
@@ -141,11 +199,76 @@ function SectionCard({
   );
 }
 
-/** Sections stacked without an index, for a single-workspace surface. */
-export function SectionStack({ sections }: { sections: IndexedSection[] }) {
-  return sections.map((section) => (
-    <SectionCard key={section.id} section={section} />
-  ));
+/** Sections in order, each declared pair sharing a row. */
+export function SectionStack({
+  sections,
+  unfolded,
+}: {
+  sections: IndexedSection[];
+  unfolded?: ReadonlySet<string>;
+}) {
+  const partners = new Set(sections.map((section) => section.pairWith));
+  const card = (section: IndexedSection) => (
+    <SectionCard
+      key={section.id}
+      section={section}
+      unfolded={unfolded?.has(section.id)}
+    />
+  );
+  return sections.flatMap((section) => {
+    if (partners.has(section.id)) return [];
+    const partner = sections.find(
+      (candidate) => candidate.id === section.pairWith,
+    );
+    return partner ? (
+      <SectionPair key={section.id}>
+        {card(section)}
+        {card(partner)}
+      </SectionPair>
+    ) : (
+      card(section)
+    );
+  });
+}
+
+/**
+ * Known-empty sections read as one quiet line at the end of their group. A
+ * name unfolds its section, which keeps the section's own Add and Open all.
+ */
+function FoldedSectionsLine({
+  sections,
+  pending,
+  onUnfold,
+}: {
+  sections: IndexedSection[];
+  pending: number;
+  onUnfold: (id: string) => void;
+}) {
+  if (sections.length === 0 && pending === 0) return null;
+  return (
+    <p
+      data-folded-sections
+      className="flex min-h-(--fact-row-height) flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground"
+    >
+      {pending > 0 ? (
+        <output>Checking {formatCount(pending)} more…</output>
+      ) : null}
+      {sections.length > 0 ? <span>Nothing recorded:</span> : null}
+      {sections.map((section, index) => (
+        <span key={section.id} className="inline-flex items-center gap-x-1.5">
+          <button
+            type="button"
+            aria-label={`Show ${section.title}, nothing recorded`}
+            onClick={() => onUnfold(section.id)}
+            className="rounded-sm outline-none hover:text-foreground-strong hover:underline focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-11"
+          >
+            {section.title}
+          </button>
+          {index < sections.length - 1 ? <span aria-hidden>·</span> : null}
+        </span>
+      ))}
+    </p>
+  );
 }
 
 function hashForDetailTarget(id: string, groups: IndexedSectionGroup[]) {
@@ -194,14 +317,12 @@ function SectionIndex({
   groups,
   sectionStates,
   activeId,
-  wide,
   onSelect,
   onFocusTarget,
 }: {
   groups: IndexedSectionGroup[];
   sectionStates: ReadonlyMap<string, SectionIndexState>;
   activeId: string | undefined;
-  wide: boolean;
   onSelect: (id: string) => void;
   onFocusTarget: (id: string) => void;
 }) {
@@ -212,13 +333,14 @@ function SectionIndex({
     const active = nav?.querySelector<HTMLElement>(
       'a[aria-current="location"]',
     );
-    if (!wide || !nav || !active) return;
+    // A hidden nav measures all zeroes, so narrow layouts never scroll it.
+    if (!nav || !active) return;
     const viewport = nav.getBoundingClientRect();
     const item = active.getBoundingClientRect();
     if (item.top < viewport.top) nav.scrollTop += item.top - viewport.top;
     else if (item.bottom > viewport.bottom)
       nav.scrollTop += item.bottom - viewport.bottom;
-  }, [activeId, wide]);
+  }, [activeId]);
   const selectMenuTarget = (id: string) => {
     menuTargetRef.current = document.getElementById(id);
     onSelect(id);
@@ -237,27 +359,19 @@ function SectionIndex({
     "aria-current": activeId === id ? ("location" as const) : undefined,
   });
   return (
-    <div
-      className={cn(
-        "sticky top-[var(--app-chrome-top)] z-30 self-start",
-        wide ? "w-52 shrink-0" : "bg-card",
-      )}
-    >
+    <div className="sticky top-[calc(var(--app-chrome-top)+var(--record-title-height,0px))] z-30 self-start bg-card @min-[800px]/record:w-52 @min-[800px]/record:shrink-0 @min-[800px]/record:bg-transparent">
       <nav
         ref={navigationRef}
         aria-label="Section index"
-        className={cn(
-          "max-h-[calc(100dvh-var(--app-chrome-top)-1rem)] overflow-y-auto overscroll-contain py-1",
-          !wide && "hidden",
-        )}
+        className="hidden max-h-[calc(100dvh-var(--app-chrome-top)-var(--record-title-height,0px)-1rem)] overflow-y-auto overscroll-contain py-1 @min-[800px]/record:block"
       >
         {groups.map((group) => (
-          <div key={group.id} className="mb-3 last:mb-0">
+          <div key={group.id} className="mb-1.5 last:mb-0">
             <a
               href={`#${hashForDetailTarget(group.id, groups)}`}
               {...entryState(group.id)}
               className={cn(
-                "relative block rounded-lg px-2 py-1 text-xs font-semibold text-foreground-strong hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                "relative flex h-(--nav-row-height) items-center rounded-lg px-2 text-xs font-semibold text-foreground-strong hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
                 activeId === group.id && currentDetailAnchorClass,
               )}
               onClick={(event) => {
@@ -282,7 +396,7 @@ function SectionIndex({
                         aria-describedby={describedBy(section.id)}
                         title={section.title}
                         className={cn(
-                          "relative flex h-7 items-center gap-2 rounded-lg px-1.5 text-sm hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                          "relative flex h-(--nav-row-height) items-center gap-2 rounded-lg px-1.5 text-sm hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
                           state?.empty
                             ? "text-muted-foreground/70"
                             : "text-foreground",
@@ -327,7 +441,7 @@ function SectionIndex({
           </div>
         ))}
       </nav>
-      {!wide && (
+      <div className="@min-[800px]/record:hidden">
         <DropdownMenu
           onOpenChange={(open) => {
             if (open) menuTargetRef.current = null;
@@ -424,8 +538,24 @@ function SectionIndex({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-      )}
+      </div>
     </div>
+  );
+}
+
+/**
+ * The section the reading line is in. Paired sections share a top, so document
+ * order alone would always report the right-hand one: of those sharing the
+ * lowest top above the line, prefer the first still running past it.
+ */
+function currentAtLine(targets: readonly HTMLElement[], line: number) {
+  const above = targets
+    .map((target) => ({ target, rect: target.getBoundingClientRect() }))
+    .filter(({ rect }) => rect.top <= line);
+  const lowest = Math.max(...above.map(({ rect }) => rect.top));
+  const sharing = above.filter(({ rect }) => lowest - rect.top <= 1);
+  return (
+    sharing.find(({ rect }) => rect.bottom > line)?.target ?? sharing[0]?.target
   );
 }
 
@@ -450,29 +580,9 @@ export function IndexedSections({
    * id, `data-detail-group` and `tabIndex={-1}` so jumps focus it. */
   leadIndex?: ReadonlyArray<{ id: string; title: string }>;
 }) {
-  const indexGroups = useMemo(
-    () => [
-      ...leadIndex.map((entry) => ({ ...entry, sections: [] })),
-      ...groups,
-    ],
-    [groups, leadIndex],
-  );
   const hydrated = useHydrated();
   const workspaceRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
-  const wide = width >= 800;
-  useLayoutEffect(() => {
-    const element = workspaceRef.current;
-    if (!element) return;
-    setWidth(element.getBoundingClientRect().width);
-    if (!("ResizeObserver" in window)) return;
-    const observer = new ResizeObserver((entries) =>
-      setWidth(entries[0]?.contentRect.width ?? 0),
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
   const [sectionStates, setSectionStates] = useState<
     Map<string, SectionIndexState>
   >(new Map());
@@ -490,6 +600,32 @@ export function IndexedSections({
     },
     [],
   );
+  // Sections the member unfolded, or that a link named, this visit.
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
+  const unfold = useCallback((id: string) => {
+    setUnfolded((previous) =>
+      previous.has(id) ? previous : new Set([...previous, id]),
+    );
+  }, []);
+  const isFolded = (section: IndexedSection) =>
+    !unfolded.has(section.id) &&
+    sectionIsFolded(section, sectionStates.get(section.id));
+  const isPending = (section: IndexedSection) =>
+    section.countPending === true && !unfolded.has(section.id);
+  // The index lists what the page shows: a folded section is reachable from its
+  // group's line, and a group of nothing but folded sections leaves the index.
+  const populatedGroups = groups.flatMap((group) => {
+    const sections = group.sections.filter(
+      (section) => !isFolded(section) && !isPending(section),
+    );
+    return sections.length > 0 || group.sections.length === 0
+      ? [{ ...group, sections }]
+      : [];
+  });
+  const indexGroups = [
+    ...leadIndex.map((entry) => ({ ...entry, sections: [] })),
+    ...populatedGroups,
+  ];
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const jumpTargetRef = useRef<
     | {
@@ -508,22 +644,38 @@ export function IndexedSections({
     const group = document.getElementById(`detail-group-${id}`);
     return group && workspaceRef.current?.contains(group) ? group.id : id;
   }, []);
-  const focusTarget = useCallback((id: string) => {
-    const target = document.getElementById(id);
-    if (!target || !workspaceRef.current?.contains(target)) return;
-    target.scrollIntoView({ behavior: "instant", block: "start" });
-    target.focus({ preventScroll: true });
-    const positions = new Map<Element, number>();
-    for (
-      let ancestor: HTMLElement | null = target;
-      ancestor;
-      ancestor = ancestor.parentElement
-    )
-      positions.set(ancestor, ancestor.scrollTop);
-    jumpTargetRef.current = { id, positions };
-    scrollIntentRef.current = false;
-    setActiveId(id);
-  }, []);
+  const pendingFocus = useRef<string | undefined>(undefined);
+  const focusTarget = useCallback(
+    (id: string) => {
+      const target = document.getElementById(id);
+      if (!target || !workspaceRef.current?.contains(target)) return;
+      // A link to a folded section unfolds it, then focuses it once it renders.
+      if (target.hidden) {
+        pendingFocus.current = id;
+        unfold(id);
+        return;
+      }
+      target.scrollIntoView({ behavior: "instant", block: "start" });
+      target.focus({ preventScroll: true });
+      const positions = new Map<Element, number>();
+      for (
+        let ancestor: HTMLElement | null = target;
+        ancestor;
+        ancestor = ancestor.parentElement
+      )
+        positions.set(ancestor, ancestor.scrollTop);
+      jumpTargetRef.current = { id, positions };
+      scrollIntentRef.current = false;
+      setActiveId(id);
+    },
+    [unfold],
+  );
+  useEffect(() => {
+    const id = pendingFocus.current;
+    if (id === undefined || !unfolded.has(id)) return;
+    pendingFocus.current = undefined;
+    focusTarget(id);
+  }, [unfolded, focusTarget]);
   const selectSection = (id: string) => {
     focusTarget(id);
     void navigate({
@@ -550,7 +702,7 @@ export function IndexedSections({
         body.querySelectorAll<HTMLElement>(
           "[data-detail-group], [data-detail-section]",
         ),
-      );
+      ).filter((target) => !target.hidden);
       const top = targets[0]
         ? parseFloat(getComputedStyle(targets[0]).scrollMarginTop) || 88
         : 88;
@@ -573,9 +725,7 @@ export function IndexedSections({
       const current =
         body.getBoundingClientRect().bottom <= window.innerHeight + 1
           ? targets.at(-1)
-          : (targets
-              .filter((target) => target.getBoundingClientRect().top <= top + 1)
-              .at(-1) ?? targets[0]);
+          : (currentAtLine(targets, top + 1) ?? targets[0]);
       if (current) setActiveId(current.id);
     };
     const schedule = (event?: Event) => {
@@ -662,45 +812,51 @@ export function IndexedSections({
     };
   }, [hydrated, groups, focusTarget]);
   return (
-    <div
-      ref={workspaceRef}
-      className={cn("min-w-0", wide ? "flex items-start gap-6" : "space-y-3")}
-    >
-      <ContinuousDetailContext.Provider value>
-        <SectionIndexRegistryContext.Provider value={registerSection}>
-          <SectionIndex
-            groups={indexGroups}
-            sectionStates={sectionStates}
-            activeId={activeId}
-            wide={wide}
-            onSelect={selectSection}
-            onFocusTarget={focusTarget}
-          />
-          <div
-            ref={bodyRef}
-            className="min-w-0 flex-1 space-y-(--section-gap) text-sm"
-          >
-            {lead}
-            {groups.map((group) => (
-              <div
-                key={group.id}
-                id={group.id}
-                data-detail-group
-                tabIndex={-1}
-                className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] space-y-2 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              >
-                <h2 className="text-xs font-medium text-muted-foreground">
-                  {group.title}
-                </h2>
-                <div className="space-y-(--section-gap)">
-                  <SectionStack sections={group.sections} />
+    <div ref={workspaceRef} className="@container/record min-w-0">
+      <div className="space-y-3 @min-[800px]/record:flex @min-[800px]/record:items-start @min-[800px]/record:gap-6 @min-[800px]/record:space-y-0">
+        <ContinuousDetailContext.Provider value>
+          <SectionIndexRegistryContext.Provider value={registerSection}>
+            <SectionIndex
+              groups={indexGroups}
+              sectionStates={sectionStates}
+              activeId={activeId}
+              onSelect={selectSection}
+              onFocusTarget={focusTarget}
+            />
+            <div
+              ref={bodyRef}
+              className="min-w-0 flex-1 space-y-(--section-gap) text-sm"
+            >
+              {lead}
+              {groups.map((group) => (
+                <div
+                  key={group.id}
+                  id={group.id}
+                  data-detail-group
+                  tabIndex={-1}
+                  className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] space-y-2 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  <h2 className="text-xs font-medium text-muted-foreground">
+                    {group.title}
+                  </h2>
+                  <div className="space-y-(--section-gap)">
+                    <SectionStack
+                      sections={group.sections}
+                      unfolded={unfolded}
+                    />
+                    <FoldedSectionsLine
+                      sections={group.sections.filter(isFolded)}
+                      pending={group.sections.filter(isPending).length}
+                      onUnfold={unfold}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
-            {footer}
-          </div>
-        </SectionIndexRegistryContext.Provider>
-      </ContinuousDetailContext.Provider>
+              ))}
+              {footer}
+            </div>
+          </SectionIndexRegistryContext.Provider>
+        </ContinuousDetailContext.Provider>
+      </div>
     </div>
   );
 }

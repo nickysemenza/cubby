@@ -1,7 +1,13 @@
 /* RecordList: compact read-only rows over the records Ledger. */
 .ledger[data-record-list] > .ledger-row {
-  min-height: 1.75rem;
-  padding-block: 0.1875rem;
+  min-height: var(--record-row-height, 1.75rem);
+  padding-block: var(--record-row-pad, 0.1875rem);
+}
+@media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
+  :root:not([data-native-workspace]) {
+    --record-row-height: var(--table-row-height);
+    --record-row-pad: 0.125rem;
+  }
 }
 
 .ledger[data-record-list] > .ledger-row[data-record-heading] {
@@ -55,7 +61,7 @@
    starts at the first mark and ends at the last; a mark's surface halo keeps
    the rail out of hollow and faint states. */
 .ledger[data-record-list="timeline"] {
-  --record-mark-center: calc(0.1875rem + 0.625rem);
+  --record-mark-center: calc(var(--record-row-pad, 0.1875rem) + 0.625rem);
 }
 .ledger[data-record-list="timeline"] > .ledger-row {
   position: relative;

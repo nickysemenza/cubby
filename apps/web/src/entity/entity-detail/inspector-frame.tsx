@@ -92,8 +92,10 @@ export function EntityInspectorFrame({
   entity,
   id,
   name,
+  resolving = false,
   eyebrow,
   leading,
+  headerActions,
   activeTab,
   onTabChange,
   onClose,
@@ -106,8 +108,12 @@ export function EntityInspectorFrame({
   entity: Entity;
   id: string;
   name?: string;
+  /** The record is still loading: `name`, if any, is the row's copy of it. */
+  resolving?: boolean;
   eyebrow?: ReactNode;
   leading?: ReactNode;
+  /** The record's primary verb and Edit, always in the header. */
+  headerActions?: ReactNode;
   activeTab: InspectorTab;
   onTabChange: (tab: InspectorTab) => void;
   onClose?: () => void;
@@ -150,8 +156,17 @@ export function EntityInspectorFrame({
     <SidePanel
       label={`${label} inspector`}
       code={id}
-      title={name ?? label}
-      eyebrow={eyebrow ?? label}
+      // Never "Product / Product": a loading record says so rather than
+      // printing its type as its name.
+      title={
+        name ?? (
+          <span className="font-normal text-muted-foreground">
+            {resolving ? `Loading ${label.toLowerCase()}…` : label}
+          </span>
+        )
+      }
+      eyebrow={eyebrow ?? (resolving && name ? `${label} · loading` : label)}
+      headerRow={headerActions}
       icon={
         leading ?? (
           <SidePanelIconTile>

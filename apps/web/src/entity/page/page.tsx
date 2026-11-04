@@ -263,7 +263,11 @@ function DetailPageShell(props: PageDetailProps) {
     : "Loading records…";
   return (
     <PageWrapper layout={props.layout}>
-      <div className="space-y-4">
+      <div
+        data-record-page
+        // The crumb row scrolls away; the 40px title band stays (`DetailPageHeader`).
+        className="space-y-2 [--record-crumb-height:1rem] md:[--record-title-height:2.5rem]"
+      >
         <DetailPageHeader
           entity={props.entity}
           wayfinding={props.wayfinding}

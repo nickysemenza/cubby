@@ -159,7 +159,7 @@ describe("GenericEntityDetail", () => {
       );
       const header = screen.getByTestId("detail-spec-plate");
       await waitFor(() => {
-        const image = header.querySelector(":scope > div > .shrink-0 img");
+        const image = header.querySelector(".shrink-0 img");
         expect(image?.getAttribute("src")).toContain("brand-logo.png");
         expect(header.querySelector("h1 svg")).toBeNull();
       });
@@ -338,16 +338,18 @@ describe("GenericEntityDetail", () => {
     if (!(overview instanceof HTMLElement) || !(work instanceof HTMLElement)) {
       throw new Error("Record Overview and Work groups must render");
     }
-    // The first fields section is the record's facts aside, ahead of the
-    // groups when the columns stack.
-    for (const label of ["Name", "Category"]) {
-      const fact = within(container).getByText(label, {
+    const fact = within(container).getByText("Category", {
+      selector: '[data-slot="fact-label"]',
+    });
+    expect(
+      fact.compareDocumentPosition(work) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // The title already says the name; Edit keeps it editable.
+    expect(
+      within(container).queryByText("Name", {
         selector: '[data-slot="fact-label"]',
-      });
-      expect(
-        fact.compareDocumentPosition(work) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy();
-    }
+      }),
+    ).toBeNull();
     // Brand has its own summary cell, so the facts do not repeat it.
     expect(
       within(container).queryByText("Brand", {
@@ -426,7 +428,6 @@ describe("GenericEntityDetail", () => {
       ),
       (element) => element.textContent,
     );
-    expect(labels).toContain("Name");
     expect(labels).toContain("ISBN-13");
   });
 

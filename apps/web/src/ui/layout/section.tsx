@@ -62,7 +62,7 @@ export function Section({
   const heading = hasHeader && (
     <div
       data-slot="section-heading"
-      className="flex flex-wrap items-center gap-x-3 border-b border-border pb-1.5"
+      className="flex flex-wrap items-center gap-x-3 border-b border-border pb-(--section-heading-pad)"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         {title != null && (
@@ -99,7 +99,11 @@ export function Section({
       )}
     </div>
   );
-  const body = <div className="min-w-0 space-y-2 text-sm">{children}</div>;
+  const body = (
+    <div className="min-w-0 space-y-(--section-body-gap) text-sm">
+      {children}
+    </div>
+  );
   return (
     <section
       aria-labelledby={
@@ -107,7 +111,7 @@ export function Section({
       }
       className={cn(
         "flex min-w-0 flex-col",
-        ruled ? "gap-0" : "gap-2",
+        ruled ? "gap-0" : "gap-(--section-body-gap)",
         className,
       )}
       ref={ref}
@@ -116,7 +120,7 @@ export function Section({
       {disclosure ? (
         <DisclosureRoot
           state={disclosure}
-          className={cn("min-w-0", !ruled && "space-y-2")}
+          className={cn("min-w-0", !ruled && "space-y-(--section-body-gap)")}
         >
           {heading}
           <DisclosureBody keepMounted={disclosure.keepMounted}>

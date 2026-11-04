@@ -20,6 +20,8 @@ export interface DetailSlot<E extends GenericDetailEntity> {
   applies?(record: DetailRecordOf<E>): boolean;
   /** Defer execution evidence until requested; direct section links open it. */
   collapsed?: boolean;
+  /** Index label for a slot whose declared section has no title of its own. */
+  indexTitle?: string;
 }
 
 /**

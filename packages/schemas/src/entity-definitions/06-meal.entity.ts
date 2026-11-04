@@ -113,6 +113,7 @@ export const { definition, readSchemas } = defineEntityModel(
             "The composition slot renders served recipes with their portions.",
         },
         hero: { when: { field: "date", label: "Eaten" } },
+        lead: ["overview"],
         sections: [
           {
             kind: "fields",
