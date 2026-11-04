@@ -28,6 +28,7 @@ import {
 
 import {
   captureConnectionBasis,
+  forEachConnectionBasis,
   prepareConnectionBases,
 } from "./connection-evidence";
 import { connectionDiscoveryFingerprint } from "./discovery-fingerprint";
@@ -191,6 +192,26 @@ describe("prepared connection bases", () => {
       expect(
         canonicalJson(await captureConnectionBasis(ctx.db, raw, false, ready)),
       ).toBe(canonicalJson(await captureConnectionBasis(ctx.db, raw)));
+    // One source's proposals can span capture batches and interleave with another's.
+    const interleaved = Array.from({ length: 34 }, (_, index) =>
+      candidate(
+        "expense-project",
+        ref("expense", (index % 2 ? history : line).output.id),
+        ref("project", project.output.id),
+      ),
+    );
+    const visited: ConnectionCandidate[] = [];
+    await forEachConnectionBasis(
+      ctx.db,
+      interleaved.map((entry) => ({ candidate: entry })),
+      async ({ candidate: entry }, batched) => {
+        visited.push(entry);
+        expect(canonicalJson(batched)).toBe(
+          canonicalJson(await captureConnectionBasis(ctx.db, entry)),
+        );
+      },
+    );
+    expect(visited).toEqual(interleaved);
     const [captured] = await prepareEntityConnectionEvidence(
       ctx.db,
       candidates.filter((entry) => entry.relation === "expense-project"),

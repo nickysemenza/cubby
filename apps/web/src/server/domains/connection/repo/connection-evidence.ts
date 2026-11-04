@@ -223,22 +223,45 @@ export async function forEachConnectionBasis<
       ? await prepareExpenseProjectRecommendationContexts(db, expenseIds)
       : undefined);
   // Every candidate for one source carries the same frozen recommendation evidence.
-  // Keep one snapshot across construction batches, never across capture passes.
+  // Keep one snapshot across construction batches until the source's last visit,
+  // never across capture passes.
   const expenseProjectEvidence = new Map<string, ConnectionJson>();
+  const visitsLeft = new Map<string, number>();
+  for (const id of expenseIds)
+    visitsLeft.set(id, (visitsLeft.get(id) ?? 0) + 1);
   const batchSize = 16;
   for (let offset = 0; offset < entries.length; offset += batchSize) {
     const batch = entries.slice(offset, offset + batchSize);
     const prepared = await prepareConnectionBases(
       db,
       batch.map((entry) => entry.candidate),
-      preparedExpenseProjects,
+      // Keep shared record reads batched, but expand one large source context at a time.
+      preparedExpenseProjects && (() => preparedExpenseProjects([])),
     );
     prepared.expenseProjectEvidence = expenseProjectEvidence;
-    for (const entry of batch)
-      await visit(
-        entry,
-        await captureConnectionBasis(db, entry.candidate, false, prepared),
+    for (const entry of batch) {
+      const id =
+        entry.candidate.relation === "expense-project"
+          ? parseShortcodeFor("expense", entry.candidate.source.entityId)
+          : null;
+      if (id && !expenseProjectEvidence.has(id))
+        prepared.expenseProject.set(
+          id,
+          preparedExpenseProjects?.([id]).get(id) ?? null,
+        );
+      const basis = await captureConnectionBasis(
+        db,
+        entry.candidate,
+        false,
+        prepared,
       );
+      if (id) prepared.expenseProject.delete(id);
+      await visit(entry, basis);
+      if (!id) continue;
+      const left = visitsLeft.get(id)! - 1;
+      visitsLeft.set(id, left);
+      if (left === 0) expenseProjectEvidence.delete(id);
+    }
   }
 }
 

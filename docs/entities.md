@@ -2943,6 +2943,12 @@ it cannot attribute a source ticket's cause to an individual record. Reasons are
 metadata and do not participate in calculation fingerprints or publication
 authority.
 
+Stored-value page reads declare requested keys with a typed `VALUES` relation.
+Its actual cardinality lets PostgreSQL choose indexed publication and work
+lookups for small rosters; an estimated hundred-key JSON recordset must not
+turn those reads into population-wide hashes. This changes neither availability
+nor refresh scheduling, and missing publications remain distinct from zero.
+
 Compute adapters may share an authoritative preparation source within one admitted
 page. The union of its admitted IDs stays inside the existing page budget;
 each target projects only its own IDs. A failed shared preparation falls back

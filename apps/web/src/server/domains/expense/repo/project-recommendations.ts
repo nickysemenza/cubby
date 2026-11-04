@@ -61,6 +61,10 @@ export async function prepareExpenseProjectRecommendationContexts(
     db,
     sources.map(({ source }) => source),
   );
+  const normalizedHistory = new Map<
+    (typeof history)[number],
+    ReturnType<typeof historyRow>
+  >();
   const projectIds = uniq(
     sources.flatMap(({ source }) =>
       source.effectiveProjectId ? [source.effectiveProjectId] : [],
@@ -89,13 +93,22 @@ export async function prepareExpenseProjectRecommendationContexts(
         sourceContext(
           source,
           rosters.get(source.id) ?? [],
-          history.filter(
-            (row) =>
-              row.expenseId !== source.id &&
-              (row.trade === source.effectiveTrade ||
-                (source.productId !== null &&
-                  row.productId === source.productId)),
-          ),
+          history
+            .filter(
+              (row) =>
+                row.expenseId !== source.id &&
+                (row.trade === source.effectiveTrade ||
+                  (source.productId !== null &&
+                    row.productId === source.productId)),
+            )
+            .map((row) => {
+              let normalized = normalizedHistory.get(row);
+              if (!normalized) {
+                normalized = historyRow(row);
+                normalizedHistory.set(row, normalized);
+              }
+              return normalized;
+            }),
           source.effectiveProjectId
             ? byProject.get(source.effectiveProjectId)
             : undefined,
@@ -110,7 +123,7 @@ export async function prepareExpenseProjectRecommendationContexts(
  * Assigned principal lines sharing any source's trade or Product, in Expense
  * id order: the order is part of each fingerprinted basis, so it must not
  * follow physical tuple order. One read through the joined principal
- * inheritance serves every source.
+ * inheritance serves every source, so its shortcodes are validated once here.
  */
 const readHistory = async (
   db: Database,
@@ -153,6 +166,18 @@ const readHistory = async (
   return result.rows;
 };
 
+/** Normalize only included rows; an excluded malformed row must not fail another source. */
+function historyRow({
+  expenseId: _expenseId,
+  ...row
+}: Awaited<ReturnType<typeof readHistory>>[number]) {
+  return {
+    ...row,
+    id: parseShortcodeFor("expense", row.id),
+    projectId: parseShortcodeFor("project", row.projectId),
+  };
+}
+
 type RecommendationContext = Awaited<ReturnType<typeof sourceContext>>;
 type RecommendationSource = Awaited<ReturnType<typeof readSources>>[number];
 type EligibleSource = RecommendationSource & {
@@ -174,7 +199,7 @@ const readSources = async (db: Database, ids: readonly ExpenseShortcode[]) =>
 function sourceContext(
   source: EligibleSource,
   projects: ProjectOptionsOut[],
-  history: Awaited<ReturnType<typeof readHistory>>,
+  history: readonly ReturnType<typeof historyRow>[],
   currentProject: { shortcode: string; name: string } | undefined,
 ) {
   return {
@@ -185,11 +210,8 @@ function sourceContext(
       productKind: source.product?.kind ?? null,
     },
     projects,
-    history: history.map(({ expenseId: _expenseId, ...row }) => ({
-      ...row,
-      id: parseShortcodeFor("expense", row.id),
-      projectId: parseShortcodeFor("project", row.projectId),
-    })),
+    // Each context owns its row objects; only their immutable primitives are shared.
+    history: history.map((row) => ({ ...row })),
     currentTarget: currentProject
       ? {
           id: parseShortcodeFor("project", currentProject.shortcode),

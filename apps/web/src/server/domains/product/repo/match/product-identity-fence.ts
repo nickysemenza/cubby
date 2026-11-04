@@ -65,7 +65,9 @@ export async function productIdentityEvidenceFences(
       UNION ALL SELECT t.key, 'identity-analysis', a.id::text, a.xmin::text FROM photos t JOIN "AiAnalysis" a ON a."entityId" = t.id WHERE a."entityKind" = ${entitySchema.enum.image}
       UNION ALL SELECT h.key, 'state', s.id::text, s.xmin::text FROM history h JOIN "AssessmentState" s ON s.id = h.id
       UNION ALL SELECT t.key, 'state', s.id::text, s.xmin::text FROM photos t JOIN "AssessmentState" s ON s."recordId" = t.id
-      UNION ALL SELECT h.key, 'identity-assessment', a.id::text, a.xmin::text FROM history_ids h JOIN "Assessment" a ON a.id::text = h.id
+      -- Keep the exact text recheck: non-canonical lineage must not gain membership.
+      UNION ALL SELECT h.key, 'identity-assessment', a.id::text, a.xmin::text FROM history_ids h JOIN "Assessment" a
+        ON a.id = CASE WHEN pg_input_is_valid(h.id, ${"uuid"}) THEN h.id::uuid END AND a.id::text = h.id
       UNION ALL SELECT t.key, 'binding', b.id::text, b.xmin::text FROM bindings t JOIN "ImportSourceProduct" b ON b.id = t.id
       UNION ALL SELECT t.key, 'identity-expense', e.id::text, e.xmin::text FROM target_products t JOIN "Expense" e ON e."productId" = t.id
       UNION ALL SELECT t.key, 'identity-expense', e.id::text, e.xmin::text FROM bindings t JOIN "Expense" e ON e.id = t."expenseId"

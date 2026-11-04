@@ -313,12 +313,47 @@ describe("expense project recommendation evidence", () => {
         productId: product.id,
       }),
       await line({ projectId: garage.id, trade: "plumbing" }),
+      // Matches the first source by both trade and Product.
+      await line({ projectId: kitchen.id, productId: product.id }),
     ];
     const sources = [
       await line({ projectId: kitchen.id, productId: product.id }),
       await line({ projectId: garage.id, trade: "plumbing" }),
     ];
     const codes = sources.map((row) => row.shortcode);
+    // Each match once, in Expense id order, without the source itself.
+    const projectCodes = new Map([
+      [kitchen.id, kitchen.shortcode],
+      [garage.id, garage.shortcode],
+    ]);
+    const expectedHistory = (rows: typeof history) =>
+      [...rows]
+        .sort((a, b) => (a.id < b.id ? -1 : 1))
+        .map((row) => ({
+          id: row.shortcode,
+          name: row.name,
+          projectId: projectCodes.get(row.projectId!),
+          trade: row.trade,
+          productId: row.productId,
+        }));
+    const contexts = await expenseProjectRecommendationContexts(ctx.db, codes);
+    expect(contexts.get(codes[0]!)?.history).toEqual(
+      expectedHistory([history[0]!, history[1]!, history[2]!, history[4]!]),
+    );
+    expect(contexts.get(codes[1]!)?.history).toEqual(
+      expectedHistory([history[2]!, history[3]!]),
+    );
+    const firstCopy = contexts
+      .get(codes[0]!)
+      ?.history.find((row) => row.id === history[2]!.shortcode);
+    const secondCopy = contexts
+      .get(codes[1]!)
+      ?.history.find((row) => row.id === history[2]!.shortcode);
+    if (!firstCopy || !secondCopy)
+      throw new Error("Synthetic shared history row missing");
+    const originalName = secondCopy.name;
+    firstCopy.name = "Synthetic context-local change";
+    expect(secondCopy.name).toBe(originalName);
     const read = async () =>
       new Map(
         [...(await expenseProjectRecommendationContexts(ctx.db, codes))].map(

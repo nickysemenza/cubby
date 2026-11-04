@@ -251,13 +251,19 @@ export async function loadStoredDerived(
   if (ids.length === 0 || declarations.length === 0) return out;
   // A target-wide fanout flag does not establish which record it affects.
   // Only a direct ticket can attribute a recorded source cause to this record.
+  // VALUES exposes the key count; jsonb_to_recordset estimates 100 and can
+  // make a small read hash whole publication and work tables.
   const result = await unwrapDb(db).execute(sql`
     WITH keys AS MATERIALIZED (
       SELECT declared.*, EXISTS (SELECT 1 FROM "WorkItem" w
         WHERE ${fanoutTargetMatches(sql`w.target`, sql`declared.target`)}) AS "fanoutPending"
-      FROM jsonb_to_recordset(${JSON.stringify(
-        declarations.map(({ key, target, clock }) => ({ key, target, clock })),
-      )}::jsonb) AS declared(key text, target text, clock text)
+      FROM (VALUES ${sql.join(
+        declarations.map(
+          ({ key, target, clock }) =>
+            sql`(${key}::text, ${target}::text, ${clock}::text)`,
+        ),
+        sql`, `,
+      )}) AS declared(key, target, clock)
     )
     SELECT i.id AS "entityId", k.key, v.value,
            ${options.includeEvidence ? sql`v."decidedBy"` : sql`v."decidedBy" - ${storedFieldDecision.keyof().enum.evidence}`} AS "decidedBy", v."computedAt",

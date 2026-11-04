@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { z } from "zod";
 
 /** Normalize dates and optional properties before hashing persisted JSON inputs. */
@@ -13,6 +15,28 @@ export function canonicalJson(
   const fragments: string[] = [];
   writeCanonicalJson(value, (fragment) => fragments.push(fragment));
   return fragments.join("");
+}
+
+/**
+ * The digest of `canonicalJson(value)` without assembling that string or its
+ * UTF-8 buffer. Chunks end between complete tokens, and JSON.stringify escapes
+ * lone surrogates, so every chunk is well-formed and encodes independently.
+ */
+export function sha256CanonicalJson(
+  value: z.infer<ReturnType<typeof z.json>>,
+): Promise<string> {
+  const hash = createHash("sha256");
+  let buffered = "";
+  writeCanonicalJson(value, (fragment: string | undefined) => {
+    // join() renders a runtime undefined scalar as empty; fingerprints keep those bytes.
+    const token = fragment ?? "";
+    if (buffered.length + token.length > 32_768) {
+      hash.update(buffered);
+      buffered = token;
+    } else buffered += token;
+  });
+  hash.update(buffered);
+  return Promise.resolve(hash.digest("hex"));
 }
 
 /** Emit complete JSON tokens so consumers can avoid retaining the whole string. */
