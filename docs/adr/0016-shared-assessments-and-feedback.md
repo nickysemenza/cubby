@@ -286,8 +286,15 @@ and canonical preparation seam alone establish neither coverage nor latency.
 The publication assembler serializes keys and declared filter operands from the
 canonical admission result; it does not recompute family eligibility. It emits
 an evaluated-empty revision for closed records, releasing their memberships.
+Preparation and coverage share the same relevant open population, narrowed by
+identity for component reads. Unserved trials outside the statement/transfer
+families publish empty rather than becoming unavailable user work.
 An open record with no input observations fails its component preparation and
 retains the previous publication; an absent read set is never an empty result.
+Field preparation observes retained ordinary inputs even without a stored live
+fingerprint. Applied Automatic receipts are observed before their keys are hidden
+from Suggestions. These background-only observations reuse the field reader;
+normal browsing does not add those reads or change receipt admission.
 Background admission preparation returns canonical rows and exact scope/ref
 memberships together. Family freshness reads and membership input observations
 merge into one deduplicated dependency set per Assessment; preparing a shared

@@ -308,6 +308,75 @@ describe("cross-family Suggestion list", () => {
       ),
     ).toEqual(claimed.slice(20));
     expect(resumed.retained).toEqual([]);
+    await recordFeedback(ctx.db, {
+      assessmentId: id,
+      operationId: "synthetic.hidden-field-inputs",
+      verdict: "ungraded",
+      authority: "automatic",
+      intent: "apply",
+      actorUserId: ctx.actor.userId,
+      metadata: {
+        kind: "assessment_application",
+        rule: { key: "synthetic-field-rule", revision: 1 },
+      },
+      receipt: { synthetic: true },
+    });
+    const hidden = await prepareCanonicalAssessmentReadPublication(
+      ctx.db,
+      [id],
+      async () => () => sql`true`,
+    );
+    expect(hidden.failures.size).toBe(0);
+    expect(
+      hidden.components.flatMap(({ prepared }) => prepared.results),
+    ).toMatchObject([
+      {
+        assessmentId: id,
+        facts: [],
+        dependencies: expect.arrayContaining([
+          { sourceKind: "product", sourceId: item.entityId },
+          { sourceKind: "assessment.fieldWrite", sourceId: item.entityId },
+        ]),
+      },
+    ]);
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ data: sql`${assessmentState.data} - 'liveInputFingerprint'` })
+      .where(eq(assessmentState.id, id));
+    const unavailable = await prepareCanonicalAssessmentReadPublication(
+      ctx.db,
+      [id],
+      async () => () => sql`true`,
+    );
+    expect(unavailable.failures.size).toBe(0);
+    expect(
+      unavailable.components.flatMap(({ prepared }) => prepared.results),
+    ).toEqual(hidden.components.flatMap(({ prepared }) => prepared.results));
+    await getDb(ctx.db)
+      .update(assessment)
+      .set({ served: false })
+      .where(eq(assessment.id, id));
+    const unserved = await prepareCanonicalAssessmentReadPublication(
+      ctx.db,
+      [id],
+      async () => () => sql`true`,
+    );
+    expect(unserved.failures.size).toBe(0);
+    expect(
+      unserved.components.flatMap(({ prepared }) => prepared.results),
+    ).toEqual([
+      {
+        assessmentId: id,
+        groupKey: `assessment:${id}`,
+        facts: [],
+        memberships: [],
+        dependencies: [],
+      },
+    ]);
+    await getDb(ctx.db)
+      .update(assessment)
+      .set({ served: true })
+      .where(eq(assessment.id, id));
     await getDb(ctx.db)
       .update(assessmentState)
       .set({ active: false, status: "superseded" })

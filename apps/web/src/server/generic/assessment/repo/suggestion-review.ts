@@ -200,7 +200,8 @@ async function presentFieldRows(
     const data = z.record(z.string(), z.json()).parse(suggestion.data);
     return (
       !("connectionEvidence" in data) &&
-      typeof data.liveInputFingerprint === "string"
+      (observeInputs !== undefined ||
+        typeof data.liveInputFingerprint === "string")
     );
   });
   const current = await readFieldInputs(
@@ -329,7 +330,12 @@ export async function fieldSuggestionKeys(
     runId?: string;
     assessmentIds?: readonly string[];
   },
+  observeInputs?: (id: string, inputs: FieldInputRead) => void,
 ) {
+  if (observeInputs && scope.assessmentIds === undefined)
+    throw new Error(
+      "Field publication observations require scoped Assessment ids",
+    );
   const conditions: (SQL | undefined)[] = [
     eq(suggestionTable.family, "field"),
     eq(suggestionTable.active, true),
@@ -348,7 +354,7 @@ export async function fieldSuggestionKeys(
   ];
   if (scope.entities?.length === 0 || scope.recordUuids?.length === 0)
     return [];
-  return getDb(db)
+  const rows = await getDb(db)
     .select({
       id: suggestionTable.id,
       fingerprint: suggestionTable.fingerprint,
@@ -364,6 +370,16 @@ export async function fieldSuggestionKeys(
     .from(suggestionTable)
     .leftJoin(runTable, eq(runTable.id, suggestionTable.runId))
     .where(and(...conditions));
+  if (observeInputs && scope.status === "pending") {
+    // Automatic receipts hide these keys before hydration, but their retained
+    // publication still needs source observations. Other keys hydrate once.
+    await readFieldSuggestions(
+      db,
+      rows.filter((row) => row.automaticRule !== null).map((row) => row.id),
+      observeInputs,
+    );
+  }
+  return rows;
 }
 
 /** Outcome counts per (entity, field), optionally for one Run. */

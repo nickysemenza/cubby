@@ -132,21 +132,27 @@ export function publishedAssessmentRecordRefsSql(
       AND m.revision = admitted.revision AND m.kind = 'ref'`;
 }
 
+/** Preparation and coverage share the same served/open population. */
+function assessmentReadPopulationSql(ids?: readonly string[]): SQL {
+  const families = sql.join(
+    suggestionListFamily.options.map((family) => sql`${family}`),
+    sql`, `,
+  );
+  return sql`SELECT s.id FROM ${assessmentState} s
+    JOIN ${assessment} a ON a.id = s.id
+    WHERE s.active AND s.status = ${suggestionStatus.enum.pending}
+      AND (s.family IN (${families}) OR a.family IN (${families}))
+      AND (a.served OR s.family IN (${assessmentFamily.enum.statement_transaction}, ${assessmentFamily.enum.transfer_pair}))
+      ${ids === undefined ? sql`` : sql`AND s.id = ANY(${uuidArrayParam(ids)})`}`;
+}
+
 /**
  * Before expansion, new memberships are unknown. Coverage therefore stays
  * conservative across scopes instead of claiming that an empty scoped read is
  * complete. Empty successful revisions do establish coverage for their source.
  */
 export function publishedAssessmentCoverageSql(): SQL {
-  const families = sql.join(
-    suggestionListFamily.options.map((family) => sql`${family}`),
-    sql`, `,
-  );
-  const population = sql`SELECT s.id FROM ${assessmentState} s
-    JOIN ${assessment} a ON a.id = s.id
-    WHERE s.active AND s.status = ${suggestionStatus.enum.pending}
-      AND (s.family IN (${families}) OR a.family IN (${families}))
-      AND (a.served OR s.family IN (${assessmentFamily.enum.statement_transaction}, ${assessmentFamily.enum.transfer_pair}))`;
+  const population = assessmentReadPopulationSql();
   return sql`SELECT
     EXISTS (SELECT 1 FROM (${population}) open
       WHERE NOT EXISTS (SELECT 1 FROM ${assessmentReadPublication} p
@@ -229,17 +235,13 @@ export async function readOpenAssessmentReadIds(
   ids: readonly string[],
 ): Promise<string[]> {
   if (!ids.length) return [];
-  const rows = await repositoryQueries(db)
-    .select({ id: assessmentState.id })
-    .from(assessmentState)
-    .where(
-      and(
-        assessmentState.active,
-        eq(assessmentState.status, "pending"),
-        sql`${assessmentState.id} = ANY(${uuidArrayParam(ids)})`,
-      ),
-    );
-  return rows.map((row) => row.id);
+  const result = await repositoryQueries(db).execute(
+    assessmentReadPopulationSql(ids),
+  );
+  return z
+    .array(z.object({ id: z.guid() }))
+    .parse(result.rows)
+    .map((row) => row.id);
 }
 
 /** Retained winners and unfinished components connect the old and new edge scopes. */

@@ -232,17 +232,21 @@ const shortcodeEntity = z.enum(shortcodeEntities);
 const fieldKind = z.enum(["correction", "addition"]);
 
 const field: SuggestionFamilyPresentation<"field"> = {
-  keys: async (db, query) => {
+  keys: async (db, query, observeInputs) => {
     const { filters, records } = query;
     // Pushed into SQL: the record roster, entity and Run. Column filters
     // apply to every family's keys in the generic list.
-    const rows = await fieldSuggestionKeys(db, {
-      status: filters.status,
-      entities: filters.recordEntity ? [filters.recordEntity] : undefined,
-      recordUuids: records?.map((record) => record.id),
-      runId: runCode(query),
-      assessmentIds: query.assessmentIds,
-    });
+    const rows = await fieldSuggestionKeys(
+      db,
+      {
+        status: filters.status,
+        entities: filters.recordEntity ? [filters.recordEntity] : undefined,
+        recordUuids: records?.map((record) => record.id),
+        runId: runCode(query),
+        assessmentIds: query.assessmentIds,
+      },
+      observeInputs && ((id, read) => observeInputs(id, read.dependencies)),
+    );
     return rows.map((row) => {
       const entity = shortcodeEntity.parse(row.entity);
       const kind = fieldKind.parse(row.kind);
