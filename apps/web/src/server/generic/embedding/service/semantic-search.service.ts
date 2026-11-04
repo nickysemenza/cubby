@@ -1,5 +1,9 @@
 import type { RunId } from "@cubby/schemas/identifiers";
-import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+import type {
+  SearchableEntity,
+  SearchHit,
+  SemanticCoverageGap,
+} from "@cubby/schemas/search";
 import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 
@@ -7,7 +11,6 @@ import type { Database } from "~/server/db";
 import {
   findSemanticEntityCandidates,
   type SemanticCandidateScan,
-  type SemanticCoverageGap,
 } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/generic/embedding/service/semantic/constants";

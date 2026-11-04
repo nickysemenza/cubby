@@ -5,12 +5,14 @@ import {
   type SearchableEntity,
   type SearchHit,
   type SearchQueryInput,
+  type SemanticCoverageGap,
   searchHitSchema,
   searchableEntities,
   searchableEntitySchema,
 } from "@cubby/schemas/search";
 import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
+import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { type SQL, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 
@@ -61,8 +63,13 @@ export interface RelatedSearchPort {
 }
 
 export type InternalRelatedSearchCandidates =
-  | { status: "ready"; results: InternalSearchCandidate[]; complete: boolean }
-  | { status: "unavailable"; results: [] };
+  | {
+      status: "ready";
+      results: InternalSearchCandidate[];
+      complete: boolean;
+      gap?: SemanticCoverageGap;
+    }
+  | { status: "unavailable"; results: []; error?: string };
 
 const productionRelatedSearchPort: RelatedSearchPort = {
   configured: semanticEmbeddingsConfigured,
@@ -375,10 +382,19 @@ export async function findRelatedSearchCandidates(
         },
       ];
     });
-    return { status: "ready", results, complete: scan.complete };
+    return {
+      status: "ready",
+      results,
+      complete: scan.complete,
+      ...(scan.gap ? { gap: scan.gap } : {}),
+    };
   } catch (error) {
     log.warn("related failed", { message: getErrorMessage(error) });
-    return { status: "unavailable", results: [] };
+    return {
+      status: "unavailable",
+      results: [],
+      error: scrubErrorMessage(getErrorMessage(error)),
+    };
   }
 }
 
@@ -394,6 +410,7 @@ export async function findRelatedSearchHits(
   return {
     status: "ready",
     complete: related.complete,
+    ...(related.gap ? { gap: related.gap } : {}),
     results: publicHits(await hydrateHits(db, related.results)),
   };
 }

@@ -2,7 +2,10 @@ import type { EntityRef } from "@cubby/schemas/entity";
 import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { basisValueOf } from "@cubby/schemas/field-suggestion";
 import type { RunId } from "@cubby/schemas/identifiers";
-import type { SearchableEntity } from "@cubby/schemas/search";
+import type {
+  SearchableEntity,
+  SemanticCoverageGap,
+} from "@cubby/schemas/search";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -19,7 +22,6 @@ import {
   retrieveAcquisitionNotes,
 } from "~/server/domains/connection/repo/connection-candidates";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
-import type { SemanticCoverageGap } from "~/server/generic/embedding/repo/entity-embedding";
 import { semanticEntityCandidateScan } from "~/server/generic/embedding/service/semantic-search.service";
 import { SEMANTIC_MATCH_MIN_SIMILARITY } from "~/server/generic/embedding/service/semantic/constants";
 import { findLexicalSearchCandidates } from "~/server/generic/search/service/search.service";

@@ -254,12 +254,26 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
               )}
             </section>
           )}
-          {relatedDraft === draft &&
-          !related.isPlaceholderData &&
-          related.data?.status === "unavailable" ? (
-            <p className="text-xs text-muted-foreground">
-              Related matches are temporarily unavailable.
-            </p>
+          {relatedDraft === draft && !related.isPlaceholderData ? (
+            related.error || related.data?.error ? (
+              <ErrorDisplay
+                error={related.error ?? new Error(related.data?.error)}
+                title="Related matches"
+                onRetry={() => void related.refetch()}
+              />
+            ) : related.data?.status === "unavailable" ? (
+              <p className="text-xs text-muted-foreground">
+                Related matches are temporarily unavailable.
+              </p>
+            ) : related.data?.complete === false ? (
+              <p className="text-xs text-muted-foreground">
+                {related.data.gap === "pending"
+                  ? "Related matches are incomplete while search data updates."
+                  : related.data.gap === "budget_exceeded"
+                    ? "Related matches are incomplete because the search candidate limit was reached."
+                    : "Related matches are incomplete."}
+              </p>
+            ) : null
           ) : null}
         </Stack>
       ) : (

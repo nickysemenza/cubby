@@ -219,21 +219,26 @@ export type SearchResultGroup = z.infer<typeof searchResultGroupSchema>;
 
 export const searchResultGroupsOut = z.array(searchResultGroupSchema);
 
-export const relatedSearchGroupsOutSchema = z.object({
-  status: z.enum(["ready", "unavailable"]),
-  groups: searchResultGroupsOut,
-});
-export type RelatedSearchGroupsOut = z.infer<
-  typeof relatedSearchGroupsOutSchema
->;
+/** Pending corpus work can settle; an exhausted ANN budget cannot settle by waiting. */
+export const semanticCoverageGap = z.enum(["pending", "budget_exceeded"]);
+export type SemanticCoverageGap = z.infer<typeof semanticCoverageGap>;
 
 /** Semantic results are separate so they cannot reorder lexical hits. */
 export const relatedSearchOutSchema = z.object({
   status: z.enum(["ready", "unavailable"]),
   complete: z.boolean().optional(),
+  gap: semanticCoverageGap.optional(),
+  error: z.string().optional(),
   results: z.array(searchHitSchema),
 });
 export type RelatedSearchOut = z.infer<typeof relatedSearchOutSchema>;
+
+export const relatedSearchGroupsOutSchema = relatedSearchOutSchema
+  .omit({ results: true })
+  .extend({ groups: searchResultGroupsOut });
+export type RelatedSearchGroupsOut = z.infer<
+  typeof relatedSearchGroupsOutSchema
+>;
 
 export const similarEntityResultSchema = z.object({
   similarity: z.number(),

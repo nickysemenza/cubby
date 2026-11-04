@@ -4,6 +4,7 @@ import {
   searchableEntities,
   type SearchableEntity,
   type SearchableEntityRef,
+  type SemanticCoverageGap,
 } from "@cubby/schemas/search";
 import { and, eq, inArray, isNotNull, isNull, or, type SQL } from "drizzle-orm";
 import { chunk } from "es-toolkit";
@@ -35,12 +36,6 @@ import { vectorPayloadHash } from "./embedding-artifact";
 interface EntityEmbeddingCandidate extends SearchableEntityRef {
   similarity: number;
 }
-/**
- * Why a scan withheld completeness. `pending`: owed search or embedding work
- * for these kinds can still change the answer. `budget_exceeded`: the fixed ANN
- * budget ran out over a settled corpus, so waiting cannot change the answer.
- */
-export type SemanticCoverageGap = "pending" | "budget_exceeded";
 /** Complete describes eligible corpus and budget, never exhaustive ANN recall. */
 export interface SemanticCandidateScan {
   candidates: EntityEmbeddingCandidate[];

@@ -149,6 +149,14 @@ for Cmd+K and full search. Generation rejects unreadable fields. These facts
 are separate from search-hit subtitle/placement context and hover-preview
 rosters. Grouped search hydrates only returned records through the canonical
 selected-field list reader, batched by entity kind; rows never query data.
+Related search preserves the semantic reader's coverage flag through grouping.
+Incomplete coverage remains visible even when it yields no matches; it is not a
+successful complete empty result. Pending publication work and an exhausted
+candidate budget keep their existing distinct explanations; only pending work
+is described as updating. Completeness never promises exhaustive ANN recall.
+Provider and read failures retain scrubbed
+diagnostics and a retry action without hiding lexical results. An unavailable
+provider with no diagnostic remains unavailable, with no invented cause.
 Choose facts that add useful context beyond the retained title and subtitle.
 The shared compact field renderer owns formatting and resolved envelopes.
 Missing values leave their declared positions empty, without substitutions;
