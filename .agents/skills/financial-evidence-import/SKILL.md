@@ -211,6 +211,11 @@ writer; replacing a client-side snapshot can remove concurrent attachments.
 
 ### Booking classification and read-back
 
+For statement-review receipt lookup, exact replay and authorized service
+classification corrections, read
+[Statement review receipts and classification](../../../docs/import-evidence-convergence.md#statement-review-receipts-and-classification).
+Exact command replay and fresh spending convergence have separate contracts.
+
 For an authorized explicit booking, check existing Purchases, Expenses and
 settlement allocations before creating aggregate spending. Refresh that check
 when resuming a retained proposal; a fresh booking preview checks the selected
