@@ -15,6 +15,7 @@ import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, notExists, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -277,6 +278,51 @@ export async function readEntityConnectionsBatch(
   const sources = z.array(entityGraphRootSchema).max(250).parse(raw);
   if (!sources.length) return [];
   const keys = sources.map(sourceKey);
+  let selectedEdgeIds: string[] | undefined;
+  if (reviewIds) {
+    if (!reviewIds.length) return sources.map(() => []);
+    const selected = alias(assessment, "selected_connection");
+    const edgeName = sql.identifier("connection_edge");
+    const edgeId = sql<string>`${edgeName}.${sql.identifier("id")}`;
+    const edgeEvidence = sql`${edgeName}.${sql.identifier("evidence")}`;
+    // Fence the source lookup before target matching: a shared target can have
+    // a population-sized history even when each selected source has few edges.
+    const competitors = related(
+      assessment,
+      (
+        entry,
+      ) => sql`${entry.evidence}#>>'{candidate,source,entityKind}' = ${outer(selected.evidence)}#>>'{candidate,source,entityKind}'
+        AND ${entry.evidence}#>>'{candidate,source,entityId}' = ${outer(selected.evidence)}#>>'{candidate,source,entityId}'`,
+    )
+      .where(
+        (entry) =>
+          sql`${entry.served} AND ${entry.subject}->>'scope' LIKE 'connection.%'`,
+      )
+      .aggregate(
+        (entry) =>
+          sql`${entry.id} AS ${sql.identifier("id")}, ${entry.evidence} AS ${sql.identifier("evidence")}`,
+      );
+    const edges = await getDb(db)
+      .select({ id: edgeId })
+      .from(selected)
+      .innerJoinLateral(
+        sql`(${competitors} OFFSET 0) AS ${edgeName}`,
+        sql`true`,
+      )
+      .where(
+        and(
+          sql`${selected.id} = ANY(${uuidArrayParam(reviewIds)})`,
+          sql`(${edgeEvidence}#>>'{candidate,relation}',
+            ${edgeEvidence}#>>'{candidate,target,entityKind}',
+            ${edgeEvidence}#>>'{candidate,target,entityId}') =
+            (${selected.evidence}#>>'{candidate,relation}',
+            ${selected.evidence}#>>'{candidate,target,entityKind}',
+            ${selected.evidence}#>>'{candidate,target,entityId}')`,
+        ),
+      );
+    selectedEdgeIds = [...new Set(edges.map((entry) => entry.id))];
+    if (!selectedEdgeIds.length) return sources.map(() => []);
+  }
   const rows = await getDb(db)
     .select({
       prediction: connectionReadSelection,
@@ -292,23 +338,8 @@ export async function readEntityConnectionsBatch(
         sql`${assessment.subject}->>'scope' LIKE 'connection.%'`,
         // Retain every competitor on a selected edge: filtering by review ID
         // alone could resurrect a proposal replaced by the reader's deduplication.
-        reviewIds
-          ? related(
-              assessment,
-              (
-                selected,
-              ) => sql`${selected.id} = ANY(${uuidArrayParam(reviewIds)})
-                AND (${outer(assessment.evidence)}#>>'{candidate,relation}',
-                  ${outer(assessment.evidence)}#>>'{candidate,source,entityKind}',
-                  ${outer(assessment.evidence)}#>>'{candidate,source,entityId}',
-                  ${outer(assessment.evidence)}#>>'{candidate,target,entityKind}',
-                  ${outer(assessment.evidence)}#>>'{candidate,target,entityId}') =
-                (${selected.evidence}#>>'{candidate,relation}',
-                  ${selected.evidence}#>>'{candidate,source,entityKind}',
-                  ${selected.evidence}#>>'{candidate,source,entityId}',
-                  ${selected.evidence}#>>'{candidate,target,entityKind}',
-                  ${selected.evidence}#>>'{candidate,target,entityId}')`,
-            ).exists()
+        selectedEdgeIds
+          ? sql`${assessment.id} = ANY(${uuidArrayParam(selectedEdgeIds)})`
           : undefined,
         sql`(${inArray(sql`(${assessment.evidence}->'candidate'->${"source"}->>'entityKind') || ':' || (${assessment.evidence}->'candidate'->${"source"}->>'entityId')`, keys)} OR ${inArray(sql`(${assessment.evidence}->'candidate'->${"target"}->>'entityKind') || ':' || (${assessment.evidence}->'candidate'->${"target"}->>'entityId')`, keys)})`,
         notExists(

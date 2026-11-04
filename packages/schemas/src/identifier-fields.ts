@@ -12,6 +12,9 @@ const brandedId = <Name extends string>(name: Name) => z.uuid().brand(name);
 export const userId = z.string().min(1).brand("UserId");
 export type UserId = z.infer<typeof userId>;
 
+/** Reserved actor for unattended work, including declaration-owned receipt inputs. */
+export const SYSTEM_USER_ID = userId.parse("cubby-system");
+
 export const expenseAttributionId = brandedId("ExpenseAttributionId");
 export type ExpenseAttributionId = z.infer<typeof expenseAttributionId>;
 

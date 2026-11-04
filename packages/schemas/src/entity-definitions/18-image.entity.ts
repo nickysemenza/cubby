@@ -12,6 +12,7 @@ import {
 import { imageSightingOut } from "../image-sighting-fields.js";
 import { optionalImageRepresentations } from "../image-summary.js";
 import { defineEntity, defineEntityModel } from "./definition.js";
+import { imageDescriptionReceiptWhere } from "./image-description-inputs";
 import { labelField } from "./label-field.js";
 import { imageShortcode, ledgerPartyShortcode } from "../identifier-fields.js";
 import { z } from "zod";
@@ -1048,10 +1049,15 @@ export const { definition, readSchemas } = defineEntityModel(
           json: { key: "recordId" },
           where: { family: "image_description" },
         },
-        { table: "AssessmentState", match: { recordId: "id" } },
+        {
+          table: "AssessmentState",
+          match: { recordId: "id" },
+          where: { family: "image_description" },
+        },
         {
           table: "Feedback",
           match: { assessmentId: "id" },
+          where: imageDescriptionReceiptWhere,
           path: [{ table: "AssessmentState", from: "id", to: "recordId" }],
         },
       ],

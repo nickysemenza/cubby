@@ -10,7 +10,12 @@ import { z } from "zod";
 import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
 import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { getDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
-import { image, assessmentState, feedback } from "~/server/db/schema";
+import {
+  image,
+  assessmentState,
+  feedback,
+  searchDocument,
+} from "~/server/db/schema";
 import { getImageProcessingReadProjection } from "~/server/domains/image-processing/repo/image-processing";
 import { imageScaffold } from "~/server/domains/image/repo/image";
 import {
@@ -36,6 +41,10 @@ import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  derivedMarkTickets,
+  drainDerivedRefreshFrontier,
+} from "~/server/testing/background-queue";
 import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
 
 // Failure modes: a grade or stale confirmation becomes reusable authority;
@@ -403,6 +412,20 @@ describe("image correction authority", () => {
         },
       },
     });
+    // The automatic receipt is its own capture, apart from the State transition.
+    expect(
+      await derivedMarkTickets(
+        ctx.db,
+        "product.searchDocument@6",
+        target.prediction.id,
+      ),
+    ).toHaveLength(1);
+    await drainDerivedRefreshFrontier(ctx.db);
+    const [ownerDocument] = await getDb(ctx.db)
+      .select({ body: searchDocument.body })
+      .from(searchDocument)
+      .where(eq(searchDocument.entityId, product.id));
+    expect(ownerDocument?.body).toContain("Synthetic apples");
     const [code] = await getDb(ctx.db)
       .select({ shortcode: image.shortcode })
       .from(image)
